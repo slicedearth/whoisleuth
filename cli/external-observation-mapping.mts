@@ -14,7 +14,7 @@ import {
   parseExternalFindingsDocument,
   type ExternalFindingCategory,
   type ExternalFindingEvidenceClass,
-} from '../frontend/src/lib/analysis/external-findings-import.ts';
+} from '../packages/interchange/external-findings-import.mts';
 
 export const EXTERNAL_OBSERVATION_MAPPING_SCHEMA = 'whoisleuth.external-observation-mapping';
 export const EXTERNAL_OBSERVATION_MAPPING_VERSION = 1;

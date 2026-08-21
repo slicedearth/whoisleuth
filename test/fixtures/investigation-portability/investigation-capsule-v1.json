@@ -1,0 +1,127 @@
+{
+  "schema": "whoisleuth.investigation-capsule",
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": "1.47.4"
+  },
+  "target": {
+    "value": "fixture.example",
+    "type": "domain"
+  },
+  "sourceContracts": [
+    {
+      "id": "lookup-evidence",
+      "schema": "whoisleuth.lookup-evidence",
+      "version": 28,
+      "digest": "sha256:b8062828bc8a24cd7f0f4b53d4fccc84447a7b2e6f5f0d2bb79e658a978fabb6",
+      "embedded": false
+    },
+    {
+      "id": "investigation-brief",
+      "schema": "whoisleuth.investigation-brief",
+      "version": 1,
+      "digest": "sha256:ee3538c0d90b46fe97d8af8bbb29d02d79fcb23290142680978d69593922d819",
+      "embedded": true
+    },
+    {
+      "id": "asset-graph",
+      "schema": "whoisleuth.lookup-asset-graph",
+      "version": 2,
+      "digest": "sha256:e5454e211670d89de50412ceb046672c3371b8fb49405203f5c713d3523f2eb4",
+      "embedded": true
+    }
+  ],
+  "investigationBrief": {
+    "schema": "whoisleuth.investigation-brief",
+    "schemaVersion": 1,
+    "generatedAt": "2026-08-22T00:00:00.000Z",
+    "target": "fixture.example",
+    "targetType": "domain",
+    "task": "general",
+    "taskLabel": "General investigation",
+    "question": "What does the bounded evidence establish?",
+    "summary": "Review the bounded evidence and retain unresolved questions.",
+    "observation": {
+      "observedAt": "2026-08-22T00:00:00.000Z",
+      "evidenceAgeDays": 0,
+      "completeSources": 1,
+      "limitedSources": 0,
+      "freshnessPolicy": {
+        "version": 1,
+        "id": "task-default",
+        "task": "general",
+        "thresholdsDays": {
+          "registration": 30,
+          "network": 7,
+          "web": 3
+        }
+      }
+    },
+    "verifiedFacts": [],
+    "contradictions": [],
+    "unknowns": [],
+    "nextActions": [],
+    "relationships": {
+      "nodes": 3,
+      "edges": 0,
+      "truncated": false,
+      "kinds": []
+    },
+    "limitations": [
+      "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+      "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+      "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+      "Missing and incomplete sources remain explicit and are not represented as absent relationships.",
+      "This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.",
+      "Analyst assertions, hypotheses, and decisions must remain separate from observed evidence."
+    ]
+  },
+  "graphSnapshot": {
+    "version": 2,
+    "targetId": "target-fixture-example-he9xyi",
+    "nodes": [
+      {
+        "id": "target-fixture-example-he9xyi",
+        "label": "fixture.example",
+        "kind": "target",
+        "detail": "Lookup target"
+      },
+      {
+        "id": "observation-registry-publication-m032s8",
+        "label": "Registry publication",
+        "kind": "observation",
+        "detail": "Registry nameserver and glue evidence"
+      },
+      {
+        "id": "observation-recursive-parent-view-5esrn6",
+        "label": "Recursive parent view",
+        "kind": "observation",
+        "detail": "Point-in-time parent delegation observation"
+      }
+    ],
+    "edges": [],
+    "sources": [],
+    "truncated": false,
+    "limitations": [
+      "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+      "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+      "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+      "Missing and incomplete sources remain explicit and are not represented as absent relationships."
+    ]
+  },
+  "analystRecords": null,
+  "integrity": {
+    "algorithm": "SHA-256",
+    "briefDigest": "sha256:ee3538c0d90b46fe97d8af8bbb29d02d79fcb23290142680978d69593922d819",
+    "graphDigest": "sha256:e5454e211670d89de50412ceb046672c3371b8fb49405203f5c713d3523f2eb4",
+    "analystRecordsDigest": null
+  },
+  "limitations": [
+    "The Lookup evidence file is linked by digest but is not embedded; keep or share that exact file separately when verification is required.",
+    "Digest verification can detect changed content but does not establish who created the capsule. No digital signature is applied.",
+    "The graph and brief are bounded projections of collected and derived evidence, not attribution, ownership, safety, availability, or maliciousness conclusions.",
+    "Analyst decisions, assertions, notes, contacts, actions, and raw source payloads are excluded."
+  ]
+}

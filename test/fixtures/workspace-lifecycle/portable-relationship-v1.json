@@ -1,0 +1,10 @@
+{
+  "schema": "whoisleuth.relationship-observations",
+  "version": 1,
+  "generatedAt": "2000-01-01T00:00:00.000Z",
+  "observations": [],
+  "limitations": [
+    "These are analyst-selected derived pivots, not proof of ownership, coordination, intent, or maliciousness.",
+    "The export excludes the originating raw lookup responses and complete Bulk scan."
+  ]
+}

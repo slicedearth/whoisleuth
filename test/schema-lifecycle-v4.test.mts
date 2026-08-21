@@ -445,6 +445,37 @@ describe('schema lifecycle metadata version 4', () => {
     );
   });
 
+  test('records established compact JSON and terminal-line-feed conventions exactly', () => {
+    const source = familySource();
+    source.metadata.serialisationProfiles[0].indentSpaces = 0;
+    source.metadata.serialisationProfiles[0].terminalLf = false;
+    const family = defineSchemaLifecycleFamily(source);
+    assert.equal(family.metadata.serialisationProfiles[0]?.indentSpaces, 0);
+    assert.equal(family.metadata.serialisationProfiles[0]?.terminalLf, false);
+
+    for (const [label, mutate] of [
+      ['indent', (value: any) => { value.metadata.serialisationProfiles[0].indentSpaces = 1; }],
+      ['terminal LF', (value: any) => { value.metadata.serialisationProfiles[0].terminalLf = 'false'; }],
+    ] as const) {
+      const invalid = familySource();
+      mutate(invalid);
+      assert.throws(() => defineSchemaLifecycleFamily(invalid), label);
+    }
+  });
+
+  test('allows current-only normalisation when an unversioned legacy root is explicit', () => {
+    const source = familySource();
+    source.compatibility[0] = defineSchemaCompatibility({
+      ...DATASET_COMPATIBILITY,
+      acceptsUnversionedLegacy: true,
+      migration: 'normalize_to_current',
+    });
+    const family = defineSchemaLifecycleFamily(source);
+    assert.equal(family.compatibility[0]?.acceptsUnversionedLegacy, true);
+    assert.equal(family.compatibility[0]?.migration, 'normalize_to_current');
+    assert.equal(family.contracts.filter(({ compatibilityId }) => compatibilityId === DATASET_COMPATIBILITY.id).length, 1);
+  });
+
   test('owns retired output history, discriminated variants, and bounded projections', () => {
     const source = familySource();
     const family = defineSchemaLifecycleFamily(source);

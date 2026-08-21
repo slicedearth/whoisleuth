@@ -7,11 +7,11 @@ import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
   decryptWorkspaceArchive,
   isEncryptedWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+} from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
   readWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive.ts';
+} from '../packages/workspace/workspace-archive.mts';
 import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,

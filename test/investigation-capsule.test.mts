@@ -147,7 +147,10 @@ test('offline verification rejects re-digested capsule contract and graph-linkag
 test('investigation capsule includes analyst records only when deliberately selected', async () => {
   const maximumPinReferences = Array.from({ length: MAX_DECISION_PIN_REFERENCES }, (_, index) => `pin-${index}`);
   const caseRecord = {
-    id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', brandProfileIds: [], tags: [], notes: [{ id: 'note', body: 'excluded note', createdAt: '2026-08-04T00:00:00.000Z' }], source: 'lookup', evidenceHistory: [], evidencePins: [], actions: [], manualTrail: [], sightings: [], createdAt: '2026-08-04T00:00:00.000Z', updatedAt: '2026-08-04T00:00:00.000Z',
+    id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', brandProfileIds: [], tags: [], notes: [{ id: 'note', body: 'excluded note', createdAt: '2026-08-04T00:00:00.000Z' }], source: 'lookup', evidenceHistory: [], evidencePins: [], actions: [], manualTrail: [], sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    createdAt: '2026-08-04T00:00:00.000Z', updatedAt: '2026-08-04T00:00:00.000Z',
     decisions: [{ id: 'decision-1', summary: 'Review registration conflict', rationale: 'Two publications differ.', evidencePinIds: maximumPinReferences, createdAt: '2026-08-04T00:00:00.000Z' }],
     assertions: [{ id: 'assertion-1', kind: 'hypothesis' as const, statement: 'Publication lag may explain the difference.', rationale: null, evidencePinIds: maximumPinReferences, state: 'open' as const, createdAt: '2026-08-04T00:00:00.000Z', updatedAt: '2026-08-04T00:00:00.000Z' }],
   };

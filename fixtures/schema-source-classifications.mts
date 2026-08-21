@@ -1,4 +1,66 @@
 export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
+  ...([
+    ['whoisleuth.internal.candidate-handoff', 'packages/contracts/tab-portability.mts', 'tab.candidate-handoff'],
+    ['whoisleuth.internal.synthetic-demo-tab', 'packages/contracts/tab-portability.mts', 'tab.synthetic-demo'],
+    ['whoisleuth.internal.defensive-indicators', 'packages/contracts/analyst-interchange.mts', 'export.defensive-indicators'],
+    ['whoisleuth.internal.stix-indicators', 'packages/contracts/analyst-interchange.mts', 'export.stix-indicators'],
+    ['whoisleuth.internal.misp-indicators', 'packages/contracts/analyst-interchange.mts', 'export.misp-indicators'],
+  ] as const).map(([identifier, owner, relatedEntryId]) => Object.freeze({
+    identifier,
+    kind: 'exempt' as const,
+    reason: 'identifier_only' as const,
+    owner,
+    sourceUses: Object.freeze([
+      Object.freeze({ file: owner, literalOccurrences: 1, dynamicConstructions: 0 }),
+    ]),
+    relatedEntryIds: Object.freeze([relatedEntryId]),
+    note: 'The lifecycle identity owns a versioned schema-less format without adding or changing any public serialised field.',
+  })),
+  ...([
+    ['whoisleuth.browser.brand-profile-store', 'browser.brand-profiles', 7],
+    ['whoisleuth.browser.bulk-review-store', 'browser.bulk-review', 3],
+    ['whoisleuth.browser.bulk-session-store', 'browser.bulk-sessions', 6],
+    ['whoisleuth.browser.campaign-store', 'browser.campaigns', 3],
+    ['whoisleuth.browser.ct-history-store', 'browser.ct-history', 4],
+    ['whoisleuth.browser.detection-rule-store', 'browser.detection-rules', 3],
+    ['whoisleuth.browser.investigation-template-store', 'browser.investigation-templates', 4],
+    ['whoisleuth.browser.relationship-observation-store', 'browser.relationship-observations', 3],
+    ['whoisleuth.browser.shortlist-store', 'browser.shortlist', 4],
+    ['whoisleuth.browser.watchlist-store', 'browser.watchlists', 3],
+    ['whoisleuth.browser.website-snapshot-store', 'browser.website-snapshots', 6],
+  ] as const).map(([identifier, relatedEntryId, literalOccurrences]) => Object.freeze({
+    identifier,
+    kind: 'exempt' as const,
+    reason: 'identifier_only' as const,
+    owner: 'packages/contracts/workspace-portability.mts',
+    sourceUses: Object.freeze([
+      Object.freeze({ file: 'packages/contracts/workspace-portability.mts', literalOccurrences, dynamicConstructions: 0 }),
+    ]),
+    relatedEntryIds: Object.freeze([relatedEntryId]),
+    note: 'The lifecycle identity separates browser-store compatibility from the portable document identity without adding or changing a wire-level marker.',
+  })),
+  Object.freeze({
+    identifier: 'whoisleuth.browser.case-store',
+    kind: 'exempt',
+    reason: 'identifier_only',
+    owner: 'packages/contracts/case-portability.mts',
+    sourceUses: Object.freeze([
+      Object.freeze({ file: 'packages/contracts/case-portability.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
+    ]),
+    relatedEntryIds: Object.freeze(['browser.cases']),
+    note: 'The lifecycle identity owns the schema-less browser Case envelope without adding a wire-level schema field.',
+  }),
+  Object.freeze({
+    identifier: 'whoisleuth.case-export',
+    kind: 'exempt',
+    reason: 'identifier_only',
+    owner: 'packages/contracts/case-portability.mts',
+    sourceUses: Object.freeze([
+      Object.freeze({ file: 'packages/contracts/case-portability.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
+    ]),
+    relatedEntryIds: Object.freeze(['export.cases']),
+    note: 'The lifecycle identity owns the schema-less portable Case envelope without adding a wire-level schema field.',
+  }),
   Object.freeze({
     identifier: 'whoisleuth.case-review-calendar',
     kind: 'exempt',
@@ -59,9 +121,9 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     identifier: 'whoisleuth.investigation-recipe',
     kind: 'exempt',
     reason: 'identifier_only',
-    owner: 'frontend/src/lib/analysis/investigation-guide.ts',
+    owner: 'packages/workspace/investigation-guide.mts',
     sourceUses: Object.freeze([
-      Object.freeze({ file: 'frontend/src/lib/analysis/investigation-guide.ts', literalOccurrences: 1, dynamicConstructions: 0 }),
+      Object.freeze({ file: 'packages/workspace/investigation-guide.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
     ]),
     relatedEntryIds: Object.freeze(['tab.investigation-guide']),
     note: 'The identifier labels the versioned tab-local model rather than its serialised contract; its portable summary has a separate inventoried schema.',
@@ -127,13 +189,13 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     identifier: 'whoisleuth.relationship-evidence',
     kind: 'member',
     reason: 'provenance_marker',
-    owner: 'frontend/src/lib/analysis/relationship-evidence.ts',
+    owner: 'packages/contracts/offline-comparison.mts',
     sourceUses: Object.freeze([
-      Object.freeze({ file: 'frontend/src/lib/analysis/relationship-evidence.ts', literalOccurrences: 1, dynamicConstructions: 0 }),
+      Object.freeze({ file: 'packages/contracts/offline-comparison.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
     ]),
     relatedEntryIds: Object.freeze(['derived.observation-envelope']),
     note: 'The marker identifies nested upstream provenance inside the common observation envelope rather than a standalone document.',
   }),
-] as const);
+].sort((left, right) => left.identifier < right.identifier ? -1 : left.identifier > right.identifier ? 1 : 0));
 
 export type SchemaSourceClassification = typeof SCHEMA_SOURCE_CLASSIFICATIONS[number];

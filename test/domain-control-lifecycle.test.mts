@@ -358,7 +358,7 @@ describe('domain-control schema lifecycle', () => {
     unprovenNormalising.fixtures[1]!.expectedOutputFixtureId = null;
     assert.throws(
       () => defineSchemaLifecycleFamily(unprovenNormalising as unknown as SchemaLifecycleFamily),
-      /prove every legacy migration with a fixture/iu,
+      /prove every declared normalisation with a fixture/iu,
     );
 
     const nonEmittedTarget = mutableLifecycle();

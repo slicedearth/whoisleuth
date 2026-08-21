@@ -13,7 +13,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { mergeCases, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
@@ -270,7 +270,7 @@ function bulkReview() {
 }
 
 type WorkspaceFixture = {
-  cases: ReturnType<typeof caseRecord>[];
+  cases: Array<ReturnType<typeof caseRecord> | CaseRecord>;
   campaigns: ReturnType<typeof campaign>[];
   brandProfiles: ReturnType<typeof profile>[];
   watchlists: Record<string, unknown>;
@@ -393,6 +393,57 @@ describe('portable workspace archive', () => {
     assert.equal(cases.brandProfileReferencesOmitted, 0);
     const merged = mergeCases(normalizeCaseStore(local.cases).cases, archive.sections.cases);
     assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
+  });
+
+  test('keeps archive v5 while round-tripping embedded Case v14 lifecycle histories', async () => {
+    let record = createCase({
+      domain: 'response-archive.invalid',
+      source: 'lookup',
+      evidence: {
+        inputHostname: 'login.response-archive.invalid',
+        scanDepth: 'deep',
+        availability: 'registered',
+      },
+    }, NOW);
+    record = updateCase([record], record.id, {
+      action: { type: 'registrar_report', recipient: 'Reviewed response route', contactSource: 'analyst supplied' },
+    }, NOW).record;
+    const actionId = record.actions[0]!.id;
+    record = updateCase([record], record.id, {
+      actionUpdate: {
+        id: actionId,
+        transition: { nextState: 'ready_for_review', sourceClass: 'analyst', provenance: 'archive_fixture_review' },
+      },
+    }, '2026-07-19T02:01:00.000Z').record;
+    record = updateCase([record], record.id, {
+      observedEffectReview: {
+        state: 'not_checked', observedAt: '2026-07-19T02:02:00.000Z', sourceClass: 'analyst',
+        source: 'Scheduled local follow-up', completeness: 'unknown', followUpAt: '2026-07-26T02:02:00.000Z',
+        limitations: ['No request was made.'],
+      },
+    }, '2026-07-19T02:02:00.000Z').record;
+    record = updateCase([record], record.id, {
+      closure: {
+        reason: 'monitoring_transferred', summary: 'Monitoring was deliberately transferred to the local follow-up calendar.',
+        limitations: ['No remediation or absence conclusion was made.'],
+      },
+    }, '2026-07-19T02:03:00.000Z').record;
+
+    const source = input();
+    source.cases = [record];
+    const archive = await buildWorkspaceArchive(source, { generatedAt: '2026-07-19T02:04:00.000Z' });
+    assert.equal(archive.version, 5);
+    assert.equal(archive.sections.cases.version, 14);
+    const parsed = await readWorkspaceArchive(archive);
+    const cases = parsed.sections.find((section) => section.id === 'cases');
+    assert.equal(cases?.status, 'ready');
+    const restored = mergeCases([], cases?.data).cases[0]!;
+    assert.equal(restored.evidenceHistory[0]?.inputHostname, 'login.response-archive.invalid');
+    assert.equal(restored.actions[0]?.history.length, 2);
+    assert.equal(restored.actions[0]?.history[1]?.id, record.actions[0]?.history[1]?.id);
+    assert.equal(restored.observedEffects.reviews[0]?.id, record.observedEffects.reviews[0]?.id);
+    assert.equal(restored.closures.records[0]?.id, record.closures.records[0]?.id);
+    assert.equal(restored.status, 'resolved');
   });
 
   test('quarantines profile-derived Bulk claims that arrive through a workspace section', async () => {
@@ -816,16 +867,16 @@ describe('portable workspace archive', () => {
     assert.equal(preview.unsupportedCount, 1);
   });
 
-  test('isolates a checksummed future Case v13 section as unsupported', async () => {
+  test('isolates a checksummed future Case v15 section as unsupported', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    await retargetSectionVersion(archive, 'cases', 13);
+    await retargetSectionVersion(archive, 'cases', 15);
     const parsed = await readWorkspaceArchive(archive);
     assert.equal(parsed.sections.find((section) => section.id === 'cases')?.status, 'unsupported');
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'unsupported');
     assert.equal(cases?.selected, false);
-    assert.match(cases?.reason ?? '', /newer schema 13/iu);
+    assert.match(cases?.reason ?? '', /newer schema 15/iu);
   });
 
   test('binds every checksummed section contract to its manifest declaration', async () => {

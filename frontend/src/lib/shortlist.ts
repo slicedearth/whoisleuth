@@ -9,9 +9,10 @@ import {
 } from './analysis/shortlist-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_SHORTLIST_KEY } from './browser-local-data-contract.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
+export { MAX_SHORTLIST_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
 export const SHORTLIST_KEY = LEGACY_SHORTLIST_KEY;
-export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
 export type { ShortlistRecord };
 
@@ -68,7 +69,7 @@ export async function importShortlist(value: unknown) {
 }
 
 export async function exportShortlist() {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(buildShortlistExport(await loadShortlist()), null, 2)], { type: 'application/json' }));
+  const url = URL.createObjectURL(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`;

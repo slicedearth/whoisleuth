@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { CASE_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/case-portability.mts';
+import { ANALYST_INTERCHANGE_LIFECYCLE_FAMILY } from '../packages/contracts/analyst-interchange.mts';
 import { CLI_LOOKUP_SCHEMA_LIFECYCLE } from '../packages/contracts/cli-lookup.mts';
 import { DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-flight-recorder.mts';
 import { DOMAIN_CONTROL_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-manifest.mts';
 import { DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-monitor.mts';
 import { DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-review.mts';
+import { EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY } from '../packages/contracts/external-observation-interchange.mts';
+import { INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/investigation-portability.mts';
+import { INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY } from '../packages/contracts/investigation-projections.mts';
+import { MONITORING_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/monitoring-portability.mts';
+import { OFFLINE_COMPARISON_LIFECYCLE_FAMILY } from '../packages/contracts/offline-comparison.mts';
+import { RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/relationship-portability.mts';
 import { RISK_CALIBRATION_SCHEMA_LIFECYCLE } from '../packages/contracts/risk-calibration.mts';
+import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/tab-portability.mts';
+import { WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/workspace-portability.mts';
 import {
   MAX_SCHEMA_LIFECYCLE_FAMILIES,
   defineSchemaLifecycleRegistry,
@@ -144,12 +154,22 @@ function heavyFamily(index: number): Record<string, unknown> {
 describe('schema lifecycle registry', () => {
   it('owns a detached recursively frozen canonical family list', () => {
     const source = [
+      structuredClone(CASE_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY),
+      structuredClone(OFFLINE_COMPARISON_LIFECYCLE_FAMILY),
       structuredClone(DOMAIN_CONTROL_SCHEMA_LIFECYCLE),
       structuredClone(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE),
       structuredClone(DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE),
       structuredClone(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE),
       structuredClone(CLI_LOOKUP_SCHEMA_LIFECYCLE),
       structuredClone(RISK_CALIBRATION_SCHEMA_LIFECYCLE),
+      structuredClone(WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(TAB_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(MONITORING_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY),
+      structuredClone(RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY),
+      structuredClone(ANALYST_INTERCHANGE_LIFECYCLE_FAMILY),
     ];
     const registry = defineSchemaLifecycleRegistry(source as unknown as readonly SchemaLifecycleFamily[]);
     assert.deepEqual(registry, SCHEMA_LIFECYCLE_REGISTRY);
@@ -158,12 +178,26 @@ describe('schema lifecycle registry', () => {
     assert.equal(Object.isFrozen(registry[0]), true);
     assert.equal(Object.isFrozen(registry[0]?.compatibility), true);
     (source as unknown as Array<Record<string, unknown>>)[0]!.id = 'changed-after-registration';
-    assert.equal(registry[0]?.id, 'domain-control-manifest');
-    assert.equal(registry[1]?.id, 'domain-control-review');
-    assert.equal(registry[2]?.id, 'domain-control-flight-recorder');
-    assert.equal(registry[3]?.id, 'domain-control-monitor');
-    assert.equal(registry[4]?.id, 'cli-lookup');
-    assert.equal(registry[5]?.id, 'risk-calibration');
+    assert.equal(registry[0]?.id, 'case-portability');
+    assert.equal(registry[1]?.id, 'investigation-portability');
+    assert.equal(registry[2]?.id, 'external-observation-interchange');
+    assert.equal(registry[3]?.id, 'offline-comparison');
+    assert.equal(registry[4]?.id, 'domain-control-manifest');
+    assert.equal(registry[5]?.id, 'domain-control-review');
+    assert.equal(registry[6]?.id, 'domain-control-flight-recorder');
+    assert.equal(registry[7]?.id, 'domain-control-monitor');
+    assert.equal(registry[8]?.id, 'cli-lookup');
+    assert.equal(registry[9]?.id, 'risk-calibration');
+    assert.equal(registry[10]?.id, 'workspace-portability');
+    assert.equal(registry[11]?.id, 'tab-portability');
+    assert.equal(registry[12]?.id, 'monitoring-portability');
+    assert.equal(registry[13]?.id, 'investigation-projections');
+    assert.equal(registry[14]?.id, 'relationship-portability');
+    assert.equal(registry[15]?.id, 'analyst-interchange');
+    assert.equal(registry.length, 16);
+    assert.equal(registry.flatMap((family) => family.contracts).length, 182);
+    assert.equal(registry.flatMap((family) => family.compatibility).length, 83);
+    assert.equal(registry.flatMap((family) => family.fixtures).length, 232);
   });
 
   it('rejects malformed registry arrays without invoking entries', () => {

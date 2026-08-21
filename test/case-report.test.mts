@@ -63,6 +63,8 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     assertions: [],
     manualTrail: [],
     sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: ISO,
     updatedAt: ISO,
     ...overrides,
@@ -76,7 +78,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 8);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 9);
   });
 });
 
@@ -90,7 +92,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 8);
+    assert.equal(json.schemaVersion, 9);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.application.version, null);
@@ -107,12 +109,12 @@ describe('buildCaseReport JSON', () => {
     assert.equal('notes' in json.case, false);
   });
 
-  test('case report v8 preserves exact opaque Brand Profile references', () => {
+  test('case report v9 preserves exact opaque Brand Profile references', () => {
     const record = caseRecord({
       brandProfileIds: ['Profile_A', 'profile_a'],
     });
     const { json, markdown } = caseReport.buildCaseReport(record, { generatedAt: ISO });
-    assert.equal(json.schemaVersion, 8);
+    assert.equal(json.schemaVersion, 9);
     assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
     (record.brandProfileIds as string[])[0] = 'changed-source';
     assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
@@ -168,6 +170,50 @@ describe('buildCaseReport JSON', () => {
     assert.match(markdown, /Browser navigation is not tracked|certificate fingerprint/u);
   });
 
+  test('projects provider outcomes and independently observed effects as separate typed times', () => {
+    const action = {
+      id: 'action-one', type: 'registrar_report', recipient: 'Provider response desk',
+      contactSource: 'reviewed route', contactLimitations: [], dueAt: null,
+      state: 'acknowledged', reference: 'REF-1', followUpAt: null,
+      providerOutcome: 'provider_reports_resolved', outcome: 'Provider reported resolution.', originActionId: null,
+      history: [{
+        id: 'event-provider', previousState: 'submitted', nextState: 'acknowledged', occurredAt: LATER,
+        sourceClass: 'provider', provenance: 'provider_response', reference: 'REF-1', evidencePinId: null,
+        limitations: ['Provider scope was not independently established.'], providerOutcome: 'provider_reports_resolved',
+        outcomeDetail: 'Provider reported resolution.', originActionId: null, applied: true,
+      }],
+      historyOmitted: 0, historyLimitations: [], createdAt: ISO, metadataUpdatedAt: ISO, updatedAt: LATER,
+    };
+    const effect = {
+      id: 'effect-one', state: 'changed', observedAt: LATEST, sourceClass: 'analyst',
+      source: 'Independent fixture review', completeness: 'partial',
+      limitations: ['Only the selected path was reviewed.'], evidencePinId: null, sightingId: null,
+      followUpAt: null, createdAt: LATEST,
+    };
+    const rec = caseRecord({
+      actions: [action],
+      observedEffects: {
+        reviews: [effect], omitted: 0, preV13HistoryUnavailable: false,
+        limitations: ['Provider workflow and independent review remain separate.'],
+      },
+    });
+    const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: LATEST });
+    assert.equal(json.responseLifecycle.providerOutcomeState, 'available');
+    assert.equal(json.responseLifecycle.latestProviderOutcome?.occurredAt, LATER);
+    assert.equal(json.responseLifecycle.observedChangeState, 'available');
+    assert.equal(json.responseLifecycle.latestObservedEffect?.observedAt, LATEST);
+    assert.equal(json.responseLifecycle.latestObservedChangeAt, LATEST);
+    assert.notEqual(
+      json.responseLifecycle.latestProviderOutcome?.occurredAt,
+      json.responseLifecycle.latestObservedChangeAt,
+    );
+    assert.equal(json.analystResponse.actions[0]?.history[0]?.id, 'event-provider');
+    assert.equal(json.analystResponse.observedEffects.reviews[0]?.id, 'effect-one');
+    assert.match(markdown, /Latest provider outcome time: 2026-06-01/iu);
+    assert.match(markdown, /Latest independently observed change time: 2026-07-01/iu);
+    assert.match(markdown, /does not establish independent remediation/iu);
+  });
+
   test('single-snapshot baseline', () => {
     const rec = caseRecord({
       evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],
@@ -184,7 +230,7 @@ describe('buildCaseReport JSON', () => {
     assert.equal(requiredValue(json.currentAssessment).id, 'ev-1');
   });
 
-  test('report v8 preserves nullable profile provenance in JSON, timeline, and Markdown beside Risk', () => {
+  test('report v9 preserves nullable profile provenance in JSON, timeline, and Markdown beside Risk', () => {
     const limitation = 'The active Brand Profile was unavailable for this observation.';
     const rec = caseRecord({
       evidenceHistory: [snapshot({
@@ -195,7 +241,7 @@ describe('buildCaseReport JSON', () => {
       })],
     });
     const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
-    assert.equal(json.schemaVersion, 8);
+    assert.equal(json.schemaVersion, 9);
     assert.equal(requiredValue(json.currentAssessment).profileContextState, 'unavailable');
     assert.equal(requiredValue(json.currentAssessment).profileContextLimitation, limitation);
     assert.equal(requiredValue(json.evidenceTimeline[0]).snapshot.profileContextState, 'unavailable');
@@ -443,6 +489,12 @@ describe('buildCaseReport Markdown', () => {
     const { markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.ok(markdown.includes(ISO));
+  });
+
+  test('withholds both lifecycle times explicitly when an otherwise empty Case has no typed events', () => {
+    const { markdown } = caseReport.buildCaseReport(caseRecord(), { generatedAt: ISO });
+    assert.match(markdown, /Latest provider outcome time: Withheld because the typed event state is missing/iu);
+    assert.match(markdown, /Latest independently observed change time: Withheld because the independent change state is missing/iu);
   });
 
   test('includes limitations section', () => {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import {
@@ -7,9 +8,20 @@ import {
 } from '../packages/contracts/schema-lifecycle.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
+  CASE_CONTRACT_OWNER,
+  CASE_DOMAIN_COMPATIBILITY_FACADES,
+  CASE_DOMAIN_RUNTIME_ADAPTERS,
+} from '../packages/contracts/case-portability.mts';
+import {
+  WORKSPACE_CONTRACT_OWNER,
+  WORKSPACE_DOMAIN_COMPATIBILITY_FACADES,
+} from '../packages/contracts/workspace-portability.mts';
+import {
   MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES,
   assertSchemaLifecycleFixtureDiscriminator,
   discoverSchemaLifecycleSourceBindings,
+  validateCasePortabilitySourceSnapshot,
+  validateWorkspacePortabilitySourceSnapshot,
   validateSchemaLifecycleDefinitionCoverage,
   validateSchemaLifecycleRepository,
 } from '../tools/schema-lifecycle-repository.mts';
@@ -60,6 +72,29 @@ function firstHook(registry: Array<Record<string, unknown>>): Record<string, unk
   const hooks = metadata?.hooks as Array<Record<string, unknown>> | undefined;
   assert.ok(hooks?.[0]);
   return hooks[0];
+}
+
+async function casePortabilitySources() {
+  const files = [...new Set([
+    CASE_CONTRACT_OWNER,
+    ...CASE_DOMAIN_COMPATIBILITY_FACADES.flatMap(([facade, owner]) => [facade, owner]),
+    ...CASE_DOMAIN_RUNTIME_ADAPTERS,
+  ])].sort();
+  return Promise.all(files.map(async (file) => Object.freeze({
+    file,
+    source: await readFile(new URL(`../${file}`, import.meta.url), 'utf8'),
+  })));
+}
+
+async function workspacePortabilitySources() {
+  const files = [...new Set([
+    WORKSPACE_CONTRACT_OWNER,
+    ...WORKSPACE_DOMAIN_COMPATIBILITY_FACADES.flatMap(([facade, owner]) => [facade, owner]),
+  ])].sort();
+  return Promise.all(files.map(async (file) => Object.freeze({
+    file,
+    source: await readFile(new URL(`../${file}`, import.meta.url), 'utf8'),
+  })));
 }
 
 describe('schema lifecycle repository closure', () => {
@@ -398,6 +433,75 @@ describe('schema lifecycle repository closure', () => {
       /ordinary source record/u,
     );
     assert.equal(proxyTraps, 0);
+  });
+
+  test('closes canonical Case identities and exact compatibility facades', async () => {
+    const sources = await casePortabilitySources();
+    assert.doesNotThrow(() => validateCasePortabilitySourceSnapshot(sources));
+
+    const [firstFacade] = CASE_DOMAIN_COMPATIBILITY_FACADES[0]!;
+    const staleFacade = sources.map((source) => source.file === firstFacade
+      ? Object.freeze({ ...source, source: `${source.source}\n` })
+      : source);
+    assert.throws(
+      () => validateCasePortabilitySourceSnapshot(staleFacade),
+      /compatibility facade is stale/u,
+    );
+
+    assert.throws(
+      () => validateCasePortabilitySourceSnapshot([
+        ...sources,
+        Object.freeze({
+          file: 'frontend/src/lib/analysis/hidden-case-facade.mts',
+          source: "export * from './case-model.ts';\n",
+        }),
+      ]),
+      /compatibility facade is hidden/u,
+    );
+
+    assert.throws(
+      () => validateCasePortabilitySourceSnapshot([
+        ...sources,
+        Object.freeze({
+          file: 'lib/duplicate-case-identity.mts',
+          source: 'export const CASE_SCHEMA_VERSION = 13;\nexport const MAX_CASE_IMPORT_BYTES = 2097152;\n',
+        }),
+      ]),
+      /constant is declared outside its canonical owner/u,
+    );
+
+    assert.throws(
+      () => validateCasePortabilitySourceSnapshot([
+        ...sources,
+        Object.freeze({
+          file: 'lib/duplicate-case-bound.mts',
+          source: 'export const MAX_CASE_IMPORT_BYTES = 2097152;\n',
+        }),
+      ]),
+      /constant is declared outside its canonical owner/u,
+    );
+  });
+
+  test('closes canonical workspace identities and exact compatibility facades', async () => {
+    const sources = await workspacePortabilitySources();
+    assert.doesNotThrow(() => validateWorkspacePortabilitySourceSnapshot(sources));
+
+    const [firstFacade, firstOwner] = WORKSPACE_DOMAIN_COMPATIBILITY_FACADES[0]!;
+    const staleFacade = sources.map((source) => source.file === firstFacade
+      ? Object.freeze({ ...source, source: `${source.source}\n` })
+      : source);
+    assert.throws(
+      () => validateWorkspacePortabilitySourceSnapshot(staleFacade),
+      /compatibility facade is stale/u,
+    );
+
+    const duplicateIdentity = sources.map((source) => source.file === firstOwner
+      ? Object.freeze({ ...source, source: `${source.source}\nconst BRAND_PROFILE_SCHEMA_VERSION = 6;\n` })
+      : source);
+    assert.throws(
+      () => validateWorkspacePortabilitySourceSnapshot(duplicateIdentity),
+      /constant is declared outside its canonical owner/u,
+    );
   });
 
   test('verifies every registered fixture, hook and canonical definition in the checkout', async () => {

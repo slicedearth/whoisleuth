@@ -99,6 +99,32 @@ describe('browser-local collection definitions', () => {
     }
   });
 
+  test('every non-Case wrapper detects a future version before migration without changing its input', () => {
+    const futureRoots: Record<string, unknown> = {
+      campaigns: { version: 2, campaigns: [] },
+      brand_profiles: { version: 7, profiles: [] },
+      watchlists: { schema: 'whoisleuth.watchlists', version: 3, watchlists: {} },
+      shortlist: { schema: 'whoisleuth.shortlist', version: 4, entries: [] },
+      ct_history: { version: 4, entries: [] },
+      detection_rules: { version: 2, rules: [] },
+      relationship_observations: { schema: 'whoisleuth.relationship-observations', version: 2, observations: [] },
+      bulk_sessions: { schema: 'whoisleuth.bulk-sessions', version: 5, sessions: [] },
+      website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 5, snapshots: [] },
+      investigation_templates: { schema: 'whoisleuth.investigation-templates', version: 3, templates: [] },
+      bulk_review: { schema: 'whoisleuth.bulk-review', version: 2, presets: [], rows: [] },
+    };
+    const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
+    assert.equal(definitions.length, 11);
+    for (const definition of definitions) {
+      const raw = futureRoots[definition.id];
+      assert.ok(raw, definition.id);
+      const before = structuredClone(raw);
+      assert.equal(definition.acceptLegacyRoot(raw), true, definition.id);
+      assert.equal(definition.version(raw), definition.schemaVersion + 1, definition.id);
+      assert.deepEqual(raw, before, definition.id);
+    }
+  });
+
   test('Brand Profile migration accepts its supported export envelope only', () => {
     const exported = {
       schema: 'whoisleuth.brand-profiles',

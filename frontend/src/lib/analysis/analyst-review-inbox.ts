@@ -3,7 +3,7 @@ import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 
 export const MAX_ANALYST_REVIEW_ITEMS = 500;
-export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'evidence_gap', 'watchlist_change', 'bulk_session'] as const;
+export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'observed_effect_review', 'evidence_gap', 'watchlist_change', 'bulk_session'] as const;
 export type AnalystReviewKind = typeof ANALYST_REVIEW_KINDS[number];
 export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
 export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
@@ -52,7 +52,11 @@ export type AnalystReviewInbox = Readonly<{
   limitations: readonly string[];
 }>;
 
-const OPEN_ACTION_STATES = new Set(['planned', 'ready_for_review', 'submitted', 'acknowledged']);
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+const OPEN_ACTION_STATES = new Set(['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'acknowledged']);
 const LIMITED_SOURCE_STATES = new Set([
   'blocked',
   'error',
@@ -87,7 +91,7 @@ function itemSort(left: AnalystReviewItem, right: AnalystReviewItem, nowMs: numb
   if (leftDue !== rightDue) return leftDue - rightDue;
   const priority = PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
   if (priority) return priority;
-  return Date.parse(right.observedAt) - Date.parse(left.observedAt) || left.id.localeCompare(right.id);
+  return Date.parse(right.observedAt) - Date.parse(left.observedAt) || compareCodeUnits(left.id, right.id);
 }
 
 function hashGapParts(parts: readonly string[]): string {
@@ -251,7 +255,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
       if (!OPEN_ACTION_STATES.has(action.state)) continue;
       const dueAt = timestamp(action.followUpAt) || timestamp(action.dueAt);
       const overdue = dueAt !== null && Date.parse(dueAt) <= Date.parse(nowIso);
-      const priority: AnalystReviewPriority = overdue ? 'urgent' : action.state === 'ready_for_review' || action.state === 'submitted' ? 'high' : 'normal';
+      const priority: AnalystReviewPriority = overdue ? 'urgent' : ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(action.state) ? 'high' : 'normal';
       items.push(withReviewMetadata({
         id: `action:${record.id}:${action.id}`,
         kind: 'case_action',
@@ -266,6 +270,29 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         completeness: action.state === 'submitted' || action.state === 'acknowledged' ? 'complete' : 'partial',
         nextAction: 'follow_up',
         href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+        retryHref: null,
+        caseId: record.id,
+        dismissalTarget: null,
+      }, nowIso));
+    }
+    for (const review of (record.observedEffects?.reviews ?? []).slice(-40)) {
+      const dueAt = timestamp(review.followUpAt);
+      if (!dueAt) continue;
+      const overdue = Date.parse(dueAt) <= Date.parse(nowIso);
+      items.push(withReviewMetadata({
+        id: `observed-effect:${record.id}:${review.id}`,
+        kind: 'observed_effect_review',
+        priority: overdue ? 'urgent' : review.state === 'still_observed' || review.state === 'unavailable' ? 'high' : 'normal',
+        title: `Independent effect follow-up for ${record.domain}`,
+        detail: `${review.state.replaceAll('_', ' ')} · ${review.source} · ${review.completeness}`,
+        source: 'Independent browser-local observed-effect review',
+        sourceIds: ['observed_effect_review'],
+        caseDomain: record.domain,
+        observedAt: timestamp(review.observedAt) || updatedAt,
+        dueAt,
+        completeness: review.completeness === 'complete' ? 'complete' : review.completeness === 'partial' ? 'partial' : 'inconclusive',
+        nextAction: 'follow_up',
+        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
@@ -374,6 +401,7 @@ export function buildAnalystReviewInbox(
     overdue: items.filter((item) => item.dueAt !== null && Date.parse(item.dueAt) <= nowMs).length,
     case: items.filter((item) => item.kind === 'case').length,
     case_action: items.filter((item) => item.kind === 'case_action').length,
+    observed_effect_review: items.filter((item) => item.kind === 'observed_effect_review').length,
     evidence_gap: items.filter((item) => item.kind === 'evidence_gap').length,
     watchlist_change: items.filter((item) => item.kind === 'watchlist_change').length,
     bulk_session: items.filter((item) => item.kind === 'bulk_session').length,

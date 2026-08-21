@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import * as model from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
@@ -165,9 +166,46 @@ describe('case creation and updates', () => {
       brandProfileIds: Array.from({ length: 9 }, (_, index) => `profile-${index}`),
     }), /limited to 8 Brand Profile associations/iu);
   });
+
+  test('requires a deliberate typed closure before resolving a current Case', () => {
+    const created = model.createCase({ domain: 'closure.example' }, ISO);
+    assert.throws(
+      () => model.updateCase([created], created.id, { status: 'resolved' }, LATER),
+      /deliberate closure review/iu,
+    );
+    const closed = model.updateCase([created], created.id, {
+      closure: {
+        reason: 'risk_accepted',
+        summary: 'The analyst explicitly accepted the retained risk for this case.',
+        limitations: ['This does not establish safety or remediation.'],
+      },
+    }, LATER).record;
+    assert.equal(closed.status, 'resolved');
+    assert.equal(closed.closures.records.length, 1);
+    assert.equal(closed.closures.records[0]?.reason, 'risk_accepted');
+  });
 });
 
 describe('Case v12 Brand Profile references', () => {
+  test('migrates the frozen v12 response fixture to one explicit legacy snapshot and unavailable pre-v13 histories', () => {
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/case-v12-response-lifecycle.json', import.meta.url), 'utf8'));
+    const first = model.mergeCases([], fixture);
+    const migrated = requiredValue(first.cases[0]);
+    assert.equal(migrated.actions[0]?.history.length, 1);
+    assert.equal(migrated.actions[0]?.history[0]?.sourceClass, 'migration');
+    assert.equal(migrated.actions[0]?.history[0]?.occurredAt, '2026-08-01T12:00:00.000Z');
+    assert.equal(migrated.actions[0]?.reference, 'LEGACY-RESPONSE-42');
+    assert.equal(migrated.observedEffects.reviews.length, 0);
+    assert.equal(migrated.observedEffects.preV13HistoryUnavailable, true);
+    assert.equal(migrated.closures.records.length, 0);
+    assert.equal(migrated.closures.preV13HistoryUnavailable, true);
+    assert.match(migrated.observedEffects.limitations.join(' '), /pre-v13.*history is unavailable/iu);
+    const current = model.buildCaseExport(first.cases, '2026-08-02T12:00:00.000Z');
+    assert.equal(current.version, 14);
+    assert.deepEqual(model.mergeCases([], current).cases, first.cases);
+    assert.deepEqual(model.mergeCases(first.cases, current).cases, first.cases);
+  });
+
   test('forces schema 2 through 11 profile-context evidence to null before fingerprinting and merging', () => {
     const evidence = {
       ...deepEvidence(),
@@ -236,16 +274,20 @@ describe('Case v12 Brand Profile references', () => {
     }
   });
 
-  test('preserves current references in bare internal arrays and schema 12 envelopes only', () => {
+  test('preserves references in bare, v12, v13, and current v14 records but rejects future fields', () => {
     const raw = {
       domain: 'current-reference.example',
       brandProfileIds: ['Profile_A', ' profile-b', 'profile.with.dot', 'profile-b', 'Profile_A'],
       futureField: 'not retained',
     };
     const bare = requiredValue(model.normalizeCaseStore([raw]).cases[0]);
-    const current = requiredValue(model.normalizeCaseStore({ version: 12, cases: [raw] }).cases[0]);
-    const future = requiredValue(model.normalizeCaseStore({ version: 13, cases: [raw] }).cases[0]);
+    const legacy = requiredValue(model.normalizeCaseStore({ version: 12, cases: [raw] }).cases[0]);
+    const previous = requiredValue(model.normalizeCaseStore({ version: 13, cases: [raw] }).cases[0]);
+    const current = requiredValue(model.normalizeCaseStore({ version: 14, cases: [raw] }).cases[0]);
+    const future = requiredValue(model.normalizeCaseStore({ version: 15, cases: [raw] }).cases[0]);
     assert.deepEqual(bare.brandProfileIds, ['Profile_A', 'profile-b']);
+    assert.deepEqual(legacy.brandProfileIds, ['Profile_A', 'profile-b']);
+    assert.deepEqual(previous.brandProfileIds, ['Profile_A', 'profile-b']);
     assert.deepEqual(current.brandProfileIds, ['Profile_A', 'profile-b']);
     assert.deepEqual(future.brandProfileIds, []);
     assert.equal(Object.hasOwn(current, 'futureField'), false);
@@ -257,7 +299,7 @@ describe('Case v12 Brand Profile references', () => {
       brandProfileIds: ['Profile_A', 'profile_a'],
     }, ISO);
     const exported = model.buildCaseExport(opened.cases, LATER);
-    assert.equal(exported.version, 12);
+    assert.equal(exported.version, 14);
     assert.deepEqual(exported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
     const imported = model.mergeCases([], exported);
     assert.deepEqual(imported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
@@ -430,10 +472,10 @@ describe('duplicate-domain handling', () => {
   test('normalizeCaseStore keeps a single case per domain, most recent wins', () => {
     const store = model.normalizeCaseStore([
       { domain: 'dup.example', status: 'new', updatedAt: ISO },
-      { domain: 'DUP.example', status: 'resolved', updatedAt: LATER },
+      { domain: 'DUP.example', status: 'monitoring', updatedAt: LATER },
     ]);
     assert.equal(store.cases.length, 1);
-    assert.equal(requiredValue(store.cases[0]).status, 'resolved');
+    assert.equal(requiredValue(store.cases[0]).status, 'monitoring');
   });
 });
 
@@ -540,10 +582,10 @@ describe('imports cannot reset local analyst decisions', () => {
 
   test('a valid newer exported record still wins per field', () => {
     const result = model.mergeCases(localCase(), caseExport([
-      { domain: 'shared.example', status: 'resolved', disposition: 'closed_no_action', source: 'monitor', updatedAt: '2026-07-01T00:00:00.000Z' },
+      { domain: 'shared.example', status: 'monitoring', disposition: 'closed_no_action', source: 'monitor', updatedAt: '2026-07-01T00:00:00.000Z' },
     ]));
     const merged = requiredValue(result.cases[0]);
-    assert.equal(merged.status, 'resolved');
+    assert.equal(merged.status, 'monitoring');
     assert.equal(merged.disposition, 'closed_no_action');
     assert.equal(merged.source, 'monitor');
   });

@@ -22,6 +22,7 @@
   const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
 
   function incomparableLabel(reasons: string[]) {
+    if (reasons.includes('observation-context')) return 'Observation context differs';
     if ((reasons.includes('risk-model') || reasons.includes('opportunity-model')) && reasons.includes('scan-depth')) return 'Model and depth limit comparison';
     if (reasons.includes('opportunity-model')) return 'Opportunity models differ';
     if (reasons.includes('risk-model')) return 'Risk models differ';
@@ -31,6 +32,7 @@
 
   function incomparableNote(reasons: string[]) {
     const notes = [];
+    if (reasons.includes('observation-context')) notes.push('The submitted hostname differs. This is observation context and is not evidence that domain or infrastructure state changed.');
     if (reasons.includes('risk-model')) notes.push('Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
     if (reasons.includes('opportunity-model')) notes.push('Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
     if (reasons.includes('scan-depth')) notes.push('The capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
@@ -128,7 +130,7 @@
       {/each}
     </ol>
     {#if changedOnly && visibleTimeline.length===1 && timeline.length>1}
-      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched. Some observations differ materially, but their scan depth or risk model prevents field-level comparison.':'No reliable comparable changes matched.'}</p>
+      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched. Some observations differ only in context, scan depth, or score-model comparability.':'No reliable comparable changes matched.'}</p>
     {/if}
   {/if}
 </section>

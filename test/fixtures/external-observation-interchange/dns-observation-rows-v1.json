@@ -1,0 +1,17 @@
+{
+  "schema": "whoisleuth.dns-observation-rows",
+  "schemaVersion": 1,
+  "source": {
+    "name": "Reserved DNS observations"
+  },
+  "observations": [
+    {
+      "domain": "dns.example.test",
+      "type": "MX",
+      "value": "10 mail.example.test.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "partial",
+      "reference": null
+    }
+  ]
+}

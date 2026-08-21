@@ -10,8 +10,8 @@ import {
   mergeBulkSessions,
   normalizeBulkSession,
   type BulkSession,
-} from '../frontend/src/lib/analysis/bulk-session-model.ts';
-import { buildBulkComparisonCandidates } from '../frontend/src/lib/analysis/comparison-ledger-bulk.ts';
+} from '../packages/workspace/bulk-session-model.mts';
+import { buildBulkComparisonCandidates } from '../packages/comparison/comparison-ledger-bulk.mts';
 import {
   MAX_COMPARISON_LEDGER_DETAIL_ROWS,
   boundedComparisonLedgerLimitations,
@@ -27,7 +27,7 @@ import {
   type ComparisonLedgerIndex,
   type MutableComparisonLedgerCounters,
   type RawComparisonLedgerProjection,
-} from '../frontend/src/lib/analysis/comparison-ledger-contract.ts';
+} from '../packages/comparison/comparison-ledger-contract.mts';
 import {
   DOMAIN_PORTFOLIO_INPUT_SCHEMA,
   DOMAIN_PORTFOLIO_REVIEW_SCHEMA,
@@ -38,10 +38,13 @@ import { parseBoundedJsonObject } from './bounded-json.mts';
 import { CliUsageError } from './errors.mts';
 import { buildCliLookupDiff, formatCliLookupDiff, type CliLookupDiffDocument } from './lookup-diff.mts';
 import { SAVED_LOOKUP_SCHEMA } from './saved-lookup.mts';
+import {
+  CLI_COMPARISON_LEDGER_SCHEMA,
+  CLI_COMPARISON_LEDGER_VERSION,
+  MAX_RETAINED_ARTIFACT_DIFF_BYTES,
+} from '../packages/contracts/offline-comparison.mts';
 
-export const CLI_COMPARISON_LEDGER_SCHEMA = 'whoisleuth.cli.comparison-ledger';
-export const CLI_COMPARISON_LEDGER_VERSION = 1;
-export const MAX_RETAINED_ARTIFACT_DIFF_BYTES = 8 * 1024 * 1024;
+export { CLI_COMPARISON_LEDGER_SCHEMA, CLI_COMPARISON_LEDGER_VERSION, MAX_RETAINED_ARTIFACT_DIFF_BYTES };
 
 type UnknownRecord = Record<string, unknown>;
 type ArtifactFamily = 'bulk_sessions' | 'domain_portfolio';

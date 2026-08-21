@@ -1,0 +1,60 @@
+{
+  "schema": "whoisleuth.lookup-claim-passport",
+  "version": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": "1.47.4"
+  },
+  "target": {
+    "type": "domain",
+    "value": "fixture.example"
+  },
+  "observation": {
+    "observedAt": "2026-08-22T00:00:00.000Z",
+    "lookupDepth": "deep"
+  },
+  "claim": {
+    "id": "registration-state",
+    "label": "Registration-state statement",
+    "state": "not_ready",
+    "conclusion": "Whether an authority-aware registered, available, or inconclusive statement can be made.",
+    "requiredEvidenceIds": [
+      "authority-aware-availability"
+    ],
+    "missingEvidenceIds": [
+      "authority-aware-availability"
+    ],
+    "requirements": [
+      {
+        "id": "authority-aware-availability",
+        "label": "Authority-aware availability decision",
+        "evidenceId": "availability",
+        "mode": "network_collection",
+        "state": "unknown",
+        "observedAt": null,
+        "limitations": [
+          "Not supplied"
+        ]
+      }
+    ],
+    "limitations": [
+      "Authority-aware availability decision: Not supplied"
+    ]
+  },
+  "models": {
+    "claimReadiness": 2,
+    "risk": 7
+  },
+  "limitations": [
+    "Readiness describes evidence sufficiency, not truth, ownership, intent, safety, or eligibility.",
+    "This portable passport records evidence sufficiency for one point-in-time statement. It does not establish that the statement is true, current, safe, authorized, or attributable to an owner or actor.",
+    "The SHA-256 digest detects changes to this file. It does not authenticate the analyst, collection source, signer, or truth of the retained states.",
+    "Raw registry responses, contacts, page values, request paths, credentials, and browser-local records are excluded."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:894f9df9de70eee94c59a45096a9747fcf7bb94fe7a97f3fa4c9cff7e1db204f"
+  }
+}

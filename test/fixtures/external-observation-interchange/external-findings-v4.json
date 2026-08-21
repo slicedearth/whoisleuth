@@ -1,0 +1,24 @@
+{
+  "schema": "whoisleuth.external-findings",
+  "schemaVersion": 4,
+  "source": {
+    "name": "Reserved fixture source",
+    "reference": null,
+    "collectedAt": "2026-01-02T03:05:00.000Z"
+  },
+  "findings": [
+    {
+      "domain": "example.test",
+      "category": "reputation",
+      "evidenceClass": "provider_report",
+      "summary": "External review requires analyst confirmation.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "partial",
+      "limitations": [
+        "The observation was not independently verified."
+      ],
+      "reference": null,
+      "structuredObservation": null
+    }
+  ]
+}

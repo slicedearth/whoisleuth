@@ -12,7 +12,7 @@ import {
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   mergeBrandProfiles,
-} from '../frontend/src/lib/analysis/brand-profile-model.ts';
+} from '../packages/workspace/brand-profile-model.mts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 

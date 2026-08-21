@@ -1,0 +1,1 @@
+{"schema":"whoisleuth.web-capture-summary","schemaVersion":1,"source":{"name":"Reserved capture","reference":"fixture","collectedAt":"2026-01-01T00:00:00.000Z"},"captures":[{"domain":"capture.example","capturedAt":"2026-01-01T00:00:00.000Z","completeness":"partial","limitations":["Fixture-only metadata."],"pageTitle":"Reserved capture"}]}

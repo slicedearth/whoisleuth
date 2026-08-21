@@ -1,0 +1,251 @@
+{
+  "version": 10,
+  "cases": [
+    {
+      "id": "case-historical",
+      "domain": "history.example.test",
+      "status": "reviewing",
+      "disposition": "unreviewed",
+      "reviewReasonCode": null,
+      "tags": [
+        "review"
+      ],
+      "notes": [],
+      "source": "lookup",
+      "evidenceHistory": [
+        {
+          "id": "ev-17ccf6b",
+          "fingerprint": "17ccf6b",
+          "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+          "capturedAt": "2026-01-01T00:00:00.000Z",
+          "source": "lookup",
+          "scanDepth": "deep",
+          "availability": "registered",
+          "confidence": "high",
+          "riskModelVersion": 1,
+          "riskScore": 20,
+          "opportunityModelVersion": 1,
+          "opportunityScore": 40,
+          "riskFactors": [
+            {
+              "label": "Base",
+              "points": 20
+            }
+          ],
+          "opportunityFactors": [
+            {
+              "label": "Open",
+              "points": 40
+            }
+          ],
+          "registrar": "Old Registrar",
+          "createdDate": "2020-01-01T12:00:00.000Z",
+          "expiryDate": "2027-01-01T12:00:00.000Z",
+          "nameservers": [
+            "ns1.example.test"
+          ],
+          "hasMx": true,
+          "hasSpf": false,
+          "hasDmarc": false,
+          "activityStatus": "active",
+          "websiteProbeDetail": "Website responded",
+          "pageTitle": "Example page",
+          "httpSummaryVersion": null,
+          "httpEvidenceStatus": null,
+          "httpFinalOrigin": null,
+          "httpResponseStatus": null,
+          "httpTransportSecurity": null,
+          "httpRedirectCount": null,
+          "httpCrossOriginRedirect": null,
+          "httpHttpsDowngrade": null,
+          "httpContentType": null,
+          "httpSecurityHeaders": null,
+          "faviconMatch": false,
+          "faviconNearMatch": false,
+          "reusesOfficialAssets": false,
+          "hasPasswordField": false,
+          "hasExternalFormAction": false,
+          "phishingLanguageMatch": null,
+          "privacyProtected": false,
+          "idnReferenceMatch": false,
+          "pageBaselineMatch": false,
+          "hasActiveBrandProfile": false,
+          "mutationTypes": [
+            "replacement"
+          ]
+        },
+        {
+          "id": "ev-1vx7lwy",
+          "fingerprint": "1vx7lwy",
+          "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+          "capturedAt": "2026-02-01T00:00:00.000Z",
+          "source": "lookup",
+          "scanDepth": "deep",
+          "availability": "registered",
+          "confidence": "high",
+          "riskModelVersion": 1,
+          "riskScore": 30,
+          "opportunityModelVersion": 1,
+          "opportunityScore": 55,
+          "riskFactors": [
+            {
+              "label": "Base",
+              "points": 30
+            }
+          ],
+          "opportunityFactors": [
+            {
+              "label": "Open",
+              "points": 55
+            }
+          ],
+          "registrar": "New Registrar",
+          "createdDate": "2020-01-01T12:00:00.000Z",
+          "expiryDate": "2027-01-01T12:00:00.000Z",
+          "nameservers": [
+            "ns1.example.test"
+          ],
+          "hasMx": true,
+          "hasSpf": false,
+          "hasDmarc": false,
+          "activityStatus": "active",
+          "websiteProbeDetail": "Website responded",
+          "pageTitle": "Example page",
+          "httpSummaryVersion": null,
+          "httpEvidenceStatus": null,
+          "httpFinalOrigin": null,
+          "httpResponseStatus": null,
+          "httpTransportSecurity": null,
+          "httpRedirectCount": null,
+          "httpCrossOriginRedirect": null,
+          "httpHttpsDowngrade": null,
+          "httpContentType": null,
+          "httpSecurityHeaders": null,
+          "faviconMatch": false,
+          "faviconNearMatch": false,
+          "reusesOfficialAssets": false,
+          "hasPasswordField": false,
+          "hasExternalFormAction": false,
+          "phishingLanguageMatch": null,
+          "privacyProtected": false,
+          "idnReferenceMatch": false,
+          "pageBaselineMatch": false,
+          "hasActiveBrandProfile": false,
+          "mutationTypes": [
+            "replacement"
+          ]
+        }
+      ],
+      "evidencePins": [
+        {
+          "id": "pin-1",
+          "checkpointId": null,
+          "field": "registrar",
+          "category": "registration",
+          "label": "Registrar",
+          "value": "Old Registrar",
+          "source": "lookup",
+          "sourceState": "complete",
+          "sourceSchema": null,
+          "observedAt": "2026-01-01T00:00:00.000Z",
+          "collectionDepth": "deep",
+          "completeness": "complete",
+          "truncated": false,
+          "transitionExpectation": "preserve",
+          "limitations": [],
+          "createdAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "decisions": [
+        {
+          "id": "decision-1",
+          "summary": "Continue review",
+          "rationale": "The bounded evidence changed.",
+          "evidencePinIds": [
+            "pin-1"
+          ],
+          "createdAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "actions": [
+        {
+          "id": "action-1",
+          "type": "internal_review",
+          "recipient": "Internal review team",
+          "contactSource": "analyst_supplied",
+          "contactLimitations": [],
+          "dueAt": null,
+          "state": "planned",
+          "reference": null,
+          "followUpAt": null,
+          "outcome": null,
+          "createdAt": "2026-02-01T00:00:00.000Z",
+          "updatedAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "assertions": [
+        {
+          "id": "assertion-1",
+          "kind": "hypothesis",
+          "statement": "The observed change requires review.",
+          "rationale": null,
+          "evidencePinIds": [
+            "pin-1"
+          ],
+          "evidenceRelations": [
+            {
+              "evidencePinId": "pin-1",
+              "stance": "supports"
+            }
+          ],
+          "state": "open",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-02-01T00:00:00.000Z",
+          "provenance": {
+            "origin": "external_import",
+            "format": "stix",
+            "sourceName": "Reserved fixture feed",
+            "sourceDigestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "publisher": null,
+            "externalId": "indicator--fixture",
+            "entityType": "domain",
+            "entityValue": "history.example.test",
+            "observedAt": "2026-01-01T00:00:00.000Z",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "modifiedAt": "2026-02-01T00:00:00.000Z",
+            "confidence": 80,
+            "labels": [
+              "fixture"
+            ],
+            "markings": []
+          }
+        }
+      ],
+      "manualTrail": [
+        {
+          "id": "trail-1",
+          "kind": "review",
+          "summary": "Reviewed the retained evidence.",
+          "target": "history.example.test",
+          "createdAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "sightings": [
+        {
+          "id": "sighting-1",
+          "state": "analyst_confirmed",
+          "sourceClass": "analyst",
+          "category": "registration",
+          "source": "Analyst review",
+          "observedAt": "2026-02-01T00:00:00.000Z",
+          "completeness": "complete",
+          "evidencePinId": "pin-1",
+          "limitations": [],
+          "createdAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-02-01T00:00:00.000Z"
+    }
+  ]
+}

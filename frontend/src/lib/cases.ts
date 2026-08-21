@@ -60,11 +60,16 @@ export {
 export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
+  CASE_ACTION_EVENT_SOURCE_CLASSES,
   CASE_ASSERTION_KINDS,
   CASE_ASSERTION_STATES,
   CASE_EVIDENCE_RELATION_STANCES,
   CASE_MANUAL_TRAIL_KINDS,
+  CASE_CLOSURE_REASONS,
+  CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
+  CASE_OBSERVED_EFFECT_STATES,
   CASE_PIN_COMPLETENESS,
+  CASE_PROVIDER_OUTCOMES,
   CASE_SIGHTING_CATEGORIES,
   CASE_SIGHTING_STATES,
 } from './analysis/case-response-model.ts';
@@ -86,12 +91,18 @@ export {
 } from './analysis/external-intelligence-import.ts';
 export type {
   CaseActionRecord,
+  CaseActionState,
+  CaseActionTransitionEvent,
   CaseAssertionExternalProvenance,
   CaseAssertionRecord,
   CaseEvidenceRelationStance,
   CaseDecisionRecord,
   CaseEvidencePin,
+  CaseClosureHistory,
+  CaseClosureRecord,
   CaseManualTrailEvent,
+  CaseObservedEffectHistory,
+  CaseObservedEffectReview,
   CaseSightingRecord,
   CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';

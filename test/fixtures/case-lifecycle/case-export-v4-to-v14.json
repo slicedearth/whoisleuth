@@ -1,0 +1,272 @@
+{
+  "version": 14,
+  "exportedAt": "2026-08-22T00:00:00.000Z",
+  "cases": [
+    {
+      "id": "case-historical",
+      "domain": "history.example.test",
+      "status": "reviewing",
+      "disposition": "unreviewed",
+      "reviewReasonCode": null,
+      "brandProfileIds": [],
+      "tags": [
+        "review"
+      ],
+      "notes": [],
+      "source": "lookup",
+      "evidenceHistory": [
+        {
+          "id": "ev-yi9yp2",
+          "fingerprint": "yi9yp2",
+          "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+          "capturedAt": "2026-01-01T00:00:00.000Z",
+          "source": "lookup",
+          "inputHostname": null,
+          "scanDepth": "deep",
+          "availability": "registered",
+          "confidence": "high",
+          "riskModelVersion": 1,
+          "riskScore": 20,
+          "opportunityModelVersion": null,
+          "opportunityScore": 40,
+          "riskFactors": [
+            {
+              "label": "Base",
+              "points": 20
+            }
+          ],
+          "opportunityFactors": [
+            {
+              "label": "Open",
+              "points": 40
+            }
+          ],
+          "registrar": "Old Registrar",
+          "createdDate": "2020-01-01T12:00:00.000Z",
+          "expiryDate": "2027-01-01T12:00:00.000Z",
+          "nameservers": [
+            "ns1.example.test"
+          ],
+          "hasMx": true,
+          "hasSpf": false,
+          "hasDmarc": false,
+          "activityStatus": "active",
+          "websiteProbeDetail": "Website responded",
+          "pageTitle": "Example page",
+          "httpSummaryVersion": null,
+          "httpEvidenceStatus": null,
+          "httpFinalOrigin": null,
+          "httpResponseStatus": null,
+          "httpTransportSecurity": null,
+          "httpRedirectCount": null,
+          "httpCrossOriginRedirect": null,
+          "httpHttpsDowngrade": null,
+          "httpContentType": null,
+          "httpSecurityHeaders": null,
+          "faviconMatch": false,
+          "faviconNearMatch": false,
+          "reusesOfficialAssets": false,
+          "hasPasswordField": false,
+          "hasExternalFormAction": null,
+          "phishingLanguageMatch": null,
+          "privacyProtected": null,
+          "idnReferenceMatch": null,
+          "pageBaselineMatch": null,
+          "hasActiveBrandProfile": null,
+          "profileContextState": null,
+          "profileContextLimitation": null,
+          "mutationTypes": [
+            "replacement"
+          ]
+        },
+        {
+          "id": "ev-7m9n25",
+          "fingerprint": "7m9n25",
+          "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+          "capturedAt": "2026-02-01T00:00:00.000Z",
+          "source": "lookup",
+          "inputHostname": null,
+          "scanDepth": "deep",
+          "availability": "registered",
+          "confidence": "high",
+          "riskModelVersion": 1,
+          "riskScore": 30,
+          "opportunityModelVersion": null,
+          "opportunityScore": 55,
+          "riskFactors": [
+            {
+              "label": "Base",
+              "points": 30
+            }
+          ],
+          "opportunityFactors": [
+            {
+              "label": "Open",
+              "points": 55
+            }
+          ],
+          "registrar": "New Registrar",
+          "createdDate": "2020-01-01T12:00:00.000Z",
+          "expiryDate": "2027-01-01T12:00:00.000Z",
+          "nameservers": [
+            "ns1.example.test"
+          ],
+          "hasMx": true,
+          "hasSpf": false,
+          "hasDmarc": false,
+          "activityStatus": "active",
+          "websiteProbeDetail": "Website responded",
+          "pageTitle": "Example page",
+          "httpSummaryVersion": null,
+          "httpEvidenceStatus": null,
+          "httpFinalOrigin": null,
+          "httpResponseStatus": null,
+          "httpTransportSecurity": null,
+          "httpRedirectCount": null,
+          "httpCrossOriginRedirect": null,
+          "httpHttpsDowngrade": null,
+          "httpContentType": null,
+          "httpSecurityHeaders": null,
+          "faviconMatch": false,
+          "faviconNearMatch": false,
+          "reusesOfficialAssets": false,
+          "hasPasswordField": false,
+          "hasExternalFormAction": null,
+          "phishingLanguageMatch": null,
+          "privacyProtected": null,
+          "idnReferenceMatch": null,
+          "pageBaselineMatch": null,
+          "hasActiveBrandProfile": null,
+          "profileContextState": null,
+          "profileContextLimitation": null,
+          "mutationTypes": [
+            "replacement"
+          ]
+        }
+      ],
+      "evidencePins": [
+        {
+          "id": "pin-1",
+          "checkpointId": null,
+          "field": null,
+          "category": null,
+          "label": "Registrar",
+          "value": "Old Registrar",
+          "source": "lookup",
+          "sourceState": null,
+          "sourceSchema": null,
+          "observedAt": "2026-01-01T00:00:00.000Z",
+          "collectionDepth": "unknown",
+          "completeness": "complete",
+          "truncated": null,
+          "transitionExpectation": null,
+          "limitations": [],
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "certificateObservation": null
+        }
+      ],
+      "decisions": [
+        {
+          "id": "decision-1",
+          "summary": "Continue review",
+          "rationale": "The bounded evidence changed.",
+          "evidencePinIds": [
+            "pin-1"
+          ],
+          "createdAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "actions": [
+        {
+          "id": "action-1",
+          "type": "internal_review",
+          "recipient": "Internal review team",
+          "contactSource": "analyst_supplied",
+          "contactLimitations": [],
+          "dueAt": null,
+          "state": "drafting",
+          "reference": null,
+          "followUpAt": null,
+          "providerOutcome": null,
+          "outcome": null,
+          "originActionId": null,
+          "history": [
+            {
+              "id": "action-event-1ge78g2",
+              "previousState": null,
+              "nextState": "drafting",
+              "occurredAt": "2026-02-01T00:00:00.000Z",
+              "sourceClass": "migration",
+              "provenance": "case_v12_legacy_snapshot",
+              "reference": null,
+              "evidencePinId": null,
+              "limitations": [
+                "Migrated from the Case v12 current state \"planned\"; pre-v13 transition history is unavailable."
+              ],
+              "providerOutcome": null,
+              "outcomeDetail": null,
+              "originActionId": null,
+              "applied": true
+            }
+          ],
+          "historyOmitted": 0,
+          "historyLimitations": [],
+          "createdAt": "2026-02-01T00:00:00.000Z",
+          "metadataUpdatedAt": "2026-02-01T00:00:00.000Z",
+          "updatedAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "assertions": [
+        {
+          "id": "assertion-1",
+          "kind": "hypothesis",
+          "statement": "The observed change requires review.",
+          "rationale": null,
+          "evidencePinIds": [
+            "pin-1"
+          ],
+          "evidenceRelations": [
+            {
+              "evidencePinId": "pin-1",
+              "stance": "supports"
+            }
+          ],
+          "state": "open",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "manualTrail": [
+        {
+          "id": "trail-1",
+          "kind": "review",
+          "summary": "Reviewed the retained evidence.",
+          "target": "history.example.test",
+          "createdAt": "2026-02-01T00:00:00.000Z"
+        }
+      ],
+      "sightings": [],
+      "observedEffects": {
+        "reviews": [],
+        "omitted": 0,
+        "preV13HistoryUnavailable": true,
+        "limitations": [
+          "Migrated from a pre-v13 Case; earlier independent observed-effect review history is unavailable.",
+          "Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them."
+        ]
+      },
+      "closures": {
+        "records": [],
+        "omitted": 0,
+        "preV13HistoryUnavailable": true,
+        "limitations": [
+          "Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.",
+          "Migrated from a pre-v13 Case; earlier deliberate closure history is unavailable."
+        ]
+      },
+      "branches": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-02-01T00:00:00.000Z"
+    }
+  ]
+}

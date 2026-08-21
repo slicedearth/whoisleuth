@@ -12,6 +12,7 @@ import {
   parseCacaoInvestigationPlaybook,
 } from './analysis/investigation-playbook-interchange.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { serialiseWorkspacePortableJsonLine } from '../../../packages/contracts/workspace-portability.mts';
 
 export {
   INVESTIGATION_TEMPLATE_SCHEMA,
@@ -71,7 +72,7 @@ export async function importInvestigationTemplates(raw: unknown) {
 }
 
 export async function exportInvestigationTemplates(): Promise<void> {
-  const body = `${JSON.stringify(buildInvestigationTemplateExport(await loadInvestigationTemplates()), null, 2)}\n`;
+  const body = serialiseWorkspacePortableJsonLine(buildInvestigationTemplateExport(await loadInvestigationTemplates()));
   const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;

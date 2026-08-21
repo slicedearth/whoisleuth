@@ -14,6 +14,7 @@ import {
   parseArguments,
 } from '../tools/local-data-platform-evaluation.mts';
 import { BROWSER_LOCAL_COLLECTIONS } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 const NOW = new Date('2026-07-22T00:00:00.000Z');
 const DECLARED_BROWSER_STORE_BYTES = BROWSER_LOCAL_COLLECTIONS
@@ -25,6 +26,16 @@ function capture() {
 }
 
 describe('local data platform evaluation', () => {
+  test('keeps the dependency-neutral manifest identical to live browser collection metadata', () => {
+    assert.deepEqual(BROWSER_LOCAL_COLLECTIONS.map((definition) => ({
+      id: definition.id,
+      label: definition.label,
+      schemaVersion: definition.schemaVersion,
+      maximumBytes: definition.maximumBytes,
+      maximumRecords: definition.maximumRecords,
+    })), BROWSER_LOCAL_COLLECTION_MANIFEST);
+  });
+
   test('derives the aggregate ceiling from the owning browser-store constants', () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     assert.equal(report.schema, LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA);

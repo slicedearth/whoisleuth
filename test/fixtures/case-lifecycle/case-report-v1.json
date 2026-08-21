@@ -1,0 +1,259 @@
+{
+  "schema": "whoisleuth.case-report",
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-05T03:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth"
+  },
+  "case": {
+    "id": "case-historical",
+    "domain": "history.example.test",
+    "status": "reviewing",
+    "disposition": "unreviewed",
+    "tags": [
+      "review"
+    ],
+    "source": "lookup",
+    "openedAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-02-01T00:00:00.000Z",
+    "notesIncluded": false
+  },
+  "currentAssessment": {
+    "id": "ev-1uonnn",
+    "fingerprint": "1uonnn",
+    "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+    "capturedAt": "2026-02-01T00:00:00.000Z",
+    "source": "lookup",
+    "scanDepth": "deep",
+    "availability": "registered",
+    "confidence": "high",
+    "riskModelVersion": 1,
+    "riskScore": 30,
+    "opportunityScore": 55,
+    "riskFactors": [
+      {
+        "label": "Base",
+        "points": 30
+      }
+    ],
+    "opportunityFactors": [
+      {
+        "label": "Open",
+        "points": 55
+      }
+    ],
+    "registrar": "New Registrar",
+    "createdDate": "2020-01-01T12:00:00.000Z",
+    "expiryDate": "2027-01-01T12:00:00.000Z",
+    "nameservers": [
+      "ns1.example.test"
+    ],
+    "hasMx": true,
+    "hasSpf": false,
+    "hasDmarc": false,
+    "activityStatus": "active",
+    "websiteProbeDetail": "Website responded",
+    "pageTitle": "Example page",
+    "httpSummaryVersion": null,
+    "httpEvidenceStatus": null,
+    "httpFinalOrigin": null,
+    "httpResponseStatus": null,
+    "httpTransportSecurity": null,
+    "httpRedirectCount": null,
+    "httpCrossOriginRedirect": null,
+    "httpHttpsDowngrade": null,
+    "httpContentType": null,
+    "httpSecurityHeaders": null,
+    "faviconMatch": false,
+    "faviconNearMatch": false,
+    "reusesOfficialAssets": false,
+    "hasPasswordField": false,
+    "phishingLanguageMatch": null,
+    "mutationTypes": [
+      "replacement"
+    ]
+  },
+  "evidenceTimeline": [
+    {
+      "snapshot": {
+        "id": "ev-xul0z4",
+        "fingerprint": "xul0z4",
+        "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+        "capturedAt": "2026-01-01T00:00:00.000Z",
+        "source": "lookup",
+        "scanDepth": "deep",
+        "availability": "registered",
+        "confidence": "high",
+        "riskModelVersion": 1,
+        "riskScore": 20,
+        "opportunityScore": 40,
+        "riskFactors": [
+          {
+            "label": "Base",
+            "points": 20
+          }
+        ],
+        "opportunityFactors": [
+          {
+            "label": "Open",
+            "points": 40
+          }
+        ],
+        "registrar": "Old Registrar",
+        "createdDate": "2020-01-01T12:00:00.000Z",
+        "expiryDate": "2027-01-01T12:00:00.000Z",
+        "nameservers": [
+          "ns1.example.test"
+        ],
+        "hasMx": true,
+        "hasSpf": false,
+        "hasDmarc": false,
+        "activityStatus": "active",
+        "websiteProbeDetail": "Website responded",
+        "pageTitle": "Example page",
+        "httpSummaryVersion": null,
+        "httpEvidenceStatus": null,
+        "httpFinalOrigin": null,
+        "httpResponseStatus": null,
+        "httpTransportSecurity": null,
+        "httpRedirectCount": null,
+        "httpCrossOriginRedirect": null,
+        "httpHttpsDowngrade": null,
+        "httpContentType": null,
+        "httpSecurityHeaders": null,
+        "faviconMatch": false,
+        "faviconNearMatch": false,
+        "reusesOfficialAssets": false,
+        "hasPasswordField": false,
+        "phishingLanguageMatch": null,
+        "mutationTypes": [
+          "replacement"
+        ]
+      },
+      "isBaseline": true,
+      "hasRepeatedObservation": false,
+      "changes": null,
+      "hasIncomparableChange": false,
+      "incomparableReasons": []
+    },
+    {
+      "snapshot": {
+        "id": "ev-1uonnn",
+        "fingerprint": "1uonnn",
+        "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+        "capturedAt": "2026-02-01T00:00:00.000Z",
+        "source": "lookup",
+        "scanDepth": "deep",
+        "availability": "registered",
+        "confidence": "high",
+        "riskModelVersion": 1,
+        "riskScore": 30,
+        "opportunityScore": 55,
+        "riskFactors": [
+          {
+            "label": "Base",
+            "points": 30
+          }
+        ],
+        "opportunityFactors": [
+          {
+            "label": "Open",
+            "points": 55
+          }
+        ],
+        "registrar": "New Registrar",
+        "createdDate": "2020-01-01T12:00:00.000Z",
+        "expiryDate": "2027-01-01T12:00:00.000Z",
+        "nameservers": [
+          "ns1.example.test"
+        ],
+        "hasMx": true,
+        "hasSpf": false,
+        "hasDmarc": false,
+        "activityStatus": "active",
+        "websiteProbeDetail": "Website responded",
+        "pageTitle": "Example page",
+        "httpSummaryVersion": null,
+        "httpEvidenceStatus": null,
+        "httpFinalOrigin": null,
+        "httpResponseStatus": null,
+        "httpTransportSecurity": null,
+        "httpRedirectCount": null,
+        "httpCrossOriginRedirect": null,
+        "httpHttpsDowngrade": null,
+        "httpContentType": null,
+        "httpSecurityHeaders": null,
+        "faviconMatch": false,
+        "faviconNearMatch": false,
+        "reusesOfficialAssets": false,
+        "hasPasswordField": false,
+        "phishingLanguageMatch": null,
+        "mutationTypes": [
+          "replacement"
+        ]
+      },
+      "isBaseline": false,
+      "hasRepeatedObservation": true,
+      "changes": [
+        {
+          "field": "riskScore",
+          "label": "Risk score",
+          "before": 20,
+          "after": 30,
+          "tone": "warn"
+        },
+        {
+          "field": "riskFactors",
+          "label": "Risk factors",
+          "before": [
+            {
+              "label": "Base",
+              "points": 20
+            }
+          ],
+          "after": [
+            {
+              "label": "Base",
+              "points": 30
+            }
+          ],
+          "tone": "neutral"
+        },
+        {
+          "field": "opportunityScore",
+          "label": "Opportunity score",
+          "before": 40,
+          "after": 55,
+          "tone": "neutral"
+        },
+        {
+          "field": "opportunityFactors",
+          "label": "Opportunity factors",
+          "before": [
+            {
+              "label": "Open",
+              "points": 40
+            }
+          ],
+          "after": [
+            {
+              "label": "Open",
+              "points": 55
+            }
+          ],
+          "tone": "neutral"
+        },
+        {
+          "field": "registrar",
+          "label": "Registrar",
+          "before": "Old Registrar",
+          "after": "New Registrar",
+          "tone": "warn"
+        }
+      ],
+      "hasIncomparableChange": false,
+      "incomparableReasons": []
+    }
+  ],
+  "limitations": "This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and risk-model gates prevent misleading comparisons; \"incomparable\" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it."
+}

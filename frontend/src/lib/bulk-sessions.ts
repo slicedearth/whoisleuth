@@ -10,6 +10,7 @@ import {
   type BulkSessionComparison,
 } from './analysis/bulk-session-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { serialiseWorkspacePortableJsonLine } from '../../../packages/contracts/workspace-portability.mts';
 
 export type {
   BulkSession,
@@ -66,7 +67,7 @@ export async function importBulkSessions(value: unknown) {
 
 export async function exportBulkSessions(generatedAt = new Date().toISOString()) {
   const archive = buildBulkSessionExport(await loadBulkSessions(), generatedAt);
-  const blob = new Blob([`${JSON.stringify(archive, null, 2)}\n`], { type: 'application/json;charset=utf-8' });
+  const blob = new Blob([serialiseWorkspacePortableJsonLine(archive)], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

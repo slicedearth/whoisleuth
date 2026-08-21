@@ -10,42 +10,44 @@ import {
 } from './artifact-structure.mts';
 
 import {
-  CASE_RESPONSE_PACKET_SCHEMA,
-  CASE_RESPONSE_PACKET_VERSION,
-  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   verifyCaseResponsePacketIntegrity,
   type CaseResponsePacket,
-} from '../frontend/src/lib/analysis/case-response-packet.ts';
+} from '../packages/cases/case-response-packet.mts';
+import {
+  CASE_PORTABILITY_VERIFIER_DISPATCH,
+  CASE_RESPONSE_PACKET_SCHEMA,
+  CLI_CASE_PACK_SCHEMA,
+} from '../packages/contracts/case-portability.mts';
 import {
   ACQUISITION_DECISION_PACKET_SCHEMA,
   ACQUISITION_DECISION_PACKET_VERSION,
-} from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
+} from '../packages/investigation/acquisition-decision-packet.mts';
 import {
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_VERSION,
-} from '../frontend/src/lib/analysis/lookup-claim-passport.ts';
+} from '../packages/investigation/lookup-claim-passport.mts';
 import {
   BULK_DOMAIN_COMPARISON_SCHEMA,
   BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
+} from '../packages/investigation/bulk-domain-comparison.mts';
 import {
   BULK_MAIL_EXPOSURE_SCHEMA,
   BULK_MAIL_EXPOSURE_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
+} from '../packages/investigation/bulk-mail-exposure.mts';
 import {
   BULK_REVIEW_MANIFEST_SCHEMA,
   BULK_REVIEW_MANIFEST_VERSION,
-} from '../frontend/src/lib/analysis/bulk-review-export.ts';
+} from '../packages/investigation/bulk-review-export.mts';
 import {
   decryptWorkspaceArchive,
   inspectEncryptedWorkspaceArchive,
   isEncryptedWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+} from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
   previewWorkspaceArchive,
   readWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive.ts';
+} from '../packages/workspace/workspace-archive.mts';
 import {
   canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
@@ -77,15 +79,12 @@ import {
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   verifyInvestigationCapsule,
   type SupportedInvestigationCapsule,
-} from '../frontend/src/lib/analysis/investigation-capsule.ts';
+} from '../packages/investigation/investigation-capsule.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
   INVESTIGATION_MANIFEST_VERSION,
 } from './investigation-manifest.mts';
-import {
-  CLI_CASE_PACK_SCHEMA,
-  verifyCliCasePack,
-} from './case-pack.mts';
+import { verifyCliCasePack } from './case-pack.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
   LOOKUP_EVIDENCE_SCHEMA,
@@ -200,6 +199,38 @@ function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : null;
+}
+
+type CasePortabilityVerifierDescriptor = typeof CASE_PORTABILITY_VERIFIER_DISPATCH[number];
+
+function selectCasePortabilityVerifier(value: UnknownRecord): CasePortabilityVerifierDescriptor | null {
+  const packet = record(value.packet);
+  for (const descriptor of CASE_PORTABILITY_VERIFIER_DISPATCH) {
+    if (descriptor.id === 'case-response-packet'
+      && descriptor.discriminator === 'root_schema'
+      && value.schema === CASE_RESPONSE_PACKET_SCHEMA) return descriptor;
+    if (descriptor.id === 'cli-case-pack'
+      && descriptor.discriminator === 'packet_schema'
+      && packet?.schema === CLI_CASE_PACK_SCHEMA) return descriptor;
+  }
+  return null;
+}
+
+function casePortabilityVersion(
+  descriptor: CasePortabilityVerifierDescriptor,
+  value: UnknownRecord,
+): number {
+  if (descriptor.versionField === 'schemaVersion') return artifactVersion(value);
+  const packet = record(value.packet);
+  if (!packet) throw new TypeError('The Case portability verifier discriminator is missing.');
+  return artifactVersion(packet);
+}
+
+function supportsCasePortabilityVersion(
+  descriptor: CasePortabilityVerifierDescriptor,
+  version: number,
+): boolean {
+  return descriptor.supportedVersions.some((candidate) => candidate === version);
 }
 
 function parseJson(raw: string): UnknownRecord {
@@ -361,9 +392,13 @@ async function verifyOfflineArtifactCore(
   options: Readonly<{ passphrase?: string | null }> = {},
 ): Promise<OfflineArtifactVerificationCore> {
   const value = parseJson(raw);
+  const casePortabilityVerifier = selectCasePortabilityVerifier(value);
 
-  const casePackPacket = record(value.packet);
-  if (casePackPacket?.schema === CLI_CASE_PACK_SCHEMA) {
+  if (casePortabilityVerifier?.id === 'cli-case-pack') {
+    const casePackVersion = casePortabilityVersion(casePortabilityVerifier, value);
+    if (!supportsCasePortabilityVersion(casePortabilityVerifier, casePackVersion)) {
+      throw new UnsupportedOfflineArtifactError('This CLI Case-pack version is not supported.');
+    }
     const verified = verifyCliCasePack(value);
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
@@ -371,7 +406,7 @@ async function verifyOfflineArtifactCore(
       artifact: Object.freeze({
         kind: 'cli_case_pack',
         schema: CLI_CASE_PACK_SCHEMA,
-        version: Number(casePackPacket.version),
+        version: casePackVersion,
       }),
       state: 'verified',
       checks: Object.freeze({
@@ -433,11 +468,11 @@ async function verifyOfflineArtifactCore(
     return archiveReport(raw, value, await readWorkspaceArchive(value), false, null);
   }
 
-  if (schema === CASE_RESPONSE_PACKET_SCHEMA) {
-    if (version !== LEGACY_CASE_RESPONSE_PACKET_VERSION && version !== CASE_RESPONSE_PACKET_VERSION) {
+  if (casePortabilityVerifier?.id === 'case-response-packet') {
+    if (!supportsCasePortabilityVersion(casePortabilityVerifier, version)) {
       throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
     }
-    validateOfflineArtifactStructure(schema, value);
+    validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, value);
     const integrity = record(value.integrity);
     if (!integrity || !await verifyCaseResponsePacketIntegrity(value as CaseResponsePacket)) {
       throw new TypeError('The case-response packet failed its manifest integrity check.');
@@ -445,7 +480,7 @@ async function verifyOfflineArtifactCore(
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
-      artifact: Object.freeze({ kind: 'case_response_packet', schema, version }),
+      artifact: Object.freeze({ kind: 'case_response_packet', schema: CASE_RESPONSE_PACKET_SCHEMA, version }),
       state: 'verified',
       checks: Object.freeze({
         structure: 'verified',

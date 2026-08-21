@@ -3,8 +3,8 @@ import { recordOrEmpty } from '../lib/bounded-contract-normalizers.mts';
 import {
   buildBulkDomainComparison,
   type BulkDomainComparison,
-} from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
-import { relationshipObservation } from '../frontend/src/lib/analysis/relationship-evidence.ts';
+} from '../packages/investigation/bulk-domain-comparison.mts';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 

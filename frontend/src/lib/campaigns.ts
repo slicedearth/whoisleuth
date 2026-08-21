@@ -12,6 +12,7 @@ import {
 } from './analysis/campaign-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_CAMPAIGNS_KEY } from './browser-local-data-contract.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 
 export { MAX_CAMPAIGN_IMPORT_BYTES } from './analysis/campaign-model.ts';
 
@@ -80,7 +81,7 @@ export async function importCampaigns(raw: unknown): Promise<{ campaigns: Campai
 }
 
 export async function exportCampaigns(): Promise<void> {
-  const blob = new Blob([JSON.stringify(buildCampaignExport(await loadCampaigns()), null, 2)], { type: 'application/json' });
+  const blob = new Blob([serialiseWorkspacePortableJson(buildCampaignExport(await loadCampaigns()))], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

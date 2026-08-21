@@ -77,7 +77,7 @@ function storageEntries(
 }
 
 function nearBudgetCaseSnapshot(): CaseRecord[] {
-  const note = (caseIndex:number,noteIndex:number,length=2_000)=>({
+  const note = (caseIndex:number,noteIndex:number,length=1_987)=>({
     createdAt:new Date(Date.parse('2026-06-01T00:00:00.000Z')+noteIndex*1_000).toISOString(),
     body:`${caseIndex}-${noteIndex}-`.padEnd(length,'x'),
   });

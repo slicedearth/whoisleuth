@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "targetId": "target-fixture-example-he9xyi",
+  "nodes": [
+    {
+      "id": "target-fixture-example-he9xyi",
+      "label": "fixture.example",
+      "kind": "target",
+      "detail": "Lookup target"
+    },
+    {
+      "id": "observation-registry-publication-m032s8",
+      "label": "Registry publication",
+      "kind": "observation",
+      "detail": "Registry nameserver and glue evidence"
+    },
+    {
+      "id": "observation-recursive-parent-view-5esrn6",
+      "label": "Recursive parent view",
+      "kind": "observation",
+      "detail": "Point-in-time parent delegation observation"
+    }
+  ],
+  "edges": [],
+  "sources": [],
+  "truncated": false,
+  "limitations": [
+    "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+    "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+    "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+    "Missing and incomplete sources remain explicit and are not represented as absent relationships."
+  ]
+}

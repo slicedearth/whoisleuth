@@ -1,0 +1,139 @@
+{
+  "schema": "whoisleuth.acquisition-decision",
+  "version": 2,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "target": "fixture.example",
+  "synthetic": true,
+  "evidenceObservedAt": "2026-08-22T00:00:00.000Z",
+  "analystReview": {
+    "decision": "continue_manual_review",
+    "rationale": "Retain the bounded review for an analyst decision.",
+    "reviewedChecks": [
+      "eligibility",
+      "counterparty",
+      "transfer",
+      "continuity",
+      "legal"
+    ],
+    "outstandingChecks": [],
+    "state": "reviewed"
+  },
+  "evidenceReview": {
+    "version": 2,
+    "label": "2 due-diligence areas unavailable",
+    "state": "registered",
+    "items": [
+      {
+        "id": "availability",
+        "label": "Registration observed",
+        "state": "observed",
+        "detail": "Current registry, WHOIS, or authoritative DNS evidence supports a registered state.",
+        "provenance": "RDAP registration evidence"
+      },
+      {
+        "id": "lifecycle",
+        "label": "Expiry date not published",
+        "state": "observed",
+        "detail": "A usable publication was collected without a normalised expiry date. Registry policy and renewal state still require manual confirmation.",
+        "provenance": "Registry publication quality"
+      },
+      {
+        "id": "transfer",
+        "label": "No interpreted lock status observed",
+        "state": "review",
+        "detail": "The collected statuses did not contain a recognised client or server lock. This does not prove transfer eligibility or that other policy restrictions are absent.",
+        "provenance": "EPP status interpretation"
+      },
+      {
+        "id": "operations",
+        "label": "Service continuity unresolved",
+        "state": "unavailable",
+        "detail": "The available point-in-time evidence does not establish current web or mail dependencies.",
+        "provenance": "Point-in-time service evidence"
+      },
+      {
+        "id": "contacts",
+        "label": "Contact routing unavailable",
+        "state": "unavailable",
+        "detail": "No usable contact publication was available from the collected sources.",
+        "provenance": "Registry source health"
+      }
+    ],
+    "transitionDependencies": [
+      {
+        "id": "nameservers",
+        "label": "Nameserver dependencies unavailable",
+        "state": "unavailable",
+        "detail": "Incomplete DNS evidence cannot establish the current authoritative delegation.",
+        "provenance": "Point-in-time DNS nameserver source health"
+      },
+      {
+        "id": "web",
+        "label": "Web-routing dependencies unavailable",
+        "state": "unavailable",
+        "detail": "Incomplete DNS and activation evidence cannot establish current web routing.",
+        "provenance": "Point-in-time DNS and HTTP source health"
+      },
+      {
+        "id": "mail",
+        "label": "Mail dependencies unavailable",
+        "state": "unavailable",
+        "detail": "Incomplete DNS evidence cannot establish current mail routing or authentication.",
+        "provenance": "Point-in-time DNS mail source health"
+      },
+      {
+        "id": "tls",
+        "label": "TLS transition evidence unavailable",
+        "state": "unavailable",
+        "detail": "No usable TLS observation was available to describe certificate or hostname dependencies.",
+        "provenance": "TLS source health"
+      }
+    ],
+    "policyChecks": [
+      {
+        "id": "policy_eligibility",
+        "label": "Confirm .example eligibility and registration policy",
+        "state": "review",
+        "detail": "Check current registry and registrar rules for registrant eligibility, reserved names, disputes, documentation, renewal, and transfer before committing funds.",
+        "provenance": "Manual policy check prompted by the observed domain suffix"
+      },
+      {
+        "id": "policy_lifecycle",
+        "label": "Resolve lifecycle-policy context",
+        "state": "review",
+        "detail": "No recognised lifecycle status was retained. Confirm renewal, grace, redemption, restoration, and deletion rules with the current registry or registrar.",
+        "provenance": "Separately attributed RDAP and WHOIS lifecycle publications"
+      },
+      {
+        "id": "policy_transfer",
+        "label": "Confirm transfer and change-of-control requirements",
+        "state": "review",
+        "detail": "No recognised lock was retained, but that does not establish transfer eligibility. Confirm authorisation, waiting periods, identity checks, and registrar requirements.",
+        "provenance": "EPP status interpretation and manual policy requirements"
+      }
+    ],
+    "nextSteps": [
+      "Confirm current registration eligibility, price, and contractual terms with an appropriate registrar or registry.",
+      "Review current registry lifecycle and transfer-policy statuses immediately before acting.",
+      "Determine whether current DNS, web, mail, and certificate services must be preserved.",
+      "Resolve official registry and registrar support channels manually.",
+      "Review trade mark, eligibility, dispute, tax, escrow, and legal requirements outside WHOISleuth."
+    ],
+    "limitations": [
+      "This workspace organises observed evidence; it does not value a domain or establish that it can be acquired.",
+      "Expiry dates, EPP statuses, sale signals, and contact routes can change after collection.",
+      "WHOISleuth does not assess legal rights, registry eligibility, registrar terms, escrow, tax, or payment risk."
+    ]
+  },
+  "limitations": [
+    "This local artefact records an analyst review of bounded point-in-time evidence and does not submit, reserve, value, purchase, or transfer a domain.",
+    "A reviewed state records completion of the displayed manual checklist, not the accuracy of external statements or a legal, financial, eligibility, or ownership determination.",
+    "Refresh authoritative registration and policy evidence immediately before acting.",
+    "This packet contains synthetic demonstration data and must not be used as evidence or an acquisition record."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:b70701de1a486f9dfebafce5c802ba01523fb88f6389d2be092886425e36a84d"
+  }
+}

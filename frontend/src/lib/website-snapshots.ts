@@ -7,6 +7,7 @@ import {
   type WebsiteProfileSnapshot,
 } from './analysis/website-snapshot-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 
 export { MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES } from './analysis/website-snapshot-model.ts';
 export type { WebsiteProfileSnapshot, WebsiteSnapshotChange } from './analysis/website-snapshot-model.ts';
@@ -38,7 +39,7 @@ export async function importWebsiteSnapshots(raw: unknown) {
   });
 }
 export async function exportWebsiteSnapshots(): Promise<void> {
-  const body = JSON.stringify(buildWebsiteSnapshotExport(await loadWebsiteSnapshots()), null, 2);
+  const body = serialiseWorkspacePortableJson(buildWebsiteSnapshotExport(await loadWebsiteSnapshots()));
   const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;

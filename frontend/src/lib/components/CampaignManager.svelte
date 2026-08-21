@@ -4,12 +4,14 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
   import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
+  import ParentDomainCampaignScope from '$lib/components/ParentDomainCampaignScope.svelte';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
   import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
   import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
+  import { buildParentDomainCampaignReview, type ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import {
     addCampaignDomain,
     createCampaign,
@@ -23,7 +25,7 @@
     type CampaignRecord,
   } from '$lib/campaigns';
 
-  let { records, profiles, relationshipSummary, cohortSourceStates, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];profiles:BrandProfile[];relationshipSummary:CaseRelationshipSummary;cohortSourceStates:{cases:CampaignCohortSourceState;profiles:CampaignCohortSourceState;relationships:CampaignCohortSourceState};initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
+  let { records, profiles, relationshipSummary, cohortSourceStates, parentDomainSourceState, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];profiles:BrandProfile[];relationshipSummary:CaseRelationshipSummary;cohortSourceStates:{cases:CampaignCohortSourceState;profiles:CampaignCohortSourceState;relationships:CampaignCohortSourceState};parentDomainSourceState:ParentDomainCampaignSourceState;initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
@@ -51,6 +53,7 @@
   const pagedMembers=$derived((expanded?.domains??[]).slice((currentMemberPage-1)*MEMBER_PAGE_SIZE,currentMemberPage*MEMBER_PAGE_SIZE));
   const reviewSummary=$derived(buildCampaignReviewSummary(expanded?.domains??[],records));
   const temporalReview=$derived(buildCampaignTemporalReview(expanded?.domains??[],records));
+  const parentDomainReview=$derived(expanded?buildParentDomainCampaignReview(expanded,records,parentDomainSourceState):null);
 
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   function setMemberPage(value:number){memberPage=Math.min(memberPageCount,Math.max(1,Math.trunc(value)));}
@@ -190,6 +193,8 @@
             </section>{:else}<p class="source-state" role="alert">Campaign review and temporal counts are unavailable until the browser-local Case collection can be read. No zero or unreviewed state is inferred.</p>{/if}
 
             <CampaignCohortReview campaign={campaign} {records} {profiles} {relationshipSummary} sourceStates={cohortSourceStates} {onselect} />
+
+            {#if parentDomainReview}<ParentDomainCampaignScope campaign={campaign} review={parentDomainReview} {records} {onselect} onmessage={(value)=>message=value} />{/if}
 
             {#if casesReady}<CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />{/if}
 

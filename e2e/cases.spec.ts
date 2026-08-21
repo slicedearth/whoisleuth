@@ -181,8 +181,8 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
 
   const report = page.locator('.operations-report');
   await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
-  await expect(report.getByText('Prepared', { exact: true })).toBeVisible();
-  await expect(report).toContainText('State recorded as ready for review');
+  await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();
+  await expect(report).toContainText('Readiness is distinct from review or authorisation');
   await report.getByLabel('Audience').selectOption('executive');
   await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
   await expect(report).toContainText('Denominator: 3 inspected Cases');
@@ -197,15 +197,15 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   const exported = JSON.parse(body);
   expect(exported).toMatchObject({
     schema: 'whoisleuth.brand-protection-operations-report',
-    version: 1,
+    version: 2,
     sourceState: 'ready',
-    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, prepared: 1, submitted: 0, resolved: 1 },
+    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, readyForReview: 1, submitted: 0, terminal: 1 },
   });
   expect(Object.keys(exported).sort()).toEqual([
-    'actionTypes', 'counts', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
+    'actionTypes', 'counts', 'durations', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
   ]);
   expect(Object.keys(exported.window).sort()).toEqual(['basis', 'endAt', 'id', 'startAt']);
-  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit']);
+  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit', 'observedEffectReviewsOmitted', 'transitionEventsOmitted']);
   for (const sentinel of [
     'case-operations-prepared', 'case-operations-resolved', 'prepared.invalid', 'resolved.invalid',
     'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
@@ -213,6 +213,56 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   ]) expect(body).not.toContain(sentinel);
   await expect(page.getByRole('status')).toContainText('No response was submitted');
   await expectNoHorizontalOverflow(page);
+});
+
+test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 in light and dark themes', async ({ page }) => {
+  const now = new Date().toISOString();
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 12,
+      cases: [caseRecord({
+        id: 'response-layout-case',
+        domain: 'response-layout.invalid',
+        actions: [{
+          id: 'response-layout-action', type: 'registrar_report', recipient: 'Reserved review route',
+          contactSource: 'Reserved fixture source', contactLimitations: ['Reachability was not tested.'],
+          dueAt: null, state: 'acknowledged', reference: 'CASE-EXAMPLE-LAYOUT', followUpAt: null,
+          outcome: 'Acknowledged for bounded review.', createdAt: now, updatedAt: now,
+        }],
+      })],
+    },
+  });
+
+  for (const surface of [
+    { width: 1440, height: 1000, theme: 'light' },
+    { width: 1440, height: 1000, theme: 'dark' },
+    { width: 390, height: 844, theme: 'light' },
+    { width: 390, height: 844, theme: 'dark' },
+  ] as const) {
+    await page.setViewportSize({ width: surface.width, height: surface.height });
+    await page.evaluate((theme) => localStorage.setItem('whoisleuth:theme:v1', theme), surface.theme);
+    await page.reload();
+    await page.getByRole('tab', { name: /Cases/ }).click();
+    const head = page.locator('.case-head', { hasText: 'response-layout.invalid' });
+    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
+    const workspace = page.locator('.response-workspace');
+    const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
+    await actions.getByText('Track append-only response actions', { exact: true }).click();
+    await expect(actions.getByRole('list', { name: 'Response action transition timelines' })).toContainText('Recorded outcome detail: Acknowledged for bounded review.');
+    await actions.getByRole('button', { name: 'Review or append event' }).focus();
+    await expect(actions.getByRole('button', { name: 'Review or append event' })).toBeFocused();
+    const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+    await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+    await expect(remediation).toContainText('Provider outcome time');
+    await expect(remediation).toContainText('Independently observed change time');
+    const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+    await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+    await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
+    await expect(packet).toContainText('Draft readiness never implies authorisation');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', surface.theme);
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 
@@ -860,7 +910,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await createCase(page, 'reconcile-neighbour.invalid');
   await createCase(page, 'reconcile-target.invalid');
   const openCaseRecord = page.locator('article.case.open');
-  const status = openCaseRecord.getByRole('combobox', { name: 'Status', exact: true });
+  const status = openCaseRecord.getByRole('combobox', { name: /^Status/u });
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await status.selectOption('reviewing');
@@ -901,12 +951,12 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   expect(committed.records.map((item) => item.value.domain)).toEqual(['reconcile-neighbour.invalid']);
 });
 
-test('rapid repeated action submission persists one reviewed action', async ({ page }) => {
+test('rapid repeated action submission persists one drafting action', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'action-single.invalid');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const details = page.locator('.response-workspace details', { hasText: 'Track a reviewed action or outcome' });
-  await details.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  const details = page.locator('.response-workspace details', { hasText: 'Track append-only response actions' });
+  await details.getByText('Track append-only response actions', { exact: true }).click();
   await details.getByLabel('Recipient or internal owner').fill('Fixture review owner');
   await details.getByLabel('Contact source').fill('Fixture source');
   await details.locator('form').evaluate((form) => {
@@ -914,7 +964,7 @@ test('rapid repeated action submission persists one reviewed action', async ({ p
     (form as HTMLFormElement).requestSubmit();
   });
 
-  await expect(details).toContainText('internal review · planned');
+  await expect(details).toContainText('internal review · drafting');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -950,44 +1000,38 @@ test('rapid repeated branch submission persists one investigation branch', async
   expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
 });
 
-test('keeps a reviewed action draft when the Case update fails before commit', async ({ page }) => {
+test('keeps a drafting action form when the Case update fails before commit', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'action-draft.invalid');
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = page.locator('.response-workspace');
-  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
-  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registrar_report');
-  await action.getByLabel('State').selectOption('submitted');
   await action.getByLabel('Recipient or internal owner').fill('Fixture review desk');
   await action.getByLabel('Contact source').fill('Fixture registry role');
   await action.getByLabel('Due at').fill('2026-08-18T10:00');
   await action.getByLabel('Follow-up at').fill('2026-08-19T11:30');
-  await action.getByLabel('Reference').fill('CASE-EXAMPLE-101');
   await action.getByLabel(/Contact limitations/).fill('Fixture contact route; no delivery attempted');
-  await action.getByLabel('Outcome').fill('Awaiting an independently reviewed response.');
 
   await failNextBrowserLocalCollectionRead(page, 'cases');
-  await action.getByRole('button', { name: 'Record action' }).click();
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
 
   await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
   await expect(action.getByLabel('Action type')).toHaveValue('registrar_report');
-  await expect(action.getByLabel('State')).toHaveValue('submitted');
   await expect(action.getByLabel('Recipient or internal owner')).toHaveValue('Fixture review desk');
   await expect(action.getByLabel('Contact source')).toHaveValue('Fixture registry role');
   await expect(action.getByLabel('Due at')).toHaveValue('2026-08-18T10:00');
   await expect(action.getByLabel('Follow-up at')).toHaveValue('2026-08-19T11:30');
-  await expect(action.getByLabel('Reference')).toHaveValue('CASE-EXAMPLE-101');
   await expect(action.getByLabel(/Contact limitations/)).toHaveValue('Fixture contact route; no delivery attempted');
-  await expect(action.getByLabel('Outcome')).toHaveValue('Awaiting an independently reviewed response.');
 
   const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(unchanged.manifest.revision).toBe(before.manifest.revision);
   expect(requiredValue(unchanged.records[0], 'The action-draft Case is missing.').value.actions).toEqual([]);
 
-  await action.getByRole('button', { name: 'Record action' }).click();
-  await expect(workspace).toContainText('registrar report · submitted');
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(workspace).toContainText('registrar report · drafting');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -1002,17 +1046,17 @@ test('shows the complete committed Case snapshot when the immediate action rerea
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = page.locator('.response-workspace');
-  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
-  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registry_report');
   await action.getByLabel('Recipient or internal owner').fill('Fixture registry desk');
   await action.getByLabel('Contact source').fill('Fixture registry evidence');
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
-  await action.getByRole('button', { name: 'Record action' }).click();
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
 
   await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
-  await expect(workspace).toContainText('registry report · planned');
+  await expect(workspace).toContainText('registry report · drafting');
   await expect(page.locator('.case-head', { hasText: 'action-neighbour.invalid' })).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
@@ -1094,7 +1138,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
   expect(stored.branches?.[0]).toMatchObject({ name: 'Committed branch', state: 'active' });
 });
 
-test('reviewed response records persist and produce a local non-submitted packet', {
+test('append-only response review, exact authorisation, independent verification, and closure persist locally', {
   tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
 }, async ({ page }) => {
   await openCasesView(page);
@@ -1119,13 +1163,13 @@ test('reviewed response records persist and produce a local non-submitted packet
   await decision.getByRole('button', { name: 'Record decision' }).click();
   await expect(workspace).toContainText('Escalate for reviewed reporting');
 
-  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
-  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registrar_report');
   await action.getByLabel('Recipient or internal owner').fill('Registrar abuse desk');
   await action.getByLabel('Contact source').fill('RDAP entity role');
-  await action.getByRole('button', { name: 'Record action' }).click();
-  await expect(workspace).toContainText('registrar report · planned');
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(workspace).toContainText('registrar report · drafting');
 
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
@@ -1135,6 +1179,23 @@ test('reviewed response records persist and produce a local non-submitted packet
   await branch.getByRole('button', { name: 'Create branch' }).click();
   await expect(branch).toContainText('Registrar response path');
   await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
+
+  await action.getByRole('button', { name: 'Review or append event' }).click();
+  for (const state of ['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const) {
+    await action.getByLabel('Next state').selectOption(state);
+    await action.getByRole('button', { name: 'Append transition' }).click();
+    await expect(action).toContainText(`Current projection: ${state.replaceAll('_', ' ')}`);
+  }
+  await action.getByLabel('Event source').selectOption('provider');
+  await action.getByLabel('Next state').selectOption('acknowledged');
+  await action.getByLabel('Bounded reference').fill('CASE-EXAMPLE-101');
+  await action.getByLabel('Typed provider outcome').selectOption('accepted_for_review');
+  await action.getByLabel('Provider outcome detail').fill('The provider acknowledged the bounded report for review.');
+  await action.getByLabel('Event limitations').fill('Acknowledgement is not independent remediation evidence.');
+  await action.getByRole('button', { name: 'Append transition' }).click();
+  await expect(action).toContainText('registrar report · acknowledged');
+  await expect(action).toContainText('Latest typed provider outcome: accepted for review');
+  await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
@@ -1151,9 +1212,47 @@ test('reviewed response records persist and produce a local non-submitted packet
   await expect(packet).toContainText('review cautions');
   await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
   await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
+  await packet.getByRole('checkbox', { name: /Observed credential form/ }).check();
+  const infrastructure = packet.locator('.readiness-editor section', { hasText: 'Infrastructure responsibility' });
+  await infrastructure.getByLabel('State').selectOption('complete');
+  await infrastructure.getByLabel('Detail').fill('The selected registration evidence supports this bounded registrar route.');
+  const authority = packet.locator('.readiness-editor section', { hasText: 'Analyst authority' });
+  await authority.getByLabel('State').selectOption('complete');
+  await authority.getByLabel('Detail').fill('The analyst confirmed authority for this exact recipient and scope.');
+  const contradictionReview = packet.locator('.readiness-editor section', { hasText: 'Contradiction review' });
+  await contradictionReview.getByLabel('State').selectOption('complete');
+  await contradictionReview.getByLabel('Detail').fill('The exact selected inputs were reviewed for contradictions.');
+  const sourceLimitations = packet.locator('.readiness-editor section', { hasText: 'Source limitations review' });
+  await sourceLimitations.getByLabel('State').selectOption('partial');
+  await sourceLimitations.getByLabel('Detail').fill('Known static-capture limitations remain explicit.');
+  await sourceLimitations.getByLabel('Limitations').fill('No delivery or provider monitoring check was performed.');
+  await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
+  await expect(packet).toContainText('Profile-specific readiness matrix');
+  await packet.getByLabel('Label', { exact: true }).last().fill('Reviewed static capture metadata');
+  await packet.getByLabel('Captured at').fill('2026-07-28T10:00');
+  await packet.getByLabel('SHA-256 digest').fill('a'.repeat(64));
+  await packet.getByLabel('Byte length').fill('1024');
+
+  await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
+  await expect(packet).toContainText('draft · review stale or incomplete');
+  await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name and logo.');
+  await expect(packet).toContainText('Material inputs changed after review');
+  await expect(packet.getByRole('checkbox', { name: 'I reviewed the exact selected evidence.' })).toBeDisabled();
+  await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
+  for (const confirmation of [
+    'I reviewed the exact selected evidence.',
+    'I reviewed the recipient and scope.',
+    'I reviewed privacy and redactions.',
+    'I confirm analyst authority for this scope.',
+    'I reviewed evidence freshness and retained cautions.',
+  ]) await packet.getByRole('checkbox', { name: confirmation }).check();
+  await expect(packet.getByLabel('Confirmation time')).toBeEnabled();
+  await packet.getByRole('button', { name: 'Authorise exact bound inputs' }).click();
+  await expect(packet.getByLabel('Confirmation time')).not.toHaveValue('');
+  await expect(packet).toContainText('authorised inputs');
 
   const downloadPromise = page.waitForEvent('download');
-  await packet.getByRole('button', { name: 'Export JSON' }).click();
+  await packet.getByRole('button', { name: 'Export JSON draft or authorised packet' }).click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -1162,7 +1261,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 6,
+    schemaVersion: 7,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',
@@ -1176,8 +1275,18 @@ test('reviewed response records persist and produce a local non-submitted packet
     escalationHistory: [{
       type: 'registrar_report',
       recipient: 'Registrar abuse desk',
-      state: 'planned',
+      state: 'acknowledged',
+      providerOutcome: 'accepted_for_review',
+      reference: 'CASE-EXAMPLE-101',
     }],
+    readiness: { profileId: 'registrar' },
+    artefactReferences: [{ label: 'Reviewed static capture metadata', byteLength: 1024 }],
+    authorisation: { status: 'authorised', digestMatches: true, missingConfirmations: [] },
+    responseLifecycle: {
+      latestProviderOutcome: { outcome: 'accepted_for_review' },
+      latestObservedEffect: null,
+      latestObservedChangeAt: null,
+    },
     preflight: {
       status: 'review_cautions',
       canExport: true,
@@ -1192,14 +1301,48 @@ test('reviewed response records persist and produce a local non-submitted packet
       scope: 'packet excluding integrity',
     },
   });
+  expect(exported.escalationHistory[0].transitions).toHaveLength(6);
+  expect(exported.readiness.rows).toHaveLength(10);
   expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(page.getByRole('status')).toContainText('Nothing was submitted');
+
+  const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+  await expect(remediation).toContainText('accepted for review');
+  await expect(remediation).toContainText('Withheld — missing');
+  await remediation.getByLabel('Observed effect').selectOption('changed');
+  await remediation.getByLabel('Separately attributed source').fill('Independent fixture review');
+  await remediation.getByLabel('Completeness').selectOption('complete');
+  await remediation.getByLabel('Evidence pin').selectOption({ index: 1 });
+  await remediation.getByLabel('Limitations').first().fill('The independent check covers only the retained exact URL.');
+  await remediation.getByRole('button', { name: 'Record independent review' }).click();
+  await expect(remediation.getByRole('list', { name: 'Independent observed-effect reviews' })).toContainText('changed');
+  await expect(remediation).not.toContainText('Withheld — no independent changed review');
+  await remediation.getByLabel('Closure reason').selectOption('infrastructure_changed');
+  await remediation.getByLabel('Independent review').selectOption({ index: 1 });
+  await remediation.getByLabel('Provider action').selectOption({ index: 1 });
+  await remediation.getByLabel('Closure summary').fill('Independent review recorded a bounded infrastructure change.');
+  await remediation.getByLabel('Closure limitations').fill('Closure is not a safety or provider-performance conclusion.');
+  await remediation.getByRole('button', { name: 'Close case with reason' }).click();
+  await expect(remediation.getByRole('list', { name: 'Deliberate case closures' })).toContainText('infrastructure changed');
+
+  const persisted = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const stored = requiredValue(persisted.records.find((item) => item.value.domain === 'response.invalid'), 'The response-lifecycle Case is missing.').value;
+  const storedAction = requiredValue(stored.actions[0], 'The response action is missing.');
+  expect(stored.status).toBe('resolved');
+  expect(storedAction).toMatchObject({ state: 'acknowledged', providerOutcome: 'accepted_for_review', reference: 'CASE-EXAMPLE-101' });
+  expect(storedAction.history).toHaveLength(6);
+  expect(stored.observedEffects.reviews).toHaveLength(1);
+  expect(stored.observedEffects.reviews[0]).toMatchObject({ state: 'changed', source: 'Independent fixture review' });
+  expect(stored.closures.records).toHaveLength(1);
+  expect(stored.closures.records[0]).toMatchObject({ reason: 'infrastructure_changed' });
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
   await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
+  await expect(page.locator('.response-workspace')).toContainText('registrar report · acknowledged');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {

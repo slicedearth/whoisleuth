@@ -6,6 +6,7 @@ import ts from 'typescript';
 
 import * as artifactStructureModule from '../cli/artifact-structure.mts';
 import * as artifactVerifyModule from '../cli/artifact-verify.mts';
+import * as casePackModule from '../cli/case-pack.mts';
 import * as domainControlMonitorModule from '../cli/domain-control-monitor.mts';
 import * as domainControlObservationsModule from '../cli/domain-control-observations.mts';
 import * as ciReportModule from '../cli/ci-report.mts';
@@ -14,19 +15,87 @@ import * as jsonFormatterModule from '../cli/formatters/json.mts';
 import * as terminalFormatterModule from '../cli/formatters/terminal.mts';
 import * as interchangeReportModule from '../cli/interchange-report.mts';
 import * as outputFileModule from '../cli/output-file.mts';
+import * as pageCompareModule from '../cli/page-compare.mts';
+import * as retainedArtifactDiffModule from '../cli/retained-artifact-diff.mts';
 import * as riskCalibrationModule from '../cli/risk-calibration.mts';
 import * as sharingReviewModule from '../cli/sharing-review.mts';
 import * as savedLookupModule from '../cli/saved-lookup.mts';
 import * as sourceReliabilityModule from '../cli/source-reliability.mts';
-import * as domainControlPassportModule from '../frontend/src/lib/analysis/domain-control-passport.ts';
-import * as riskCalibrationDashboardModule from '../frontend/src/lib/analysis/risk-calibration-dashboard.ts';
-import * as riskCalibrationExportModule from '../frontend/src/lib/analysis/risk-calibration-export.ts';
+import * as caseModelModule from '../packages/cases/case-model.mts';
+import * as caseReportModule from '../packages/cases/case-report.mts';
+import * as caseResponsePacketModule from '../packages/cases/case-response-packet.mts';
+import * as acquisitionDecisionPacketModule from '../packages/investigation/acquisition-decision-packet.mts';
+import * as bulkDomainComparisonModule from '../packages/investigation/bulk-domain-comparison.mts';
+import * as bulkMailExposureModule from '../packages/investigation/bulk-mail-exposure.mts';
+import * as bulkReviewExportModule from '../packages/investigation/bulk-review-export.mts';
+import * as investigationCapsuleModule from '../packages/investigation/investigation-capsule.mts';
+import * as lookupAssetGraphModule from '../packages/investigation/lookup-asset-graph.mts';
+import * as lookupClaimPassportModule from '../packages/investigation/lookup-claim-passport.mts';
+import * as lookupInvestigationBriefModule from '../packages/investigation/lookup-investigation-brief.mts';
+import * as candidateHandoffModule from '../packages/investigation/candidate-handoff.mts';
+import * as campaignTemporalReviewModule from '../packages/investigation/campaign-temporal-review.mts';
+import * as parentDomainCampaignReviewModule from '../packages/investigation/parent-domain-campaign-review.mts';
+import * as investigationProjectionModule from '../packages/investigation/investigation-projection.mts';
+import * as investigationSearchModule from '../packages/investigation/investigation-search.mts';
+import * as observationEnvelopeModule from '../packages/investigation/observation-envelope.mts';
+import * as externalFindingsConvertersModule from '../packages/interchange/external-findings-converters.mts';
+import * as externalFindingsImportModule from '../packages/interchange/external-findings-import.mts';
+import * as analystInterchangeModule from '../packages/contracts/analyst-interchange.mts';
+import * as investigationProjectionsContractModule from '../packages/contracts/investigation-projections.mts';
+import * as monitoringPortabilityModule from '../packages/contracts/monitoring-portability.mts';
+import * as relationshipPortabilityModule from '../packages/contracts/relationship-portability.mts';
+import * as tabPortabilityModule from '../packages/contracts/tab-portability.mts';
+import * as brandProtectionOperationsReportModule from '../packages/interchange/brand-protection-operations-report.mts';
+import * as defensiveIndicatorExportModule from '../packages/interchange/defensive-indicator-export.mts';
+import * as dnsChangeRehearsalModule from '../packages/interchange/dns-change-rehearsal.mts';
+import * as investigationPlaybookInterchangeModule from '../packages/interchange/investigation-playbook-interchange.mts';
+import * as mailReportWorkbenchModule from '../packages/interchange/mail-report-workbench.mts';
+import * as mispIndicatorExportModule from '../packages/interchange/misp-indicator-export.mts';
+import * as registrationDisclosurePlanModule from '../packages/interchange/registration-disclosure-plan.mts';
+import * as staticPagePatternPacksModule from '../packages/interchange/static-page-pattern-packs.mts';
+import * as stixIndicatorExportModule from '../packages/interchange/stix-indicator-export.mts';
+import * as webCaptureImportModule from '../packages/interchange/web-capture-import.mts';
+import * as scheduledMonitorDispatcherModule from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
+import * as scheduledMonitorModelModule from '../packages/monitoring/scheduled-monitor-model.mts';
+import * as caseRelationshipClustersModule from '../packages/relationships/case-relationship-clusters.mts';
+import * as caseRelationshipGraphExportModule from '../packages/relationships/case-relationship-graph-export.mts';
+import * as brandProfileModelModule from '../packages/workspace/brand-profile-model.mts';
+import * as bulkReviewModelModule from '../packages/workspace/bulk-review-model.mts';
+import * as bulkSessionModelModule from '../packages/workspace/bulk-session-model.mts';
+import * as campaignModelModule from '../packages/workspace/campaign-model.mts';
+import * as ctHistoryModule from '../packages/workspace/ct-history.mts';
+import * as detectionRuleModelModule from '../packages/workspace/detection-rule-model.mts';
+import * as investigationTemplateModelModule from '../packages/workspace/investigation-template-model.mts';
+import * as relationshipObservationModelModule from '../packages/workspace/relationship-observation-model.mts';
+import * as shortlistModelModule from '../packages/workspace/shortlist-model.mts';
+import * as watchlistStoreModule from '../packages/workspace/watchlist-store.mts';
+import * as websiteSnapshotModelModule from '../packages/workspace/website-snapshot-model.mts';
+import * as workspaceArchiveModule from '../packages/workspace/workspace-archive.mts';
+import * as encryptedWorkspaceArchiveModule from '../packages/workspace/workspace-archive-crypto.mts';
+import * as domainControlPassportModule from '../packages/workspace/domain-control-passport.mts';
+import * as riskCalibrationDashboardModule from '../packages/investigation/risk-calibration-dashboard.mts';
+import * as riskCalibrationExportModule from '../packages/investigation/risk-calibration-export.mts';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 import * as domainControlFlightRecorderModule from '../lib/domain-control-flight-recorder.mts';
 import * as domainControlManifestModule from '../lib/domain-control-manifest.mts';
 import * as riskCalibrationSummaryModule from '../lib/risk-calibration-summary.mts';
 import type { SchemaLifecycleRegistry } from '../packages/contracts/schema-lifecycle.mts';
+import * as casePortabilityModule from '../packages/contracts/case-portability.mts';
+import * as workspacePortabilityModule from '../packages/contracts/workspace-portability.mts';
+import {
+  CASE_CONTRACT_OWNER,
+  CASE_DOMAIN_COMPATIBILITY_FACADES,
+  CASE_DOMAIN_RUNTIME_ADAPTERS,
+  CASE_PORTABILITY_BOUND_CONSTANTS,
+  CASE_PORTABILITY_IDENTITY_CONSTANTS,
+} from '../packages/contracts/case-portability.mts';
+import {
+  WORKSPACE_CONTRACT_OWNER,
+  WORKSPACE_DOMAIN_COMPATIBILITY_FACADES,
+  WORKSPACE_PORTABILITY_BOUND_CONSTANTS,
+  WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS,
+} from '../packages/contracts/workspace-portability.mts';
 import * as domainControlRuntimeModule from '../packages/evidence/domain-control-runtime.mts';
 import { compareCodeUnits as ordinalCompare } from './maintainer-tool-helpers.mts';
 import {
@@ -53,6 +122,7 @@ const LIFECYCLE_CODE_EXTENSIONS = new Set([
 export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
   'cli/artifact-structure.mts': artifactStructureModule,
   'cli/artifact-verify.mts': artifactVerifyModule,
+  'cli/case-pack.mts': casePackModule,
   'cli/domain-control-monitor.mts': domainControlMonitorModule,
   'cli/domain-control-observations.mts': domainControlObservationsModule,
   'cli/ci-report.mts': ciReportModule,
@@ -61,16 +131,71 @@ export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
   'cli/formatters/terminal.mts': terminalFormatterModule,
   'cli/interchange-report.mts': interchangeReportModule,
   'cli/output-file.mts': outputFileModule,
+  'cli/page-compare.mts': pageCompareModule,
+  'cli/retained-artifact-diff.mts': retainedArtifactDiffModule,
   'cli/risk-calibration.mts': riskCalibrationModule,
   'cli/sharing-review.mts': sharingReviewModule,
   'cli/saved-lookup.mts': savedLookupModule,
   'cli/source-reliability.mts': sourceReliabilityModule,
-  'frontend/src/lib/analysis/domain-control-passport.ts': domainControlPassportModule,
-  'frontend/src/lib/analysis/risk-calibration-dashboard.ts': riskCalibrationDashboardModule,
-  'frontend/src/lib/analysis/risk-calibration-export.ts': riskCalibrationExportModule,
+  'packages/cases/case-model.mts': caseModelModule,
+  'packages/cases/case-report.mts': caseReportModule,
+  'packages/cases/case-response-packet.mts': caseResponsePacketModule,
+  'packages/investigation/acquisition-decision-packet.mts': acquisitionDecisionPacketModule,
+  'packages/investigation/bulk-domain-comparison.mts': bulkDomainComparisonModule,
+  'packages/investigation/bulk-mail-exposure.mts': bulkMailExposureModule,
+  'packages/investigation/bulk-review-export.mts': bulkReviewExportModule,
+  'packages/investigation/investigation-capsule.mts': investigationCapsuleModule,
+  'packages/investigation/lookup-asset-graph.mts': lookupAssetGraphModule,
+  'packages/investigation/lookup-claim-passport.mts': lookupClaimPassportModule,
+  'packages/investigation/lookup-investigation-brief.mts': lookupInvestigationBriefModule,
+  'packages/investigation/candidate-handoff.mts': candidateHandoffModule,
+  'packages/investigation/campaign-temporal-review.mts': campaignTemporalReviewModule,
+  'packages/investigation/parent-domain-campaign-review.mts': parentDomainCampaignReviewModule,
+  'packages/investigation/investigation-projection.mts': investigationProjectionModule,
+  'packages/investigation/investigation-search.mts': investigationSearchModule,
+  'packages/investigation/observation-envelope.mts': observationEnvelopeModule,
+  'packages/interchange/external-findings-converters.mts': externalFindingsConvertersModule,
+  'packages/interchange/external-findings-import.mts': externalFindingsImportModule,
+  'packages/contracts/analyst-interchange.mts': analystInterchangeModule,
+  'packages/contracts/investigation-projections.mts': investigationProjectionsContractModule,
+  'packages/contracts/monitoring-portability.mts': monitoringPortabilityModule,
+  'packages/contracts/relationship-portability.mts': relationshipPortabilityModule,
+  'packages/contracts/tab-portability.mts': tabPortabilityModule,
+  'packages/interchange/brand-protection-operations-report.mts': brandProtectionOperationsReportModule,
+  'packages/interchange/defensive-indicator-export.mts': defensiveIndicatorExportModule,
+  'packages/interchange/dns-change-rehearsal.mts': dnsChangeRehearsalModule,
+  'packages/interchange/investigation-playbook-interchange.mts': investigationPlaybookInterchangeModule,
+  'packages/interchange/mail-report-workbench.mts': mailReportWorkbenchModule,
+  'packages/interchange/misp-indicator-export.mts': mispIndicatorExportModule,
+  'packages/interchange/registration-disclosure-plan.mts': registrationDisclosurePlanModule,
+  'packages/interchange/static-page-pattern-packs.mts': staticPagePatternPacksModule,
+  'packages/interchange/stix-indicator-export.mts': stixIndicatorExportModule,
+  'packages/interchange/web-capture-import.mts': webCaptureImportModule,
+  'packages/monitoring/scheduled-monitor-dispatcher.mts': scheduledMonitorDispatcherModule,
+  'packages/monitoring/scheduled-monitor-model.mts': scheduledMonitorModelModule,
+  'packages/relationships/case-relationship-clusters.mts': caseRelationshipClustersModule,
+  'packages/relationships/case-relationship-graph-export.mts': caseRelationshipGraphExportModule,
+  'packages/workspace/brand-profile-model.mts': brandProfileModelModule,
+  'packages/workspace/bulk-review-model.mts': bulkReviewModelModule,
+  'packages/workspace/bulk-session-model.mts': bulkSessionModelModule,
+  'packages/workspace/campaign-model.mts': campaignModelModule,
+  'packages/workspace/ct-history.mts': ctHistoryModule,
+  'packages/workspace/detection-rule-model.mts': detectionRuleModelModule,
+  'packages/workspace/investigation-template-model.mts': investigationTemplateModelModule,
+  'packages/workspace/relationship-observation-model.mts': relationshipObservationModelModule,
+  'packages/workspace/shortlist-model.mts': shortlistModelModule,
+  'packages/workspace/watchlist-store.mts': watchlistStoreModule,
+  'packages/workspace/website-snapshot-model.mts': websiteSnapshotModelModule,
+  'packages/workspace/workspace-archive-crypto.mts': encryptedWorkspaceArchiveModule,
+  'packages/workspace/workspace-archive.mts': workspaceArchiveModule,
+  'packages/workspace/domain-control-passport.mts': domainControlPassportModule,
+  'packages/investigation/risk-calibration-dashboard.mts': riskCalibrationDashboardModule,
+  'packages/investigation/risk-calibration-export.mts': riskCalibrationExportModule,
   'lib/domain-control-flight-recorder.mts': domainControlFlightRecorderModule,
   'lib/domain-control-manifest.mts': domainControlManifestModule,
   'lib/risk-calibration-summary.mts': riskCalibrationSummaryModule,
+  'packages/contracts/case-portability.mts': casePortabilityModule,
+  'packages/contracts/workspace-portability.mts': workspacePortabilityModule,
   'packages/evidence/domain-control-runtime.mts': domainControlRuntimeModule,
 } as const);
 
@@ -709,10 +834,198 @@ function snapshotHookModules(value: unknown): ReadonlyMap<string, Readonly<Recor
   return modules;
 }
 
+export function validateCasePortabilitySourceSnapshot(value: unknown): void {
+  const sources = snapshotLifecycleSources(value);
+  const sourceByPath = new Map(sources.map((source) => [source.file, source.source]));
+  const sourceFiles = new Set(sourceByPath.keys());
+  const facadePaths = new Set<string>();
+  const adapterPaths = new Set<string>();
+  const ownerPaths = new Set<string>();
+  for (const [facade, owner] of CASE_DOMAIN_COMPATIBILITY_FACADES) {
+    if (facadePaths.has(facade)) {
+      throw new TypeError('Case domain compatibility facades contain a duplicate facade path.');
+    }
+    facadePaths.add(facade);
+    ownerPaths.add(owner);
+    if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
+      throw new TypeError(`Case domain compatibility facade is not source-covered: ${facade}.`);
+    }
+    const relative = path.posix.relative(path.posix.dirname(facade), owner);
+    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
+    const expected = `export * from '${specifier}';\n`;
+    if (sourceByPath.get(facade) !== expected) {
+      throw new TypeError(`Case domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
+    }
+  }
+  for (const adapter of CASE_DOMAIN_RUNTIME_ADAPTERS) {
+    if (adapterPaths.has(adapter) || facadePaths.has(adapter) || !sourceByPath.has(adapter)) {
+      throw new TypeError(`Case domain runtime adapter is duplicated or not source-covered: ${adapter}.`);
+    }
+    adapterPaths.add(adapter);
+  }
+
+  const staticReExports = new Map<string, readonly string[]>();
+  for (const item of sources) {
+    const sourceFile = ts.createSourceFile(item.file, item.source, ts.ScriptTarget.Latest, true, scriptKind(item.file));
+    const diagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
+    if (diagnostics.length) throw new TypeError(`Case portability source ${item.file} must contain valid source syntax.`);
+    validateSourceAstBounds(sourceFile, item.file);
+    const importedTargets = new Map<string, string>();
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement)
+        || !ts.isStringLiteral(statement.moduleSpecifier)
+        || !statement.importClause) continue;
+      const target = resolveSourceModule(item.file, statement.moduleSpecifier.text, sourceFiles);
+      if (!target) continue;
+      if (statement.importClause.name) importedTargets.set(statement.importClause.name.text, target);
+      const bindings = statement.importClause.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) importedTargets.set(bindings.name.text, target);
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) importedTargets.set(element.name.text, target);
+      }
+    }
+    const targets = new Set<string>();
+    for (const statement of sourceFile.statements) {
+      if (ts.isExportDeclaration(statement)) {
+        if (statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+          const target = resolveSourceModule(item.file, statement.moduleSpecifier.text, sourceFiles);
+          if (target) targets.add(target);
+        } else if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+          for (const element of statement.exportClause.elements) {
+            const localName = element.propertyName?.text ?? element.name.text;
+            const target = importedTargets.get(localName);
+            if (target) targets.add(target);
+          }
+        }
+      } else if (ts.isExportAssignment(statement)) {
+        const expression = unwrapExpression(statement.expression);
+        if (ts.isIdentifier(expression)) {
+          const target = importedTargets.get(expression.text);
+          if (target) targets.add(target);
+        }
+      }
+    }
+    staticReExports.set(item.file, Object.freeze([...targets]));
+  }
+
+  function reachesCaseOwner(file: string, visiting: Set<string>): boolean {
+    if (ownerPaths.has(file) || facadePaths.has(file)) return true;
+    if (visiting.has(file)) return false;
+    visiting.add(file);
+    return (staticReExports.get(file) ?? []).some((target) => reachesCaseOwner(target, visiting));
+  }
+
+  for (const adapter of adapterPaths) {
+    if (!reachesCaseOwner(adapter, new Set<string>())) {
+      throw new TypeError(`Case domain runtime adapter is stale: ${adapter}.`);
+    }
+  }
+
+  for (const { file, source } of sources) {
+    if (!facadePaths.has(file)
+      && !adapterPaths.has(file)
+      && !ownerPaths.has(file)
+      && reachesCaseOwner(file, new Set<string>())) {
+      throw new TypeError(`Case domain compatibility facade is hidden from the canonical register: ${file}.`);
+    }
+    if (file === CASE_CONTRACT_OWNER) continue;
+    for (const name of [
+      ...CASE_PORTABILITY_IDENTITY_CONSTANTS,
+      ...CASE_PORTABILITY_BOUND_CONSTANTS,
+    ]) {
+      const declaration = new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`, 'u');
+      if (declaration.test(source)) {
+        throw new TypeError(`Case portability constant is declared outside its canonical owner: ${file}#${name}.`);
+      }
+    }
+  }
+}
+
+async function validateCasePortabilitySourceClosure(discovery: SchemaSourceDiscovery): Promise<void> {
+  const sources: LifecycleSource[] = [];
+  let inspectedBytes = 0;
+  for (const file of discovery.files) {
+    if (!LIFECYCLE_CODE_EXTENSIONS.has(path.posix.extname(file))) continue;
+    const raw = await readBoundedRegularFileWithin(discovery.repositoryRoot, file, {
+      maximumBytes: MAX_SCHEMA_SOURCE_FILE_BYTES,
+      minimumBytes: 1,
+      label: `Case portability source ${file}`,
+    });
+    inspectedBytes += raw.byteLength;
+    if (inspectedBytes > MAX_SCHEMA_SOURCE_TOTAL_BYTES) {
+      throw new TypeError('Case portability source closure exceeds its aggregate byte ceiling.');
+    }
+    sources.push(Object.freeze({
+      file,
+      source: decodeBoundedUtf8(raw, `Case portability source ${file}`),
+    }));
+  }
+  validateCasePortabilitySourceSnapshot(sources);
+}
+
+export function validateWorkspacePortabilitySourceSnapshot(value: unknown): void {
+  const sources = snapshotLifecycleSources(value);
+  const sourceByPath = new Map(sources.map((source) => [source.file, source.source]));
+  const facadePaths = new Set<string>();
+  const ownerPaths = new Set<string>();
+  for (const [facade, owner] of WORKSPACE_DOMAIN_COMPATIBILITY_FACADES) {
+    if (facadePaths.has(facade)) {
+      throw new TypeError('Workspace domain compatibility facades contain a duplicate facade path.');
+    }
+    facadePaths.add(facade);
+    ownerPaths.add(owner);
+    if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
+      throw new TypeError(`Workspace domain compatibility facade is not source-covered: ${facade}.`);
+    }
+    const relative = path.posix.relative(path.posix.dirname(facade), owner);
+    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
+    if (sourceByPath.get(facade) !== `export * from '${specifier}';\n`) {
+      throw new TypeError(`Workspace domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
+    }
+  }
+
+  for (const item of sources) {
+    if (item.file === WORKSPACE_CONTRACT_OWNER
+      || (!facadePaths.has(item.file) && !ownerPaths.has(item.file))) continue;
+    for (const name of [
+      ...WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS,
+      ...WORKSPACE_PORTABILITY_BOUND_CONSTANTS,
+    ]) {
+      if (new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`, 'u').test(item.source)) {
+        throw new TypeError(`Workspace portability constant is declared outside its canonical owner: ${item.file}#${name}.`);
+      }
+    }
+  }
+}
+
+async function validateWorkspacePortabilitySourceClosure(discovery: SchemaSourceDiscovery): Promise<void> {
+  const sources: LifecycleSource[] = [];
+  let inspectedBytes = 0;
+  for (const file of discovery.files) {
+    if (!LIFECYCLE_CODE_EXTENSIONS.has(path.posix.extname(file))) continue;
+    const raw = await readBoundedRegularFileWithin(discovery.repositoryRoot, file, {
+      maximumBytes: MAX_SCHEMA_SOURCE_FILE_BYTES,
+      minimumBytes: 1,
+      label: `Workspace portability source ${file}`,
+    });
+    inspectedBytes += raw.byteLength;
+    if (inspectedBytes > MAX_SCHEMA_SOURCE_TOTAL_BYTES) {
+      throw new TypeError('Workspace portability source closure exceeds its aggregate byte ceiling.');
+    }
+    sources.push(Object.freeze({
+      file,
+      source: decodeBoundedUtf8(raw, `Workspace portability source ${file}`),
+    }));
+  }
+  validateWorkspacePortabilitySourceSnapshot(sources);
+}
+
 export async function validateSchemaLifecycleRepository(
   registry: SchemaLifecycleRegistry,
   discovery: SchemaSourceDiscovery,
 ): Promise<void> {
+  await validateCasePortabilitySourceClosure(discovery);
+  await validateWorkspacePortabilitySourceClosure(discovery);
   const bindings = await repositoryLifecycleBindings(discovery);
   validateSchemaLifecycleDefinitionCoverage(bindings);
   if (bindings.registryEntries.length !== registry.length) {

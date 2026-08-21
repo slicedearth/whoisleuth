@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 
-import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
-import { buildCaseSightingStixExport } from '../frontend/src/lib/analysis/case-sighting-stix-export.ts';
-import { buildStixIndicatorExport } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
+import { createCase } from '../packages/cases/case-model.mts';
+import { buildCaseSightingStixExport } from '../packages/interchange/case-sighting-stix-export.mts';
+import { buildStixIndicatorExport } from '../packages/interchange/stix-indicator-export.mts';
 
 const SCHEMA_REVISION = 'c4f8d589acf2bdb3783655c89e0ffb6e150006ae';
 const SCHEMA_TREE_SHA256 = 'fe3b1997ce3ca562aa1ea60298dcc0d126448a9c295d76b8bbe0b81631d4747b';

@@ -24,13 +24,20 @@ import {
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
-import { buildCaseResponsePacket } from '../frontend/src/lib/analysis/case-response-packet.ts';
+import {
+  buildCaseResponsePacket,
+  CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
+  CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  MAX_RESPONSE_ACTION_HISTORY,
+} from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
+  appendCaseAction,
+  appendCaseActionTransition,
   MAX_CASE_ACTIONS,
   MAX_CASE_ASSERTIONS,
   MAX_CASE_DECISIONS,
@@ -38,6 +45,7 @@ import {
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
 import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
+import { historicalCaseResponsePacketFixture } from './case-response-packet-fixtures.mts';
 import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
@@ -94,7 +102,7 @@ async function resignArtifact<T extends Record<string, unknown>>(value: T): Prom
 
 async function resignCaseResponsePacket<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
-  const current = value.schemaVersion === 6;
+  const current = Number(value.schemaVersion) >= 6;
   return {
     ...unsigned,
     integrity: {
@@ -104,6 +112,38 @@ async function resignCaseResponsePacket<T extends Record<string, unknown>>(value
       digestSha256: (await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned))).slice('sha256:'.length),
     },
   } as unknown as T;
+}
+
+async function rebindCaseResponseReview<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const profile = value.profile as Record<string, unknown>;
+  const reviewMaterial = {
+    contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
+    version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+    profile: {
+      id: profile.id,
+      label: profile.label,
+      audience: profile.audience,
+      subject: profile.subject,
+      checklist: profile.checklist,
+      includedEvidence: profile.includedEvidence,
+      excludedEvidence: profile.excludedEvidence,
+      redactions: profile.redactions,
+    },
+    case: value.case,
+    incident: value.incident,
+    contacts: value.contacts,
+    selectedEvidence: value.selectedEvidence,
+    contradictions: value.contradictions,
+    readiness: value.readiness,
+    artefactReferences: value.artefactReferences,
+    escalationHistory: value.escalationHistory,
+    escalationHistoryOmitted: value.escalationHistoryOmitted,
+    escalationHistoryLimitations: value.escalationHistoryLimitations,
+    responseLifecycle: value.responseLifecycle,
+  };
+  const authorisation = value.authorisation as Record<string, unknown>;
+  authorisation.reviewedInputDigestSha256 = (await sha256ArtifactDigestV2(reviewMaterial)).slice('sha256:'.length);
+  return value;
 }
 
 function lookupEvidenceArtifact(): Record<string, unknown> {
@@ -899,6 +939,116 @@ describe('offline artifact verifier', () => {
     }
   });
 
+  test('verifies frozen response packets v5 and v6, current v7, and the exact v7 review binding', async () => {
+    for (const version of [5, 6] as const) {
+      const historical = historicalCaseResponsePacketFixture(version);
+      const verified = await verifyOfflineArtifact(JSON.stringify(historical));
+      assert.equal(verified.state, 'verified');
+      assert.equal(verified.artifact.version, version);
+    }
+
+    const caseRecord = createCase({
+      domain: 'review-binding.example',
+      status: 'escalated',
+      disposition: 'confirmed_abuse',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+    }, '2026-07-15T00:00:00.000Z');
+    const packet = (await buildCaseResponsePacket(caseRecord, {
+      category: 'Reserved review',
+      affectedParty: 'Reserved service',
+      abusiveUrls: ['https://review-binding.example/review'],
+      observedHarm: 'A reserved synthetic observation.',
+      observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T01:00:00.000Z')).json;
+    const verified = await verifyOfflineArtifact(JSON.stringify(packet));
+    assert.equal(verified.state, 'verified');
+    assert.equal(verified.artifact.version, 7);
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    const authorisation = forged.authorisation as Record<string, unknown>;
+    authorisation.reviewedInputDigestSha256 = 'f'.repeat(64);
+    authorisation.suppliedReviewDigestSha256 = 'f'.repeat(64);
+    authorisation.digestMatches = true;
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('reconstructs the v7 provider lifecycle projection instead of trusting a re-signed summary', async () => {
+    const base = createCase({
+      domain: 'provider-lifecycle.example',
+      status: 'escalated',
+      disposition: 'confirmed_abuse',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: { recipient: 'Reserved response desk', type: 'registrar_report' },
+    }, '2026-07-15T00:00:00.000Z');
+    const actionId = base.actions[0]!.id;
+    let actions = base.actions;
+    for (const [index, nextState] of (['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const).entries()) {
+      actions = appendCaseActionTransition(actions, actionId, { nextState, sourceClass: 'analyst' },
+        new Date(Date.parse('2026-07-15T00:00:00.000Z') + (index + 1) * 60_000).toISOString());
+    }
+    actions = appendCaseActionTransition(actions, actionId, {
+      nextState: 'acknowledged', sourceClass: 'provider', providerOutcome: 'provider_reports_resolved',
+      outcomeDetail: 'The provider reported resolution.', provenance: 'provider_reported_resolution',
+    }, '2026-07-15T01:00:00.000Z');
+    actions = appendCaseActionTransition(actions, actionId, {
+      nextState: 'acknowledged', sourceClass: 'provider',
+      outcomeDetail: 'A later response supplied procedural detail only.', provenance: 'provider_detail_only',
+    }, '2026-07-15T01:30:00.000Z');
+    const packet = (await buildCaseResponsePacket({ ...base, actions, updatedAt: '2026-07-15T01:30:00.000Z' }, {
+      category: 'Reserved review',
+      affectedParty: 'Reserved service',
+      abusiveUrls: ['https://provider-lifecycle.example/review'],
+      observedHarm: 'A reserved synthetic observation.',
+      observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T02:00:00.000Z')).json;
+    const verified = await verifyOfflineArtifact(JSON.stringify(packet));
+    assert.equal(verified.state, 'verified');
+    assert.equal(packet.escalationHistory[0]?.providerOutcome, 'provider_reports_resolved');
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    const lifecycle = forged.responseLifecycle as Record<string, unknown>;
+    const latest = lifecycle.latestProviderOutcome as Record<string, unknown>;
+    latest.outcome = 'duplicate';
+    await rebindCaseResponseReview(forged);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('accepts explicit bounded packet action omissions only with conservative provider timing', async () => {
+    const base = createCase({
+      domain: 'bounded-packet-actions.example',
+      status: 'reviewing',
+      disposition: 'suspicious',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+    }, '2026-07-15T00:00:00.000Z');
+    let actions = base.actions;
+    for (let index = 0; index <= MAX_RESPONSE_ACTION_HISTORY; index += 1) {
+      actions = appendCaseAction(actions, { recipient: `Bounded local reviewer ${index}` },
+        new Date(Date.parse('2026-07-15T00:00:00.000Z') + index * 60_000).toISOString());
+    }
+    const packet = (await buildCaseResponsePacket({ ...base, actions }, {
+      category: 'Reserved review', affectedParty: 'Reserved service',
+      abusiveUrls: ['https://bounded-packet-actions.example/review'],
+      observedHarm: 'A reserved synthetic observation.', observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T02:00:00.000Z')).json;
+    assert.equal(packet.escalationHistoryOmitted, 1);
+    assert.equal(packet.responseLifecycle.providerOutcomeState, 'ambiguous');
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(packet))).state, 'verified');
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    (forged.responseLifecycle as Record<string, unknown>).providerOutcomeState = 'missing';
+    await rebindCaseResponseReview(forged);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
   test('enforces the real Case v5 collection maxima before accepting a recomputed packet digest', async () => {
     const caseRecord = createCase({
       domain: 'bounded-response.example',
@@ -967,6 +1117,18 @@ describe('offline artifact verifier', () => {
       (value) => {
         const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
         contact.limitations = ['l'.repeat(241)];
+      },
+      (value) => {
+        const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
+        contact.freshness = 'current';
+      },
+      (value) => {
+        const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;
+        rows.find((row) => row.id === 'exact_url')!.requiredForAuthorisation = false;
+      },
+      (value) => {
+        const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;
+        rows.find((row) => row.id === 'exact_url')!.state = 'partial';
       },
       (value) => {
         value.escalationHistory = [{

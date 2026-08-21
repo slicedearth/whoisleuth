@@ -109,8 +109,8 @@ type SchemaLifecycleSerialisationProfile = Readonly<{
   mediaType: 'application/json';
   encoding: 'utf-8';
   bom: false;
-  indentSpaces: 2;
-  terminalLf: true;
+  indentSpaces: 0 | 2;
+  terminalLf: boolean;
   propertyOrder: 'normalised_fixed' | 'source_insertion';
   canonicalisation: null;
   integrity: 'none' | 'structural_only_requires_separate_verification';
@@ -215,7 +215,7 @@ type SchemaLifecycleContract = Readonly<{
   emitted: boolean;
   exactKeys: boolean;
   extensionPolicy: 'discard_bounded' | 'preserve_bounded' | 'reject';
-  futureVersionBehaviour: 'not_applicable' | 'reject';
+  futureVersionBehaviour: 'discard' | 'not_applicable' | 'preserve_without_write' | 'reject';
   migrationTarget: SchemaLifecycleTarget | null;
   canonicalisation: string | null;
   byteBudget: number | null;
@@ -288,15 +288,15 @@ type SchemaLifecycleFamilyWithMetadataV1 = SchemaLifecycleFamily & Readonly<{
   metadata: SchemaLifecycleMetadataV1;
 }>;
 
-type SchemaLifecycleFamilyWithMetadataV2 = SchemaLifecycleFamily & Readonly<{
+export type SchemaLifecycleFamilyWithMetadataV2 = SchemaLifecycleFamily & Readonly<{
   metadata: SchemaLifecycleMetadataV2;
 }>;
 
-type SchemaLifecycleFamilyWithMetadataV3 = SchemaLifecycleFamily & Readonly<{
+export type SchemaLifecycleFamilyWithMetadataV3 = SchemaLifecycleFamily & Readonly<{
   metadata: SchemaLifecycleMetadataV3;
 }>;
 
-type SchemaLifecycleFamilyWithMetadataV4 = Omit<SchemaLifecycleFamily, 'fixtures'> & Readonly<{
+export type SchemaLifecycleFamilyWithMetadataV4 = Omit<SchemaLifecycleFamily, 'fixtures'> & Readonly<{
   fixtures: readonly SchemaLifecycleFixtureV4[];
   metadata: SchemaLifecycleMetadataV4;
 }>;
@@ -418,7 +418,7 @@ const METADATA_PATH_PATTERN = new RegExp(
   'u',
 );
 const EXPORT_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]{0,79}$/u;
-const MAX_CONTRACTS = 32;
+const MAX_CONTRACTS = 64;
 const MAX_FIXTURES = 128;
 const MAX_METADATA_COLLECTION = 128;
 const MAX_NESTED_METADATA_COLLECTION = 64;
@@ -557,7 +557,10 @@ function boundedId(value: unknown, label: string): string {
 }
 
 function boundedSchema(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 120 || !isCanonicalLocalSchemaIdentifier(value)) {
+  if (typeof value !== 'string'
+    || value.length > 120
+    || !/^[-a-z0-9.]+$/u.test(value)
+    || (value.startsWith('whoisleuth.') && !isCanonicalLocalSchemaIdentifier(value))) {
     throw new TypeError(`${label} is invalid.`);
   }
   return value;
@@ -842,7 +845,9 @@ function copyContract(value: unknown, index: number): SchemaLifecycleContract {
       && extensionPolicy !== 'preserve_bounded'
       && extensionPolicy !== 'discard_bounded')
     || (exactKeys === true) !== (extensionPolicy === 'reject')
-    || (source.futureVersionBehaviour !== 'reject'
+    || (source.futureVersionBehaviour !== 'discard'
+      && source.futureVersionBehaviour !== 'reject'
+      && source.futureVersionBehaviour !== 'preserve_without_write'
       && source.futureVersionBehaviour !== 'not_applicable')) {
     throw new TypeError(`${label} must reconcile exact keys with its bounded extension policy and declare future-version handling.`);
   }
@@ -1145,8 +1150,8 @@ function copySerialisationProfile(
   if (source.mediaType !== 'application/json'
     || source.encoding !== 'utf-8'
     || source.bom !== false
-    || source.indentSpaces !== 2
-    || source.terminalLf !== true
+    || (source.indentSpaces !== 0 && source.indentSpaces !== 2)
+    || typeof source.terminalLf !== 'boolean'
     || (source.propertyOrder !== 'normalised_fixed' && source.propertyOrder !== 'source_insertion')
     || (source.integrity !== 'none'
       && source.integrity !== 'structural_only_requires_separate_verification')) {
@@ -1169,8 +1174,8 @@ function copySerialisationProfile(
     mediaType: 'application/json' as const,
     encoding: 'utf-8' as const,
     bom: false as const,
-    indentSpaces: 2 as const,
-    terminalLf: true as const,
+    indentSpaces: source.indentSpaces,
+    terminalLf: source.terminalLf,
     propertyOrder: source.propertyOrder,
     canonicalisation: source.canonicalisation === null
       ? null
@@ -1416,8 +1421,15 @@ function validateFamilyRelations(family: SchemaLifecycleFamily): void {
     compatibilityOwners.set(contract.compatibilityId, { schema: contract.schema, role: contract.role });
     if (contract.migrationTarget) {
       const target = contractPairs.get(`${contract.migrationTarget.schema}\u0000${contract.migrationTarget.version}`);
-      if (!target || target.schema !== contract.schema || target.version <= contract.version) {
-        throw new TypeError('Schema lifecycle migration targets must name a greater registered version of the same schema.');
+      const inputProjection = contract.role === 'input'
+        && contract.lifecycle === 'current'
+        && target?.role === 'document'
+        && target.lifecycle === 'current'
+        && target.emitted
+        && target.schema !== contract.schema;
+      const versionMigration = target?.schema === contract.schema && target.version > contract.version;
+      if (!target || (!inputProjection && !versionMigration)) {
+        throw new TypeError('Schema lifecycle migration targets must name a greater version of the same schema or a current emitted document projected from a current input contract.');
       }
     }
   }
@@ -1426,10 +1438,10 @@ function validateFamilyRelations(family: SchemaLifecycleFamily): void {
     const contracts = family.contracts.filter((contract) => contract.compatibilityId === descriptor.id);
     const versions = contracts.map((contract) => contract.version);
     const current = contracts.find((contract) => contract.lifecycle === 'current');
+    const logicalSchema = contracts[0]?.schema ?? null;
     if (!contracts.length
-      || descriptor.schema === null
       || descriptor.owner !== family.owner
-      || contracts.some((contract) => contract.schema !== descriptor.schema
+      || contracts.some((contract) => (descriptor.schema !== null && contract.schema !== descriptor.schema)
         || (contract.lifecycle === 'retired'
           ? contract.futureVersionBehaviour !== 'not_applicable'
           : contract.futureVersionBehaviour !== descriptor.futureVersionBehavior)
@@ -1440,13 +1452,19 @@ function validateFamilyRelations(family: SchemaLifecycleFamily): void {
       throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} does not match its contracts.`);
     }
     if (descriptor.migration === 'normalize_to_current') {
-      if (!contracts.some((contract) => contract.lifecycle === 'legacy')
+      const currentInputProjection = contracts.length === 1
+        && current?.role === 'input'
+        && current.migrationTarget !== null
+        && contractPairs.get(`${current.migrationTarget.schema}\u0000${current.migrationTarget.version}`)?.role === 'document';
+      if ((!currentInputProjection
+          && !contracts.some((contract) => contract.lifecycle === 'legacy')
+          && !descriptor.acceptsUnversionedLegacy)
         || contracts.some((contract) => contract.lifecycle === 'retired')) {
-        throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} must name a registered legacy version before it can normalise to current.`);
+        throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} must name a registered legacy version or an accepted unversioned legacy root before it can normalise to current.`);
       }
-      if (contracts.some((contract) => contract.lifecycle === 'current'
+      if (!currentInputProjection && contracts.some((contract) => contract.lifecycle === 'current'
         ? contract.migrationTarget !== null
-        : contract.migrationTarget?.schema !== descriptor.schema
+        : contract.migrationTarget?.schema !== logicalSchema
           || contract.migrationTarget.version !== descriptor.currentVersion)) {
         throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} requires every legacy version to normalise to its current version.`);
       }
@@ -1514,18 +1532,23 @@ function validateFamilyRelations(family: SchemaLifecycleFamily): void {
     if (descriptor.migration !== 'normalize_to_current') continue;
     const contracts = family.contracts.filter((contract) => contract.compatibilityId === descriptor.id);
     const current = contracts.find((contract) => contract.lifecycle === 'current');
-    for (const contract of contracts.filter((candidate) => candidate.lifecycle === 'legacy')) {
+    const migrationContracts = contracts.filter((candidate) => candidate.lifecycle === 'legacy'
+      || (candidate.lifecycle === 'current' && candidate.role === 'input' && candidate.migrationTarget !== null));
+    for (const contract of migrationContracts) {
+      const expectedTarget = contract.migrationTarget
+        ? contractPairs.get(`${contract.migrationTarget.schema}\u0000${contract.migrationTarget.version}`)
+        : current;
       const hasMigrationFixture = contract.fixtureIds.some((fixtureId) => {
         const fixture = fixtureById.get(fixtureId);
         const output = fixture?.expectedOutputFixtureId
           ? fixtureById.get(fixture.expectedOutputFixtureId)
           : null;
         return fixture?.expectation === 'normalises_to_current_output'
-          && output?.schema === current?.schema
-          && output?.version === current?.version;
+          && output?.schema === expectedTarget?.schema
+          && output?.version === expectedTarget?.version;
       });
       if (!hasMigrationFixture) {
-        throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} must prove every legacy migration with a fixture.`);
+        throw new TypeError(`Schema lifecycle compatibility descriptor ${descriptor.id} must prove every declared normalisation with a fixture.`);
       }
     }
   }

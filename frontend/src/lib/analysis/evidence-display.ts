@@ -20,6 +20,7 @@ const SCAN_DEPTH_LABELS = {
 
 /** Human labels for every known snapshot field. */
 const FIELD_LABELS = {
+  inputHostname: 'Submitted hostname',
   scanDepth: 'Scan depth',
   availability: 'Availability',
   confidence: 'Confidence',
@@ -68,7 +69,7 @@ export type TimelineEntry = {
   hasRepeatedObservation: boolean;
   changes: EvidenceChange[] | null;
   hasIncomparableChange: boolean;
-  incomparableReasons: Array<'opportunity-model' | 'scan-depth' | 'risk-model' | 'other'>;
+  incomparableReasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other'>;
   displayIndex: number;
 };
 type SnapshotGroup = {
@@ -77,6 +78,10 @@ type SnapshotGroup = {
 };
 
 const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
+  {
+    name: 'Observation context',
+    fields: ['inputHostname'],
+  },
   {
     name: 'Registration',
     fields: ['availability', 'confidence', 'registrar', 'createdDate', 'expiryDate', 'nameservers'],

@@ -1,0 +1,59 @@
+{
+  "schema": "whoisleuth.bulk-review-manifest",
+  "version": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "observedAt": "2026-08-22T00:00:00.000Z",
+  "lookupProfile": "deep",
+  "selection": {
+    "count": 1,
+    "domains": [
+      "left.fixture.example"
+    ]
+  },
+  "view": "all",
+  "rows": [
+    {
+      "domain": "left.fixture.example",
+      "reviewState": "reviewed",
+      "resultState": "complete",
+      "scanDepth": "deep",
+      "sourceCoverage": [
+        {
+          "source": "rdap",
+          "state": "complete"
+        },
+        {
+          "source": "availability",
+          "state": "complete"
+        },
+        {
+          "source": "dns",
+          "state": "complete"
+        },
+        {
+          "source": "http",
+          "state": "complete"
+        },
+        {
+          "source": "tls",
+          "state": "complete"
+        }
+      ],
+      "profileContext": {
+        "sourceState": "ready",
+        "activeProfileId": null,
+        "profileUpdatedAt": null,
+        "limitation": ""
+      }
+    }
+  ],
+  "limitations": [
+    "This manifest records the explicit review selection and view context for a separate CSV export.",
+    "It contains compact source states and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.",
+    "Reproducing the filters does not reproduce upstream responses or imply that evidence remains current."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "digestSha256": "sha256:6c5661b675bcffd17751843f234c7cef87810d7e7735c23296caba16843228d5"
+  }
+}

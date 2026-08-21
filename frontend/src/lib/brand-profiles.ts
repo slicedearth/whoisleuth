@@ -17,10 +17,11 @@ import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { BrowserLocalDataError } from './browser-local-data.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
+export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
 export const PROFILES_KEY = LEGACY_PROFILES_KEY;
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
-export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
 export type ActiveBrandProfileSourceState = 'loading' | 'ready' | 'unavailable';
 
 export class BrandProfileMutationCommittedError extends BrowserLocalDataError {
@@ -186,7 +187,7 @@ export async function importProfiles(value: unknown) {
 }
 
 export async function exportProfiles() {
-  const blob = new Blob([JSON.stringify(buildBrandProfileExport(await loadProfiles()), null, 2)], { type: 'application/json' });
+  const blob = new Blob([serialiseWorkspacePortableJson(buildBrandProfileExport(await loadProfiles()))], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

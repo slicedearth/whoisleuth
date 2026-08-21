@@ -1,0 +1,168 @@
+{
+  "schema": "whoisleuth.case-response-packet",
+  "schemaVersion": 5,
+  "generatedAt": "2026-08-06T00:00:00.000Z",
+  "reviewRequired": true,
+  "submissionPerformed": false,
+  "profile": {
+    "id": "internal_soc",
+    "label": "Internal SOC handoff",
+    "audience": "Internal security operations or incident-response team",
+    "subject": "Reviewed domain investigation handoff: legacy-response.example (Reserved review)",
+    "checklist": [
+      "Identify the internal owner",
+      "Separate verified facts, hypotheses, unknowns, and contradictions",
+      "Record the next reviewed action"
+    ],
+    "evidenceOrder": [
+      "Decision packet",
+      "Selected evidence",
+      "Incident facts",
+      "Action and investigation trail"
+    ],
+    "includedEvidence": [
+      "Case disposition",
+      "Selected evidence pins",
+      "Analyst decisions and assertions",
+      "Action history",
+      "Exact URLs when relevant"
+    ],
+    "excludedEvidence": [
+      "Raw upstream payloads",
+      "Secrets",
+      "Unselected personal data",
+      "Unsupported attribution"
+    ],
+    "redactions": [
+      "Remove credentials, tokens, and personal data not required for the internal decision"
+    ],
+    "attachments": [
+      "Reviewed response packet",
+      "Normalised case report when required by internal policy"
+    ],
+    "followUpFields": [
+      "Internal owner",
+      "Due date",
+      "Decision",
+      "Control or escalation outcome"
+    ]
+  },
+  "case": {
+    "id": "74058809-0262-4f92-ad9b-bafacec9fef2",
+    "domain": "legacy-response.example",
+    "status": "escalated",
+    "disposition": "confirmed_abuse",
+    "updatedAt": "2026-08-06T00:00:00.000Z"
+  },
+  "incident": {
+    "category": "Reserved review",
+    "affectedParty": "Reserved service",
+    "abusiveUrls": [
+      "https://legacy-response.example/review"
+    ],
+    "observedHarm": "A reserved synthetic observation.",
+    "observedAt": "2026-08-06T00:00:00.000Z"
+  },
+  "contacts": [],
+  "preflight": {
+    "version": 1,
+    "status": "review_cautions",
+    "canExport": true,
+    "counts": {
+      "block": 0,
+      "caution": 4,
+      "pass": 5
+    },
+    "checks": [
+      {
+        "id": "required_incident_fields",
+        "label": "Incident facts",
+        "state": "pass",
+        "detail": "1 exact HTTP(S) URL and the required incident context are present."
+      },
+      {
+        "id": "evidence_pins",
+        "label": "Selected evidence",
+        "state": "caution",
+        "detail": "No precise evidence pin is recorded; the packet can be drafted, but its support is less reviewable."
+      },
+      {
+        "id": "analyst_decision",
+        "label": "Analyst decision",
+        "state": "caution",
+        "detail": "No explicit analyst decision explains why external reporting is appropriate."
+      },
+      {
+        "id": "recipient_route",
+        "label": "Recipient route",
+        "state": "caution",
+        "detail": "No contact route is included; identify and review the intended recipient before sending."
+      },
+      {
+        "id": "profile_recipient",
+        "label": "Audience-specific recipient",
+        "state": "pass",
+        "detail": "Internal SOC handoff has no fixed external contact-kind requirement; confirm the intended manual destination."
+      },
+      {
+        "id": "case_disposition",
+        "label": "Case disposition",
+        "state": "pass",
+        "detail": "The case disposition is confirmed abuse."
+      },
+      {
+        "id": "evidence_freshness",
+        "label": "Evidence freshness",
+        "state": "pass",
+        "detail": "The selected observation is under 24 hours."
+      },
+      {
+        "id": "contradictory_evidence",
+        "label": "Contradictory evidence",
+        "state": "pass",
+        "detail": "No open contradictory-evidence assertion is recorded."
+      },
+      {
+        "id": "action_tracking",
+        "label": "Action tracking",
+        "state": "caution",
+        "detail": "No reviewed case action is recorded for ownership, submission, or follow-up."
+      }
+    ],
+    "actionSummary": {
+      "total": 0,
+      "active": 0,
+      "submitted": 0,
+      "acknowledged": 0,
+      "resolved": 0,
+      "closed": 0,
+      "overdue": 0,
+      "followUpDue": 0,
+      "withOutcome": 0,
+      "latestOutcomes": []
+    }
+  },
+  "escalationHistory": [],
+  "provenance": {
+    "latestEvidenceCapturedAt": "2026-08-06T00:00:00.000Z",
+    "evidencePinCount": 0,
+    "decisionCount": 0,
+    "assertionCount": 0,
+    "observationAge": {
+      "ageSeconds": 0,
+      "band": "under_24_hours",
+      "refreshRecommended": false
+    },
+    "limitations": [
+      "This packet contains analyst-selected facts and must be reviewed before submission.",
+      "WHOISleuth did not submit this packet or verify that any listed contact is monitored.",
+      "No escalation contact was included."
+    ]
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v1",
+    "scope": "packet excluding integrity",
+    "digestSha256": "6cf926a9825e3174158583c531b23523e0ef82bb2628db7db43aa3071ee08444"
+  }
+}

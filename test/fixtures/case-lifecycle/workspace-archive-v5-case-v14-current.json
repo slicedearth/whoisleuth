@@ -1,0 +1,238 @@
+{
+  "schema": "whoisleuth.workspace-archive",
+  "version": 5,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "manifest": {
+    "sectionCount": 12,
+    "totalRecords": 2,
+    "sections": [
+      {
+        "id": "cases",
+        "schema": null,
+        "version": 14,
+        "recordCount": 1,
+        "bytes": 908,
+        "checksum": "sha256:6795b6ad4a5c6e73d27102b04b63716ea094c4c8b7eff0c69d51783b1d513940"
+      },
+      {
+        "id": "campaigns",
+        "schema": "whoisleuth.campaigns",
+        "version": 1,
+        "recordCount": 0,
+        "bytes": 259,
+        "checksum": "sha256:f5801ea8baba3a75b037c0679a38495e1df7ff6a4d5c550becd1451ca815b371"
+      },
+      {
+        "id": "brandProfiles",
+        "schema": "whoisleuth.brand-profiles",
+        "version": 6,
+        "recordCount": 0,
+        "bytes": 104,
+        "checksum": "sha256:b121a853551aa8c25511ac042ab781fa22c91afe189e316e05ecc9816c83b96d"
+      },
+      {
+        "id": "watchlists",
+        "schema": "whoisleuth.watchlists",
+        "version": 2,
+        "recordCount": 0,
+        "bytes": 102,
+        "checksum": "sha256:882a3a3a670616fcb9c14b649ea86b2e8e5f99f450c4ba00295bd062ac12124f"
+      },
+      {
+        "id": "shortlist",
+        "schema": "whoisleuth.shortlist",
+        "version": 3,
+        "recordCount": 0,
+        "bytes": 98,
+        "checksum": "sha256:9f23650594c2642047388a3b2f541069420d5eb1ab96640daa081a320aa12134"
+      },
+      {
+        "id": "detectionRules",
+        "schema": "whoisleuth.detection-rules",
+        "version": 1,
+        "recordCount": 0,
+        "bytes": 271,
+        "checksum": "sha256:081092a3a3731a136bac86d5d0a73d800235347a14db949a8739f174d29d1769"
+      },
+      {
+        "id": "relationshipObservations",
+        "schema": "whoisleuth.relationship-observations",
+        "version": 1,
+        "recordCount": 0,
+        "bytes": 328,
+        "checksum": "sha256:1dd6a61baf1c0df81fa5c06f8c0dbf0d04e3ca417ae6cd58c71302d17d34a4bc"
+      },
+      {
+        "id": "bulkSessions",
+        "schema": "whoisleuth.bulk-sessions",
+        "version": 4,
+        "recordCount": 0,
+        "bytes": 303,
+        "checksum": "sha256:48d190c0015706f3e5ea85dcb54f02a6ea01046b1022ad10f6c056e324f4698a"
+      },
+      {
+        "id": "websiteSnapshots",
+        "schema": "whoisleuth.website-profile-snapshots",
+        "version": 4,
+        "recordCount": 0,
+        "bytes": 117,
+        "checksum": "sha256:60d5515ac98766fa805a31a333fa39da574f7621bee26254898792005ae06b6f"
+      },
+      {
+        "id": "investigationTemplates",
+        "schema": "whoisleuth.investigation-templates",
+        "version": 2,
+        "recordCount": 0,
+        "bytes": 431,
+        "checksum": "sha256:0c6d285958c3095aa51c3bd8ad33c767ab6d5ca27e2572088f3d56485ae584e7"
+      },
+      {
+        "id": "bulkReview",
+        "schema": "whoisleuth.bulk-review",
+        "version": 1,
+        "recordCount": 0,
+        "bytes": 70,
+        "checksum": "sha256:43497735ab26251b1b80c46612c0cd65599ea648659bcfc156d6dd0f436220df"
+      },
+      {
+        "id": "settings",
+        "schema": "whoisleuth.workspace-settings",
+        "version": 1,
+        "recordCount": 1,
+        "bytes": 92,
+        "checksum": "sha256:52ca28366c97f42802ecfafe464c03ff383484428dfc517fa0bc633ad5c1cd20"
+      }
+    ]
+  },
+  "sections": {
+    "cases": {
+      "version": 14,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "cases": [
+        {
+          "id": "21936849-ddac-4c03-80e4-cafc4d770ed5",
+          "domain": "current.example.test",
+          "status": "new",
+          "disposition": "unreviewed",
+          "reviewReasonCode": null,
+          "brandProfileIds": [],
+          "tags": [],
+          "notes": [],
+          "source": "manual",
+          "evidenceHistory": [],
+          "evidencePins": [],
+          "decisions": [],
+          "actions": [],
+          "assertions": [],
+          "manualTrail": [],
+          "sightings": [],
+          "observedEffects": {
+            "reviews": [],
+            "omitted": 0,
+            "preV13HistoryUnavailable": false,
+            "limitations": [
+              "Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them."
+            ]
+          },
+          "closures": {
+            "records": [],
+            "omitted": 0,
+            "preV13HistoryUnavailable": false,
+            "limitations": [
+              "Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency."
+            ]
+          },
+          "branches": [],
+          "createdAt": "2026-08-22T00:00:00.000Z",
+          "updatedAt": "2026-08-22T00:00:00.000Z"
+        }
+      ]
+    },
+    "campaigns": {
+      "schema": "whoisleuth.campaigns",
+      "version": 1,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "campaigns": [],
+      "limitations": "Campaigns contain browser-local labels and domain membership only. They do not prove common ownership, coordination, intent, or maliciousness."
+    },
+    "brandProfiles": {
+      "schema": "whoisleuth.brand-profiles",
+      "version": 6,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "profiles": []
+    },
+    "watchlists": {
+      "schema": "whoisleuth.watchlists",
+      "version": 2,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "watchlists": {}
+    },
+    "shortlist": {
+      "schema": "whoisleuth.shortlist",
+      "version": 3,
+      "entries": [],
+      "exportedAt": "2026-08-22T00:00:00.000Z"
+    },
+    "detectionRules": {
+      "schema": "whoisleuth.detection-rules",
+      "version": 1,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "rules": [],
+      "limitations": "Custom rules are browser-local analyst heuristics. Matches and score contributions are not proof of maliciousness and do not alter built-in risk scores."
+    },
+    "relationshipObservations": {
+      "schema": "whoisleuth.relationship-observations",
+      "version": 1,
+      "generatedAt": "2026-08-22T00:00:00.000Z",
+      "observations": [],
+      "limitations": [
+        "These are analyst-selected derived pivots, not proof of ownership, coordination, intent, or maliciousness.",
+        "The export excludes the originating raw lookup responses and complete Bulk scan."
+      ]
+    },
+    "bulkSessions": {
+      "schema": "whoisleuth.bulk-sessions",
+      "version": 4,
+      "generatedAt": "2026-08-22T00:00:00.000Z",
+      "sessions": [],
+      "limitations": [
+        "Compact Bulk results and source states only; raw source payloads and contact records are excluded.",
+        "Import is non-destructive and does not resume network collection automatically."
+      ]
+    },
+    "websiteSnapshots": {
+      "schema": "whoisleuth.website-profile-snapshots",
+      "version": 4,
+      "snapshots": [],
+      "generatedAt": "2026-08-22T00:00:00.000Z"
+    },
+    "investigationTemplates": {
+      "schema": "whoisleuth.investigation-templates",
+      "version": 2,
+      "templates": [],
+      "generatedAt": "2026-08-22T00:00:00.000Z",
+      "limitations": [
+        "Templates contain allowlisted WHOISleuth tool steps and analyst-authored guidance only.",
+        "A template cannot run code, start collection, submit evidence, change a case, or bypass a required request approval gate.",
+        "Workflow outcomes are analyst progress markers and are not findings about a target."
+      ]
+    },
+    "bulkReview": {
+      "schema": "whoisleuth.bulk-review",
+      "version": 1,
+      "presets": [],
+      "rows": []
+    },
+    "settings": {
+      "schema": "whoisleuth.workspace-settings",
+      "version": 1,
+      "activeProfileId": "",
+      "theme": "system"
+    }
+  },
+  "limitations": [
+    "This archive contains only the bounded browser-local workspace sections listed in its manifest.",
+    "It excludes login sessions, passwords, API credentials, hosted-monitor encryption keys, raw upstream payloads, tab state, and unrelated browser storage.",
+    "Import is a reviewed non-destructive merge. Existing records can be updated according to their section-specific versioned merge rules but are not deleted by absence from the archive."
+  ]
+}

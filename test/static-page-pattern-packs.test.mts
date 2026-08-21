@@ -30,6 +30,7 @@ function fixtureCase(overrides: Record<string, unknown> = {}): CaseRecord {
       firstCapturedAt: '2026-07-30T00:00:00.000Z',
       capturedAt: '2026-07-30T00:00:00.000Z',
       source: 'lookup',
+      inputHostname: null,
       scanDepth: 'deep',
       availability: 'registered',
       confidence: 'high',
@@ -73,6 +74,8 @@ function fixtureCase(overrides: Record<string, unknown> = {}): CaseRecord {
     assertions: [],
     manualTrail: [],
     sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: '2026-07-30T00:00:00.000Z',
     updatedAt: '2026-07-30T00:00:00.000Z',
   };

@@ -425,6 +425,22 @@ describe('retained comparison adapters', () => {
     assert.equal(details.rows.some((row) => row.field === 'Risk score'), false);
   });
 
+  test('classifies a changed submitted hostname as observation context rather than target or model change', () => {
+    const record = caseWithSnapshots(
+      'example.test',
+      caseEvidence({ inputHostname: 'login.example.test' }),
+      caseEvidence({ inputHostname: 'account.example.test' }),
+    );
+    const index = buildComparisonLedgerIndex({ cases: [record] });
+    const details = buildComparisonLedgerDetails({ cases: [record] }, { itemIds: index.items[0]?.id });
+    const context = details.rows.find((row) => row.field === 'Submitted hostname context');
+    assert.equal(context?.state, 'not_compared');
+    assert.equal(context?.earlier.value, 'login.example.test');
+    assert.equal(context?.later.value, 'account.example.test');
+    assert.match(context?.limitations.join(' ') ?? '', /observation context only.*not evidence/iu);
+    assert.equal(details.rows.some((row) => ['added', 'different', 'model_changed', 'removed'].includes(row.state)), false);
+  });
+
   test('allows website-family removal only from a later complete family', () => {
     const completeEarlier = websiteSnapshot('web-complete-1', 'complete.reservation.invalid', EARLIER);
     const completeLater = websiteSnapshot('web-complete-2', 'complete.reservation.invalid', LATER, { technologies: [] });

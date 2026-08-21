@@ -9,19 +9,11 @@ import {
   SORTED_JSON_V1,
   SORTED_JSON_V2,
 } from '../packages/evidence/artifact-integrity.mts';
-import {
-  buildCaseReport,
-  CASE_REPORT_SCHEMA,
-  CASE_REPORT_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-report.ts';
+import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
-  CASE_IMPORT_VERSIONS,
   CONCLUSIVE_AVAILABILITY,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
-  MAX_CASE_IMPORT_BYTES,
-  CASE_SCHEMA_VERSION,
   assertCaseBrandProfileIds,
   caseEvidenceIncomparableReasons,
   compareCaseEvidence,
@@ -32,38 +24,54 @@ import {
   safeId,
   type CaseEvidenceSnapshot,
   type CaseRecord,
-} from '../frontend/src/lib/analysis/case-model.ts';
+} from '../packages/cases/case-model.mts';
+import {
+  caseReportVersionMatchesCase,
+  CASE_IMPORT_VERSIONS,
+  CASE_REPORT_SCHEMA,
+  CASE_SCHEMA_VERSION,
+  CLI_CASE_PACK_SCHEMA,
+  CLI_CASE_PACK_VERSION,
+  CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
+  CLI_CASE_PACK_INTEGRITY_KEYS as INTEGRITY_KEYS,
+  CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
+  CLI_CASE_PACK_LIMITATIONS as PACKET_LIMITATIONS,
+  CLI_CASE_PACK_PACKET_KEYS as PACKET_KEYS,
+  CLI_CASE_PACK_REPORT_KEYS as REPORT_KEYS,
+  CLI_CASE_PACK_ROOT_KEYS as ROOT_KEYS,
+  LEGACY_CLI_CASE_PACK_VERSION,
+  MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_PACK_CASES,
+  MAX_CASE_PACK_INPUT_BYTES,
+  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+} from '../packages/contracts/case-portability.mts';
 import { buildPortableGeneratorMetadata } from '../lib/portable-generator.mts';
 import { analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import { CliUsageError } from './errors.mts';
 
-export const CLI_CASE_PACK_SCHEMA = 'whoisleuth.cli.case-pack';
-export const CLI_CASE_PACK_VERSION = 2;
-export const LEGACY_CLI_CASE_PACK_VERSION = 1;
-export const MAX_CASE_PACK_INPUT_BYTES = 4 * 1024 * 1024;
-export const MAX_CASE_PACK_CASES = 25;
+export {
+  CLI_CASE_PACK_SCHEMA,
+  CLI_CASE_PACK_VERSION,
+  LEGACY_CLI_CASE_PACK_VERSION,
+  MAX_CASE_PACK_CASES,
+  MAX_CASE_PACK_INPUT_BYTES,
+};
 export type CasePackAudience = 'internal' | 'public' | 'trusted';
 
 const MAX_CASE_PACK_REFERENCE_SCAN_DEPTH = 64;
-const LEGACY_CASE_REPORT_VERSIONS = Object.freeze([1, 2, 3, 4, 5, 6, 7]);
 const INTERNAL_EXCLUSIONS = Object.freeze(['Raw upstream payloads and credentials are outside the case schema.']);
 const TRUSTED_EXCLUSIONS = Object.freeze(['Case notes', 'Recipient values', 'Manual trail targets', 'Raw upstream payloads and credentials']);
 const PUBLIC_EXCLUSIONS_V10 = Object.freeze(['Case notes', 'Actions and recipient values', 'Analyst assertions', 'Manual trail targets', 'Raw upstream payloads and credentials']);
 const PUBLIC_EXCLUSIONS_V11 = Object.freeze([...PUBLIC_EXCLUSIONS_V10.slice(0, 3), 'Investigation branches', ...PUBLIC_EXCLUSIONS_V10.slice(3)]);
-const PUBLIC_EXCLUSIONS = Object.freeze(['Case notes', 'Brand Profile references', ...PUBLIC_EXCLUSIONS_V11.slice(1)]);
-const SENSITIVE_CASE_PACK_FIELDS = Object.freeze(['brandProfileIds', 'notes', 'actions', 'assertions', 'manualTrail', 'branches', 'recipient', 'target']);
-const ROOT_KEYS = Object.freeze(['version', 'exportedAt', 'cases', 'packet', 'integrity']);
-const PACKET_KEYS = Object.freeze(['schema', 'version', 'audience', 'reviewed', 'reports', 'redactionManifest', 'limitations']);
-const REPORT_KEYS = Object.freeze(['schema', 'schemaVersion', 'generatedAt', 'application', 'case', 'currentAssessment', 'evidenceTimeline', 'analystResponse', 'limitations']);
-const INTEGRITY_KEYS = Object.freeze(['algorithm', 'canonicalization', 'digestSha256']);
-const PACKET_LIMITATIONS = Object.freeze([
-  'This local package is browser-importable through its top-level case collection and does not upload or submit evidence.',
-  'The reviewed flag records a deliberate CLI choice; it does not prove recipient authorisation, factual correctness, or legal sufficiency.',
-  'Importing the package does not restore fields excluded by its audience profile.',
-]);
+const PUBLIC_EXCLUSIONS_V12 = Object.freeze(['Case notes', 'Brand Profile references', ...PUBLIC_EXCLUSIONS_V11.slice(1)]);
+const PUBLIC_EXCLUSIONS = Object.freeze([...PUBLIC_EXCLUSIONS_V12, 'Independent observed-effect reviews and closure history']);
+const SENSITIVE_CASE_PACK_FIELDS = Object.freeze(['brandProfileIds', 'notes', 'actions', 'assertions', 'manualTrail', 'observedEffects', 'closures', 'branches', 'recipient', 'target']);
+const PUBLIC_OBSERVED_EFFECT_LIMITATION = 'Independent observed-effect review records were excluded from this public Case pack.';
+const PUBLIC_CLOSURE_LIMITATION = 'Deliberate closure records were excluded from this public Case pack.';
 const LEGACY_RISK_MODEL_LIMITATION = 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
 const LEGACY_SCORING_MODEL_LIMITATION = 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
 const LEGACY_PORTABLE_LIMITATION = 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
+const LEGACY_PROFILE_LIMITATION = 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Generated locally in the browser. Review the package before sharing it.';
 const LEGACY_REPORT_LIMITATION_BY_VERSION = new Map<number, string>([
   [1, LEGACY_RISK_MODEL_LIMITATION],
   [2, LEGACY_RISK_MODEL_LIMITATION],
@@ -72,6 +80,7 @@ const LEGACY_REPORT_LIMITATION_BY_VERSION = new Map<number, string>([
   [5, LEGACY_SCORING_MODEL_LIMITATION],
   [6, LEGACY_PORTABLE_LIMITATION],
   [7, LEGACY_PORTABLE_LIMITATION],
+  [8, LEGACY_PROFILE_LIMITATION],
 ]);
 
 const HISTORICAL_BASE_MATERIAL_FIELDS = Object.freeze([
@@ -104,6 +113,11 @@ const HISTORICAL_CONTEXT_MATERIAL_FIELDS = Object.freeze([
   'privacyProtected', 'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
   'mutationTypes',
 ] as const);
+const HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS = Object.freeze([
+  ...HISTORICAL_CONTEXT_MATERIAL_FIELDS.slice(0, -1),
+  'profileContextState', 'profileContextLimitation',
+  ...HISTORICAL_CONTEXT_MATERIAL_FIELDS.slice(-1),
+] as const);
 const HISTORICAL_CHANGE_ORDER = Object.freeze([
   'availability', 'confidence', 'riskScore', 'riskFactors', 'opportunityScore', 'opportunityFactors',
   'registrar', 'createdDate', 'expiryDate', 'nameservers', 'hasMx', 'hasSpf', 'hasDmarc',
@@ -122,7 +136,8 @@ function record(value: unknown): Record<string, unknown> | null {
 function expectedExclusions(audience: CasePackAudience, caseVersion: number): readonly string[] {
   if (audience === 'internal') return INTERNAL_EXCLUSIONS;
   if (audience === 'trusted') return TRUSTED_EXCLUSIONS;
-  if (caseVersion >= 12) return PUBLIC_EXCLUSIONS;
+  if (caseVersion >= 13) return PUBLIC_EXCLUSIONS;
+  if (caseVersion === 12) return PUBLIC_EXCLUSIONS_V12;
   return caseVersion === 11 ? PUBLIC_EXCLUSIONS_V11 : PUBLIC_EXCLUSIONS_V10;
 }
 
@@ -195,14 +210,14 @@ function assertClosedEnvelopes(
   integrity: Record<string, unknown>,
   redactionManifest: Record<string, unknown>,
   reports: readonly unknown[],
-  current: boolean,
+  supportsBrandProfileReferences: boolean,
 ): void {
   assertOnlyKeys(root, ROOT_KEYS, 'root envelope');
   assertOnlyKeys(packet, PACKET_KEYS, 'packet envelope');
   assertOnlyKeys(integrity, INTEGRITY_KEYS, 'integrity envelope');
   assertOnlyKeys(
     redactionManifest,
-    current ? ['excluded', 'sourceCaseCount', 'brandProfileReferencesOmitted'] : ['excluded', 'sourceCaseCount'],
+    supportsBrandProfileReferences ? CLI_CASE_PACK_CURRENT_REDACTION_KEYS : CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
     'redaction manifest',
   );
   if (!stringListsMatch(packet.limitations, PACKET_LIMITATIONS)) {
@@ -235,10 +250,10 @@ function listItemPath(path: readonly (number | string)[], list: 'actions' | 'man
       && path[3] === 'analystResponse' && path[4] === list && typeof path[5] === 'number');
 }
 
-function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[], current: boolean): boolean {
-  if (key === 'brandProfileIds') return current && (topCasePath(path) || reportCasePath(path));
+function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[], supportsBrandProfileReferences: boolean): boolean {
+  if (key === 'brandProfileIds') return supportsBrandProfileReferences && (topCasePath(path) || reportCasePath(path));
   if (key === 'notes') return topCasePath(path) || reportCasePath(path);
-  if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'branches') {
+  if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'observedEffects' || key === 'closures' || key === 'branches') {
     return topCasePath(path) || analystResponsePath(path);
   }
   if (key === 'recipient') return listItemPath(path, 'actions');
@@ -247,7 +262,7 @@ function allowedSensitiveFieldPath(key: string, path: readonly (number | string)
 }
 
 /** Rejects hidden audience-sensitive copies with a budget proven by the serialized byte bound. */
-function assertSensitiveFieldPlacement(root: Record<string, unknown>, current: boolean, serializedLength: number): void {
+function assertSensitiveFieldPlacement(root: Record<string, unknown>, supportsBrandProfileReferences: boolean, serializedLength: number): void {
   const stack: Array<{ value: unknown; path: readonly (number | string)[]; depth: number }> = [{ value: root, path: [], depth: 0 }];
   const visited = new Set<object>();
   let inspected = 0;
@@ -255,7 +270,7 @@ function assertSensitiveFieldPlacement(root: Record<string, unknown>, current: b
     const entry = stack.pop();
     if (!entry || !entry.value || typeof entry.value !== 'object') continue;
     for (const key of SENSITIVE_CASE_PACK_FIELDS) {
-      if (Object.hasOwn(entry.value, key) && !allowedSensitiveFieldPath(key, entry.path, current)) {
+      if (Object.hasOwn(entry.value, key) && !allowedSensitiveFieldPath(key, entry.path, supportsBrandProfileReferences)) {
         throw new TypeError('The CLI case pack contains audience-sensitive data outside its versioned case or report fields.');
       }
     }
@@ -314,7 +329,18 @@ function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string)
 function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string): void {
   if (rawCases.length !== normalised.length
     || rawCases.some((item, index) => !canonicalValuesMatch(item, normalised[index]))) {
-    throw new TypeError(`${label} contains a schema 12 Case that would be repaired, truncated, or otherwise changed during normalisation.`);
+    throw new TypeError(`${label} contains a schema ${CASE_SCHEMA_VERSION} Case that would be repaired, truncated, or otherwise changed during normalisation.`);
+  }
+}
+
+function assertCase13Projection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string): void {
+  const projected = normalised.map((item) => ({
+    ...structuredClone(item),
+    evidenceHistory: item.evidenceHistory.map(({ inputHostname: _inputHostname, ...snapshot }) => snapshot),
+  }));
+  if (rawCases.length !== projected.length
+    || rawCases.some((item, index) => !canonicalValuesMatch(item, projected[index]))) {
+    throw new TypeError(`${label} contains a schema 13 Case that would be changed beyond the declared schema-14 inputHostname migration.`);
   }
 }
 
@@ -324,6 +350,7 @@ function requiredHistoricalCaseKeys(caseVersion: number): readonly string[] {
     ...(caseVersion >= 3 ? ['evidencePins', 'decisions', 'actions'] : []),
     ...(caseVersion >= 4 ? ['assertions', 'manualTrail'] : []),
     ...(caseVersion >= 9 ? ['sightings'] : []),
+    ...(caseVersion >= 12 ? ['brandProfileIds'] : []),
   ];
 }
 
@@ -340,15 +367,37 @@ function assertHistoricalCaseOwnKeys(cases: readonly unknown[], caseVersion: num
 }
 
 function reportVersionMatchesCase(caseVersion: number, reportVersion: unknown): boolean {
-  if (!Number.isSafeInteger(reportVersion)) return false;
-  if (caseVersion === CASE_SCHEMA_VERSION) return reportVersion === CASE_REPORT_SCHEMA_VERSION;
-  if (!LEGACY_CASE_REPORT_VERSIONS.includes(reportVersion as number)) return false;
-  if (caseVersion === 2) return reportVersion === 1;
-  if (caseVersion === 3) return reportVersion === 2;
-  if (caseVersion >= 4 && caseVersion <= 8) return reportVersion === 3;
-  if (caseVersion === 9) return reportVersion === 4;
-  if (caseVersion === 10) return reportVersion === 5 || reportVersion === 6;
-  return caseVersion === 11 && reportVersion === 7;
+  return caseReportVersionMatchesCase(caseVersion, reportVersion);
+}
+
+function publicObservedEffectHistory(preV13HistoryUnavailable: boolean): CaseRecord['observedEffects'] {
+  return {
+    reviews: [],
+    omitted: 0,
+    preV13HistoryUnavailable,
+    limitations: [
+      ...(preV13HistoryUnavailable
+        ? ['Migrated from a pre-v13 Case; earlier independent observed-effect review history is unavailable.']
+        : []),
+      'Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them.',
+      PUBLIC_OBSERVED_EFFECT_LIMITATION,
+    ].sort(),
+  };
+}
+
+function publicClosureHistory(preV13HistoryUnavailable: boolean): CaseRecord['closures'] {
+  return {
+    records: [],
+    omitted: 0,
+    preV13HistoryUnavailable,
+    limitations: [
+      ...(preV13HistoryUnavailable
+        ? ['Migrated from a pre-v13 Case; earlier deliberate closure history is unavailable.']
+        : []),
+      'Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.',
+      PUBLIC_CLOSURE_LIMITATION,
+    ].sort(),
+  };
 }
 
 function assertAudienceFields(value: Record<string, unknown>, audience: CasePackAudience, supportsBranches: boolean): void {
@@ -363,6 +412,18 @@ function assertAudienceFields(value: Record<string, unknown>, audience: CasePack
     for (const field of ['actions', 'assertions', ...(supportsBranches ? ['branches'] : [])]) {
       if (Object.hasOwn(value, field) && (!Array.isArray(value[field]) || (value[field] as unknown[]).length !== 0)) {
         throw new TypeError(`The public CLI case pack contains ${field} excluded by its audience.`);
+      }
+    }
+    for (const [field, list] of [['observedEffects', 'reviews'], ['closures', 'records']] as const) {
+      if (Object.hasOwn(value, field)) {
+        const history = record(value[field]);
+        const expected = field === 'observedEffects'
+          ? publicObservedEffectHistory(history?.preV13HistoryUnavailable === true)
+          : publicClosureHistory(history?.preV13HistoryUnavailable === true);
+        if (!history || !Array.isArray(history[list]) || (history[list] as unknown[]).length !== 0
+          || !canonicalValuesMatch(history, expected)) {
+          throw new TypeError(`The public CLI case pack contains ${field} excluded by its audience.`);
+        }
       }
     }
   } else if (Object.hasOwn(value, 'actions')) {
@@ -401,13 +462,14 @@ function assertCurrentReportProjection(report: Record<string, unknown>, rawCase:
   }
 }
 
-type HistoricalMaterialField = (typeof HISTORICAL_CONTEXT_MATERIAL_FIELDS)[number];
+type HistoricalMaterialField = (typeof HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS)[number];
 type HistoricalSnapshot = Record<string, unknown>;
 
 function historicalMaterialFields(caseVersion: number): readonly HistoricalMaterialField[] {
   if (caseVersion <= 7) return HISTORICAL_BASE_MATERIAL_FIELDS;
   if (caseVersion <= 9) return HISTORICAL_EXTERNAL_FORM_MATERIAL_FIELDS;
-  return HISTORICAL_CONTEXT_MATERIAL_FIELDS;
+  if (caseVersion <= 11) return HISTORICAL_CONTEXT_MATERIAL_FIELDS;
+  return HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS;
 }
 
 function historicalMaterialValue(field: HistoricalMaterialField, snapshot: CaseEvidenceSnapshot): unknown {
@@ -597,10 +659,19 @@ function historicalAnalystResponse(caseRecord: CaseRecord, caseVersion: number, 
     item as unknown as Record<string, unknown>,
     ['id', 'summary', 'rationale', 'evidencePinIds', 'createdAt'],
   ));
-  const actions = caseRecord.actions.map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    ['id', 'type', 'recipient', 'contactSource', 'contactLimitations', 'dueAt', 'state', 'reference', 'followUpAt', 'outcome', 'createdAt', 'updatedAt'],
-  ));
+  const actions = caseRecord.actions.map((item) => {
+    const projected = pickHistoricalFields(
+      item as unknown as Record<string, unknown>,
+      ['id', 'type', 'recipient', 'contactSource', 'contactLimitations', 'dueAt', 'state', 'reference', 'followUpAt', 'outcome', 'createdAt', 'updatedAt'],
+    );
+    const migrationState = item.history.find((event) => event.sourceClass === 'migration')?.limitations
+      .map((limitation) => /current state "([^"]+)"/u.exec(limitation)?.[1] ?? null)
+      .find((value) => value !== null);
+    if (migrationState && ['planned', 'ready_for_review', 'submitted', 'acknowledged', 'resolved', 'closed'].includes(migrationState)) {
+      projected.state = migrationState;
+    }
+    return projected;
+  });
   const assertions = caseRecord.assertions.map((item) => {
     const projected = pickHistoricalFields(
       item as unknown as Record<string, unknown>,
@@ -681,6 +752,7 @@ function historicalReportProjection(
     disposition: caseRecord.disposition,
     ...(reportVersion >= 5 ? { reviewReasonCode: caseRecord.reviewReasonCode ?? null } : {}),
     ...(reportVersion >= 6 ? { interoperabilityTags: analystInteroperabilityTags(caseRecord.disposition, caseRecord.reviewReasonCode) } : {}),
+    ...(reportVersion >= 8 ? { brandProfileIds: [...caseRecord.brandProfileIds] } : {}),
     tags: [...caseRecord.tags],
     source: caseRecord.source,
     openedAt: caseRecord.createdAt,
@@ -742,11 +814,20 @@ function redactedCase(record: CaseRecord, audience: CasePackAudience): CaseRecor
   if (audience === 'internal') return structuredClone(record);
   return {
     ...structuredClone(record),
+    status: audience === 'public' && record.status === 'resolved' && record.closures.records.length
+      ? 'reviewing'
+      : record.status,
     brandProfileIds: audience === 'public' ? [] : [...record.brandProfileIds],
     notes: [],
     actions: audience === 'public' ? [] : record.actions.map((item) => ({ ...item, recipient: '[redacted]' })),
     manualTrail: record.manualTrail.map((item) => ({ ...item, target: null })),
     assertions: audience === 'public' ? [] : structuredClone(record.assertions),
+    observedEffects: audience === 'public'
+      ? publicObservedEffectHistory(record.observedEffects.preV13HistoryUnavailable)
+      : structuredClone(record.observedEffects),
+    closures: audience === 'public'
+      ? publicClosureHistory(record.closures.preV13HistoryUnavailable)
+      : structuredClone(record.closures),
     branches: audience === 'public' ? [] : structuredClone(record.branches ?? []),
   };
 }
@@ -780,7 +861,7 @@ export function buildCliCasePack(
       if (cause instanceof TypeError && /Case identity/u.test(cause.message)) {
         throw new CliUsageError(cause.message);
       }
-      throw new CliUsageError('Case-pack schema 12 input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array on every case.');
+      throw new CliUsageError(`Case-pack schema ${CASE_SCHEMA_VERSION} input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array on every case.`);
     }
   }
   const normalised = normalizeCaseStore(root).cases;
@@ -793,7 +874,7 @@ export function buildCliCasePack(
   }
   if (root.version === CASE_SCHEMA_VERSION) {
     try { assertCurrentCaseProjection(root.cases, normalised, 'Case-pack input'); }
-    catch (cause) { throw new CliUsageError(cause instanceof Error ? cause.message : 'Case-pack schema 12 input is not exact.'); }
+    catch (cause) { throw new CliUsageError(cause instanceof Error ? cause.message : `Case-pack schema ${CASE_SCHEMA_VERSION} input is not exact.`); }
   }
   const cases = normalised.map((item) => redactedCase(item, options.audience));
   const brandProfileReferencesOmitted = options.audience === 'public'
@@ -848,8 +929,13 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     || !packet
     || packet.schema !== CLI_CASE_PACK_SCHEMA
     || (packet.version !== LEGACY_CLI_CASE_PACK_VERSION && packet.version !== CLI_CASE_PACK_VERSION)
+    || (packet.version === CLI_CASE_PACK_VERSION
+      ? (root.version !== 13 && root.version !== CASE_SCHEMA_VERSION)
+      : (root.version === 13 || root.version === CASE_SCHEMA_VERSION))
     || packet.reviewed !== true
-    || !['internal', 'public', 'trusted'].includes(String(packet.audience))
+    || (packet.audience !== 'internal'
+      && packet.audience !== 'public'
+      && packet.audience !== 'trusted')
     || !Array.isArray(packet.reports)
     || !redactionManifest
     || !Array.isArray(root.cases)
@@ -882,16 +968,18 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   const { integrity: _integrity, ...unsigned } = root;
   const audience = packet.audience as CasePackAudience;
   const current = root.version === CASE_SCHEMA_VERSION;
-  assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, current);
-  assertSensitiveFieldPlacement(root, current, serialized.length);
+  const case13 = root.version === 13;
+  const supportsBrandProfileReferences = root.version >= 12;
+  assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, supportsBrandProfileReferences);
+  assertSensitiveFieldPlacement(root, supportsBrandProfileReferences, serialized.length);
   if (!Number.isSafeInteger(redactionManifest.sourceCaseCount)
-    || Number(redactionManifest.sourceCaseCount) !== root.cases.length
+    || redactionManifest.sourceCaseCount !== root.cases.length
     || !stringListsMatch(redactionManifest.excluded, expectedExclusions(audience, root.version))) {
     throw new TypeError('The CLI case pack has an invalid audience redaction manifest.');
   }
   const caseReferenceLists: string[][] = [];
   const reportReferenceLists: string[][] = [];
-  if (!current) assertHistoricalCaseOwnKeys(root.cases, root.version);
+  if (!current && !case13) assertHistoricalCaseOwnKeys(root.cases, root.version);
   assertCanonicalCaseIdentities(root.cases, 'The CLI case pack');
   const normalised = normalizeCaseStore(root).cases;
   if (normalised.length !== root.cases.length) {
@@ -899,6 +987,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   }
   const normalisedByDomain = new Map(normalised.map((item) => [item.domain, item]));
   if (current) assertCurrentCaseProjection(root.cases, normalised, 'The CLI case pack');
+  if (case13) assertCase13Projection(root.cases, normalised, 'The CLI case pack');
   for (let index = 0; index < root.cases.length; index++) {
     const rawCase = record(root.cases[index]);
     const report = record(packet.reports[index]);
@@ -917,8 +1006,8 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     const normalisedCase = normalisedByDomain.get(rawCase.domain);
     if (!normalisedCase) throw new TypeError('The CLI case pack contains an invalid case collection.');
     assertAudienceFields(rawCase, audience, root.version >= 11);
-    if (!current) assertLegacyProfileContextEpoch(rawCase, report);
-    if (current) {
+    if (root.version < 12) assertLegacyProfileContextEpoch(rawCase, report);
+    if (supportsBrandProfileReferences) {
       try {
         if (!Object.hasOwn(rawCase, 'brandProfileIds') || !Object.hasOwn(reportCase, 'brandProfileIds')) throw new Error('missing');
         caseReferenceLists.push(assertCaseBrandProfileIds(rawCase.brandProfileIds));
@@ -926,10 +1015,31 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
       } catch {
         throw new TypeError('The CLI case pack contains invalid Brand Profile references.');
       }
+    }
+    if (current) {
       assertCurrentReportProjection(report, rawCase as unknown as CaseRecord);
+    } else if (case13) {
+      if (report.generatedAt !== root.exportedAt) {
+        throw new TypeError('The CLI case pack contains an invalid or mismatched Case-13 report generation time.');
+      }
+      const expectedReport = {
+        ...buildCaseReport(normalisedCase, {
+          applicationVersion: reportApplicationVersion(report),
+          includeNotes: false,
+          generatedAt: root.exportedAt,
+        }).json,
+      };
+      if (!canonicalValuesMatch(report, expectedReport)) {
+        throw new TypeError('The CLI case pack contains an invalid or mismatched Case-13 report projection.');
+      }
     } else {
       const historicalHistory = normalizeHistoricalEvidenceHistory(rawCase.evidenceHistory, root.version);
-      assertProjectionKeys(rawCase, { ...normalisedCase, evidenceHistory: historicalHistory }, `cases[${index}]`);
+      const historicalResponse = historicalAnalystResponse(normalisedCase, root.version, reportVersion as number);
+      assertProjectionKeys(rawCase, {
+        ...normalisedCase,
+        evidenceHistory: historicalHistory,
+        ...(historicalResponse ?? {}),
+      }, `cases[${index}]`);
       assertHistoricalCaseResponseEpoch(rawCase, normalisedCase, root.version, reportVersion as number, `cases[${index}]`);
       if (report.generatedAt !== root.exportedAt) {
         throw new TypeError('The CLI case pack contains an invalid or mismatched historical report generation time.');
@@ -947,12 +1057,12 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
       }
     }
   }
-  if (current) {
+  if (supportsBrandProfileReferences) {
     const omitted = redactionManifest.brandProfileReferencesOmitted;
     if (!Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')
       || !Number.isSafeInteger(omitted)
-      || Number(omitted) < 0
-      || Number(omitted) > MAX_CASE_PACK_CASES * 8) {
+      || (omitted as number) < 0
+      || (omitted as number) > MAX_CASE_PACK_CASES * 8) {
       throw new TypeError('The CLI case pack has an invalid Brand Profile redaction manifest.');
     }
     const referencesMatch = caseReferenceLists.every((references, index) => {
@@ -965,7 +1075,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
         || reportReferenceLists.some((references) => references.length !== 0)) {
         throw new TypeError('The public CLI case pack has an invalid Brand Profile redaction manifest.');
       }
-    } else if (Number(omitted) !== 0 || !referencesMatch) {
+    } else if (omitted !== 0 || !referencesMatch) {
       throw new TypeError('The trusted or internal CLI case pack has inconsistent Brand Profile references.');
     }
   } else if (Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')) {

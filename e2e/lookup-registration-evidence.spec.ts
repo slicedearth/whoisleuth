@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
@@ -777,6 +777,86 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
   expect(registrar).toBe('Example Registrar LLC');
 });
 
+test('only deliberate Case creation and refresh retain the exact submitted hostname', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const query = new URL(route.request().url()).searchParams.get('q') ?? '';
+    const identity = lookupDomainIdentity(query);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...identity,
+        availability: {
+          applicable: true,
+          state: 'registered',
+          confidence: 'high',
+          domain: identity.registrableDomain,
+          deepScanComplete: true,
+        },
+        rdap: { parsed: { domain: identity.registrableDomain } },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: {
+          rdap: { status: 'success' },
+          whois: { status: 'complete' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  const runLookup = async (hostname: string) => {
+    await page.locator('#query').fill(hostname);
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    await expect(page.getByRole('heading', { name: 'scope.test', exact: true })).toBeVisible();
+    await expandLookupFamilies(page);
+  };
+  const retainedCase = async (minimumRevision = 1) => {
+    const collection = await readBrowserLocalCollection(page, 'cases', {
+      minimumRecords: 1,
+      minimumRevision,
+    });
+    const record = collection.records[0]?.value as {
+      domain?: unknown;
+      evidenceHistory?: Array<{ inputHostname?: unknown }>;
+    } | undefined;
+    expect(collection.records).toHaveLength(1);
+    expect(record?.domain).toBe('scope.test');
+    return { collection, record };
+  };
+
+  await runLookup('login.scope.test');
+  await page.getByRole('button', { name: 'Create case' }).click();
+  const created = await retainedCase();
+  expect(created.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname)).toEqual([
+    'login.scope.test',
+  ]);
+
+  await runLookup('account.scope.test');
+  const refresh = page.getByRole('button', {
+    name: 'Refresh retained Case evidence for scope.test',
+  });
+  await expect(refresh).toBeVisible();
+  const beforeRefresh = await retainedCase(created.collection.manifest.revision);
+  expect(beforeRefresh.collection.manifest.revision).toBe(created.collection.manifest.revision);
+  expect(beforeRefresh.record?.evidenceHistory).toHaveLength(1);
+
+  await refresh.click();
+  const refreshed = await retainedCase(beforeRefresh.collection.manifest.revision + 1);
+  expect(refreshed.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname).sort()).toEqual([
+    'account.scope.test',
+    'login.scope.test',
+  ]);
+
+  await runLookup('transient.scope.test');
+  await expect(refresh).toBeVisible();
+  const afterTransientLookup = await retainedCase(refreshed.collection.manifest.revision);
+  expect(afterTransientLookup.collection.manifest.revision).toBe(refreshed.collection.manifest.revision);
+  expect(afterTransientLookup.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname).sort()).toEqual([
+    'account.scope.test',
+    'login.scope.test',
+  ]);
+});
+
 test('published response routes can be recorded in a local case with their provenance', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
@@ -829,7 +909,7 @@ test('published response routes can be recorded in a local case with their prove
       type: 'registrar_report',
       recipient: 'abuse@example.test',
       contactSource: 'registrar RDAP entity',
-      state: 'planned',
+      state: 'drafting',
     }),
   ]);
 

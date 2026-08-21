@@ -15,6 +15,7 @@ function deepSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEviden
     firstCapturedAt: ISO,
     capturedAt: ISO,
     source: 'lookup',
+    inputHostname: null,
     scanDepth: 'deep',
     availability: 'registered',
     confidence: null,

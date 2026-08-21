@@ -649,6 +649,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     status: show(availability.state),
   };
   const caseEvidence = {
+    inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,

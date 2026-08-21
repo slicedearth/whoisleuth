@@ -128,6 +128,11 @@ describe('strict external findings import', () => {
       status: 'resolved',
       disposition: 'false_positive',
       source: 'lookup',
+      closure: {
+        reason: 'false_positive',
+        summary: 'The analyst deliberately closed the retained false-positive case.',
+        limitations: ['This closure does not establish remediation or safety.'],
+      },
     }, NOW);
     const parsed = parseExternalFindingsDocument(document());
     const merged = mergeExternalFindingsIntoCases([current], parsed, NOW);

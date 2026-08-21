@@ -1,0 +1,45 @@
+{
+  "schema": "whoisleuth.investigation-brief",
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "target": "fixture.example",
+  "targetType": "domain",
+  "task": "general",
+  "taskLabel": "General investigation",
+  "question": "What does the bounded evidence establish?",
+  "summary": "Review the bounded evidence and retain unresolved questions.",
+  "observation": {
+    "observedAt": "2026-08-22T00:00:00.000Z",
+    "evidenceAgeDays": 0,
+    "completeSources": 1,
+    "limitedSources": 0,
+    "freshnessPolicy": {
+      "version": 1,
+      "id": "task-default",
+      "task": "general",
+      "thresholdsDays": {
+        "registration": 30,
+        "network": 7,
+        "web": 3
+      }
+    }
+  },
+  "verifiedFacts": [],
+  "contradictions": [],
+  "unknowns": [],
+  "nextActions": [],
+  "relationships": {
+    "nodes": 3,
+    "edges": 0,
+    "truncated": false,
+    "kinds": []
+  },
+  "limitations": [
+    "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+    "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+    "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+    "Missing and incomplete sources remain explicit and are not represented as absent relationships.",
+    "This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.",
+    "Analyst assertions, hypotheses, and decisions must remain separate from observed evidence."
+  ]
+}

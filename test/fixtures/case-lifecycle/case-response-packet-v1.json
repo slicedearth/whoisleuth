@@ -1,0 +1,40 @@
+{
+  "schema": "whoisleuth.case-response-packet",
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "reviewRequired": true,
+  "submissionPerformed": false,
+  "case": {
+    "id": "case-response-history",
+    "domain": "history.example.test",
+    "status": "reviewing",
+    "disposition": "unreviewed",
+    "updatedAt": "2026-08-22T00:00:00.000Z"
+  },
+  "incident": {
+    "category": "Reserved fixture review",
+    "affectedParty": "Example service",
+    "abusiveUrls": [
+      "https://history.example.test/review"
+    ],
+    "observedHarm": "A reserved fixture condition was retained for review.",
+    "observedAt": "2026-08-22T00:00:00.000Z"
+  },
+  "contacts": [
+    {
+      "kind": "registrar",
+      "contact": "abuse@example.test",
+      "source": "reserved fixture",
+      "limitations": []
+    }
+  ],
+  "provenance": {
+    "latestEvidenceCapturedAt": null,
+    "evidencePinCount": 0,
+    "decisionCount": 0,
+    "limitations": [
+      "This packet contains analyst-selected facts and must be reviewed before submission.",
+      "WHOISleuth did not submit this packet or verify that any listed contact is monitored."
+    ]
+  }
+}

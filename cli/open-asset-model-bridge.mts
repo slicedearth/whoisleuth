@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 import {
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
-} from '../frontend/src/lib/analysis/external-findings-import.ts';
+} from '../packages/interchange/external-findings-import.mts';
 import { requireIsoTimestamp } from '../lib/bounded-contract-normalizers.mts';
 
 export const OPEN_ASSET_MODEL_BRIDGE_SCHEMA = 'whoisleuth.open-asset-model-bridge';

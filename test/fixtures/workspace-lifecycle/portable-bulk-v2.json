@@ -1,0 +1,10 @@
+{
+  "schema": "whoisleuth.bulk-sessions",
+  "version": 2,
+  "generatedAt": "2000-01-01T00:00:00.000Z",
+  "sessions": [],
+  "limitations": [
+    "Compact Bulk results and source states only; raw source payloads and contact records are excluded.",
+    "Import is non-destructive and does not resume network collection automatically."
+  ]
+}

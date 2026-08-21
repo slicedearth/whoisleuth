@@ -133,7 +133,7 @@
       {#if expandedId === record.id}
         <div class="case-body" id={`case-body-${record.id}`}>
           <div class="field-grid">
-            <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+            <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each CASE_STATUSES.filter((option) => option.value !== 'resolved' || record.status === 'resolved') as option}<option value={option.value}>{option.label}</option>{/each}</select><small>Use the independent-remediation section for a new deliberate closure.</small></label>
             <label class="field">Disposition<select value={record.disposition} onchange={(event) => setDisposition(record, event.currentTarget.value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             <label class="field">Review reason<select value={record.reviewReasonCode ?? ''} onchange={(event) => setReviewReason(record, event.currentTarget.value)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>

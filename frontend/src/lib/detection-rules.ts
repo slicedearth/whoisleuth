@@ -18,6 +18,7 @@ import type {
   DetectionRule,
   DetectionRuleEvaluation,
 } from './analysis/detection-rule-model.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 
 export {
   MAX_RULE_IMPORT_BYTES,
@@ -77,7 +78,7 @@ export async function importDetectionRules(raw: unknown): Promise<{ rules: Detec
 }
 
 export async function exportDetectionRules(): Promise<void> {
-  const blob = new Blob([JSON.stringify(buildDetectionRuleExport(await loadDetectionRules()), null, 2)], { type: 'application/json' });
+  const blob = new Blob([serialiseWorkspacePortableJson(buildDetectionRuleExport(await loadDetectionRules()))], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

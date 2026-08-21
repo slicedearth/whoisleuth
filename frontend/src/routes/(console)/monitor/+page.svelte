@@ -38,6 +38,7 @@
   import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
+  import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
     addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
@@ -135,6 +136,7 @@
   let cases=$state<CaseRecord[]>([]);
   let pendingNoteCaseIds=$state<string[]>([]);
   let casesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  let parentDomainCasesSourceState=$state<ParentDomainCampaignSourceState>('loading');
   let casesRefreshing=$state(false);
   let brandProfiles=$state<BrandProfile[]>([]);
   let brandProfilesUnavailable=$state(true);
@@ -202,10 +204,12 @@
       caseMessage=`Deleted the retained relationship observation. Source cases and watchlists were not changed.`;
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the retained relationship observation.';}
   }
-  async function refreshCases(){const hadSnapshot=casesSourceState==='ready';casesRefreshing=true;try{cases=await loadCases();casesSourceState='ready';calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}catch(cause){if(!hadSnapshot)casesSourceState='unavailable';throw cause;}finally{casesRefreshing=false;}}
-  function installCommittedCaseSnapshot(committedCases:CaseRecord[]){
+  function parentDomainCaseFailureState(cause:unknown):ParentDomainCampaignSourceState{return cause instanceof BrowserLocalDataError&&cause.code==='LOCAL_DATA_FUTURE_SCHEMA'?'future_schema':'unavailable';}
+  async function refreshCases(){const hadSnapshot=casesSourceState==='ready';casesRefreshing=true;try{cases=await loadCases();casesSourceState='ready';parentDomainCasesSourceState='ready';calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}catch(cause){parentDomainCasesSourceState=hadSnapshot?'partial':parentDomainCaseFailureState(cause);if(!hadSnapshot)casesSourceState='unavailable';throw cause;}finally{casesRefreshing=false;}}
+  function installCommittedCaseSnapshot(committedCases:CaseRecord[],sourceState:ParentDomainCampaignSourceState='ready'){
     cases=committedCases;
     casesSourceState='ready';
+    parentDomainCasesSourceState=sourceState;
     calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(item=>item.id===id));
     refreshRelationships();
     if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';
@@ -220,7 +224,7 @@
       if(record)showCasePage(record);
       caseMessage=`${success}${prunedNote(committed.pruned)}`;
     }catch{
-      installCommittedCaseSnapshot(committed.cases);
+      installCommittedCaseSnapshot(committed.cases,'partial');
       if(record)showCasePage(record);
       caseMessage=`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`;
     }
@@ -353,7 +357,7 @@
       showCasePage(persisted);
       caseMessage=`${operation==='add'?'Added':'Removed'} an explicit Brand Profile association for ${persisted.domain}.${prunedNote(pruned)}`;
     }catch{
-      installCommittedCaseSnapshot(committedCases);
+      installCommittedCaseSnapshot(committedCases,'partial');
       showCasePage(persisted);
       caseMessage=`Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(pruned)}`;
     }
@@ -400,7 +404,7 @@
     catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';return;}
     if(expandedId===record.id)expandedId='';
     try{await refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}
-    catch{installCommittedCaseSnapshot(committed.cases);caseMessage=`Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;}
+    catch{installCommittedCaseSnapshot(committed.cases,'partial');caseMessage=`Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;}
   }
   function clearCaseFilters(){statusFilter='';dispositionFilter='';caseSearch='';}
   async function importCaseFile(event:Event){
@@ -491,13 +495,18 @@
   });
 
   onMount(()=>{void (async()=>{
+    const campaignLoad=loadCampaigns();
+    void campaignLoad.then(
+      (loadedCampaigns)=>{campaigns=loadedCampaigns;campaignCount=loadedCampaigns.length;campaignsSourceState='ready';},
+      ()=>{campaignsSourceState='unavailable';},
+    );
     const initialLoads=await Promise.allSettled([
       loadWatchlists(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),
-      loadWebsiteSnapshots(),loadCampaigns(),loadDetectionRules(),loadProfiles(),
+      loadWebsiteSnapshots(),campaignLoad,loadDetectionRules(),loadProfiles(),
     ]);
     const [watchlistResult,caseResult,relationshipResult,bulkResult,websiteResult,campaignResult,ruleResult,profileResult]=initialLoads;
     if(watchlistResult.status==='fulfilled'){watchlists=watchlistResult.value;watchlistsSourceState='ready';if(selected&&!watchlists[selected])selected='';}else watchlistsSourceState='unavailable';
-    if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';}else casesSourceState='unavailable';
+    if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';parentDomainCasesSourceState='ready';}else{casesSourceState='unavailable';parentDomainCasesSourceState=parentDomainCaseFailureState(caseResult.reason);}
     if(relationshipResult.status==='fulfilled'){retainedRelationships=relationshipResult.value;relationshipsSourceState='ready';}else relationshipsSourceState='unavailable';
     if(bulkResult.status==='fulfilled'){bulkSessions=bulkResult.value;bulkSessionsSourceState='ready';}else bulkSessionsSourceState='unavailable';
     if(websiteResult.status==='fulfilled'){websiteSnapshots=websiteResult.value;websiteSnapshotsSourceState='ready';}else websiteSnapshotsSourceState='unavailable';
@@ -555,7 +564,7 @@
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   {#if campaignsSourceState==='ready'}
-    <CampaignManager records={cases} profiles={brandProfiles} {relationshipSummary} cohortSourceStates={{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState}} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
+    <CampaignManager records={cases} profiles={brandProfiles} {relationshipSummary} cohortSourceStates={{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState}} parentDomainSourceState={parentDomainCasesSourceState} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
   {:else}
     <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The browser-local campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}

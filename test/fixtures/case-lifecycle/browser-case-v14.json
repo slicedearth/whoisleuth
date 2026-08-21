@@ -1,0 +1,88 @@
+{
+  "version": 14,
+  "cases": [
+    {
+      "id": "case-v12-response",
+      "domain": "response-history.example",
+      "status": "reviewing",
+      "disposition": "suspicious",
+      "reviewReasonCode": null,
+      "brandProfileIds": [],
+      "tags": [
+        "response-review"
+      ],
+      "notes": [],
+      "source": "manual",
+      "evidenceHistory": [],
+      "evidencePins": [],
+      "decisions": [],
+      "actions": [
+        {
+          "id": "action-v12-response",
+          "type": "registrar_report",
+          "recipient": "Reviewed registrar route",
+          "contactSource": "Published registrar policy",
+          "contactLimitations": [
+            "Route freshness was not retained."
+          ],
+          "dueAt": "2026-08-05T12:00:00.000Z",
+          "state": "acknowledged",
+          "reference": "LEGACY-RESPONSE-42",
+          "followUpAt": "2026-08-08T12:00:00.000Z",
+          "providerOutcome": null,
+          "outcome": "A provider acknowledgement was recorded.",
+          "originActionId": null,
+          "history": [
+            {
+              "id": "action-event-6tz7fd",
+              "previousState": null,
+              "nextState": "acknowledged",
+              "occurredAt": "2026-08-01T12:00:00.000Z",
+              "sourceClass": "migration",
+              "provenance": "case_v12_legacy_snapshot",
+              "reference": "LEGACY-RESPONSE-42",
+              "evidencePinId": null,
+              "limitations": [
+                "Migrated from the Case v12 current state \"acknowledged\"; pre-v13 transition history is unavailable.",
+                "Route freshness was not retained."
+              ],
+              "providerOutcome": null,
+              "outcomeDetail": "A provider acknowledgement was recorded.",
+              "originActionId": null,
+              "applied": true
+            }
+          ],
+          "historyOmitted": 0,
+          "historyLimitations": [],
+          "createdAt": "2026-07-28T12:00:00.000Z",
+          "metadataUpdatedAt": "2026-08-01T12:00:00.000Z",
+          "updatedAt": "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      "assertions": [],
+      "manualTrail": [],
+      "sightings": [],
+      "observedEffects": {
+        "reviews": [],
+        "omitted": 0,
+        "preV13HistoryUnavailable": true,
+        "limitations": [
+          "Migrated from a pre-v13 Case; earlier independent observed-effect review history is unavailable.",
+          "Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them."
+        ]
+      },
+      "closures": {
+        "records": [],
+        "omitted": 0,
+        "preV13HistoryUnavailable": true,
+        "limitations": [
+          "Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.",
+          "Migrated from a pre-v13 Case; earlier deliberate closure history is unavailable."
+        ]
+      },
+      "branches": [],
+      "createdAt": "2026-07-28T11:00:00.000Z",
+      "updatedAt": "2026-08-01T12:00:00.000Z"
+    }
+  ]
+}

@@ -671,8 +671,8 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       },
     ],
     hooks: [
-      { id: 'risk-calibration.browser.build-dataset', role: 'builder', runtime: 'browser', module: 'frontend/src/lib/analysis/risk-calibration-export.ts', exportName: 'buildRiskCalibrationDatasetExport' },
-      { id: 'risk-calibration.browser.serialise-dataset', role: 'serialiser', runtime: 'browser', module: 'frontend/src/lib/analysis/risk-calibration-export.ts', exportName: 'serializeRiskCalibrationDatasetExport' },
+      { id: 'risk-calibration.browser.build-dataset', role: 'builder', runtime: 'browser', module: 'packages/investigation/risk-calibration-export.mts', exportName: 'buildRiskCalibrationDatasetExport' },
+      { id: 'risk-calibration.browser.serialise-dataset', role: 'serialiser', runtime: 'browser', module: 'packages/investigation/risk-calibration-export.mts', exportName: 'serializeRiskCalibrationDatasetExport' },
       { id: 'risk-calibration.cli.parse-dataset', role: 'normaliser', runtime: 'cli', module: 'cli/risk-calibration.mts', exportName: 'parseRiskCalibrationDataset' },
       { id: 'risk-calibration.cli.build-detailed', role: 'builder', runtime: 'cli', module: 'cli/risk-calibration.mts', exportName: 'buildRiskCalibrationReport' },
       { id: 'risk-calibration.shared.build-summary', role: 'builder', runtime: 'shared', module: 'lib/risk-calibration-summary.mts', exportName: 'buildRiskCalibrationSummaryReport' },
@@ -680,7 +680,7 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       { id: 'risk-calibration.cli.serialise-report', role: 'serialiser', runtime: 'cli', module: 'cli/risk-calibration.mts', exportName: 'serializeRiskCalibrationReport' },
       { id: 'risk-calibration.cli.format-terminal', role: 'serialiser', runtime: 'cli', module: 'cli/formatters/terminal.mts', exportName: 'formatTerminalRiskCalibration' },
       { id: 'risk-calibration.cli.write-private-file', role: 'private_file_writer', runtime: 'cli', module: 'cli/output-file.mts', exportName: 'writePrivateFile' },
-      { id: 'risk-calibration.browser.read-summary', role: 'reviewer', runtime: 'browser', module: 'frontend/src/lib/analysis/risk-calibration-dashboard.ts', exportName: 'parseRiskCalibrationDashboard' },
+      { id: 'risk-calibration.browser.read-summary', role: 'reviewer', runtime: 'browser', module: 'packages/investigation/risk-calibration-dashboard.mts', exportName: 'parseRiskCalibrationDashboard' },
     ],
     serialisationProfiles: [
       {

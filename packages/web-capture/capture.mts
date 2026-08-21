@@ -19,7 +19,7 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
+} from '../contracts/web-capture.mts';
 export {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
   MAX_WEB_CAPTURE_DOM_ELEMENTS,
@@ -31,7 +31,7 @@ export {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
+} from '../contracts/web-capture.mts';
 export const MAX_CAPTURE_REQUESTS = 100;
 export const MAX_CAPTURE_HOSTS = 30;
 export const MAX_CAPTURE_URL_LENGTH = 2048;

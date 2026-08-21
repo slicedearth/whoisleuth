@@ -15,6 +15,7 @@ const REPORT_LIMITATIONS = {
   risk: 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.',
   scoring: 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.',
   portable: 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.',
+  profile: 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Generated locally in the browser. Review the package before sharing it.',
 } as const;
 
 type HistoricalAudience = 'internal' | 'public' | 'trusted';
@@ -57,6 +58,9 @@ const FROZEN_HISTORICAL_DIGESTS: Readonly<Record<string, string>> = Object.freez
   '11:7:public': 'sha256:fab62bcf75cb5cbb230e6aa3bfb8cf2b0949059f2865bad7e10c7a4639fc7614',
   '11:7:trusted': 'sha256:bea11e9c23f6c0d072355ed7269e8ba166fa52a2c50ae346de1886c6d5448ffc',
   '11:7:internal': 'sha256:a9fcc14f93e1b9eb184ef4a62d5e9c248a42077ab695eba4a980564bc5d63808',
+  '12:8:public': 'sha256:6d8ca5bcf4a1c92f4c3314e7a6989cd1765effd62e99d2206d3cf65099f66d82',
+  '12:8:trusted': 'sha256:731aa37614feffb4fb8444596fc7831d96d2cccec1b28ced185987c3aa1f3afe',
+  '12:8:internal': 'sha256:eb599762ee85189b595832a09d0d7274eeb45da82a6e729aa0d8f3bcf0ad03ee',
 });
 
 function exclusions(audience: HistoricalAudience, caseVersion: number): string[] {
@@ -64,6 +68,7 @@ function exclusions(audience: HistoricalAudience, caseVersion: number): string[]
   if (audience === 'trusted') return ['Case notes', 'Recipient values', 'Manual trail targets', 'Raw upstream payloads and credentials'];
   return [
     'Case notes',
+    ...(caseVersion >= 12 ? ['Brand Profile references'] : []),
     'Actions and recipient values',
     'Analyst assertions',
     ...(caseVersion >= 11 ? ['Investigation branches'] : []),
@@ -78,7 +83,9 @@ function evidenceSnapshot(caseVersion: number, current: boolean): Record<string,
     ? second ? '1uonnn' : 'xul0z4'
     : caseVersion <= 9
       ? second ? '1hn5lkv' : '3fb6ig'
-      : second ? '1vx7lwy' : '17ccf6b';
+      : caseVersion <= 11
+        ? second ? '1vx7lwy' : '17ccf6b'
+        : second ? 'z7kk3f' : 'ihg81o';
   return {
     id: `ev-${fingerprint}`,
     fingerprint,
@@ -125,6 +132,10 @@ function evidenceSnapshot(caseVersion: number, current: boolean): Record<string,
       idnReferenceMatch: false,
       pageBaselineMatch: false,
       hasActiveBrandProfile: false,
+    } : {}),
+    ...(caseVersion >= 12 ? {
+      profileContextState: null,
+      profileContextLimitation: null,
     } : {}),
     mutationTypes: ['replacement'],
   };
@@ -272,6 +283,7 @@ function historicalCase(caseVersion: number, audience: HistoricalAudience, repor
     } : {}),
     ...(caseVersion >= 9 ? { sightings: response.sightings } : {}),
     ...(caseVersion >= 11 ? { branches: publicAudience ? [] : response.branches } : {}),
+    ...(caseVersion >= 12 ? { brandProfileIds: publicAudience ? [] : ['Profile_A'] } : {}),
     createdAt: FIRST_CAPTURED_AT,
     updatedAt: SECOND_CAPTURED_AT,
   };
@@ -283,7 +295,8 @@ function defaultReportVersion(caseVersion: number): number {
   if (caseVersion <= 8) return 3;
   if (caseVersion === 9) return 4;
   if (caseVersion === 10) return 6;
-  return 7;
+  if (caseVersion === 11) return 7;
+  return 8;
 }
 
 function evidenceChanges() {
@@ -313,6 +326,7 @@ function historicalReport(caseVersion: number, reportVersion: number, sourceCase
       disposition: 'unreviewed',
       ...(reportVersion >= 5 ? { reviewReasonCode: null } : {}),
       ...(reportVersion >= 6 ? { interoperabilityTags: [] } : {}),
+      ...(reportVersion >= 8 ? { brandProfileIds: structuredClone(sourceCase.brandProfileIds) } : {}),
       tags: ['review'],
       source: 'lookup',
       openedAt: FIRST_CAPTURED_AT,
@@ -355,7 +369,9 @@ function historicalReport(caseVersion: number, reportVersion: number, sourceCase
       ? REPORT_LIMITATIONS.risk
       : reportVersion === 5
         ? REPORT_LIMITATIONS.scoring
-        : REPORT_LIMITATIONS.portable,
+        : reportVersion <= 7
+          ? REPORT_LIMITATIONS.portable
+          : REPORT_LIMITATIONS.profile,
   };
 }
 
@@ -392,6 +408,9 @@ export function historicalCasePackFixture(
       redactionManifest: {
         excluded: exclusions(audience, caseVersion),
         sourceCaseCount: 1,
+        ...(caseVersion >= 12 ? {
+          brandProfileReferencesOmitted: audience === 'public' ? 1 : 0,
+        } : {}),
       },
       limitations: [...PACKET_LIMITATIONS],
     },

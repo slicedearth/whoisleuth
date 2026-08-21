@@ -16,7 +16,7 @@ import * as interchangeReportModule from '../cli/interchange-report.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from '../cli/offline-evidence-review.mts';
 import * as sharingReviewModule from '../cli/sharing-review.mts';
 import { MAX_DESIRED_POSTURE_BASELINES } from '../frontend/src/lib/analysis/brand-profile-model.ts';
-import * as browserDomainControlModule from '../frontend/src/lib/analysis/domain-control-passport.ts';
+import * as browserDomainControlModule from '../packages/workspace/domain-control-passport.mts';
 import * as nodeDomainControlModule from '../lib/domain-control-manifest.mts';
 import {
   MAX_BOUNDED_JSON_CONTAINER_ITEMS,
@@ -132,7 +132,7 @@ function assertRecursivelyFrozen(value: unknown, seen = new Set<object>()): void
 
 const HOOK_MODULES: Readonly<Record<string, object>> = Object.freeze({
   'packages/evidence/domain-control-runtime.mts': domainControlRuntimeModule,
-  'frontend/src/lib/analysis/domain-control-passport.ts': browserDomainControlModule,
+  'packages/workspace/domain-control-passport.mts': browserDomainControlModule,
   'lib/domain-control-manifest.mts': nodeDomainControlModule,
   'cli/artifact-structure.mts': artifactStructureModule,
   'cli/artifact-verify.mts': artifactVerifyModule,
@@ -149,10 +149,10 @@ const EXPECTED_HOOKS = Object.freeze([
   ['domain-control.shared.measure-serialised-bytes', 'serialised_byte_counter', 'shared', 'packages/evidence/domain-control-runtime.mts', 'domainControlManifestSerialisedBytes'],
   ['domain-control.shared.assert-byte-budget', 'budget_guard', 'shared', 'packages/evidence/domain-control-runtime.mts', 'assertDomainControlManifestByteBudget'],
   ['domain-control.shared.serialise-document', 'serialiser', 'shared', 'packages/evidence/domain-control-runtime.mts', 'serializeDomainControlManifest'],
-  ['domain-control.browser.build-input', 'builder', 'browser', 'frontend/src/lib/analysis/domain-control-passport.ts', 'buildBrandProfilePassportInput'],
-  ['domain-control.browser.build-document', 'builder', 'browser', 'frontend/src/lib/analysis/domain-control-passport.ts', 'buildDomainControlPassport'],
-  ['domain-control.browser.verify-unexpired', 'integrity_verifier', 'browser', 'frontend/src/lib/analysis/domain-control-passport.ts', 'verifyDomainControlPassport'],
-  ['domain-control.browser.apply', 'merger', 'browser', 'frontend/src/lib/analysis/domain-control-passport.ts', 'applyVerifiedDomainControlPassport'],
+  ['domain-control.browser.build-input', 'builder', 'browser', 'packages/workspace/domain-control-passport.mts', 'buildBrandProfilePassportInput'],
+  ['domain-control.browser.build-document', 'builder', 'browser', 'packages/workspace/domain-control-passport.mts', 'buildDomainControlPassport'],
+  ['domain-control.browser.verify-unexpired', 'integrity_verifier', 'browser', 'packages/workspace/domain-control-passport.mts', 'verifyDomainControlPassport'],
+  ['domain-control.browser.apply', 'merger', 'browser', 'packages/workspace/domain-control-passport.mts', 'applyVerifiedDomainControlPassport'],
   ['domain-control.node.build-document', 'builder', 'node', 'lib/domain-control-manifest.mts', 'buildDomainControlManifest'],
   ['domain-control.node.verify-integrity', 'integrity_verifier', 'node', 'lib/domain-control-manifest.mts', 'verifyDomainControlManifest'],
   ['domain-control.node.review', 'reviewer', 'node', 'lib/domain-control-manifest.mts', 'reviewDomainControlManifest'],

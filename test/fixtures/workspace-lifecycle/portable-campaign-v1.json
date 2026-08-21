@@ -1,0 +1,7 @@
+{
+  "schema": "whoisleuth.campaigns",
+  "version": 1,
+  "exportedAt": "2000-01-01T00:00:00.000Z",
+  "campaigns": [],
+  "limitations": "Campaigns contain browser-local labels and domain membership only. They do not prove common ownership, coordination, intent, or maliciousness."
+}

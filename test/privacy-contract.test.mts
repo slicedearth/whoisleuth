@@ -90,8 +90,8 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.ok(compact.includes(HANDOFF_KEY));
     assert.ok(compact.includes('up to eight exact opaque Brand Profile identifiers'));
     assert.ok(compact.includes('failed local reads remain explicit'));
-    assert.ok(compact.includes('Case report v8 JSON and Markdown'));
-    assert.ok(compact.includes('Public CLI case packs clear them'));
+    assert.ok(compact.includes('Case report v9 JSON and Markdown'));
+    assert.ok(compact.includes('Public CLI case packs clear identifiers, actions, observed-effect reviews, and closure records'));
     assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORT_MEMBERS} matching cases`));
     assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORTS} cohorts`));
     assert.ok(compact.includes(`at most ${MAX_CAMPAIGN_COHORT_RATIONALES} source-qualified rationales`));
@@ -105,7 +105,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
     assert.match(compact, /without another request or a browser-local write/u);
     assert.ok(compact.includes('Brand-protection operations report'));
     assert.ok(compact.includes(`at most ${MAX_OPERATIONS_REPORT_CASES} readable Cases`));
-    assert.ok(compact.includes(`${MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE} current action records per Case`));
+    assert.ok(compact.includes(`${MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE} action records per Case`));
     assert.match(compact, /excludes Case and domain identifiers, domains, recipients, notes, references, outcome text, raw evidence, and provider payloads/u);
     assert.match(compact, /target-free Risk calibration summary/iu);
     assert.match(compact, /rejects the detailed report/u);

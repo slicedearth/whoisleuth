@@ -8,6 +8,7 @@ export interface SnapshotOverrides {
   firstCapturedAt?: string;
   capturedAt?: string;
   source?: string;
+  inputHostname?: string | null;
   scanDepth?: 'fast' | 'deep';
   availability?: string | null;
   riskModelVersion?: number | null;
@@ -43,6 +44,7 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
       overrides.firstCapturedAt ?? '2026-06-01T00:00:00.000Z',
     capturedAt: overrides.capturedAt ?? '2026-06-01T00:00:00.000Z',
     source: overrides.source ?? 'lookup',
+    inputHostname: overrides.inputHostname ?? null,
     scanDepth: overrides.scanDepth ?? 'deep',
     availability: overrides.availability ?? 'registered',
     confidence: null,

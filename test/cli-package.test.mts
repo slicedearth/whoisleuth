@@ -10,6 +10,7 @@ import {
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
   MAX_CLI_COMMAND_INVENTORY_BYTES,
   MAX_CLI_PACKAGE_COMPILER_SOURCES,
+  MAX_CLI_PACKAGE_ENTRIES,
   MAX_CLI_PACKAGE_MODULES,
   MAX_CLI_RUNTIME_MODULES,
   assertCliCommandInventory,
@@ -79,9 +80,10 @@ describe('scoped CLI package contract', () => {
     assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
     assert.equal(MAX_CLI_COMMAND_INVENTORY_BYTES, 4 * 1024);
-    assert.equal(MAX_CLI_RUNTIME_MODULES, 301);
-    assert.equal(MAX_CLI_PACKAGE_MODULES, 303);
-    assert.equal(MAX_CLI_PACKAGE_COMPILER_SOURCES, 303);
+    assert.equal(MAX_CLI_RUNTIME_MODULES, 306);
+    assert.equal(MAX_CLI_PACKAGE_MODULES, 308);
+    assert.equal(MAX_CLI_PACKAGE_COMPILER_SOURCES, 296);
+    assert.equal(MAX_CLI_PACKAGE_ENTRIES, 307);
   });
 
   test('uses an independent exact command inventory rather than a live self-projection', async () => {
@@ -117,8 +119,11 @@ describe('scoped CLI package contract', () => {
         { source: 'frontend/src/lib/bounded-json.ts', dependencies: [] },
         { source: 'frontend/src/lib/analysis/workspace-archive.ts', dependencies: [] },
         { source: 'packages/contracts/risk-calibration.mts', dependencies: [] },
+        { source: 'packages/comparison/page-similarity.mts', dependencies: [] },
         { source: 'packages/evidence/artifact-integrity.mts', dependencies: [] },
         { source: 'packages/evidence/observation.mts', dependencies: [] },
+        { source: 'packages/interchange/external-findings-import.mts', dependencies: [] },
+        { source: 'packages/investigation/investigation-capsule.mts', dependencies: [] },
         { source: 'packages/web-capture/capture.mts', dependencies: [] },
         { source: 'test/cli.test.mts', dependencies: [] },
       ],
@@ -129,9 +134,12 @@ describe('scoped CLI package contract', () => {
       'frontend/src/lib/analysis/workspace-archive.ts',
       'frontend/src/lib/bounded-json.ts',
       'lib/lookup.mts',
+      'packages/comparison/page-similarity.mts',
       'packages/contracts/risk-calibration.mts',
       'packages/evidence/artifact-integrity.mts',
       'packages/evidence/observation.mts',
+      'packages/interchange/external-findings-import.mts',
+      'packages/investigation/investigation-capsule.mts',
     ]);
   });
 
@@ -264,8 +272,13 @@ describe('scoped CLI package contract', () => {
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
     assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
     assert.ok((manifest.files as string[]).includes('frontend/src/lib/**/*.js'));
+    assert.ok((manifest.files as string[]).includes('packages/cases/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/comparison/**/*.mjs'));
     assert.ok((manifest.files as string[]).includes('packages/contracts/**/*.mjs'));
     assert.ok((manifest.files as string[]).includes('packages/evidence/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/interchange/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/investigation/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/workspace/**/*.mjs'));
   });
 
   test('generates public metadata only for an explicit release candidate', () => {

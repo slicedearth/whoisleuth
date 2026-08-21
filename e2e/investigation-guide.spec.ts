@@ -271,7 +271,7 @@ test('a response playbook reaches focused local packet preflight without a reque
   const preflight = page.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
-  await expect(preflight).toContainText('WHOISleuth does not send reports');
+  await expect(preflight).toContainText('WHOISleuth performs no contact discovery, submission, mail, authentication, retry, or background request');
   await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into browser-local cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {

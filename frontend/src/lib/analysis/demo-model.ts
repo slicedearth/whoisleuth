@@ -11,13 +11,23 @@ import { deriveTimeline } from './evidence-display.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
 import { parseBoundedJson } from '../bounded-json.ts';
+import {
+  MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
+  MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
+  SYNTHETIC_DEMO_EXPORT_SCHEMA,
+  SYNTHETIC_DEMO_EXPORT_VERSION,
+  SYNTHETIC_DEMO_STORAGE_KEY,
+  SYNTHETIC_DEMO_VERSION,
+} from '../../../../packages/contracts/tab-portability.mts';
 
-export const SYNTHETIC_DEMO_VERSION = 1;
-export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;
-export const SYNTHETIC_DEMO_STORAGE_KEY = 'whoisleuth:synthetic-demo:v1';
-export const SYNTHETIC_DEMO_EXPORT_SCHEMA = 'whoisleuth.synthetic-demo-case';
-export const MAX_SYNTHETIC_DEMO_NOTE_LENGTH = 800;
-export const MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES = 4_096;
+export {
+  MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
+  MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
+  SYNTHETIC_DEMO_EXPORT_SCHEMA,
+  SYNTHETIC_DEMO_EXPORT_VERSION,
+  SYNTHETIC_DEMO_STORAGE_KEY,
+  SYNTHETIC_DEMO_VERSION,
+} from '../../../../packages/contracts/tab-portability.mts';
 
 export const SYNTHETIC_DEMO_STAGES = [
   Object.freeze({ id: 'dashboard', label: '1. Dashboard' }),
@@ -185,6 +195,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
   const baseline: SyntheticObservation = {
     capturedAt: '2026-06-26T11:15:00.000Z',
     source: 'lookup',
+    inputHostname: null,
     scanDepth: 'deep',
     availability: availability === 'unknown' ? 'unknown' : 'registered',
     confidence: availability === 'unknown' ? 'low' : 'high',

@@ -8,7 +8,7 @@ function caseRecord(id: string, domain: string, disposition: string): CaseRecord
     id, domain, disposition, status: 'reviewing', reviewReasonCode: null, brandProfileIds: [], tags: [], notes: [], source: 'lookup',
     evidenceHistory: [{
       id: `e-${id}`, fingerprint: 'same-evidence', firstCapturedAt: '2026-08-01T00:00:00.000Z', capturedAt: '2026-08-05T00:00:00.000Z',
-      source: 'lookup', scanDepth: 'deep', availability: 'registered', confidence: 'high', riskModelVersion: 1, riskScore: 50,
+      source: 'lookup', inputHostname: null, scanDepth: 'deep', availability: 'registered', confidence: 'high', riskModelVersion: 1, riskScore: 50,
       opportunityModelVersion: 1, opportunityScore: 10, riskFactors: [], opportunityFactors: [], registrar: null, createdDate: null,
       expiryDate: null, nameservers: [], hasMx: null, hasSpf: null, hasDmarc: null, activityStatus: null,
       websiteProbeDetail: null, pageTitle: null, httpSummaryVersion: null, httpEvidenceStatus: null, httpFinalOrigin: null,
@@ -21,7 +21,11 @@ function caseRecord(id: string, domain: string, disposition: string): CaseRecord
     decisions: [{ id: `decision-${id}`, summary: 'Reviewed', rationale: 'Analyst rationale', evidencePinIds: [], createdAt: '2026-08-02T00:00:00.000Z' }],
     actions: [],
     assertions: [{ id: `assertion-${id}`, kind: 'hypothesis', statement: 'Review hypothesis', rationale: null, evidencePinIds: [], state: 'open', createdAt: '2026-08-02T00:00:00.000Z', updatedAt: '2026-08-02T00:00:00.000Z' }],
-    manualTrail: [], sightings: [], createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-05T00:00:00.000Z',
+    manualTrail: [],
+    sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-05T00:00:00.000Z',
   };
 }
 

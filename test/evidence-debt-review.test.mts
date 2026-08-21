@@ -115,6 +115,8 @@ function caseRecord(overrides: Partial<CaseRecord> = {}): CaseRecord {
     assertions: [],
     manualTrail: [],
     sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: '2026-07-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
     ...overrides,

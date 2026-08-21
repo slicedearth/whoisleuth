@@ -1,11 +1,14 @@
 import { buildBulkComparisonEvidence } from '../lib/bulk-comparison-evidence.mts';
-import { createPageBaseline } from '../frontend/src/lib/analysis/page-baseline.ts';
-import { comparePageBaselines } from '../frontend/src/lib/analysis/page-similarity.ts';
+import { createPageBaseline } from '../packages/workspace/page-baseline.mts';
+import { comparePageBaselines } from '../packages/comparison/page-similarity.mts';
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
+import {
+  CLI_PAGE_COMPARE_SCHEMA,
+  CLI_PAGE_COMPARE_VERSION,
+} from '../packages/contracts/offline-comparison.mts';
 
-export const CLI_PAGE_COMPARE_SCHEMA = 'whoisleuth.cli.page-compare';
-export const CLI_PAGE_COMPARE_VERSION = 4;
+export { CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION };
 
 type ComparisonState = 'different' | 'equal' | 'overlap' | 'partial' | 'unavailable';
 

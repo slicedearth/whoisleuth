@@ -34,13 +34,31 @@ function caseRecord(): CaseRecord {
       state: 'ready_for_review',
       reference: null,
       followUpAt: null,
+      providerOutcome: null,
       outcome: null,
+      originActionId: null,
+      history: [{
+        id: 'event-create', previousState: null, nextState: 'drafting',
+        occurredAt: '2026-07-26T08:00:00.000Z', sourceClass: 'analyst', provenance: 'fixture_creation',
+        reference: null, evidencePinId: null, limitations: [], providerOutcome: null,
+        outcomeDetail: null, originActionId: null, applied: true,
+      }, {
+        id: 'event-ready', previousState: 'drafting', nextState: 'ready_for_review',
+        occurredAt: '2026-07-27T08:00:00.000Z', sourceClass: 'analyst', provenance: 'fixture_readiness_review',
+        reference: null, evidencePinId: null, limitations: [], providerOutcome: null,
+        outcomeDetail: null, originActionId: null, applied: true,
+      }],
+      historyOmitted: 0,
+      historyLimitations: [],
       createdAt: '2026-07-26T08:00:00.000Z',
+      metadataUpdatedAt: '2026-07-26T08:00:00.000Z',
       updatedAt: '2026-07-27T08:00:00.000Z',
     }],
     assertions: [],
     manualTrail: [],
     sightings: [],
+    observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+    closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: '2026-07-26T08:00:00.000Z',
     updatedAt: '2026-07-27T08:00:00.000Z',
   };
@@ -148,6 +166,24 @@ describe('analyst review inbox', () => {
     assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:/u);
   });
 
+  test('projects scheduled independent observed-effect follow-up without performing a request', () => {
+    const record = caseRecord();
+    record.observedEffects.reviews = [{
+      id: 'effect-review-one', state: 'still_observed', observedAt: '2026-07-27T07:00:00.000Z',
+      sourceClass: 'analyst', source: 'Independent fixture review', completeness: 'partial',
+      limitations: ['Only the selected path was reviewed.'], evidencePinId: null, sightingId: null,
+      followUpAt: '2026-07-28T07:00:00.000Z', createdAt: '2026-07-27T07:00:00.000Z',
+    }];
+    const inbox = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    const followUp = inbox.items.find((item) => item.kind === 'observed_effect_review');
+    assert.ok(followUp);
+    assert.equal(inbox.counts.observed_effect_review, 1);
+    assert.equal(followUp.priority, 'urgent');
+    assert.equal(followUp.nextAction, 'follow_up');
+    assert.equal(followUp.retryHref, null);
+    assert.deepEqual(followUp.sourceIds, ['observed_effect_review']);
+  });
+
   test('filters the queue by source, age, case, severity, and next action', () => {
     const record = caseRecord();
     record.disposition = 'suspicious';
@@ -223,7 +259,7 @@ describe('analyst review inbox', () => {
   test('excludes resolved cases, settled actions, unchanged watchlists, and complete sessions', () => {
     const record = caseRecord();
     record.status = 'resolved';
-    record.actions[0]!.state = 'closed';
+    record.actions[0]!.state = 'terminal';
     const unchanged = watchlists();
     unchanged.Priority!.history[0]!.changeCount = 0;
     const session = bulkSession();

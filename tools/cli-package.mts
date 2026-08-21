@@ -9,6 +9,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
+import ts from 'typescript';
+
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
@@ -94,22 +96,23 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The executable dependency graph remains independently capped. Two historical
-// browser-safe domain-control paths are also retained as explicit package roots
-// because released CLI archives permitted those deep imports.
-export const MAX_CLI_RUNTIME_MODULES = 301;
-export const MAX_CLI_PACKAGE_MODULES = 303;
+// The executable dependency graph remains independently capped. The canonical
+// Shared domain extractions retain their reviewed pure closures,
+// and two historical browser-safe domain-control paths remain explicit package
+// roots because released CLI archives permitted those deep imports.
+export const MAX_CLI_RUNTIME_MODULES = 306;
+export const MAX_CLI_PACKAGE_MODULES = 308;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but they remain bounded
 // because TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 303;
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 296;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep a modest growth margin while the packed and unpacked byte ceilings remain
-// the primary package-bloat controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 320;
+// Keep a two-entry growth margin over the reviewed shared-domain package
+// closure; packed and unpacked byte ceilings remain independent controls.
+export const MAX_CLI_PACKAGE_ENTRIES = 307;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
@@ -117,12 +120,43 @@ export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 export const MAX_CLI_COMMAND_INVENTORY_BYTES = 4 * 1024;
 
-const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:contracts|evidence))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
+const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:cases|comparison|contracts|evidence|interchange|investigation|workspace))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const COMPILABLE_SOURCE_PATTERN = /\.(?:mts|ts)$/u;
 const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
 const CLI_COMPATIBILITY_ENTRY_MODULES = Object.freeze([
   'frontend/src/lib/analysis/domain-control-manifest-core.ts',
   'frontend/src/lib/analysis/domain-control-records.ts',
+]);
+const INSTALLED_COMPATIBILITY_FACADES = Object.freeze([
+  Object.freeze({
+    path: 'frontend/src/lib/analysis/domain-control-manifest-core.js',
+    owner: '../../../../packages/evidence/domain-control-runtime.mjs',
+    exports: Object.freeze([
+      'DOMAIN_CONTROL_MANIFEST_VERSION',
+      'DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA',
+      'DOMAIN_CONTROL_PASSPORT_LIMITATIONS',
+      'DOMAIN_CONTROL_PASSPORT_SCHEMA',
+      'DOMAIN_CONTROL_PASSPORT_VERSION',
+      'MAX_DOMAIN_CONTROL_MANIFEST_BYTES',
+      'MAX_DOMAIN_CONTROL_PASSPORT_BYTES',
+      'MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES',
+      'assertDomainControlPassportByteBudget',
+      'buildUnsignedDomainControlPassport',
+      'domainControlPassportSerialisedBytes',
+      'normalizeDomainControlPassportDocument',
+    ]),
+  }),
+  Object.freeze({
+    path: 'frontend/src/lib/analysis/domain-control-records.js',
+    owner: '../../../../packages/evidence/domain-control-runtime.mjs',
+    exports: Object.freeze([
+      'MAX_CANONICAL_DOMAIN_CONTROL_RECORDS',
+      'canonicalCaaRecord',
+      'canonicalDomainControlRecordList',
+      'canonicalDsRecord',
+      'canonicalMxRecord',
+    ]),
+  }),
 ]);
 const CLI_PACKAGE_ENTRY_MODULES = Object.freeze([
   ...CLI_RUNTIME_ENTRY_MODULES,
@@ -365,8 +399,13 @@ export function buildCliPackageManifest(
       'cli/**/*.mjs',
       'lib/**/*.mjs',
       'frontend/src/lib/**/*.js',
+      'packages/cases/**/*.mjs',
+      'packages/comparison/**/*.mjs',
       'packages/contracts/**/*.mjs',
       'packages/evidence/**/*.mjs',
+      'packages/interchange/**/*.mjs',
+      'packages/investigation/**/*.mjs',
+      'packages/workspace/**/*.mjs',
       'docs/cli.md',
       'docs/cli-reference.md',
       'DISCLOSURE',
@@ -441,6 +480,45 @@ async function copyPackageFile(stagingRoot: string, destination: string, bytes: 
   const destinationPath = path.join(stagingRoot, safeDestination);
   await mkdir(path.dirname(destinationPath), { recursive: true });
   await writeFile(destinationPath, bytes, { flag: 'wx', mode: 0o644 });
+}
+
+async function assertInstalledCompatibilityFacade(
+  installedPackageRoot: string,
+  contract: typeof INSTALLED_COMPATIBILITY_FACADES[number],
+): Promise<void> {
+  const bytes = await readBoundedRegularFileWithin(installedPackageRoot, contract.path, {
+    maximumBytes: 16 * 1024,
+    minimumBytes: 1,
+    label: contract.path,
+  });
+  let source: string;
+  try {
+    source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new TypeError(`Installed compatibility facade ${contract.path} is not valid UTF-8.`);
+  }
+  const sourceFile = ts.createSourceFile(contract.path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const statement = sourceFile.statements.length === 1 ? sourceFile.statements[0] : null;
+  if (!statement
+    || !ts.isExportDeclaration(statement)
+    || statement.isTypeOnly
+    || !statement.exportClause
+    || !ts.isNamedExports(statement.exportClause)
+    || !statement.moduleSpecifier
+    || !ts.isStringLiteral(statement.moduleSpecifier)
+    || statement.moduleSpecifier.text !== contract.owner) {
+    throw new TypeError(`Installed compatibility facade ${contract.path} must be one pure named re-export from its canonical owner.`);
+  }
+  const exported = statement.exportClause.elements.map((element) => {
+    if (element.isTypeOnly || element.propertyName) {
+      throw new TypeError(`Installed compatibility facade ${contract.path} must not rename or type-erase runtime exports.`);
+    }
+    return element.name.text;
+  }).sort();
+  if (exported.length !== contract.exports.length
+    || exported.some((name, index) => name !== [...contract.exports].sort()[index])) {
+    throw new TypeError(`Installed compatibility facade ${contract.path} changed its released runtime exports.`);
+  }
 }
 
 export async function captureCliPackageSourceSnapshot(
@@ -881,8 +959,14 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'cli/runner.mjs',
       'frontend/src/lib/analysis/domain-control-manifest-core.js',
       'frontend/src/lib/analysis/domain-control-records.js',
+      'packages/cases/case-model.mjs',
+      'packages/comparison/page-similarity.mjs',
       'packages/evidence/domain-control-runtime.mjs',
       'packages/evidence/domain-name.mjs',
+      'packages/interchange/external-findings-import.mjs',
+      'packages/investigation/investigation-capsule.mjs',
+      'packages/workspace/bulk-session-model.mjs',
+      'packages/workspace/workspace-archive.mjs',
       'package.json',
       'third-party-notices.txt',
       ...SUPPORT_FILES.map(([, destination]) => destination),
@@ -963,49 +1047,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       ]),
     ));
     const installedPackageRoot = path.dirname(path.dirname(executable));
-    const [installedDomainControlCore, installedDomainControlRecords, installedDomainControlRuntime, installedDomainName] = await Promise.all([
-      import(pathToFileURL(path.join(installedPackageRoot, 'frontend/src/lib/analysis/domain-control-manifest-core.js')).href),
-      import(pathToFileURL(path.join(installedPackageRoot, 'frontend/src/lib/analysis/domain-control-records.js')).href),
+    await Promise.all(INSTALLED_COMPATIBILITY_FACADES.map((contract) => (
+      assertInstalledCompatibilityFacade(installedPackageRoot, contract)
+    )));
+    const [installedDomainControlRuntime, installedDomainName] = await Promise.all([
       import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-control-runtime.mjs')).href),
       import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-name.mjs')).href),
     ]);
-    const expectedDomainControlCoreExports = [
-      'DOMAIN_CONTROL_MANIFEST_VERSION',
-      'DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA',
-      'DOMAIN_CONTROL_PASSPORT_LIMITATIONS',
-      'DOMAIN_CONTROL_PASSPORT_SCHEMA',
-      'DOMAIN_CONTROL_PASSPORT_VERSION',
-      'MAX_DOMAIN_CONTROL_MANIFEST_BYTES',
-      'MAX_DOMAIN_CONTROL_PASSPORT_BYTES',
-      'MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES',
-      'assertDomainControlPassportByteBudget',
-      'buildUnsignedDomainControlPassport',
-      'domainControlPassportSerialisedBytes',
-      'normalizeDomainControlPassportDocument',
-    ].sort();
-    const expectedDomainControlRecordExports = [
-      'MAX_CANONICAL_DOMAIN_CONTROL_RECORDS',
-      'canonicalCaaRecord',
-      'canonicalDomainControlRecordList',
-      'canonicalDsRecord',
-      'canonicalMxRecord',
-    ].sort();
-    if (Object.keys(installedDomainControlCore).sort().join(',') !== expectedDomainControlCoreExports.join(',')) {
-      throw new TypeError('Installed domain-control manifest facade changed its released runtime exports.');
-    }
-    if (Object.keys(installedDomainControlRecords).sort().join(',') !== expectedDomainControlRecordExports.join(',')) {
-      throw new TypeError('Installed domain-control record facade changed its released runtime exports.');
-    }
-    for (const name of expectedDomainControlRecordExports) {
-      if (installedDomainControlRecords[name] !== installedDomainControlRuntime[name]) {
-        throw new TypeError(`Installed domain-control record facade export ${name} is not bound to the canonical runtime.`);
-      }
-    }
-    for (const name of expectedDomainControlCoreExports) {
-      if (installedDomainControlCore[name] !== installedDomainControlRuntime[name]) {
-        throw new TypeError(`Installed domain-control manifest facade export ${name} is not bound to the canonical runtime.`);
-      }
-    }
     if (typeof installedDomainControlRuntime.serializeDomainControlManifest !== 'function'
       || installedDomainName.normalizeDomain('EXAMPLE.TEST.') !== 'example.test') {
       throw new TypeError('Installed canonical domain-control modules did not retain their reviewed runtime contract.');

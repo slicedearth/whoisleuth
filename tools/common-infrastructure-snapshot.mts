@@ -60,7 +60,7 @@ type MainOptions = Readonly<{
   stderr?: WritableLike;
 }>;
 
-export const SNAPSHOT_PATH = 'frontend/src/lib/analysis/common-infrastructure-snapshot.json';
+export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
 export const COMMON_INFRASTRUCTURE_SCHEMA = 'whoisleuth.common-infrastructure';
 export const COMMON_INFRASTRUCTURE_VERSION = 1;
 export const DEFAULT_UPSTREAM_COMMIT = '950282a018f0552d99f156412b650d31e7ff4688';

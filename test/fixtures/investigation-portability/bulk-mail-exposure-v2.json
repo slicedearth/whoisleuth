@@ -1,0 +1,78 @@
+{
+  "schema": "whoisleuth.bulk-mail-exposure",
+  "version": 2,
+  "report": {
+    "version": 1,
+    "generatedAt": "2026-08-22T00:00:00.000Z",
+    "observedAt": "2026-08-22T00:00:00.000Z",
+    "baseline": {
+      "profile": "standard",
+      "officialDomains": [
+        "official.fixture.example"
+      ],
+      "label": "Configured standard-mail baseline",
+      "limitations": [
+        "The Brand Profile describes an analyst-configured official-domain posture; it is not a live observation.",
+        "Candidate similarity and mail configuration do not establish use, control, intent, safety, or maliciousness."
+      ]
+    },
+    "rows": [
+      {
+        "domain": "left.fixture.example",
+        "state": "authenticated_mail",
+        "label": "Receiving mail with SPF and DMARC",
+        "detail": "An explicit receiving MX plus SPF and DMARC publications were observed.",
+        "baselineRelation": "aligned",
+        "baselineDetail": "Receiving mail plus SPF and DMARC matches the configured standard-mail baseline.",
+        "mutationTypes": [],
+        "registration": "registered",
+        "sourceCoverage": [
+          {
+            "source": "rdap",
+            "state": "complete"
+          },
+          {
+            "source": "availability",
+            "state": "complete"
+          },
+          {
+            "source": "dns",
+            "state": "complete"
+          },
+          {
+            "source": "http",
+            "state": "complete"
+          },
+          {
+            "source": "tls",
+            "state": "complete"
+          }
+        ],
+        "profileContextState": "ready",
+        "profileContextLimitation": "",
+        "limitations": [
+          "Mail configuration alone does not establish use, intent, control, safety, or maliciousness."
+        ]
+      }
+    ],
+    "counts": {
+      "authenticated_mail": 1,
+      "evidence_incomplete": 0,
+      "mail_auth_gap": 0,
+      "mail_auth_incomplete": 0,
+      "no_explicit_mx": 0,
+      "null_mx": 0
+    },
+    "profileContextUnevaluatedCount": 0,
+    "limitations": [
+      "This review uses compact Bulk evidence already collected and makes no additional request.",
+      "Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.",
+      "SMTP delivery, mailbox existence, catch-all behaviour, and message acceptance were not tested."
+    ]
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:34ae2a8ace28193f545b897035d3c72b26a2e14a09b0845dbdd5a5d337955aa3"
+  }
+}

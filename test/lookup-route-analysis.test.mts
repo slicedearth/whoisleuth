@@ -86,6 +86,7 @@ describe('Lookup route analysis', () => {
     });
 
     assert.equal(analysis.caseDomain, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, 'portal.example.test');
     assert.equal(analysis.lookupEvidenceDepth, 'fast');
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:05:00.000Z');
     assert.equal(analysis.comparison.counts.conflict, 0);
@@ -128,6 +129,20 @@ describe('Lookup route analysis', () => {
         + analysis.lookupInvestigationBrief.decisionFacts.omitted,
     );
     assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
+  });
+
+  test('does not infer Case hostname context from registrable or availability domains', () => {
+    const { inputHostname: _inputHostname, ...withoutInputHostname } = response();
+    const result = withoutInputHostname as LookupHttpResponse;
+    const analysis = buildLookupRouteAnalysis({
+      result,
+      lookupView: createLookupViewModel(result),
+      profile: null,
+      task: 'general',
+      completedLookupDepth: 'fast',
+    });
+    assert.equal(analysis.caseDomain, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, null);
   });
 
   test('keeps non-domain registry comparisons neutral and bounded', () => {

@@ -73,7 +73,7 @@ const localCases = normalizeCaseStore([{
   domain: 'shared.invalid', status: 'new', createdAt: epoch, updatedAt: explicitBaseline,
 }]).cases;
 const mergedCase = mergeCases(localCases, {
-  version: 12,
+  version: 14,
   cases: [{ domain: 'shared.invalid', status: 'escalated', createdAt: epoch, updatedAt: candidateTimestamp }],
 }).cases[0];
 
@@ -212,8 +212,8 @@ function runNestedCase(timezone: string, timestamp: string, version: number): Re
 
 test('Case nested timestamps and lifecycle values obey current and legacy policies', () => {
   const zoneLess = '2026-03-15T12:00:00.000';
-  const current = runNestedCase('UTC', zoneLess, 12);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 12), current);
+  const current = runNestedCase('UTC', zoneLess, 14);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 14), current);
   assert.equal(current.pinObservedAt, '2026-01-01T00:00:00.000Z');
   assert.equal(current.certificateNotAfter, null);
   assert.equal(current.actionDueAt, null);
@@ -230,8 +230,8 @@ test('Case nested timestamps and lifecycle values obey current and legacy polici
   assert.equal(legacy.evidenceCreatedDate, '2026-03-15T12:00:00.000Z');
   assert.equal(legacy.lifecycleStartsAt, null);
 
-  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 12);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 12), offset);
+  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 14);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 14), offset);
   assert.equal(offset.pinObservedAt, '2026-03-15T11:00:00.000Z');
   assert.equal(offset.lifecycleStartsAt, '2026-02-13T11:00:00.000Z');
 });

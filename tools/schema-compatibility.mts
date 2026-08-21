@@ -37,7 +37,6 @@ import {
   CLI_MAIL_REVIEW_VERSION,
   MAX_MAIL_REVIEW_INPUT_BYTES,
 } from '../cli/mail-review.mts';
-import { CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION } from '../cli/page-compare.mts';
 import { ARCHIVE_INSPECTION_SCHEMA, ARCHIVE_INSPECTION_VERSION } from '../cli/archive-inspect.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
@@ -88,10 +87,6 @@ import {
   MAX_CLI_CONFIG_BYTES,
 } from '../cli/config-profile.mts';
 import {
-  CLI_CASE_PACK_SCHEMA,
-  CLI_CASE_PACK_VERSION,
-} from '../cli/case-pack.mts';
-import {
   INTERCHANGE_FIDELITY_REPORT_SCHEMA,
   INTERCHANGE_FIDELITY_REPORT_VERSION,
   MAX_INTERCHANGE_REPORT_BYTES,
@@ -115,11 +110,6 @@ import {
   CLI_LOOKUP_DIFF_SCHEMA,
   CLI_LOOKUP_DIFF_VERSION,
 } from '../cli/lookup-diff.mts';
-import {
-  CLI_COMPARISON_LEDGER_SCHEMA,
-  CLI_COMPARISON_LEDGER_VERSION,
-  MAX_RETAINED_ARTIFACT_DIFF_BYTES,
-} from '../cli/retained-artifact-diff.mts';
 import {
   CLI_LOOKUP_RECONCILIATION_SCHEMA,
   CLI_LOOKUP_RECONCILIATION_VERSION,
@@ -242,201 +232,12 @@ import {
   MAX_MAIL_TRANSPORT_INPUT_BYTES,
 } from '../lib/smtp-transport-review.mts';
 import {
-  BRAND_PROFILE_SCHEMA,
-  BRAND_PROFILE_SCHEMA_VERSION,
-  MAX_PROFILE_STORE_BYTES,
-  SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
-} from '../frontend/src/lib/analysis/brand-profile-model.ts';
-import {
-  BULK_SESSION_SCHEMA,
-  BULK_SESSION_SCHEMA_VERSION,
-  MAX_BULK_SESSION_STORE_BYTES,
-  SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
-} from '../frontend/src/lib/analysis/bulk-session-model.ts';
-import {
-  BULK_REVIEW_SCHEMA,
-  BULK_REVIEW_SCHEMA_VERSION,
-  MAX_BULK_REVIEW_STORE_BYTES,
-} from '../frontend/src/lib/analysis/bulk-review-model.ts';
-import {
-  CAMPAIGN_SCHEMA,
-  CAMPAIGN_SCHEMA_VERSION,
-  MAX_CAMPAIGN_IMPORT_BYTES,
-  MAX_CAMPAIGN_STORE_BYTES,
-} from '../frontend/src/lib/analysis/campaign-model.ts';
-import {
-  CAMPAIGN_TEMPORAL_REVIEW_SCHEMA,
-  CAMPAIGN_TEMPORAL_REVIEW_VERSION,
-} from '../frontend/src/lib/analysis/campaign-temporal-review.ts';
-import {
-  CASE_REPORT_SCHEMA,
-  CASE_REPORT_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-report.ts';
-import {
-  CASE_RESPONSE_PACKET_SCHEMA,
-  CASE_RESPONSE_PACKET_VERSION,
-} from '../frontend/src/lib/analysis/case-response-packet.ts';
-import {
-  ACQUISITION_DECISION_PACKET_SCHEMA,
-  ACQUISITION_DECISION_PACKET_VERSION,
-} from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
-import {
-  LOOKUP_CLAIM_PASSPORT_SCHEMA,
-  LOOKUP_CLAIM_PASSPORT_VERSION,
-  MAX_LOOKUP_CLAIM_PASSPORT_BYTES,
-} from '../frontend/src/lib/analysis/lookup-claim-passport.ts';
-import {
-  BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
-  BULK_DOMAIN_COMPARISON_SCHEMA,
-} from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
-import {
-  BULK_MAIL_EXPOSURE_EXPORT_VERSION,
-  BULK_MAIL_EXPOSURE_SCHEMA,
-} from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
-import {
-  BULK_REVIEW_MANIFEST_SCHEMA,
-  BULK_REVIEW_MANIFEST_VERSION,
-} from '../frontend/src/lib/analysis/bulk-review-export.ts';
-import {
-  INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA,
-  INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
-  INVESTIGATION_CAPSULE_SCHEMA,
-  INVESTIGATION_CAPSULE_VERSION,
-  SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
-} from '../frontend/src/lib/analysis/investigation-capsule.ts';
-import {
-  CASE_IMPORT_VERSIONS,
-  CASE_SCHEMA_VERSION,
-  MAX_CASE_IMPORT_BYTES,
-  MAX_CASE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/case-model.ts';
-import {
-  CT_HISTORY_SCHEMA_VERSION,
-  MAX_CT_HISTORY_STORE_BYTES,
-} from '../frontend/src/lib/analysis/ct-history.ts';
-import {
-  DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
-  DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA,
-  DEFENSIVE_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/defensive-indicator-export.ts';
-import {
-  DETECTION_RULE_SCHEMA,
-  DETECTION_RULE_SCHEMA_VERSION,
-  MAX_RULE_IMPORT_BYTES,
-  MAX_RULE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/detection-rule-model.ts';
-import {
-  SYNTHETIC_DEMO_EXPORT_SCHEMA,
-  SYNTHETIC_DEMO_EXPORT_VERSION,
-  MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
-  SYNTHETIC_DEMO_VERSION,
-} from '../frontend/src/lib/analysis/demo-model.ts';
-import {
   INVESTIGATION_GUIDE_EXPORT_SCHEMA,
   INVESTIGATION_GUIDE_EXPORT_VERSION,
   INVESTIGATION_GUIDE_VERSION,
   MAX_INVESTIGATION_GUIDE_EXPORT_BYTES,
   MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
-} from '../frontend/src/lib/analysis/investigation-guide.ts';
-import {
-  INVESTIGATION_TEMPLATE_SCHEMA,
-  INVESTIGATION_TEMPLATE_VERSION,
-  MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
-  MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/investigation-template-model.ts';
-import {
-  INVESTIGATION_CACAO_PROFILE_VERSION,
-  INVESTIGATION_CACAO_SPEC_VERSION,
-  MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
-} from '../frontend/src/lib/analysis/investigation-playbook-interchange.ts';
-import {
-  BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
-  BRAND_PROTECTION_OPERATIONS_REPORT_VERSION,
-  MAX_OPERATIONS_REPORT_BYTES,
-} from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
-import {
-  INVESTIGATION_PROJECTION_SCHEMA,
-  INVESTIGATION_PROJECTION_VERSION,
-} from '../frontend/src/lib/analysis/investigation-projection.ts';
-import {
-  MAX_ENVELOPE_BYTES as MAX_OBSERVATION_ENVELOPE_BYTES,
-  OBSERVATION_ENVELOPE_SCHEMA,
-  OBSERVATION_ENVELOPE_VERSION,
-} from '../frontend/src/lib/analysis/observation-envelope.ts';
-import {
-  MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
-  RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
-  RELATIONSHIP_GRAPH_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/case-relationship-graph-export.ts';
-import {
-  MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
-  RELATIONSHIP_OBSERVATION_SCHEMA,
-  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
-import {
-  MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
-  WEBSITE_SNAPSHOT_SCHEMA,
-  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
-  SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
-} from '../frontend/src/lib/analysis/website-snapshot-model.ts';
-import {
-  MAX_WORKSPACE_ARCHIVE_BYTES,
-  WORKSPACE_ARCHIVE_SCHEMA,
-  WORKSPACE_ARCHIVE_VERSION,
-  WORKSPACE_SETTINGS_SCHEMA,
-  WORKSPACE_SETTINGS_VERSION,
-} from '../frontend/src/lib/analysis/workspace-archive.ts';
-import {
-  ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
-  ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
-  MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
-} from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
-import {
-  INVESTIGATION_SEARCH_SCHEMA,
-  INVESTIGATION_SEARCH_VERSION,
-} from '../frontend/src/lib/analysis/investigation-search.ts';
-import {
-  EXTERNAL_FINDINGS_SCHEMA,
-  EXTERNAL_FINDINGS_VERSION,
-  MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
-} from '../frontend/src/lib/analysis/external-findings-import.ts';
-import {
-  CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
-  DNS_OBSERVATION_ROWS_SCHEMA,
-  DOMAIN_OBSERVATION_ROWS_SCHEMA,
-  EXTERNAL_FINDING_ROWS_SCHEMA,
-  EXTERNAL_FINDING_ROWS_VERSION,
-  SUPPORTED_OBSERVATION_ROWS_VERSION,
-} from '../frontend/src/lib/analysis/external-findings-converters.ts';
-import {
-  MISP_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/misp-indicator-export.ts';
-import {
-  SCHEDULED_MONITOR_DELIVERY_SCHEMA,
-  SCHEDULED_MONITOR_DELIVERY_VERSION,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
-import {
-  MAX_SCHEDULED_MONITOR_STORE_BYTES,
-  SCHEDULED_MONITOR_SCHEMA,
-  SCHEDULED_MONITOR_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
-import {
-  MAX_SHORTLIST_STORE_BYTES,
-  SHORTLIST_SCHEMA,
-  SHORTLIST_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/shortlist-model.ts';
-import {
-  STIX_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/stix-indicator-export.ts';
-import {
-  MAX_WATCHLIST_STORE_BYTES,
-  WATCHLIST_SCHEMA,
-  WATCHLIST_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/watchlist-store.ts';
-import {
-  HANDOFF_VERSION,
-  MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES,
-} from '../frontend/src/lib/candidate-handoff-core.ts';
+} from '../packages/workspace/investigation-guide.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
   LOOKUP_EVIDENCE_SCHEMA,
@@ -482,7 +283,7 @@ import {
   WEB_CAPTURE_MANIFEST_VERSION,
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_SUMMARY_VERSION,
-} from '../lib/web-capture-contract.mts';
+} from '../packages/contracts/web-capture.mts';
 import {
   DEPLOYMENT_SELF_CHECK_SCHEMA,
   DEPLOYMENT_SELF_CHECK_VERSION,
@@ -577,37 +378,6 @@ import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycl
 import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
 import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
 import {
-  CASE_RELATIONSHIP_CLUSTER_VERSION,
-  REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA,
-} from '../frontend/src/lib/analysis/case-relationship-clusters.ts';
-import {
-  DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
-  DNS_CHANGE_REHEARSAL_VERSION,
-} from '../frontend/src/lib/analysis/dns-change-rehearsal.ts';
-import {
-  LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
-  LOOKUP_INVESTIGATION_BRIEF_VERSION,
-  MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES,
-  SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS,
-} from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
-import {
-  LOOKUP_ASSET_GRAPH_SCHEMA,
-  LOOKUP_ASSET_GRAPH_VERSION,
-} from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
-import {
-  MAIL_REPORT_SCHEMA,
-  MAIL_REPORT_VERSION,
-} from '../frontend/src/lib/analysis/mail-report-workbench.ts';
-import {
-  REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
-  REGISTRATION_DISCLOSURE_PLAN_VERSION,
-} from '../frontend/src/lib/analysis/registration-disclosure-plan.ts';
-import {
-  MAX_STATIC_PAGE_PATTERN_PACK_BYTES,
-  STATIC_PAGE_PATTERN_PACK_SCHEMA,
-  STATIC_PAGE_PATTERN_PACK_VERSION,
-} from '../frontend/src/lib/analysis/static-page-pattern-packs.ts';
-import {
   DNSSEC_EVIDENCE_SCHEMA,
   DNSSEC_EVIDENCE_VERSION,
 } from '../lib/dnssec-evidence-validation.mts';
@@ -696,14 +466,7 @@ type SchemaCompatibilityInventory = {
 
 const MAX_INVENTORY_LIMITATIONS = 8;
 const MAX_INVENTORY_LIMITATION_LENGTH = 300;
-const SCHEMA_COMPATIBILITY_PROFILES = Object.freeze({
-  'whoisleuth.bulk-review': Object.freeze(['browser.bulk-review', 'export.bulk-review']),
-  'whoisleuth.bulk-sessions': Object.freeze(['browser.bulk-sessions', 'export.bulk-sessions']),
-  'whoisleuth.investigation-templates': Object.freeze(['browser.investigation-templates', 'export.investigation-templates']),
-  'whoisleuth.relationship-observations': Object.freeze(['browser.relationship-observations', 'export.relationship-observations']),
-  'whoisleuth.shortlist': Object.freeze(['browser.shortlist', 'export.shortlist']),
-  'whoisleuth.watchlists': Object.freeze(['browser.watchlists', 'export.watchlists']),
-} as const);
+const SCHEMA_COMPATIBILITY_PROFILES: Readonly<Record<string, readonly string[]>> = Object.freeze({});
 
 function entry(value: SchemaCompatibilityDescriptor): SchemaCompatibilityEntry {
   return mutableSchemaCompatibilityEntry(value);
@@ -737,69 +500,16 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.technology-source-verification', kind: 'cli_document', schema: TECHNOLOGY_SOURCE_VERIFICATION_SCHEMA, currentVersion: TECHNOLOGY_SOURCE_VERIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-source-verify.mts', note: 'Bounded source-document verification report; no live application target is queried.' }),
   entry({ id: 'maintainer.technology-source-manifest', kind: 'cli_document', schema: TECHNOLOGY_SOURCE_MANIFEST_SCHEMA, currentVersion: TECHNOLOGY_SOURCE_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_TECHNOLOGY_SOURCE_MANIFEST_BYTES, owner: 'tools/technology-source-verify.mts', note: 'Exact-current reviewed source manifest consumed by the verification tool.' }),
   entry({ id: 'maintainer.unicode-confusable-audit', kind: 'cli_document', schema: UNICODE_CONFUSABLE_AUDIT_SCHEMA, currentVersion: UNICODE_CONFUSABLE_AUDIT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/unicode-confusable-audit.mts', note: 'Target-free Unicode confusable calibration and invariant report.' }),
-  entry({ id: 'browser.cases', kind: 'browser_store', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Known fields can be read from newer local envelopes, but wrappers block overwrite and downgraded export; version 12 adds up to eight exact opaque analyst-selected Brand Profile references without inferred or cascading relationships.' }),
-  entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Version 1 bare arrays and supported profiles normalise to the current bounded store; version 6 adds bounded domain-control planning context and approved change windows.' }),
-  entry({ id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.' }),
-  entry({ id: 'browser.watchlists', kind: 'browser_store', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Legacy map-shaped stores normalise to the current envelope.' }),
-  entry({ id: 'browser.shortlist', kind: 'browser_store', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_SHORTLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Legacy arrays normalise to the current compact envelope.' }),
-  entry({ id: 'browser.ct-history', kind: 'browser_store', schema: null, currentVersion: CT_HISTORY_SCHEMA_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CT_HISTORY_STORE_BYTES, owner: 'frontend/src/lib/analysis/ct-history.ts', note: 'Version 3 adds bounded ever-seen and reappearance state; versions 1 and 2 migrate without invented history completeness, and future stores are preserved without write.' }),
-  entry({ id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_RULE_STORE_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.ts', note: 'Only allowlisted structured rule fields and operators survive normalisation; the schema string belongs to portable exports.' }),
-  entry({ id: 'browser.relationship-observations', kind: 'browser_store', schema: RELATIONSHIP_OBSERVATION_SCHEMA, currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: 'frontend/src/lib/analysis/relationship-observation-model.ts', note: 'Only explicit analyst selections from bounded Bulk relationship evidence are retained; identities are re-derived from normalised values and members.' }),
-  entry({ id: 'browser.website-snapshots', kind: 'browser_store', schema: WEBSITE_SNAPSHOT_SCHEMA, currentVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION, supportedVersions: [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_WEBSITE_SNAPSHOT_STORE_BYTES, owner: 'frontend/src/lib/analysis/website-snapshot-model.ts', note: 'Only explicit analyst-selected compact website profiles and optional normalised leaf-certificate observations are retained; version 4 adds a bounded reviewed security-posture baseline, while raw lookup payloads, contact data, certificate bytes, and fetched bodies remain excluded.' }),
-  entry({ id: 'browser.bulk-sessions', kind: 'browser_store', schema: BULK_SESSION_SCHEMA, currentVersion: BULK_SESSION_SCHEMA_VERSION, supportedVersions: [...SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: 'frontend/src/lib/analysis/bulk-session-model.ts', note: 'Schema 4 binds rows and sessions to bounded Brand Profile provenance. Bare browser arrays classify each record independently: complete schema-4 provenance is retained, wholly legacy records migrate fail-closed, and portable imports require a local rescan.' }),
-  entry({ id: 'browser.investigation-templates', kind: 'browser_store', schema: INVESTIGATION_TEMPLATE_SCHEMA, currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES, owner: 'frontend/src/lib/analysis/investigation-template-model.ts', note: 'Version 2 adds the fixed response-playbook recipe identifiers. Analyst-authored guidance remains bound to allowlisted built-in stages and cannot run code, start collection, submit evidence, or remove mandatory request gates.' }),
-  entry({ id: 'browser.bulk-review', kind: 'browser_store', schema: BULK_REVIEW_SCHEMA, currentVersion: BULK_REVIEW_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_BULK_REVIEW_STORE_BYTES, owner: 'frontend/src/lib/analysis/bulk-review-model.ts', note: 'Bounded saved Bulk filter views and per-domain review states only; scan results, contacts, notes, and case disposition remain separate.' }),
-  entry({ id: 'tab.candidate-handoff', kind: 'tab_store', schema: null, currentVersion: HANDOFF_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES, owner: 'frontend/src/lib/candidate-handoff-core.ts', note: 'Bounded one-use session handoff; unsupported and legacy envelopes are ignored rather than applied.' }),
-  entry({ id: 'tab.investigation-guide', kind: 'tab_store', schema: null, currentVersion: INVESTIGATION_GUIDE_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'ephemeral_replace', byteBudget: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES, owner: 'frontend/src/lib/analysis/investigation-guide.ts', note: 'Versions 1 through 4 normalise into bounded version 5 recipe state; version 5 adds three fixed manual response-preparation recipes without inventing a custom template, action, submission, or stage outcome.' }),
-  entry({ id: 'tab.synthetic-demo', kind: 'tab_store', schema: null, currentVersion: SYNTHETIC_DEMO_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Fixed synthetic fixtures remain separate from investigation stores.' }),
-  entry({ id: 'hosted.scheduled-monitor', kind: 'hosted_store', schema: SCHEDULED_MONITOR_SCHEMA, currentVersion: SCHEDULED_MONITOR_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_SCHEDULED_MONITOR_STORE_BYTES, owner: 'frontend/src/lib/analysis/scheduled-monitor-model.ts', note: 'Compact authority-aware evidence only; raw responses and expanded contacts are excluded.' }),
+  entry({ id: 'tab.investigation-guide', kind: 'tab_store', schema: null, currentVersion: INVESTIGATION_GUIDE_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'ephemeral_replace', byteBudget: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES, owner: 'packages/workspace/investigation-guide.mts', note: 'Versions 1 through 4 normalise into bounded version 5 recipe state; version 5 adds three fixed manual response-preparation recipes without inventing a custom template, action, submission, or stage outcome.' }),
   entry({ id: 'hosted.scheduled-monitor-envelope', kind: 'hosted_store', schema: ENVELOPE_SCHEMA, currentVersion: ENVELOPE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_ENVELOPE_BYTES, owner: 'lib/scheduled-monitor-crypto.mts', note: 'Authenticated encrypted envelope; version and namespace are part of authenticated context.' }),
-  entry({ id: 'hosted.scheduled-monitor-delivery', kind: 'hosted_store', schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA, currentVersion: SCHEDULED_MONITOR_DELIVERY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts', note: 'Opaque bounded queue message with an allowlisted key set.' }),
-  entry({ id: 'export.cases', kind: 'export', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [...CASE_IMPORT_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Non-destructive merge accepts declared schemas 2 through 12, rejects future versions, and unions exact opaque Brand Profile references existing-first within the eight-reference bound.' }),
-  entry({ id: 'export.brand-profiles', kind: 'export', schema: BRAND_PROFILE_SCHEMA, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Supported exports merge non-destructively by bounded normalised profile identity.' }),
-  entry({ id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CAMPAIGN_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Non-destructive merge; unversioned legacy campaign arrays remain accepted.' }),
-  entry({ id: 'export.campaign-temporal-review', kind: 'export', schema: CAMPAIGN_TEMPORAL_REVIEW_SCHEMA, currentVersion: CAMPAIGN_TEMPORAL_REVIEW_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/campaign-temporal-review.ts', note: 'Integrity-protected local projection of source-qualified case pins and sightings. Retained timestamps are not global first-seen or service-activation times.' }),
-  entry({ id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Non-destructive collection merge with current schema required.' }),
-  entry({ id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Non-destructive domain merge retains schema 2 records while schema 3 adds Opportunity model identity.' }),
-  entry({ id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RULE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.ts', note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.' }),
-  entry({ id: 'export.case-report', kind: 'export', schema: CASE_REPORT_SCHEMA, currentVersion: CASE_REPORT_SCHEMA_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6, 7, 8], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-report.ts', note: 'Local report output; version 8 preserves exact opaque analyst-selected Brand Profile references and remains a non-import persistence contract.' }),
-  entry({ id: 'export.case-response-packet', kind: 'export', schema: CASE_RESPONSE_PACKET_SCHEMA, currentVersion: CASE_RESPONSE_PACKET_VERSION, supportedVersions: [1, 2, 3, 4, 5, 6], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-response-packet.ts', note: 'Version 6 uses deterministic sorted-json-v2 integrity for the local reviewed response packet; no submission or provider side effect occurs.' }),
-  entry({ id: 'export.acquisition-decision', kind: 'export', schema: ACQUISITION_DECISION_PACKET_SCHEMA, currentVersion: ACQUISITION_DECISION_PACKET_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/acquisition-decision-packet.ts', note: 'Version 2 uses deterministic sorted-json-v2 integrity for a bounded acquisition review without making an availability, eligibility, ownership, valuation, or purchase determination.' }),
-  entry({ id: 'export.lookup-claim-passport', kind: 'export', schema: LOOKUP_CLAIM_PASSPORT_SCHEMA, currentVersion: LOOKUP_CLAIM_PASSPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_CLAIM_PASSPORT_BYTES, owner: 'frontend/src/lib/analysis/lookup-claim-passport.ts', note: 'Explicit local export of one typed claim-readiness projection with exact evidence requirement IDs, retained source states, bounded limitations, and deterministic sorted-json-v2 integrity; raw source payloads and browser-local records are excluded.' }),
-  entry({ id: 'export.domain-comparison', kind: 'export', schema: BULK_DOMAIN_COMPARISON_SCHEMA, currentVersion: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, supportedVersions: [3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/bulk-domain-comparison.ts', note: 'Export version 4 uses deterministic sorted-json-v2 integrity while its nested comparison remains version 3 and preserves distinct evidence states.' }),
-  entry({ id: 'export.bulk-mail-exposure', kind: 'export', schema: BULK_MAIL_EXPOSURE_SCHEMA, currentVersion: BULK_MAIL_EXPOSURE_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/bulk-mail-exposure.ts', note: 'Export version 2 uses deterministic sorted-json-v2 integrity while its nested report remains version 1 and incomplete DNS evidence remains inconclusive.' }),
-  entry({ id: 'export.bulk-review-manifest', kind: 'export', schema: BULK_REVIEW_MANIFEST_SCHEMA, currentVersion: BULK_REVIEW_MANIFEST_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/bulk-review-export.ts', note: 'Version 2 uses deterministic sorted-json-v2 integrity for one bounded Bulk review selection while excluding raw payloads, contacts, notes, and transient request state.' }),
-  entry({ id: 'export.investigation-capsule', kind: 'export', schema: INVESTIGATION_CAPSULE_SCHEMA, currentVersion: INVESTIGATION_CAPSULE_VERSION, supportedVersions: [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'frontend/src/lib/analysis/investigation-capsule.ts', note: 'Version 3 embeds investigation brief v2 with canonical Decision Facts; versions 2 and 3 retain whole-capsule sorted-json-v2 integrity, while version 1 remains verifiable only for its embedded projections.' }),
-  entry({ id: 'derived.lookup-asset-graph', kind: 'derived', schema: LOOKUP_ASSET_GRAPH_SCHEMA, currentVersion: LOOKUP_ASSET_GRAPH_VERSION, supportedVersions: [LOOKUP_ASSET_GRAPH_VERSION], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/lookup-asset-graph.ts', note: 'Bounded relationship projection embedded in investigation capsules; source attribution and incomplete evidence remain explicit.' }),
-  entry({ id: 'derived.case-analyst-records', kind: 'derived', schema: INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, currentVersion: INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION, supportedVersions: [INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-capsule.ts', note: 'Optional bounded analyst-decision and assertion projection embedded only after deliberate selection for an investigation capsule.' }),
-  entry({ id: 'export.external-findings', kind: 'export', schema: EXTERNAL_FINDINGS_SCHEMA, currentVersion: EXTERNAL_FINDINGS_VERSION, supportedVersions: [1, 2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-import.ts', note: 'Strict local findings import. Version 4 can retain bounded certificate event identity and name-completeness metadata while analyst assertions remain a separate case workflow.' }),
-  entry({ id: 'import.external-finding-rows', kind: 'export', schema: EXTERNAL_FINDING_ROWS_SCHEMA, currentVersion: EXTERNAL_FINDING_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Bounded fixed-column JSON rows converted through the strict findings parser.' }),
-  entry({ id: 'import.domain-observation-rows', kind: 'export', schema: DOMAIN_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external domain-state observations retained with source-qualified provenance.' }),
-  entry({ id: 'import.dns-observation-rows', kind: 'export', schema: DNS_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external DNS observations; only valid relational values project graph edges.' }),
-  entry({ id: 'import.certificate-observation-rows', kind: 'export', schema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA, currentVersion: SUPPORTED_OBSERVATION_ROWS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/external-findings-converters.ts', note: 'Typed external certificate observations requiring an exact SHA-256 fingerprint.' }),
-  entry({ id: 'export.investigation-recipe-summary', kind: 'export', schema: INVESTIGATION_GUIDE_EXPORT_SCHEMA, currentVersion: INVESTIGATION_GUIDE_EXPORT_VERSION, supportedVersions: [1, 2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_GUIDE_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-guide.ts', note: 'Version 4 covers the fixed response-playbook identifiers. The compact summary retains only workflow metadata, optional template identity, and bounded stage-review reasons.' }),
-  entry({ id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA, currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-template-model.ts', note: 'Portable bounded analyst-authored guide definitions with allowlisted stage identities and request gates; version 1 remains readable only for the original recipe identifiers.' }),
-  entry({ id: 'export.investigation-cacao-profile', kind: 'export', schema: INVESTIGATION_CACAO_SPEC_VERSION, currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_CACAO_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-playbook-interchange.ts', note: 'Restricted CACAO 2.0 profile with a connected linear sequence of manual analyst steps; version 2 adds fixed response recipe identifiers while executable commands, branches, targets, credentials, and arbitrary operations remain rejected.' }),
-  entry({ id: 'export.brand-protection-operations-report', kind: 'export', schema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA, currentVersion: BRAND_PROTECTION_OPERATIONS_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OPERATIONS_REPORT_BYTES, owner: 'frontend/src/lib/analysis/brand-protection-operations-report.ts', note: 'Aggregate current Case-action counts with explicit denominators, time-window basis, source state, bounds, and limitations. It excludes domains, recipients, notes, outcomes, raw evidence, and transition-time inference.' }),
-  entry({ id: 'export.relationship-graph', kind: 'export', schema: RELATIONSHIP_GRAPH_EXPORT_SCHEMA, currentVersion: RELATIONSHIP_GRAPH_EXPORT_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/case-relationship-graph-export.ts', note: 'One canonical bounded relationship document serialised as WHOISleuth JSON, GraphML, or GEXF; version 3 adds browser-local commonality context while transient graph view state remains excluded.' }),
-  entry({ id: 'export.relationship-observations', kind: 'export', schema: RELATIONSHIP_OBSERVATION_SCHEMA, currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: 'frontend/src/lib/analysis/relationship-observation-model.ts', note: 'Workspace-archive section for bounded analyst-selected derived pivots; raw scan and lookup responses are excluded.' }),
-  entry({ id: 'export.bulk-sessions', kind: 'export', schema: BULK_SESSION_SCHEMA, currentVersion: BULK_SESSION_SCHEMA_VERSION, supportedVersions: [...SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: 'frontend/src/lib/analysis/bulk-session-model.ts', note: 'Portable compact Bulk sessions with explicit source states, comparison limitations, and schema-4 bounded profile-context provenance. Schemas 1 through 3 merge with profile-dependent conclusions withheld because those rows cannot prove which profile context was evaluated.' }),
-  entry({ id: 'export.bulk-review', kind: 'export', schema: BULK_REVIEW_SCHEMA, currentVersion: BULK_REVIEW_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_BULK_REVIEW_STORE_BYTES, owner: 'frontend/src/lib/analysis/bulk-review-model.ts', note: 'Workspace-archive section for saved Bulk views and explicit review states; network collection and case disposition are never changed by import.' }),
-  entry({ id: 'export.workspace-archive', kind: 'export', schema: WORKSPACE_ARCHIVE_SCHEMA, currentVersion: WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1, 2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Manifested local archive with per-section checksums, preview-first import, rollback on browser-store write failure, and backward compatibility with archive versions 1 through 4.' }),
-  entry({ id: 'export.encrypted-workspace-archive', kind: 'export', schema: ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, currentVersion: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive-crypto.ts', note: 'Browser-local PBKDF2 and AES-GCM wrapper around the ordinary checksummed archive; passphrases are never persisted or recoverable.' }),
-  entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
+  entry({ id: 'export.investigation-recipe-summary', kind: 'export', schema: INVESTIGATION_GUIDE_EXPORT_SCHEMA, currentVersion: INVESTIGATION_GUIDE_EXPORT_VERSION, supportedVersions: [1, 2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_GUIDE_EXPORT_BYTES, owner: 'packages/workspace/investigation-guide.mts', note: 'Version 4 covers the fixed response-playbook identifiers. The compact summary retains only workflow metadata, optional template identity, and bounded stage-review reasons.' }),
   entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [25, 26, 27, 28], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, owner: 'lib/evidence-export.mts', note: 'Version 28 removes raw registration payloads, expanded contacts, and attributed contact routes behind positive publication allowlists. Version 27 retains fixed homepage summaries; versions 25 and 26 preserve their documented source-wrapper compatibility.' }),
   ...SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility.map(entry)),
-  entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Review-only indicator, provenance-manifest, and rollback formats; never submitted or applied automatically.' }),
-  entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.ts', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
-  entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.ts', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
-  entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
   entry({ id: 'cli.doctor', kind: 'cli_document', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
   entry({ id: 'cli.command-catalogue', kind: 'cli_document', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/command-catalogue.mts', note: 'Installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
   entry({ id: 'cli.lookup-plan', kind: 'cli_document', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
   entry({ id: 'cli.lookup-timeline', kind: 'cli_document', schema: CLI_LOOKUP_TIMELINE_SCHEMA, currentVersion: CLI_LOOKUP_TIMELINE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_TIMELINE_INPUT_BYTES, owner: 'cli/lookup-timeline.mts', note: 'Offline chronological comparison of bounded same-domain saved observations; missing fields and unavailable evidence remain explicit.' }),
   entry({ id: 'cli.mail-review', kind: 'cli_document', schema: CLI_MAIL_REVIEW_SCHEMA, currentVersion: CLI_MAIL_REVIEW_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_MAIL_REVIEW_INPUT_BYTES, owner: 'cli/mail-review.mts', note: 'Version 3 discloses every row, relationship, and domain coverage bound in the offline passive mail and DANE review. Version 2 remains a supported historical pre-disclosure output; neither version makes an SMTP connection.' }),
-  entry({ id: 'cli.page-compare', kind: 'cli_document', schema: CLI_PAGE_COMPARE_SCHEMA, currentVersion: CLI_PAGE_COMPARE_VERSION, supportedVersions: [2, 3, 4], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/page-compare.mts', note: 'Offline comparison of two bounded deep-lookup page identity, technology, favicon, TLS, and response observations; version 3 withholds technology equality for partial sets and version 4 also withholds TLS issuer and public-key conclusions for partial TLS evidence.' }),
   entry({ id: 'cli.workspace-archive-inspection', kind: 'cli_document', schema: ARCHIVE_INSPECTION_SCHEMA, currentVersion: ARCHIVE_INSPECTION_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/archive-inspect.mts', note: 'Offline bounded archive summary and deliberate redacted search report; it does not reveal retained values unless explicitly requested.' }),
   entry({ id: 'cli.offline-artifact-verification', kind: 'cli_document', schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, currentVersion: OFFLINE_ARTIFACT_VERIFICATION_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/artifact-verify.mts', note: 'Version 3 adds optional exact-byte manifest identity checks while preserving separate structure, integrity, projection, and encrypted-envelope assurance.' }),
   entry({ id: 'cli.signed-evidence-package', kind: 'cli_document', schema: SIGNED_EVIDENCE_PACKAGE_SCHEMA, currentVersion: SIGNED_EVIDENCE_PACKAGE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_OFFLINE_ARTIFACT_BYTES, owner: 'cli/evidence-signing.mts', note: 'Version 2 signs deterministic sorted-json-v2 bytes; valid version-1 signatures remain verifiable and embedded-artifact assurance stays separate.' }),
@@ -819,7 +529,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.bulk-checkpoint', kind: 'cli_document', schema: CLI_BULK_CHECKPOINT_SCHEMA, currentVersion: CLI_BULK_CHECKPOINT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_BULK_CHECKPOINT_BYTES, owner: 'cli/bulk-checkpoint.mts', note: 'Private local compact Bulk checkpoint tied to the exact ordered input digest and scan mode; version 2 preserves nullable per-item observation time while schema-1 rows migrate without inventing one.' }),
   entry({ id: 'cli.progress-event', kind: 'cli_document', schema: CLI_PROGRESS_EVENT_SCHEMA, currentVersion: CLI_PROGRESS_EVENT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/progress-events.mts', note: 'Target-free JSONL lifecycle event emitted on standard error only when explicitly requested.' }),
   entry({ id: 'cli.lookup-diff', kind: 'cli_document', schema: CLI_LOOKUP_DIFF_SCHEMA, currentVersion: CLI_LOOKUP_DIFF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-diff.mts', note: 'Offline comparison of two supported bounded saved Lookup documents.' }),
-  entry({ id: 'cli.comparison-ledger', kind: 'cli_document', schema: CLI_COMPARISON_LEDGER_SCHEMA, currentVersion: CLI_COMPARISON_LEDGER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_RETAINED_ARTIFACT_DIFF_BYTES * 2, owner: 'cli/retained-artifact-diff.mts', note: 'Value-free bounded index plus on-demand exact rows for explicitly paired retained Bulk sessions or domain-portfolio reviews.' }),
   entry({ id: 'cli.lookup-reconciliation', kind: 'cli_document', schema: CLI_LOOKUP_RECONCILIATION_SCHEMA, currentVersion: CLI_LOOKUP_RECONCILIATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_RECONCILIATION_INPUT_BYTES, owner: 'cli/lookup-reconcile.mts', note: 'Offline reconciliation of two to five same-domain saved observations; labels remain analyst context rather than proof of independent collection.' }),
   entry({ id: 'cli.registry-doctor', kind: 'cli_document', schema: REGISTRY_DOCTOR_SCHEMA, currentVersion: REGISTRY_DOCTOR_VERSION, supportedVersions: [1, 2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/registry-doctor.mts', note: 'Version 3 propagates bounded RDAP publication-family truncation and withholds absence or consistency conclusions that omitted values could change.' }),
   entry({ id: 'cli.sharing-review', kind: 'cli_document', schema: SHARING_REVIEW_SCHEMA, currentVersion: SHARING_REVIEW_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SHARING_REVIEW_BYTES, owner: 'cli/sharing-review.mts', note: 'Version 2 withholds ready status for projection-only or structure-only assurance; output remains redacted and does not grant recipient authorisation.' }),
@@ -845,7 +554,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.investigation-run', kind: 'cli_document', schema: CLI_INVESTIGATION_RUN_SCHEMA, currentVersion: CLI_INVESTIGATION_RUN_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_RUN_BYTES, owner: 'cli/investigation-run.mts', note: 'Resumable state for installed fixed-recipe steps; network work requires per-run approval and analyst placeholders always pause.' }),
   entry({ id: 'cli.collection-preflight', kind: 'cli_document', schema: CLI_COLLECTION_PREFLIGHT_SCHEMA, currentVersion: CLI_COLLECTION_PREFLIGHT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/collection-preflight.mts', note: 'Offline bounded collection-family and disclosure preview that makes no request.' }),
   entry({ id: 'cli.config', kind: 'cli_document', schema: CLI_CONFIG_SCHEMA, currentVersion: CLI_CONFIG_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CLI_CONFIG_BYTES, owner: 'cli/config-profile.mts', note: 'Strict local safe-default profiles; targets, deep mode, output paths, network approvals, failure policies and arbitrary arguments are refused.' }),
-  entry({ id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'cli/case-pack.mts', note: 'Packet versions 1 and 2 are verified within the portable Case import ceiling; future packet versions are rejected, and version 2 uses deterministic sorted-json-v2 integrity while the enclosed Case schema remains version 12.' }),
   entry({ id: 'cli.interchange-fidelity-report', kind: 'cli_document', schema: INTERCHANGE_FIDELITY_REPORT_SCHEMA, currentVersion: INTERCHANGE_FIDELITY_REPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INTERCHANGE_REPORT_BYTES, owner: 'cli/interchange-report.mts', note: 'Version 2 enforces the runtime registry assurance requirement before reporting fidelity; output remains metadata-only and excludes evidence values and unknown schema text.' }),
   entry({ id: 'cli.lookup-brief', kind: 'cli_document', schema: CLI_LOOKUP_BRIEF_SCHEMA, currentVersion: CLI_LOOKUP_BRIEF_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-brief.mts', note: 'Offline source-aware handoff; version 2 adds structured actions with expected outcomes.' }),
   entry({ id: 'cli.registry-cohort', kind: 'cli_document', schema: REGISTRY_COHORT_SCHEMA, currentVersion: REGISTRY_COHORT_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'normalize_to_current', writeSemantics: 'read_only', byteBudget: MAX_REGISTRY_COHORT_INPUT_BYTES, owner: 'cli/registry-cohort.mts', note: 'Version 2 adds bounded target-free timelines and can merge one unmixed family of retained version-1 or version-2 cohort reports without treating overlapping samples as independent.' }),
@@ -877,23 +585,10 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.rdap-extension-drift-audit', kind: 'cli_document', schema: RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA, currentVersion: RDAP_EXTENSION_DRIFT_AUDIT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_RDAP_EXTENSION_SOURCE_BYTES, owner: 'tools/rdap-extension-drift-audit.mts', note: 'Offline fixture comparison with an optional manual fetch of one fixed official registry; never enables an extension or reverse search.' }),
   entry({ id: 'cli.specialist-workflow-benchmark', kind: 'cli_document', schema: SPECIALIST_WORKFLOW_BENCHMARK_SCHEMA, currentVersion: SPECIALIST_WORKFLOW_BENCHMARK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/specialist-workflow-benchmark.mts', note: 'Offline synthetic regression and workflow-contract benchmark; no live target, provider request, or deployment effect.' }),
   entry({ id: 'cli.service-dependency-signature-audit', kind: 'cli_document', schema: SERVICE_DEPENDENCY_SIGNATURE_AUDIT_SCHEMA, currentVersion: SERVICE_DEPENDENCY_SIGNATURE_AUDIT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/service-dependency-signature-audit.mts', note: 'Offline digest, metadata, collision, and freshness audit for the passive service-dependency signature catalogue.' }),
-  entry({ id: 'export.web-capture-summary', kind: 'export', schema: WEB_CAPTURE_SUMMARY_SCHEMA, currentVersion: WEB_CAPTURE_SUMMARY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/web-capture-import.ts', note: 'Sanitised metadata-only capture summary accepted through the bounded external-finding preview.' }),
-  entry({ id: 'export.web-capture-manifest', kind: 'export', schema: WEB_CAPTURE_MANIFEST_SCHEMA, currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_MANIFEST_BYTES, owner: 'frontend/src/lib/analysis/web-capture-import.ts', note: 'Metadata-only capture manifest; the browser accepts versions 1 and 2 while offline artefact comparison requires current version 2.' }),
   entry({ id: 'export.web-capture-dom-digest', kind: 'export', schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA, currentVersion: WEB_CAPTURE_DOM_DIGEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_DOM_DIGEST_BYTES, owner: 'packages/web-capture/capture.mts', note: 'Local structural and visible-text digests with counts and truncation only; markup and page text are excluded.' }),
   entry({ id: 'cli.web-capture-comparison', kind: 'cli_document', schema: WEB_CAPTURE_COMPARISON_SCHEMA, currentVersion: WEB_CAPTURE_COMPARISON_VERSION, supportedVersions: [2, 3], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'packages/web-capture/compare.mts', note: 'Version 2 reports page-title equality without copying either title; version 3 withholds DOM equality for equal truncated prefixes. Both exclude input paths and DOM or body text.' }),
   entry({ id: 'derived.capability-manifest', kind: 'derived', schema: CAPABILITY_MANIFEST_SCHEMA, currentVersion: CAPABILITY_MANIFEST_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_CAPABILITY_MANIFEST_BYTES, owner: 'packages/contracts/capability-manifest.mts', note: 'Read-only fixed product boundary metadata; it enables no capability, request, credential, retention, score, or authorisation.' }),
   entry({ id: 'derived.curated-connector-result', kind: 'derived', schema: CURATED_CONNECTOR_RESULT_SCHEMA, currentVersion: CURATED_CONNECTOR_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-runtime.mts', note: 'Transient bounded entity and relationship projection; the contract enables no connector, request, credential, storage, score, or availability decision.' }),
-  entry({ id: 'derived.observation-envelope', kind: 'derived', schema: OBSERVATION_ENVELOPE_SCHEMA, currentVersion: OBSERVATION_ENVELOPE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: MAX_OBSERVATION_ENVELOPE_BYTES, owner: 'frontend/src/lib/analysis/observation-envelope.ts', note: 'Disposable typed adapter over authoritative browser-local records; it performs no writes and preserves source schema, provenance, partialness, and rollback state.' }),
-  entry({ id: 'derived.investigation-projection', kind: 'derived', schema: INVESTIGATION_PROJECTION_SCHEMA, currentVersion: INVESTIGATION_PROJECTION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-projection.ts', note: 'Read-only bounded projection over existing stores; never persisted.' }),
-  entry({ id: 'derived.investigation-search', kind: 'derived', schema: INVESTIGATION_SEARCH_SCHEMA, currentVersion: INVESTIGATION_SEARCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-search.ts', note: 'Disposable in-memory index; never persisted or transmitted.' }),
-  entry({ id: 'export.reviewed-relationship-clusters', kind: 'export', schema: REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA, currentVersion: CASE_RELATIONSHIP_CLUSTER_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-relationship-clusters.ts', note: 'Output-only bounded reviewed relationship clusters; version 2 is the only contract represented by the current producer.' }),
-  entry({ id: 'export.defensive-indicator-manifest', kind: 'export', schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Output-only manifest for explicitly selected defensive indicators; historical version 1 is not claimed without a retained reader.' }),
-  entry({ id: 'export.defensive-indicator-rollback', kind: 'export', schema: DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Output-only rollback companion for the same bounded defensive-indicator selection.' }),
-  entry({ id: 'export.dns-change-rehearsal', kind: 'export', schema: DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA, currentVersion: DNS_CHANGE_REHEARSAL_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/dns-change-rehearsal.ts', note: 'Output-only DNS change rehearsal document; version 2 is the only producer contract represented by this tree.' }),
-  entry({ id: 'derived.lookup-investigation-brief', kind: 'derived', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, currentVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION, supportedVersions: [...SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'none', byteBudget: MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES, owner: 'frontend/src/lib/analysis/lookup-investigation-brief.ts', note: 'Version 2 replaces legacy summary and decision-entry arrays with one bounded canonical Decision Fact projection; version 1 remains structurally verified when embedded in supported capsule versions.' }),
-  entry({ id: 'export.mail-report-review', kind: 'export', schema: MAIL_REPORT_SCHEMA, currentVersion: MAIL_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/mail-report-workbench.ts', note: 'Output-only review derived from bounded offline aggregate-report input; the producer has field and collection limits but no separate serialised-output byte contract.' }),
-  entry({ id: 'export.registration-disclosure-plan', kind: 'export', schema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA, currentVersion: REGISTRATION_DISCLOSURE_PLAN_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/registration-disclosure-plan.ts', note: 'Output-only bounded registration-disclosure planning document; version 2 is the only current producer contract.' }),
-  entry({ id: 'export.static-page-pattern-pack', kind: 'export', schema: STATIC_PAGE_PATTERN_PACK_SCHEMA, currentVersion: STATIC_PAGE_PATTERN_PACK_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_STATIC_PAGE_PATTERN_PACK_BYTES, owner: 'frontend/src/lib/analysis/static-page-pattern-packs.ts', note: 'Exact-current bounded page-pattern pack imported by explicit analyst action and merged without executing code or starting collection.' }),
   entry({ id: 'cli.dnssec-evidence-review', kind: 'cli_document', schema: DNSSEC_EVIDENCE_SCHEMA, currentVersion: DNSSEC_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/dnssec-evidence-validation.mts', note: 'Output-only offline relationship review of bounded analyst-supplied DS, DNSKEY, and RRSIG evidence.' }),
   entry({ id: 'cli.tlsa-evidence-review', kind: 'cli_document', schema: TLSA_EVIDENCE_SCHEMA, currentVersion: TLSA_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/tlsa-evidence.mts', note: 'Output-only offline comparison of bounded analyst-supplied TLSA and certificate material with independent DNSSEC and PKIX states.' }),
   entry({ id: 'cli.rpki-route-review', kind: 'cli_document', schema: RPKI_EVIDENCE_SCHEMA, currentVersion: RPKI_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/rpki-evidence.mts', note: 'Output-only offline route-origin review over bounded analyst-supplied authorisations.' }),

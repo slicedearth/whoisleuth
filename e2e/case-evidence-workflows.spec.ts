@@ -257,10 +257,10 @@ test.describe('evidence timeline', () => {
     await expect(page.locator('.timeline-entry')).toHaveCount(1);
     await expect(page.locator('.timeline-badge.timeline-baseline')).toBeVisible();
 
-    // The depth-incomparable explanation is visible.
+    // The bounded comparability explanation is visible.
     await expect(page.locator('.timeline-filter-note')).toBeVisible();
     await expect(page.locator('.timeline-filter-note')).toContainText('No reliable comparable changes matched');
-    await expect(page.locator('.timeline-filter-note')).toContainText('scan depth or risk model prevents field-level comparison');
+    await expect(page.locator('.timeline-filter-note')).toContainText('context, scan depth, or score-model comparability');
   });
 
   test('risk model changes stay readable without creating a false score change', async ({ page }) => {

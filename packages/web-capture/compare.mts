@@ -19,10 +19,10 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
+} from '../contracts/web-capture.mts';
 import { MAX_CAPTURE_HOSTS, hasTerminalUnsafeCharacters } from './capture.mts';
 
-export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../../lib/web-capture-contract.mts';
+export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../contracts/web-capture.mts';
 export const MAX_MANIFEST_BYTES = MAX_WEB_CAPTURE_MANIFEST_BYTES;
 export const MAX_DOM_DIGEST_BYTES = MAX_WEB_CAPTURE_DOM_DIGEST_BYTES;
 export const MAX_SCREENSHOT_BYTES = MAX_WEB_CAPTURE_SCREENSHOT_BYTES;
