@@ -1,0 +1,3739 @@
+{
+  "profileVersion": 1,
+  "sourceRevision": "60400ba9f33d0e91852c9aca663cc5dc5fe451fb",
+  "provenance": [
+    {
+      "id": "unit-local-start-60400ba9",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "complete-exact-revision-4479-tests",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-start-60400ba9",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-one-worker-no-retry",
+      "sampleBasis": "complete-exact-revision-440-tests",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-change-60400ba9",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "accepted-focused-working-tree-based-on-60400ba9",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-postrepair-60400ba9",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "accepted-focused-working-tree-after-schema-closure",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-change-60400ba9",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-one-worker-no-retry",
+      "sampleBasis": "accepted-dashboard-and-guide-working-tree-based-on-60400ba9",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-finalarchitecture-60400ba9",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "accepted-final-architecture-working-tree-based-on-60400ba9",
+      "sampleCount": 1
+    },
+    {
+      "id": "local-bulk-analysis-postfix-20260822",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node26",
+      "sampleBasis": "exact-no-retry-changed-bulk-spec-postfix",
+      "sampleCount": 1
+    }
+  ],
+  "files": [
+    {
+      "file": "e2e/accessibility.spec.ts",
+      "lane": "browser",
+      "weightMs": 21848,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/analyst-context.spec.ts",
+      "lane": "browser",
+      "weightMs": 2274,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/auth.setup.ts",
+      "lane": "browser_setup",
+      "weightMs": 48,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-change-60400ba9"
+    },
+    {
+      "file": "e2e/auth.spec.ts",
+      "lane": "browser",
+      "weightMs": 4321,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/brand-asset-register.spec.ts",
+      "lane": "browser",
+      "weightMs": 4005,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/brand-baseline.spec.ts",
+      "lane": "browser",
+      "weightMs": 17400,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/bulk-analysis.spec.ts",
+      "lane": "browser",
+      "weightMs": 32155,
+      "sampleCount": 1,
+      "provenanceId": "local-bulk-analysis-postfix-20260822"
+    },
+    {
+      "file": "e2e/candidate-handoff.spec.ts",
+      "lane": "browser",
+      "weightMs": 961,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/capabilities.spec.ts",
+      "lane": "browser",
+      "weightMs": 811,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/case-brand-association.spec.ts",
+      "lane": "browser",
+      "weightMs": 32079,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/case-evidence-workflows.spec.ts",
+      "lane": "browser",
+      "weightMs": 13200,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/case-relationship-workflows.spec.ts",
+      "lane": "browser",
+      "weightMs": 25231,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/cases.spec.ts",
+      "lane": "browser",
+      "weightMs": 46341,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/collection-pagination.spec.ts",
+      "lane": "browser",
+      "weightMs": 3340,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/comparison-ledger.spec.ts",
+      "lane": "browser",
+      "weightMs": 2361,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/console-loading.spec.ts",
+      "lane": "browser",
+      "weightMs": 1692,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/dashboard.spec.ts",
+      "lane": "browser",
+      "weightMs": 22096,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-change-60400ba9"
+    },
+    {
+      "file": "e2e/deletion-focus.spec.ts",
+      "lane": "browser",
+      "weightMs": 9794,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/demo.spec.ts",
+      "lane": "browser",
+      "weightMs": 8978,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/design-system.spec.ts",
+      "lane": "browser",
+      "weightMs": 47033,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/discover.spec.ts",
+      "lane": "browser",
+      "weightMs": 29508,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/evidence-debt.spec.ts",
+      "lane": "browser",
+      "weightMs": 4520,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/hosted-monitoring.spec.ts",
+      "lane": "browser",
+      "weightMs": 5926,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/investigation-guide.spec.ts",
+      "lane": "browser",
+      "weightMs": 22792,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-change-60400ba9"
+    },
+    {
+      "file": "e2e/investigation-search.spec.ts",
+      "lane": "browser",
+      "weightMs": 9884,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/local-data-platform.spec.ts",
+      "lane": "browser",
+      "weightMs": 4942,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/lookup-input.spec.ts",
+      "lane": "browser",
+      "weightMs": 23518,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/lookup-network-evidence.spec.ts",
+      "lane": "browser",
+      "weightMs": 22073,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/lookup-registration-evidence.spec.ts",
+      "lane": "browser",
+      "weightMs": 32977,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/lookup-replay.spec.ts",
+      "lane": "browser",
+      "weightMs": 1597,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/mail-report-workbench.spec.ts",
+      "lane": "browser",
+      "weightMs": 2033,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/mobile-nav.spec.ts",
+      "lane": "browser",
+      "weightMs": 3779,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/network-controls.spec.ts",
+      "lane": "browser",
+      "weightMs": 3107,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/origin-guard.spec.ts",
+      "lane": "browser",
+      "weightMs": 88,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/parent-domain-campaign-scope.spec.ts",
+      "lane": "browser",
+      "weightMs": 5886,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/privacy-data-flow-catalogue.spec.ts",
+      "lane": "browser",
+      "weightMs": 2001,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/public-contact.spec.ts",
+      "lane": "browser",
+      "weightMs": 538,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/public-guide.spec.ts",
+      "lane": "browser",
+      "weightMs": 3972,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/registry-support.spec.ts",
+      "lane": "browser",
+      "weightMs": 8383,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/risk-calibration-dashboard.spec.ts",
+      "lane": "browser",
+      "weightMs": 1491,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/seo.spec.ts",
+      "lane": "browser",
+      "weightMs": 340,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/shortlist-storage.spec.ts",
+      "lane": "browser",
+      "weightMs": 829,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/skip-navigation.spec.ts",
+      "lane": "browser",
+      "weightMs": 1190,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/theme.spec.ts",
+      "lane": "browser",
+      "weightMs": 9018,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/watchlist-storage.spec.ts",
+      "lane": "browser",
+      "weightMs": 2431,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "test/abort.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/abuse-recipient-resolver.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/acquisition-decision-packet.test.mts",
+      "lane": "unit",
+      "weightMs": 40,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/acquisition-due-diligence.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/activation-context.test.mts",
+      "lane": "unit",
+      "weightMs": 19,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/analyst-evidence-pivots.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/analyst-review-inbox.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/analyst-taxonomy.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/analyst-undo.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/api-error-status.test.mts",
+      "lane": "unit",
+      "weightMs": 19,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/architecture-boundaries.test.mts",
+      "lane": "unit",
+      "weightMs": 1471,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/archive-inspect.test.mts",
+      "lane": "unit",
+      "weightMs": 700,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/artifact-integrity-v2.test.mts",
+      "lane": "unit",
+      "weightMs": 1108,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/artifact-verify.test.mts",
+      "lane": "unit",
+      "weightMs": 2134,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/auth.test.mts",
+      "lane": "unit",
+      "weightMs": 96,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/availability-contact.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/availability-date.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/availability-dns.test.mts",
+      "lane": "unit",
+      "weightMs": 114,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/availability-feature-policy.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bounded-file.test.mts",
+      "lane": "unit",
+      "weightMs": 202,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bounded-json-response.test.mts",
+      "lane": "unit",
+      "weightMs": 63,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bounded-json.test.mts",
+      "lane": "unit",
+      "weightMs": 258,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bounded-local-search.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bounded-relationship-graph.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-asset-register.test.mts",
+      "lane": "unit",
+      "weightMs": 256,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-certificate-event-replay.test.mts",
+      "lane": "unit",
+      "weightMs": 44,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-mimicry-review.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-profile-model.test.mts",
+      "lane": "unit",
+      "weightMs": 151,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-profile-preference.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-protection-operations-report.test.mts",
+      "lane": "unit",
+      "weightMs": 53,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/brand-review-inbox.test.mts",
+      "lane": "unit",
+      "weightMs": 151,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-library-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 442,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-local-data-definitions.test.mts",
+      "lane": "unit",
+      "weightMs": 52,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-local-data-provider.test.mts",
+      "lane": "unit",
+      "weightMs": 202,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-local-timestamp-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 3261,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-lookup-handoff.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-comparison-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-export.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-limits.test.mts",
+      "lane": "unit",
+      "weightMs": 1,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-lookup-controller.test.mts",
+      "lane": "unit",
+      "weightMs": 75,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-mail-exposure.test.mts",
+      "lane": "unit",
+      "weightMs": 34,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-pacing.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-peer-outliers.test.mts",
+      "lane": "unit",
+      "weightMs": 73,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-result-model.test.mts",
+      "lane": "unit",
+      "weightMs": 31,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-review-model.test.mts",
+      "lane": "unit",
+      "weightMs": 19,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-review-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 83,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-route-model.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-scan-normalizer.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-session-model.test.mts",
+      "lane": "unit",
+      "weightMs": 164,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-sort.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-source-coverage.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/bulk-triage.test.mts",
+      "lane": "unit",
+      "weightMs": 16,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/campaign-cohort-review.test.mts",
+      "lane": "unit",
+      "weightMs": 645,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/campaign-model.test.mts",
+      "lane": "unit",
+      "weightMs": 158,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/campaign-review-summary.test.mts",
+      "lane": "unit",
+      "weightMs": 19,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/campaign-temporal-review.test.mts",
+      "lane": "unit",
+      "weightMs": 38,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/candidate-handoff.test.mts",
+      "lane": "unit",
+      "weightMs": 964,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/capabilities.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/capability-manifest.test.mts",
+      "lane": "unit",
+      "weightMs": 63,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-contract-doc.test.mts",
+      "lane": "unit",
+      "weightMs": 19,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-decision-quality.test.mts",
+      "lane": "unit",
+      "weightMs": 38,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-domain-facades.test.mts",
+      "lane": "unit",
+      "weightMs": 65,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-evidence-checkpoint.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-input-hostname.test.mts",
+      "lane": "unit",
+      "weightMs": 50,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-lifecycle-calendar.test.mts",
+      "lane": "unit",
+      "weightMs": 16,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-model.test.mts",
+      "lane": "unit",
+      "weightMs": 1045,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-portability-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 419,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-relationship-clusters.test.mts",
+      "lane": "unit",
+      "weightMs": 23,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-relationship-graph-export.test.mts",
+      "lane": "unit",
+      "weightMs": 46,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-relationship-graph.test.mts",
+      "lane": "unit",
+      "weightMs": 52,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-relationship-table.test.mts",
+      "lane": "unit",
+      "weightMs": 152,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-relationships.test.mts",
+      "lane": "unit",
+      "weightMs": 120,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-report.test.mts",
+      "lane": "unit",
+      "weightMs": 48,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-response-model.test.mts",
+      "lane": "unit",
+      "weightMs": 187,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-response-packet-fixtures.mts",
+      "lane": "unit",
+      "weightMs": 130,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-response-packet.test.mts",
+      "lane": "unit",
+      "weightMs": 131,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-sighting-chronology.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/case-sighting-stix-export.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/certificate-extension-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 29,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/certificate-policy-review.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ci-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 69,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/cisa-kev-catalog-status.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cisa-kev-catalog.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/classify.test.mts",
+      "lane": "unit",
+      "weightMs": 66,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-automation-workflows.test.mts",
+      "lane": "unit",
+      "weightMs": 570,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-bulk.test.mts",
+      "lane": "unit",
+      "weightMs": 429,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-case-pack.test.mts",
+      "lane": "unit",
+      "weightMs": 2431,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-ci-report.test.mts",
+      "lane": "unit",
+      "weightMs": 294,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-collection-preflight.test.mts",
+      "lane": "unit",
+      "weightMs": 269,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-command-registry.test.mts",
+      "lane": "unit",
+      "weightMs": 15279,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-compare.test.mts",
+      "lane": "unit",
+      "weightMs": 80,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-config-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-cryptographic-mail.test.mts",
+      "lane": "unit",
+      "weightMs": 293,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-csv.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-ct-search.test.mts",
+      "lane": "unit",
+      "weightMs": 369,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-discover.test.mts",
+      "lane": "unit",
+      "weightMs": 104,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-discovery-scan.test.mts",
+      "lane": "unit",
+      "weightMs": 471,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-doctor-completion.test.mts",
+      "lane": "unit",
+      "weightMs": 32266,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-domain-control-monitor.test.mts",
+      "lane": "unit",
+      "weightMs": 93,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-domain-control-observations.test.mts",
+      "lane": "unit",
+      "weightMs": 26,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-export.test.mts",
+      "lane": "unit",
+      "weightMs": 647,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-fail-policy.test.mts",
+      "lane": "unit",
+      "weightMs": 341,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-http.test.mts",
+      "lane": "unit",
+      "weightMs": 346,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-input.test.mts",
+      "lane": "unit",
+      "weightMs": 1940,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-interactive-launcher.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-investigation-plan.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-investigation-run.test.mts",
+      "lane": "unit",
+      "weightMs": 292,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-lookalike-calibration.test.mts",
+      "lane": "unit",
+      "weightMs": 27,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-lookup-brief.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-lookup-browser.test.mts",
+      "lane": "unit",
+      "weightMs": 629,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-lookup-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 426,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-lookup-v1-fixture.mts",
+      "lane": "unit",
+      "weightMs": 126,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-mail-review.test.mts",
+      "lane": "unit",
+      "weightMs": 49,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-output-file.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-package-boundary.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-package.test.mts",
+      "lane": "unit",
+      "weightMs": 1181,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-page-compare.test.mts",
+      "lane": "unit",
+      "weightMs": 69,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-posture.test.mts",
+      "lane": "unit",
+      "weightMs": 345,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-process.test.mts",
+      "lane": "unit",
+      "weightMs": 10404,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-published-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-registry-cohort.test.mts",
+      "lane": "unit",
+      "weightMs": 520,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-registry-doctor.test.mts",
+      "lane": "unit",
+      "weightMs": 44,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-registry-maintenance.test.mts",
+      "lane": "unit",
+      "weightMs": 47,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-registry-support.test.mts",
+      "lane": "unit",
+      "weightMs": 23,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-release-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-risk-calibration.test.mts",
+      "lane": "unit",
+      "weightMs": 225,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-sharing-review.test.mts",
+      "lane": "unit",
+      "weightMs": 63,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-terminal-presentation.test.mts",
+      "lane": "unit",
+      "weightMs": 401,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli-tls.test.mts",
+      "lane": "unit",
+      "weightMs": 304,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cli.test.mts",
+      "lane": "unit",
+      "weightMs": 7421,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/client-behavior-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/client-response-contracts.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/collection-preflight.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/common-infrastructure.test.mts",
+      "lane": "unit",
+      "weightMs": 111,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/comparison-ledger-architecture.test.mts",
+      "lane": "unit",
+      "weightMs": 57,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/comparison-ledger.test.mts",
+      "lane": "unit",
+      "weightMs": 1276,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/console-workflow-state.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/contact-route-function.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/contact-route.test.mts",
+      "lane": "unit",
+      "weightMs": 28,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/core-protocol-properties.test.mts",
+      "lane": "unit",
+      "weightMs": 301,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/coverage.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/credential-surface-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 39,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/cryptographic-assurance.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/css-custom-properties.test.mts",
+      "lane": "unit",
+      "weightMs": 48,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ct-event-intake.test.mts",
+      "lane": "unit",
+      "weightMs": 42,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ct-history.test.mts",
+      "lane": "unit",
+      "weightMs": 2236,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ct-query.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ct-results.test.mts",
+      "lane": "unit",
+      "weightMs": 145,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ct-search.test.mts",
+      "lane": "unit",
+      "weightMs": 158,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/decision-fact.test.mts",
+      "lane": "unit",
+      "weightMs": 37,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/defensive-indicator-export.test.mts",
+      "lane": "unit",
+      "weightMs": 106,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/demo-model.test.mts",
+      "lane": "unit",
+      "weightMs": 35,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dependency-review-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/deployment-self-check.test.mts",
+      "lane": "unit",
+      "weightMs": 48,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/detection-rule-model.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/disclosure-policy-health.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/disclosure-route-review.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/discover-candidate-sort.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/discover-review-cues.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/distributed-operation-budget.test.mts",
+      "lane": "unit",
+      "weightMs": 82,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dns-change-rehearsal.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dns-convergence-review.test.mts",
+      "lane": "unit",
+      "weightMs": 22,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dns-delegation-health.test.mts",
+      "lane": "unit",
+      "weightMs": 66,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dns-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 62,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dns-mx.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dnssec-chain-validation.test.mts",
+      "lane": "unit",
+      "weightMs": 114,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/dnssec-evidence-validation.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/documentation-links.test.mts",
+      "lane": "unit",
+      "weightMs": 41,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-assurance.test.mts",
+      "lane": "unit",
+      "weightMs": 28,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-change-packet.test.mts",
+      "lane": "unit",
+      "weightMs": 92,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-change-review.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-centre.test.mts",
+      "lane": "unit",
+      "weightMs": 25,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-flight-recorder-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 160,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-flight-recorder.test.mts",
+      "lane": "unit",
+      "weightMs": 611,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-lifecycle-metadata.test.mts",
+      "lane": "unit",
+      "weightMs": 346,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 113,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-manifest.test.mts",
+      "lane": "unit",
+      "weightMs": 122,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-monitor-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 210,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-passport.test.mts",
+      "lane": "unit",
+      "weightMs": 976,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-review-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 221,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-control-runtime.test.mts",
+      "lane": "unit",
+      "weightMs": 83,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-portfolio-review.test.mts",
+      "lane": "unit",
+      "weightMs": 23,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-posture-analysis.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-posture-matrix.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-posture-parsers.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-posture.test.mts",
+      "lane": "unit",
+      "weightMs": 38,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/encrypted-dns-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/error-detail.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-coverage-ledger.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-debt-review.test.mts",
+      "lane": "unit",
+      "weightMs": 167,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-display.test.mts",
+      "lane": "unit",
+      "weightMs": 39,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-export.test.mts",
+      "lane": "unit",
+      "weightMs": 188,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-quality-properties.test.mts",
+      "lane": "unit",
+      "weightMs": 77,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-signing.test.mts",
+      "lane": "unit",
+      "weightMs": 135,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-status-tone.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/evidence-topology.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/external-findings-converters.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/external-findings-import.test.mts",
+      "lane": "unit",
+      "weightMs": 20,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/external-intelligence-import.test.mts",
+      "lane": "unit",
+      "weightMs": 66,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/external-intelligence-risk.test.mts",
+      "lane": "unit",
+      "weightMs": 70,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/extracted-domain-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 90,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fast-check-config.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/favicon-discovery.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/feature-policy.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/first-use-analyst-study.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/cli/forbidden-presentation.mts",
+      "lane": "unit",
+      "weightMs": 135,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/artifact-integrity.mts",
+      "lane": "unit",
+      "weightMs": 133,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/brand-profile-model.mts",
+      "lane": "unit",
+      "weightMs": 106,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/case-model.mts",
+      "lane": "unit",
+      "weightMs": 120,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/domain-control-manifest-core.mts",
+      "lane": "unit",
+      "weightMs": 117,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/domain-control-records.mts",
+      "lane": "unit",
+      "weightMs": 106,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/external-findings-import.mts",
+      "lane": "unit",
+      "weightMs": 99,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/page-similarity.mts",
+      "lane": "unit",
+      "weightMs": 137,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/analysis/workspace-archive.mts",
+      "lane": "unit",
+      "weightMs": 99,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/components/adapter.mts",
+      "lane": "unit",
+      "weightMs": 102,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/frontend/src/lib/forbidden-observation-facade.mts",
+      "lane": "unit",
+      "weightMs": 127,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/lib/forbidden-frontend.mts",
+      "lane": "unit",
+      "weightMs": 152,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/lib/observation.mts",
+      "lane": "unit",
+      "weightMs": 101,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/lib/runtime.mts",
+      "lane": "unit",
+      "weightMs": 130,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/netlify/functions/forbidden-frontend.mts",
+      "lane": "unit",
+      "weightMs": 133,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/cases/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 142,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/cases/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 148,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/comparison/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 114,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/contracts/forbidden-contract.mts",
+      "lane": "unit",
+      "weightMs": 109,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/evidence/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 101,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/interchange/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 111,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/interchange/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 91,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/investigation/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 133,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/investigation/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 133,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/monitoring/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 119,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/monitoring/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 133,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/relationships/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 118,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/relationships/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 123,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/workspace/forbidden-domain.mts",
+      "lane": "unit",
+      "weightMs": 115,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/packages/workspace/forbidden-node-core.mts",
+      "lane": "unit",
+      "weightMs": 112,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/server.mts",
+      "lane": "unit",
+      "weightMs": 124,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/fixtures/architecture/tools/forbidden-frontend.mts",
+      "lane": "unit",
+      "weightMs": 114,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/frontend-loading-report.test.mts",
+      "lane": "unit",
+      "weightMs": 44,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/helpers/fast-check-config.mts",
+      "lane": "unit",
+      "weightMs": 177,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/helpers/threat-provider-conformance.mts",
+      "lane": "unit",
+      "weightMs": 142,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/historical-case-pack-fixtures.mts",
+      "lane": "unit",
+      "weightMs": 139,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/homepage-metadata-fixtures.mts",
+      "lane": "unit",
+      "weightMs": 162,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/hostname.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/html-signals.test.mts",
+      "lane": "unit",
+      "weightMs": 363,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/http-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 78,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/http-summary.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/http.test.mts",
+      "lane": "unit",
+      "weightMs": 64,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/idn-confusables.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/idn-registry-policy.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/incremental-lookup-qualification.test.mts",
+      "lane": "unit",
+      "weightMs": 67,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/incremental-lookup-staging-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/incremental-lookup-transport-spike.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/interchange-report.test.mts",
+      "lane": "unit",
+      "weightMs": 1383,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-capsule.test.mts",
+      "lane": "unit",
+      "weightMs": 73,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-compatibility-fixtures.test.mts",
+      "lane": "unit",
+      "weightMs": 33,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-context-preview.test.mts",
+      "lane": "unit",
+      "weightMs": 45,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-guide-loading.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-guide.test.mts",
+      "lane": "unit",
+      "weightMs": 65,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-handoff-readiness.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-lineage.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-manifest.test.mts",
+      "lane": "unit",
+      "weightMs": 388,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-playbook-interchange.test.mts",
+      "lane": "unit",
+      "weightMs": 22,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-projection-reader.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-projection.test.mts",
+      "lane": "unit",
+      "weightMs": 484,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-search.test.mts",
+      "lane": "unit",
+      "weightMs": 103,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/investigation-template-model.test.mts",
+      "lane": "unit",
+      "weightMs": 25,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/ip-prefix.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/iso-timestamp.test.mts",
+      "lane": "unit",
+      "weightMs": 336,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/layout-request-bounds.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/local-codeql.test.mts",
+      "lane": "unit",
+      "weightMs": 1091,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/local-context-load.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/local-data-platform-evaluation.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/local-geoip-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 27,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/local-web-capture.test.mts",
+      "lane": "unit",
+      "weightMs": 9024,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/login.test.mts",
+      "lane": "unit",
+      "weightMs": 43,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/logout.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-asset-graph.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-at-a-glance-model.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-cache.test.mts",
+      "lane": "unit",
+      "weightMs": 538,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-capability-matrix.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-case-controller.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-claim-passport.test.mts",
+      "lane": "unit",
+      "weightMs": 43,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-claim-readiness.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-decision-review-model.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-decision-support.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-display-model.test.mts",
+      "lane": "unit",
+      "weightMs": 114,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-impact.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-quality-model.test.mts",
+      "lane": "unit",
+      "weightMs": 54,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-replay-diff.test.mts",
+      "lane": "unit",
+      "weightMs": 25,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-replay.test.mts",
+      "lane": "unit",
+      "weightMs": 352,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-v25-fixtures.mts",
+      "lane": "unit",
+      "weightMs": 127,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-evidence-v26-fixture.mts",
+      "lane": "unit",
+      "weightMs": 126,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-investigation-brief.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-page-actions.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-presentation.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-readable-report.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-request-controller.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-request.test.mts",
+      "lane": "unit",
+      "weightMs": 89,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-response-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 117,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-review-action-model.test.mts",
+      "lane": "unit",
+      "weightMs": 38,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-route-analysis.test.mts",
+      "lane": "unit",
+      "weightMs": 305,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-snapshot-input.test.mts",
+      "lane": "unit",
+      "weightMs": 49,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-source-refresh.test.mts",
+      "lane": "unit",
+      "weightMs": 54,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-summary-model.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup.test.mts",
+      "lane": "unit",
+      "weightMs": 179,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/mail-report-workbench.test.mts",
+      "lane": "unit",
+      "weightMs": 50,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/maintainer-duplication-report.test.mts",
+      "lane": "unit",
+      "weightMs": 409,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-postrepair-60400ba9"
+    },
+    {
+      "file": "test/maintenance-file-boundaries.test.mts",
+      "lane": "unit",
+      "weightMs": 1366,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/manifest-artifact-identity.test.mts",
+      "lane": "unit",
+      "weightMs": 64,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/misp-indicator-export.test.mts",
+      "lane": "unit",
+      "weightMs": 91,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/model-contract-properties.test.mts",
+      "lane": "unit",
+      "weightMs": 292,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/nameserver-preflight-review.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/netlify-api-error-boundaries.test.mts",
+      "lane": "unit",
+      "weightMs": 38,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/netlify-network-guard.test.mts",
+      "lane": "unit",
+      "weightMs": 65,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/netlify-network-handler-contracts.test.mts",
+      "lane": "unit",
+      "weightMs": 64,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/netlify-static-headers.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/observation-envelope.test.mts",
+      "lane": "unit",
+      "weightMs": 22,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/observation-interchange.test.mts",
+      "lane": "unit",
+      "weightMs": 31,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/observation.test.mts",
+      "lane": "unit",
+      "weightMs": 35,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/observed-network-context.test.mts",
+      "lane": "unit",
+      "weightMs": 59,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/offline-evidence-review.test.mts",
+      "lane": "unit",
+      "weightMs": 64,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/offline-investigation-scenarios.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/operation-budget.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/outbound-identity.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/outbound-request-bounds.test.mts",
+      "lane": "unit",
+      "weightMs": 1,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/owned-domain-posture-review.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/page-baseline.test.mts",
+      "lane": "unit",
+      "weightMs": 33,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/page-fingerprints.test.mts",
+      "lane": "unit",
+      "weightMs": 357,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/page-language-signals.test.mts",
+      "lane": "unit",
+      "weightMs": 34,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/page-role-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 88,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/page-similarity.test.mts",
+      "lane": "unit",
+      "weightMs": 33,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/parent-domain-campaign-review.test.mts",
+      "lane": "unit",
+      "weightMs": 493,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/perceptual-hash.test.mts",
+      "lane": "unit",
+      "weightMs": 62,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/playwright-results-summary.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/portable-domain-facades.test.mts",
+      "lane": "unit",
+      "weightMs": 240,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/portable-generator.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/privacy-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 36,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/privacy-data-flow-catalogue.test.mts",
+      "lane": "unit",
+      "weightMs": 566,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/privacy-dns-consistency.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/production-dependency-audit.test.mts",
+      "lane": "unit",
+      "weightMs": 161,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/provider-policy-admission.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/provider-policy-freshness.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/public-guide.test.mts",
+      "lane": "unit",
+      "weightMs": 31,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/public-resources.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/public-session.test.mts",
+      "lane": "unit",
+      "weightMs": 1,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/published-cli-check.test.mts",
+      "lane": "unit",
+      "weightMs": 158,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rate-limit.test.mts",
+      "lane": "unit",
+      "weightMs": 17,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-bootstrap.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-capabilities.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-extension-drift-audit.test.mts",
+      "lane": "unit",
+      "weightMs": 84,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-failover.test.mts",
+      "lane": "unit",
+      "weightMs": 39,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-nameserver-search.test.mts",
+      "lane": "unit",
+      "weightMs": 37,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-parsing.test.mts",
+      "lane": "unit",
+      "weightMs": 622,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-reference-oracle.test.mts",
+      "lane": "unit",
+      "weightMs": 20,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-registry-fixtures.test.mts",
+      "lane": "unit",
+      "weightMs": 25,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-reverse-search-preview.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-search-workbench.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rdap-transport.test.mts",
+      "lane": "unit",
+      "weightMs": 16,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registrar-rdap.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registration-disclosure-plan.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-capabilities.test.mts",
+      "lane": "unit",
+      "weightMs": 81,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-collection-admission.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-comparison.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-dates.test.mts",
+      "lane": "unit",
+      "weightMs": 17,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-drift-audit.test.mts",
+      "lane": "unit",
+      "weightMs": 70,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-drift-workflow.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-fixture-tooling.test.mts",
+      "lane": "unit",
+      "weightMs": 37,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-insights.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-standards-coverage.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/registry-support-view.test.mts",
+      "lane": "unit",
+      "weightMs": 213,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/relationship-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 59,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/relationship-observation-model.test.mts",
+      "lane": "unit",
+      "weightMs": 62,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/release-version-check.test.mts",
+      "lane": "unit",
+      "weightMs": 29,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/response-policy.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/retained-artifact-diff.test.mts",
+      "lane": "unit",
+      "weightMs": 149,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/retained-evidence-timeline.test.mts",
+      "lane": "unit",
+      "weightMs": 63,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/retire-browser-catalog.test.mts",
+      "lane": "unit",
+      "weightMs": 171,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/reviewed-accuracy-tooling.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/risk-calibration-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 507,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/risk-calibration-dashboard.test.mts",
+      "lane": "unit",
+      "weightMs": 65,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/risk-calibration-export.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/risk-calibration-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 121,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/rpki-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/safe-fetch-provenance.test.mts",
+      "lane": "unit",
+      "weightMs": 62,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/safe-fetch.test.mts",
+      "lane": "unit",
+      "weightMs": 40,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/saved-lookup.test.mts",
+      "lane": "unit",
+      "weightMs": 93,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-crypto.test.mts",
+      "lane": "unit",
+      "weightMs": 37,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-cycle.test.mts",
+      "lane": "unit",
+      "weightMs": 87,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-dispatcher.test.mts",
+      "lane": "unit",
+      "weightMs": 134,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-function.test.mts",
+      "lane": "unit",
+      "weightMs": 34,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-management-function.test.mts",
+      "lane": "unit",
+      "weightMs": 163,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-management.test.mts",
+      "lane": "unit",
+      "weightMs": 93,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-model.test.mts",
+      "lane": "unit",
+      "weightMs": 934,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-netlify-store.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-repository.test.mts",
+      "lane": "unit",
+      "weightMs": 14,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitor-runtime.test.mts",
+      "lane": "unit",
+      "weightMs": 41,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/scheduled-monitoring-client.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/schema-compatibility.test.mts",
+      "lane": "unit",
+      "weightMs": 3800,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-postrepair-60400ba9"
+    },
+    {
+      "file": "test/schema-contract-ownership.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/schema-lifecycle-registry.test.mts",
+      "lane": "unit",
+      "weightMs": 570,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/schema-lifecycle-repository.test.mts",
+      "lane": "unit",
+      "weightMs": 33253,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-finalarchitecture-60400ba9"
+    },
+    {
+      "file": "test/schema-lifecycle-v3.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/schema-lifecycle-v4.test.mts",
+      "lane": "unit",
+      "weightMs": 54,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/schema-source-coverage.test.mts",
+      "lane": "unit",
+      "weightMs": 4034,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-postrepair-60400ba9"
+    },
+    {
+      "file": "test/scoring.test.mts",
+      "lane": "unit",
+      "weightMs": 81,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/security-txt.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/server-api-errors.test.mts",
+      "lane": "unit",
+      "weightMs": 294,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/server-routing.test.mts",
+      "lane": "unit",
+      "weightMs": 172,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/server-typescript-boundary.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/service-binding-dns.test.mts",
+      "lane": "unit",
+      "weightMs": 54,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/service-dependency-review.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/service-dependency-signature-audit.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/shared-contract-bounds.test.mts",
+      "lane": "unit",
+      "weightMs": 28,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/shared-domain-facades.test.mts",
+      "lane": "unit",
+      "weightMs": 617,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/shortlist-model.test.mts",
+      "lane": "unit",
+      "weightMs": 92,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/smtp-transport-review.test.mts",
+      "lane": "unit",
+      "weightMs": 144,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/source-reliability-dashboard.test.mts",
+      "lane": "unit",
+      "weightMs": 65,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/source-reliability.test.mts",
+      "lane": "unit",
+      "weightMs": 276,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/specialist-workflow-benchmark.test.mts",
+      "lane": "unit",
+      "weightMs": 1325,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/sslbl-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/sslbl-snapshot-status.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/sslbl-snapshot.test.mts",
+      "lane": "unit",
+      "weightMs": 7,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/staged-secret-check.test.mts",
+      "lane": "unit",
+      "weightMs": 15,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/static-page-pattern-packs.test.mts",
+      "lane": "unit",
+      "weightMs": 57,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/stix-indicator-export.test.mts",
+      "lane": "unit",
+      "weightMs": 89,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/stix-schema-conformance.test.mts",
+      "lane": "unit",
+      "weightMs": 798,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/structured-data-identity.test.mts",
+      "lane": "unit",
+      "weightMs": 37,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/synthetic-analyst-journeys.test.mts",
+      "lane": "unit",
+      "weightMs": 254,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/technology-example-review.test.mts",
+      "lane": "unit",
+      "weightMs": 150,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-fixture-review.test.mts",
+      "lane": "unit",
+      "weightMs": 43,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-review-candidate.test.mts",
+      "lane": "unit",
+      "weightMs": 235,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-reviewed-fixtures.test.mts",
+      "lane": "unit",
+      "weightMs": 101,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-signature-benchmark.test.mts",
+      "lane": "unit",
+      "weightMs": 398,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-signature-scaffold.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/technology-source-verify.test.mts",
+      "lane": "unit",
+      "weightMs": 39,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/test-duration-reporter.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/theme-assets.test.mts",
+      "lane": "unit",
+      "weightMs": 11,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/theme.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/third-party-notices.test.mts",
+      "lane": "unit",
+      "weightMs": 257,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/threat-intelligence-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 150,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/threat-provider-conformance.test.mts",
+      "lane": "unit",
+      "weightMs": 58,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/threatfox-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 83,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/timeout-covers-body-read.test.mts",
+      "lane": "unit",
+      "weightMs": 144,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/tls-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 60,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/tlsa-evidence.test.mts",
+      "lane": "unit",
+      "weightMs": 12,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/trust-store-comparison.test.mts",
+      "lane": "unit",
+      "weightMs": 18,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/typescript-boundary.test.mts",
+      "lane": "unit",
+      "weightMs": 52,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/typosquat-generator.test.mts",
+      "lane": "unit",
+      "weightMs": 128,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/unicode-confusable-projection.test.mts",
+      "lane": "unit",
+      "weightMs": 52,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/urlhaus-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 119,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/urlscan-intelligence.test.mts",
+      "lane": "unit",
+      "weightMs": 135,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/utils.test.mts",
+      "lane": "unit",
+      "weightMs": 3328,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/value-assertions.mts",
+      "lane": "unit",
+      "weightMs": 171,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/verification-architecture.test.mts",
+      "lane": "unit",
+      "weightMs": 209,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-finalarchitecture-60400ba9"
+    },
+    {
+      "file": "test/verification-state-machines.test.mts",
+      "lane": "unit",
+      "weightMs": 275,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-change-60400ba9"
+    },
+    {
+      "file": "test/visualization-models.test.mts",
+      "lane": "unit",
+      "weightMs": 1721,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/wacz-evidence-import.test.mts",
+      "lane": "unit",
+      "weightMs": 910,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/warc-evidence-import.test.mts",
+      "lane": "unit",
+      "weightMs": 26,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/watchlist-history.test.mts",
+      "lane": "unit",
+      "weightMs": 183,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/watchlist-store.test.mts",
+      "lane": "unit",
+      "weightMs": 641,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/web-capture-import.test.mts",
+      "lane": "unit",
+      "weightMs": 32,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/website-activity.test.mts",
+      "lane": "unit",
+      "weightMs": 255,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/website-profile-clusters.test.mts",
+      "lane": "unit",
+      "weightMs": 21,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/website-security-posture.test.mts",
+      "lane": "unit",
+      "weightMs": 35,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/website-snapshot-model.test.mts",
+      "lane": "unit",
+      "weightMs": 785,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/website-technology.test.mts",
+      "lane": "unit",
+      "weightMs": 282,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-address-failover.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-authority.test.mts",
+      "lane": "unit",
+      "weightMs": 51,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-contacts.test.mts",
+      "lane": "unit",
+      "weightMs": 66,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-deadline.test.mts",
+      "lane": "unit",
+      "weightMs": 5,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-encoding.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-query-profile.test.mts",
+      "lane": "unit",
+      "weightMs": 20,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-referral-guard.test.mts",
+      "lane": "unit",
+      "weightMs": 27,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/whois-registry-fixtures.test.mts",
+      "lane": "unit",
+      "weightMs": 499,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/workspace-archive-crypto.test.mts",
+      "lane": "unit",
+      "weightMs": 4251,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/workspace-archive.test.mts",
+      "lane": "unit",
+      "weightMs": 560,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/workspace-domain-facades.test.mts",
+      "lane": "unit",
+      "weightMs": 196,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/workspace-portability-lifecycle.test.mts",
+      "lane": "unit",
+      "weightMs": 137,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/workspace-rollback.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/zone-intent-review.test.mts",
+      "lane": "unit",
+      "weightMs": 23,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "tools/test-duration-reporter.mts",
+      "lane": "unit",
+      "weightMs": 179,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-postrepair-60400ba9"
+    }
+  ]
+}

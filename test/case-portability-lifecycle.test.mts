@@ -85,10 +85,10 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(family.compatibility.length, 9);
     assert.equal(family.contracts.length, 53);
     assert.equal(family.fixtures.length, 87);
-    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.length, 16);
-    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.compatibility).length, 83);
-    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.contracts).length, 182);
-    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.fixtures).length, 232);
+    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.length, 17);
+    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.compatibility).length, 84);
+    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.contracts).length, 183);
+    assert.equal(SCHEMA_LIFECYCLE_REGISTRY.flatMap((item) => item.fixtures).length, 233);
 
     const [packetDispatch, casePackDispatch] = contracts.CASE_PORTABILITY_VERIFIER_DISPATCH;
     assert.equal(packetDispatch.schema, contracts.CASE_RESPONSE_PACKET_SCHEMA);
@@ -102,7 +102,7 @@ describe('canonical Case portability lifecycle', () => {
     }
 
     const inventory = buildSchemaCompatibilityInventory();
-    assert.equal(inventory.entries.length, 209);
+    assert.equal(inventory.entries.length, 210);
     for (const descriptor of family.compatibility) {
       const row = inventory.entries.find((entry) => entry.id === descriptor.id);
       assert.deepEqual(row, descriptor);

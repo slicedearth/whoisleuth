@@ -183,7 +183,11 @@ test('keeps shortlist-derived analysis unavailable instead of inferring no selec
   await page.getByRole('button', { name: 'Save current session' }).click();
   await failBrowserLocalCollectionReads(page, 'shortlist');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page).toHaveURL(/\/dashboard$/u);
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page).toHaveURL(/\/bulk$/u);
+  await expect(page.locator('.local-context-status')).toContainText('shortlist');
+  await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
   await page.locator('.bulk-sessions article', { hasText: 'Unavailable shortlist review' }).getByRole('button', { name: 'Load' }).click();
 
   const mailReview = page.getByRole('region', { name: 'Lookalike mail exposure' });

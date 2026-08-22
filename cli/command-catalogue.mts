@@ -1,7 +1,13 @@
+import {
+  CLI_COMMAND_CATALOGUE_SCHEMA,
+  CLI_COMMAND_CATALOGUE_VERSION,
+} from '../packages/contracts/cli-command-catalogue.mts';
 import type { CliCommand, CommandCollection, CommandDetail } from './command-reference.mts';
 
-export const CLI_COMMAND_CATALOGUE_SCHEMA = 'whoisleuth.cli.command-catalogue';
-export const CLI_COMMAND_CATALOGUE_VERSION = 1;
+export {
+  CLI_COMMAND_CATALOGUE_SCHEMA,
+  CLI_COMMAND_CATALOGUE_VERSION,
+};
 
 type CommandCatalogueEntry = Readonly<{
   command: CliCommand;

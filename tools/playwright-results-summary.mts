@@ -5,6 +5,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import {
+  buildBalancedBrowserShardPlan,
+  readVerificationTimingProfile,
+} from './verification-timing-profile.mts';
 
 const MAX_RESULTS_BYTES = 64 * 1024 * 1024;
 const MAX_TEST_RESULTS = 4_000;
@@ -33,6 +37,12 @@ export type PlaywrightResultSummary = Readonly<{
   skipped: number;
   retried: number;
   extraAttempts: number;
+  observedDurationMs: number;
+  attemptDurationMs: number;
+  laneDurations: Readonly<{ setup: number; browser: number }>;
+  shard: string | null;
+  plannedWeightMs: number | null;
+  projectedImbalanceMs: number | null;
   truncated: boolean;
   slowest: readonly PlaywrightTestResult[];
   failureAttachments: readonly string[];
@@ -150,6 +160,11 @@ function collectSuites(
 export function summarizePlaywrightResults(
   raw: unknown,
   rawLabel = '',
+  planning: Readonly<{
+    shard: string;
+    plannedWeightMs: number;
+    projectedImbalanceMs: number;
+  }> | null = null,
 ): PlaywrightResultSummary {
   const root = record(raw);
   if (!root) throw new Error('Playwright result data must be an object.');
@@ -157,6 +172,8 @@ export function summarizePlaywrightResults(
   const truncated = collectSuites(root.suites, results, [], 0);
   const failures = results.filter(({ status }) => status === 'failed');
   const diagnostics = results.filter(({ status }) => status === 'failed' || status === 'flaky');
+  const stats = record(root.stats);
+  const attemptDurationMs = results.reduce((total, result) => total + result.durationMs, 0);
   return Object.freeze({
     label: boundedText(rawLabel) || 'run',
     total: results.length,
@@ -166,6 +183,15 @@ export function summarizePlaywrightResults(
     skipped: results.filter(({ status }) => status === 'skipped').length,
     retried: results.filter(({ retried }) => retried).length,
     extraAttempts: results.reduce((total, result) => total + result.extraAttempts, 0),
+    observedDurationMs: finiteDuration(stats?.duration),
+    attemptDurationMs,
+    laneDurations: Object.freeze({
+      setup: results.filter((item) => item.file.endsWith('.setup.ts')).reduce((total, item) => total + item.durationMs, 0),
+      browser: results.filter((item) => !item.file.endsWith('.setup.ts')).reduce((total, item) => total + item.durationMs, 0),
+    }),
+    shard: planning?.shard ?? null,
+    plannedWeightMs: planning?.plannedWeightMs ?? null,
+    projectedImbalanceMs: planning?.projectedImbalanceMs ?? null,
     truncated,
     slowest: [...results]
       .sort((left, right) => right.durationMs - left.durationMs || left.title.localeCompare(right.title))
@@ -197,6 +223,11 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
     `| Extra attempts | ${summary.extraAttempts} |`,
     '',
     `Total recorded tests: ${summary.total}${summary.truncated ? ' (bounded summary truncated)' : ''}.`,
+    `Observed run duration: ${Math.round(summary.observedDurationMs)} ms; recorded attempt duration: ${Math.round(summary.attemptDurationMs)} ms.`,
+    `Lane durations: setup ${Math.round(summary.laneDurations.setup)} ms; browser ${Math.round(summary.laneDurations.browser)} ms.`,
+    ...(summary.shard === null ? [] : [
+      `Balanced shard ${markdown(summary.shard)} planned weight: ${summary.plannedWeightMs} ms; projected complete-plan imbalance: ${summary.projectedImbalanceMs} ms.`,
+    ]),
     '',
     '### Slowest tests',
     '',
@@ -226,10 +257,22 @@ async function main(): Promise<void> {
       allowSymbolicLink: true,
     });
     const parsed: unknown = JSON.parse(source);
-    output = renderPlaywrightResultSummary(summarizePlaywrightResults(
-      parsed,
-      process.env.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL,
-    ));
+    let planning: { shard: string; plannedWeightMs: number; projectedImbalanceMs: number } | null = null;
+    const shardIdentity = process.env.WHOISLEUTH_PLAYWRIGHT_SHARD;
+    if (shardIdentity) {
+      const match = /^(\d+)\/(\d+)$/u.exec(shardIdentity);
+      const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
+      const shard = match && Number(match[2]) === plan.shardCount
+        ? plan.shards.find((item) => item.shard === Number(match[1]))
+        : null;
+      if (!shard) throw new TypeError('Playwright summary shard does not match the retained balanced plan.');
+      planning = {
+        shard: shardIdentity,
+        plannedWeightMs: shard.plannedWeightMs,
+        projectedImbalanceMs: plan.unavoidableImbalanceMs,
+      };
+    }
+    output = renderPlaywrightResultSummary(summarizePlaywrightResults(parsed, process.env.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL, planning));
   } catch (error) {
     const detail = error instanceof Error ? boundedText(error.message) : 'unknown diagnostic error';
     output = `## Playwright result summary\n\nResult data was unavailable: ${markdown(detail)}.\n`;

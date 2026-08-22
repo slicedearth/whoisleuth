@@ -63,7 +63,7 @@ test('public privacy notices track versioned browser-local data contracts', asyn
 
   for (const notice of [rootNotice, publicNotice]) {
     const compact = notice.replace(/\s+/gu, ' ');
-    assert.match(compact, /Last updated: 20 August 2026/u);
+    assert.match(compact, /Last updated: 22 August 2026/u);
     assert.match(compact, /Domain-control passports?.*?selected official-domain nameserver, DS, MX, CAA, TLS issuer or public-key, transfer-lock, and renewal-review expectations/iu);
     assert.match(compact, /Profile identity, brands, contacts, notes, retained observations, change windows, suppressions.*?excluded/iu);
     assert.match(compact, /field-level preview.*?does not delete a destination value by omission/iu);

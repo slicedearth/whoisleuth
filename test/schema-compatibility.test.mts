@@ -254,20 +254,20 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 209);
+    assert.equal(inventory.entries.length, 210);
     const rowsById = [...inventory.entries].sort((left, right) => (
       left.id < right.id ? -1 : left.id > right.id ? 1 : 0
     ));
     const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
     assert.equal(
       digest(rowsById.map((entry) => entry.id)),
-      'b6b7c5fc03d8f500331df331b1d1a8753950bda41f24a28b6d770e498fba6896',
+      '232104ea58c5c833566319545143640492d4cd79cd504b9271a8b80fd0613889',
     );
     assert.equal(
       digest(rowsById.map((entry) => Object.fromEntries(
         Object.entries(entry).filter(([key]) => key !== 'owner'),
       ))),
-      '70819ecad3017b694447126f8c16f7837b92247a07453e70f4d656821a8caa9d',
+      '9a8456101ee47b3280f365adfcdabfcd17976a546ec0df724a3225554a713b68',
     );
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',

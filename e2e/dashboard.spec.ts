@@ -302,7 +302,13 @@ test('the Dashboard keeps interaction blue and outcome green in the dark theme',
   await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
 });
 
-test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', async ({ page }) => {
+test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', {
+  tag: [
+    '@analyst-journey',
+    '@journey-first-domain-assessment',
+    '@journey-acquisition-uncertainty-review',
+  ],
+}, async ({ page }) => {
   await page.goto('/dashboard');
   const consoleNavigation = page.getByRole('navigation', { name: 'Console' });
   const start = consoleNavigation.getByRole('group', { name: 'Start' });

@@ -19,6 +19,7 @@ import {
 import {
   MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES,
   assertSchemaLifecycleFixtureDiscriminator,
+  buildSchemaLifecycleCompatibilityMatrix,
   discoverSchemaLifecycleSourceBindings,
   validateCasePortabilitySourceSnapshot,
   validateWorkspacePortabilitySourceSnapshot,
@@ -98,6 +99,58 @@ async function workspacePortabilitySources() {
 }
 
 describe('schema lifecycle repository closure', () => {
+  test('generates the complete routine compatibility matrix from canonical metadata', () => {
+    const matrix = buildSchemaLifecycleCompatibilityMatrix(SCHEMA_LIFECYCLE_REGISTRY);
+    assert.equal(matrix.familyCount, SCHEMA_LIFECYCLE_REGISTRY.length);
+    assert.equal(matrix.compatibilityCount, SCHEMA_LIFECYCLE_REGISTRY.reduce((sum, family) => sum + family.compatibility.length, 0));
+    assert.equal(matrix.contractCount, SCHEMA_LIFECYCLE_REGISTRY.reduce((sum, family) => sum + family.contracts.length, 0));
+    assert.equal(matrix.fixtureCount, SCHEMA_LIFECYCLE_REGISTRY.reduce((sum, family) => sum + family.fixtures.length, 0));
+    assert.ok(matrix.families.every((family) => (
+      family.fixtureEvidence.every((fixture) => fixture.bytes > 0 && /^[a-f0-9]{64}$/u.test(fixture.sha256))
+      && family.compatibility.every((entry) => (
+        entry.supportedVersions.at(-1) === entry.currentVersion
+        && ['reader_writer', 'reader_only', 'output_only', 'retired'].includes(entry.disposition)
+        && entry.migration.length > 0
+        && entry.futureVersionBehaviour.length > 0
+      ))
+      && family.closure.shapes > 0
+      && family.closure.boundProfiles > 0
+      && family.closure.hooks > 0
+      && family.closure.serialisationProfiles > 0
+      && family.closure.privacyProfiles > 0
+      && family.closure.consumerEdges > 0
+    )));
+
+    const declaredMigration = matrix.families.flatMap((family) => family.compatibility.map((compatibility) => ({
+      familyId: family.id,
+      compatibility,
+    }))).find(({ compatibility }) => compatibility.migration === 'normalize_to_current' && compatibility.expectedOutputs.length > 0);
+    assert.ok(declaredMigration);
+    const missingOutput = cloneRegistry();
+    const family = missingOutput.find((candidate) => candidate.id === declaredMigration.familyId);
+    assert.ok(family);
+    const fixture = (family.fixtures as Array<Record<string, unknown>>).find((candidate) => (
+      candidate.id === declaredMigration.compatibility.expectedOutputs[0]?.inputFixtureId
+    ));
+    assert.ok(fixture);
+    fixture.expectedOutputFixtureId = null;
+    assert.throws(
+      () => buildSchemaLifecycleCompatibilityMatrix(missingOutput as unknown as SchemaLifecycleRegistry),
+      /migration output is missing/u,
+    );
+
+    const overbound = cloneRegistry();
+    const firstFamily = overbound[0];
+    assert.ok(firstFamily);
+    const firstContract = (firstFamily.contracts as Array<Record<string, unknown>>)[0];
+    assert.ok(firstContract);
+    firstFamily.contracts = Array.from({ length: 513 }, () => structuredClone(firstContract));
+    assert.throws(
+      () => buildSchemaLifecycleCompatibilityMatrix(overbound as unknown as SchemaLifecycleRegistry),
+      /aggregate bounds/u,
+    );
+  });
+
   test('binds fixture content to its declared variant discriminator', () => {
     const detailed = '{"schema":"whoisleuth.test.report","version":3,"mode":"detailed"}\n';
     assert.doesNotThrow(() => assertSchemaLifecycleFixtureDiscriminator(

@@ -8,6 +8,7 @@ import {
 
 function fixture() {
   return {
+    stats: { duration: 1_500 },
     suites: [{
       title: 'Console',
       file: '/checkout/e2e/console.spec.ts',
@@ -46,6 +47,9 @@ describe('Playwright result summary', () => {
       skipped: summary.skipped,
       retried: summary.retried,
       extraAttempts: summary.extraAttempts,
+      observedDurationMs: summary.observedDurationMs,
+      attemptDurationMs: summary.attemptDurationMs,
+      laneDurations: summary.laneDurations,
     }, {
       total: 3,
       passed: 1,
@@ -54,6 +58,9 @@ describe('Playwright result summary', () => {
       skipped: 0,
       retried: 1,
       extraAttempts: 1,
+      observedDurationMs: 1_500,
+      attemptDurationMs: 1_340,
+      laneDurations: { setup: 0, browser: 1_340 },
     });
     assert.equal(summary.slowest[0]?.file, 'e2e/console.spec.ts');
     assert.deepEqual(summary.failureAttachments, ['screenshot', 'trace']);
@@ -61,11 +68,18 @@ describe('Playwright result summary', () => {
   });
 
   test('renders a safe concise GitHub summary', () => {
-    const report = renderPlaywrightResultSummary(summarizePlaywrightResults(fixture(), 'shard | one'));
+    const report = renderPlaywrightResultSummary(summarizePlaywrightResults(fixture(), 'shard | one', {
+      shard: '1/2',
+      plannedWeightMs: 24_000,
+      projectedImbalanceMs: 120,
+    }));
     assert.match(report, /Playwright result summary: shard &#124; one/u);
     assert.match(report, /\| Flaky \| 1 \|/u);
     assert.match(report, /Retried tests/u);
     assert.match(report, /Failure attachment types: screenshot, trace/u);
+    assert.match(report, /Observed run duration: 1500 ms/u);
+    assert.match(report, /Lane durations: setup 0 ms; browser 1340 ms/u);
+    assert.match(report, /Balanced shard 1\/2 planned weight: 24000 ms; projected complete-plan imbalance: 120 ms/u);
     assert.doesNotMatch(report, /\/private\//u);
   });
 

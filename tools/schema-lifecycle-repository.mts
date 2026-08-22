@@ -43,6 +43,7 @@ import * as externalFindingsImportModule from '../packages/interchange/external-
 import * as analystInterchangeModule from '../packages/contracts/analyst-interchange.mts';
 import * as investigationProjectionsContractModule from '../packages/contracts/investigation-projections.mts';
 import * as monitoringPortabilityModule from '../packages/contracts/monitoring-portability.mts';
+import * as privacyDataFlowCatalogueModule from '../packages/contracts/privacy-data-flow-catalogue.mts';
 import * as relationshipPortabilityModule from '../packages/contracts/relationship-portability.mts';
 import * as tabPortabilityModule from '../packages/contracts/tab-portability.mts';
 import * as brandProtectionOperationsReportModule from '../packages/interchange/brand-protection-operations-report.mts';
@@ -115,6 +116,7 @@ export const MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES = 64 * 1024 * 1024;
 const MAX_SCHEMA_LIFECYCLE_HOOK_MODULES = 128;
 const MAX_SCHEMA_LIFECYCLE_STATIC_STRING_LENGTH = 256;
 const MAX_SCHEMA_LIFECYCLE_STATIC_STRING_PARTS = 32;
+const MAX_SCHEMA_LIFECYCLE_MATRIX_BYTES = 512 * 1024;
 const LIFECYCLE_CODE_EXTENSIONS = new Set([
   '.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx',
 ]);
@@ -159,6 +161,7 @@ export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
   'packages/contracts/analyst-interchange.mts': analystInterchangeModule,
   'packages/contracts/investigation-projections.mts': investigationProjectionsContractModule,
   'packages/contracts/monitoring-portability.mts': monitoringPortabilityModule,
+  'packages/contracts/privacy-data-flow-catalogue.mts': privacyDataFlowCatalogueModule,
   'packages/contracts/relationship-portability.mts': relationshipPortabilityModule,
   'packages/contracts/tab-portability.mts': tabPortabilityModule,
   'packages/interchange/brand-protection-operations-report.mts': brandProtectionOperationsReportModule,
@@ -1020,10 +1023,145 @@ async function validateWorkspacePortabilitySourceClosure(discovery: SchemaSource
   validateWorkspacePortabilitySourceSnapshot(sources);
 }
 
+/**
+ * Projects the routine compatibility matrix directly from the canonical
+ * lifecycle registry. The repository validator still performs the byte and
+ * digest reads below; this projection proves that every declared version,
+ * migration, hook, bound, shape, serializer, privacy profile, consumer and
+ * exact-output fixture link closes over that same metadata.
+ */
+export function buildSchemaLifecycleCompatibilityMatrix(registry: SchemaLifecycleRegistry) {
+  if (registry.length < 1 || registry.length > 32) {
+    throw new TypeError('Schema lifecycle compatibility matrix requires a bounded registry.');
+  }
+  const declaredContracts = registry.reduce((sum, family) => sum + family.contracts.length, 0);
+  const declaredFixtures = registry.reduce((sum, family) => sum + family.fixtures.length, 0);
+  const declaredCompatibility = registry.reduce((sum, family) => sum + family.compatibility.length, 0);
+  if (declaredContracts > 512 || declaredFixtures > 1_024 || declaredCompatibility > 512) {
+    throw new TypeError('Schema lifecycle compatibility matrix exceeds its aggregate bounds.');
+  }
+  let contracts = 0;
+  let fixtures = 0;
+  const families = registry.map((family) => {
+    if (!('metadata' in family)) {
+      throw new TypeError(`Schema lifecycle family ${family.id} must declare generated-coverage metadata.`);
+    }
+    const contractByCompatibility = new Map<string, typeof family.contracts>();
+    for (const compatibility of family.compatibility) {
+      const matching = family.contracts.filter((contract) => contract.compatibilityId === compatibility.id);
+      contractByCompatibility.set(compatibility.id, matching);
+    }
+    const compatibility = family.compatibility.map((descriptor) => {
+      const matching = contractByCompatibility.get(descriptor.id) ?? [];
+      const versions = [...new Set(matching.map((contract) => contract.version))].sort((left, right) => left - right);
+      if (versions.length !== descriptor.supportedVersions.length
+        || versions.some((version, index) => version !== descriptor.supportedVersions[index])) {
+        throw new TypeError(`Generated compatibility versions do not close for ${family.id}#${descriptor.id}.`);
+      }
+      const current = matching.find((contract) => contract.version === descriptor.currentVersion);
+      if (!current) throw new TypeError(`Generated compatibility current version is missing for ${family.id}#${descriptor.id}.`);
+      const readable = matching.some((contract) => contract.readable);
+      const emitted = matching.some((contract) => contract.emitted);
+      const disposition = readable && emitted
+        ? 'reader_writer'
+        : readable ? 'reader_only' : emitted ? 'output_only' : 'retired';
+      const fixtureIds = new Set(matching.flatMap((contract) => contract.fixtureIds));
+      const compatibilityFixtures = family.fixtures.filter((fixture) => fixtureIds.has(fixture.id));
+      if (compatibilityFixtures.length !== fixtureIds.size) {
+        throw new TypeError(`Generated compatibility fixtures do not close for ${family.id}#${descriptor.id}.`);
+      }
+      const migrationFixtures = compatibilityFixtures.filter((fixture) => fixture.role === 'input');
+      const expectedOutputs = migrationFixtures.map((fixture) => {
+        if (descriptor.migration === 'normalize_to_current' && !fixture.expectedOutputFixtureId) {
+          throw new TypeError(`Generated compatibility migration output is missing for ${family.id}#${fixture.id}.`);
+        }
+        if (!fixture.expectedOutputFixtureId) return null;
+        const target = family.fixtures.find((candidate) => candidate.id === fixture.expectedOutputFixtureId);
+        const targetContract = target && family.contracts.find((contract) => (
+          contract.fixtureIds.includes(target.id)
+          && contract.lifecycle === 'current'
+          && contract.emitted
+        ));
+        if (!target || !targetContract || target.expectation === 'normalises_to_current_output') {
+          throw new TypeError(`Generated compatibility migration output is invalid for ${family.id}#${fixture.id}.`);
+        }
+        return Object.freeze({ inputFixtureId: fixture.id, expectedOutputFixtureId: target.id });
+      }).filter((value): value is NonNullable<typeof value> => value !== null);
+      return Object.freeze({
+        id: descriptor.id,
+        schemaIdentity: descriptor.schema,
+        supportedVersions: Object.freeze([...descriptor.supportedVersions]),
+        currentVersion: descriptor.currentVersion,
+        disposition,
+        migration: descriptor.migration,
+        futureVersionBehaviour: descriptor.futureVersionBehavior,
+        writeSemantics: descriptor.writeSemantics,
+        contractCount: matching.length,
+        fixtureCount: compatibilityFixtures.length,
+        expectedOutputs: Object.freeze(expectedOutputs),
+      });
+    });
+    contracts += family.contracts.length;
+    fixtures += family.fixtures.length;
+    if (contracts > 512 || fixtures > 1_024) throw new TypeError('Schema lifecycle compatibility matrix exceeds its aggregate bounds.');
+    const fixtureEvidence = family.fixtures.map((fixture) => Object.freeze({
+      id: fixture.id,
+      path: fixture.path,
+      bytes: fixture.bytes,
+      sha256: fixture.sha256,
+      contentDigestSha256: fixture.contentDigestSha256,
+      expectedOutputFixtureId: fixture.expectedOutputFixtureId,
+    }));
+    const metadata = family.metadata;
+    const shapeReferences = new Set(metadata.consumerEdges.flatMap((edge) => edge.shapeIds));
+    const boundReferences = new Set(metadata.consumerEdges.flatMap((edge) => edge.boundProfileIds));
+    const hookReferences = new Set(metadata.consumerEdges.flatMap((edge) => edge.hookIds));
+    const serialisationReferences = new Set(metadata.consumerEdges.map((edge) => edge.serialisationProfileId).filter(Boolean));
+    const privacyReferences = new Set(metadata.consumerEdges.map((edge) => edge.privacyProfileId));
+    const missingClosure = [
+      ...shapeReferences].filter((id) => !metadata.shapes.some((item) => item.id === id)).length
+      + [...boundReferences].filter((id) => !metadata.boundProfiles.some((item) => item.id === id)).length
+      + [...hookReferences].filter((id) => !metadata.hooks.some((item) => item.id === id)).length
+      + [...serialisationReferences].filter((id) => !metadata.serialisationProfiles.some((item) => item.id === id)).length
+      + [...privacyReferences].filter((id) => !metadata.privacyProfiles.some((item) => item.id === id)).length;
+    if (missingClosure) throw new TypeError(`Generated compatibility metadata does not close for ${family.id}.`);
+    return Object.freeze({
+      id: family.id,
+      owner: family.owner,
+      privacy: family.privacy,
+      metadataVersion: metadata.metadataVersion,
+      compatibility: Object.freeze(compatibility),
+      fixtureEvidence: Object.freeze(fixtureEvidence),
+      closure: Object.freeze({
+        shapes: metadata.shapes.length,
+        boundProfiles: metadata.boundProfiles.length,
+        hooks: metadata.hooks.length,
+        serialisationProfiles: metadata.serialisationProfiles.length,
+        privacyProfiles: metadata.privacyProfiles.length,
+        consumerEdges: metadata.consumerEdges.length,
+        consumerRelationships: 'consumerRelationships' in metadata ? metadata.consumerRelationships.length : 0,
+      }),
+    });
+  });
+  const matrix = Object.freeze({
+    version: 1 as const,
+    familyCount: families.length,
+    compatibilityCount: families.reduce((sum, family) => sum + family.compatibility.length, 0),
+    contractCount: contracts,
+    fixtureCount: fixtures,
+    families: Object.freeze(families),
+  });
+  if (Buffer.byteLength(JSON.stringify(matrix), 'utf8') > MAX_SCHEMA_LIFECYCLE_MATRIX_BYTES) {
+    throw new TypeError('Schema lifecycle compatibility matrix exceeds its serialised byte bound.');
+  }
+  return matrix;
+}
+
 export async function validateSchemaLifecycleRepository(
   registry: SchemaLifecycleRegistry,
   discovery: SchemaSourceDiscovery,
 ): Promise<void> {
+  buildSchemaLifecycleCompatibilityMatrix(registry);
   await validateCasePortabilitySourceClosure(discovery);
   await validateWorkspacePortabilitySourceClosure(discovery);
   const bindings = await repositoryLifecycleBindings(discovery);

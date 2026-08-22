@@ -351,6 +351,7 @@ test('new-domain triage leads from a deep lookup through comparison and a review
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page, 'New-domain triage', 'Portal.Test.');
+  await expect(currentAction(page).getByRole('button', { name: 'Review requests' })).toBeVisible();
 
   await runLookupStep(page, 'Collect domain evidence', 'portal.test');
   await expect(currentAction(page)).toContainText('Compare focused peers');
@@ -369,6 +370,7 @@ test('infrastructure pivot keeps the starting domain through lookup, peer compar
   await page.setViewportSize({ width: 393, height: 852 });
   await installLookupFixture(page);
   await startRecipe(page, 'Infrastructure pivot', 'Portal.Test.');
+  await expect(currentAction(page).getByRole('button', { name: 'Review requests' })).toBeVisible();
 
   await runLookupStep(page, 'Collect starting evidence', 'portal.test');
   await runBulkStep(page, 'Compare relationships', ['portal.test', 'related.test']);

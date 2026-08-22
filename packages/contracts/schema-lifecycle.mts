@@ -6,7 +6,7 @@ import {
 
 type SchemaLifecycleRole = 'input' | 'document';
 type SchemaLifecycleState = 'current' | 'legacy' | 'retired';
-type SchemaLifecyclePrivacy = 'analyst_authored_sensitive';
+type SchemaLifecyclePrivacy = 'analyst_authored_sensitive' | 'metadata_only';
 type SchemaLifecycleFixtureRole = 'input' | 'historical' | 'current';
 type SchemaLifecycleFixtureExpectation = 'accepted_exact' | 'historical_output_exact' | 'normalises_to_current_output';
 
@@ -2062,9 +2062,11 @@ export function defineSchemaLifecycleFamily(
   const family = Object.freeze({
     id: boundedId(source.id, 'Schema lifecycle family id'),
     owner: boundedPath(source.owner, 'Schema lifecycle family owner'),
-    privacy: source.privacy === 'analyst_authored_sensitive'
-      ? source.privacy
-      : (() => { throw new TypeError('Schema lifecycle family privacy is invalid.'); })(),
+    privacy: oneOf(
+      source.privacy,
+      ['analyst_authored_sensitive', 'metadata_only'] as const,
+      'Schema lifecycle family privacy',
+    ),
     compatibility,
     contracts,
     fixtures,

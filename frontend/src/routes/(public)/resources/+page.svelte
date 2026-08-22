@@ -1,5 +1,6 @@
 <script lang="ts">
   import OfflineInvestigationScenarios from '$lib/components/OfflineInvestigationScenarios.svelte';
+  import PrivacyDataFlowSummary from '$lib/components/PrivacyDataFlowSummary.svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicGoalPaths from '$lib/components/PublicGoalPaths.svelte';
   import PublicResourceCards from '$lib/components/PublicResourceCards.svelte';
@@ -62,6 +63,7 @@
   <a href="#practice">Practice</a>
   <a href="#tools">Tools</a>
   <a href="#reference">Reference</a>
+  <a href="#privacy-boundaries">Privacy boundaries</a>
   <a href="#results">Read results</a>
   <a href="#glossary">Glossary</a>
   <a href="#faq">FAQ</a>
@@ -123,6 +125,10 @@
       </article>
     {/each}
   </div>
+</section>
+
+<section id="privacy-boundaries" class="resource-section">
+  <PrivacyDataFlowSummary headingId="resources-privacy-catalogue" />
 </section>
 
 <section id="results" class="resource-section" aria-labelledby="results-title">

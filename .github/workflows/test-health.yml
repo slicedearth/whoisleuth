@@ -33,6 +33,8 @@ jobs:
           WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'
           WHOISLEUTH_FAST_CHECK_SEED: ${{ github.run_number }}
         run: npm run test:properties
+      - name: Verify retained timing contract without rewriting it
+        run: npm run verification:timing:check
       - name: Profile the complete unit suite
         run: |
           set -o pipefail

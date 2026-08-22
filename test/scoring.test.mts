@@ -450,6 +450,20 @@ describe('explainRiskScore / computeRiskScore', () => {
     ]);
     assert.equal(explained.evidenceQuality.state, 'limited');
   });
+
+  test('missing source coverage remains unknown and never contributes score', () => {
+    const withoutCoverage = riskExplanation({
+      availability: 'registered',
+      scanDepth: 'deep',
+    });
+    const unknownDepth = riskExplanation({
+      availability: 'registered',
+      scanDepth: 'unknown',
+    });
+    assert.equal(withoutCoverage.evidenceQuality.state, 'unknown');
+    assert.match(withoutCoverage.evidenceQuality.limitations.join(' '), /Source-level coverage was not supplied/u);
+    assert.equal(withoutCoverage.score, unknownDepth.score);
+  });
 });
 
 describe('risk score sensitivity', () => {

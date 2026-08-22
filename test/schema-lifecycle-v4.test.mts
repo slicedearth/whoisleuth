@@ -511,6 +511,8 @@ describe('schema lifecycle metadata version 4', () => {
       ['retired readable', (value) => { value.contracts[1].readable = true; }],
       ['retired emission', (value) => { value.contracts[1].emitted = true; }],
       ['retired migration', (value) => { value.contracts[1].migrationTarget = { schema: REPORT_SCHEMA, version: 3 }; }],
+      ['retired future-version handling', (value) => { value.contracts[1].futureVersionBehaviour = 'reject'; }],
+      ['compatibility future-version mismatch', (value) => { value.contracts[0].futureVersionBehaviour = 'preserve_without_write'; }],
       ['retired expectation', (value) => { value.fixtures[1].expectation = 'accepted_exact'; }],
       ['fixture shape', (value) => { value.fixtures[1].shapeId = 'test.variant-report.v3-summary'; }],
       ['missing shape', (value) => { delete value.fixtures[1].shapeId; }],

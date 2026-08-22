@@ -13,6 +13,7 @@ import { INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contract
 import { INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY } from '../packages/contracts/investigation-projections.mts';
 import { MONITORING_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/monitoring-portability.mts';
 import { OFFLINE_COMPARISON_LIFECYCLE_FAMILY } from '../packages/contracts/offline-comparison.mts';
+import { PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY } from '../packages/contracts/privacy-data-flow-catalogue.mts';
 import { RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/relationship-portability.mts';
 import { RISK_CALIBRATION_SCHEMA_LIFECYCLE } from '../packages/contracts/risk-calibration.mts';
 import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/tab-portability.mts';
@@ -170,6 +171,7 @@ describe('schema lifecycle registry', () => {
       structuredClone(INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY),
       structuredClone(RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY),
       structuredClone(ANALYST_INTERCHANGE_LIFECYCLE_FAMILY),
+      structuredClone(PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY),
     ];
     const registry = defineSchemaLifecycleRegistry(source as unknown as readonly SchemaLifecycleFamily[]);
     assert.deepEqual(registry, SCHEMA_LIFECYCLE_REGISTRY);
@@ -194,10 +196,11 @@ describe('schema lifecycle registry', () => {
     assert.equal(registry[13]?.id, 'investigation-projections');
     assert.equal(registry[14]?.id, 'relationship-portability');
     assert.equal(registry[15]?.id, 'analyst-interchange');
-    assert.equal(registry.length, 16);
-    assert.equal(registry.flatMap((family) => family.contracts).length, 182);
-    assert.equal(registry.flatMap((family) => family.compatibility).length, 83);
-    assert.equal(registry.flatMap((family) => family.fixtures).length, 232);
+    assert.equal(registry[16]?.id, 'privacy-data-flow-catalogue');
+    assert.equal(registry.length, 17);
+    assert.equal(registry.flatMap((family) => family.contracts).length, 183);
+    assert.equal(registry.flatMap((family) => family.compatibility).length, 84);
+    assert.equal(registry.flatMap((family) => family.fixtures).length, 233);
   });
 
   it('rejects malformed registry arrays without invoking entries', () => {

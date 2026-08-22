@@ -24,9 +24,27 @@ describe('test duration report', () => {
     ], 2);
 
     assert.match(report, /Measured 3 tests across 2 files; 0 failed\./u);
+    assert.match(report, /Accepted totals: 3 passed, 0 failed, 0 cancelled, 0 skipped, 0 todo\./u);
+    assert.match(report, /Unit lane duration: 37\.0 ms\./u);
     assert.ok(report.indexOf('test/first.test.mts: 25.0 ms') < report.indexOf('test/second.test.mts: 12.0 ms'));
     assert.ok(report.indexOf('slow case: 25.0 ms') < report.indexOf('medium case: 10.0 ms'));
     assert.doesNotMatch(report, /quick case/u);
+  });
+
+  it('uses accepted runner totals for cancellation, skip, todo, and lane duration', () => {
+    const report = createTestDurationReport([
+      record('passed case', 'test/pass.test.mts', 5),
+      record('failed case', 'test/fail.test.mts', 7, true),
+    ], 20, {
+      passed: 1,
+      failed: 1,
+      cancelled: 2,
+      skipped: 3,
+      todo: 4,
+      durationMs: 123,
+    });
+    assert.match(report, /Accepted totals: 1 passed, 1 failed, 2 cancelled, 3 skipped, 4 todo\./u);
+    assert.match(report, /Unit lane duration: 123 ms\./u);
   });
 
   it('reports failures and ignores invalid durations', () => {
