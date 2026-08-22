@@ -57,7 +57,8 @@ function watchlistMap(raw: unknown): Record<string, unknown> | null {
 
 export function watchlistStoreVersion(raw: unknown): number | null {
   const value = plainRecord(raw);
-  if (!value || !isEnvelope(value)) return value ? 1 : null;
+  if (!value) return null;
+  if (!isEnvelope(value)) return WATCHLIST_SCHEMA_VERSION;
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0 ? value.version : null;
 }
 
@@ -73,15 +74,17 @@ export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
   assertWorkspaceInputGraph(raw, 'Watchlist store');
   const root = plainRecord(raw);
   if (root?.schema === WATCHLIST_SCHEMA) assertWorkspaceDeclaredVersion(raw, 'Watchlist store');
+  if (root?.schema === WATCHLIST_SCHEMA && watchlistStoreVersion(root) !== WATCHLIST_SCHEMA_VERSION) {
+    throw new Error(`Watchlist schema ${String(root.version)} is unsupported; no data was changed.`);
+  }
   const source = watchlistMap(raw);
-  const legacyTimestamps = watchlistStoreVersion(raw) === 1;
   const watchlists: WatchlistCollection = {};
   if (!source) return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
   for (const [rawName, rawEntry] of Object.entries(source).slice(0, MAX_WATCHLIST_INPUTS)) {
     const name = normalizeWatchlistName(rawName);
     const entry = plainRecord(rawEntry);
     if (!name || !entry || !Array.isArray(entry.results) || entry.results.length > MAX_WATCHLIST_DOMAINS) continue;
-    defineEntry(watchlists, name, normalizeWatchlistEntry(entry, { legacyTimestamps }));
+    defineEntry(watchlists, name, normalizeWatchlistEntry(entry));
     if (Object.keys(watchlists).length >= MAX_WATCHLISTS) break;
   }
   return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };

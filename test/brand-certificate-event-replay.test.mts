@@ -91,6 +91,16 @@ describe('retained certificate expectation replay', () => {
     assert.match(replay.limitations.join(' '), /not proof/iu);
   });
 
+  test('treats complete names outside the reviewed SAN patterns as review material', () => {
+    const replay = buildBrandCertificateEventReplay(profile('Fixture issuer', ['official.example']), [
+      eventCase('official.example'),
+      eventCase('extra.example'),
+    ]);
+    const event = requiredValue(replay.domains[0]?.events[0]);
+    assert.equal(event.namesComplete, true);
+    assert.equal(event.clauses.find((item) => item.id === 'san_patterns')?.state, 'review');
+  });
+
   test('ignores unrelated and malformed certificate pins and keeps missing evidence explicit', () => {
     const unrelated = eventCase('unrelated.example');
     const replay = buildBrandCertificateEventReplay(profile(), [unrelated]);

@@ -22,15 +22,14 @@ function sourceReportLookup(state: 'success' | 'error', durationMs: number) {
   };
 }
 
-test('the Dashboard and console navigation expose the registry-support reference', async ({ page }) => {
+test('the canonical console reference navigation exposes registry support', async ({ page }) => {
   await page.goto('/dashboard');
 
-  const dashboardLink = page.getByRole('link', { name: /Check domain-ending support/ });
-  await expect(dashboardLink).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: 'Registry support' })).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: 'Registry support' })).toHaveAttribute('href', '/registry-support');
+  const referenceLink = page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: 'Registry support' });
+  await expect(referenceLink).toHaveAttribute('href', '/registry-support');
 
-  await dashboardLink.click();
+  await referenceLink.click();
   await expect(page).toHaveURL('/registry-support');
   await expect(page.getByRole('heading', { name: 'Registry support', exact: true })).toBeVisible();
 });

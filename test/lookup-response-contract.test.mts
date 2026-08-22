@@ -246,6 +246,14 @@ describe('Lookup HTTP response contract', () => {
     const view = createLookupViewModel(parsed.value);
     assert.equal(view.pagePublicationMetadata, publicationMetadata);
     assert.equal(view.httpDeliveryMetadata, deliveryMetadata);
+    assert.equal(parseLookupHttpResponse(response({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        pageTitle: 'Account\u009b\u202e centre',
+      },
+    })).ok, false);
 
     for (const child of [
       { ...pagePublicationMetadataFixture(), version: 2 },
@@ -1039,8 +1047,9 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('sanitizes and bounds server error text before display', () => {
-    const message = lookupHttpErrorMessage({ error: `upstream\n${'x'.repeat(400)}` }, 502);
+    const message = lookupHttpErrorMessage({ error: `upstream\n\u009b\u202e${'x'.repeat(400)}` }, 502);
     assert.equal(message.includes('\n'), false);
+    assert.doesNotMatch(message, /[\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
     assert.equal(message.length, MAX_LOOKUP_RESPONSE_ERROR_LENGTH);
     assert.equal(lookupHttpErrorMessage({}, 503), 'Lookup failed (503)');
   });

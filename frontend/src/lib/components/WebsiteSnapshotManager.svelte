@@ -186,7 +186,7 @@
       <label class="btn file-btn" class:disabled={operation !== 'ready'}>Import<input type="file" accept="application/json,.json" onchange={importFile} disabled={operation !== 'ready'}></label>
     </div>
   </header>
-  <p>Save only after reviewing a completed Deep Lookup. Snapshots retain curated technology identifiers, posture states, identity digests, source health, completeness, and timestamps. A change is a review lead, not evidence of compromise, ownership, intent, or maliciousness.</p>
+  <p>Save after reviewing a completed Deep Lookup. Snapshots retain curated technology identifiers, posture states, identity digests, source health, completeness and timestamps. Differences are review cues.</p>
   {#if domainSnapshots.length}
     <div class="comparison-controls">
       <label class="field">Earlier snapshot<select bind:value={beforeId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
@@ -229,7 +229,7 @@
       </div>
       <span>{certificateSnapshots.length} observation{certificateSnapshots.length === 1 ? '' : 's'} · {certificateDomains} domain{certificateDomains === 1 ? '' : 's'}</span>
     </header>
-    <p>Built only from leaf certificates in analyst-saved Deep Lookups on this browser. Records are point-in-time observations, not proof of current deployment, ownership, safety, or compromise.</p>
+    <p>Built from leaf certificates in analyst-saved Deep Lookups on this browser. Records are point-in-time observations.</p>
     {#if certificateInventory.length}
       <ul>
         {#each certificateInventory as item}
@@ -250,7 +250,7 @@
                   <dt>Observation</dt><dd>{certificate.complete ? 'Complete TLS profile' : 'Partial TLS profile'}{certificate.truncated ? ' · Truncated' : ''}</dd>
                 </dl>
                 {#if sharedCertificateDomains(certificate.fingerprintSha256) > 1}
-                  <p class="callout info">The same exact leaf fingerprint appears across {sharedCertificateDomains(certificate.fingerprintSha256)} saved domains. Shared certificates are an investigation pivot, not proof of common control.</p>
+                  <p class="callout info">The same exact leaf fingerprint appears across {sharedCertificateDomains(certificate.fingerprintSha256)} saved domains. Verify shared certificates independently.</p>
                 {/if}
               </details>
             </li>

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { CASE_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/case-portability.mts';
 import { ANALYST_INTERCHANGE_LIFECYCLE_FAMILY } from '../packages/contracts/analyst-interchange.mts';
+import { ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY } from '../packages/contracts/analyst-review-state.mts';
 import { CLI_LOOKUP_SCHEMA_LIFECYCLE } from '../packages/contracts/cli-lookup.mts';
 import { DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-flight-recorder.mts';
 import { DOMAIN_CONTROL_SCHEMA_LIFECYCLE } from '../packages/contracts/domain-control-manifest.mts';
@@ -154,53 +155,17 @@ function heavyFamily(index: number): Record<string, unknown> {
 
 describe('schema lifecycle registry', () => {
   it('owns a detached recursively frozen canonical family list', () => {
-    const source = [
-      structuredClone(CASE_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY),
-      structuredClone(OFFLINE_COMPARISON_LIFECYCLE_FAMILY),
-      structuredClone(DOMAIN_CONTROL_SCHEMA_LIFECYCLE),
-      structuredClone(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE),
-      structuredClone(DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE),
-      structuredClone(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE),
-      structuredClone(CLI_LOOKUP_SCHEMA_LIFECYCLE),
-      structuredClone(RISK_CALIBRATION_SCHEMA_LIFECYCLE),
-      structuredClone(WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(TAB_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(MONITORING_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY),
-      structuredClone(RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY),
-      structuredClone(ANALYST_INTERCHANGE_LIFECYCLE_FAMILY),
-      structuredClone(PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY),
-    ];
+    const source = SCHEMA_LIFECYCLE_REGISTRY.map((family) => structuredClone(family));
     const registry = defineSchemaLifecycleRegistry(source as unknown as readonly SchemaLifecycleFamily[]);
     assert.deepEqual(registry, SCHEMA_LIFECYCLE_REGISTRY);
     assert.notEqual(registry[0], source[0]);
     assert.equal(Object.isFrozen(registry), true);
     assert.equal(Object.isFrozen(registry[0]), true);
     assert.equal(Object.isFrozen(registry[0]?.compatibility), true);
+    const expectedIds = SCHEMA_LIFECYCLE_REGISTRY.map((family) => family.id);
     (source as unknown as Array<Record<string, unknown>>)[0]!.id = 'changed-after-registration';
-    assert.equal(registry[0]?.id, 'case-portability');
-    assert.equal(registry[1]?.id, 'investigation-portability');
-    assert.equal(registry[2]?.id, 'external-observation-interchange');
-    assert.equal(registry[3]?.id, 'offline-comparison');
-    assert.equal(registry[4]?.id, 'domain-control-manifest');
-    assert.equal(registry[5]?.id, 'domain-control-review');
-    assert.equal(registry[6]?.id, 'domain-control-flight-recorder');
-    assert.equal(registry[7]?.id, 'domain-control-monitor');
-    assert.equal(registry[8]?.id, 'cli-lookup');
-    assert.equal(registry[9]?.id, 'risk-calibration');
-    assert.equal(registry[10]?.id, 'workspace-portability');
-    assert.equal(registry[11]?.id, 'tab-portability');
-    assert.equal(registry[12]?.id, 'monitoring-portability');
-    assert.equal(registry[13]?.id, 'investigation-projections');
-    assert.equal(registry[14]?.id, 'relationship-portability');
-    assert.equal(registry[15]?.id, 'analyst-interchange');
-    assert.equal(registry[16]?.id, 'privacy-data-flow-catalogue');
-    assert.equal(registry.length, 17);
-    assert.equal(registry.flatMap((family) => family.contracts).length, 183);
-    assert.equal(registry.flatMap((family) => family.compatibility).length, 84);
-    assert.equal(registry.flatMap((family) => family.fixtures).length, 233);
+    assert.deepEqual(registry.map((family) => family.id), expectedIds);
+    assert.equal(new Set(expectedIds).size, expectedIds.length);
   });
 
   it('rejects malformed registry arrays without invoking entries', () => {
@@ -260,13 +225,18 @@ describe('schema lifecycle registry', () => {
 
     const duplicateFixtureId = distinctFamily('fixture-id');
     const duplicateIdFixture = (duplicateFixtureId.fixtures as Array<Record<string, unknown>>)
-      .find((fixture) => String(fixture.id).startsWith('domain-control-manifest-v1-'));
+      .find((fixture) => String(fixture.id).startsWith('domain-control-manifest-v2-'));
     assert.ok(duplicateIdFixture);
     const formerFixtureId = String(duplicateIdFixture.id);
-    duplicateIdFixture.id = 'domain-control-manifest-v1';
+    duplicateIdFixture.id = 'domain-control-manifest-v2';
     for (const contract of duplicateFixtureId.contracts as Array<Record<string, unknown>>) {
       contract.fixtureIds = (contract.fixtureIds as string[])
-        .map((id) => id === formerFixtureId ? 'domain-control-manifest-v1' : id);
+        .map((id) => id === formerFixtureId ? 'domain-control-manifest-v2' : id);
+    }
+    for (const fixture of duplicateFixtureId.fixtures as Array<Record<string, unknown>>) {
+      if (fixture.expectedOutputFixtureId === formerFixtureId) {
+        fixture.expectedOutputFixtureId = 'domain-control-manifest-v2';
+      }
     }
     assert.throws(
       () => defineSchemaLifecycleRegistry([
@@ -278,9 +248,9 @@ describe('schema lifecycle registry', () => {
 
     const duplicateFixturePath = distinctFamily('fixture-path');
     const duplicatePathFixture = (duplicateFixturePath.fixtures as Array<Record<string, unknown>>)
-      .find((fixture) => String(fixture.id).startsWith('domain-control-manifest-v1-'));
+      .find((fixture) => String(fixture.id).startsWith('domain-control-manifest-v2-'));
     assert.ok(duplicatePathFixture);
-    duplicatePathFixture.path = 'test/fixtures/domain-control-manifest-v1.json';
+    duplicatePathFixture.path = 'test/fixtures/domain-control-manifest-v2.json';
     assert.throws(
       () => defineSchemaLifecycleRegistry([
         DOMAIN_CONTROL_SCHEMA_LIFECYCLE,

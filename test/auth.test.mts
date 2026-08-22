@@ -14,7 +14,15 @@ import {
   parseCookies,
   sessionFingerprintFromCookieHeader,
 } from '../lib/auth.mts';
+import { LOCAL_API_PROXY } from '../frontend/vite.config.ts';
 import { requiredValue } from './value-assertions.mts';
+
+test('the development API proxy preserves the browser-facing host for origin checks', () => {
+  assert.deepEqual(LOCAL_API_PROXY, {
+    target: 'http://localhost:3000',
+    changeOrigin: false,
+  });
+});
 
 function withSessionTestSecrets(run: () => void): void {
   const previousPassword = process.env.SITE_PASSWORD;

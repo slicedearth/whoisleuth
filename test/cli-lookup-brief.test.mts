@@ -30,6 +30,15 @@ describe('CLI Lookup brief', () => {
     assert.match(formatCliLookupBrief(brief), /Recommended manual actions/u);
   });
 
+  test('sanitises retained page identity before building and presenting a brief', () => {
+    const source = lookup();
+    source.availability.pageTitle = 'Account\u009b\u202e centre\u00ad';
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    const pageTitle = brief.facts.find((item) => item.label === 'Page title');
+    assert.equal(pageTitle?.value, 'Account centre');
+    assert.doesNotMatch(formatCliLookupBrief(brief), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  });
+
   test('routes the offline command without collecting', async () => {
     let stdout = '';
     let collected = false;

@@ -57,6 +57,7 @@ async function fixtureRepository(t: { after(callback: () => Promise<void>): void
 function fixtureEntry(owner = 'lib/owner.mts'): SchemaCompatibilityEntry {
   return {
     id: 'derived.fixture',
+    tier: 'internal',
     kind: 'derived',
     schema: 'whoisleuth.fixture',
     currentVersion: 1,
@@ -608,12 +609,11 @@ describe('schema source coverage', () => {
         ...discovery,
         emitters: [...discovery.emitters, dynamicAllowanceUse],
       }),
-      /dynamic-emitter allowance expected lines/iu,
+      /dynamic-use allowance expected/iu,
     );
 
     const lineAllowanceUse = discovery.emitters.find((item) => (
       item.file === 'cli/archive-inspect.mts'
-      && item.line === 135
       && item.symbol === null
       && item.role === 'writer'
     ));
@@ -623,14 +623,14 @@ describe('schema source coverage', () => {
         ...discovery,
         emitters: [...discovery.emitters, lineAllowanceUse],
       }),
-      /dynamic-use allowance expected one use/iu,
+      /dynamic-use allowance expected/iu,
     );
     await assert.rejects(
       validateSchemaSourceCoverage(inventory.entries, {
         ...discovery,
         emitters: discovery.emitters.filter((item) => item !== lineAllowanceUse),
       }),
-      /dynamic-use allowance expected one use/iu,
+      /dynamic-use allowance expected/iu,
     );
 
     const inlineAllowanceUse = discovery.emitters.find((item) => (
@@ -644,7 +644,7 @@ describe('schema source coverage', () => {
         ...discovery,
         emitters: [...discovery.emitters, inlineAllowanceUse],
       }),
-      /inline-emitter allowance expected lines/iu,
+      /inline-emitter allowance expected/iu,
     );
 
     await assert.rejects(

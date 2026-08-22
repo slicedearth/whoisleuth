@@ -18,7 +18,6 @@ import {
   verifyCaseResponsePacketIntegrity,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
-import { historicalCaseResponsePacketFixture } from './case-response-packet-fixtures.mts';
 
 const NOW = '2026-07-28T02:00:00.000Z';
 
@@ -142,11 +141,12 @@ function packetInput() {
 }
 
 describe('case response packet', () => {
-  test('verifies frozen v5 and v6 packets before current v7 output', async () => {
+  test('refuses retired packet versions before current v7 output', async () => {
     for (const version of [5, 6] as const) {
-      const packet = historicalCaseResponsePacketFixture(version);
-      assert.equal(packet.schemaVersion, version);
-      assert.equal(await verifyCaseResponsePacketIntegrity(packet as Parameters<typeof verifyCaseResponsePacketIntegrity>[0]), true);
+      assert.equal(await verifyCaseResponsePacketIntegrity({
+        schema: CASE_RESPONSE_PACKET_SCHEMA,
+        schemaVersion: version,
+      } as Parameters<typeof verifyCaseResponsePacketIntegrity>[0]), false);
     }
   });
 

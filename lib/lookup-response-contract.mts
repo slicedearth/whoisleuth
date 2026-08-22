@@ -214,6 +214,7 @@ const INVALID_COMPACT_LOOKUP_RESPONSE = 'INVALID_COMPACT_LOOKUP_RESPONSE';
 const INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE = 'Bulk lookup returned an invalid response.';
 const MAX_LOOKUP_RESPONSE_QUERY_LENGTH = 4096;
 const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
+const MAX_LOOKUP_RESPONSE_PAGE_TITLE_LENGTH = 200;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
 const MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS = 500;
@@ -227,7 +228,7 @@ const MAX_THREAT_INTELLIGENCE_LIMITATIONS = 10;
 const MAX_THREAT_INTELLIGENCE_TEXT_LENGTH = 500;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const MAX_LOOKUP_TIMING_SOURCES = 10;
-const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const QUERY_TYPES = new Set<LookupQueryType>(['domain', 'ipv4', 'ipv6', 'asn']);
 const COMPACT_AVAILABILITY_STATES = new Set<CompactLookupAvailabilityState>([
   'available',
@@ -907,6 +908,7 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && validOptionalNullableText(value.confidence, 40)
     && validOptionalNullableText(value.activityStatus, 40)
     && validOptionalNullableText(value.websiteProbeDetail, 500)
+    && validOptionalNullableText(value.pageTitle, MAX_LOOKUP_RESPONSE_PAGE_TITLE_LENGTH)
     && validOptionalNullableText(value.dnssec, 40)
     && (value.deepScanComplete === undefined || typeof value.deepScanComplete === 'boolean')
     && (value.hasMx === undefined || value.hasMx === null || typeof value.hasMx === 'boolean')
@@ -1154,7 +1156,7 @@ function lookupHttpErrorMessage(value: unknown, status: number): string {
   const source = record(value);
   const message = typeof source.error === 'string'
     ? source.error
-        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+        .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu, ' ')
         .replace(/\s+/gu, ' ')
         .trim()
         .slice(0, MAX_LOOKUP_RESPONSE_ERROR_LENGTH)

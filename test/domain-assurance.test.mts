@@ -3,13 +3,14 @@ import { describe, test } from 'node:test';
 
 import {
   DOMAIN_ASSURANCE_INPUT_SCHEMA,
+  DOMAIN_ASSURANCE_VERSION,
   buildDomainAssurance,
 } from '../lib/domain-assurance.mts';
 
 const NOW = '2026-08-04T00:00:00.000Z';
 
 describe('domain assurance', () => {
-  test('requires explicit zones for current inputs and deterministically migrates legacy instants', () => {
+  test('requires explicit zones for current inputs and rejects reader-only version 1', () => {
     const fixture = (version: number) => ({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
       version,
@@ -44,16 +45,14 @@ describe('domain assurance', () => {
         }],
       },
     });
-    assert.throws(() => buildDomainAssurance(fixture(2), NOW), /explicit timezone/u);
-    const migrated = buildDomainAssurance(fixture(1), NOW);
-    assert.equal(migrated.result.kind, 'planned-change');
-    assert.equal(migrated.result.window.startsAt, '2026-08-05T00:00:00.000Z');
+    assert.throws(() => buildDomainAssurance(fixture(DOMAIN_ASSURANCE_VERSION), NOW), /explicit timezone/u);
+    assert.throws(() => buildDomainAssurance(fixture(1), NOW), /version 2/u);
   });
 
   test('keeps planned change observations and rollback decisions explicitly attributed', () => {
     const document = buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'planned-change',
       domain: 'change.example',
       change: {
@@ -81,7 +80,7 @@ describe('domain assurance', () => {
   test('reports cross-domain recovery concentration and unknown fields without inferring control', () => {
     const document = buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'recovery-dependencies',
       assets: [
         {
@@ -107,7 +106,7 @@ describe('domain assurance', () => {
   test('keeps unchecked retirement controls distinct from negative checks', () => {
     const document = buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'retirement',
       domain: 'retired.example',
       checks: {
@@ -143,7 +142,7 @@ describe('domain assurance', () => {
     assert.equal(document.result.review.state, 'needs_review');
   });
 
-  test('keeps custom retirement checks out of version 1 and rejects duplicates', () => {
+  test('rejects reader-only version 1 and duplicate current custom retirement checks', () => {
     const base = {
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
       kind: 'retirement',
@@ -154,7 +153,7 @@ describe('domain assurance', () => {
       ...base,
       version: 1,
       customChecks: [],
-    }, NOW), /unknown field: customChecks/u);
+    }, NOW), /version 2/u);
     assert.throws(() => buildDomainAssurance({
       ...base,
       version: 2,
@@ -175,7 +174,7 @@ describe('domain assurance', () => {
   test('rejects secret-like oversized labels and observed states without evidence references', () => {
     assert.throws(() => buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'planned-change',
       domain: 'change.example',
       change: {
@@ -193,7 +192,7 @@ describe('domain assurance', () => {
   test('explains every negative planned-change state', () => {
     const document = buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'planned-change',
       domain: 'change.example',
       change: {
@@ -221,7 +220,7 @@ describe('domain assurance', () => {
   test('rejects unknown fields and evidence on unfinished checks', () => {
     assert.throws(() => buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'retirement',
       domain: 'retired.example',
       checks: { autoRenewDisabled: true },
@@ -230,7 +229,7 @@ describe('domain assurance', () => {
 
     assert.throws(() => buildDomainAssurance({
       schema: DOMAIN_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_ASSURANCE_VERSION,
       kind: 'planned-change',
       domain: 'change.example',
       change: {

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { Page, Route } from '@playwright/test';
 
 const NOW = '2026-07-16T12:00:00.000Z';
@@ -95,15 +95,14 @@ function managementResponse(watchlists: HostedItem[], action: string | null = nu
 }
 
 async function seedLocalWatchlist(page: Page) {
+  const value = currentBrowserLocalDocument('watchlists', {
+    watchlists: { 'Priority domains': localEntry() },
+  });
   await page.addInitScript(({ key, value }) => {
     localStorage.setItem(key, JSON.stringify(value));
   }, {
     key: WATCHLIST_KEY,
-    value: {
-      schema: 'whoisleuth.watchlists',
-      version: 2,
-      watchlists: { 'Priority domains': localEntry() },
-    },
+    value,
   });
 }
 

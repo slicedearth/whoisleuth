@@ -36,11 +36,11 @@ describe('pageTitle', () => {
     assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Acme Bank Login');
   });
 
-  test('strips C0 and DEL controls before retaining a title', () => {
-    const html = '<title>Account\x00\x07 review\x7f centre</title>';
+  test('strips terminal controls and default-ignorable characters before retaining a title', () => {
+    const html = '<title>Account\x00\x07\x7f\u009b\u202e review\u00ad centre</title>';
     const title = extractHtmlSignals(html, 'example.com').pageTitle;
     assert.equal(title, 'Account review centre');
-    assert.equal(/[\x00-\x1f\x7f]/.test(title), false);
+    assert.equal(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u.test(title), false);
   });
 
   test('is null when there is no title tag', () => {
@@ -194,6 +194,18 @@ describe('pageIdentity', () => {
     assert.equal(result.generator, 'Example CMS 4');
     assert.match(result.limitations.join(' '), /Query strings and fragments were omitted/);
     assert.doesNotMatch(JSON.stringify(result), /secret|campaign=private/);
+  });
+
+  test('sanitises terminal controls and bidi formatting in retained identity metadata', () => {
+    const result = identity(`
+      <meta property="og:title" content="Account\u009b\u202e centre">
+      <meta property="og:site_name" content="Example\u00ad portal">
+      <meta name="generator" content="Fixture\u2066 generator">
+    `);
+    assert.equal(result.openGraph.title, 'Account centre');
+    assert.equal(result.openGraph.siteName, 'Example portal');
+    assert.equal(result.generator, 'Fixture generator');
+    assert.doesNotMatch(JSON.stringify(result), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
   test('resolves a meta-refresh target against the final response URL', () => {

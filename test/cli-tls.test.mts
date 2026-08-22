@@ -264,7 +264,7 @@ describe('TLS CLI runner', () => {
       collectTlsIntelligence: async () => { throw new Error(`collector failed\n${'x'.repeat(500)}`); },
     });
     assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
-    assert.match(stderr.value(), /^TLS intelligence failed: collector failed /);
+    assert.match(stderr.value(), /^TLS evidence collection failed: collector failed /);
     assert.ok(stderr.value().length < 360);
   });
 });

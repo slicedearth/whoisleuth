@@ -185,7 +185,7 @@ describe('CT history retention and recovery', () => {
 
   test('malformed entries and unknown fields are discarded without throwing', () => {
     const store = nonEmptyStore(history.normalizeCtHistoryStore({
-      version: 1,
+      version: history.CT_HISTORY_SCHEMA_VERSION,
       evil: true,
       entries: [
         null,
@@ -270,45 +270,16 @@ describe('CT history retention and recovery', () => {
     assert.deepStrictEqual(remaining.entries.map((entry) => entry.query), ['two']);
   });
 
-  test('schema 1 migrates without inventing pruning certainty', () => {
-    const migrated = nonEmptyStore(history.normalizeCtHistoryStore({
-      version: 1,
-      entries: [{
-        query: 'example',
-        baselineAt: FIRST,
-        updatedAt: FIRST,
-        domains: ['a.example'],
-        history: [{ checkedAt: FIRST, resultCount: 1 }],
-      }],
-    }));
-    assert.equal(migrated.version, 3);
-    assert.equal(migrated.entries[0].discardedCheckCount, 0);
-    assert.equal(migrated.entries[0].discardedCheckCountKnown, false);
-    assert.equal(migrated.entries[0].discardedCheckCountCapped, false);
-    assert.deepStrictEqual(migrated.entries[0].everSeenDomains, ['a.example']);
-    assert.equal(migrated.entries[0].everSeenDomainsComplete, false);
-  });
-
-  test('migrated retained evidence can prove reappearance but cannot prove first observation', () => {
-    const migrated = history.normalizeCtHistoryStore({
-      version: 2,
-      entries: [{
-        query: 'example',
-        baselineAt: SECOND,
-        updatedAt: SECOND,
-        domains: ['b.example'],
-        history: [
-          { checkedAt: FIRST, resultCount: 1, certificateCount: 1, newCount: 1, newDomains: ['a.example'], truncated: false },
-          { checkedAt: SECOND, resultCount: 1, certificateCount: 1, newCount: 0, newDomains: [], truncated: false },
-        ],
-        discardedCheckCount: 0,
-        discardedCheckCountKnown: true,
-      }],
-    });
-    const next = record(migrated, 'example', ['a.example', 'b.example', 'c.example'], THIRD);
-    assert.deepStrictEqual(next.comparison.reappearedDomains, ['a.example']);
-    assert.deepStrictEqual(next.comparison.historyUnknownDomains, ['c.example']);
-    assert.deepStrictEqual(next.comparison.firstObservedDomains, []);
+  test('rejects reader-only schemas without partial interpretation', () => {
+    for (const version of [1, 2]) {
+      const unsupported = { version, entries: [{ query: 'private-query', updatedAt: FIRST }] };
+      const before = structuredClone(unsupported);
+      assert.throws(
+        () => history.normalizeCtHistoryStore(unsupported),
+        new RegExp(`schema ${version} is unsupported.*no data was changed`, 'u'),
+      );
+      assert.deepEqual(unsupported, before);
+    }
   });
 
   test('future schema versions and bounded discarded counts remain explicit', () => {

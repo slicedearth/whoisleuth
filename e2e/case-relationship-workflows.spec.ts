@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -8,6 +8,8 @@ import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowse
 
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { COMMON_INFRASTRUCTURE_SNAPSHOT } from '../frontend/src/lib/analysis/common-infrastructure.ts';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
 const COHORT_PROFILE_ID = 'cohort_profile_exact';
 const COHORT_OTHER_PROFILE_ID = 'cohort_profile_other';
@@ -89,23 +91,22 @@ function cohortStorage(profileName = 'P'.repeat(100)) {
   ].join('|');
   return {
     [ACTIVE_PROFILE_KEY]: COHORT_PROFILE_ID,
-    'whois-rdap-cases-v1': { version: 12, cases },
-    'whois-rdap-brand-profiles-v1': {
-      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: COHORT_NOW,
-      profiles: [cohortProfile(COHORT_PROFILE_ID, profileName), cohortProfile(COHORT_OTHER_PROFILE_ID, 'Other exact scope')],
-    },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([
+      cohortProfile(COHORT_PROFILE_ID, profileName),
+      cohortProfile(COHORT_OTHER_PROFILE_ID, 'Other exact scope'),
+    ]),
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [{
       id: 'cohort-campaign', name: 'Retained cohort review', description: '',
       domains: cases.map((record) => record.domain), createdAt: COHORT_NOW, updatedAt: COHORT_NOW,
-    }] },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations', version: 1,
+    }] }),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [
         retainedRelationship('certificate', 'a'.repeat(64), ['cohort-alpha.invalid', 'cohort-beta.invalid', 'cohort-outside.invalid']),
         retainedRelationship('favicon', faviconValue, ['cohort-beta.invalid', 'cohort-gamma.invalid']),
         retainedRelationship('ip_address', commonAddress!, ['cohort-alpha.invalid', 'cohort-gamma.invalid']),
       ],
-    },
+    }),
   };
 }
 
@@ -117,7 +118,7 @@ test.describe('browser-local campaigns', () => {
   ) {
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
-      'whois-rdap-cases-v1': { version: 2, cases: records },
+      'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records },
     });
     await page.getByRole('tab', { name: /Campaigns/ }).click();
   }
@@ -134,7 +135,7 @@ test.describe('browser-local campaigns', () => {
           label: 'Mail route',
           value: 'mail.member-one.invalid',
           source: 'Lookup checkpoint',
-          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: 3 },
+          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: LOOKUP_EVIDENCE_SCHEMA_VERSION },
           observedAt: '2026-06-01T00:00:00.000Z',
           completeness: 'complete',
           createdAt: '2026-06-01T00:00:00.000Z',
@@ -345,14 +346,14 @@ test.describe('browser-local campaigns', () => {
   test('shows and focuses a saved campaign when the tab opens before browser-local loading finishes', async ({ page }) => {
     await page.goto('/dashboard');
     await migrateLegacyBrowserData(page, {
-      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+      'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [{
         id: 'delayed-campaign',
         name: 'Delayed campaign',
         description: '',
         domains: [],
         createdAt: '2026-08-07T00:00:00.000Z',
         updatedAt: '2026-08-07T00:00:00.000Z',
-      }] },
+      }] }),
     });
     await holdBrowserLocalReads(page, 3_000);
     const monitorLink = page.getByRole('link', { name: /Monitor/ }).first();
@@ -376,11 +377,11 @@ test.describe('browser-local campaigns', () => {
     })];
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
-      'whois-rdap-cases-v1': { version: 2, cases },
-      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+      'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
+      'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [{
         id: 'portable-campaign', name: 'Portable group', description: 'Metadata only',
         domains: ['export-member.invalid'], createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
-      }] },
+      }] }),
     });
     await page.getByRole('tab', { name: /Campaigns/ }).click();
 
@@ -436,7 +437,7 @@ test.describe('accessible cross-case relationship table', () => {
   ) {
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
-      'whois-rdap-cases-v1': { version: 2, cases: records },
+      'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records },
     });
     await readBrowserLocalCollection(page, 'cases', {
       minimumRecords: records.length,
@@ -489,7 +490,7 @@ test.describe('accessible cross-case relationship table', () => {
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': {
-        version: 2,
+        version: CASE_SCHEMA_VERSION,
         cases: [
           caseRecord({ id: 'partial-a', domain: 'partial-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
           caseRecord({ id: 'partial-b', domain: 'partial-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.partial.invalid'] })] }),
@@ -632,15 +633,13 @@ test.describe('accessible cross-case relationship table', () => {
     }));
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
-      'whois-rdap-cases-v1': { version: 2, cases: [
+      'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
         caseRecord({ id: 'stale-a', domain: 'stale-a.invalid' }),
         caseRecord({ id: 'stale-b', domain: 'stale-b.invalid' }),
       ] },
-      'whoisleuth-relationship-observations-v1': {
-        schema: 'whoisleuth.relationship-observations',
-        version: 1,
+      'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
         observations,
-      },
+      }),
     });
     await page.getByRole('tab', { name: /Relationships/ }).click();
 
@@ -856,12 +855,12 @@ test.describe('accessible cross-case relationship table', () => {
     ];
     await page.goto('/monitor');
     await migrateLegacyBrowserData(page, {
-      'whois-rdap-cases-v1': { version: 2, cases },
-      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+      'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
+      'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [{
         id: 'provenance-campaign', name: 'Provenance review', description: '',
         domains: ['provenance-a.invalid', 'provenance-b.invalid'],
         createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-18T00:00:00.000Z',
-      }] },
+      }] }),
     });
     await page.getByRole('tab', { name: /Relationships/ }).click();
 

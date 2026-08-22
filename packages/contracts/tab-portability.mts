@@ -30,7 +30,7 @@ const SYNTHETIC_DEMO_TAB_COMPATIBILITY = defineSchemaCompatibility({
 });
 const SYNTHETIC_DEMO_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA,
-  currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, SYNTHETIC_DEMO_EXPORT_VERSION],
+  currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [SYNTHETIC_DEMO_EXPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: TAB_PORTABILITY_CONTRACT_OWNER,
   note: 'Explicitly synthetic fixed-fixture package, never live evidence.',
@@ -99,9 +99,6 @@ export const TAB_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buil
       optionalKeys: ['generatedAt', 'exportedAt', 'warning', 'profile', 'case', 'assessment', 'provenance', 'relationship', 'evidence', 'timeline', 'limitations', 'state'],
       hook: { module: TAB_PORTABILITY_CONTRACT_OWNER, exportName: 'validateSyntheticDemoExportContract', role: 'structure_validator', runtime: 'shared' },
       fixtures: [
-        { id: 'synthetic-demo-export-v2', path: 'test/fixtures/extracted-domain-lifecycle/synthetic-demo-export-v2.json', bytes: 124, sha256: '6aee4f436bef0d15b4c660be93d234104e8c3a8fc7985ac485b8732bc74633e8', version: 2 },
-        { id: 'synthetic-demo-export-v3', path: 'test/fixtures/extracted-domain-lifecycle/synthetic-demo-export-v3.json', bytes: 124, sha256: '3fa2aaa85425f1f508f1111923c94405e061bebd7ec6ce2300c3936b240b82b0', version: 3 },
-        { id: 'synthetic-demo-export-v4', path: 'test/fixtures/extracted-domain-lifecycle/synthetic-demo-export-v4.json', bytes: 124, sha256: '182461830ee287c7f90dc60a2f880273c270e5b06a9a8b0d84160b9b2106010e', version: 4 },
         { id: 'synthetic-demo-export-v5', path: 'test/fixtures/extracted-domain-lifecycle/synthetic-demo-export-v5.json', bytes: 124, sha256: '5dc04d6a6a3289e704fdc344a86df786e4fb2b77658d54e2b90369d08447377f', version: SYNTHETIC_DEMO_EXPORT_VERSION },
       ],
     },

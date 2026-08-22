@@ -137,7 +137,7 @@ function parseBulkExport(root: UnknownRecord): ParsedBulkExport {
     const rawSession = record(candidate);
     const rawResults = Array.isArray(rawSession?.results) ? rawSession.results : null;
     const rawDomains = Array.isArray(rawSession?.domains) ? rawSession.domains : null;
-    const session = normalizeBulkSession(candidate, version);
+    const session = normalizeBulkSession(candidate);
     if (!session || !rawResults || !rawDomains
       || rawResults.length > MAX_BULK_SESSION_ROWS
       || rawResults.length !== session.results.length

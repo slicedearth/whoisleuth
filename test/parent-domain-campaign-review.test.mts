@@ -67,7 +67,7 @@ describe('bounded parent-domain campaign review', () => {
     assert.ok(parent?.hostnames.every((item) => item.observations.every((item) => (
       item.store === 'browser_case_evidence_snapshot'
       && item.campaignMemberDomain === 'example.test'
-      && item.schemaVersion === 14
+      && item.schemaVersion === 13
       && item.observationTime !== null
       && item.scanDepth === 'deep'
     ))));

@@ -122,7 +122,8 @@ const MAX_STATIC_PUBLICATION_META_ELEMENTS = MAX_PAGE_PUBLICATION_META_ELEMENTS;
 const MAX_STATIC_PUBLICATION_DECLARATIONS = MAX_PAGE_PUBLICATION_DECLARATIONS;
 const MAX_STATIC_ROBOTS_DIRECTIVES = MAX_PAGE_PUBLICATION_ROBOTS_DIRECTIVES;
 const MAX_FORM_ATTRIBUTE_LENGTH = 2_048;
-const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
+const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const CONTROL_CHARACTER_RE_GLOBAL = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const PAYMENT_AUTOCOMPLETE_TOKENS = new Set([
   'cc-name',
   'cc-given-name',
@@ -761,7 +762,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
 
   return {
     markup: markup.join('\n'),
-    visibleText: visibleTextParts.join(''),
+    visibleText: visibleTextParts.join('').replace(CONTROL_CHARACTER_RE_GLOBAL, ' ').replace(/\s+/gu, ' '),
     structureTokens,
     scripts,
     cspMetaPolicies,

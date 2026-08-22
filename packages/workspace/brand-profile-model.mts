@@ -3,7 +3,7 @@
 // bounds, import merging, and exact serialized-byte accounting.
 
 import { normalizeDomain } from '../cases/case-model.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
 import type { PageBaseline } from './page-baseline.mts';
@@ -73,7 +73,7 @@ const PROTECTION_ATTESTATION_STATES = new Set([
   'unavailable',
   'not_applicable',
 ]);
-const DESIRED_POSTURE_FIELDS = new Set([
+export const DESIRED_POSTURE_SUPPRESSION_FIELDS = Object.freeze([
   'nameservers',
   'ds',
   'mx',
@@ -83,7 +83,8 @@ const DESIRED_POSTURE_FIELDS = new Set([
   'tls_spki',
   'registrar_lock',
   'renewal_review',
-]);
+] as const);
+const DESIRED_POSTURE_FIELDS = new Set<string>(DESIRED_POSTURE_SUPPRESSION_FIELDS);
 const POSTURE_CHECK_STATUSES = new Set(['danger', 'info', 'pass', 'warning']);
 
 export type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
@@ -115,6 +116,7 @@ export type DesiredPostureObservation = {
   }>;
 };
 export type DesiredPostureChangeWindow = {
+  id: string;
   startsAt: string;
   endsAt: string;
   summary: string;
@@ -172,7 +174,6 @@ export type BrandProfileStore = {
 
 export type NormalizeBrandProfileOptions = {
   existing?: unknown;
-  legacyTimestamps?: unknown;
   nowIso?: unknown;
   makeId?: unknown;
   touch?: unknown;
@@ -191,17 +192,15 @@ export function normalizeBrandProfileId(value: unknown): string | null {
   return normalizeOpaqueReferenceId(value);
 }
 
-function timestamp<T extends string | null>(value: unknown, fallback: T, legacy = false): string | T {
-  const normalized = normalizeExplicitIsoTimestamp(value);
-  if (normalized) return normalized;
-  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
+function timestamp<T extends string | null>(value: unknown, fallback: T): string | T {
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
-function calendarTimestamp<T extends string | null>(value: unknown, fallback: T, legacy = false): string | T {
+function calendarTimestamp<T extends string | null>(value: unknown, fallback: T): string | T {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value)) {
     return normalizeExplicitIsoTimestamp(`${value}T00:00:00Z`) ?? fallback;
   }
-  return timestamp(value, fallback, legacy);
+  return timestamp(value, fallback);
 }
 
 function normalizeTld(value: unknown): string {
@@ -259,7 +258,7 @@ function normalizeMailProtectionProfile(value: unknown): MailProtectionProfile {
     : 'standard';
 }
 
-export function normalizeProtectionAttestations(value: unknown, legacyTimestamps = false): ProtectionAttestation[] {
+export function normalizeProtectionAttestations(value: unknown): ProtectionAttestation[] {
   if (!Array.isArray(value)) return [];
   const output: ProtectionAttestation[] = [];
   const seen = new Set<string>();
@@ -274,14 +273,14 @@ export function normalizeProtectionAttestations(value: unknown, legacyTimestamps
     ) {
       continue;
     }
-    const assertedAt = timestamp(candidate.assertedAt, null, legacyTimestamps);
+    const assertedAt = timestamp(candidate.assertedAt, null);
     if (!assertedAt) continue;
     seen.add(candidate.control);
     output.push({
       control: candidate.control as ProtectionAttestationControl,
       state: candidate.state as ProtectionAttestationState,
       assertedAt,
-      expiresAt: calendarTimestamp(candidate.expiresAt, null, legacyTimestamps),
+      expiresAt: calendarTimestamp(candidate.expiresAt, null),
       note: boundedText(candidate.note),
     });
     if (output.length >= MAX_PROTECTION_ATTESTATIONS) break;
@@ -302,9 +301,9 @@ function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unk
   return [...output].sort();
 }
 
-function normalizeDesiredPostureObservation(value: unknown, legacyTimestamps = false): DesiredPostureObservation | null {
+function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObservation | null {
   const candidate = record(value);
-  const observedAt = timestamp(candidate.observedAt, null, legacyTimestamps);
+  const observedAt = timestamp(candidate.observedAt, null);
   if (!observedAt || !Array.isArray(candidate.checks)) return null;
   const checks: DesiredPostureObservation['checks'] = [];
   const seen = new Set<string>();
@@ -331,12 +330,11 @@ function normalizeDesiredPostureObservation(value: unknown, legacyTimestamps = f
 function normalizeDesiredPostureObservationHistory(
   value: unknown,
   previous: DesiredPostureObservation | null,
-  legacyTimestamps = false,
 ): DesiredPostureObservation[] {
   const candidates = Array.isArray(value) ? value : previous ? [previous] : [];
   const byTime = new Map<string, DesiredPostureObservation>();
   for (const item of candidates.slice(0, MAX_DESIRED_POSTURE_OBSERVATIONS * 4)) {
-    const normalized = normalizeDesiredPostureObservation(item, legacyTimestamps);
+    const normalized = normalizeDesiredPostureObservation(item);
     if (normalized) byTime.set(normalized.observedAt, normalized);
   }
   return [...byTime.values()]
@@ -344,16 +342,45 @@ function normalizeDesiredPostureObservationHistory(
     .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
 }
 
-function normalizeDesiredPostureChangeWindows(value: unknown, legacyTimestamps = false): DesiredPostureChangeWindow[] {
+function deterministicChangeWindowId(seed: string): string {
+  const states = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
+  const factors = [0x01000193, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f];
+  for (let index = 0; index < seed.length; index += 1) {
+    const code = seed.charCodeAt(index);
+    for (let stateIndex = 0; stateIndex < states.length; stateIndex += 1) {
+      const state = states[stateIndex] ?? 0;
+      const mixed = state ^ (code + Math.imul(index + 1, stateIndex + 17));
+      states[stateIndex] = Math.imul(mixed, factors[stateIndex] ?? 0x01000193);
+    }
+  }
+  return `cw-${states.map((state) => (state >>> 0).toString(16).padStart(8, '0')).join('')}`;
+}
+
+function normalizeDesiredPostureChangeWindows(
+  value: unknown,
+  identityScope = '',
+): DesiredPostureChangeWindow[] {
   if (!Array.isArray(value)) return [];
   const output: DesiredPostureChangeWindow[] = [];
+  const seenIds = new Set<string>();
+  const duplicateMaterial = new Map<string, number>();
   for (const item of value.slice(0, MAX_DESIRED_POSTURE_CHANGE_WINDOWS * 4)) {
     const candidate = record(item);
-    const startsAt = timestamp(candidate.startsAt, null, legacyTimestamps);
-    const endsAt = timestamp(candidate.endsAt, null, legacyTimestamps);
+    const startsAt = timestamp(candidate.startsAt, null);
+    const endsAt = timestamp(candidate.endsAt, null);
     const summary = boundedText(candidate.summary, 300);
     if (!startsAt || !endsAt || Date.parse(endsAt) <= Date.parse(startsAt) || !summary) continue;
-    output.push({ startsAt, endsAt, summary });
+    const material = `${startsAt}\u001f${endsAt}\u001f${summary}`;
+    const occurrence = duplicateMaterial.get(material) ?? 0;
+    duplicateMaterial.set(material, occurrence + 1);
+    let id = normalizeOpaqueReferenceId(candidate.id);
+    let salt = 0;
+    while (!id || seenIds.has(id)) {
+      id = deterministicChangeWindowId(`${identityScope}\u001f${material}\u001f${occurrence}\u001f${salt}`);
+      salt += 1;
+    }
+    seenIds.add(id);
+    output.push({ id, startsAt, endsAt, summary });
     if (output.length >= MAX_DESIRED_POSTURE_CHANGE_WINDOWS) break;
   }
   return output.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
@@ -377,7 +404,7 @@ export function normalizeDesiredPostureBaselines(
   value: unknown,
   officialDomains: readonly string[],
   fallbackNow: unknown = new Date().toISOString(),
-  legacyTimestamps = false,
+  identityScope = '',
 ): DesiredPostureBaseline[] {
   if (!Array.isArray(value)) return [];
   const allowedDomains = new Set(officialDomains);
@@ -400,13 +427,13 @@ export function normalizeDesiredPostureBaselines(
       suppressions.push({
         field,
         reason,
-        expiresAt: calendarTimestamp(suppression.expiresAt, null, legacyTimestamps),
+        expiresAt: calendarTimestamp(suppression.expiresAt, null),
       });
       if (suppressions.length >= MAX_DESIRED_POSTURE_SUPPRESSIONS) break;
     }
     seen.add(domain);
-    const previousObservation = normalizeDesiredPostureObservation(candidate.previousObservation, legacyTimestamps);
-    const observationHistory = normalizeDesiredPostureObservationHistory(candidate.observationHistory, previousObservation, legacyTimestamps);
+    const previousObservation = normalizeDesiredPostureObservation(candidate.previousObservation);
+    const observationHistory = normalizeDesiredPostureObservationHistory(candidate.observationHistory, previousObservation);
     output.push({
       version: 1,
       domain,
@@ -422,7 +449,7 @@ export function normalizeDesiredPostureBaselines(
       registrarLock: ['required', 'not_required'].includes(String(candidate.registrarLock))
         ? candidate.registrarLock as DesiredPostureBaseline['registrarLock']
         : 'unconfigured',
-      renewalReviewAt: calendarTimestamp(candidate.renewalReviewAt, null, legacyTimestamps),
+      renewalReviewAt: calendarTimestamp(candidate.renewalReviewAt, null),
       zoneIntent: ['active_service', 'defensive_registration', 'no_service', 'parked', 'redirect_only'].includes(String(candidate.zoneIntent))
         ? candidate.zoneIntent as DesiredPostureBaseline['zoneIntent']
         : 'unconfigured',
@@ -430,12 +457,15 @@ export function normalizeDesiredPostureBaselines(
         ? candidate.lifecycle as DesiredPostureBaseline['lifecycle']
         : 'active',
       recoveryDependency: boundedText(candidate.recoveryDependency, 200),
-      approvedChangeWindows: normalizeDesiredPostureChangeWindows(candidate.approvedChangeWindows, legacyTimestamps),
+      approvedChangeWindows: normalizeDesiredPostureChangeWindows(
+        candidate.approvedChangeWindows,
+        `${identityScope}\u001f${domain}`,
+      ),
       suppressions,
       note: boundedText(candidate.note, MAX_PROFILE_TEXT_LENGTH),
       previousObservation: observationHistory.at(-1) ?? previousObservation,
       observationHistory,
-      updatedAt: timestamp(candidate.updatedAt, fallback, legacyTimestamps),
+      updatedAt: timestamp(candidate.updatedAt, fallback),
     });
     if (output.length >= MAX_DESIRED_POSTURE_BASELINES) break;
   }
@@ -457,7 +487,6 @@ export function normalizeBrandProfile(
 ): BrandProfile | null {
   const value = record(raw);
   const existing = options.existing ? record(options.existing) : null;
-  const legacyTimestamps = options.legacyTimestamps === true;
   const now = timestamp(options.nowIso, new Date().toISOString());
   const officialDomains = normalizeProfileDomains(value.officialDomains);
   const dkimSelectors = normalizeDkimSelectors(value.dkimSelectors);
@@ -475,7 +504,7 @@ export function normalizeBrandProfile(
     || (typeof options.makeId === 'function' ? normalizeBrandProfileId(options.makeId()) : null);
   const name = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
   if (!profileId || !name) return null;
-  const createdAt = timestamp(existing?.createdAt, null) || timestamp(value.createdAt, now, legacyTimestamps);
+  const createdAt = timestamp(existing?.createdAt, null) || timestamp(value.createdAt, now);
   return {
     id: profileId,
     name,
@@ -489,12 +518,12 @@ export function normalizeBrandProfile(
     retiredDkimSelectors: normalizeDkimSelectors(value.retiredDkimSelectors)
       .filter((selector) => !dkimSelectors.includes(selector)),
     mailProtectionProfile: normalizeMailProtectionProfile(value.mailProtectionProfile),
-    protectionAttestations: normalizeProtectionAttestations(value.protectionAttestations, legacyTimestamps),
+    protectionAttestations: normalizeProtectionAttestations(value.protectionAttestations),
     desiredPostureBaselines: normalizeDesiredPostureBaselines(
       value.desiredPostureBaselines,
       officialDomains,
       now,
-      legacyTimestamps,
+      profileId,
     ),
     trademarkOwner: boundedText(value.trademarkOwner),
     trademarkRegistration: boundedText(value.trademarkRegistration),
@@ -502,7 +531,7 @@ export function normalizeBrandProfile(
     officialFaviconPHash: baselineDomainMismatch ? '' : normalizeFaviconPHash(value.officialFaviconPHash),
     pageBaseline,
     createdAt,
-    updatedAt: options.touch === true ? now : timestamp(value.updatedAt, createdAt, legacyTimestamps),
+    updatedAt: options.touch === true ? now : timestamp(value.updatedAt, createdAt),
   };
 }
 
@@ -513,7 +542,7 @@ function profileList(raw: unknown): unknown[] {
 }
 
 export function brandProfileStoreVersion(raw: unknown): number | null {
-  if (Array.isArray(raw)) return 1;
+  if (Array.isArray(raw)) return BRAND_PROFILE_SCHEMA_VERSION;
   const value = record(raw);
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0 ? value.version : null;
 }
@@ -523,13 +552,13 @@ export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
   assertWorkspaceInputGraph(raw, 'Brand Profile store');
   assertWorkspaceDeclaredVersion(raw, 'Brand Profile store');
   const sourceVersion = brandProfileStoreVersion(raw);
-  const legacyTimestamps = !Array.isArray(raw)
-    && sourceVersion !== null
-    && sourceVersion < BRAND_PROFILE_SCHEMA_VERSION;
+  if (!Array.isArray(raw) && sourceVersion !== null
+    && !SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.includes(sourceVersion)) {
+    throw new Error(`Brand Profile schema ${sourceVersion} is unsupported; no data was changed.`);
+  }
   const byId = new Map<string, BrandProfile>();
   for (const item of profileList(raw).slice(0, MAX_PROFILES * 4)) {
     const profile = normalizeBrandProfile(item, {
-      legacyTimestamps,
       nowIso: new Date(0).toISOString(),
     });
     if (!profile) continue;
@@ -608,7 +637,6 @@ export function mergeBrandProfiles(
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
     const profile = normalizeBrandProfile(item, {
       existing,
-      legacyTimestamps: importedVersion !== null && importedVersion < BRAND_PROFILE_SCHEMA_VERSION,
       touch: true,
       nowIso: options.nowIso,
       makeId: options.makeId,

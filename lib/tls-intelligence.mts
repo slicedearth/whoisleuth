@@ -1,4 +1,4 @@
-// Bounded, one-connection TLS and certificate intelligence for deep scans.
+// Bounded, one-connection TLS and certificate evidence for deep scans.
 //
 // The collector resolves the submitted hostname once through the same public-
 // address guard used by safe-fetch, validates every returned address again at
@@ -728,7 +728,7 @@ function failedTlsObservation(error: unknown, options: TlsFailureOptions = {}) {
       source: 'tls',
       durationMs: options.durationMs,
       complete: false,
-      limitations: ['TLS intelligence was inconclusive; DNS, connection, timeout, policy, or handshake failure is not proof that no TLS service exists.'],
+      limitations: ['TLS evidence collection was inconclusive; DNS, connection, timeout, policy, or handshake failure is not proof that no TLS service exists.'],
       diagnostics: { connectionAttempts: options.connectionAttempts || 0, error: detail },
     }),
     profileVersion: TLS_PROFILE_VERSION,
@@ -750,7 +750,7 @@ function failedTlsObservation(error: unknown, options: TlsFailureOptions = {}) {
   };
 }
 
-function skippedTlsObservation(detail = 'TLS intelligence is disabled by deployment policy.') {
+function skippedTlsObservation(detail = 'TLS evidence collection is disabled by deployment policy.') {
   return {
     ...failedTlsObservation(detail, { connectionAttempts: 0 }),
     ...createObservation({

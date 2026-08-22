@@ -332,6 +332,7 @@ const METADATA_V4_KEYS = new Set([
 ]);
 const COMPATIBILITY_KEYS = new Set([
   'id',
+  'tier',
   'kind',
   'schema',
   'currentVersion',
@@ -810,6 +811,7 @@ function copyCompatibility(value: unknown, index: number): SchemaCompatibilityDe
     .map((version) => positiveInteger(version, `${label} supported version`));
   return defineSchemaCompatibility({
     id: source.id as SchemaCompatibilityDescriptor['id'],
+    tier: source.tier as SchemaCompatibilityDescriptor['tier'],
     kind: source.kind as SchemaCompatibilityDescriptor['kind'],
     schema: source.schema as SchemaCompatibilityDescriptor['schema'],
     currentVersion: source.currentVersion as SchemaCompatibilityDescriptor['currentVersion'],

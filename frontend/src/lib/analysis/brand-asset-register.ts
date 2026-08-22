@@ -166,7 +166,7 @@ const RELATIONSHIP_METADATA = Object.freeze({
   certificate: Object.freeze({ label: 'Shared TLS certificate', method: 'Exact leaf-certificate SHA-256' }),
   tracking_identifier: Object.freeze({ label: 'Shared tracking identifier', method: 'Exact public identifier' }),
   favicon: Object.freeze({ label: 'Similar favicon', method: 'Exact hash or bounded perceptual distance' }),
-  official_asset: Object.freeze({ label: 'Official asset relationship', method: 'Configured-domain host match' }),
+  official_asset: Object.freeze({ label: 'Official asset host match', method: 'Configured-domain host match' }),
 });
 const CASE_SOURCE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   lookup: 'Lookup Case',

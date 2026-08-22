@@ -1,14 +1,43 @@
 import type { CaseRecord } from './case-model.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
+import {
+  ANALYST_REVIEW_KINDS,
+  MAX_ANALYST_REVIEW_ITEMS,
+  analystReviewLifecycle,
+  analystReviewMaterialFingerprint,
+  analystReviewSubjectKey,
+  emptyAnalystReviewStateStore,
+} from './analyst-review-state.ts';
+import type {
+  AnalystReviewAge,
+  AnalystReviewCompleteness,
+  AnalystReviewEvidenceFamily,
+  AnalystReviewItem,
+  AnalystReviewKind,
+  AnalystReviewLifecycle,
+  AnalystReviewLifecycleState,
+  AnalystReviewNextAction,
+  AnalystReviewPriority,
+  AnalystReviewStateStore,
+} from './analyst-review-state.ts';
 
-export const MAX_ANALYST_REVIEW_ITEMS = 500;
-export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'observed_effect_review', 'evidence_gap', 'watchlist_change', 'bulk_session'] as const;
-export type AnalystReviewKind = typeof ANALYST_REVIEW_KINDS[number];
-export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
-export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
-export type AnalystReviewAge = 'current' | 'aging' | 'stale';
-export type AnalystReviewNextAction = 'review' | 'refresh' | 'follow_up' | 'resume';
+export {
+  ANALYST_REVIEW_KINDS,
+  MAX_ANALYST_REVIEW_ITEMS,
+} from './analyst-review-state.ts';
+export type {
+  AnalystReviewAge,
+  AnalystReviewCompleteness,
+  AnalystReviewEvidenceFamily,
+  AnalystReviewItem,
+  AnalystReviewKind,
+  AnalystReviewLifecycle,
+  AnalystReviewLifecycleState,
+  AnalystReviewNextAction,
+  AnalystReviewPriority,
+  AnalystReviewStateStore,
+} from './analyst-review-state.ts';
 export const ANALYST_REVIEW_DISMISSAL_REASONS = [
   { value: 'accepted_limitation', label: 'Accepted source limitation' },
   { value: 'reviewed_not_actionable', label: 'Reviewed, not actionable' },
@@ -16,26 +45,7 @@ export const ANALYST_REVIEW_DISMISSAL_REASONS = [
 ] as const;
 export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASONS[number]['value'];
 
-export type AnalystReviewItem = Readonly<{
-  id: string;
-  kind: AnalystReviewKind;
-  priority: AnalystReviewPriority;
-  title: string;
-  detail: string;
-  source: string;
-  sourceIds: readonly string[];
-  caseDomain: string | null;
-  observedAt: string;
-  dueAt: string | null;
-  age: AnalystReviewAge;
-  completeness: AnalystReviewCompleteness;
-  nextAction: AnalystReviewNextAction;
-  rankingReason: string;
-  href: string;
-  retryHref: string | null;
-  caseId: string | null;
-  dismissalTarget: string | null;
-}>;
+export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
 
 export type AnalystReviewFilter = Readonly<{
   source?: string;
@@ -43,10 +53,12 @@ export type AnalystReviewFilter = Readonly<{
   caseQuery?: string;
   priority?: AnalystReviewPriority;
   nextAction?: AnalystReviewNextAction;
+  evidenceFamily?: AnalystReviewEvidenceFamily;
+  lifecycle?: AnalystReviewLifecycleState;
 }>;
 
 export type AnalystReviewInbox = Readonly<{
-  items: AnalystReviewItem[];
+  items: AnalystReviewInboxItem[];
   counts: Readonly<Record<AnalystReviewKind | 'all' | 'overdue', number>>;
   truncated: boolean;
   limitations: readonly string[];
@@ -128,12 +140,47 @@ function rankingReason(priority: AnalystReviewPriority, dueAt: string | null, no
   return 'Undated work is ordered by priority, newest observation, then stable identity.';
 }
 
+type AnalystReviewItemSeed = Omit<
+  AnalystReviewItem,
+  'age' | 'rankingReason' | 'subjectKey' | 'materialFingerprint' | 'evidenceFamily' | 'requiresExpiry' | 'campaignIds'
+> & Partial<Pick<AnalystReviewItem, 'evidenceFamily' | 'requiresExpiry' | 'campaignIds'>>;
+
+function reviewEvidenceFamily(kind: AnalystReviewKind): AnalystReviewEvidenceFamily {
+  if (kind === 'watchlist_change' || kind === 'comparison') return 'comparison';
+  if (kind === 'bulk_session') return 'bulk';
+  if (kind === 'certificate') return 'certificate_identity';
+  if (kind === 'desired_posture') return 'desired_posture';
+  if (kind === 'suppression') return 'suppression';
+  if (kind === 'change_window') return 'change_window';
+  if (kind === 'detection_rule') return 'rule';
+  if (kind === 'incomplete_packet') return 'packet';
+  return 'case';
+}
+
 function withReviewMetadata(
-  item: Omit<AnalystReviewItem, 'age' | 'rankingReason'>,
+  item: AnalystReviewItemSeed,
   nowIso: string,
 ): AnalystReviewItem {
+  const evidenceFamily = item.evidenceFamily ?? reviewEvidenceFamily(item.kind);
+  const subjectKey = analystReviewSubjectKey(evidenceFamily, [item.kind, item.id, item.caseId, item.caseDomain]);
+  const materialFingerprint = analystReviewMaterialFingerprint([
+    item.kind,
+    item.priority,
+    item.title,
+    item.detail,
+    item.sourceIds,
+    item.observedAt,
+    item.dueAt,
+    item.completeness,
+    item.nextAction,
+  ]);
   return {
     ...item,
+    evidenceFamily,
+    subjectKey,
+    materialFingerprint,
+    requiresExpiry: item.requiresExpiry ?? true,
+    campaignIds: item.campaignIds ?? [],
     age: ageAt(item.observedAt, nowIso),
     rankingReason: rankingReason(item.priority, item.dueAt, nowIso),
   };
@@ -310,7 +357,7 @@ function watchlistItems(watchlists: WatchlistCollection, nowIso: string): Analys
     const observedAt = timestamp(latestChange.checkedAt) || timestamp(watchlist.updatedAt) || nowIso;
     const priority: AnalystReviewPriority = latestChange.changes.some((change) => change.tone === 'danger') ? 'high' : 'normal';
     items.push(withReviewMetadata({
-      id: `watchlist:${name}:${observedAt}`,
+      id: `watchlist:${name}`,
       kind: 'watchlist_change',
       priority,
       title: `${name} has ${latestChange.changeCount} material change${latestChange.changeCount === 1 ? '' : 's'}`,
@@ -361,9 +408,9 @@ function bulkItems(sessions: readonly BulkSession[], nowIso: string): AnalystRev
 }
 
 export function filterAnalystReviewItems(
-  items: readonly AnalystReviewItem[],
+  items: readonly AnalystReviewInboxItem[],
   filter: AnalystReviewFilter,
-): AnalystReviewItem[] {
+): AnalystReviewInboxItem[] {
   const source = sourceId(filter.source ?? '');
   const query = typeof filter.caseQuery === 'string'
     ? filter.caseQuery.trim().toLowerCase().slice(0, 253)
@@ -374,7 +421,59 @@ export function filterAnalystReviewItems(
     && (!query || item.caseDomain?.toLowerCase().includes(query))
     && (!filter.priority || item.priority === filter.priority)
     && (!filter.nextAction || item.nextAction === filter.nextAction)
+    && (!filter.evidenceFamily || item.evidenceFamily === filter.evidenceFamily)
+    && (!filter.lifecycle || (filter.lifecycle === 'recurred'
+      ? item.lifecycle.recurred
+      : item.lifecycle.state === filter.lifecycle))
   );
+}
+
+function orphanedReviewItem(
+  decision: AnalystReviewStateStore['records'][number],
+  nowIso: string,
+): AnalystReviewInboxItem {
+  const dueAt = decision.reviewDueAt ?? decision.expiresAt;
+  const nowMs = Date.parse(nowIso);
+  const expired = decision.expiresAt !== null && Date.parse(decision.expiresAt) <= nowMs;
+  const reviewDue = decision.reviewDueAt !== null && Date.parse(decision.reviewDueAt) <= nowMs;
+  const familyLabel = decision.evidenceFamily.replaceAll('_', ' ');
+  return {
+    id: `orphaned:${decision.subjectKey.slice(-16)}`,
+    kind: 'orphaned_state',
+    evidenceFamily: decision.evidenceFamily,
+    subjectKey: decision.subjectKey,
+    materialFingerprint: decision.reviewedFingerprint,
+    requiresExpiry: true,
+    priority: expired || reviewDue ? 'high' : 'normal',
+    title: `Source evidence unavailable for retained ${familyLabel} review`,
+    detail: `The imported or retained analyst decision has no current matching Review Item. Its ${familyLabel} source evidence is unavailable in this workspace, so the earlier disposition cannot resolve or hide current evidence.`,
+    source: 'Browser-local analyst Review Item lifecycle',
+    sourceIds: ['analyst_review_state'],
+    caseDomain: null,
+    observedAt: decision.reviewedAt,
+    dueAt,
+    age: ageAt(decision.reviewedAt, nowIso),
+    completeness: 'inconclusive',
+    nextAction: 'review',
+    rankingReason: expired || reviewDue
+      ? 'The retained lifecycle time has arrived, but its source evidence is unavailable.'
+      : 'The source evidence for this retained analyst decision is unavailable.',
+    href: '/monitor?view=inbox',
+    retryHref: null,
+    caseId: decision.caseIds[0] ?? null,
+    campaignIds: decision.campaignIds,
+    dismissalTarget: null,
+    lifecycle: {
+      state: 'orphaned',
+      effectiveDisposition: 'open',
+      decision,
+      reason: 'The retained analyst decision has no matching current evidence. It remains preserved but unavailable and cannot be treated as resolved.',
+      expired,
+      invalidated: false,
+      recurred: false,
+      reviewDue,
+    },
+  };
 }
 
 export function buildAnalystReviewInbox(
@@ -382,6 +481,9 @@ export function buildAnalystReviewInbox(
     cases?: readonly CaseRecord[];
     watchlists?: WatchlistCollection;
     bulkSessions?: readonly BulkSession[];
+    reviewState?: AnalystReviewStateStore;
+    projectedItems?: readonly AnalystReviewItem[];
+    projectedItemsTruncated?: boolean;
   }>,
   now: unknown = new Date().toISOString(),
 ): AnalystReviewInbox {
@@ -389,14 +491,27 @@ export function buildAnalystReviewInbox(
   const nowMs = Date.parse(nowIso);
   const inputTruncated = (input.cases?.length ?? 0) > 500
     || Object.keys(input.watchlists ?? {}).length > 100
-    || (input.bulkSessions?.length ?? 0) > 10;
+    || (input.bulkSessions?.length ?? 0) > 10
+    || input.projectedItemsTruncated === true;
   const all = [
     ...caseItems(Array.isArray(input.cases) ? input.cases : [], nowIso),
     ...watchlistItems(input.watchlists && typeof input.watchlists === 'object' ? input.watchlists : {}, nowIso),
     ...bulkItems(Array.isArray(input.bulkSessions) ? input.bulkSessions : [], nowIso),
+    ...(Array.isArray(input.projectedItems) ? input.projectedItems.slice(0, MAX_ANALYST_REVIEW_ITEMS) : []),
   ].sort((left, right) => itemSort(left, right, nowMs));
-  const items = all.slice(0, MAX_ANALYST_REVIEW_ITEMS);
-  const counts = {
+  const reviewState = input.reviewState ?? emptyAnalystReviewStateStore();
+  const currentItems = all.map((item) => ({
+    ...item,
+    lifecycle: analystReviewLifecycle(item, reviewState, nowIso),
+  }));
+  const currentSubjects = new Set(currentItems.map((item) => item.subjectKey));
+  const orphanedItems = reviewState.records
+    .filter((decision) => !currentSubjects.has(decision.subjectKey))
+    .map((decision) => orphanedReviewItem(decision, nowIso));
+  const combinedItems = [...currentItems, ...orphanedItems]
+    .sort((left, right) => itemSort(left, right, nowMs));
+  const items = combinedItems.slice(0, MAX_ANALYST_REVIEW_ITEMS);
+  const counts: Record<AnalystReviewKind | 'all' | 'overdue', number> = {
     all: items.length,
     overdue: items.filter((item) => item.dueAt !== null && Date.parse(item.dueAt) <= nowMs).length,
     case: items.filter((item) => item.kind === 'case').length,
@@ -405,16 +520,26 @@ export function buildAnalystReviewInbox(
     evidence_gap: items.filter((item) => item.kind === 'evidence_gap').length,
     watchlist_change: items.filter((item) => item.kind === 'watchlist_change').length,
     bulk_session: items.filter((item) => item.kind === 'bulk_session').length,
+    comparison: items.filter((item) => item.kind === 'comparison').length,
+    suppression: items.filter((item) => item.kind === 'suppression').length,
+    change_window: items.filter((item) => item.kind === 'change_window').length,
+    desired_posture: items.filter((item) => item.kind === 'desired_posture').length,
+    certificate: items.filter((item) => item.kind === 'certificate').length,
+    incomplete_packet: items.filter((item) => item.kind === 'incomplete_packet').length,
+    detection_rule: items.filter((item) => item.kind === 'detection_rule').length,
+    orphaned_state: items.filter((item) => item.kind === 'orphaned_state').length,
   };
   return {
     items,
     counts,
-    truncated: inputTruncated || all.length > items.length,
+    truncated: inputTruncated || combinedItems.length > items.length,
     limitations: [
       'The inbox is a browser-local projection of retained records. It does not run checks, change cases, or infer maliciousness.',
       'Partial and inconclusive source states remain review prompts, not evidence of absence or safety.',
       'Evidence gaps are projected from explicit incomplete pins and open unknown or contradiction assertions; the queue does not invent missing facts.',
       'A reviewed dismissal hides only the exact current gap fingerprint and records the fixed reason in the case investigation trail. It does not resolve, delete, or rewrite the underlying evidence or assertion.',
+      'Review Item lifecycle is an analyst-authored overlay. Material evidence changes and time-bounded expiry return an item to review while retaining the earlier rationale as history.',
+      'Imported lifecycle records without matching source evidence remain explicit unavailable items; their earlier disposition is not reused as a current conclusion.',
     ],
   };
 }

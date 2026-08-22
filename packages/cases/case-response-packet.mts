@@ -17,12 +17,13 @@ import {
   type CaseObservedEffectState,
 } from './case-response-model.mts';
 import { canonicalArtifactJsonV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
+import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
   MAX_AFFECTED_PARTY_LENGTH,
@@ -41,7 +42,6 @@ import {
   MAX_RESPONSE_REFERENCE_LENGTH,
   MAX_RESPONSE_SELECTED_EVIDENCE,
   MAX_RESPONSE_VALUE_LENGTH,
-  PREVIOUS_CASE_RESPONSE_PACKET_VERSION,
   RESPONSE_ROUTE_STALE_AFTER_DAYS,
   SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS,
 } from '../contracts/case-portability.mts';
@@ -49,9 +49,9 @@ import {
 export {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
   MAX_AFFECTED_PARTY_LENGTH,
@@ -63,7 +63,6 @@ export {
   MAX_RESPONSE_CONTRADICTIONS,
   MAX_RESPONSE_HARM_LENGTH,
   MAX_RESPONSE_SELECTED_EVIDENCE,
-  PREVIOUS_CASE_RESPONSE_PACKET_VERSION,
   RESPONSE_ROUTE_STALE_AFTER_DAYS,
   SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS,
 };
@@ -1017,13 +1016,6 @@ function observationAge(observedAt: string, generatedAt: string): CaseResponsePa
   return { ageSeconds, band: 'over_seven_days', refreshRecommended: true };
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const source = value as Record<string, unknown>;
-  return `{${Object.keys(source).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(source[key])}`).join(',')}}`;
-}
-
 async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
@@ -1443,36 +1435,30 @@ function buildResponseAuthorisation(
   };
 }
 
-export async function verifyCaseResponsePacketIntegrity(packet: Readonly<{
-  schemaVersion: number;
-  integrity: Readonly<{
-    algorithm: unknown;
-    canonicalization: unknown;
-    scope: unknown;
-    digestSha256: unknown;
-  }>;
-  [key: string]: unknown;
-}>): Promise<boolean> {
-  const { integrity, ...unsigned } = packet;
-  const canonicalization = packet.schemaVersion === LEGACY_CASE_RESPONSE_PACKET_VERSION
-    && integrity.canonicalization === 'sorted-json-v1'
-    ? canonicalJson
-    : (packet.schemaVersion === PREVIOUS_CASE_RESPONSE_PACKET_VERSION || packet.schemaVersion === CASE_RESPONSE_PACKET_VERSION)
-      && integrity.canonicalization === SORTED_JSON_V2
-      ? canonicalArtifactJsonV2
-      : null;
+export async function verifyCaseResponsePacketIntegrity(packet: unknown): Promise<boolean> {
+  try {
+    assertBoundedJsonStructure(packet, 'Case-response packet');
+  } catch {
+    return false;
+  }
+  if (!packet || typeof packet !== 'object' || Array.isArray(packet)) return false;
+  const root = packet as Record<string, unknown>;
+  const integrityValue = root.integrity;
+  if (!integrityValue || typeof integrityValue !== 'object' || Array.isArray(integrityValue)) return false;
+  const integrity = integrityValue as Record<string, unknown>;
+  const { integrity: _integrity, ...unsigned } = root;
   if (
-    integrity.algorithm !== 'SHA-256'
-    || !canonicalization
+    !SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS.includes(root.schemaVersion as typeof SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS[number])
+    || integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== SORTED_JSON_V2
     || integrity.scope !== 'packet excluding integrity'
     || typeof integrity.digestSha256 !== 'string'
     || !/^[a-f0-9]{64}$/u.test(integrity.digestSha256)
   ) {
     return false;
   }
-  return integrity.digestSha256 === await sha256(canonicalization(unsigned));
+  return integrity.digestSha256 === await sha256(canonicalArtifactJsonV2(unsigned));
 }
-
 function escapeMarkdown(value: string): string {
   return value.replace(/([\\`*_[\]<>|])/gu, '\\$1').replace(/\r?\n/gu, ' ');
 }

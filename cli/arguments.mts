@@ -9,7 +9,9 @@ import {
 import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   type InvestigationPlanRecipe,
+  type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { parseCliFailPolicies, type CliFailPolicy } from './fail-policy.mts';
 import { isDirectLookupTarget } from '../lib/classify.mts';
@@ -18,6 +20,7 @@ import {
   cliMetaActionForInvocation,
   isCliCommand,
   type CliCommand,
+  type CliHelpGroup,
   type CompletionShell,
 } from './command-reference.mts';
 
@@ -36,7 +39,7 @@ type CliAction =
   | { action: 'help'; command?: CliCommand }
   | { action: 'version' }
   | ({ action: 'completion'; shell: CompletionShell })
-  | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -77,7 +80,9 @@ type CliAction =
   | ({ action: 'change-packet'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: InvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -376,18 +381,39 @@ function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'
 
 function parseCommandsArguments(argv: string[]): Extract<CliArguments, { action: 'commands' }> {
   let output: 'terminal' | 'json' = 'terminal';
+  let common = false;
+  let group: CliHelpGroup | null = null;
+  let mode: 'offline' | 'network' | null = null;
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--common') {
+      if (common) throw new CliUsageError('--common may be supplied only once.');
+      common = true;
+    } else if (argument === '--group') {
+      if (group !== null) throw new CliUsageError('--group may be supplied only once.');
+      const value = argv[++index];
+      if (!['investigate', 'respond', 'assure', 'utilities'].includes(value ?? '')) {
+        throw new CliUsageError('--group requires investigate, respond, assure, or utilities.');
+      }
+      group = value as CliHelpGroup;
+    } else if (argument === '--mode') {
+      if (mode !== null) throw new CliUsageError('--mode may be supplied only once.');
+      const value = argv[++index];
+      if (value !== 'offline' && value !== 'network') {
+        throw new CliUsageError('--mode requires offline or network.');
+      }
+      mode = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else throw new CliUsageError(`Unknown option "${argument}".`);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'commands', output, quiet, color };
+  return { action: 'commands', output, common, group, mode, quiet, color };
 }
 
 function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'doctor' }> {
@@ -1100,24 +1126,43 @@ function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { ac
 
 function parseWorkflowPlanArguments(argv: string[]): Extract<CliArguments, { action: 'workflow-plan' }> {
   const positional: string[] = [];
+  let discovery: 'list' | 'explain' | null = null;
+  let explainedRecipe: InvestigationPlanRecipe | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]!;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--list') {
+      if (discovery !== null) throw new CliUsageError('--list and --explain are mutually exclusive and may be supplied only once.');
+      discovery = 'list';
+    } else if (argument === '--explain') {
+      if (discovery !== null) throw new CliUsageError('--list and --explain are mutually exclusive and may be supplied only once.');
+      const value = argv[++index];
+      if (!INVESTIGATION_PLAN_RECIPES.includes(value as InvestigationPlanRecipe)) {
+        throw new CliUsageError(`--explain recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
+      }
+      discovery = 'explain';
+      explainedRecipe = value as InvestigationPlanRecipe;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else positional.push(argument);
   }
-  if (positional.length !== 2) throw new CliUsageError('workflow-plan requires one fixed recipe and one subject.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  if (discovery !== null) {
+    if (positional.length !== 0) throw new CliUsageError('workflow-plan discovery options do not accept a subject.');
+    if (discovery === 'list') return { action: 'workflow-plan', discovery, output, quiet, color };
+    return { action: 'workflow-plan', discovery, recipe: explainedRecipe!, output, quiet, color };
+  }
+  if (positional.length !== 2) throw new CliUsageError('workflow-plan requires one fixed recipe and one subject, --list, or --explain <recipe>.');
   const recipe = positional[0];
   if (!INVESTIGATION_PLAN_RECIPES.includes(recipe as InvestigationPlanRecipe)) {
     throw new CliUsageError(`workflow-plan recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
   }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'workflow-plan', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, output, quiet, color };
 }
 
@@ -1149,11 +1194,11 @@ function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { acti
   }
   if (positional.length !== 2) throw new CliUsageError('workflow-run requires one fixed recipe and one subject.');
   const recipe = positional[0];
-  if (!INVESTIGATION_PLAN_RECIPES.includes(recipe as InvestigationPlanRecipe)) {
-    throw new CliUsageError(`workflow-run recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
+  if (!RUNNABLE_INVESTIGATION_PLAN_RECIPES.includes(recipe as RunnableInvestigationPlanRecipe)) {
+    throw new CliUsageError(`workflow-run recipe must be one of: ${RUNNABLE_INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'workflow-run', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
+  return { action: 'workflow-run', recipe: recipe as RunnableInvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {

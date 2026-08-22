@@ -7,7 +7,7 @@ export const MAX_OFFLINE_COMPARISON_INPUT_BYTES = 8 * 1024 * 1024;
 export const PAGE_COMPARISON_VERSION = 3;
 export const CLI_PAGE_COMPARE_SCHEMA = 'whoisleuth.cli.page-compare';
 export const CLI_PAGE_COMPARE_VERSION = 4;
-export const SUPPORTED_CLI_PAGE_COMPARE_VERSIONS = Object.freeze([2, 3, CLI_PAGE_COMPARE_VERSION] as const);
+export const SUPPORTED_CLI_PAGE_COMPARE_VERSIONS = Object.freeze([CLI_PAGE_COMPARE_VERSION] as const);
 
 export const CLI_COMPARISON_LEDGER_SCHEMA = 'whoisleuth.cli.comparison-ledger';
 export const CLI_COMPARISON_LEDGER_VERSION = 1;
@@ -16,7 +16,7 @@ export const MAX_RETAINED_ARTIFACT_DIFF_BYTES = 8 * 1024 * 1024;
 export const RELATIONSHIP_EVIDENCE_SCHEMA = 'whoisleuth.relationship-evidence';
 export const RELATIONSHIP_EVIDENCE_VERSION = 2;
 export const TLS_RELATIONSHIP_PROFILE_VERSION = 2;
-export const SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS = Object.freeze([1, TLS_RELATIONSHIP_PROFILE_VERSION] as const);
+export const SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS = Object.freeze([TLS_RELATIONSHIP_PROFILE_VERSION] as const);
 
 export const OFFLINE_COMPARISON_COMPATIBILITY_FACADES = Object.freeze([
   ['frontend/src/lib/analysis/comparison-ledger-bulk.ts', 'packages/comparison/comparison-ledger-bulk.mts'],
@@ -49,8 +49,6 @@ export const OFFLINE_COMPARISON_COMPATIBILITY = Object.freeze([
 ]);
 
 const OFFLINE_COMPARISON_FIXTURES = Object.freeze([
-  { id: 'cli-page-compare-v2', path: 'test/fixtures/offline-comparison/cli-page-compare-v2.json', bytes: 5_059, sha256: 'b18e98826794967588ec3dbd8ade3d8ffe2e61d2034b6a5235a5d15560faaab4', schema: CLI_PAGE_COMPARE_SCHEMA, version: 2, role: 'historical' as const, expectation: 'historical_output_exact' as const, shapeId: 'offline-comparison.page-output.history' },
-  { id: 'cli-page-compare-v3', path: 'test/fixtures/offline-comparison/cli-page-compare-v3.json', bytes: 5_059, sha256: 'a432cc156392899377dede7145ec8e28b923bcb796ed34add0847ac320ca400a', schema: CLI_PAGE_COMPARE_SCHEMA, version: 3, role: 'historical' as const, expectation: 'historical_output_exact' as const, shapeId: 'offline-comparison.page-output.history' },
   { id: 'cli-page-compare-v4', path: 'test/fixtures/offline-comparison/cli-page-compare-v4.json', bytes: 5_059, sha256: '12bff7f46b852778f0f38926159083f37c34038ccdbbf8c4fc904ce03482360c', schema: CLI_PAGE_COMPARE_SCHEMA, version: 4, role: 'current' as const, expectation: 'accepted_exact' as const, shapeId: 'offline-comparison.page-output.current' },
   { id: 'cli-comparison-ledger-v1', path: 'test/fixtures/offline-comparison/cli-comparison-ledger-v1.json', bytes: 6_820, sha256: '861a733500dede0af9f2551d94db66dc51b0a2fbdb68e377a71fd4661a51530b', schema: CLI_COMPARISON_LEDGER_SCHEMA, version: 1, role: 'current' as const, expectation: 'accepted_exact' as const, shapeId: 'offline-comparison.ledger-output.current' },
 ].map((fixture) => Object.freeze({
@@ -133,7 +131,6 @@ export const OFFLINE_COMPARISON_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily({
     metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: [
-      offlineOutputShape('offline-comparison.page-output.history', CLI_PAGE_COMPARE_SCHEMA, [2, 3], ['schema', 'version', 'generatedAt', 'left', 'right', 'page', 'technology', 'tls', 'limitations']),
       offlineOutputShape('offline-comparison.page-output.current', CLI_PAGE_COMPARE_SCHEMA, [4], ['schema', 'version', 'generatedAt', 'left', 'right', 'page', 'technology', 'tls', 'limitations']),
       offlineOutputShape('offline-comparison.ledger-output.current', CLI_COMPARISON_LEDGER_SCHEMA, [1], ['schema', 'version', 'generatedAt', 'artifactFamily', 'left', 'right', 'index', 'details', 'limitations']),
     ],

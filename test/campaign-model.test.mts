@@ -168,7 +168,7 @@ test('rejects invalid and over-limit domain additions', () => {
 test('merges matching ids additively while newer metadata wins', () => {
   const local = campaign({ name: 'Local', domains: ['local.invalid'], updatedAt: '2026-07-02T00:00:00.000Z' });
   const imported = campaign({ name: 'Imported', domains: ['imported.invalid'], createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-07-03T00:00:00.000Z' });
-  const result = mergeCampaigns([local], { version: 1, campaigns: [imported] });
+  const result = mergeCampaigns([local], { schema: 'whoisleuth.campaigns', version: 1, campaigns: [imported] });
   assert.equal(result.added, 0);
   assert.equal(result.updated, 1);
   assert.equal(requiredValue(result.campaigns[0]).name, 'Imported');
@@ -179,14 +179,14 @@ test('merges matching ids additively while newer metadata wins', () => {
 test('an older import cannot overwrite local metadata', () => {
   const local = campaign({ name: 'Local', description: 'Keep me', updatedAt: '2026-07-04T00:00:00.000Z' });
   const imported = campaign({ name: 'Old import', description: 'Old', domains: ['extra.invalid'], updatedAt: '2026-07-03T00:00:00.000Z' });
-  const result = mergeCampaigns([local], { version: 1, campaigns: [imported] });
+  const result = mergeCampaigns([local], { schema: 'whoisleuth.campaigns', version: 1, campaigns: [imported] });
   assert.equal(requiredValue(result.campaigns[0]).name, 'Local');
   assert.equal(requiredValue(result.campaigns[0]).description, 'Keep me');
   assert.ok(requiredValue(result.campaigns[0]).domains.includes('extra.invalid'));
 });
 
 test('imports new records, skips malformed records and is idempotent', () => {
-  const payload = { version: 1, campaigns: [campaign({ id: 'portable' }), { id: 'bad', name: ' ' }] };
+  const payload = { schema: 'whoisleuth.campaigns', version: 1, campaigns: [campaign({ id: 'portable' }), { id: 'bad', name: ' ' }] };
   const first = mergeCampaigns([], payload);
   assert.deepEqual({ added: first.added, updated: first.updated, skipped: first.skipped }, { added: 1, updated: 0, skipped: 1 });
   const second = mergeCampaigns(first.campaigns, payload);
@@ -201,15 +201,15 @@ test('bounds recovery and import work before iterating attacker-controlled array
     name: `Input ${index}`,
   }));
   assert.equal(normalizeCampaignStore(oversized).campaigns.length, MAX_CAMPAIGNS);
-  const result = mergeCampaigns([], { version: 1, campaigns: oversized });
+  const result = mergeCampaigns([], { schema: 'whoisleuth.campaigns', version: 1, campaigns: oversized });
   assert.equal(result.campaigns.length, MAX_CAMPAIGNS);
   assert.equal(result.added, MAX_CAMPAIGNS);
   assert.equal(result.skipped, oversized.length - MAX_CAMPAIGNS);
 });
 
 test('rejects a future import version before changing local data', () => {
-  assert.throws(() => mergeCampaigns([campaign()], { version: 2, campaigns: [] }), /newer schema 2/);
-  assert.throws(() => mergeCampaigns([campaign()], { version: 1.5, campaigns: [] }), /newer schema 1.5/);
+  assert.throws(() => mergeCampaigns([campaign()], { schema: 'whoisleuth.campaigns', version: 2, campaigns: [] }), /newer schema 2/);
+  assert.throws(() => mergeCampaigns([campaign()], { schema: 'whoisleuth.campaigns', version: 1.5, campaigns: [] }), /newer schema 1.5/);
 });
 
 test('rejects a different named export schema', () => {

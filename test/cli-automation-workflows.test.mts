@@ -14,7 +14,7 @@ import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
-import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
+import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
 import type { BulkLookupResult } from '../cli/bulk.mts';
@@ -163,7 +163,7 @@ describe('offline domain assurance', () => {
       now: () => NOW,
       readArtifactInput: async () => JSON.stringify({
         schema: 'whoisleuth.domain-assurance.input',
-        version: 1,
+        version: 2,
         kind: 'retirement',
         domain: 'retired.example',
         checks: { autoRenewDisabled: true, registrarLockMaintained: true },
@@ -209,7 +209,7 @@ describe('offline domain assurance', () => {
         schema: 'whoisleuth.domain-change-packet.input', version: 1, domain: 'example.test', reference: 'CHG-42',
         preChange: change('192.0.2.10'), postChange: change('192.0.2.20'),
         assurance: {
-          schema: 'whoisleuth.domain-assurance.input', version: 1, kind: 'planned-change', domain: 'example.test',
+          schema: 'whoisleuth.domain-assurance.input', version: 2, kind: 'planned-change', domain: 'example.test',
           change: {
             reference: 'CHG-42', startsAt: '2026-08-05T00:00:00Z', endsAt: '2026-08-05T02:00:00Z',
             milestones: [{ id: 'dns', label: 'DNS published', expectedBy: NOW, evidenceSource: 'fixture', state: 'observed', observedAt: NOW, evidenceReference: 'post:dns' }],
@@ -520,6 +520,25 @@ describe('strict exit and machine progress events', () => {
       exitCode: EXIT_CODES.USAGE,
     });
   });
+
+  test('escapes terminal-unsafe Unicode in machine progress events without changing parsed values', () => {
+    const stderr = capture();
+    const events = createCliProgressEvents(stderr.stream, {
+      command: 'lookup', enabled: true, now: () => NOW,
+    });
+    events.emit({
+      event: 'warning',
+      source: 'fixture\u009bsource',
+      state: 'partial\u202e',
+      reason: 'line\u2028break\u00admarker',
+    });
+
+    assert.doesNotMatch(stderr.value(), /[\u007f-\u009f\u2028\u2029]|\p{Default_Ignorable_Code_Point}/u);
+    const parsed = JSON.parse(stderr.value());
+    assert.equal(parsed.source, 'fixture\u009bsource');
+    assert.equal(parsed.state, 'partial\u202e');
+    assert.equal(parsed.reason, 'line break\u00admarker');
+  });
 });
 
 describe('direct reports and saved Lookup diff', () => {
@@ -657,10 +676,16 @@ describe('direct reports and saved Lookup diff', () => {
     const legacyExplicit = JSON.parse(savedLookup('history.example')) as Record<string, unknown>;
     legacyExplicit.version = 1;
     legacyExplicit.generatedAt = '2026-01-15T01:30:00.000Z';
+    const before = structuredClone(legacyZoneLess);
+    assert.throws(
+      () => buildCliLookupTimeline([JSON.stringify(legacyZoneLess), JSON.stringify(legacyExplicit)], NOW),
+      /explicit timezone/u,
+    );
+    assert.deepEqual(legacyZoneLess, before);
     assert.deepEqual(
-      buildCliLookupTimeline([JSON.stringify(legacyZoneLess), JSON.stringify(legacyExplicit)], NOW)
+      buildCliLookupTimeline([JSON.stringify(legacyExplicit), oldest], NOW)
         .observations.map((item) => item.generatedAt),
-      ['2026-01-15T01:30:00.000Z', '2026-01-15T12:00:00.000Z'],
+      ['2026-01-15T01:30:00.000Z', '2026-06-01T00:00:00.000Z'],
     );
   });
 
@@ -778,7 +803,7 @@ describe('resumable Bulk checkpoints', () => {
     }
   });
 
-  test('migrates legacy checkpoint rows without inventing observation time', () => {
+  test('rejects a reader-only checkpoint without inventing observation time', () => {
     const queries = ['legacy.example'];
     const legacy = {
       schema: 'whoisleuth.cli.bulk-checkpoint',
@@ -799,15 +824,13 @@ describe('resumable Bulk checkpoints', () => {
         },
       }],
     };
-    const parsed = parseBulkCheckpoint(JSON.stringify(legacy), {
+    const before = structuredClone(legacy);
+    assert.throws(() => parseBulkCheckpoint(JSON.stringify(legacy), {
       queries,
       deep: false,
       classifyQuery: classifiedDomain,
-    });
-    assert.equal(parsed.results[0]?.observedAt, null);
-    assert.equal(parsed.startedAt, '2026-08-01T00:00:00.000Z');
-    assert.equal(parsed.updatedAt, '2026-08-01T00:01:00.000Z');
-    assert.equal(parsed.results[0]?.collectionOrigin, 'resumed_checkpoint');
+    }), /version 2/u);
+    assert.deepEqual(legacy, before);
   });
 
   test('coalesces settlement bursts into one active write and one follow-up', async () => {

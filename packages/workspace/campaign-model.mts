@@ -265,12 +265,17 @@ export function mergeCampaigns(localRaw: unknown, importedRaw: unknown) {
   assertWorkspaceInputGraph(importedRaw, 'Imported campaign document');
   assertWorkspacePortableVersion(importedRaw, CAMPAIGN_SCHEMA_VERSION, 'Imported campaign document');
   const importedEnvelope = plainRecord(importedRaw);
-  if (importedEnvelope && typeof importedEnvelope.schema === 'string' && importedEnvelope.schema !== CAMPAIGN_SCHEMA) {
+  if (!importedEnvelope
+    || importedEnvelope.schema !== CAMPAIGN_SCHEMA
+    || !Array.isArray(importedEnvelope.campaigns)) {
     throw new Error('This JSON file is not a WHOISleuth campaign export.');
   }
   const version = campaignStoreVersion(importedRaw);
   if (version !== null && version > CAMPAIGN_SCHEMA_VERSION) {
     throw new Error(`This campaign file uses newer schema ${version}. Update the app before importing it.`);
+  }
+  if (version !== CAMPAIGN_SCHEMA_VERSION) {
+    throw new Error(`Expected campaign schema ${CAMPAIGN_SCHEMA_VERSION}.`);
   }
   const local = normalizeCampaignStore(localRaw).campaigns;
   const byId = new Map(local.map((campaign) => [campaign.id, campaign]));

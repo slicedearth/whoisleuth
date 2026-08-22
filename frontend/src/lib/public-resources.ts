@@ -34,10 +34,10 @@ export type PublicResource = Readonly<{
 export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'open-source-domain-intelligence',
-    shortTitle: 'Open-source domain intelligence',
-    title: 'Open-source domain intelligence without a hidden verdict',
+    shortTitle: 'Domain investigation evidence',
+    title: 'How WHOISleuth handles domain investigation evidence',
     description: 'See how WHOISleuth combines WHOIS, RDAP, DNS, certificates, website and network evidence while keeping every source and limitation visible.',
-    eyebrow: 'Domain intelligence',
+    eyebrow: 'Domain investigation',
     summary: Object.freeze([
       'A useful domain investigation rarely comes from one database. Registration records describe the domain, DNS shows current publication, certificates show issued identities, and website observations describe one captured response.',
       'WHOISleuth keeps those evidence classes separate. It uses authoritative registry evidence for registration decisions, then adds supporting context without converting a failed or missing source into a claim of absence or safety.',
@@ -120,9 +120,9 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Does page or infrastructure evidence match a reviewed official baseline?',
     ]),
     demoHref: '/demo',
-    demoLabel: 'Try the synthetic brand workflow',
+    demoLabel: 'Try the brand example',
     guideHref: '/resources#tool-discover',
-    guideLabel: 'Read the Discover workflow',
+    guideLabel: 'Read about Discover',
     repositoryDoc: 'docs/idn-confusables.md',
   }),
   Object.freeze({
@@ -132,7 +132,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     description: 'Learn what public certificate logs can reveal about domain names, and why certificate observations need registration and website context.',
     eyebrow: 'Certificate evidence',
     summary: Object.freeze([
-      'Certificate Transparency logs can expose hostnames that requested publicly trusted certificates. This makes them useful for finding brand-related names and reviewing certificate reuse before a domain appears in other workflows.',
+      'Certificate Transparency logs can expose hostnames included in publicly logged certificates. This makes them useful for finding brand-related names and reviewing certificate reuse before a domain appears elsewhere.',
       'Log presence is only an observation. It does not establish that a site is active, that the certificate is still deployed, or that a hostname is controlled by the party suggested by its name.',
     ]),
     steps: Object.freeze([
@@ -158,13 +158,13 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   }),
   Object.freeze({
     slug: 'domain-investigation-workflow',
-    shortTitle: 'Domain investigation workflow',
-    title: 'A source-aware domain investigation workflow',
+    shortTitle: 'Domain investigation guide',
+    title: 'A practical domain investigation guide',
     description: 'Move from one domain question to registration, DNS, certificate, website, relationship and case evidence without losing source health or scope.',
-    eyebrow: 'Analyst workflow',
+    eyebrow: 'Analyst guide',
     summary: Object.freeze([
       'The fastest route through a domain investigation is not always the deepest scan. Start with the decision you need to make, collect only the evidence needed for that decision, and retain the facts that another reviewer must be able to reproduce.',
-      'WHOISleuth supports single-domain triage, brand sweeps and infrastructure pivots through fixed bounded guides. Every network stage requires an explicit action, and the guide cannot execute arbitrary scripts or submit a report.',
+      'WHOISleuth supports single-domain review, brand sweeps and infrastructure pivots. Network collection and report submission remain explicit actions.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Frame the decision', body: 'State whether you are checking registration, possible impersonation, infrastructure overlap, acquisition readiness, service change or an abuse-reporting lead.' }),
@@ -182,7 +182,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'What unknown or contradiction should be carried into the next step?',
     ]),
     demoHref: '/demo',
-    demoLabel: 'Walk through the six-stage demo',
+    demoLabel: 'Try the investigation example',
     guideHref: '/resources#start',
     guideLabel: 'Choose an investigation path',
     repositoryDoc: 'docs/application-guide.md',
@@ -191,7 +191,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'bulk-domain-comparison',
     shortTitle: 'Bulk domain comparison',
     title: 'Compare multiple domains without flattening incomplete evidence',
-    description: 'Use bounded Bulk Fast or Bulk Deep collection, source-aware filters and two-domain comparisons to prioritise a review queue.',
+    description: 'Use Bulk Fast or Bulk Deep collection, source-state filters and two-domain comparisons to prioritise a review queue.',
     eyebrow: 'Bulk triage',
     summary: Object.freeze([
       'Bulk review is most useful when every row follows the same collection contract and incomplete sources stay visible. A failed domain request must not look like a low-risk result, and a missing field must not be treated as observed absence.',
@@ -200,7 +200,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     steps: Object.freeze([
       Object.freeze({ title: 'Choose a focused set', body: 'Paste a bounded domain list or carry a reviewed shortlist from Discover. Remove unrelated names before collection.' }),
       Object.freeze({ title: 'Select depth and pacing', body: 'Fast emphasizes registration. Bulk Deep adds compact DNS, mail, website, TLS, technology and certificate comparison fields without becoming a full single-domain Deep response.' }),
-      Object.freeze({ title: 'Review before acting', body: 'Sort and filter by source-aware fields, compare two domains, retain useful relationships, and act only on an explicit selection.' }),
+      Object.freeze({ title: 'Review before acting', body: 'Sort and filter by source state, compare two domains, retain useful relationships, and act only on an explicit selection.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Per-domain collection state', usefulFor: 'Separating complete, partial, failed and unsettled rows.', limitation: 'A completed request can still contain unavailable individual sources.' }),
@@ -215,7 +215,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     demoHref: '/demo',
     demoLabel: 'See synthetic Bulk triage',
     guideHref: '/resources#tool-bulk',
-    guideLabel: 'Read the Bulk workflow',
+    guideLabel: 'Read about Bulk',
     repositoryDoc: 'docs/application-guide.md',
   }),
   Object.freeze({

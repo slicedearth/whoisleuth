@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { CLI_PARSERS, CliUsageError, parseCliArguments, type CliCommand } from '../cli/arguments.mts';
-import { buildCliCommandCatalogue } from '../cli/command-catalogue.mts';
+import { buildCliCommandCatalogue, selectCliCommands } from '../cli/command-catalogue.mts';
 import {
   CLI_COMMAND_REGISTRY,
   CLI_COMMANDS,
@@ -16,6 +16,8 @@ import {
   HELP,
   HELP_COMMANDS_BY_GROUP,
   OPTIONS_BY_COMMAND,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
+  commandHelp,
   cliMetaActionForInvocation,
   cliInvocationNetworkEffect,
   commandOptionSpec,
@@ -31,11 +33,13 @@ import { buildShellCompletion } from '../cli/completion.mts';
 import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
 import { buildCliManual } from '../cli/manual.mts';
 import { INLINE_CLI_COMMANDS } from '../cli/runner.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
+import {
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_ARCHIVE_VERSION,
+} from '../packages/contracts/case-portability.mts';
 
-const FROZEN_COMMANDS = Object.freeze(JSON.parse(readFileSync(
-  new URL('../fixtures/cli-command-inventory-v1.json', import.meta.url),
-  'utf8',
-)) as string[]);
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 function bashCandidates(script: string, words: readonly string[]): string[] {
@@ -164,6 +168,7 @@ function withGrammarOption(
   const specification = commandOptionSpec(command, option);
   assert.ok(specification && specification.arity === 1, `${command} ${option}`);
   let argv = withoutOption(MINIMUM_ARGUMENTS[command], option, 1);
+  if (command === 'workflow-plan' && option === '--explain') argv = ['workflow-plan'];
   if (option === '--fail-on') argv = argv.filter((argument) => argument !== '--plan');
   if (option === '--manifest-entry' && !argv.includes('--manifest')) argv.push('--manifest', 'manifest.json');
   if (whenOptionPresent === '--deep') {
@@ -201,10 +206,10 @@ function referencedConstraintOptions(constraint: CliGrammarConstraint): readonly
 }
 
 describe('canonical CLI command registry', () => {
-  test('preserves the independent ordered 47-command contract and deep immutability', () => {
-    assert.equal(CLI_COMMAND_REGISTRY.length, 47);
-    assert.deepEqual(CLI_COMMANDS, FROZEN_COMMANDS);
-    assert.equal(new Set(CLI_COMMANDS).size, 47);
+  test('keeps one ordered, unique, deeply immutable command contract', () => {
+    assert.ok(CLI_COMMAND_REGISTRY.length > 0);
+    assert.deepEqual(CLI_COMMANDS, CLI_COMMAND_REGISTRY.map((definition) => definition.command));
+    assert.equal(new Set(CLI_COMMANDS).size, CLI_COMMANDS.length);
     assertDeepFrozen(CLI_COMMAND_REGISTRY);
     assertDeepFrozen(INVESTIGATION_PLAN_RECIPES, 'investigationRecipes');
     for (const [order, definition] of CLI_COMMAND_REGISTRY.entries()) {
@@ -216,9 +221,9 @@ describe('canonical CLI command registry', () => {
     assert.equal(isCliCommand('not-a-command'), false);
 
     const helpCommands = Object.values(HELP_COMMANDS_BY_GROUP).flat();
-    assert.equal(helpCommands.length, 47);
-    assert.deepEqual([...helpCommands].sort(), [...FROZEN_COMMANDS].sort());
-    assert.equal(new Set(helpCommands).size, 47);
+    assert.equal(helpCommands.length, CLI_COMMANDS.length);
+    assert.deepEqual([...helpCommands].sort(), [...CLI_COMMANDS].sort());
+    assert.equal(new Set(helpCommands).size, CLI_COMMANDS.length);
   });
 
   test('owns typed option grammar, bounded values, ranges, occurrences, and constraints', () => {
@@ -280,8 +285,12 @@ describe('canonical CLI command registry', () => {
       { name: 'sources', valueKind: 'file', minimum: 2, maximum: 2, values: [], inputSource: 'argv', requiredWhenOptions: [] },
     ]);
     assert.deepEqual(commandPositionalSpecs('workflow-run'), [
-      { name: 'recipe', valueKind: 'enum', minimum: 1, maximum: 1, values: INVESTIGATION_PLAN_RECIPES, inputSource: 'argv', requiredWhenOptions: [] },
+      { name: 'recipe', valueKind: 'enum', minimum: 1, maximum: 1, values: RUNNABLE_INVESTIGATION_PLAN_RECIPES, inputSource: 'argv', requiredWhenOptions: [] },
       { name: 'subject', valueKind: 'text', minimum: 1, maximum: 1, values: [], inputSource: 'argv', requiredWhenOptions: [] },
+    ]);
+    assert.deepEqual(commandPositionalSpecs('workflow-plan'), [
+      { name: 'recipe', valueKind: 'enum', minimum: 0, maximum: 1, values: INVESTIGATION_PLAN_RECIPES, inputSource: 'argv', requiredWhenOptions: [] },
+      { name: 'subject', valueKind: 'text', minimum: 0, maximum: 1, values: [], inputSource: 'argv', requiredWhenOptions: [] },
     ]);
     assert.deepEqual(commandPositionalSpecs('lookup'), [
       { name: 'target', valueKind: 'text', minimum: 0, maximum: 1, values: [], inputSource: 'argv_or_stdin', requiredWhenOptions: ['--browse'] },
@@ -312,8 +321,8 @@ describe('canonical CLI command registry', () => {
   });
 
   test('binds every command to one parser and its own minimal accepted action', () => {
-    assert.deepEqual(Object.keys(CLI_PARSERS), FROZEN_COMMANDS);
-    assert.deepEqual(Object.keys(MINIMUM_ARGUMENTS), FROZEN_COMMANDS);
+    assert.deepEqual(Object.keys(CLI_PARSERS), CLI_COMMANDS);
+    assert.deepEqual(Object.keys(MINIMUM_ARGUMENTS), CLI_COMMANDS);
     for (const command of CLI_COMMANDS) {
       const parsed = parseCliArguments(MINIMUM_ARGUMENTS[command]);
       assert.equal(parsed.action, command, command);
@@ -497,7 +506,6 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'discovery_scan').map(([command]) => command), ['discover-scan']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'evidence').map(([command]) => command), ['inspect-archive', 'sign-artifact', 'verify-signature']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'network').map(([command]) => command), ['ct-search', 'posture', 'http', 'tls', 'dnssec-validate', 'mail-transport']);
-    assert.equal(Object.values(owners).filter((owner) => owner === 'inline').length, 34);
     assert.deepEqual(
       INLINE_CLI_COMMANDS,
       CLI_COMMAND_REGISTRY.filter((definition) => definition.execution.handlerOwner === 'inline')
@@ -522,7 +530,7 @@ describe('canonical CLI command registry', () => {
       usage: COMMAND_USAGE,
       packageVersion: '1.47.4',
     });
-    assert.deepEqual(catalogue.commands.map((entry) => entry.command), FROZEN_COMMANDS);
+    assert.deepEqual(catalogue.commands.map((entry) => entry.command), CLI_COMMANDS);
     for (const entry of catalogue.commands) {
       assert.deepEqual(Object.keys(entry).sort(), [
         'boundary', 'collection', 'command', 'description', 'example', 'usage',
@@ -530,6 +538,33 @@ describe('canonical CLI command registry', () => {
       assert.equal(Object.hasOwn(entry, 'grammar'), false);
       assert.equal(Object.hasOwn(entry, 'execution'), false);
     }
+  });
+
+  test('selects the canonical catalogue with deterministic intersection filters', () => {
+    const defaults = selectCliCommands(CLI_COMMAND_REGISTRY, { common: false, group: null, mode: null });
+    assert.deepEqual(defaults, CLI_COMMANDS);
+    const filtered = selectCliCommands(CLI_COMMAND_REGISTRY, {
+      common: true,
+      group: 'respond',
+      mode: 'offline',
+    });
+    assert.deepEqual(filtered, ['case-pack', 'export']);
+    assert.deepEqual(selectCliCommands(CLI_COMMAND_REGISTRY, {
+      common: true,
+      group: 'investigate',
+      mode: 'offline',
+    }), ['discover', 'review-evidence']);
+    assert.ok(CLI_COMMAND_REGISTRY.every((definition) => (
+      definition.documentation.inputLimits.length > 0
+      && definition.documentation.outputLimits.length > 0
+      && definition.documentation.outputFormats.length > 0
+    )));
+    assert.deepEqual(
+      CLI_COMMAND_REGISTRY
+        .filter((definition) => definition.documentation.supportedSchemaIdentifiers.length === 0)
+        .map((definition) => definition.command),
+      ['completion', 'manual', 'registry-scaffold'],
+    );
   });
 
   test('keeps fixed workflow steps aligned with invocation-level network effects', () => {
@@ -725,12 +760,10 @@ describe('canonical CLI command registry', () => {
     }
   });
 
-  test('keeps the public release inventory exact and documents the scaffold bootstrap exception', () => {
+  test('keeps the installed registry authoritative and documents the scaffold bootstrap exception', () => {
     const reference = readFileSync(new URL('../docs/cli-reference.md', import.meta.url), 'utf8');
-    const supported = reference.match(/This release supports ([\s\S]*?)\. Additional command families/u)?.[1] ?? '';
-    const documented = [...supported.matchAll(/`([a-z][a-z0-9-]*)`/gu)].map((match) => match[1]);
-    assert.deepEqual([...documented].sort(), [...FROZEN_COMMANDS].sort());
-    assert.equal(new Set(documented).size, 47);
+    assert.match(reference, /Installed `whoisleuth <command> --help`,[\s\S]*exact grammar, option and[\s\S]*command authorities/iu);
+    assert.doesNotMatch(reference, /This release supports/iu);
     for (const source of [
       reference,
       readFileSync(new URL('../docs/cli.md', import.meta.url), 'utf8'),
@@ -739,5 +772,18 @@ describe('canonical CLI command registry', () => {
     ]) {
       assert.match(source, /registry-scaffold[\s\S]*--profile[\s\S]*--config/iu);
     }
+  });
+
+  test('derives workspace archive help from the canonical current and public versions', () => {
+    const help = commandHelp('inspect-archive');
+    assert.match(help, new RegExp(`current version-${WORKSPACE_ARCHIVE_VERSION}`, 'u'));
+    assert.match(help, new RegExp(`exact public version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION} support`, 'u'));
+    assert.match(help, new RegExp(`archive v${WORKSPACE_ARCHIVE_VERSION}.*exact v${PUBLIC_WORKSPACE_ARCHIVE_VERSION} compatibility`, 'su'));
+    assert.doesNotMatch(help, new RegExp(`current version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION}(?:\\D|$)`, 'u'));
+  });
+
+  test('keeps public CLI exit-status guidance aligned with executable ownership', () => {
+    const executableCodes = [...Object.values(EXIT_CODES), 143].sort((left, right) => left - right);
+    assert.deepEqual(CLI_PUBLIC_GUIDANCE.exitCodes.map((item) => item.code), executableCodes);
   });
 });

@@ -7,13 +7,12 @@ import { writePrivateFile } from './output-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';
 export const CLI_DISCOVERY_OBSERVATION_VERSION = 2;
 export const MAX_DISCOVERY_OBSERVATION_BYTES = 8 * 1024 * 1024;
 const MAX_DISCOVERY_OBSERVATIONS = 500;
-const SUPPORTED_DISCOVERY_OBSERVATION_VERSIONS = new Set([1, CLI_DISCOVERY_OBSERVATION_VERSION]);
 
 type Candidate = { domain: unknown };
 type Observation = {
@@ -50,17 +49,13 @@ function domainValue(value: unknown): string {
   return domain;
 }
 
-function normalizedTimestamp(value: unknown, label: string, optional = false, legacy = false): string | null {
+function normalizedTimestamp(value: unknown, label: string, optional = false): string | null {
   if (optional && value === null) return null;
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
     throw new CliUsageError(`${label} is invalid.`);
   }
   const normalized = normalizeExplicitIsoTimestamp(value);
   if (normalized) return normalized;
-  if (legacy) {
-    const legacyTimestamp = normalizeLegacyIsoTimestamp(value);
-    if (legacyTimestamp) return legacyTimestamp;
-  }
   throw new CliUsageError(`${label} is invalid.`);
 }
 
@@ -102,30 +97,23 @@ function normalizeDns(value: unknown): Observation['dns'] | null {
   };
 }
 
-function normalizeObservation(value: unknown, version: number): Observation | null {
+function normalizeObservation(value: unknown): Observation | null {
   const item = record(value);
   const dns = normalizeDns(item.dns);
   try {
-    const validAttemptStates = version === 1 ? ['error', 'success'] : ['error', 'partial', 'success'];
     if (!dns
-      || !validAttemptStates.includes(String(item.latestAttemptState))
+      || !['error', 'partial', 'success'].includes(String(item.latestAttemptState))
       || typeof item.availabilityState !== 'string' || !item.availabilityState || item.availabilityState.length > 40
       || /[\u0000-\u001f\u007f]/u.test(item.availabilityState)
       || typeof item.confidence !== 'string' || !item.confidence || item.confidence.length > 40
       || /[\u0000-\u001f\u007f]/u.test(item.confidence)) return null;
-    const legacyObservedAt = normalizedTimestamp(item.observedAt, 'Discovery observation time', version >= 2, version === 1);
-    const registrationObservedAt = version === 1
-      ? item.availabilityState === 'unknown' ? null : legacyObservedAt
-      : normalizedTimestamp(item.registrationObservedAt, 'Discovery registration observation time', true);
-    const dnsObservedAt = version === 1
-      ? ['partial', 'success'].includes(dns.status) ? legacyObservedAt : null
-      : normalizedTimestamp(item.dnsObservedAt, 'Discovery DNS observation time', true);
+    const declaredObservedAt = normalizedTimestamp(item.observedAt, 'Discovery observation time', true);
+    const registrationObservedAt = normalizedTimestamp(item.registrationObservedAt, 'Discovery registration observation time', true);
+    const dnsObservedAt = normalizedTimestamp(item.dnsObservedAt, 'Discovery DNS observation time', true);
     const observedAt = latestObservedAt(registrationObservedAt, dnsObservedAt);
-    if (version >= 2 && legacyObservedAt !== observedAt) return null;
-    const latestRegistrationState = version === 1
-      ? registrationObservedAt ? 'observed' : 'unavailable'
-      : item.latestRegistrationState;
-    const latestDnsState = version === 1 ? dns.status : item.latestDnsState;
+    if (declaredObservedAt !== observedAt) return null;
+    const latestRegistrationState = item.latestRegistrationState;
+    const latestDnsState = item.latestDnsState;
     if (!['observed', 'unavailable'].includes(String(latestRegistrationState))
       || typeof latestDnsState !== 'string' || !latestDnsState || latestDnsState.length > 40
       || /[\u0000-\u001f\u007f]/u.test(latestDnsState)) return null;
@@ -135,7 +123,7 @@ function normalizeObservation(value: unknown, version: number): Observation | nu
       observedAt,
       registrationObservedAt,
       dnsObservedAt,
-      latestAttemptAt: normalizedTimestamp(item.latestAttemptAt, 'Discovery latest-attempt time', false, version === 1) ?? '',
+      latestAttemptAt: normalizedTimestamp(item.latestAttemptAt, 'Discovery latest-attempt time') ?? '',
       latestAttemptState: item.latestAttemptState as Observation['latestAttemptState'],
       latestRegistrationState: latestRegistrationState as Observation['latestRegistrationState'],
       latestDnsState,
@@ -164,8 +152,8 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
   const version = typeof document.version === 'number' && Number.isSafeInteger(document.version)
     ? document.version
     : 0;
-  if (document.schema !== CLI_DISCOVERY_OBSERVATION_SCHEMA || !SUPPORTED_DISCOVERY_OBSERVATION_VERSIONS.has(version)) {
-    throw new CliUsageError(`Discovery observation snapshot must use ${CLI_DISCOVERY_OBSERVATION_SCHEMA} version 1 or ${CLI_DISCOVERY_OBSERVATION_VERSION}.`);
+  if (document.schema !== CLI_DISCOVERY_OBSERVATION_SCHEMA || version !== CLI_DISCOVERY_OBSERVATION_VERSION) {
+    throw new CliUsageError(`Discovery observation snapshot must use ${CLI_DISCOVERY_OBSERVATION_SCHEMA} version ${CLI_DISCOVERY_OBSERVATION_VERSION}.`);
   }
   if (document.configurationDigestSha256 !== expectedDigest) {
     throw new CliUsageError('Discovery observation snapshot does not match this candidate set, scan mode, or resolver selection.');
@@ -173,13 +161,8 @@ function parseObservationSnapshot(text: string, expectedDigest: string): Snapsho
   if (!Array.isArray(document.observations) || document.observations.length > MAX_DISCOVERY_OBSERVATIONS) {
     throw new CliUsageError('Discovery observation snapshot metadata is invalid.');
   }
-  const generatedAt = normalizedTimestamp(
-    document.generatedAt,
-    'Discovery snapshot generation time',
-    false,
-    version === 1,
-  ) ?? '';
-  const observations = document.observations.map((item) => normalizeObservation(item, version));
+  const generatedAt = normalizedTimestamp(document.generatedAt, 'Discovery snapshot generation time') ?? '';
+  const observations = document.observations.map((item) => normalizeObservation(item));
   if (observations.some((item) => item === null) || document.observationCount !== observations.length) {
     throw new CliUsageError('Discovery observation snapshot contains invalid evidence.');
   }

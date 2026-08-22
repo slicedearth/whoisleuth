@@ -18,7 +18,6 @@ export {
 export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
 export const DOMAIN_CONTROL_MANIFEST_SCHEMA = 'whoisleuth.domain-control-manifest';
 export const DOMAIN_CONTROL_MANIFEST_INPUT_VERSION = 1;
-export const LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION = 1;
 export const DOMAIN_CONTROL_MANIFEST_VERSION = 2;
 export const MAX_DOMAIN_CONTROL_MANIFEST_BYTES = 16 * 1024 * 1024;
 export const MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES = 1;
@@ -172,7 +171,6 @@ export type DomainControlManifestInput = Readonly<{
   entries: readonly DomainControlManifestInputEntry[];
 }>;
 export const SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS = Object.freeze([
-  LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_MANIFEST_VERSION,
 ] as const);
 
@@ -203,7 +201,7 @@ export const DOMAIN_CONTROL_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
   owner: 'packages/contracts/domain-control-manifest.mts',
-  note: 'Version 2 uses deterministic sorted-json-v2 integrity for bounded analyst-authored desired state; version 1 remains readable and browser import is an explicit non-destructive field selection.',
+  note: 'The v1.47.4 current writer and v2 use version 2 with deterministic sorted-json-v2 integrity for bounded analyst-authored desired state; browser import is an explicit non-destructive field selection.',
 });
 
 export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
@@ -234,22 +232,6 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     {
       compatibilityId: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
       schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-      version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
-      role: 'document',
-      lifecycle: 'legacy',
-      readable: true,
-      emitted: false,
-      exactKeys: true,
-      extensionPolicy: 'reject',
-      futureVersionBehaviour: 'reject',
-      migrationTarget: null,
-      canonicalisation: 'sorted-json-v1',
-      byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
-      fixtureIds: ['domain-control-manifest-v1'],
-    },
-    {
-      compatibilityId: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
-      schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
       version: DOMAIN_CONTROL_MANIFEST_VERSION,
       role: 'document',
       lifecycle: 'current',
@@ -276,19 +258,6 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       role: 'input',
       expectation: 'normalises_to_current_output',
       expectedOutputFixtureId: 'domain-control-manifest-v2',
-      scope: 'repository',
-    },
-    {
-      id: 'domain-control-manifest-v1',
-      path: 'test/fixtures/domain-control-manifest-v1.json',
-      bytes: 955,
-      sha256: '14679c94d38bc0f480aec079185c20f9301c99ae0202cb9d7a34bd41fa1b123f',
-      contentDigestSha256: 'sha256:d986bb3d4467ca4607e5b10289005d47ec712e2bc6ae6885fcfec1f41f0d1ec5',
-      schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-      version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
-      role: 'historical',
-      expectation: 'accepted_exact',
-      expectedOutputFixtureId: null,
       scope: 'repository',
     },
     {
@@ -1076,7 +1045,7 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
   },
 });
 
-export type DomainControlManifestCanonicalization = 'sorted-json-v1' | 'sorted-json-v2';
+export type DomainControlManifestCanonicalization = 'sorted-json-v2';
 export type DomainControlManifestCanonicalizationRoute = Readonly<{
   version: number;
   canonicalization: DomainControlManifestCanonicalization;
@@ -1096,8 +1065,7 @@ function projectDomainControlManifestOperation(): Readonly<{
     if (contract.schema !== DOMAIN_CONTROL_MANIFEST_SCHEMA) continue;
     if (contract.role !== 'document'
       || !contract.readable
-      || (contract.canonicalisation !== 'sorted-json-v1'
-        && contract.canonicalisation !== 'sorted-json-v2')) {
+      || contract.canonicalisation !== 'sorted-json-v2') {
       throw new TypeError('Domain-control manifest lifecycle routes must be readable canonical documents.');
     }
     const route = Object.freeze({

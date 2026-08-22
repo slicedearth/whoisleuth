@@ -2,12 +2,15 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
 import {
+  currentBrandProfileBrowserStore,
+  currentBrowserLocalDocument,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
   useTheme,
 } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const DATABASE_NAME = 'whoisleuth-browser-data-v1';
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -73,15 +76,10 @@ function registerEntries(options: {
   activeId?: string | null;
 } = {}) {
   return {
-    [PROFILES_KEY]: {
-      schema: 'whoisleuth.brand-profiles',
-      version: 6,
-      exportedAt: NOW,
-      profiles: [options.profile ?? profileFixture()],
-    },
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([options.profile ?? profileFixture()]),
     [ACTIVE_KEY]: options.activeId === undefined ? PROFILE_ID : options.activeId,
     [CASES_KEY]: {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: options.cases ?? [
         caseRecord({
           id: 'asset-case',
@@ -93,12 +91,9 @@ function registerEntries(options: {
         }),
       ],
     },
-    [RELATIONSHIPS_KEY]: {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
-      generatedAt: LATER,
+    [RELATIONSHIPS_KEY]: currentBrowserLocalDocument('relationship_observations', {
       observations: options.relationships ?? [relationshipFixture()],
-    },
+    }),
   };
 }
 
@@ -185,7 +180,9 @@ test('renders the deterministic register as a desktop table and mobile cards in 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.getByRole('tab', { name: /Assets/u })).toHaveAttribute('aria-selected', 'true');
   const register = page.getByRole('region', { name: 'Brand asset register' });
-  await expect(register.getByRole('table')).toBeVisible();
+  const registerTable = register.getByRole('table', { includeHidden: true });
+  await expect(registerTable).toBeVisible();
+  await expect(register.locator('.asset-cards')).toHaveCount(1);
   await expect(register.locator('.asset-cards')).toBeHidden();
   const officialRow = register.getByRole('row', { name: /official\.example/u });
   await expect(officialRow).toContainText('Official');
@@ -197,7 +194,8 @@ test('renders the deterministic register as a desktop table and mobile cards in 
 
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
-    await expect(register.getByRole('table')).toBeHidden();
+    await expect(registerTable).toHaveCount(1);
+    await expect(registerTable).toBeHidden();
     await expect(register.locator('.asset-cards')).toBeVisible();
     await expect(register.locator('.asset-cards article', { hasText: 'official.example' })).toBeVisible();
     await expectNoHorizontalOverflow(page);

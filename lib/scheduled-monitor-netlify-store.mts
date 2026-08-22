@@ -18,7 +18,7 @@ type NetlifyBlobWriteResult = {
 type NetlifyBlobStore = {
   getWithMetadata: (
     key: string,
-    options: { consistency: 'strong'; type: 'text' },
+    options: { consistency: 'strong'; type: 'stream' },
   ) => Promise<NetlifyBlobReadResult | null>;
   set: (
     key: string,
@@ -52,6 +52,84 @@ function validStore(value: unknown): value is NetlifyBlobStore {
   return typeof candidate.getWithMetadata === 'function' && typeof candidate.set === 'function';
 }
 
+type StreamReader = Readonly<{
+  read: () => Promise<Readonly<{ done: unknown; value?: unknown }>>;
+  cancel: (reason?: unknown) => Promise<unknown>;
+  releaseLock?: () => void;
+}>;
+
+function streamReader(value: unknown): StreamReader | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const getReader = (value as { getReader?: unknown }).getReader;
+  if (typeof getReader !== 'function') return null;
+  try {
+    const reader = getReader.call(value) as Partial<StreamReader>;
+    return reader
+      && typeof reader.read === 'function'
+      && typeof reader.cancel === 'function'
+      ? reader as StreamReader
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function cancelQuietly(reader: StreamReader | null, reason: string): Promise<void> {
+  if (!reader) return;
+  try { await reader.cancel(reason); } catch { /* Preserve the primary validation failure. */ }
+}
+
+function releaseQuietly(reader: StreamReader | null): void {
+  try { reader?.releaseLock?.(); } catch { /* The stream is no longer used. */ }
+}
+
+async function readBoundedBlobText(value: unknown): Promise<string> {
+  const reader = streamReader(value);
+  if (!reader) throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let completed = false;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (!result || typeof result !== 'object' || typeof result.done !== 'boolean') {
+        await cancelQuietly(reader, 'invalid Blob stream result');
+        throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
+      }
+      if (result.done) {
+        completed = true;
+        break;
+      }
+      if (!(result.value instanceof Uint8Array)) {
+        await cancelQuietly(reader, 'invalid Blob stream chunk');
+        throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
+      }
+      if (result.value.byteLength > MAX_ENVELOPE_BYTES - total) {
+        await cancelQuietly(reader, 'scheduled monitoring entry exceeded its byte bound');
+        throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
+      }
+      total += result.value.byteLength;
+      chunks.push(result.value.slice());
+    }
+  } catch (cause) {
+    if (!completed) await cancelQuietly(reader, 'scheduled monitoring Blob read failed');
+    throw cause;
+  } finally {
+    releaseQuietly(reader);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
+  }
+}
+
 function createNetlifyBlobVersionedTextStore(store: NetlifyBlobStore): VersionedTextStore {
   if (!validStore(store)) {
     throw new Error('A Netlify Blob store is required for scheduled monitoring.');
@@ -62,18 +140,24 @@ function createNetlifyBlobVersionedTextStore(store: NetlifyBlobStore): Versioned
       if (!validBlobKey(key)) throw new Error('Scheduled monitoring Blob key is invalid.');
       const entry = await store.getWithMetadata(key, {
         consistency: 'strong',
-        type: 'text',
+        type: 'stream',
       });
       if (entry === null) return { value: null, version: null };
       if (!entry
         || typeof entry !== 'object'
         || Array.isArray(entry)
-        || typeof entry.data !== 'string'
-        || Buffer.byteLength(entry.data, 'utf8') > MAX_ENVELOPE_BYTES
         || !validEtag(entry.etag)) {
+        const reader = entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? streamReader(entry.data)
+          : null;
+        try {
+          await cancelQuietly(reader, 'invalid scheduled monitoring entry metadata');
+        } finally {
+          releaseQuietly(reader);
+        }
         throw new Error('Netlify Blobs returned an invalid scheduled monitoring entry.');
       }
-      return { value: entry.data, version: entry.etag };
+      return { value: await readBoundedBlobText(entry.data), version: entry.etag };
     },
 
     async compareAndSet(key, expectedVersion, nextValue) {

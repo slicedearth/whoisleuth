@@ -48,55 +48,11 @@ unlisted advisory at any severity blocks the command, so every new high or
 critical production advisory remains blocking even when npm reports it through
 another affected package node.
 
-WHOISleuth currently relies on no production-audit exception. On 2026-08-13,
-the direct dependency was updated to `@netlify/blobs` 10.7.13. Its locked
-`@netlify/dev-utils` 5.0.0 dependency no longer includes `image-size`, and the
-production audit reports no vulnerable package entries.
-
-The policy retains the earlier review as a fail-closed historical guard rather
-than an active allowance. The exception reviewed on 2026-08-10 covered exactly
-these high-severity advisory IDs:
-
-- `GHSA-w3rx-r6r6-pgpr`
-- `GHSA-5p2g-fcmc-qvqq`
-
-Both advisories affected `image-size` 2.0.2 through the locked chain
-`@netlify/blobs` 10.7.9 → `@netlify/dev-utils` 4.4.6 → `image-size` 2.0.2. npm
-therefore reported three vulnerable package entries but two advisory IDs. At
-the time of review, npm advertised `@netlify/blobs@9.1.5` as a semver-major
-downgrade from the locked major version 10, so the exact old chain was retained
-temporarily while a compatible remediation was unavailable. WHOISleuth's
-production sources imported `getStore` from the package root rather than its
-image-parser-bearing `./server` export; that reachability distinction reduced
-exposure but did not remove the advisory or suppress npm's raw report.
-
-The historical exception expires at `2026-09-10T00:00:00.000Z`. If the old
-affected chain or advisories reappear, the gate fails closed after that instant.
-It also fails closed for malformed, oversized, unsupported, or internally
-inconsistent audit JSON; an
-unlisted, missing, or duplicated advisory record; changed advisory URL, source,
-severity, or affected range; changed fix availability or package-chain
-metadata; and any change to the reviewed locked versions or dependency edges.
-An empty audit result also blocks while the lockfile contains the exact old
-reviewed vulnerable chain, because missing advisory evidence is not proof of a
-clean tree. The current clean audit passes because that chain is absent, not
-because the historical exception permits it.
-
-Re-review immediately if any of the following occurs:
-
-- the old affected chain or either reviewed advisory reappears;
-- npm changes the advertised fix descriptor or either advisory's severity,
-  range, or identity;
-- the lockfile changes any package or edge in the current remediated chain;
-- production code begins importing `@netlify/blobs/server`, another server
-  subpath, or otherwise reaches the affected image parsers; or
-- build or deployment changes alter which package exports are bundled or run.
-
-Re-review requires updating the explicit policy and its fixture-driven tests;
-do not replace it with an advisory-count allowance or a blanket severity
-suppression. The command exits 0 only for a clean audit or an exact, current
-reviewed match; policy mismatches exit 1, and audit execution or lockfile-read
-failures exit 2.
+WHOISleuth currently has no production-audit exception. Any advisory blocks the
+gate until its package path, reachability, fix availability and lockfile state
+have been reviewed. Temporary exceptions, when needed, must name the exact
+advisory and package chain, expire automatically and remain covered by fixtures.
+Policy mismatches exit 1; audit execution or lockfile-read failures exit 2.
 
 Published CLI releases have a separate exact-version check documented in the
 [release guide](releasing.md). It verifies registry integrity and exact byte

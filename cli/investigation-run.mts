@@ -2,7 +2,8 @@ import { Buffer } from 'node:buffer';
 
 import {
   buildInvestigationPlan,
-  type InvestigationPlanRecipe,
+  isRunnableInvestigationRecipe,
+  type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
@@ -112,7 +113,7 @@ function parseResumeState(
 }
 
 export async function runInvestigationRecipe(
-  recipe: InvestigationPlanRecipe,
+  recipe: RunnableInvestigationPlanRecipe,
   subjectValue: string,
   options: Readonly<{
     approveNetwork: boolean;
@@ -122,6 +123,9 @@ export async function runInvestigationRecipe(
     execute: (command: CliCommand, args: readonly string[]) => Promise<ExecutionResult>;
   }>,
 ) {
+  if (!isRunnableInvestigationRecipe(recipe)) {
+    throw new CliUsageError('workflow-run supports only installed recipes whose exact steps satisfy the execution contract.');
+  }
   const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
   const prior = parseResumeState(options.resumeInput, plan);
   const completed = [...prior];

@@ -1,6 +1,7 @@
 import type { Page, Request } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
+  currentBrandProfileBrowserStore,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   failBrowserLocalManifestWrites,
@@ -12,7 +13,7 @@ import {
   requiredValue,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 
 const NOW = '2026-08-09T02:00:00.000Z';
 const PROFILE_ID = 'Profile_A';
@@ -55,11 +56,31 @@ function actionFixture(id: string, recipient = 'Reserved fixture recipient') {
     contactSource: 'manual',
     contactLimitations: [],
     dueAt: NOW,
-    state: 'planned',
+    state: 'drafting',
     reference: null,
     followUpAt: null,
+    providerOutcome: null,
     outcome: null,
+    originActionId: null,
+    history: [{
+      id: `${id}-created`,
+      previousState: null,
+      nextState: 'drafting',
+      occurredAt: NOW,
+      sourceClass: 'browser_local',
+      provenance: 'browser_local_fixture_action',
+      reference: null,
+      evidencePinId: null,
+      limitations: [],
+      providerOutcome: null,
+      outcomeDetail: null,
+      originActionId: null,
+      applied: true,
+    }],
+    historyOmitted: 0,
+    historyLimitations: [],
     createdAt: NOW,
+    metadataUpdatedAt: NOW,
     updatedAt: NOW,
   };
 }
@@ -70,9 +91,9 @@ function storageEntries(
   activeProfileId = PROFILE_ID,
 ) {
   return {
-    [PROFILES_KEY]: { schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: NOW, profiles },
+    [PROFILES_KEY]: currentBrandProfileBrowserStore(profiles),
     [ACTIVE_PROFILE_KEY]: activeProfileId,
-    [CASES_KEY]: { version: 12, cases },
+    [CASES_KEY]: { version: CASE_SCHEMA_VERSION, cases },
   };
 }
 
@@ -87,11 +108,11 @@ function nearBudgetCaseSnapshot(): CaseRecord[] {
     caseRecord({id:'pruned-other-case',domain:'pruned-other.invalid',evidenceHistory:[snapshot({id:'old-prunable',capturedAt:'2026-01-01T00:00:00.000Z',firstCapturedAt:'2026-01-01T00:00:00.000Z'})]}),
     ...Array.from({length:40},(_,index)=>caseRecord({id:`budget-${index}`,domain:`budget-${index}.invalid`,notes:fullNotes(index)})),
   ];
-  const build=(length:number)=>normalizeCaseStore({version:12,cases:[
+  const build=(length:number)=>normalizeCaseStore({version:CASE_SCHEMA_VERSION,cases:[
     ...fixed,
     caseRecord({id:'budget-partial',domain:'budget-partial.invalid',notes:[
-      ...Array.from({length:20},(_,index)=>note(40,index)),
-      note(40,20,length),
+      ...Array.from({length:23},(_,index)=>note(40,index)),
+      note(40,23,length),
     ]}),
   ]}).cases;
   let lower=1,upper=2_000,best=build(1);
@@ -485,6 +506,7 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
 });
 
 test('installs complete committed profile snapshots across stale tabs and preference failure', async ({ page,context }) => {
+  test.slow();
   const apiRequests = trackApiRequests(page);
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()]), { destination: '/brands' });

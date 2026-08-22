@@ -133,7 +133,6 @@ describe('canonical schema contract ownership', () => {
       [
         DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.id,
         DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
-        DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
       ],
     );
   });

@@ -1,5 +1,6 @@
-import { Gunzip, UnzipInflate, unzipSync } from 'fflate';
+import { Gunzip, UnzipInflate } from 'fflate';
 import { parseBoundedJson } from '../bounded-json.ts';
+import { extractBoundedZipEntries } from '../../../../packages/interchange/bounded-zip-extraction.mts';
 
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -212,8 +213,8 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
   const seen = new Set<string>();
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes, {
-      filter(file) {
+    const extracted = extractBoundedZipEntries(bytes, {
+      inspect(file) {
         zipEntries += 1;
         if (zipEntries > MAX_WACZ_ENTRIES) {
           throw new Error(`WACZ imports are limited to ${MAX_WACZ_ENTRIES} ZIP entries.`);
@@ -239,7 +240,14 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
           || canonicalName === 'datapackage-digest.json'
           || isWarcResourcePath(file.name)
         );
-        if (!selected) return false;
+        if (!selected) {
+          return {
+            key: canonicalName,
+            selected: false,
+            maximumBytes: 0,
+            exceededMessage: 'Selected WACZ entries exceed the bounded extraction allowance.',
+          };
+        }
         if (![0, UnzipInflate.compression].includes(file.compression)) {
           throw new Error('A required WACZ entry uses an unsupported ZIP compression method.');
         }
@@ -247,9 +255,25 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
         if (selectedBytes > MAX_WACZ_IMPORT_BYTES + (2 * MAX_WACZ_MANIFEST_BYTES)) {
           throw new Error('Selected WACZ entries exceed the bounded extraction allowance.');
         }
-        return true;
+        return {
+          key: canonicalName,
+          selected: true,
+          maximumBytes: canonicalName === 'datapackage.json' || canonicalName === 'datapackage-digest.json'
+            ? MAX_WACZ_MANIFEST_BYTES
+            : MAX_WACZ_IMPORT_BYTES,
+          exceededMessage: canonicalName === 'datapackage.json' || canonicalName === 'datapackage-digest.json'
+            ? 'Selected WACZ manifest entry exceeds its bounded extraction allowance.'
+            : 'Selected WACZ WARC entry exceeds its bounded extraction allowance.',
+        };
       },
+      keyForName: (name) => name.toLowerCase(),
+      maximumEntries: MAX_WACZ_ENTRIES,
+      maximumSelectedBytes: MAX_WACZ_IMPORT_BYTES + (2 * MAX_WACZ_MANIFEST_BYTES),
+      selectedBytesExceededMessage: 'Selected WACZ entries exceed the bounded extraction allowance.',
+      metadataMismatchMessage: 'The WACZ contains inconsistent ZIP metadata.',
     });
+    files = Object.fromEntries(extracted.files);
+    zipEntries = extracted.entryCount;
   } catch (cause) {
     if (cause instanceof Error && cause.message.startsWith('WACZ')) throw cause;
     if (cause instanceof Error && cause.message.startsWith('The WACZ')) throw cause;

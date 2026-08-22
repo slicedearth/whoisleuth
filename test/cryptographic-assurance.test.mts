@@ -5,6 +5,8 @@ import { describe, test } from 'node:test';
 
 import {
   CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+  CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
+  CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
   buildCryptographicAssuranceReview,
 } from '../lib/cryptographic-assurance.mts';
 
@@ -33,12 +35,15 @@ describe('separate cryptographic assurance review', () => {
     }, OBSERVED_AT);
 
     assert.equal(review.combinedState, null);
+    assert.equal(review.version, CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION);
     assert.deepEqual(review.cards.map((card) => card.family), [
       'dnssec_validation',
       'route_origin_authorisation',
       'dane_tlsa',
     ]);
-    assert.deepEqual(review.cards.map((card) => card.state), ['unsigned', 'valid', 'unavailable']);
+    assert.deepEqual(review.cards.map((card) => card.state), ['unsigned', 'matches_supplied_rows', 'unavailable']);
+    assert.equal(review.cards[1]?.completeness, 'partial');
+    assert.equal(review.cards[1]?.authority, 'Analyst-supplied route-origin rows');
     assert.deepEqual(review.cards.map((card) => card.source), [
       'Fixture DNS delegation',
       'Fixture validated route snapshot',
@@ -58,7 +63,8 @@ describe('separate cryptographic assurance review', () => {
 
     assert.equal(review.cards[0]?.state, 'unavailable');
     assert.equal(review.cards[0]?.observedAt, null);
-    assert.equal(review.cards[1]?.state, 'not_found');
+    assert.equal(review.cards[1]?.state, 'not_found_in_supplied_rows');
+    assert.equal(review.cards[1]?.completeness, 'partial');
     assert.equal(review.cards[2]?.state, 'unavailable');
     assert.match(review.cards[2]?.limitations[0] ?? '', /No state was inferred/u);
   });
@@ -84,25 +90,56 @@ describe('separate cryptographic assurance review', () => {
     const card = review.cards[2];
     assert.equal(card?.state, 'partial');
     assert.equal(card?.completeness, 'partial');
+    assert.equal((card?.result as { dnssecState?: string }).dnssecState, 'unavailable');
+    assert.match(card?.limitations.join(' ') ?? '', /state labels are not accepted as validator evidence/iu);
+  });
+
+  test('does not promote self-asserted prerequisite labels to positive DANE state', () => {
+    const certificateBytes = Buffer.from('fixture prerequisite assertion');
+    const review = buildCryptographicAssuranceReview({
+      schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+      version: 1,
+      tlsa: wrapper({
+        serviceName: '_25._tcp.mx.example.test',
+        dnssecState: 'validated',
+        pkixValidationState: 'validated',
+        certificateDerBase64: certificateBytes.toString('base64'),
+        records: [{
+          usage: 3,
+          selector: 0,
+          matchingType: 1,
+          associationData: createHash('sha256').update(certificateBytes).digest('hex'),
+        }],
+      }, 'Fixture TLSA association'),
+    }, OBSERVED_AT);
+    const card = review.cards[2];
+    assert.equal(card?.state, 'partial');
+    assert.equal(card?.completeness, 'partial');
+    assert.equal((card?.result as { dnssecState?: string }).dnssecState, 'unavailable');
   });
 
   test('rejects empty or unbounded wrapper shapes', () => {
     assert.throws(() => buildCryptographicAssuranceReview({
       schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
       dnssec: null,
       routeOrigin: null,
       tlsa: null,
     }, OBSERVED_AT), /at least one evidence family/u);
     assert.throws(() => buildCryptographicAssuranceReview({
       schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
       dnssec: { source: 'Fixture', observedAt: OBSERVED_AT, evidence: [], extra: true },
     }, OBSERVED_AT), /unsupported field/u);
     assert.throws(() => buildCryptographicAssuranceReview({
       schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
-      version: 1,
+      version: CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
       dnssec: wrapper({ ownerName: 'example.test', delegationSigned: false, dsRecords: [] }, 'Fixture DNS delegation'),
     }, '2026-08-11T00:00:00'), /timestamp/u);
+    assert.throws(() => buildCryptographicAssuranceReview({
+      schema: CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+      version: CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
+      dnssec: wrapper({ ownerName: 'example.test', delegationSigned: false, dsRecords: [] }, 'Fixture DNS delegation'),
+    }, OBSERVED_AT), /input.*version 1/iu);
   });
 });

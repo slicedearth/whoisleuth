@@ -134,7 +134,7 @@
 
 <section class="rule-limits card">
   <strong>Interpretation boundary</strong>
-  <p>Custom contributions are shown beside the stored built-in score; they never rewrite it. A match is an analyst-defined heuristic, not proof of maliciousness. Missing evidence does not satisfy a condition, and imported rules cannot run JavaScript.</p>
+  <p>Custom contributions appear beside the stored built-in score and never rewrite it. Missing evidence does not satisfy a condition, and imported rules cannot run JavaScript.</p>
 </section>
 
 <section class="pattern-packs card" aria-labelledby="pattern-packs-title">

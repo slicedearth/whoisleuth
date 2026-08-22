@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const moduleUrl = (path: string) => new URL(path, import.meta.url).href;
@@ -73,7 +73,7 @@ const localCases = normalizeCaseStore([{
   domain: 'shared.invalid', status: 'new', createdAt: epoch, updatedAt: explicitBaseline,
 }]).cases;
 const mergedCase = mergeCases(localCases, {
-  version: 14,
+  version: 13,
   cases: [{ domain: 'shared.invalid', status: 'escalated', createdAt: epoch, updatedAt: candidateTimestamp }],
 }).cases[0];
 
@@ -86,7 +86,7 @@ process.stdout.write(JSON.stringify({
   bulkProfileRevisionMatches: bulkProfileContextsMatch(retainedProfileContext, currentProfileContext),
   campaignMergeWinner: mergeCampaigns(
     [campaign('Local', explicitBaseline)],
-    { version: 1, campaigns: [campaign('Imported', candidateTimestamp)] },
+    { schema: 'whoisleuth.campaigns', version: 1, campaigns: [campaign('Imported', candidateTimestamp)] },
   ).campaigns[0]?.name,
   caseMergeStatus: mergedCase?.status,
   shortlistSavedAt: normalizeShortlistRecord({
@@ -166,7 +166,7 @@ const version = Number(process.env.PROBE_VERSION);
 const epoch = '2026-01-01T00:00:00.000Z';
 const raw = {
   domain: 'nested.invalid', createdAt: epoch, updatedAt: epoch,
-  evidenceHistory: [{ availability: 'registered', capturedAt: epoch, createdDate: candidate, expiryDate: candidate }],
+  evidenceHistory: [{ inputHostname: null, availability: 'registered', capturedAt: epoch, createdDate: candidate, expiryDate: candidate }],
   evidencePins: [{
     id: 'pin-1', checkpointId: 'checkpoint-1', field: 'certificateSha256', label: 'Certificate', value: 'a'.repeat(64),
     source: 'fixture', sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
@@ -210,10 +210,20 @@ function runNestedCase(timezone: string, timestamp: string, version: number): Re
   })) as Record<string, unknown>;
 }
 
-test('Case nested timestamps and lifecycle values obey current and legacy policies', () => {
+function rejectNestedCase(timezone: string, timestamp: string, version: number): string {
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', nestedCaseProbeSource], {
+    encoding: 'utf8',
+    env: { ...process.env, TZ: timezone, PROBE_TIMESTAMP: timestamp, PROBE_VERSION: String(version) },
+  });
+  assert.notEqual(child.status, 0);
+  assert.equal(child.stdout, '');
+  return child.stderr;
+}
+
+test('Case nested timestamps obey the current policy and retired schemas fail without reinterpretation', () => {
   const zoneLess = '2026-03-15T12:00:00.000';
-  const current = runNestedCase('UTC', zoneLess, 14);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 14), current);
+  const current = runNestedCase('UTC', zoneLess, 13);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 13), current);
   assert.equal(current.pinObservedAt, '2026-01-01T00:00:00.000Z');
   assert.equal(current.certificateNotAfter, null);
   assert.equal(current.actionDueAt, null);
@@ -221,17 +231,15 @@ test('Case nested timestamps and lifecycle values obey current and legacy polici
   assert.equal(current.evidenceCreatedDate, null);
   assert.equal(current.lifecycleStartsAt, null);
 
-  const legacy = runNestedCase('UTC', zoneLess, 11);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 11), legacy);
-  assert.equal(legacy.pinObservedAt, '2026-03-15T12:00:00.000Z');
-  assert.equal(legacy.certificateNotAfter, '2026-03-15T12:00:00.000Z');
-  assert.equal(legacy.actionDueAt, '2026-03-15T12:00:00.000Z');
-  assert.equal(legacy.provenanceObservedAt, '2026-03-15T12:00:00.000Z');
-  assert.equal(legacy.evidenceCreatedDate, '2026-03-15T12:00:00.000Z');
-  assert.equal(legacy.lifecycleStartsAt, null);
+  for (const timezone of ['UTC', 'Australia/Melbourne']) {
+    assert.match(
+      rejectNestedCase(timezone, zoneLess, 11),
+      /Case schema 11 is not part of the public compatibility boundary.*schema 13.*no data was changed/isu,
+    );
+  }
 
-  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 14);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 14), offset);
+  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 13);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 13), offset);
   assert.equal(offset.pinObservedAt, '2026-03-15T11:00:00.000Z');
   assert.equal(offset.lifecycleStartsAt, '2026-02-13T11:00:00.000Z');
 });

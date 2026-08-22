@@ -8,13 +8,14 @@ import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_T
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
 import { parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
-import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
+import { buildCliCommandCatalogue, formatCliCommandCatalogue, selectCliCommands } from './command-catalogue.mts';
 import {
   COMMAND_COLLECTION,
   COMMAND_DETAILS,
   COMMAND_USAGE,
   HELP,
   CLI_COMMANDS,
+  CLI_COMMAND_REGISTRY,
   commandDefinition,
   commandHelp,
   type CliCommand,
@@ -135,7 +136,12 @@ import {
   buildCtEventFindings,
   formatCtEventFindings,
 } from './ct-event-intake.mts';
-import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
+import {
+  buildInvestigationPlan,
+  buildWorkflowRecipeCatalogue,
+  formatInvestigationPlan,
+  formatWorkflowRecipeCatalogue,
+} from './investigation-plan.mts';
 import { MAX_INVESTIGATION_RUN_BYTES, formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
 import { readCliTextInput } from './input.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
@@ -394,7 +400,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           : args.action === 'http'
             ? 'HTTP probe'
             : args.action === 'tls'
-              ? 'TLS intelligence'
+              ? 'TLS evidence collection'
               : args.action === 'dnssec-validate'
                 ? 'DNSSEC chain validation'
                 : 'Mail transport review';
@@ -416,8 +422,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
 
     if (args.action === 'commands') {
+      const selectedCommands = selectCliCommands(CLI_COMMAND_REGISTRY, {
+        common: args.common,
+        group: args.group,
+        mode: args.mode,
+      });
       const catalogue = buildCliCommandCatalogue({
-        commands: CLI_COMMANDS,
+        commands: selectedCommands,
         collections: COMMAND_COLLECTION,
         details: COMMAND_DETAILS,
         usage: COMMAND_USAGE,
@@ -1074,6 +1085,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'workflow-plan') {
       failureLabel = 'Investigation plan';
+      if ('discovery' in args) {
+        const catalogue = buildWorkflowRecipeCatalogue(args.discovery === 'explain' ? args.recipe : null);
+        if (!args.quiet) write(stdout, args.output === 'json'
+          ? formatJsonDocument(catalogue)
+          : terminal(formatWorkflowRecipeCatalogue(catalogue), args.color));
+        return EXIT_CODES.SUCCESS;
+      }
       const document = buildInvestigationPlan(args.recipe, args.subject, commandContext.now());
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)

@@ -1,12 +1,11 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { parse } from 'tldts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
 export const INVESTIGATION_GUIDE_VERSION = 5;
-export const INVESTIGATION_GUIDE_LEGACY_VERSION = 1;
 export const INVESTIGATION_GUIDE_EXPORT_VERSION = 4;
-export const INVESTIGATION_GUIDE_SUPPORTED_VERSIONS = [2, 3, 4, INVESTIGATION_GUIDE_VERSION] as const;
+export const INVESTIGATION_GUIDE_SUPPORTED_VERSIONS = [INVESTIGATION_GUIDE_VERSION] as const;
 export const INVESTIGATION_GUIDE_EXPORT_SCHEMA = 'whoisleuth.investigation-recipe-summary';
 export const MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH = 253;
 export const MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS = 25;
@@ -116,7 +115,6 @@ const CONTROL_RE = /[\x00-\x1f\x7f]/u;
 const SAFE_TEMPLATE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
 const GUIDE_STATUSES = new Set<InvestigationGuideStatus>(['active', 'paused']);
 const GUIDE_OUTCOMES = new Set<InvestigationGuideOutcome>(['pending', 'complete', 'partial', 'skipped']);
-const PRE_RESPONSE_RECIPE_IDS = new Set<InvestigationRecipeId>(['brand_sweep', 'infrastructure_pivot', 'new_domain_triage']);
 
 function stage(
   id: string,
@@ -243,15 +241,13 @@ function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
-function timestamp(value: unknown, legacy = false): string {
-  return normalizeExplicitIsoTimestamp(value)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null)
-    ?? '';
+function timestamp(value: unknown): string {
+  return normalizeExplicitIsoTimestamp(value) ?? '';
 }
 
-function nullableTimestamp(value: unknown, legacy = false): string | null {
+function nullableTimestamp(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
-  return timestamp(value, legacy) || null;
+  return timestamp(value) || null;
 }
 
 function boundedTemplateText(value: unknown, maximum: number, fallback = ''): string {
@@ -450,52 +446,19 @@ export function createInvestigationGuide(
   };
 }
 
-function parseLegacyGuide(input: UnknownRecord): InvestigationGuide | null {
-  const domain = normalizeInvestigationGuideDomain(input.domain);
-  const createdAt = timestamp(input.createdAt, true);
-  const updatedAt = timestamp(input.updatedAt, true);
-  const recipe = investigationGuideRecipe('new_domain_triage');
-  if (!domain || !createdAt || !updatedAt || !recipe) return null;
-  const opened = new Set(
-    (Array.isArray(input.visitedStages) ? input.visitedStages : [])
-      .slice(0, recipe.stages.length * 2)
-      .filter((value): value is string => typeof value === 'string'),
-  );
-  return {
-    version: INVESTIGATION_GUIDE_VERSION,
-    recipeId: recipe.id,
-    template: null,
-    domain,
-    focusDomain: null,
-    reviewDomains: [domain],
-    reviewDomainsTruncated: false,
-    status: 'active',
-    createdAt,
-    updatedAt,
-    stages: recipe.stages.map((stageDefinition) => ({
-      ...createStageProgress(stageDefinition, updatedAt),
-      openedAt: opened.has(stageDefinition.id) ? updatedAt : null,
-    })),
-  };
-}
-
 export function parseInvestigationGuide(value: unknown): InvestigationGuide | null {
   const input = record(value);
   if (!input) return null;
-  if (input.version === INVESTIGATION_GUIDE_LEGACY_VERSION) return parseLegacyGuide(input);
-  if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as 2 | 3 | 4 | 5)) return null;
-  const legacyTimestamps = input.version !== INVESTIGATION_GUIDE_VERSION;
+  if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as typeof INVESTIGATION_GUIDE_VERSION)) return null;
   const recipe = investigationGuideRecipe(input.recipeId);
   const domain = normalizeInvestigationGuideDomain(input.domain);
-  const createdAt = timestamp(input.createdAt, legacyTimestamps);
-  const updatedAt = timestamp(input.updatedAt, legacyTimestamps);
-  if (!recipe || !domain || !createdAt || !updatedAt
-    || (input.version !== INVESTIGATION_GUIDE_VERSION && !PRE_RESPONSE_RECIPE_IDS.has(recipe.id))) return null;
-  const supportsTemplate = input.version === 3 || input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION;
-  const template = supportsTemplate && input.template !== null && input.template !== undefined
+  const createdAt = timestamp(input.createdAt);
+  const updatedAt = timestamp(input.updatedAt);
+  if (!recipe || !domain || !createdAt || !updatedAt) return null;
+  const template = input.template !== null && input.template !== undefined
     ? normalizeInvestigationGuideTemplateSnapshot(input.template, recipe.id)
     : null;
-  if (supportsTemplate && input.template !== null && input.template !== undefined && !template) return null;
+  if (input.template !== null && input.template !== undefined && !template) return null;
   const stageDefinitions = template?.stages || recipe.stages;
   const normalizedReview = normalizeReviewDomains(input.reviewDomains);
   const reviewDomains = normalizedReview.domains.length
@@ -524,12 +487,10 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
       return {
         id: stageDefinition.id,
         outcome: guideOutcome(item?.outcome),
-        approvedAt: nullableTimestamp(item?.approvedAt, legacyTimestamps),
-        openedAt: nullableTimestamp(item?.openedAt, legacyTimestamps),
-        reviewNote: input.version === 4 || input.version === INVESTIGATION_GUIDE_VERSION
-          ? boundedReviewNote(item?.reviewNote)
-          : null,
-        updatedAt: timestamp(item?.updatedAt, legacyTimestamps) || updatedAt,
+        approvedAt: nullableTimestamp(item?.approvedAt),
+        openedAt: nullableTimestamp(item?.openedAt),
+        reviewNote: boundedReviewNote(item?.reviewNote),
+        updatedAt: timestamp(item?.updatedAt) || updatedAt,
       };
     }),
   };

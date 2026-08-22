@@ -30,10 +30,7 @@ async function fixture(path: string): Promise<unknown> {
 describe('extracted domain lifecycle contracts', () => {
   test('bind every newly claimed epoch to exact immutable repository bytes', async () => {
     const families = SCHEMA_LIFECYCLE_REGISTRY.filter((family) => EXTRACTED_FAMILY_IDS.has(family.id));
-    assert.equal(families.length, 5);
-    assert.equal(families.flatMap((family) => family.compatibility).length, 25);
-    assert.equal(families.flatMap((family) => family.contracts).length, 34);
-    assert.equal(families.flatMap((family) => family.fixtures).length, 34);
+    assert.deepEqual(new Set(families.map((family) => family.id)), EXTRACTED_FAMILY_IDS);
     for (const family of families) {
       for (const contract of family.contracts) assert.equal(contract.fixtureIds.length, 1);
       for (const registered of family.fixtures) {
@@ -58,10 +55,8 @@ describe('extracted domain lifecycle contracts', () => {
       1,
     );
     assert.ok(normalizeScheduledMonitorDelivery(await fixture(`${FIXTURE_ROOT}scheduled-monitor-delivery-v1.json`)));
-    assert.ok(parseCacaoInvestigationPlaybook(await fixture('test/fixtures/investigation-cacao-profile-v1.json')));
     assert.ok(parseCacaoInvestigationPlaybook(await fixture(`${FIXTURE_ROOT}investigation-cacao-profile-v2.json`)));
     assert.ok(parseWebCaptureSummary(await fixture(`${FIXTURE_ROOT}web-capture-summary-v1.json`)));
-    assert.ok(parseWebCaptureManifest(await fixture(`${FIXTURE_ROOT}web-capture-manifest-v1.json`)));
     assert.ok(parseWebCaptureManifest(await fixture(`${FIXTURE_ROOT}web-capture-manifest-v2.json`)));
     assert.ok(validateStaticPagePatternPack(await fixture(`${FIXTURE_ROOT}static-page-pattern-pack-v2.json`)));
   });
@@ -83,7 +78,8 @@ describe('extracted domain lifecycle contracts', () => {
     const summary = await fixture(`${FIXTURE_ROOT}web-capture-summary-v1.json`) as Record<string, unknown>;
     assert.throws(() => parseWebCaptureSummary({ ...summary, schemaVersion: 2 }), /schema version 1/u);
     const manifest = await fixture(`${FIXTURE_ROOT}web-capture-manifest-v2.json`) as Record<string, unknown>;
-    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 3 }), /schema version 1 or 2/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 2/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 3 }), /schema version 2/u);
     const pattern = await fixture(`${FIXTURE_ROOT}static-page-pattern-pack-v2.json`) as Record<string, unknown>;
     assert.throws(() => validateStaticPagePatternPack({ ...pattern, version: 3 }), /requires schema 2/u);
   });

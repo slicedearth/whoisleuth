@@ -15,9 +15,9 @@
 <section class="control-centre card" aria-labelledby="domain-control-centre-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Domain control</p>
-      <h2 id="domain-control-centre-title">Portfolio control centre</h2>
-      <p>Review intent, baseline coverage, planned changes and shared dependencies across official domains. All records remain browser-local and analyst-authored.</p>
+      <p class="eyebrow">Owned domains</p>
+      <h2 id="domain-control-centre-title">Domain controls</h2>
+      <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These records are browser-local and analyst-authored.</p>
     </div>
   </header>
 

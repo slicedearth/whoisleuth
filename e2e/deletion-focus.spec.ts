@@ -1,11 +1,15 @@
 import { expect, test } from './fixtures';
 import {
+  currentBrowserLocalDocument,
+  currentBulkSessionBrowserStore,
   failNextBrowserLocalManifestWrite,
   holdBrowserLocalReads,
   migrateLegacyBrowserData,
+  openBulkWorkspaceTools,
   readBrowserLocalCollection,
 } from './helpers';
 import { caseRecord } from './case-test-fixtures';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const NOW = '2026-08-15T00:00:00.000Z';
 
@@ -95,7 +99,7 @@ test('case deletion restores focus after failure, then advances and falls back',
   await page.goto('/monitor?view=cases');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord({ id: 'focus-case-first', domain: 'focus-first.invalid' }),
         caseRecord({ id: 'focus-case-second', domain: 'focus-second.invalid' }),
@@ -142,7 +146,7 @@ test('case deletion on a sole trailing page focuses the nearest previous case', 
     });
   });
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 12, cases },
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
   }, { clearStorage: true });
 
   await page.getByRole('navigation', { name: 'Case pages' }).getByRole('button', { name: 'Next' }).click();
@@ -157,7 +161,7 @@ test('delayed case deletion does not steal focus after leaving the Cases view', 
   await page.goto('/monitor?view=cases');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({ id: 'delayed-case-focus', domain: 'delayed-case.invalid' })],
     },
   }, { clearStorage: true });
@@ -178,15 +182,12 @@ test('delayed case deletion does not steal focus after leaving the Cases view', 
 test('saved Bulk session deletion advances to the next delete action and then the editor', async ({ page }) => {
   await page.goto('/bulk');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 3,
-      sessions: [
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([
         bulkSession('session-first', 'First saved review'),
         bulkSession('session-second', 'Second saved review'),
-      ],
-    },
+      ]),
   }, { clearStorage: true });
+  await openBulkWorkspaceTools(page);
 
   const firstDelete = page.locator('#bulk-session-delete-session-first');
   await expect(firstDelete).toBeVisible();
@@ -211,14 +212,12 @@ test('saved Bulk session deletion advances to the next delete action and then th
 test('retained relationship deletion advances and then focuses the stable heading', async ({ page }) => {
   await page.goto('/monitor?view=relationships');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [
         relationship('relationship-focus-first', '192.0.2.10'),
         relationship('relationship-focus-second', '192.0.2.11'),
       ],
-    },
+    }),
   }, { clearStorage: true });
 
   const firstDelete = page.locator('.retained-observations li', { hasText: '192.0.2.10' }).getByRole('button', { name: 'Delete retained observation' });
@@ -244,13 +243,12 @@ test('retained relationship deletion advances and then focuses the stable headin
 test('certificate-history deletion advances and clear-all falls back to the query', async ({ page }) => {
   await page.goto('/discover');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth:ct-search-history:v1': {
-      version: 2,
+    'whoisleuth:ct-search-history:v1': currentBrowserLocalDocument('ct_history', {
       entries: [
         ctHistoryEntry('first focus search', 'first-focus.invalid'),
         ctHistoryEntry('second focus search', 'second-focus.invalid'),
       ],
-    },
+    }),
   }, { clearStorage: true });
   await page.getByRole('tab', { name: 'Certificates' }).click();
   const history = page.locator('details.ct-history');
@@ -284,10 +282,9 @@ test('certificate-history deletion advances and clear-all falls back to the quer
 test('delayed certificate-history deletion does not steal focus after changing discovery mode', async ({ page }) => {
   await page.goto('/discover');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth:ct-search-history:v1': {
-      version: 2,
+    'whoisleuth:ct-search-history:v1': currentBrowserLocalDocument('ct_history', {
       entries: [ctHistoryEntry('delayed certificate focus', 'delayed-certificate.invalid')],
-    },
+    }),
   }, { clearStorage: true });
   await page.getByRole('tab', { name: 'Certificates' }).click();
   const history = page.locator('details.ct-history');
@@ -308,13 +305,12 @@ test('delayed certificate-history deletion does not steal focus after changing d
 test('campaign deletion advances to the next campaign and then the creation field', async ({ page }) => {
   await page.goto('/monitor?view=campaigns');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-campaigns-v1': {
-      version: 1,
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', {
       campaigns: [
         campaign('campaign-focus-first', 'First focus campaign'),
         campaign('campaign-focus-second', 'Second focus campaign'),
       ],
-    },
+    }),
   }, { clearStorage: true });
 
   await page.locator('#campaign-head-campaign-focus-first').click();
@@ -342,14 +338,12 @@ test('campaign deletion advances to the next campaign and then the creation fiel
 test('watchlist deletion advances and clear-all falls back to the primary empty action', async ({ page }) => {
   await page.goto('/monitor?view=watchlists');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-watchlist-v1': {
-      schema: 'whoisleuth.watchlists',
-      version: 2,
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {
       watchlists: {
         'First focus watchlist': watchlist('first-watchlist.invalid'),
         'Second focus watchlist': watchlist('second-watchlist.invalid'),
       },
-    },
+    }),
   }, { clearStorage: true });
 
   const firstDelete = page.getByRole('row', { name: /First focus watchlist/u }).getByRole('button', { name: 'Delete' });

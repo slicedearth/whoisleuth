@@ -34,7 +34,7 @@ export type ExtractedLifecycleFamilyOptions = Readonly<{
   id: string;
   owner: string;
   formats: readonly ExtractedLifecycleFormat[];
-  serializerExportName: string;
+  serializerModule?: string; serializerExportName: string;
   plane: 'browser' | 'node' | 'shared';
   projection: 'bounded_passive_monitor' | 'browser_export' | 'browser_import' | 'review_output';
   retention: 'none' | 'operator_controlled_output' | 'transient_report';
@@ -168,7 +168,7 @@ function buildExtractedLifecycleFamily(
       id: serializerHookId,
       role: 'serialiser' as const,
       runtime: 'shared' as const,
-      module: options.owner,
+      module: options.serializerModule ?? options.owner,
       exportName: options.serializerExportName,
     },
   ];

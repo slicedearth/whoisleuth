@@ -38,7 +38,7 @@ function baseline(domain = 'example.test'): DesiredPostureBaseline {
     zoneIntent: 'active_service',
     lifecycle: 'change_planned',
     recoveryDependency: 'private recovery detail',
-    approvedChangeWindows: [{ startsAt: generatedAt, endsAt: '2026-08-07T01:00:00.000Z', summary: 'Private change' }],
+    approvedChangeWindows: [{ id: 'change-window-1', startsAt: generatedAt, endsAt: '2026-08-07T01:00:00.000Z', summary: 'Private change' }],
     suppressions: [{ field: 'mx', reason: 'Private exception', expiresAt: null }],
     note: 'Private analyst note',
     previousObservation: { observedAt: generatedAt, checks: [{ id: 'mx', status: 'pass', records: ['private observation'] }] },

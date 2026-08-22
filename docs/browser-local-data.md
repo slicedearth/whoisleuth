@@ -1,317 +1,146 @@
 # Browser-local data architecture
 
-WHOISleuth keeps ordinary investigation state in the current browser. This
-preserves the default privacy and cost boundary. The application now uses one
-asynchronous native IndexedDB provider for its bounded investigation
-collections. This document records that contract, the one-time migration from
-the former local-storage documents, and the separate gate for an encrypted
-browser vault.
+WHOISleuth keeps ordinary investigation state in the current browser profile.
+The server processes bounded requests but does not provide a general case or
+workspace database. Users deliberately choose what to retain, export or
+delete.
 
-## Current evidence
+## What is stored
 
-The owning browser-store models declare these independent serialised ceilings:
+The authenticated Console uses IndexedDB for bounded collections including
+Cases, Brand Profiles, watchlists, shortlist entries, campaigns, certificate
+search history, custom rules, retained relationship observations, saved Bulk
+sessions, website snapshots, investigation templates, Bulk review state and
+Analyst Review Item lifecycle state.
 
-| Collection | Current backend | Declared ceiling |
-| --- | --- | ---: |
-| Cases | IndexedDB | 4 MiB |
-| Watchlists | IndexedDB | 2 MiB |
-| Brand Profiles | IndexedDB | 1 MiB |
-| Campaigns | IndexedDB | 0.5 MiB |
-| Shortlist | IndexedDB | 1 MiB |
-| Certificate Transparency history | IndexedDB | 1 MiB |
-| Detection rules | IndexedDB | 0.25 MiB |
-| Retained relationship observations | IndexedDB | 0.75 MiB |
-| Saved Bulk sessions | IndexedDB | 4 MiB |
-| Website profile snapshots | IndexedDB | 0.5 MiB |
-| Investigation templates | IndexedDB | 0.25 MiB |
-| Bulk review views and queue state | IndexedDB | 0.5 MiB |
+Each collection has a canonical owner that declares its current schema,
+supported readers, record and byte limits, normalisation rules, future-version
+behaviour and write semantics. The generated
+[schema inventory](case-contracts.md) and
+[privacy catalogue](privacy-data-flow-catalogue.md) project those declarations;
+this document does not duplicate their complete tables.
 
-The combined declared ceiling is 15.75 MiB. These are safety limits rather than
-expected usage, and a browser may enforce a different origin quota. However,
-the aggregate exceeds the 5 MiB planning reference used by the former
-local-storage design. The model ceilings still apply in IndexedDB so changing
-the backend does not make any collection unbounded.
+The active IndexedDB codec is plaintext JSON. Browser access controls protect
+the profile boundary, but IndexedDB is not encrypted at rest by WHOISleuth.
+Anyone able to use the browser profile, a privileged extension or the device
+may be able to read it. Clearing site data removes the local workspace.
 
-Certificate Transparency history schema 3 adds a bounded per-query ever-seen
-domain set so complete retained searches can distinguish first observation,
-continuing observation, and reappearance after absence from the immediately
-previous complete baseline. Capped searches neither update that set nor
-establish a continuity or reappearance state. The set retains at most 1,000
-canonical domains and exposes when its earlier history is incomplete. Schema 2
-records remain readable with their exact discarded-check count, while schemas
-1 and 2 migrate without inventing a complete ever-seen history. Reaching the
-20-check capacity remains distinct from confirmed pruning, and the whole
-collection stays inside its existing 1 MiB byte budget.
+Small tab-scoped handoffs and transient preferences use `sessionStorage` or
+`localStorage` only under their documented limits. They are not silently
+promoted into workspace evidence.
 
-Saved Bulk session schema 3 added an optional compact comparison envelope to
-each settled Deep row. It retains at most 12 normalised technology identifiers,
-a bounded TLS issuer label, an exact SPKI SHA-256 fingerprint, and independent
-source states. Schema 4 additionally binds every row and session to a bounded
-Brand Profile context: the source state, an active opaque profile identifier
-when one was selected, that profile's `updatedAt` revision, and a short
-limitation. It does not copy official domains, allowlists, names, baseline
-content, or other sensitive Profile values. Schemas 1 through 3 remain
-readable, but their profile-derived trust, match, and potentially
-profile-influenced Risk conclusions are withheld because those rows cannot
-prove which Profile context was evaluated. A schema-4 row restored under a
-different or unreadable context is quarantined in the same way until it is
-rescanned. The envelope does not contain raw page, script, certificate, TLS,
-WHOIS, RDAP, or contact data.
+## Data model and evidence semantics
 
-Investigation search still builds a disposable bounded projection from cases,
-campaigns, Brand Profiles, and analyst-selected relationship observations.
-Retained relationship observations first pass through a versioned, typed common
-evidence envelope in memory. That incremental adapter preserves source schema,
-observation time, completeness, truncation, derivation, and limitations before
-the existing search and graph projection consumes it. The envelope has explicit
-record and byte accounting, refuses malformed or future source schemas, makes
-no network request, and performs no writes. It is not a new collection:
-IndexedDB records and the workspace archive remain authoritative, and
-discarding the projection leaves them unchanged.
+Stored records retain their own provenance, observation time, completeness,
+truncation and limitations. Imported, analyst-authored, provider-reported and
+collected evidence remain distinct. Missing or unreadable storage is reported
+as unavailable; it does not become an empty collection or evidence of absence.
 
-Campaign cohort review is another disposable projection over those existing
-records. It starts only after an analyst selects one exact Brand Profile
-identifier already retained by a campaign Case. It reads at most 50 matching
-cases and emits at most 25 connected cohorts, 100 source-qualified rationales,
-and 100 separately displayed assertions. The only temporal rationale is a
-pairwise same-registrar creation-publication observation within seven days;
-connected endpoints may therefore be farther apart. Missing or unreadable
-Profile, Case, or relationship data remains unavailable or partial. The review
-makes no request or write, creates no collection, and is excluded from ordinary
-campaign and workspace exports.
+Cases remain keyed by canonical registrable domain while schema 13 can retain
+the exact normalised submitted hostname on each new evidence snapshot. A Case
+migrated directly from public schema 12 may retain a null hostname because
+WHOISleuth does not reconstruct historical input from weaker fields. Case
+response histories are append-only and bounded.
 
-Case schema 12 adds a required bounded `brandProfileIds` field owned by the
-Case model. It retains at most eight exact opaque identifiers matching
-`[A-Za-z0-9_-]{1,128}` and never trims, case-folds, repairs, resolves, remaps,
-or infers them. Versioned schemas 2 through 11 migrate to an empty list, while
-bare current internal records and schema 12 envelopes preserve the field.
-Imports inspect at most 32 candidate identifiers, union them existing-first,
-retain eight, and report `brandProfileReferencesOmitted`; an omitted or
-over-bound import cannot clear an existing reference. Explicit edits replace
-the whole list and reject invalid or over-bound input. Monitor's add and remove
-controls use narrower browser-local mutation intents: every conflict retry
-rereads the current Case before deriving the next list, so disjoint concurrent
-adds survive and a removal preserves an unrelated concurrent add.
+The current workspace archive is version 6. It contains Case schema 13 and a
+bounded analyst review-state section. Exact public workspace version 5 with
+Case schema 12 remains readable and migrates directly without inventing review
+decisions. The Brand Profile contract similarly reads exact public version 6
+and writes version 7. Other reader-only historical formats and unreleased
+checkpoints are unsupported.
 
-Case parsing and import inspect at most 2,000 parsed records before the
-500-case store cap is applied. Records beyond that inspection boundary are not
-traversed and contribute to the reported skipped count.
+## IndexedDB behaviour
 
-The Brands route builds a read-only transient inbox over the existing
-source-aware analyst review inbox for cases explicitly associated with the
-active profile. It inspects at most 500 cases, 100 profiles, 500 review rows,
-and 100 unresolved references, with 25 review rows rendered per page. Loading,
-unavailable, incomplete, and limited source states remain explicit. A failed
-profile read is never interpreted as no profiles or as unresolved references.
-Deleting a profile does not change any case, and a same-name/different-ID
-profile merge does not remap an opaque reference, so the case may honestly
-remain unresolved. This projection makes no request, write, score, or alert and
-creates no new stored collection.
+The browser adapter provides:
 
-The Brands route also builds a website-only, read-only Brand Asset Register in
-memory for the active profile. Its direct anchors are the profile's authored
-official, approved-partner, and allowlisted domains plus canonical domains from
-Cases carrying that exact profile identifier. The direct set is frozen before
-retained relationship observations are considered: a qualifying observation
-can add or corroborate one-hop review leads, but those candidates never become
-anchors and observation overlap never creates or upgrades an authored role. An
-`official_asset` observation qualifies only when its configured asset host is
-the exact active official domain or a label-boundary subdomain of it.
+- one versioned database and manifest for the bounded workspace collections;
+- exact keyed reads rather than full-database scans for ordinary operations;
+- transactions for multi-record changes and archive application;
+- deterministic record and byte accounting before writes;
+- quota-aware failures that preserve the prior committed state;
+- bounded retries for concurrent-tab conflicts;
+- explicit deadlines instead of indefinite waits;
+- non-destructive future-version refusal; and
+- deletion and clear-all operations owned by the relevant workspace surface.
 
-The projection preserves every direct row, admits at most 2,000 rows in total,
-and keeps at most 12 Case references and 12 relationship references per row.
-Candidate and reference caps use deterministic timestamp and canonical-key
-ordering, and exact omission counts remain visible. Profile or active-preference
-failure suppresses rows; no active profile and an unresolved active identifier
-remain separate states. Unavailable Case or relationship reads leave readable
-rows partial and report their affected counts as unavailable rather than zero.
-Source truncation, incomplete relationship evidence, and projection or
-provenance caps likewise remain explicit.
+All untrusted stored and imported values are bounded before expensive
+normalisation or merge. Accessors, sparse arrays, custom prototypes, excessive
+nesting, oversized collections and unknown envelope keys fail closed. Returned
+domain graphs are detached from caller-owned input and frozen where their
+contract promises immutability.
 
-The register copies only canonical domains, non-ownership roles, opaque local
-references, bounded source labels, timestamps, completeness, and fixed reasons.
-It excludes evidence values and raw payloads, contacts, notes, tags, decisions,
-actions, assertions, scores, complete URLs, paths, queries, fragments, account
-labels, and credentials. Shortlist and watchlist records are not inputs because
-they do not carry an active Brand Profile association. The projection performs
-no discovery, network request, migration, storage write, export, score,
-monitoring, or automatic Case creation and does not alter future-schema refusal
-or legacy-source preservation.
+Post-write failures do not report a committed mutation as absent. Concurrent
+updates use the collection's revision and conflict policy rather than silently
+overwriting a newer value. A failed read or quota error remains visible to the
+interface.
 
-Brand Profile identity remains protected during merge. Reusing the same exact
-identifier with the same normalised profile name may merge, but mapping that
-identifier to a different normalised name rejects the whole profile import.
-For a workspace import, the dependent Case and Settings sections are also
-blocked, so neither an existing association nor the active-profile preference
-can be rebound. A same-name profile under a different identifier is still a
-distinct identity: its opaque Case reference is preserved without remapping
-and may remain unresolved. Malformed profile identifiers are skipped in both
-workspace preview and application; workspace import never generates a
-replacement identifier. Profile, active-preference, and Case source refreshes
-clear stale route projections and expose loading or unavailable state whenever
-a browser-local read or expected storage mutation fails. If a profile write has
-already committed before a preference or reread failure, the route reports the
-committed mutation and suppresses stale scoped projections instead of inviting
-the analyst to repeat the write as though it failed.
+## Migration from legacy browser storage
 
-Individual records are stored under stable collection keys, and workspace
-imports can update several collections in one IndexedDB transaction.
-Website-profile snapshots retain at most 60 explicit analyst saves and 12 per
-canonical domain. They contain curated technology identifiers, posture states,
-identity digests, source health, timestamps, completeness markers and an
-optional normalised leaf-certificate observation from the same completed Deep
-Lookup rather than raw lookup responses or certificate bytes.
-The fixed publication-declaration and selected-response delivery/cache
-summaries remain outside this compact store; they are retained only when an
-analyst deliberately saves the full Lookup JSON or a full evidence export.
-Investigation templates retain at most 20 analyst-authored variants of the
-six fixed built-in investigation and response-preparation guides. They can customise bounded guidance, omit allowlisted
-steps, and add approval gates, but cannot introduce arbitrary actions, run
-code, start collection, submit evidence, or remove a mandatory request gate.
+On the first authenticated load after the IndexedDB transition, WHOISleuth:
 
-Run the deterministic evaluation without reading browser data:
+1. reads each supported legacy local-storage document within its byte and
+   structure limits;
+2. normalises only versions explicitly supported by that collection owner;
+3. writes the bounded records and migration manifest atomically;
+4. verifies the committed manifest and record identities; and
+5. leaves the source documents untouched.
 
-```bash
-npm run platform:local-data
-npm run platform:local-data -- --json
-```
+IndexedDB becomes authoritative after successful migration. Later writes do
+not automatically rewrite the retained legacy documents. The Dashboard can
+deliberately refresh compatible legacy copies before returning to an older
+build, subject to local-storage quota; a downloaded workspace remains the safer
+portable backup.
 
-The versioned report derives its byte totals from the owning model constants.
-It performs no network requests, reads no browser records, and changes no
-production storage. It remains a capacity regression check rather than the
-active-provider selector.
+A malformed, unsupported or future source never triggers an empty replacement,
+reset or deletion. Browser-store future versions are preserved without write.
+Portable future archives are rejected before preview or merge.
 
-## Decision
+## Workspace export, import and recovery
 
-Use the dependency-free native IndexedDB provider for ordinary persistent
-investigation collections.
+A workspace export is a deliberate local download. Its versioned manifest
+records the selected sections, codec, counts, byte totals and ordered SHA-256
+digests. Digests detect corruption or mismatched content; they do not establish
+authorship, truth or confidentiality.
 
-IndexedDB is a same-origin, asynchronous, transactional browser database with
-object stores and indexes. It addresses the demonstrated aggregate-capacity
-and whole-document-query constraints while retaining local-only operation. The
-browser tests verify opening a temporary database, one-time legacy migration,
-atomic multi-record commits, keyed and indexed reads, rollback after an aborted
-transaction, quota failure, retained legacy input, deletion, cleanup, and
-bounded operation deadlines.
+Import validates the complete envelope and selected sections before applying a
+non-destructive merge. The preview reports additions, conflicts, skips,
+unavailable sections and unsupported versions. Omission does not delete local
+data. Settings are resolved after section selection so a deselected or rejected
+Brand Profile cannot supply an active-profile preference.
 
-Production browser-local operations use a bounded ten-second deadline. This
-still fails closed instead of waiting indefinitely while allowing ordinary
-manifest and record transactions to finish on slower mobile devices or under
-temporary browser contention.
+The recommended portable backup wraps the ordinary archive with
+PBKDF2-HMAC-SHA-256 and AES-256-GCM in the browser. The passphrase and derived
+key are not persisted or sent. The encrypted envelope remains version 1 and
+authenticates its embedded supported workspace document. Encryption protects
+the downloaded file while locked, not the active IndexedDB database, an open
+Console, a compromised device, a malicious extension or a weak passphrase.
 
-A wrapper library such as Dexie is not required for this capability. It may be
-reconsidered if the production adapter, schema upgrades, or transaction code
-becomes difficult to maintain. Adding it before that evidence would increase
-the dependency and upgrade surface without changing the underlying browser
-storage guarantees.
+An explicitly labelled unencrypted export remains available. Separately
+downloaded archives remain under the user's retention and deletion control.
 
-SQLite compiled to WebAssembly is deferred. Its bundle, worker, browser
-filesystem, compatibility, and recovery costs are not justified by the current
-query model.
+## Capacity and storage pressure
 
-## Production contract
+Collection-specific limits are enforced before accumulation. WHOISleuth does
+not assume the browser's available quota and cannot guarantee that every
+browser or private-browsing mode will persist IndexedDB. The interface reports
+quota, blocked, unavailable and timeout states and does not prune evidence
+silently.
 
-The provider:
+Histories remain in the existing atomic records. The current design adds no
+second database, synchronisation service, hosted custody or background network
+operation.
 
-1. Remain asynchronous and provider-neutral so browser storage details do not
-   leak through every component.
-2. Preserve the existing model normalizers, schema versions, bounds, pruning,
-   future-version refusal, and stable quota errors as the authority for each
-   collection.
-3. Use bounded collection and keyed reads. Unbounded cursors or whole-database
-   exports are not acceptable.
-4. Provide explicit atomic transactions when one action changes related
-   collections.
-5. Keep the workspace archive as the deliberate portable backup and recovery
-   format.
-6. Report unavailable, blocked, quota, migration, and unsupported-schema states
-   explicitly. It must not silently present an empty workspace after a failed
-   read.
-7. Keep all ordinary records same-origin and browser-local. No server sync,
-   analytics, hosted custody, or background upload follows from this decision.
+## Separate storage boundaries
 
-## Migration and rollback
+Optional hosted monitoring is not part of the ordinary browser workspace. It
+stores only its documented compact application-encrypted projection and
+bounded object metadata under operator control. Disabling monitoring does not
+delete retained ciphertext.
 
-The migration is non-destructive and resumable:
+CLI files, downloaded exports and optional rendered captures are also separate.
+They remain on the operator's filesystem until the operator deletes them and
+are never copied into IndexedDB automatically.
 
-1. Read and normalise each supported legacy document through its existing
-   model.
-2. Write the bounded records and a migration manifest in one IndexedDB
-   transaction.
-3. Read the records back and verify collection counts, schema versions, and
-   deterministic digests before switching the active provider.
-4. Leave the legacy documents intact. IndexedDB becomes authoritative after a
-   successful migration, so later application writes do not silently rewrite
-   those retained source documents.
-5. Refuse to overwrite a newer unsupported record in either backend.
-6. Preserve workspace archive export and import. The Dashboard can also update
-   all legacy documents from the current IndexedDB state before a deliberate
-   return to an older build. That compatibility copy is bounded by
-   local-storage quota and does not replace a downloaded workspace backup.
-7. Keep workspace envelope version 5 compatible with Case sections 2 through
-   12. A future Case schema 13 section remains checksummed but unsupported and
-   is never reinterpreted as current data.
-8. Close the versioned workspace root, manifest, and each manifest entry before
-   section integrity or importability is claimed. Additional raw-payload,
-   credential, or policy fields at those envelope layers invalidate ordinary
-   and authenticated encrypted archives; section records remain governed by
-   their own bounded normalizers. Settings preview is recomputed after section
-   selection so a deselected Profile cannot supply an imported active-profile
-   preference.
-
-The manifest records the schema, codec, revision, source, record count, byte
-count, retained legacy digest, and a SHA-256 digest of the ordered encoded
-records. The digest detects accidental corruption and unsynchronised mutation;
-it is not a secret or an authentication boundary against code already running
-on the same origin.
-
-## Encrypted portable archives
-
-Dashboard offers an optional encrypted wrapper around the ordinary checksummed
-workspace archive. Encryption and decryption happen in the browser through
-native Web Crypto. Version 1 uses PBKDF2-HMAC-SHA-256 with 600,000 iterations,
-a fresh 16-byte salt, and AES-256-GCM with a fresh 12-byte initialisation
-vector and 128-bit authentication tag. The schema, version, creation time,
-content contract, key-derivation parameters, salt, cipher parameters, and
-initialisation vector are authenticated as additional data.
-
-The envelope is bounded to approximately 13.4 MiB around the existing 10 MiB
-plaintext archive limit. It accepts only its fixed version 1 algorithm contract
-and canonical base64url fields before performing password work. Import then
-passes the decrypted document through the ordinary archive byte, manifest,
-checksum, schema, preview, and non-destructive merge checks.
-
-The threat model is deliberately narrow:
-
-- it protects the downloaded file while the file is locked and its passphrase
-  is unknown;
-- the passphrase and derived key stay in memory, are not persisted, are not
-  sent to the server, and are cleared from the form after each attempt;
-- a forgotten passphrase is not recoverable;
-- a wrong passphrase and corrupted authenticated ciphertext produce the same
-  error;
-- it does not protect the active plaintext IndexedDB workspace, an unlocked
-  Console, a compromised same-origin page, a malicious browser extension,
-  device malware, a keylogger, or a weak or reused passphrase; and
-- unencrypted archive versions 1 through 5 remain importable, without inventing
-  sections that those formats did not contain, and an unencrypted current
-  archive can still be downloaded through a separately labelled compatibility
-  action.
-
-## Separate decisions
-
-- **IndexedDB vault:** Version 1 still stores normalised records as plaintext
-  JSON inside the browser database. Portable archive encryption does not change
-  that boundary. An optional encrypted live vault would still require a
-  separate passphrase and recovery design, opaque or blind lookup keys,
-  auto-lock behaviour, rekeying, and performance tests. A key or passphrase must
-  not be persisted beside the ciphertext. Encryption cannot protect records
-  while the vault is unlocked from same-origin script or a malicious browser
-  extension.
-- **PWA support:** Offline installation, caching, and service-worker lifecycle
-  are independent from local database selection.
-- **Synchronisation:** IndexedDB remains tied to one origin and browser profile.
-  Cross-device or collaborative work would require a separately approved
-  identity, custody, conflict, retention, and cost model.
-- **Durability:** Browser storage can still be cleared or evicted. A workspace
-  archive remains the portable backup boundary.
+See the [privacy notice](../PRIVACY.md), [threat model](threat-model.md) and
+[operations guide](operations.md) for disclosure, security and hosted-retention
+details.

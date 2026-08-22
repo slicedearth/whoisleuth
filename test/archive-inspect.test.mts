@@ -6,6 +6,7 @@ import {
   inspectWorkspaceArchive,
 } from '../cli/archive-inspect.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { formatJsonDocument } from '../cli/formatters/json.mts';
 import { runCli } from '../cli/runner.mts';
 import {
   buildWorkspaceArchive,
@@ -50,16 +51,14 @@ async function archiveWithUnknownPayload(sectionId: string, payload: unknown) {
   assert.ok(original);
   const section = {
     ...value.sections.settings,
-    payload,
+    [sectionId]: payload,
   };
   value.manifest.sections[index] = {
     ...original,
-    id: sectionId,
     bytes: new TextEncoder().encode(JSON.stringify(section)).byteLength,
     checksum: await sha256ArtifactDigest(section),
   };
-  Reflect.set(value.sections, sectionId, section);
-  Reflect.deleteProperty(value.sections, 'settings');
+  value.sections.settings = section;
   return value;
 }
 
@@ -70,8 +69,8 @@ describe('offline workspace archive inspection', () => {
     assert.ok(report.summary.sectionCount > 0);
     assert.ok(report.summary.recordCount >= 2);
     assert.match(report.summary.contentDigestSha256, /^sha256:[a-f0-9]{64}$/u);
-    assert.equal(report.archive.version, 5);
-    assert.equal(report.archive.readerVersion, 5);
+    assert.equal(report.archive.version, 6);
+    assert.equal(report.archive.readerVersion, 6);
     assert.equal(report.search.requested, false);
     const terminal = formatArchiveInspection(report);
     assert.doesNotMatch(terminal, new RegExp(DOMAIN, 'u'));
@@ -216,17 +215,31 @@ describe('offline workspace archive inspection', () => {
     }
   });
 
-  test('sanitizes archive-derived terminal identifiers and revealed values', async () => {
-    const controls = '\u009b\u00ad\u034f\u180e\u200b\u202e\ufe0f\u{e007f}';
+  test('sanitizes archive-derived revealed values', async () => {
+    const controls = '\u007f\u009b\u00ad\u034f\u180e\u200b\u2028\u2029\u202e\ufe0f\u{e007f}';
     const report = await inspectWorkspaceArchive(
-      JSON.stringify(await archiveWithUnknownPayload(`future${controls}`, {
-        domain: `visible${controls}.invalid`,
+      JSON.stringify(await archiveWithUnknownPayload('future-controls', {
+        domain: 'visible\u00ad.invalid',
       })),
-      { search: `visible${controls}.invalid`, reveal: true },
+      { search: 'visible.invalid', reveal: true },
     );
-    const terminal = formatArchiveInspection(report);
-    assert.equal(report.sections.some((section) => section.id.includes(controls)), true);
-    assert.equal(report.search.results.some((result) => result.value?.includes(controls)), true);
-    assert.doesNotMatch(terminal, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+    assert.equal(report.search.matchCount, 1);
+    const hostileReport = {
+      ...report,
+      search: {
+        ...report.search,
+        results: report.search.results.map((result) => ({
+          ...result,
+          value: `visible${controls}.invalid`,
+        })),
+      },
+    };
+    const terminal = formatArchiveInspection(hostileReport);
+    assert.doesNotMatch(terminal, /[\u007f-\u009f\u2028\u2029]|\p{Default_Ignorable_Code_Point}/u);
+
+    const json = formatJsonDocument(hostileReport);
+    assert.doesNotMatch(json, /[\u007f-\u009f\u2028\u2029]|\p{Default_Ignorable_Code_Point}/u);
+    const parsed = JSON.parse(json);
+    assert.equal(parsed.search.results.some((result: { value?: string }) => result.value?.includes(controls)), true);
   });
 });

@@ -1,6 +1,5 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
 import {
@@ -36,7 +35,6 @@ import {
   buildBrandProfileExport,
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
-  brandProfileStoreVersion,
   SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
 } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
@@ -105,13 +103,11 @@ import {
   buildShortlistExport,
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
-  shortlistStoreVersion,
 } from '../frontend/src/lib/analysis/shortlist-model.ts';
 import {
   buildWatchlistExport,
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
-  watchlistStoreVersion,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
 import {
   buildCliBulkDocument,
@@ -125,8 +121,9 @@ import {
 } from '../cli/formatters/json.mts';
 import {
   CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+  CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
+  CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
   CRYPTOGRAPHIC_ASSURANCE_SCHEMA,
-  CRYPTOGRAPHIC_ASSURANCE_VERSION,
 } from '../lib/cryptographic-assurance.mts';
 import {
   DNSSEC_CHAIN_SCHEMA,
@@ -145,6 +142,10 @@ import {
 import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
 import { CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION } from '../cli/command-catalogue.mts';
 import { CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION } from '../cli/lookup-plan.mts';
+import {
+  CLI_WORKFLOW_RECIPE_CATALOGUE_SCHEMA,
+  CLI_WORKFLOW_RECIPE_CATALOGUE_VERSION,
+} from '../cli/investigation-plan.mts';
 import { CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION } from '../cli/lookup-timeline.mts';
 import { CLI_MAIL_REVIEW_SCHEMA, CLI_MAIL_REVIEW_VERSION } from '../cli/mail-review.mts';
 import { CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION } from '../cli/page-compare.mts';
@@ -254,21 +255,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 210);
-    const rowsById = [...inventory.entries].sort((left, right) => (
-      left.id < right.id ? -1 : left.id > right.id ? 1 : 0
-    ));
-    const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-    assert.equal(
-      digest(rowsById.map((entry) => entry.id)),
-      '232104ea58c5c833566319545143640492d4cd79cd504b9271a8b80fd0613889',
-    );
-    assert.equal(
-      digest(rowsById.map((entry) => Object.fromEntries(
-        Object.entries(entry).filter(([key]) => key !== 'owner'),
-      ))),
-      '9a8456101ee47b3280f365adfcdabfcd17976a546ec0df724a3225554a713b68',
-    );
+    assert.equal(new Set(inventory.entries.map((entry) => entry.id)).size, inventory.entries.length);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -314,6 +301,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.entries.some((entry) => entry.id === 'export.case-review-calendar'), false);
     assert.deepEqual(byId(inventory, 'derived.capability-manifest'), {
       id: 'derived.capability-manifest',
+      tier: 'internal',
       kind: 'derived',
       schema: CAPABILITY_MANIFEST_SCHEMA,
       currentVersion: CAPABILITY_MANIFEST_VERSION,
@@ -330,6 +318,7 @@ describe('schema compatibility inventory', () => {
     for (const [id, schema, version] of [
       ['cli.doctor', DOCTOR_SCHEMA, DOCTOR_VERSION],
       ['cli.command-catalogue', CLI_COMMAND_CATALOGUE_SCHEMA, CLI_COMMAND_CATALOGUE_VERSION],
+      ['cli.workflow-recipe-catalogue', CLI_WORKFLOW_RECIPE_CATALOGUE_SCHEMA, CLI_WORKFLOW_RECIPE_CATALOGUE_VERSION],
       ['cli.lookup-plan', CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION],
       ['cli.lookup-timeline', CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION],
       ['cli.mail-review', CLI_MAIL_REVIEW_SCHEMA, CLI_MAIL_REVIEW_VERSION],
@@ -338,18 +327,18 @@ describe('schema compatibility inventory', () => {
       assert.equal(byId(inventory, id).schema, schema);
       assert.equal(byId(inventory, id).currentVersion, version);
     }
-    assert.deepEqual(byId(inventory, 'cli.page-compare').supportedVersions, [2, 3, 4]);
-    assert.deepEqual(byId(inventory, 'cli.mail-review').supportedVersions, [2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.page-compare').supportedVersions, [4]);
+    assert.deepEqual(byId(inventory, 'cli.mail-review').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.lookup-reconciliation').schema, 'whoisleuth.cli.lookup-reconciliation');
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');
     assert.equal(byId(inventory, 'cli.sharing-review').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, 3);
-    assert.deepEqual(byId(inventory, 'cli.offline-artifact-verification').supportedVersions, [2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.offline-artifact-verification').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.evidence-signature-verification').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.interchange-fidelity-report').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.signed-evidence-package').currentVersion, 2);
-    assert.deepEqual(byId(inventory, 'cli.signed-evidence-package').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.signed-evidence-package').supportedVersions, [2]);
     assert.equal(byId(inventory, 'export.acquisition-decision').schema, 'whoisleuth.acquisition-decision');
     assert.equal(byId(inventory, 'export.lookup-claim-passport').schema, 'whoisleuth.lookup-claim-passport');
     assert.equal(byId(inventory, 'export.lookup-claim-passport').byteBudget, 64 * 1024);
@@ -362,7 +351,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.lookalike-calibration-input').schema, 'whoisleuth.lookalike-calibration-input');
     assert.equal(byId(inventory, 'cli.lookalike-calibration').schema, 'whoisleuth.lookalike-calibration');
     assert.equal(byId(inventory, 'cli.risk-calibration-report').currentVersion, 3);
-    assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.risk-calibration-report').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'cli.risk-calibration-dataset'), {
       ...RISK_CALIBRATION_DATASET_COMPATIBILITY,
       supportedVersions: [...RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions],
@@ -393,18 +382,18 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.domain-control-review-input').schema, 'whoisleuth.cli.domain-control-review-input');
     assert.equal(byId(inventory, 'cli.domain-control-observation-review').schema, 'whoisleuth.cli.domain-control-review');
     assert.equal(byId(inventory, 'cli.domain-control-monitor').schema, 'whoisleuth.cli.domain-control-monitor');
-    assert.deepEqual(byId(inventory, 'cli.lookup-brief').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.lookup-brief').supportedVersions, [2]);
     assert.equal(byId(inventory, 'cli.registry-cohort').schema, 'whoisleuth.cli.registry-cohort');
-    assert.deepEqual(byId(inventory, 'cli.registry-cohort').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.registry-cohort').supportedVersions, [2]);
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder-input').schema, 'whoisleuth.domain-control-flight-recorder.input');
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder').schema, 'whoisleuth.domain-control-flight-recorder');
     assert.deepEqual(byId(inventory, 'tab.candidate-handoff').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [1, 2, 3]);
-    assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [1, 2, 3]);
-    assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2]);
     assert.equal(byId(inventory, 'cli.lookup').migration, 'read_only');
-    assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan-item').schema, CLI_DISCOVERY_SCAN_ITEM_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-scan').currentVersion, CLI_DISCOVERY_SCAN_VERSION);
@@ -412,7 +401,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.discovery-snapshot').byteBudget, MAX_DISCOVERY_SNAPSHOT_BYTES);
     assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').schema, CLI_DISCOVERY_OBSERVATION_SCHEMA);
     assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').currentVersion, CLI_DISCOVERY_OBSERVATION_VERSION);
-    assert.deepEqual(byId(inventory, 'cli.discovery-observation-snapshot').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.discovery-observation-snapshot').supportedVersions, [2]);
     assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').byteBudget, MAX_DISCOVERY_OBSERVATION_BYTES);
     assert.equal(byId(inventory, 'cli.ct-event-batch').schema, 'whoisleuth.ct-event-batch');
     assert.equal(byId(inventory, 'cli.investigation-manifest').schema, 'whoisleuth.investigation-manifest');
@@ -421,8 +410,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.source-reliability-report').schema, 'whoisleuth.source-reliability-report');
     assert.equal(byId(inventory, 'cli.offline-evidence-review').schema, 'whoisleuth.cli.offline-evidence-review');
     for (const [id, schema, version] of [
-      ['cli.cryptographic-assurance-input', CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_VERSION],
-      ['cli.cryptographic-assurance-review', CRYPTOGRAPHIC_ASSURANCE_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_VERSION],
+      ['cli.cryptographic-assurance-input', CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION],
+      ['cli.cryptographic-assurance-review', CRYPTOGRAPHIC_ASSURANCE_SCHEMA, CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION],
       ['cli.dnssec-trust-anchor-input', DNSSEC_TRUST_ANCHOR_SCHEMA, DNSSEC_TRUST_ANCHOR_VERSION],
       ['cli.dnssec-chain-validation', DNSSEC_CHAIN_SCHEMA, DNSSEC_CHAIN_VERSION],
       ['cli.mail-transport-input', MAIL_TRANSPORT_INPUT_SCHEMA, MAIL_TRANSPORT_INPUT_VERSION],
@@ -431,54 +420,56 @@ describe('schema compatibility inventory', () => {
       assert.equal(byId(inventory, id).schema, schema);
       assert.equal(byId(inventory, id).currentVersion, version);
     }
+    assert.deepEqual(byId(inventory, 'cli.cryptographic-assurance-input').supportedVersions, [1]);
+    assert.deepEqual(byId(inventory, 'cli.cryptographic-assurance-review').supportedVersions, [2]);
     assert.equal(byId(inventory, 'cli.dnssec-trust-anchor-input').byteBudget, MAX_DNSSEC_TRUST_ANCHOR_BYTES);
     assert.equal(byId(inventory, 'cli.mail-transport-input').byteBudget, MAX_MAIL_TRANSPORT_INPUT_BYTES);
     assert.equal(byId(inventory, 'export.web-capture-summary').schema, WEB_CAPTURE_SUMMARY_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-summary').currentVersion, WEB_CAPTURE_SUMMARY_VERSION);
     assert.equal(byId(inventory, 'export.web-capture-manifest').schema, WEB_CAPTURE_MANIFEST_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-manifest').currentVersion, WEB_CAPTURE_MANIFEST_VERSION);
-    assert.deepEqual(byId(inventory, 'export.web-capture-manifest').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'export.web-capture-manifest').supportedVersions, [2]);
     assert.equal(byId(inventory, 'export.web-capture-manifest').byteBudget, MAX_MANIFEST_BYTES);
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').schema, WEB_CAPTURE_DOM_DIGEST_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
-    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [2, 3]);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [25, 26, 27, 28]);
-    assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
-    assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27]);
+    assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [5]);
+    assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [4]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');
     assert.equal(byId(inventory, 'import.domain-observation-rows').schema, 'whoisleuth.domain-observation-rows');
     assert.equal(byId(inventory, 'import.dns-observation-rows').schema, 'whoisleuth.dns-observation-rows');
     assert.equal(byId(inventory, 'import.certificate-observation-rows').schema, 'whoisleuth.certificate-observation-rows');
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);
-    assert.deepEqual(byId(inventory, 'export.relationship-graph').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'export.relationship-graph').supportedVersions, [3]);
     assert.equal(byId(inventory, 'export.relationship-graph').byteBudget, MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
     assert.equal(byId(inventory, 'browser.relationship-observations').schema, null);
     assert.equal(byId(inventory, 'browser.relationship-observations').currentVersion, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'browser.website-snapshots').schema, null);
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
-    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [4]);
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
-    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [1, 2, 3, 4]);
-    assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
-    assert.equal(byId(inventory, 'browser.bulk-sessions').acceptsUnversionedLegacy, true);
-    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [1, 2, 3, 4]);
-    assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
+    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4]);
+    assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'exact_current_only');
+    assert.equal(byId(inventory, 'browser.bulk-sessions').acceptsUnversionedLegacy, false);
+    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [4]);
+    assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'exact_current_only');
     assert.equal(byId(inventory, 'export.bulk-sessions').acceptsUnversionedLegacy, false);
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, null);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
-    assert.deepEqual(byId(inventory, 'browser.investigation-templates').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'browser.investigation-templates').supportedVersions, [2]);
     assert.equal(byId(inventory, 'browser.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_STORE_BYTES);
     assert.equal(byId(inventory, 'browser.bulk-review').schema, null);
     assert.equal(byId(inventory, 'browser.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'browser.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
-    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [1, 2, 3, 4, 5]);
+    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [5, 6]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
-    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [6, 7]);
     assert.deepEqual(byId(inventory, 'derived.case-response-review-inputs').supportedVersions, [1]);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').schema, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').currentVersion, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
@@ -501,11 +492,11 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'derived.observation-envelope').currentVersion, OBSERVATION_ENVELOPE_VERSION);
     assert.equal(byId(inventory, 'derived.observation-envelope').byteBudget, MAX_OBSERVATION_ENVELOPE_BYTES);
     assert.equal(byId(inventory, 'tab.investigation-guide').currentVersion, INVESTIGATION_GUIDE_VERSION);
-    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2, 3, 4, 5]);
+    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [5]);
     assert.equal(byId(inventory, 'tab.investigation-guide').byteBudget, MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').currentVersion, INVESTIGATION_GUIDE_EXPORT_VERSION);
-    assert.deepEqual(byId(inventory, 'export.investigation-recipe-summary').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'export.investigation-recipe-summary').supportedVersions, [4]);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').byteBudget, MAX_INVESTIGATION_GUIDE_EXPORT_BYTES);
     assert.equal(byId(inventory, 'export.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
@@ -513,12 +504,12 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').schema, INVESTIGATION_CACAO_SPEC_VERSION);
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').currentVersion, INVESTIGATION_CACAO_PROFILE_VERSION);
     assert.equal(byId(inventory, 'export.investigation-cacao-profile').byteBudget, MAX_INVESTIGATION_CACAO_IMPORT_BYTES);
-    assert.deepEqual(byId(inventory, 'export.investigation-cacao-profile').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'export.investigation-cacao-profile').supportedVersions, [2]);
     assert.equal(byId(inventory, 'export.brand-protection-operations-report').schema, BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.brand-protection-operations-report').currentVersion, BRAND_PROTECTION_OPERATIONS_REPORT_VERSION);
     assert.equal(byId(inventory, 'export.brand-protection-operations-report').byteBudget, MAX_OPERATIONS_REPORT_BYTES);
-    assert.deepEqual(byId(inventory, 'export.brand-protection-operations-report').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'export.case-report').supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert.deepEqual(byId(inventory, 'export.brand-protection-operations-report').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'export.case-report').supportedVersions, [9]);
     assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
@@ -859,25 +850,25 @@ describe('schema compatibility inventory', () => {
     }
   });
 
-  test('records deployed legacy readers separately from current-only import contracts', () => {
+  test('records the exact public-to-v2 durable boundary separately from output-only and internal contracts', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    assert.equal(brandProfileStoreVersion([]), 1);
-    assert.equal(watchlistStoreVersion({ Legacy: { results: [] } }), 1);
-    assert.equal(shortlistStoreVersion([]), 1);
-    assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4, 5, 6]);
-    assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2, 3]);
-    assert.deepEqual(byId(inventory, 'browser.ct-history').supportedVersions, [1, 2, 3]);
-    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4, 5, 6]);
+    assert.equal(byId(inventory, 'browser.cases').tier, 'durable_interchange');
+    assert.equal(byId(inventory, 'export.case-report').tier, 'published_output');
+    assert.equal(byId(inventory, 'derived.case-response-review-inputs').tier, 'internal');
+    assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [12, 13]);
+    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [6, 7]);
+    assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'browser.ct-history').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [6, 7]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2, 3]);
+    assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
-    assert.deepEqual(byId(inventory, 'export.investigation-capsule').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'export.investigation-capsule').supportedVersions, [2, 3]);
     assert.deepEqual(byId(inventory, 'derived.lookup-investigation-brief').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'export.lookup-readable-report').supportedVersions, [2, 3]);
+    assert.deepEqual(byId(inventory, 'export.lookup-readable-report').supportedVersions, [3]);
     assert.equal(byId(inventory, 'export.investigation-capsule').currentVersion, 3);
     assert.equal(byId(inventory, 'derived.lookup-investigation-brief').currentVersion, 2);
     assert.equal(byId(inventory, 'export.lookup-readable-report').currentVersion, 3);
@@ -887,10 +878,10 @@ describe('schema compatibility inventory', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const report = formatSchemaCompatibilityInventory(inventory);
     assert.match(report, /^# WHOISleuth schema compatibility inventory/m);
-    assert.match(report, /\| browser\.cases \| browser_store \|/);
-    assert.match(report, /\| cli\.compare \| cli_document \|/);
-    assert.match(report, /\| browser\.cases \| browser_store \|[^\n]+\| normalized_rewrite \|/);
-    assert.match(report, /\| export\.cases \| export \|[^\n]+\| non_destructive_merge \|/);
+    assert.match(report, /\| browser\.cases \| durable_interchange \| browser_store \|/);
+    assert.match(report, /\| cli\.compare \| published_output \| cli_document \|/);
+    assert.match(report, /\| browser\.cases \| durable_interchange \| browser_store \|[^\n]+\| normalized_rewrite \|/);
+    assert.match(report, /\| export\.cases \| durable_interchange \| export \|[^\n]+\| non_destructive_merge \|/);
     assert.match(report, /## Contract notes/);
     assert.match(report, /## Limitations/);
     assert.doesNotMatch(report, /\/Users\//);

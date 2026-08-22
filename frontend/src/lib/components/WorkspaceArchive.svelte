@@ -18,7 +18,7 @@
 
   type WorkspacePreview = Awaited<ReturnType<typeof previewLocalWorkspaceArchive>>;
 
-  let { onimport }:{onimport?:()=>void}=$props();
+  let { onimport, importOnly = false }:{onimport?:(message:string)=>void|Promise<void>;importOnly?:boolean}=$props();
   let archiveValue=$state<unknown>(null);
   let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
@@ -131,8 +131,14 @@
         }),
         {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0},
       );
-      message=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
-      archiveValue=null;preview=null;selectedIds=[];onimport?.();
+      const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
+      archiveValue=null;preview=null;selectedIds=[];
+      message=resultMessage;
+      try {
+        await onimport?.(resultMessage);
+      } catch {
+        message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the committed browser-local state.`;
+      }
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
     finally{busy=false;}
   }
@@ -150,12 +156,12 @@
 <section class="workspace-archive card" aria-labelledby="workspace-archive-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Manage saved data</p>
-      <h2 id="workspace-archive-title">Back up or move saved work</h2>
-      <p>Download supported work from this browser, or review a previous backup before adding it here.</p>
+      <p class="eyebrow">{importOnly ? 'Bring existing work' : 'Manage saved data'}</p>
+      <h2 id="workspace-archive-title">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
+      <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this browser.' : 'Download supported work from this browser, or review a previous backup before adding it here.'}</p>
     </div>
     <div class="top-actions toolbar">
-      <button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls={showEncryptionForm?'workspace-encryption-form':undefined} disabled={busy}>Download encrypted backup</button>
+      {#if !importOnly}<button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls={showEncryptionForm?'workspace-encryption-form':undefined} disabled={busy}>Download encrypted backup</button>{/if}
       <label class="btn file-btn" class:disabled={busy}>Review backup file<input type="file" accept="application/json,.json" onchange={chooseFile} disabled={busy}></label>
     </div>
   </header>
@@ -199,14 +205,14 @@
   {/if}
 
   <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
-  <details class="archive-details">
+  {#if !importOnly}<details class="archive-details">
     <summary>How workspace backups work</summary>
     <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
     <p>Encrypted backups use browser-native PBKDF2-HMAC-SHA-256 and AES-256-GCM authenticated encryption. Encryption cannot protect an unlocked Console from software already able to read the page. A forgotten passphrase makes the backup unrecoverable.</p>
     <button class="btn unencrypted-download" type="button" onclick={downloadUnencrypted} disabled={busy}>Download unencrypted backup</button>
     <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
     <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
-  </details>
+  </details>{/if}
 
   {#if preview}
     <div class="preview" role="group" aria-labelledby="workspace-archive-preview-title">

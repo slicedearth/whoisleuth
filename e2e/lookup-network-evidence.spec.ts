@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -96,7 +97,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expandLookupFamilies(page);
   const card = page.locator('.dns-card');
   await expect(card).not.toHaveAttribute('open', '');
-  await expect(card.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'DNS evidence' })).toBeVisible();
   await expect(card.locator(':scope > summary .evidence-status')).toHaveText('partial');
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeHidden();
   await card.locator(':scope > summary').click();
@@ -104,9 +105,9 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
   await expect(card.getByText(/ns1\.example.*serial 2026072701/i)).toBeVisible();
   await expect(card.getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443 · IPv4 hints 192\.0\.2\.10.*Published ech/i)).toBeVisible();
-  await expect(card.getByText(/does not follow or connect to them/i)).toBeVisible();
+  await expect(card.getByText(/Service-binding targets and address hints are displayed but not followed/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
-  await expect(card.getByText(/does not prove common ownership or maliciousness/i)).toBeVisible();
+  await expect(card.getByText(/Verify shared infrastructure independently/i)).toBeVisible();
   await expect(card.getByRole('heading', { name: 'Authoritative DNS health' })).toBeVisible();
   await expect(card.getByText('Parent view and registry publication differ', { exact: true })).toBeVisible();
   await expect(card.getByText('1 nameserver could not be confirmed', { exact: true })).toBeVisible();
@@ -132,9 +133,9 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expectNoHorizontalOverflow(page);
 });
 
-test('HTTP intelligence presents bounded redirect provenance and response metadata', async ({ page }) => {
+test('HTTP evidence presents bounded redirect provenance and response metadata', async ({ page }) => {
   test.slow();
-  await page.evaluate(() => {
+  await page.evaluate((profileVersion) => {
     const observedAt = '2026-07-12T00:00:00.000Z';
     const profile = {
       id: 'comparison-profile', name: 'Comparison profile', officialDomains: ['official.example'], productNames: [], tlds: [],
@@ -153,9 +154,9 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
         complete: true, truncated: false,
       },
     };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify({ version: profileVersion, profiles: [profile] }));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
-  });
+  }, BRAND_PROFILE_SCHEMA_VERSION);
   await migrateLegacyBrowserData(page, {});
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
@@ -384,7 +385,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(sslblReviewLead.getByRole('link', { name: 'Review certificate evidence' })).toHaveAttribute('href', '#evidence-sslbl');
   const card = page.locator('.http-card');
   await expect(card).not.toHaveAttribute('open', '');
-  await expect(card.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
   const httpStatus = card.locator(':scope > summary .evidence-status');
   await expect(httpStatus).toHaveText('success');
   await expect(httpStatus).toHaveClass(/\bsuccess\b/u);
@@ -538,7 +539,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.getByText(/related matches cannot corroborate one another/i)).toBeVisible();
 
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
-  await expect(snapshots.getByText(/A change is a review lead, not evidence of compromise/)).toBeVisible();
+  await expect(snapshots.getByText(/Differences are review cues/)).toBeVisible();
   await snapshots.getByRole('button', { name: 'Save current snapshot' }).click();
   await expect(snapshots.getByRole('status')).toContainText('Saved a compact website-profile snapshot');
   const retainedSnapshots = await readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 1 });
@@ -650,7 +651,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
   await expectNoHorizontalOverflow(page);
 });
 
-test('TLS intelligence presents one-connection certificate evidence without narrow-width overflow', async ({ page }) => {
+test('TLS evidence presents one-connection certificate evidence without narrow-width overflow', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -699,7 +700,7 @@ test('TLS intelligence presents one-connection certificate evidence without narr
   await expandLookupFamilies(page);
   const card = page.locator('.tls-card');
   await expect(card).not.toHaveAttribute('open', '');
-  await expect(card.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
   await expect(card.getByText('93.184.216.34', { exact: true })).toBeHidden();
   await card.locator(':scope > summary').click();
@@ -782,7 +783,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   ).toBeVisible();
   await reverseDnsCard.locator(':scope > summary').click();
   await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeVisible();
-  await expect(reverseDnsCard.getByText(/does not prove hosting control/i)).toBeVisible();
+  await expect(reverseDnsCard.getByText(/controlled by the address operator and may be absent, stale, generic or misleading/i)).toBeVisible();
   await page.locator('.export-menu > summary').click();
   await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

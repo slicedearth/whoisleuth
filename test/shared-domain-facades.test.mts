@@ -60,8 +60,8 @@ describe('shared domain compatibility facades', () => {
     assert.strictEqual(demo.SYNTHETIC_DEMO_VERSION, tabContracts.SYNTHETIC_DEMO_VERSION);
     assert.strictEqual(demo.SYNTHETIC_DEMO_EXPORT_SCHEMA, tabContracts.SYNTHETIC_DEMO_EXPORT_SCHEMA);
     assert.deepEqual(
-      localDefinitions.BROWSER_LOCAL_COLLECTIONS.map(({ id, label, schemaVersion, maximumBytes, maximumRecords }) => (
-        { id, label, schemaVersion, maximumBytes, maximumRecords }
+      localDefinitions.BROWSER_LOCAL_COLLECTIONS.map(({ id, label, schemaVersion, minimumReadableVersion, acceptsUnversionedLegacy, maximumBytes, maximumRecords }) => (
+        { id, label, schemaVersion, minimumReadableVersion, acceptsUnversionedLegacy, maximumBytes, maximumRecords }
       )),
       localManifest.BROWSER_LOCAL_COLLECTION_MANIFEST,
     );

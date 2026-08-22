@@ -9,26 +9,19 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   renderPrivacyDataFlowCatalogueJson,
   renderPrivacyDataFlowCatalogueMarkdown,
-  renderPrivacyDataFlowSummaryModule,
 } from './privacy-data-flow-catalogue-renderer.mts';
+import { PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY } from '../packages/contracts/privacy-data-flow-catalogue.mts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const PRIVACY_CATALOGUE_JSON_PATH = resolve(ROOT, 'docs', 'privacy-data-flow-catalogue.json');
 export const PRIVACY_CATALOGUE_MARKDOWN_PATH = resolve(ROOT, 'docs', 'privacy-data-flow-catalogue.md');
-export const PRIVACY_CATALOGUE_FRONTEND_SUMMARY_PATH = resolve(
-  ROOT,
-  'frontend',
-  'src',
-  'lib',
-  'generated',
-  'privacy-data-flow-summary.ts',
-);
 export const MAX_PRIVACY_CATALOGUE_RETAINED_ARTIFACT_BYTES = 2 * 1024 * 1024;
 
 type RetainedArtifact = Readonly<{
@@ -79,11 +72,6 @@ function expectedArtifacts(): readonly RetainedArtifact[] {
       displayPath: 'docs/privacy-data-flow-catalogue.md',
       content: renderPrivacyDataFlowCatalogueMarkdown(),
     }),
-    Object.freeze({
-      path: PRIVACY_CATALOGUE_FRONTEND_SUMMARY_PATH,
-      displayPath: 'frontend/src/lib/generated/privacy-data-flow-summary.ts',
-      content: renderPrivacyDataFlowSummaryModule(),
-    }),
   ]);
 }
 
@@ -98,8 +86,17 @@ export function main(argv: readonly string[] = process.argv.slice(2)): number {
     return 0;
   }
   const drift = artifacts.filter((artifact) => retainedArtifact(artifact.path) !== artifact.content);
-  if (drift.length > 0) {
-    process.stderr.write(`Privacy catalogue artefacts are out of date: ${drift.map((item) => item.displayPath).join(', ')}. Run the writer deliberately.\n`);
+  const jsonArtifact = artifacts[0]!;
+  const fixture = PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY.fixtures.find((item) => item.path === jsonArtifact.displayPath);
+  const jsonBytes = Buffer.byteLength(jsonArtifact.content, 'utf8');
+  const jsonSha256 = createHash('sha256').update(jsonArtifact.content).digest('hex');
+  const fixtureDrift = !fixture || fixture.bytes !== jsonBytes || fixture.sha256 !== jsonSha256;
+  if (drift.length > 0 || fixtureDrift) {
+    const stale = [
+      ...drift.map((item) => item.displayPath),
+      ...(fixtureDrift ? [`lifecycle fixture metadata (expected ${jsonBytes} bytes and ${jsonSha256})`] : []),
+    ];
+    process.stderr.write(`Privacy catalogue artefacts are out of date: ${stale.join(', ')}. Run the writer deliberately and review lifecycle metadata.\n`);
     return 1;
   }
   process.stdout.write('Privacy data-flow catalogue artefacts are current.\n');

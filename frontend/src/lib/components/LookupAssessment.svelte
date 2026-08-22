@@ -61,17 +61,17 @@
     if (score >= 70) return {
       id: 'elevated',
       label: 'Elevated review priority',
-      summary: 'Prioritise the attributed evidence for analyst review. This heuristic band does not establish maliciousness, ownership, control, or intent.',
+      summary: 'Prioritise the attributed evidence for analyst review; the band is not a finding.',
     };
     if (score >= 40) return {
       id: 'review',
       label: 'Review priority',
-      summary: 'Review the contributing evidence and limitations before deciding what to do next. This heuristic band is not a finding by itself.',
+      summary: 'Review the contributing evidence and limitations before deciding what to do next.',
     };
     return {
       id: 'lower',
       label: 'Lower triage band',
-      summary: 'A lower Risk band is neutral triage context. It does not establish safety, legitimacy, ownership, or absence of concern.',
+      summary: 'A lower Risk band is neutral; review the evidence before deciding.',
     };
   }
 

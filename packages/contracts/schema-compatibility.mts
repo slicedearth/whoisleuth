@@ -1,10 +1,12 @@
 type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
+type CompatibilityTier = 'durable_interchange' | 'published_output' | 'internal';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
 type MigrationBehavior = 'normalize_to_current' | 'exact_current_only' | 'read_only' | 'none';
 type WriteSemantics = 'normalized_rewrite' | 'ephemeral_replace' | 'optimistic_replace' | 'non_destructive_merge' | 'read_only' | 'none';
 
 type SchemaCompatibilityEntry = {
   id: string;
+  tier: CompatibilityTier;
   kind: ContractKind;
   schema: string | null;
   currentVersion: number;
@@ -24,11 +26,16 @@ type SchemaCompatibilityDescriptor = Readonly<{
     : SchemaCompatibilityEntry[Key];
 }>;
 
+type SchemaCompatibilityDefinition = Omit<SchemaCompatibilityDescriptor, 'tier'> & {
+  tier?: CompatibilityTier;
+};
+
 const LOCAL_SCHEMA_IDENTIFIER_SOURCE = String.raw`whoisleuth\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*`;
 const LOCAL_SCHEMA_IDENTIFIER_PATTERN = new RegExp(`^${LOCAL_SCHEMA_IDENTIFIER_SOURCE}$`, 'u');
 const COMPATIBILITY_SCHEMA_IDENTIFIER_PATTERN = /^[-a-z0-9.]+$/u;
 
 const CONTRACT_KINDS = new Set<ContractKind>(['browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived']);
+const COMPATIBILITY_TIERS = new Set<CompatibilityTier>(['durable_interchange', 'published_output', 'internal']);
 const FUTURE_VERSION_BEHAVIORS = new Set<FutureVersionBehavior>(['reject', 'preserve_without_write', 'discard', 'not_applicable']);
 const MIGRATION_BEHAVIORS = new Set<MigrationBehavior>(['normalize_to_current', 'exact_current_only', 'read_only', 'none']);
 const WRITE_SEMANTICS = new Set<WriteSemantics>(['normalized_rewrite', 'ephemeral_replace', 'optimistic_replace', 'non_destructive_merge', 'read_only', 'none']);
@@ -37,7 +44,8 @@ function validateSchemaCompatibilityDescriptor(value: SchemaCompatibilityDescrip
   if (!/^[a-z0-9][a-z0-9.-]{2,79}$/u.test(value.id)) {
     throw new Error(`Schema compatibility entry id is invalid: ${value.id}`);
   }
-  if (!CONTRACT_KINDS.has(value.kind)
+  if (!COMPATIBILITY_TIERS.has(value.tier)
+    || !CONTRACT_KINDS.has(value.kind)
     || !FUTURE_VERSION_BEHAVIORS.has(value.futureVersionBehavior)
     || !MIGRATION_BEHAVIORS.has(value.migration)
     || !WRITE_SEMANTICS.has(value.writeSemantics)
@@ -71,11 +79,19 @@ function validateSchemaCompatibilityDescriptor(value: SchemaCompatibilityDescrip
   }
 }
 
-function defineSchemaCompatibility(value: SchemaCompatibilityDescriptor): SchemaCompatibilityDescriptor {
-  validateSchemaCompatibilityDescriptor(value);
+function compatibilityTier(value: SchemaCompatibilityDefinition): CompatibilityTier {
+  if (value.tier) return value.tier;
+  if (value.kind === 'derived' || value.kind === 'tab_store' || value.id.startsWith('maintainer.')) return 'internal';
+  if (value.futureVersionBehavior === 'not_applicable') return 'published_output';
+  return 'durable_interchange';
+}
+
+function defineSchemaCompatibility(value: SchemaCompatibilityDefinition): SchemaCompatibilityDescriptor {
+  const descriptor = { ...value, tier: compatibilityTier(value) } as SchemaCompatibilityDescriptor;
+  validateSchemaCompatibilityDescriptor(descriptor);
   return Object.freeze({
-    ...value,
-    supportedVersions: Object.freeze([...value.supportedVersions]),
+    ...descriptor,
+    supportedVersions: Object.freeze([...descriptor.supportedVersions]),
   });
 }
 
@@ -96,9 +112,11 @@ export {
   validateSchemaCompatibilityDescriptor,
 };
 export type {
+  CompatibilityTier,
   ContractKind,
   FutureVersionBehavior,
   MigrationBehavior,
+  SchemaCompatibilityDefinition,
   SchemaCompatibilityDescriptor,
   SchemaCompatibilityEntry,
   WriteSemantics,

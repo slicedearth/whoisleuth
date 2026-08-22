@@ -14,10 +14,10 @@
       "version": 1
     },
     "schemaLifecycleRegistry": {
-      "familyCount": 17,
-      "compatibilityCount": 84,
-      "privacyProfileCount": 44,
-      "consumerFlowCount": 139,
+      "familyCount": 18,
+      "compatibilityCount": 85,
+      "privacyProfileCount": 45,
+      "consumerFlowCount": 140,
       "metadataVersions": [
         2,
         3,
@@ -77,8 +77,8 @@
   "capabilityFlows": [
     {
       "id": "analyst_cases",
-      "title": "Browser-local analyst cases",
-      "requestPurpose": "Retain analyst-selected evidence, notes and response history in the browser profile.",
+      "title": "Browser-local analyst cases and Review Item lifecycle",
+      "requestPurpose": "Retain analyst-selected Case material and the separately bounded Review Item lifecycle overlay in the browser profile.",
       "job": "respond",
       "executionPlanes": [
         "browser_local"
@@ -100,7 +100,8 @@
         "none"
       ],
       "returnedDataCategories": [
-        "bounded_case_state"
+        "bounded_case_state",
+        "bounded_analyst_review_state"
       ],
       "processingClasses": [
         "transient_processing",
@@ -144,8 +145,10 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Cases remain in the current browser profile unless deliberately exported.",
-        "Analyst assertions and actions never rewrite their source evidence."
+        "Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.",
+        "Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.",
+        "Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.",
+        "Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review."
       ]
     },
     {
@@ -2572,7 +2575,7 @@
       "command": "brief",
       "capabilityFamilyId": "offline_review",
       "title": "Build a decision brief from a saved lookup",
-      "requestPurpose": "Reads one bounded saved Lookup and emits a compact source-aware decision brief.",
+      "requestPurpose": "Reads one bounded saved Lookup and emits a compact source-attributed decision brief.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3019,7 +3022,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded browser case export and writes a separate audience-specific package.",
+      "requestPurpose": "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4465,7 +4468,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; schemas 25-27 remain readable for compatibility, with schema 26 retaining its strict source/publication binding and schema 25 retaining its documented historical wrapper semantics. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-27 exports preserve evidence-source attribution and limitations; exact public schema 26 remains readable with its strict source/publication binding, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4552,7 +4555,7 @@
       "command": "inspect-archive",
       "capabilityFamilyId": "portable_evidence",
       "title": "Inspect an archive locally",
-      "requestPurpose": "Reads one selected bounded workspace archive with redacted output by default.",
+      "requestPurpose": "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4615,7 +4618,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Exact matches require --reveal. Content identity excludes export time and formatting. The archive is read locally and is never uploaded.",
+        "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -7192,6 +7195,19 @@
       ]
     },
     {
+      "id": "analyst-review-state",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.analyst-review-state"
+      ],
+      "privacyProfileIds": [
+        "analyst-review-state.privacy"
+      ],
+      "consumerFlowIds": [
+        "analyst-review-state.browser-analyst-review-state.consumer"
+      ]
+    },
+    {
       "id": "case-portability",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7491,7 +7507,7 @@
       ],
       "privacyProfileIds": [
         "risk-calibration.dataset-export.v2",
-        "risk-calibration.dataset-input.v1-v2",
+        "risk-calibration.dataset-input.v2",
         "risk-calibration.detailed-output.v3",
         "risk-calibration.detailed-private-file.v3",
         "risk-calibration.summary-output.v3",
@@ -7594,20 +7610,34 @@
   ],
   "schemaContracts": [
     {
+      "id": "browser.analyst-review-state",
+      "familyId": "analyst-review-state",
+      "kind": "browser_store",
+      "schema": "whoisleuth.analyst-review-state",
+      "lifecycleSchema": "whoisleuth.analyst-review-state",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 524288,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
       "id": "browser.brand-profiles",
       "familyId": "workspace-portability",
       "kind": "browser_store",
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.brand-profile-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 6,
+      "currentVersion": 7,
       "supportedVersions": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
+        6,
+        7
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7628,7 +7658,7 @@
         1
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -7643,13 +7673,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 4,
       "supportedVersions": [
-        1,
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
@@ -7667,7 +7694,7 @@
         1
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -7680,22 +7707,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 14,
+      "currentVersion": 13,
       "supportedVersions": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
         12,
-        13,
-        14
+        13
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7713,12 +7728,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 3,
       "supportedVersions": [
-        1,
-        2,
         3
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 1048576,
       "storageClass": "browser_profile_storage",
@@ -7736,7 +7749,7 @@
         1
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 262144,
       "storageClass": "browser_profile_storage",
@@ -7751,11 +7764,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 262144,
       "storageClass": "browser_profile_storage",
@@ -7773,7 +7785,7 @@
         1
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 786432,
       "storageClass": "browser_profile_storage",
@@ -7788,12 +7800,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 3,
       "supportedVersions": [
-        1,
-        2,
         3
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 1048576,
       "storageClass": "browser_profile_storage",
@@ -7808,11 +7818,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 2097152,
       "storageClass": "browser_profile_storage",
@@ -7827,13 +7836,10 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 4,
       "supportedVersions": [
-        1,
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -8011,8 +8017,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 4,
       "supportedVersions": [
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8031,7 +8035,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8050,8 +8053,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 3,
       "supportedVersions": [
-        1,
-        2,
         3
       ],
       "futureVersionBehavior": "reject",
@@ -8215,7 +8216,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8232,13 +8232,10 @@
       "schema": "whoisleuth.brand-profiles",
       "lifecycleSchema": "whoisleuth.brand-profiles",
       "coverageClass": "registered_schema",
-      "currentVersion": 6,
+      "currentVersion": 7,
       "supportedVersions": [
-        2,
-        3,
-        4,
-        5,
-        6
+        6,
+        7
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -8256,7 +8253,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8275,7 +8271,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8312,7 +8307,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8331,13 +8325,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 4,
       "supportedVersions": [
-        1,
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 4194304,
       "storageClass": "deliberate_local_file",
@@ -8373,7 +8364,7 @@
         1
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 2097152,
       "storageClass": "deliberate_local_file",
@@ -8388,14 +8379,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 9,
       "supportedVersions": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
         9
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8414,11 +8397,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 7,
       "supportedVersions": [
-        1,
-        2,
-        3,
-        4,
-        5,
         6,
         7
       ],
@@ -8436,21 +8414,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 14,
+      "currentVersion": 13,
       "supportedVersions": [
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
         12,
-        13,
-        14
+        13
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -8468,7 +8435,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8523,7 +8489,6 @@
       "coverageClass": "registered_non_schema_identity",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8545,7 +8510,7 @@
         1
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 2097152,
       "storageClass": "deliberate_local_file",
@@ -8578,7 +8543,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 4,
       "supportedVersions": [
-        3,
         4
       ],
       "futureVersionBehavior": "reject",
@@ -8597,7 +8561,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -8652,13 +8615,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 4,
       "supportedVersions": [
-        1,
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 393216,
       "storageClass": "deliberate_local_file",
@@ -8673,11 +8633,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 393216,
       "storageClass": "deliberate_local_file",
@@ -8692,7 +8651,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 3,
       "supportedVersions": [
-        1,
         2,
         3
       ],
@@ -8712,11 +8670,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 393216,
       "storageClass": "deliberate_local_file",
@@ -8821,8 +8778,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 3,
       "supportedVersions": [
-        1,
-        2,
         3
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8877,11 +8832,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 3,
       "supportedVersions": [
-        2,
         3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 2097152,
       "storageClass": "deliberate_local_file",
@@ -8932,9 +8886,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 5,
       "supportedVersions": [
-        2,
-        3,
-        4,
         5
       ],
       "futureVersionBehavior": "not_applicable",
@@ -8971,7 +8922,6 @@
       "coverageClass": "registered_schema",
       "currentVersion": 2,
       "supportedVersions": [
-        1,
         2
       ],
       "futureVersionBehavior": "reject",
@@ -9008,13 +8958,10 @@
       "coverageClass": "registered_schema",
       "currentVersion": 4,
       "supportedVersions": [
-        1,
-        2,
-        3,
         4
       ],
       "futureVersionBehavior": "reject",
-      "migration": "normalize_to_current",
+      "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 786432,
       "storageClass": "deliberate_local_file",
@@ -9027,13 +8974,10 @@
       "schema": "whoisleuth.workspace-archive",
       "lifecycleSchema": "whoisleuth.workspace-archive",
       "coverageClass": "registered_schema",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
-        1,
-        2,
-        3,
-        4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9244,6 +9188,35 @@
         "analyst-interchange.export-stix-indicators.consumer",
         "analyst-interchange.export-web-capture-manifest.consumer",
         "analyst-interchange.export-web-capture-summary.consumer"
+      ]
+    },
+    {
+      "id": "analyst-review-state.privacy",
+      "familyId": "analyst-review-state",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_export",
+      "includedCategories": [
+        "subject-identity",
+        "material-fingerprint",
+        "analyst-disposition",
+        "rationale",
+        "review-times",
+        "case-and-campaign-references"
+      ],
+      "excludedCategories": [
+        "raw-upstream-responses",
+        "expanded-contacts",
+        "complete-query-urls",
+        "credentials",
+        "cookies",
+        "certificate-transparency-history"
+      ],
+      "notePolicy": "discarded",
+      "retention": "operator_controlled_output",
+      "network": "none",
+      "sharingReview": "required",
+      "consumerFlowIds": [
+        "analyst-review-state.browser-analyst-review-state.consumer"
       ]
     },
     {
@@ -10280,7 +10253,7 @@
       ]
     },
     {
-      "id": "risk-calibration.dataset-input.v1-v2",
+      "id": "risk-calibration.dataset-input.v2",
       "familyId": "risk-calibration",
       "classification": "analyst_authored_sensitive",
       "projection": "full_manifest",
@@ -10682,7 +10655,6 @@
         {
           "schema": "cacao-2.0",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -10827,7 +10799,6 @@
         {
           "schema": "whoisleuth.web-capture-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -10880,6 +10851,36 @@
       "policyState": "current"
     },
     {
+      "id": "analyst-review-state.browser-analyst-review-state.consumer",
+      "familyId": "analyst-review-state",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.analyst-review-state",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.analyst-review-state",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "analyst-review-state.privacy",
+      "requestMode": "none",
+      "retentionEffect": "operator_controlled_output",
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
       "id": "case.browser.read-write",
       "familyId": "case-portability",
       "plane": "browser",
@@ -10888,20 +10889,8 @@
         {
           "schema": "whoisleuth.browser.case-store",
           "versions": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
             12,
-            13,
-            14
+            13
           ],
           "mode": "direct",
           "discriminator": null
@@ -10909,7 +10898,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 14,
+        "version": 13,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -10931,19 +10920,7 @@
         {
           "schema": "whoisleuth.case-export",
           "versions": [
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14
+            13
           ],
           "mode": "direct",
           "discriminator": null
@@ -10973,7 +10950,6 @@
         {
           "schema": "whoisleuth.cli.case-pack",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -11000,11 +10976,8 @@
         {
           "schema": "whoisleuth.workspace-archive",
           "versions": [
-            1,
-            2,
-            3,
-            4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -11059,7 +11032,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 14,
+        "version": 13,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11102,7 +11075,6 @@
         {
           "schema": "whoisleuth.case-response-packet",
           "versions": [
-            5,
             6,
             7
           ],
@@ -11130,7 +11102,6 @@
         {
           "schema": "whoisleuth.case-response-packet",
           "versions": [
-            5,
             6,
             7
           ],
@@ -11225,7 +11196,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.workspace-archive",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11268,11 +11239,8 @@
         {
           "schema": "whoisleuth.workspace-archive",
           "versions": [
-            1,
-            2,
-            3,
-            4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -11306,19 +11274,8 @@
         {
           "schema": "whoisleuth.case-export",
           "versions": [
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
             12,
-            13,
-            14
+            13
           ],
           "mode": "direct",
           "discriminator": null
@@ -12128,7 +12085,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12185,7 +12141,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "embedded",
@@ -12211,7 +12166,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12237,7 +12191,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12264,7 +12217,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12290,7 +12242,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "embedded",
@@ -12316,7 +12267,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12342,7 +12292,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12369,7 +12318,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "embedded",
@@ -12424,7 +12372,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "embedded",
@@ -12450,7 +12397,6 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12531,9 +12477,6 @@
         {
           "schema": "whoisleuth.external-findings",
           "versions": [
-            1,
-            2,
-            3,
             4
           ],
           "mode": "direct",
@@ -12938,7 +12881,6 @@
         {
           "schema": "whoisleuth.acquisition-decision",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12955,7 +12897,6 @@
         {
           "schema": "whoisleuth.domain-comparison",
           "versions": [
-            3,
             4
           ],
           "mode": "direct",
@@ -12964,7 +12905,6 @@
         {
           "schema": "whoisleuth.bulk-mail-exposure",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12973,7 +12913,6 @@
         {
           "schema": "whoisleuth.bulk-review-manifest",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -12982,7 +12921,6 @@
         {
           "schema": "whoisleuth.investigation-capsule",
           "versions": [
-            1,
             2,
             3
           ],
@@ -13243,7 +13181,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13251,7 +13188,7 @@
         }
       ],
       "emittedContract": null,
-      "privacyProfileId": "risk-calibration.dataset-input.v1-v2",
+      "privacyProfileId": "risk-calibration.dataset-input.v2",
       "requestMode": "none",
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
@@ -13270,7 +13207,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13304,7 +13240,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13337,7 +13272,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13371,7 +13305,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13404,7 +13337,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13438,7 +13370,6 @@
         {
           "schema": "whoisleuth.risk-calibration-dataset",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13549,12 +13480,8 @@
         {
           "schema": "whoisleuth.browser.brand-profile-store",
           "versions": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6
+            6,
+            7
           ],
           "mode": "direct",
           "discriminator": null
@@ -13562,7 +13489,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.brand-profile-store",
-        "version": 6,
+        "version": 7,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13584,9 +13511,6 @@
         {
           "schema": "whoisleuth.browser.bulk-session-store",
           "versions": [
-            1,
-            2,
-            3,
             4
           ],
           "mode": "direct",
@@ -13647,8 +13571,6 @@
         {
           "schema": "whoisleuth.browser.ct-history-store",
           "versions": [
-            1,
-            2,
             3
           ],
           "mode": "direct",
@@ -13769,8 +13691,6 @@
         {
           "schema": "whoisleuth.browser.shortlist-store",
           "versions": [
-            1,
-            2,
             3
           ],
           "mode": "direct",
@@ -13801,7 +13721,6 @@
         {
           "schema": "whoisleuth.browser.investigation-template-store",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13832,7 +13751,6 @@
         {
           "schema": "whoisleuth.browser.watchlist-store",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -13863,9 +13781,6 @@
         {
           "schema": "whoisleuth.browser.website-snapshot-store",
           "versions": [
-            1,
-            2,
-            3,
             4
           ],
           "mode": "direct",
@@ -13896,11 +13811,8 @@
         {
           "schema": "whoisleuth.brand-profiles",
           "versions": [
-            2,
-            3,
-            4,
-            5,
-            6
+            6,
+            7
           ],
           "mode": "direct",
           "discriminator": null
@@ -13925,7 +13837,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.brand-profiles",
-        "version": 6,
+        "version": 7,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -13947,9 +13859,6 @@
         {
           "schema": "whoisleuth.bulk-sessions",
           "versions": [
-            1,
-            2,
-            3,
             4
           ],
           "mode": "direct",
@@ -14185,7 +14094,6 @@
         {
           "schema": "whoisleuth.shortlist",
           "versions": [
-            2,
             3
           ],
           "mode": "direct",
@@ -14233,7 +14141,6 @@
         {
           "schema": "whoisleuth.investigation-templates",
           "versions": [
-            1,
             2
           ],
           "mode": "direct",
@@ -14328,9 +14235,6 @@
         {
           "schema": "whoisleuth.website-profile-snapshots",
           "versions": [
-            1,
-            2,
-            3,
             4
           ],
           "mode": "direct",

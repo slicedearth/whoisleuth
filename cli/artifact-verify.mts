@@ -15,29 +15,23 @@ import {
 } from '../packages/cases/case-response-packet.mts';
 import {
   CASE_PORTABILITY_VERIFIER_DISPATCH,
+  CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_PACKET_SCHEMA,
+  CLI_CASE_PACK_VERSION,
   CLI_CASE_PACK_SCHEMA,
 } from '../packages/contracts/case-portability.mts';
 import {
   ACQUISITION_DECISION_PACKET_SCHEMA,
-  ACQUISITION_DECISION_PACKET_VERSION,
-} from '../packages/investigation/acquisition-decision-packet.mts';
-import {
+  BULK_DOMAIN_COMPARISON_SCHEMA,
+  BULK_MAIL_EXPOSURE_SCHEMA,
+  BULK_REVIEW_MANIFEST_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_VERSION,
-} from '../packages/investigation/lookup-claim-passport.mts';
-import {
-  BULK_DOMAIN_COMPARISON_SCHEMA,
-  BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
-} from '../packages/investigation/bulk-domain-comparison.mts';
-import {
-  BULK_MAIL_EXPOSURE_SCHEMA,
-  BULK_MAIL_EXPOSURE_EXPORT_VERSION,
-} from '../packages/investigation/bulk-mail-exposure.mts';
-import {
-  BULK_REVIEW_MANIFEST_SCHEMA,
-  BULK_REVIEW_MANIFEST_VERSION,
-} from '../packages/investigation/bulk-review-export.mts';
+  SUPPORTED_ACQUISITION_DECISION_PACKET_VERSIONS,
+  SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS,
+  SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS,
+  SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
+} from '../packages/contracts/investigation-portability.mts';
 import {
   decryptWorkspaceArchive,
   inspectEncryptedWorkspaceArchive,
@@ -52,7 +46,6 @@ import {
   canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
   sha256ArtifactDigestFor,
-  SORTED_JSON_V1,
   SORTED_JSON_V2,
   type ArtifactCanonicalizationRoute,
 } from '../packages/evidence/artifact-integrity.mts';
@@ -67,7 +60,6 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
-  DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS,
 } from '../packages/contracts/domain-control-manifest.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -75,7 +67,6 @@ import {
 } from '../lib/domain-change-packet.mts';
 import {
   INVESTIGATION_CAPSULE_SCHEMA,
-  LEGACY_INVESTIGATION_CAPSULE_VERSION,
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   verifyInvestigationCapsule,
   type SupportedInvestigationCapsule,
@@ -173,26 +164,23 @@ export type OfflineArtifactVerificationReport = Readonly<{
 
 type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, 'manifestIdentity'>;
 
-const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze({
-  [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([1, ACQUISITION_DECISION_PACKET_VERSION]),
-  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: new Set([LOOKUP_CLAIM_PASSPORT_VERSION]),
-  [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
-  [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
-  [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set(DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS),
-  [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([1, DOMAIN_CHANGE_PACKET_VERSION]),
-  [INVESTIGATION_MANIFEST_SCHEMA]: new Set([1, INVESTIGATION_MANIFEST_VERSION]),
-});
+function currentCanonicalizationRoutes(versions: readonly number[]): readonly ArtifactCanonicalizationRoute[] {
+  return Object.freeze(versions.map((version) => Object.freeze({
+    version,
+    canonicalization: SORTED_JSON_V2,
+    explicit: true,
+  })));
+}
 
-const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
-  [ACQUISITION_DECISION_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: ACQUISITION_DECISION_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: [{ version: LOOKUP_CLAIM_PASSPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+const SIGNED_ARTIFACT_ROUTES: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
+  [ACQUISITION_DECISION_PACKET_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_ACQUISITION_DECISION_PACKET_VERSIONS),
+  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: currentCanonicalizationRoutes([LOOKUP_CLAIM_PASSPORT_VERSION]),
+  [BULK_DOMAIN_COMPARISON_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS),
+  [BULK_MAIL_EXPOSURE_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS),
+  [BULK_REVIEW_MANIFEST_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS),
   [DOMAIN_CONTROL_MANIFEST_SCHEMA]: DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
-  [DOMAIN_CHANGE_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: DOMAIN_CHANGE_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [INVESTIGATION_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: INVESTIGATION_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+  [DOMAIN_CHANGE_PACKET_SCHEMA]: currentCanonicalizationRoutes([DOMAIN_CHANGE_PACKET_VERSION]),
+  [INVESTIGATION_MANIFEST_SCHEMA]: currentCanonicalizationRoutes([INVESTIGATION_MANIFEST_VERSION]),
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -231,6 +219,24 @@ function supportsCasePortabilityVersion(
   version: number,
 ): boolean {
   return descriptor.supportedVersions.some((candidate) => candidate === version);
+}
+
+function rejectUnsupportedCasePortabilityVersion(
+  label: string,
+  version: number,
+  currentVersion: number,
+): never {
+  if (Number.isSafeInteger(version) && version >= 1 && version < currentVersion) {
+    throw new UnsupportedOfflineArtifactError(
+      `${label} version ${String(version)} is retired. Export it again as version ${String(currentVersion)} with the last broad-reader release; no data was changed.`,
+    );
+  }
+  if (Number.isSafeInteger(version) && version > currentVersion) {
+    throw new UnsupportedOfflineArtifactError(
+      `${label} version ${String(version)} is newer than the supported version ${String(currentVersion)}; no data was changed.`,
+    );
+  }
+  throw new UnsupportedOfflineArtifactError(`This ${label} version is malformed or unsupported; no data was changed.`);
 }
 
 function parseJson(raw: string): UnknownRecord {
@@ -341,8 +347,8 @@ async function verifySignedArtifact(
   schema: string,
   version: number,
 ): Promise<OfflineArtifactVerificationCore> {
-  const supported = SIGNED_ARTIFACT_VERSIONS[schema];
-  if (!supported?.has(version)) {
+  const routes = SIGNED_ARTIFACT_ROUTES[schema] ?? [];
+  if (!routes.some((route) => route.version === version)) {
     throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
   }
   validateSignedDigestArtifactStructure(schema, value);
@@ -356,7 +362,7 @@ async function verifySignedArtifact(
   const canonicalization = resolveArtifactCanonicalization(
     version,
     integrity.canonicalization,
-    SIGNED_ARTIFACT_CANONICALIZATION[schema] ?? [],
+    routes,
     'Signed review artefact',
   );
   const { integrity: _integrity, ...unsigned } = value;
@@ -397,7 +403,7 @@ async function verifyOfflineArtifactCore(
   if (casePortabilityVerifier?.id === 'cli-case-pack') {
     const casePackVersion = casePortabilityVersion(casePortabilityVerifier, value);
     if (!supportsCasePortabilityVersion(casePortabilityVerifier, casePackVersion)) {
-      throw new UnsupportedOfflineArtifactError('This CLI Case-pack version is not supported.');
+      rejectUnsupportedCasePortabilityVersion('CLI Case-pack', casePackVersion, CLI_CASE_PACK_VERSION);
     }
     const verified = verifyCliCasePack(value);
     return Object.freeze({
@@ -470,7 +476,7 @@ async function verifyOfflineArtifactCore(
 
   if (casePortabilityVerifier?.id === 'case-response-packet') {
     if (!supportsCasePortabilityVersion(casePortabilityVerifier, version)) {
-      throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
+      rejectUnsupportedCasePortabilityVersion('case-response packet', version, CASE_RESPONSE_PACKET_VERSION);
     }
     validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, value);
     const integrity = record(value.integrity);
@@ -507,16 +513,15 @@ async function verifyOfflineArtifactCore(
     validateInvestigationCapsuleStructure(value);
     const verification = await verifyInvestigationCapsule(value as SupportedInvestigationCapsule);
     if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
-    const wholeIntegrity = version !== LEGACY_INVESTIGATION_CAPSULE_VERSION;
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
-      state: wholeIntegrity ? 'verified' : 'integrity_valid',
+      state: 'verified',
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
-        contentIntegrityScope: wholeIntegrity ? 'whole_artifact' : 'embedded_projections',
+        contentIntegrityScope: 'whole_artifact',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -526,9 +531,7 @@ async function verifyOfflineArtifactCore(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        ...(wholeIntegrity
-          ? ['The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.']
-          : ['The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.']),
+        'The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.',
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
       ]),
     });
@@ -633,15 +636,13 @@ async function verifyManifestIdentity(
 
   const artifactValue = parseJson(artifactRaw);
   const metadata = artifactMetadata(artifactValue);
-  const manifestVersion = artifactVersion(manifest);
-  const canonicalization = manifestVersion === 1 ? SORTED_JSON_V1 : SORTED_JSON_V2;
   const actualByteLength = inputBytes(artifactRaw);
   const expectedByteLength = Number(item.byteLength);
   const checks = Object.freeze({
     manifestIntegrity: 'verified' as const,
     byteLength: actualByteLength === expectedByteLength ? 'verified' as const : 'mismatch' as const,
     rawContentDigest: rawContentDigest(artifactRaw) === item.contentDigestSha256 ? 'verified' as const : 'mismatch' as const,
-    canonicalDigest: rawContentDigest(canonicalArtifactJsonFor(artifactValue, canonicalization)) === item.canonicalDigestSha256 ? 'verified' as const : 'mismatch' as const,
+    canonicalDigest: rawContentDigest(canonicalArtifactJsonFor(artifactValue, SORTED_JSON_V2)) === item.canonicalDigestSha256 ? 'verified' as const : 'mismatch' as const,
     schema: metadata.schema === item.schema ? 'verified' as const : 'mismatch' as const,
     version: metadata.version === item.version ? 'verified' as const : 'mismatch' as const,
   });
@@ -661,7 +662,7 @@ async function verifyManifestIdentity(
       : 'mismatch';
   return Object.freeze({
     state,
-    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: manifestVersion, entryId }),
+    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: INVESTIGATION_MANIFEST_VERSION, entryId }),
     checks,
     expectedByteLength,
     actualByteLength,

@@ -129,7 +129,8 @@ describe('optional local Ed25519 evidence-package signing', () => {
       signEvidencePackage(JSON.stringify({ schema: 'whoisleuth.unknown', version: 1 }), pair.privatePem, NOW),
       /not supported/iu,
     );
-    const contentFreeUnsigned = { schema: 'whoisleuth.bulk-review-manifest', version: 1 };
+    const currentManifest = await manifest();
+    const contentFreeUnsigned = { schema: currentManifest.schema, version: currentManifest.version };
     await assert.rejects(
       signEvidencePackage(JSON.stringify({
         ...contentFreeUnsigned,

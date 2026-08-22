@@ -40,6 +40,7 @@ function reports() {
 test('target-free calibration review stays tab-local, exact, accessible, and mobile-safe', async ({ page }, testInfo) => {
   const { detailed, summary } = reports();
   await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
   const dashboard = page.locator('.calibration-dashboard');
   await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
 
@@ -120,6 +121,7 @@ test('a delayed calibration read cannot replace a newer file selection', { tag: 
   const { summary } = reports();
   const content = JSON.stringify(summary);
   await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
   const dashboard = page.locator('.calibration-dashboard');
   const input = dashboard.locator('input[type="file"]');
   await page.evaluate(() => {

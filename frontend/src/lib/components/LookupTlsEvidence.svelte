@@ -45,7 +45,7 @@
 <details class="tls-card evidence-card card" aria-labelledby="tls-title" open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="tls-title" role="heading" aria-level="4">TLS and certificate intelligence</span><span class="evidence-summary-detail">Expand for certificate, validation, provenance, and limitation detail</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="tls-title" role="heading" aria-level="4">TLS and certificate evidence</span><span class="evidence-summary-detail">Expand for certificate, validation, provenance, and limitation detail</span></span>
       <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>

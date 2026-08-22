@@ -274,7 +274,7 @@ describe('offline Risk calibration report', () => {
     assert.equal(requiredValue(report.thresholds[0]).specificity, null);
   });
 
-  test('replays v1 and v2 subdomain records against their canonical registrable target', () => {
+  test('replays current subdomain records and rejects reader-only version 1', () => {
     const threatIntelligence = {
       providers: ['urlscan_search', 'urlhaus_host'].map((id) => ({
         provider: { id },
@@ -283,28 +283,31 @@ describe('offline Risk calibration report', () => {
         findings: [{ category: 'phishing', lastObservedAt: '2026-07-17T00:00:00.000Z' }],
       })),
     };
-    for (const version of [1, RISK_CALIBRATION_DATASET_VERSION] as const) {
-      const parsed = parseRiskCalibrationDataset(JSON.stringify({
-        ...dataset([record({
-          domain: 'portal.example.test',
-          evidence: { availability: 'registered', threatIntelligence },
-        })]),
-        version,
-      }));
-      const scoringInputs: Parameters<typeof explainRiskScore>[0][] = [];
-      const report = buildRiskCalibrationReport(parsed, (input) => {
-        scoringInputs.push(input);
-        return explainRiskScore(input);
-      }, {
-        modelVersion: RISK_MODEL_VERSION,
-        reviewThreshold: RISK_REVIEW_THRESHOLD,
-      });
-      const scoringInput = requiredValue(scoringInputs[0]);
-      assert.equal(scoringInput.domain, 'example.test');
-      assert.match(JSON.stringify(scoringInput), /"target":\{"type":"domain","value":"example\.test","exposure":"registrable_domain"\}/u);
-      assert.equal(report.records[0]?.domain, 'portal.example.test');
-      assert.ok(report.records[0]?.factors.some((factor) => factor.label === 'Corroborated recent external phishing/malware records'));
-    }
+    const current = {
+      ...dataset([record({
+        domain: 'portal.example.test',
+        evidence: { availability: 'registered', threatIntelligence },
+      })]),
+      version: RISK_CALIBRATION_DATASET_VERSION,
+    };
+    assert.throws(
+      () => parseRiskCalibrationDataset(JSON.stringify({ ...current, version: 1 })),
+      /version 2/u,
+    );
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(current));
+    const scoringInputs: Parameters<typeof explainRiskScore>[0][] = [];
+    const report = buildRiskCalibrationReport(parsed, (input) => {
+      scoringInputs.push(input);
+      return explainRiskScore(input);
+    }, {
+      modelVersion: RISK_MODEL_VERSION,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+    });
+    const scoringInput = requiredValue(scoringInputs[0]);
+    assert.equal(scoringInput.domain, 'example.test');
+    assert.match(JSON.stringify(scoringInput), /"target":\{"type":"domain","value":"example\.test","exposure":"registrable_domain"\}/u);
+    assert.equal(report.records[0]?.domain, 'portal.example.test');
+    assert.ok(report.records[0]?.factors.some((factor) => factor.label === 'Corroborated recent external phishing/malware records'));
   });
 
   test('replays the previous model without changing labels or current results', () => {

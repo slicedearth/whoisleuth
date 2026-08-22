@@ -39,7 +39,7 @@
 
 <section id="bulk-review-views" class="review-views card" aria-labelledby="bulk-review-views-title">
   <div>
-    <p class="eyebrow">Review workflow</p>
+    <p class="eyebrow">Review results</p>
     <h2 id="bulk-review-views-title">Saved views and review queue</h2>
     <p>Save the current filters, grouping, and sort order. Per-domain review state stays separate from case disposition and does not start or resume a scan.</p>
   </div>

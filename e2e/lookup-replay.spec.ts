@@ -5,8 +5,7 @@ import {
   buildLookupEvidence,
 } from '../frontend/src/lib/analysis/evidence-export';
 
-function replayEvidence(): Record<string, unknown> {
-  const target = 'legacy.example.test';
+function replayEvidence(target = 'legacy.example.test'): Record<string, unknown> {
   return buildLookupEvidence({
     query: target,
     registrableDomain: target,
@@ -112,24 +111,6 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(retainedMetadata).not.toContainText('private-header-value');
   expect(lookupRequests).toBe(requestBaseline);
 
-  const compatibility = JSON.parse(readFileSync(
-    resolve(process.cwd(), 'test/fixtures/lookup-evidence-v25-compatibility.json'),
-    'utf8',
-  )) as { cases: Array<{ name: string; document: Record<string, unknown> }> };
-  const legacy = compatibility.cases.find((item) => item.name === 'fast-whois-skipped');
-  if (!legacy) throw new Error('The frozen schema-25 mismatch fixture is missing.');
-  await replay.locator('input[type="file"]').first().setInputFiles({
-    name: 'lookup-evidence-v25.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(legacy.document)),
-  });
-
-  await expect(replay.getByText(/Loaded lookup-evidence-v25\.json locally/u)).toBeVisible();
-  await replay.locator('details.limits > summary').click();
-  await expect(replay).toContainText('retained diagnostics are authoritative');
-  await expect(replay.getByRole('region', { name: 'Retained homepage metadata' })).toHaveCount(0);
-  expect(lookupRequests).toBe(requestBaseline);
-
   await replay.locator('input[type="file"]').first().setInputFiles({
     name: 'lookup-evidence-v26.json',
     mimeType: 'application/json',
@@ -139,14 +120,7 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(replay.getByRole('region', { name: 'Retained homepage metadata' })).toHaveCount(0);
   expect(lookupRequests).toBe(requestBaseline);
 
-  await replay.locator('input[type="file"]').first().setInputFiles({
-    name: 'lookup-evidence-v25.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(legacy.document)),
-  });
-  await expect(replay.getByText(/Loaded lookup-evidence-v25\.json locally/u)).toBeVisible();
-
-  const comparisonEvidence = structuredClone(replayEvidence());
+  const comparisonEvidence = structuredClone(replayEvidence('example.test'));
   (comparisonEvidence.application as Record<string, unknown>).version = '1.35.0';
   await replay.locator('input[type="file"]').last().setInputFiles({
     name: 'lookup-evidence-comparison.json',

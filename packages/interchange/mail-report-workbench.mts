@@ -1,8 +1,9 @@
-import { Gunzip, unzipSync } from 'fflate';
+import { Gunzip } from 'fflate';
 import { sha256ArtifactDigest } from '../evidence/artifact-integrity.mts';
 import { parseBoundedJson } from '../../lib/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
+import { extractBoundedZipEntries } from './bounded-zip-extraction.mts';
 
 export { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
 
@@ -125,10 +126,10 @@ function unpackArchive(bytes: Uint8Array): ExpandedFile[] {
   let entries = 0;
   let declaredBytes = 0;
   const seen = new Set<string>();
-  let unpacked: Record<string, Uint8Array>;
+  let unpacked: ReadonlyMap<string, Uint8Array>;
   try {
-    unpacked = unzipSync(bytes, {
-      filter(file) {
+    unpacked = extractBoundedZipEntries(bytes, {
+      inspect(file) {
         entries += 1;
         if (entries > MAX_MAIL_REPORT_ARCHIVE_ENTRIES) throw new Error(`Mail report archives are limited to ${MAX_MAIL_REPORT_ARCHIVE_ENTRIES} entries.`);
         if (!safeArchivePath(file.name)) throw new Error('The mail report archive contains an unsafe path.');
@@ -138,14 +139,24 @@ function unpackArchive(bytes: Uint8Array): ExpandedFile[] {
         if (!Number.isSafeInteger(file.originalSize) || file.originalSize < 0) throw new Error('The mail report archive contains invalid size metadata.');
         declaredBytes += file.originalSize;
         if (declaredBytes > MAX_MAIL_REPORT_EXPANDED_BYTES) throw new Error('Expanded mail reports exceed the decompression limit.');
-        return !file.name.endsWith('/') && /\.(?:xml|json)$/i.test(file.name);
+        return {
+          key,
+          selected: !file.name.endsWith('/') && /\.(?:xml|json)$/i.test(file.name),
+          maximumBytes: MAX_MAIL_REPORT_EXPANDED_BYTES,
+          exceededMessage: 'Expanded mail report exceeds the decompression limit.',
+        };
       },
-    });
+      keyForName: (name) => name.toLowerCase(),
+      maximumEntries: MAX_MAIL_REPORT_ARCHIVE_ENTRIES,
+      maximumSelectedBytes: MAX_MAIL_REPORT_EXPANDED_BYTES,
+      selectedBytesExceededMessage: 'Expanded mail reports exceed the decompression limit.',
+      metadataMismatchMessage: 'The mail report archive contains inconsistent ZIP metadata.',
+    }).files;
   } catch (cause) {
-    if (cause instanceof Error && /limited|unsafe|repeats|invalid|exceed/.test(cause.message)) throw cause;
+    if (cause instanceof Error && /limited|unsafe|repeats|invalid|inconsistent|exceed/.test(cause.message)) throw cause;
     throw new Error('The ZIP mail report archive could not be safely decompressed.');
   }
-  const output = Object.entries(unpacked).map(([name, value]) => ({ name, bytes: value }));
+  const output = [...unpacked].map(([name, value]) => ({ name, bytes: value }));
   if (!output.length) throw new Error('The ZIP archive did not contain any XML or JSON mail reports.');
   return output;
 }

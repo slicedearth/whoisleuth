@@ -6,7 +6,7 @@
 import { explainRiskScore, normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http-summary.mts';
 import { normalizeDomain } from '../cases/case-model.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
   MAX_WATCHLIST_DOMAINS,
@@ -244,11 +244,8 @@ function boundedText(
 function isoTimestamp(
   value: unknown,
   fallback = new Date(0).toISOString(),
-  legacy = false,
 ): string {
-  const explicit = normalizeExplicitIsoTimestamp(value);
-  if (explicit) return explicit;
-  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
@@ -548,12 +545,8 @@ function initialHistoryEvent(
 }
 
 /** @param {object} entry */
-export function normalizeWatchlistEntry(
-  entry: unknown,
-  options: Readonly<{ legacyTimestamps?: boolean }> = {},
-): WatchlistEntry {
+export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
   const input = plainRecord(entry) || {};
-  const legacyTimestamps = options.legacyTimestamps === true;
   const rawResults = Array.isArray(input.results) ? input.results : [];
   const results = compactWatchlistResults(rawResults);
   const compactResults = results;
@@ -570,7 +563,7 @@ export function normalizeWatchlistEntry(
         : [];
       const rawMode = event.mode;
       return {
-        checkedAt: isoTimestamp(event.checkedAt, new Date(0).toISOString(), legacyTimestamps),
+        checkedAt: isoTimestamp(event.checkedAt, new Date(0).toISOString()),
         mode: typeof rawMode === 'string' && ['fast', 'deep', 'saved'].includes(rawMode)
           ? rawMode as WatchlistScanMode
           : 'saved',
@@ -583,7 +576,7 @@ export function normalizeWatchlistEntry(
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: isoTimestamp(input.updatedAt, new Date(0).toISOString(), legacyTimestamps),
+    updatedAt: isoTimestamp(input.updatedAt, new Date(0).toISOString()),
     results,
     baseline,
     history,

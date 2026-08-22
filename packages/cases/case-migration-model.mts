@@ -25,20 +25,20 @@ import {
   type CaseStore,
 } from './case-record-model.mts';
 import {
-  caseReportVersionMatchesCase,
   CASE_REPORT_SCHEMA,
+  caseReportVersionMatchesCase,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS,
-  CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
   CLI_CASE_PACK_LIMITATIONS,
   CLI_CASE_PACK_PACKET_KEYS,
+  CLI_CASE_PACK_PUBLIC_REPORT_KEYS,
   CLI_CASE_PACK_REPORT_KEYS,
   CLI_CASE_PACK_ROOT_KEYS,
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
-  LEGACY_CLI_CASE_PACK_VERSION,
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
+import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
   unionCaseBrandProfileIds,
@@ -113,6 +113,13 @@ type ImportPatch = {
   updatedAt: string | null;
 };
 
+const CASE_INPUT_JSON_LIMITS = Object.freeze({
+  maximumDepth: 48,
+  maximumKeys: 500_000,
+  maximumValues: 1_000_000,
+  maximumContainerItems: 10_000,
+});
+
 function assignUniqueIds(cases: CaseRecord[]): void {
   const used = new Set<string>();
   for (const record of [...cases].sort((a, b) => compareCodeUnits(a.domain, b.domain))) {
@@ -129,28 +136,41 @@ function assignUniqueIds(cases: CaseRecord[]): void {
 }
 
 /**
- * Recovers a clean, bounded store from an arbitrary parsed value. Accepts the
- * versioned envelope or a bare array, drops malformed records, keeps a single
+ * Recovers a clean, bounded store from the current versioned envelope or an
+ * internal bare array, drops malformed records, keeps a single
  * case per domain (most recently updated wins), caps to MAX_CASES by recency,
- * and guarantees globally unique safe ids. Never throws.
+ * and guarantees globally unique safe ids. Retired, future, accessor-bearing,
+ * sparse, or otherwise non-JSON envelopes fail before normalisation.
  * @param {unknown} raw
  * @returns {CaseStore}
  */
 export function normalizeCaseStore(raw: unknown): CaseStore {
+  assertBoundedJsonStructure(raw, 'Case store', CASE_INPUT_JSON_LIMITS);
   const fallback = new Date(0).toISOString();
   const sourceVersion = parseStoreVersion(raw);
-  const acceptsBrandProfileIds = Array.isArray(raw)
-    || (sourceVersion !== null && sourceVersion >= 12 && sourceVersion <= CASE_SCHEMA_VERSION);
+  if (!Array.isArray(raw)) {
+    if (sourceVersion === null) {
+      throw new TypeError(`Unversioned Case stores are retired. Export or reset them explicitly before using Case schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    }
+    if (!CASE_IMPORT_VERSIONS.includes(sourceVersion as typeof CASE_IMPORT_VERSIONS[number]) && sourceVersion < CASE_SCHEMA_VERSION) {
+      throw new TypeError(`Case schema ${sourceVersion} is not part of the public compatibility boundary. Only public schema 12 migrates to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    }
+    if (sourceVersion > CASE_SCHEMA_VERSION) {
+      throw new TypeError(`Case schema ${sourceVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    }
+    if (sourceVersion === CASE_SCHEMA_VERSION) {
+      assertCurrentEvidenceHostnameShape(raw);
+    }
+  }
   const byDomain = new Map<string, CaseRecord>();
   for (const item of boundedCaseList(raw).items) {
     const normalized = normalizeCase(
       item,
       undefined,
       fallback,
-      Array.isArray(raw) ? CASE_SCHEMA_VERSION : sourceVersion,
+      sourceVersion ?? CASE_SCHEMA_VERSION,
     );
     if (!normalized) continue;
-    if (!acceptsBrandProfileIds) normalized.brandProfileIds = [];
     const existing = byDomain.get(normalized.domain);
     if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
       byDomain.set(normalized.domain, normalized);
@@ -163,6 +183,19 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
   return { version: CASE_SCHEMA_VERSION, cases };
 }
 
+function assertCurrentEvidenceHostnameShape(raw: unknown): void {
+  for (const item of boundedCaseList(raw).items) {
+    const evidenceHistory = objectRecord(item).evidenceHistory;
+    if (!Array.isArray(evidenceHistory)) continue;
+    for (const snapshot of evidenceHistory) {
+      const record = objectRecord(snapshot);
+      if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'inputHostname')) {
+        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} evidence snapshots must declare their exact submitted hostname, including null; unreleased local Case checkpoints are not interpreted as the v2 format and no data was changed.`);
+      }
+    }
+  }
+}
+
 /**
  * The schema version declared by a stored/parsed value, or null. The storage
  * wrapper uses this to refuse overwriting data written by a newer, unsupported
@@ -171,8 +204,15 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
  * @returns {number | null}
  */
 export function parseStoreVersion(raw: unknown): number | null {
-  const value = objectRecord(raw).version;
-  return typeof value === 'number' ? value : null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  let descriptor: PropertyDescriptor | undefined;
+  try { descriptor = Object.getOwnPropertyDescriptor(raw, 'version'); }
+  catch { throw new TypeError('The Case store version could not be inspected safely.'); }
+  if (!descriptor) return null;
+  if (!Object.hasOwn(descriptor, 'value')) {
+    throw new TypeError('The Case store version must not be an accessor.');
+  }
+  return typeof descriptor.value === 'number' ? descriptor.value : null;
 }
 
 /** @param {unknown} raw @returns {unknown[]} */
@@ -434,7 +474,7 @@ function exactStringList(value: unknown, expected: readonly string[]): boolean {
  * collection. This projection closes the known pack envelopes before dropping
  * pack-only review and integrity metadata; it does not make an integrity claim.
  * The statically bound CLI verifier remains the exact structure-and-digest
- * verifier for both retained Case-pack versions.
+ * verifier for the durable Case-pack version.
  */
 function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unknown> {
   const root = objectRecord(importedRaw);
@@ -455,25 +495,27 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
   assertOnlyEnvelopeKeys(integrity, CLI_CASE_PACK_INTEGRITY_KEYS, 'CLI Case-pack integrity');
   const rootVersion = root.version;
   const packVersion = packet.version;
-  const currentPack = packVersion === CLI_CASE_PACK_VERSION;
-  const historicalPack = packVersion === LEGACY_CLI_CASE_PACK_VERSION;
-  const supportsBrandProfileReferences = typeof rootVersion === 'number' && rootVersion >= 12;
-  assertOnlyEnvelopeKeys(
-    redactionManifest,
-    supportsBrandProfileReferences ? CLI_CASE_PACK_CURRENT_REDACTION_KEYS : CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
-    'CLI Case-pack redaction manifest',
-  );
+  if (Number.isSafeInteger(packVersion) && (packVersion as number) < CLI_CASE_PACK_VERSION) {
+    throw new Error(`WHOISleuth CLI Case-pack version ${String(packVersion)} is retired. Re-export it as version ${CLI_CASE_PACK_VERSION}; no data was changed.`);
+  }
+  if (Number.isSafeInteger(packVersion) && (packVersion as number) > CLI_CASE_PACK_VERSION) {
+    throw new Error(`WHOISleuth CLI Case-pack version ${String(packVersion)} is newer than the supported version ${CLI_CASE_PACK_VERSION}; no data was changed.`);
+  }
+  if (Number.isSafeInteger(rootVersion) && (rootVersion as number) < CASE_SCHEMA_VERSION
+    && !CASE_IMPORT_VERSIONS.includes(rootVersion as typeof CASE_IMPORT_VERSIONS[number])) {
+    throw new Error(`Case schema ${String(rootVersion)} in this CLI Case-pack is not part of the public compatibility boundary; no data was changed.`);
+  }
+  if (Number.isSafeInteger(rootVersion) && (rootVersion as number) > CASE_SCHEMA_VERSION) {
+    throw new Error(`Case schema ${String(rootVersion)} in this CLI Case-pack is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+  }
+  assertOnlyEnvelopeKeys(redactionManifest, CLI_CASE_PACK_CURRENT_REDACTION_KEYS, 'CLI Case-pack redaction manifest');
   const reports = packet.reports;
   const cases = root.cases;
   const audience = packet.audience;
-  const expectedCanonicalization = historicalPack ? 'sorted-json-v1' : 'sorted-json-v2';
   if (packet.schema !== CLI_CASE_PACK_SCHEMA
-    || (!historicalPack && !currentPack)
+    || packVersion !== CLI_CASE_PACK_VERSION
     || typeof rootVersion !== 'number'
     || !CASE_IMPORT_VERSIONS.includes(rootVersion as typeof CASE_IMPORT_VERSIONS[number])
-    || (currentPack
-      ? (rootVersion !== 13 && rootVersion !== CASE_SCHEMA_VERSION)
-      : (rootVersion === 13 || rootVersion === CASE_SCHEMA_VERSION))
     || packet.reviewed !== true
     || (audience !== 'internal' && audience !== 'public' && audience !== 'trusted')
     || !Array.isArray(cases)
@@ -482,11 +524,10 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
     || !exactStringList(packet.limitations, CLI_CASE_PACK_LIMITATIONS)
     || !Number.isSafeInteger(redactionManifest.sourceCaseCount)
     || redactionManifest.sourceCaseCount !== cases.length
-    || (supportsBrandProfileReferences
-      && (!Number.isSafeInteger(redactionManifest.brandProfileReferencesOmitted)
-        || (redactionManifest.brandProfileReferencesOmitted as number) < 0))
+    || !Number.isSafeInteger(redactionManifest.brandProfileReferencesOmitted)
+    || (redactionManifest.brandProfileReferencesOmitted as number) < 0
     || integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== expectedCanonicalization
+    || integrity.canonicalization !== 'sorted-json-v2'
     || typeof integrity.digestSha256 !== 'string'
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)
     || typeof root.exportedAt !== 'string'
@@ -495,25 +536,22 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
   }
   for (const reportValue of reports) {
     const report = objectRecord(reportValue);
-    assertOnlyEnvelopeKeys(report, CLI_CASE_PACK_REPORT_KEYS, 'CLI Case-pack report');
+    assertOnlyEnvelopeKeys(
+      report,
+      rootVersion === CASE_SCHEMA_VERSION ? CLI_CASE_PACK_REPORT_KEYS : CLI_CASE_PACK_PUBLIC_REPORT_KEYS,
+      'CLI Case-pack report',
+    );
     if (report.schema !== CASE_REPORT_SCHEMA
-      || !caseReportVersionMatchesCase(rootVersion as number, report.schemaVersion)
+      || !caseReportVersionMatchesCase(rootVersion, report.schemaVersion)
       || report.generatedAt !== root.exportedAt) {
       throw new Error('The WHOISleuth CLI Case-pack report epoch is invalid.');
     }
   }
-  if (currentPack) {
-    const normalised = normalizeCaseStore(root).cases;
-    const expectedCases = rootVersion === 13
-      ? normalised.map((item) => ({
-          ...structuredClone(item),
-          evidenceHistory: item.evidenceHistory.map(({ inputHostname: _inputHostname, ...snapshot }) => snapshot),
-        }))
-      : normalised;
-    if (normalised.length !== cases.length
-      || canonicalArtifactJsonV2(cases) !== canonicalArtifactJsonV2(expectedCases)) {
-      throw new Error(`The WHOISleuth CLI Case-pack contains a non-canonical schema ${rootVersion} Case collection.`);
-    }
+  const normalised = normalizeCaseStore(root).cases;
+  if (normalised.length !== cases.length
+    || (rootVersion === CASE_SCHEMA_VERSION
+      && canonicalArtifactJsonV2(cases) !== canonicalArtifactJsonV2(normalised))) {
+    throw new Error(`The WHOISleuth CLI Case-pack contains a non-canonical schema ${rootVersion} Case collection.`);
   }
   return { version: rootVersion, exportedAt: root.exportedAt, cases };
 }
@@ -533,15 +571,21 @@ export function mergeCases(
   localCases: CaseRecord[],
   importedRaw: unknown,
 ): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number } {
+  assertBoundedJsonStructure(importedRaw, 'Case import', CASE_INPUT_JSON_LIMITS);
   const importedEnvelope = caseCollectionImportEnvelope(importedRaw);
   const importedVersion = parseStoreVersion(importedEnvelope);
-  if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
-    throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
+  if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion < CASE_SCHEMA_VERSION
+    && !CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])) {
+    throw new Error(`Case schema ${importedVersion} is not part of the public compatibility boundary. Only public schema 12 migrates to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+  }
+  if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
+    throw new Error(`Case schema ${importedVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
   if (!CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])
     || !Array.isArray(importedEnvelope.cases)) {
-    throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);
+    throw new Error(`Expected a well-formed WHOISleuth Case export using schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
+  if (importedVersion === CASE_SCHEMA_VERSION) assertCurrentEvidenceHostnameShape(importedEnvelope);
   const local = normalizeCaseStore(localCases).cases;
   const supportedImportedVersion = importedVersion ?? 0;
   const byDomain = new Map(local.map((item) => [item.domain, item]));

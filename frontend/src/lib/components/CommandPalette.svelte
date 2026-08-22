@@ -13,7 +13,7 @@
     commands,
     onclose,
   }: {
-    commands: ConsoleCommand[];
+    commands: readonly ConsoleCommand[];
     onclose: (restoreFocus?: boolean) => void | Promise<void>;
   } = $props();
 
@@ -23,7 +23,6 @@
   let dialog = $state<HTMLElement>();
   let resultsList = $state<HTMLElement>();
   let openError = $state('');
-  const MAX_CONSOLE_DESTINATIONS = 16;
   const queryTerms = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const filteredCommands = $derived(commands
     .filter((command) => {
@@ -31,8 +30,7 @@
       const searchableText = `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`
         .toLowerCase();
       return queryTerms.every((term) => searchableText.includes(term));
-    })
-    .slice(0, MAX_CONSOLE_DESTINATIONS));
+    }));
   const selectedCommand = $derived(filteredCommands[selectedIndex]);
   const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(selectedCommand
@@ -169,12 +167,12 @@
   >
     <header>
       <div>
-        <p class="eyebrow">Console navigation</p>
+        <p class="eyebrow">Navigation</p>
         <h2 id="command-palette-title">Go to</h2>
       </div>
       <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Esc</button>
     </header>
-    <label for="command-search">Search pages</label>
+    <label for="command-search">Search pages and tools</label>
     <div class="command-search">
       <span aria-hidden="true">❯</span>
       <input
@@ -189,7 +187,7 @@
         oninput={resetSelection}
         autocomplete="off"
         spellcheck="false"
-        placeholder="Lookup, Respond, Assure…"
+        placeholder="Search pages and tools…"
       >
     </div>
     <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
@@ -222,7 +220,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="no-results">No console destination matches that search.</p>
+      <p class="no-results">No page or tool matches that search.</p>
     {/if}
     <footer><span><kbd>↑</kbd><kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
   </div>
@@ -263,12 +261,11 @@
     .command-palette{width:100%;max-height:calc(100dvh - 20px)}
     header{padding:12px 13px 10px}
     .command-search{margin:10px}
-    ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;max-height:none;padding:0 8px 12px;overflow-y:auto}
+    ul{grid-template-columns:minmax(0,1fr);gap:3px;max-height:none;padding:0 8px 12px;overflow-y:auto}
     li button{min-height:38px;padding:7px 9px}
     small,em[data-command-group],footer{display:none}
     .command-current{font-size:.5rem}
-    strong{text-overflow:ellipsis}
+    strong{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere}
   }
-  @media(max-width:489px){ul{grid-template-columns:minmax(0,1fr)}}
   @media(prefers-reduced-motion:no-preference){.command-palette{animation:palette-enter .16s ease-out both}@keyframes palette-enter{from{opacity:0;transform:translateY(-7px) scale(.99)}to{opacity:1;transform:none}}}
 </style>

@@ -310,7 +310,7 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
       ));
     }
   }
-  for (const [value, domains] of officialAssets) output.push(group('official_asset', 'Official asset relationship', 'Configured-domain host match', value, [...domains].sort(), 'One or more pages loaded an asset from this configured official domain or its subdomain.'));
+  for (const [value, domains] of officialAssets) output.push(group('official_asset', 'Official asset host match', 'Configured-domain host match', value, [...domains].sort(), 'One or more pages loaded an asset from this configured official domain or its subdomain.'));
 
   const order = new Map<string, number>(
     ['nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'favicon', 'official_asset']

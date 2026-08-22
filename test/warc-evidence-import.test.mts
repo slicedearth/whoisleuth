@@ -93,6 +93,19 @@ describe('portable WARC evidence import', () => {
     assert.doesNotMatch(JSON.stringify(report), /private|token=secret|Ignored content/u);
   });
 
+  test('rejects terminal controls in titles and treats non-ASCII digest text as unsupported', async () => {
+    const report = await parseWarcEvidenceArchive(archive(record('response', responseBlock({
+      title: 'Account\u009b\u202e centre',
+    }), {
+      target: 'https://example.test/',
+      digest: 'sha256:\u212a',
+    })), 'capture.warc');
+    assert.equal(report.accepted, 1);
+    assert.equal(report.document.findings[0]?.completeness, 'partial');
+    assert.match(report.document.findings[0]?.limitations.join(' ') ?? '', /unsupported/u);
+    assert.doesNotMatch(JSON.stringify(report), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  });
+
   test('excludes request records and keeps digest-free responses partial', async () => {
     const request = encoder.encode('GET /secret HTTP/1.1\r\nCookie: private=value\r\n\r\n');
     const response = responseBlock();

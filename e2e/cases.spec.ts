@@ -4,6 +4,8 @@ import { gzipSync, zipSync } from 'fflate';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
+  currentBrowserLocalDocument,
+  currentBulkSessionBrowserStore,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   failNextBrowserLocalCollectionRead,
@@ -20,10 +22,74 @@ import {
 // entirely browser-local: creating and editing a case never reaches an
 // upstream service, and the shared fixture's network guard enforces that.
 
-import { caseRecord, createCase, openCasesView, snapshot } from './case-test-fixtures';
+import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
+
+type CurrentActionTargetState = 'ready_for_review' | 'acknowledged' | 'terminal';
+
+function currentActionFixture(input: {
+  id: string;
+  type: string;
+  recipient: string;
+  contactSource: string;
+  contactLimitations: string[];
+  dueAt: string | null;
+  targetState: CurrentActionTargetState;
+  reference: string | null;
+  followUpAt: string | null;
+  outcome: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  const { targetState, ...material } = input;
+  const states = targetState === 'ready_for_review'
+    ? ['drafting', 'ready_for_review'] as const
+    : targetState === 'acknowledged'
+      ? ['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'acknowledged'] as const
+      : ['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'terminal'] as const;
+  const start = Date.parse(input.createdAt);
+  const end = Date.parse(input.updatedAt);
+  const providerOutcome = targetState === 'acknowledged'
+    ? 'accepted_for_review'
+    : targetState === 'terminal' ? 'provider_reports_resolved' : null;
+  const history = states.map((nextState, index) => {
+    const final = index === states.length - 1;
+    const sourceClass = index === 0
+      ? 'browser_local'
+      : nextState === 'acknowledged' || nextState === 'terminal' ? 'provider' : 'analyst';
+    return {
+      id: `${input.id}-event-${index + 1}`,
+      previousState: index === 0 ? null : states[index - 1]!,
+      nextState,
+      occurredAt: new Date(start + Math.floor((end - start) * index / (states.length - 1))).toISOString(),
+      sourceClass,
+      provenance: index === 0
+        ? 'browser_local_fixture_action'
+        : sourceClass === 'provider' ? 'provider_fixture_update' : 'analyst_fixture_transition',
+      reference: final ? input.reference : null,
+      evidencePinId: null,
+      limitations: [],
+      providerOutcome: final ? providerOutcome : null,
+      outcomeDetail: final ? input.outcome : null,
+      originActionId: null,
+      applied: true,
+    };
+  });
+  return {
+    ...material,
+    state: targetState,
+    providerOutcome,
+    originActionId: null,
+    history,
+    historyOmitted: 0,
+    historyLimitations: [],
+    metadataUpdatedAt: input.updatedAt,
+  };
+}
 
 async function addFixtureCasePin(page: Page, label: string): Promise<void> {
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill(label);
@@ -31,6 +97,16 @@ async function addFixtureCasePin(page: Page, label: string): Promise<void> {
   await pin.getByLabel('Fact').fill('A bounded fixture fact for branch recovery testing.');
   await pin.getByRole('button', { name: 'Pin evidence' }).click();
   await expect(workspace).toContainText(label);
+}
+
+async function openPacketWizardStep(
+  packet: import('@playwright/test').Locator,
+  name: string,
+): Promise<void> {
+  const button = packet.getByRole('navigation', { name: 'Response-packet handoff steps' })
+    .getByRole('button', { name: new RegExp(name, 'iu') });
+  await button.click();
+  await expect(button).toHaveAttribute('aria-current', 'step');
 }
 
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
@@ -50,6 +126,8 @@ test('Monitor views support roving keyboard navigation', async ({ page }) => {
   const timeline = tabs.getByRole('tab', { name: /^Timeline/ });
   await timeline.focus();
   await timeline.press('ArrowRight');
+  await expect(tabs.getByRole('tab', { name: /^Certificates/ })).toBeFocused();
+  await tabs.getByRole('tab', { name: /^Certificates/ }).press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page).toHaveURL('/monitor?view=watchlists');
@@ -152,27 +230,27 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord({
           id: 'case-operations-prepared',
           domain: 'prepared.invalid',
-          actions: [{
+          actions: [currentActionFixture({
             id: 'action-prepared', type: 'registrar_report', recipient: 'Reviewed registrar route',
             contactSource: 'Published registrar policy', contactLimitations: ['Reachability was not tested.'],
-            dueAt: overdueAt, state: 'ready_for_review', reference: null,
+            dueAt: overdueAt, targetState: 'ready_for_review', reference: null,
             followUpAt: null, outcome: null, createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
-          }],
+          })],
         }),
         caseRecord({
           id: 'case-operations-resolved',
           domain: 'resolved.invalid',
-          actions: [{
+          actions: [currentActionFixture({
             id: 'action-resolved', type: 'security_contact_report', recipient: 'Private response route',
-            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, state: 'resolved',
+            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, targetState: 'terminal',
             reference: 'PRIVATE-CASE-7', followUpAt: null, outcome: 'Private analyst outcome text.',
             createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
-          }],
+          })],
         }),
         caseRecord({ id: 'case-packet-only', domain: 'packet-only.invalid', actions: [] }),
       ],
@@ -216,20 +294,22 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
 });
 
 test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 in light and dark themes', async ({ page }) => {
+  test.slow();
   const now = new Date().toISOString();
+  const createdAt = new Date(Date.parse(now) - 5_000).toISOString();
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({
         id: 'response-layout-case',
         domain: 'response-layout.invalid',
-        actions: [{
+        actions: [currentActionFixture({
           id: 'response-layout-action', type: 'registrar_report', recipient: 'Reserved review route',
           contactSource: 'Reserved fixture source', contactLimitations: ['Reachability was not tested.'],
-          dueAt: null, state: 'acknowledged', reference: 'CASE-EXAMPLE-LAYOUT', followUpAt: null,
-          outcome: 'Acknowledged for bounded review.', createdAt: now, updatedAt: now,
-        }],
+          dueAt: null, targetState: 'acknowledged', reference: 'CASE-EXAMPLE-LAYOUT', followUpAt: null,
+          outcome: 'Acknowledged for bounded review.', createdAt, updatedAt: now,
+        })],
       })],
     },
   });
@@ -246,10 +326,12 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
     await page.getByRole('tab', { name: /Cases/ }).click();
     const head = page.locator('.case-head', { hasText: 'response-layout.invalid' });
     if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
-    const workspace = page.locator('.response-workspace');
+    const workspace = await openCaseResponseWorkspace(page);
     const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
     await actions.getByText('Track append-only response actions', { exact: true }).click();
-    await expect(actions.getByRole('list', { name: 'Response action transition timelines' })).toContainText('Recorded outcome detail: Acknowledged for bounded review.');
+    const actionTimelines = actions.getByRole('list', { name: 'Response action transition timelines' });
+    await expect(actionTimelines).toContainText('submitted → acknowledged');
+    await expect(actionTimelines).toContainText('Provider outcome: accepted for review · Acknowledged for bounded review.');
     await actions.getByRole('button', { name: 'Review or append event' }).focus();
     await expect(actions.getByRole('button', { name: 'Review or append event' })).toBeFocused();
     const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
@@ -258,8 +340,9 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
     await expect(remediation).toContainText('Independently observed change time');
     const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
     await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+    await openPacketWizardStep(packet, 'Readiness limitations');
     await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
-    await expect(packet).toContainText('Draft readiness never implies authorisation');
+    await expect(packet).toContainText('Partial and stale states remain visible and require deliberate freshness and limitation confirmation');
     await expect(page.locator('html')).toHaveAttribute('data-theme', surface.theme);
     await expectNoHorizontalOverflow(page);
   }
@@ -285,7 +368,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 8,
+      version: CASE_SCHEMA_VERSION,
       cases: [{
         ...caseRecord({
           id: 'case-gap-mobile',
@@ -320,11 +403,12 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
     },
   });
 
-  await page.getByLabel('Review inbox detail filters').getByLabel('Source').selectOption('whois');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Age').selectOption('stale');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Case').fill('gap-mobile');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Severity').selectOption('high');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Next action').selectOption('refresh');
+  const detailFilters = page.getByRole('group', { name: 'Review inbox detail filters' });
+  await detailFilters.getByRole('combobox', { name: 'Source', exact: true }).selectOption('whois');
+  await detailFilters.getByRole('combobox', { name: 'Age', exact: true }).selectOption('stale');
+  await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');
+  await detailFilters.getByRole('combobox', { name: 'Severity', exact: true }).selectOption('high');
+  await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
   const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
   await expect(item).toBeVisible();
   await expect(item).toContainText('stale');
@@ -348,10 +432,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 3,
-      sessions: [{
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{
         id: 'inbox-partial-session',
         name: 'Incomplete review',
         mode: 'fast',
@@ -362,8 +443,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
         startedAt: '2026-08-07T00:00:00.000Z',
         updatedAt: '2026-08-07T00:00:00.000Z',
         completedAt: null,
-      }],
-    },
+      }]),
   });
 
   const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
@@ -399,7 +479,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord({
           id: 'reviewed-calibration',
@@ -492,13 +572,13 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
   await expect(tags).toHaveValue('');
 });
 
-test('projects retained evidence into a filterable source-aware timeline', async ({ page }) => {
+test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
   const observedAt = new Date(Date.now() - 9 * 86_400_000).toISOString();
   const storedAt = new Date(Date.parse(observedAt) + 86_400_000).toISOString();
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({
         id: 'timeline-case',
         domain: 'timeline-case.invalid',
@@ -512,9 +592,7 @@ test('projects retained evidence into a filterable source-aware timeline', async
         }],
       })],
     },
-    'whois-rdap-watchlist-v1': {
-      schema: 'whoisleuth.watchlists',
-      version: 2,
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {
       watchlists: {
         'Timeline watchlist': {
           updatedAt: storedAt,
@@ -531,10 +609,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
           }],
         },
       },
-    },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    }),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [{
         id: 'relationship-timeline-fixture',
         type: 'ip_address',
@@ -553,10 +629,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
         truncated: false,
         limitations: ['Shared infrastructure is not proof of common control.'],
       }],
-    },
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 1,
+    }),
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [{
         id: 'timeline-website-snapshot',
         domain: 'timeline-case.invalid',
@@ -569,11 +643,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
         identity: {},
         sources: [{ source: 'page', state: 'partial' }],
       }],
-    },
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 1,
-      sessions: [{
+    }),
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{
         id: 'timeline-bulk-session',
         name: 'Timeline Bulk review',
         mode: 'deep',
@@ -584,8 +655,7 @@ test('projects retained evidence into a filterable source-aware timeline', async
         startedAt: observedAt,
         updatedAt: storedAt,
         completedAt: observedAt,
-      }],
-    },
+      }]),
   });
 
   await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
@@ -648,14 +718,12 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
   await page.goto('/monitor?view=relationships');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 1,
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [
         snapshotRecord('first.invalid', 'profile-first'),
         snapshotRecord('second.invalid', 'profile-second'),
       ],
-    },
+    }),
   });
 
   const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
@@ -675,7 +743,7 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })],
     },
   });
@@ -803,7 +871,7 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await openCasesView(page);
   await createCase(page, 'draft-retention.invalid');
 
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await packet.getByLabel('Abuse category').fill('Fixture abuse review');
@@ -827,11 +895,31 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await expect(submit).toBeFocused();
 });
 
+test('Quick and Advanced Case Response presentations keep one record and restore stage focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openCasesView(page);
+  await createCase(page, 'quick-response.invalid');
+
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
+  await expect(workspace.getByRole('status')).toContainText('Next incomplete requirement');
+  await expect(workspace.locator('.stages > li')).toHaveCount(5);
+  await expect(workspace.locator('details')).toHaveCount(0);
+  await workspace.getByRole('button', { name: 'Continue observation' }).click();
+  const observation = workspace.locator('details[id^="case-response-observation-"]').first();
+  await expect(observation).toHaveAttribute('open', '');
+  await expect(observation.getByText('Pin an observed fact', { exact: true })).toBeFocused();
+  await expect(workspace.getByRole('button', { name: 'Advanced', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
+  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('Case mutation focus recovery respects deliberate movement and restores a displaced branch control', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'focus-recovery.invalid');
 
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Focus fixture pin');
@@ -955,7 +1043,7 @@ test('rapid repeated action submission persists one drafting action', async ({ p
   await openCasesView(page);
   await createCase(page, 'action-single.invalid');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const details = page.locator('.response-workspace details', { hasText: 'Track append-only response actions' });
+  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Track append-only response actions' });
   await details.getByText('Track append-only response actions', { exact: true }).click();
   await details.getByLabel('Recipient or internal owner').fill('Fixture review owner');
   await details.getByLabel('Contact source').fill('Fixture source');
@@ -980,7 +1068,7 @@ test('rapid repeated branch submission persists one investigation branch', async
   await createCase(page, 'branch-single.invalid');
   await addFixtureCasePin(page, 'Single branch pin');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const details = page.locator('.response-workspace details', { hasText: 'Group evidence and decisions into investigation branches' });
+  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await details.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await details.getByLabel('Branch name').fill('Single branch');
   await details.getByRole('checkbox', { name: 'Single branch pin' }).check();
@@ -1005,7 +1093,7 @@ test('keeps a drafting action form when the Case update fails before commit', as
   await createCase(page, 'action-draft.invalid');
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registrar_report');
@@ -1045,7 +1133,7 @@ test('shows the complete committed Case snapshot when the immediate action rerea
   await createCase(page, 'action-committed.invalid');
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registry_report');
@@ -1081,7 +1169,7 @@ test('keeps an investigation-branch draft when the Case update fails before comm
   await addFixtureCasePin(page, 'Branch fixture pin');
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Draft branch');
@@ -1113,7 +1201,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
   await addFixtureCasePin(page, 'Committed branch pin');
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Committed branch');
@@ -1144,7 +1232,7 @@ test('append-only response review, exact authorisation, independent verification
   await openCasesView(page);
   await createCase(page, 'response.invalid');
 
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Observed credential form');
@@ -1209,10 +1297,14 @@ test('append-only response review, exact authorisation, independent verification
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
+  await openPacketWizardStep(packet, 'Readiness limitations');
   await expect(packet).toContainText('review cautions');
+  await openPacketWizardStep(packet, 'Source and contact provenance');
   await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
   await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
+  await openPacketWizardStep(packet, 'Evidence selection');
   await packet.getByRole('checkbox', { name: /Observed credential form/ }).check();
+  await openPacketWizardStep(packet, 'Readiness limitations');
   const infrastructure = packet.locator('.readiness-editor section', { hasText: 'Infrastructure responsibility' });
   await infrastructure.getByLabel('State').selectOption('complete');
   await infrastructure.getByLabel('Detail').fill('The selected registration evidence supports this bounded registrar route.');
@@ -1228,16 +1320,19 @@ test('append-only response review, exact authorisation, independent verification
   await sourceLimitations.getByLabel('Limitations').fill('No delivery or provider monitoring check was performed.');
   await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
   await expect(packet).toContainText('Profile-specific readiness matrix');
+  await openPacketWizardStep(packet, 'Privacy and redaction');
   await packet.getByLabel('Label', { exact: true }).last().fill('Reviewed static capture metadata');
   await packet.getByLabel('Captured at').fill('2026-07-28T10:00');
   await packet.getByLabel('SHA-256 digest').fill('a'.repeat(64));
   await packet.getByLabel('Byte length').fill('1024');
 
+  await openPacketWizardStep(packet, 'Exact-input digest');
   await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
-  await expect(packet).toContainText('draft · review stale or incomplete');
+  await expect(packet).toContainText('draft · authorisation incomplete');
+  await openPacketWizardStep(packet, 'Recipient and scope');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name and logo.');
+  await openPacketWizardStep(packet, 'Exact-input digest');
   await expect(packet).toContainText('Material inputs changed after review');
-  await expect(packet.getByRole('checkbox', { name: 'I reviewed the exact selected evidence.' })).toBeDisabled();
   await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
   for (const confirmation of [
     'I reviewed the exact selected evidence.',
@@ -1248,8 +1343,10 @@ test('append-only response review, exact authorisation, independent verification
   ]) await packet.getByRole('checkbox', { name: confirmation }).check();
   await expect(packet.getByLabel('Confirmation time')).toBeEnabled();
   await packet.getByRole('button', { name: 'Authorise exact bound inputs' }).click();
+  await expect(packet).toContainText('The current exact inputs are authorised for deliberate local export.');
+  await openPacketWizardStep(packet, 'Explicit authorisation');
   await expect(packet.getByLabel('Confirmation time')).not.toHaveValue('');
-  await expect(packet).toContainText('authorised inputs');
+  await openPacketWizardStep(packet, 'Local export');
 
   const downloadPromise = page.waitForEvent('download');
   await packet.getByRole('button', { name: 'Export JSON draft or authorised packet' }).click();
@@ -1340,9 +1437,10 @@ test('append-only response review, exact authorisation, independent verification
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
-  await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
-  await expect(page.locator('.response-workspace')).toContainText('registrar report · acknowledged');
+  const restoredWorkspace=await openCaseResponseWorkspace(page);
+  await expect(restoredWorkspace).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
+  await expect(restoredWorkspace).toContainText('Registrar response path');
+  await expect(restoredWorkspace).toContainText('registrar report · acknowledged');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
@@ -1351,7 +1449,7 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
-    schemaVersion: 2,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: 'Local analyst export', reference: 'offline review' },
     findings: [{
       domain: 'external-review.invalid',
@@ -1375,15 +1473,16 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toBeVisible();
   await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('External page finding');
-  await expect(page.locator('.response-workspace')).toContainText('Provider report: Local analyst export');
-  await expect(page.locator('.response-workspace')).toContainText('reported by provider · website');
-  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this provider finding');
+  const externalWorkspace=await openCaseResponseWorkspace(page);
+  await expect(externalWorkspace).toContainText('External page finding');
+  await expect(externalWorkspace).toContainText('Provider report: Local analyst export');
+  await expect(externalWorkspace).toContainText('reported by provider · website');
+  await expect(externalWorkspace).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
+  await expect(externalWorkspace).toContainText('1 pin · 1 sighting · 0 decisions');
 });
 
 test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
@@ -1405,7 +1504,7 @@ test('external findings serialize file parsing before exposing import actions', 
   });
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
-    schemaVersion: 2,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: 'Serialized local review', reference: 'offline fixture' },
     findings: [{
       domain: 'serialized-review.invalid',
@@ -1471,6 +1570,8 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(externalImport).not.toContainText('private body');
   await expect(externalImport).not.toContainText('token=secret');
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
+  await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
 });
 
@@ -1568,12 +1669,11 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
   await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
   await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
-  await expect(page.locator('#monitor-view-panel > p.message[role="status"]'))
-    .toContainText('Merged 1 external assertion');
+  await expect(page.getByRole('status').filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
 
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
-  const response = page.locator('.response-workspace');
+  const response = await openCaseResponseWorkspace(page);
   await expect(response).toContainText('0 pins · 0 sightings · 0 decisions · 1 assertion');
   await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
   await expect(response).toContainText('external import · open');
@@ -1597,7 +1697,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
   await createCase(page, 'local.invalid');
 
   const importPayload = {
-    version: 3,
+    version: CASE_SCHEMA_VERSION,
     exportedAt: '2026-07-01T00:00:00.000Z',
     cases: [
       {
@@ -1624,7 +1724,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
     buffer: Buffer.from(JSON.stringify(importPayload)),
   });
 
-  await expect(page.locator('#monitor-view-panel > p.message[role="status"]')).toHaveText(/Imported 1 new/);
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 new' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'local.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'imported.invalid' })).toBeVisible();
 });

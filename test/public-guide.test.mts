@@ -23,11 +23,24 @@ import {
   monitorNavigation,
   protectedDestinations,
   publicCommandNavigation,
+  publicFooterNavigation,
+  publicHeaderNavigation,
+  publicHomepage,
+  publicPolicyNavigation,
+  publicPrimaryNavigation,
+  publicReferenceNavigation,
+  publicReferenceSectionNavigation,
+  publicResourceHubNavigation,
   publicResources,
+  publicSiteNavigation,
   referenceNavigation,
   referenceResources,
   toolNavigation,
 } from '../frontend/src/lib/workspaces.ts';
+import {
+  PUBLIC_REFERENCE_DESTINATIONS,
+  publicReferenceCommandNavigation,
+} from '../frontend/src/lib/public-reference-navigation.ts';
 
 function unique<T>(values: readonly T[]): boolean {
   return new Set(values).size === values.length;
@@ -65,9 +78,9 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Monitor',
   ]);
   const monitor = toolGuides.find((tool) => tool.id === 'monitor');
-  assert.match(monitor?.result || '', /Respond views.*Assure views/iu);
-  assert.match(monitor?.result || '', /evidence-debt matrix.*exact saved Bulk source states.*pinned case gaps/iu);
-  assert.match(`${monitor?.result || ''} ${monitor?.next || ''}`, /without starting a request|does not.*start collection/iu);
+  assert.match(monitor?.result || '', /Respond contains.*Assure contains/iu);
+  assert.match(monitor?.result || '', /Evidence gaps.*unavailable and partial sources/iu);
+  assert.match(monitor?.next || '', /Collection, response submission and control changes remain separate actions/iu);
 });
 
 test('navigation, tool guide, and reference guide use one canonical product vocabulary', () => {
@@ -104,15 +117,38 @@ test('navigation, tool guide, and reference guide use one canonical product voca
   ]);
   assert.deepEqual(referenceNavigation, [...referenceResources, ...publicResources]);
   assert.deepEqual(publicCommandNavigation.map(({ href, label }) => ({ href, label })), [
-    { href: '/', label: 'Public homepage' },
-    { href: '/demo', label: 'Synthetic demo' },
+    { href: '/', label: 'Overview' },
+    { href: '/demo', label: 'Demo' },
+    { href: '/resources', label: 'Resources' },
+    { href: '/cli', label: 'CLI' },
+    { href: '/methodology', label: 'Methodology' },
+    { href: '/coverage', label: 'Coverage' },
+    { href: '/examples', label: 'Examples' },
     { href: '/privacy', label: 'Privacy' },
     { href: '/terms', label: 'Terms' },
     { href: '/request-policy', label: 'Request policy' },
     { href: '/contact', label: 'Contact' },
   ]);
+  assert.equal(publicCommandNavigation.includes(publicHomepage), true);
+  assert.deepEqual(
+    publicReferenceCommandNavigation.map(({ href, label }) => ({ href, label })),
+    PUBLIC_REFERENCE_DESTINATIONS.map(({ href, label }) => ({ href, label })),
+  );
+  assert.deepEqual(publicPrimaryNavigation.map((item) => item.label), ['Demo', 'Resources', 'CLI']);
+  assert.deepEqual(publicReferenceNavigation.map((item) => item.label), ['Methodology', 'Coverage', 'Examples']);
+  assert.deepEqual(publicPolicyNavigation.map((item) => item.label), ['Privacy', 'Terms', 'Request policy', 'Contact']);
+  assert.deepEqual(publicReferenceSectionNavigation.map((item) => item.label), ['Resources', 'CLI', 'Methodology', 'Coverage', 'Examples']);
+  assert.deepEqual(publicResourceHubNavigation.map((item) => item.label), ['CLI', 'Methodology', 'Coverage', 'Examples']);
+  assert.deepEqual(publicHeaderNavigation, publicPrimaryNavigation);
+  assert.deepEqual(publicFooterNavigation, publicPolicyNavigation);
+  assert.deepEqual(publicSiteNavigation, [
+    publicHomepage,
+    ...publicPrimaryNavigation,
+    ...publicReferenceNavigation,
+    ...publicPolicyNavigation,
+  ]);
   assert.equal(unique(publicCommandNavigation.map((item) => item.href)), true);
-  assert.equal(allStrings({ consoleNavigation, toolNavigation, referenceResources, publicResources, publicCommandNavigation }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
+  assert.equal(allStrings({ consoleNavigation, toolNavigation, referenceResources, publicResources, publicSiteNavigation }).some((value) => /\b(?:portal|workspace)\b/iu.test(value)), false);
 });
 
 test('shared Monitor destinations keep exactly one workflow active without changing the route', () => {
@@ -122,7 +158,7 @@ test('shared Monitor destinations keep exactly one workflow active without chang
     assert.equal(isNavigationItemActive(monitorAssuranceNavigation, url), false);
     assert.equal(isProtectedDestination(url), true);
   }
-  for (const path of ['/monitor?view=timeline', '/monitor?view=watchlists&watchlist=review', '/monitor?view=rules']) {
+  for (const path of ['/monitor?view=certificates', '/monitor?view=timeline', '/monitor?view=watchlists&watchlist=review', '/monitor?view=rules']) {
     const url = new URL(path, 'https://console.example');
     assert.equal(isNavigationItemActive(monitorNavigation, url), false);
     assert.equal(isNavigationItemActive(monitorAssuranceNavigation, url), true);
@@ -145,8 +181,8 @@ test('glossary, FAQ, state, and mistake content is bounded and deterministic', (
   assert.match(glossaryTerms.find((item) => item.term === 'SOA')?.definition || '', /primary nameserver/i);
   assert.match(glossaryTerms.find((item) => item.term === 'HTTPS service binding')?.definition || '', /does not follow/i);
   const lookupDepthAnswer = guideFaqs.find((item) => item.question === 'Should I use Fast or Deep lookup?')?.answer || '';
-  assert.match(lookupDepthAnswer, /For domains, Deep adds SOA/iu);
-  assert.match(lookupDepthAnswer, /public IPs.*PTR names/iu);
+  assert.match(lookupDepthAnswer, /Deep adds DNS.*SOA/iu);
+  assert.match(lookupDepthAnswer, /PTR names/iu);
   assert.match(glossaryTerms.find((item) => item.term === 'Browser-library advisory match')?.definition || '', /not proof/i);
   assert.match(glossaryTerms.find((item) => item.term === 'EPP status')?.definition || '', /does not guarantee/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Registration disclosure')?.definition || '', /unavailable/i);

@@ -10,11 +10,10 @@ import {
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
-  BRAND_PROFILE_SCHEMA_VERSION,
   mergeBrandProfiles,
 } from '../packages/workspace/brand-profile-model.mts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
@@ -101,9 +100,8 @@ function identify(value: UnknownRecord): Readonly<{ contract: InterchangeArtifac
   return null;
 }
 
-function timestamp(value: unknown, legacy = false): string {
-  const normalized = normalizeExplicitIsoTimestamp(value)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null);
+function timestamp(value: unknown): string {
+  const normalized = normalizeExplicitIsoTimestamp(value);
   if (!normalized) throw new TypeError('Interchange report time is invalid.');
   return normalized;
 }
@@ -116,7 +114,7 @@ function validateBrandProfileExport(
   if (!Array.isArray(profiles) || profiles.length > 100) {
     throw new TypeError('Brand Profile export does not contain a bounded profiles collection.');
   }
-  const exportedAt = timestamp(value.exportedAt, version < BRAND_PROFILE_SCHEMA_VERSION);
+  const exportedAt = timestamp(value.exportedAt);
   let nextId = 0;
   const result = mergeBrandProfiles([], value, {
     nowIso: exportedAt,

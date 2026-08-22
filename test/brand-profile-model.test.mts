@@ -182,6 +182,31 @@ test('normalizes bounded desired posture baselines and retained observations', (
   assert.deepEqual(baseline.observationHistory, [baseline.previousObservation]);
 });
 
+test('migrates Brand Profile v6 change windows to deterministic collision-safe v7 identities', () => {
+  const legacy = {
+    version: 6,
+    profiles: [profile({
+      desiredPostureBaselines: [{
+        domain: 'example.invalid',
+        approvedChangeWindows: [
+          { startsAt: '2026-09-01T02:00:00Z', endsAt: '2026-09-01T03:00:00Z', summary: 'Reviewed change.' },
+          { startsAt: '2026-09-01T02:00:00Z', endsAt: '2026-09-01T03:00:00Z', summary: 'Reviewed change.' },
+        ],
+        updatedAt: NOW,
+      }],
+    })],
+  };
+  const first = normalizeBrandProfileStore(legacy);
+  const second = normalizeBrandProfileStore(structuredClone(legacy));
+  const firstWindows = requiredValue(first.profiles[0]).desiredPostureBaselines[0]?.approvedChangeWindows ?? [];
+  const secondWindows = requiredValue(second.profiles[0]).desiredPostureBaselines[0]?.approvedChangeWindows ?? [];
+  assert.equal(first.version, 7);
+  assert.deepEqual(firstWindows.map((window) => window.id), secondWindows.map((window) => window.id));
+  assert.equal(new Set(firstWindows.map((window) => window.id)).size, 2);
+  assert.ok(firstWindows.every((window) => /^cw-[a-f0-9]{32}$/u.test(window.id)));
+  assert.equal(Object.hasOwn(first, 'analystDecisions'), false);
+});
+
 test('bounds attacker-controlled list input before searching for usable values', () => {
   const values = [...Array.from({ length: MAX_PROFILE_VALUE_INPUTS }, () => ''), 'late valid value'];
   assert.deepEqual(normalizeProfileTextValues(values), []);
@@ -286,7 +311,7 @@ test('duplicate ids retain the most recently updated bounded record', () => {
 test('structured imports merge by case-insensitive profile name', () => {
   const local = profile({ id: 'local', name: 'Example Brand' });
   const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'] });
-  const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 2, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
+  const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 6, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 1, skipped: 0 });
   assert.equal(requiredValue(result.profiles[0]).id, 'local');
   assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
@@ -348,8 +373,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, 4, 5, or 6/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 7/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 6, or 7/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 8/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

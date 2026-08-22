@@ -91,22 +91,22 @@
   <div class="review-heading">
     <div>
       <p class="eyebrow">Retained source review</p>
-      <h2 id="evidence-debt-title">Evidence-debt matrix</h2>
-      <p>Exact saved Bulk source states and separately pinned case gaps, ranked as a manual next-evidence queue.</p>
+      <h2 id="evidence-debt-title">Evidence gaps</h2>
+      <p>Saved Bulk source states and pinned Case gaps, ordered for manual review.</p>
     </div>
-    <strong>{metricText}{#if review.countsComplete}{' '}<span class="sr-only">actionable evidence-debt items</span>{/if}</strong>
+    <strong>{metricText}{#if review.countsComplete}{' '}<span class="sr-only">evidence gaps to review</span>{/if}</strong>
   </div>
 
   {#if unavailableSources.length}
-    <p class="source-warning" role="alert">Evidence-debt counts are incomplete because {unavailableSources.join(' and ')} could not be read. Readable sources remain visible.</p>
+    <p class="source-warning" role="alert">Evidence-gap counts are incomplete because {unavailableSources.join(' and ')} could not be read. Readable sources remain visible.</p>
   {/if}
   {#if loadingSources.length}
-    <p class="source-loading" role="status" aria-live="polite">Loading {loadingSources.join(' and ')} before reporting a complete evidence-debt count.</p>
+    <p class="source-loading" role="status" aria-live="polite">Loading {loadingSources.join(' and ')} before reporting a complete evidence-gap count.</p>
   {/if}
 
   {#if review.matrix.length}
     <details class="matrix" open>
-      <summary>Source-by-state matrix</summary>
+      <summary>Source states</summary>
       <div class="table-wrap desktop-matrix">
         <table>
           <thead>
@@ -137,12 +137,12 @@
 
   <div class="queue-heading">
     <div>
-      <h3>Next-evidence queue</h3>
+      <h3>Sources to review</h3>
       <p>High-impact source failures and conflicts lead; medium-impact partial, stale, or unsupported evidence follows.</p>
     </div>
     <span>{filtered.length} visible</span>
   </div>
-  <div class="filters" role="group" aria-label="Evidence-debt queue filters">
+  <div class="filters" role="group" aria-label="Evidence-gap filters">
     <label>Owner
       <select bind:value={ownerFilter} onchange={() => { page = 1; }}>
         <option value="">All owners</option>
@@ -189,13 +189,13 @@
         </li>
       {/each}
     </ol>
-    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Evidence-debt queue pages" />
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Evidence-gap pages" />
   {:else if review.truncated}
     <p class="empty incomplete">No matching item is visible within the bounded queue. Omitted items may remain.</p>
   {:else if review.countsComplete}
     <p class="empty">No actionable partial, stale, conflicting, rate-limited, unsupported, or unavailable state matches this view.</p>
   {:else}
-    <p class="empty incomplete">No actionable debt is visible in the currently readable evidence. The total remains incomplete.</p>
+    <p class="empty incomplete">No matching evidence gap is visible in the currently readable sources. The total remains incomplete.</p>
   {/if}
 
   {#if review.retention.bulkRowsWithoutCoverage || review.retention.casesWithoutPins || review.retention.explicitlySkipped || review.retention.explicitlyNotFound || review.retention.resolvedCasesExcluded || review.retention.reviewedCasePinsExcluded}

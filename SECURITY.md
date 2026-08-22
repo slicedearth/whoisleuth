@@ -26,9 +26,12 @@ weakness can use the public issue tracker.
 
 Reports are assessed against WHOISleuth's documented trust boundaries,
 including its local-first workspace, bounded network collection, shared
-deployment password, and optional hosted monitoring. A source outage, partial
-registry response, or heuristic disagreement is not by itself a security
-vulnerability, but unsafe handling of those states may be.
+deployment password, and optional hosted monitoring. The accepted
+[product boundary](https://github.com/slicedearth/whoisleuth/blob/main/docs/product-boundary.md) and
+[threat model](https://github.com/slicedearth/whoisleuth/blob/main/docs/threat-model.md) describe those boundaries, principal abuse
+cases, controls, residual risks, and deliberate non-goals. A source outage,
+partial registry response, or heuristic disagreement is not by itself a
+security vulnerability, but unsafe handling of those states may be.
 
 Confirmed reports will be handled through a private advisory until a fix and
 coordinated disclosure are ready. No bounty or guaranteed response time is

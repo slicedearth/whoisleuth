@@ -15,9 +15,10 @@ import {
 export const WORKSPACE_CONTRACT_OWNER = 'packages/contracts/workspace-portability.mts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
-export const BRAND_PROFILE_SCHEMA_VERSION = 6;
-export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, 2, 3, 4, 5, BRAND_PROFILE_SCHEMA_VERSION]);
-export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = Object.freeze([2, 3, 4, 5, BRAND_PROFILE_SCHEMA_VERSION]);
+export const PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 6;
+export const BRAND_PROFILE_SCHEMA_VERSION = 7;
+export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([PUBLIC_BRAND_PROFILE_SCHEMA_VERSION, BRAND_PROFILE_SCHEMA_VERSION]);
+export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -50,7 +51,7 @@ export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
 export const WATCHLIST_SCHEMA_VERSION = 2;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([WATCHLIST_SCHEMA_VERSION]);
 export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = Object.freeze([WATCHLIST_SCHEMA_VERSION]);
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
@@ -67,8 +68,8 @@ export const MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS = MAX_WATCHLIST_DOMAINS;
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';
 export const SHORTLIST_SCHEMA_VERSION = 3;
-export const SHORTLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, 2, SHORTLIST_SCHEMA_VERSION]);
-export const SUPPORTED_SHORTLIST_SCHEMA_VERSIONS = Object.freeze([2, SHORTLIST_SCHEMA_VERSION]);
+export const SHORTLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([SHORTLIST_SCHEMA_VERSION]);
+export const SUPPORTED_SHORTLIST_SCHEMA_VERSIONS = SHORTLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_SHORTLIST_ENTRIES = 500;
 export const MAX_SHORTLIST_INPUTS = MAX_SHORTLIST_ENTRIES * 4;
 export const MAX_SHORTLIST_STORE_BYTES = 1024 * 1024;
@@ -76,7 +77,7 @@ export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_SHORTLIST_FACTORS = 20;
 
 export const CT_HISTORY_SCHEMA_VERSION = 3;
-export const CT_HISTORY_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, 2, CT_HISTORY_SCHEMA_VERSION]);
+export const CT_HISTORY_BROWSER_SUPPORTED_VERSIONS = Object.freeze([CT_HISTORY_SCHEMA_VERSION]);
 export const MAX_CT_HISTORY_SEARCHES = 30;
 export const MAX_CT_HISTORY_EVENTS = 20;
 export const MAX_CT_HISTORY_DISCARDED_CHECKS = 1_000_000;
@@ -114,8 +115,8 @@ export const MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES = 768 * 1024;
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
 export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 4;
-export const WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, 2, 3, WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
-export const SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS = Object.freeze([1, 2, 3, WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
+export const WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS = Object.freeze([WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
+export const SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS = WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
 export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
@@ -123,8 +124,8 @@ export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
 export const BULK_SESSION_SCHEMA_VERSION = 4;
-export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, 2, 3, BULK_SESSION_SCHEMA_VERSION]);
-export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = Object.freeze([1, 2, 3, BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([BULK_SESSION_SCHEMA_VERSION]);
+export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = BULK_SESSION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
 export const MAX_BULK_SESSION_STORE_BYTES = 4 * 1024 * 1024;
@@ -136,7 +137,7 @@ export const MAX_BULK_PROFILE_CONTEXT_LIMITATION_LENGTH = 300;
 
 export const INVESTIGATION_TEMPLATE_SCHEMA = 'whoisleuth.investigation-templates';
 export const INVESTIGATION_TEMPLATE_VERSION = 2;
-export const INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS = Object.freeze([1, INVESTIGATION_TEMPLATE_VERSION]);
+export const INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS = Object.freeze([INVESTIGATION_TEMPLATE_VERSION]);
 export const MAX_INVESTIGATION_TEMPLATES = 20;
 export const MAX_INVESTIGATION_TEMPLATE_STORE_BYTES = 256 * 1024;
 export const MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES = 384 * 1024;
@@ -245,93 +246,80 @@ const [, CAMPAIGNS_SECTION_ID, BRAND_PROFILES_SECTION_ID, WATCHLISTS_SECTION_ID,
   BULK_SESSIONS_SECTION_ID, WEBSITE_SNAPSHOTS_SECTION_ID, INVESTIGATION_TEMPLATES_SECTION_ID,
   BULK_REVIEW_SECTION_ID] = WORKSPACE_ARCHIVE_SECTION_IDS;
 
-export const WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES = Object.freeze([
-  { sectionId: CAMPAIGNS_SECTION_ID, schema: CAMPAIGN_SCHEMA, version: CAMPAIGN_SCHEMA_VERSION },
-  { sectionId: BRAND_PROFILES_SECTION_ID, schema: BRAND_PROFILE_SCHEMA, version: BRAND_PROFILE_SCHEMA_VERSION },
-  { sectionId: WATCHLISTS_SECTION_ID, schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION },
-  { sectionId: SHORTLIST_SECTION_ID, schema: SHORTLIST_SCHEMA, version: SHORTLIST_SCHEMA_VERSION },
-  { sectionId: DETECTION_RULES_SECTION_ID, schema: DETECTION_RULE_SCHEMA, version: DETECTION_RULE_SCHEMA_VERSION },
-  { sectionId: RELATIONSHIP_OBSERVATIONS_SECTION_ID, schema: RELATIONSHIP_OBSERVATION_SCHEMA, version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION },
-  { sectionId: BULK_SESSIONS_SECTION_ID, schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION },
-  { sectionId: WEBSITE_SNAPSHOTS_SECTION_ID, schema: WEBSITE_SNAPSHOT_SCHEMA, version: WEBSITE_SNAPSHOT_SCHEMA_VERSION },
-  { sectionId: INVESTIGATION_TEMPLATES_SECTION_ID, schema: INVESTIGATION_TEMPLATE_SCHEMA, version: INVESTIGATION_TEMPLATE_VERSION },
-  { sectionId: BULK_REVIEW_SECTION_ID, schema: BULK_REVIEW_SCHEMA, version: BULK_REVIEW_SCHEMA_VERSION },
-] as const);
-
 export const BRAND_PROFILE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION,
-  supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
+  supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_PROFILE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Version 1 bare arrays and supported profiles normalise to the current bounded store; version 6 adds bounded domain-control planning context and approved change windows.',
+  note: 'Exact public version 6 profiles migrate directly to version 7, which gives each approved change window a durable opaque identity; other historical stores are outside the compatibility boundary.',
 });
 export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION,
-  supportedVersions: CAMPAIGN_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: CAMPAIGN_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.',
+  note: 'The unchanged public version 1 envelope is the browser baseline; unsupported roots and explicit future versions are preserved without write.',
 });
 export const WATCHLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.watchlists', kind: 'browser_store', schema: null, currentVersion: WATCHLIST_SCHEMA_VERSION,
-  supportedVersions: WATCHLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: WATCHLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Legacy map-shaped stores normalise to the current envelope.',
+  note: 'The unchanged public version 2 envelope is the browser baseline; unversioned maps are outside the compatibility boundary.',
 });
 export const SHORTLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.shortlist', kind: 'browser_store', schema: null, currentVersion: SHORTLIST_SCHEMA_VERSION,
-  supportedVersions: SHORTLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: SHORTLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_SHORTLIST_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Legacy arrays normalise to the current compact envelope.',
+  note: 'The unchanged public version 3 envelope is the browser baseline; unversioned arrays are outside the compatibility boundary.',
 });
 export const CT_HISTORY_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.ct-history', kind: 'browser_store', schema: null, currentVersion: CT_HISTORY_SCHEMA_VERSION,
   supportedVersions: CT_HISTORY_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_CT_HISTORY_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Version 3 adds bounded ever-seen and reappearance state; versions 1 and 2 migrate without invented history completeness, and future stores are preserved without write.',
+  note: 'The unchanged public version 3 writer is the v2 browser baseline; future stores are preserved without write.',
 });
 export const DETECTION_RULE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
-  supportedVersions: DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_RULE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Only allowlisted structured rule fields and operators survive normalisation; the schema string belongs to portable exports.',
 });
 export const RELATIONSHIP_OBSERVATION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.relationship-observations', kind: 'browser_store', schema: null,
   currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: RELATIONSHIP_OBSERVATION_BROWSER_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Only explicit analyst selections from bounded Bulk relationship evidence are retained; identities are re-derived from normalised values and members.',
 });
 export const WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.website-snapshots', kind: 'browser_store', schema: null,
   currentVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION, supportedVersions: WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_WEBSITE_SNAPSHOT_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Only explicit analyst-selected compact website profiles and optional normalised leaf-certificate observations are retained; version 4 adds a bounded reviewed security-posture baseline, while raw lookup payloads, contact data, certificate bytes, and fetched bodies remain excluded.',
+  note: 'The unchanged public version 4 writer remains the exact browser and export baseline; raw lookup payloads, contact data, certificate bytes, and fetched bodies remain excluded.',
 });
 export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-sessions', kind: 'browser_store', schema: null, currentVersion: BULK_SESSION_SCHEMA_VERSION,
-  supportedVersions: BULK_SESSION_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: BULK_SESSION_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Schema 4 binds rows and sessions to bounded Brand Profile provenance. Bare browser arrays classify each record independently: complete schema-4 provenance is retained, wholly legacy records migrate fail-closed, and portable imports require a local rescan.',
+  note: 'The unchanged public schema 4 writer is the exact browser baseline with bounded Brand Profile provenance; unsupported local checkpoints are preserved without rewrite.',
 });
 export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.investigation-templates', kind: 'browser_store', schema: null,
   currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Version 2 adds the fixed response-playbook recipe identifiers. Analyst-authored guidance remains bound to allowlisted built-in stages and cannot run code, start collection, submit evidence, or remove mandatory request gates.',
 });
 export const BULK_REVIEW_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-review', kind: 'browser_store', schema: null, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
-  supportedVersions: BULK_REVIEW_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
+  supportedVersions: BULK_REVIEW_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_REVIEW_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Bounded saved Bulk filter views and per-domain review states only; scan results, contacts, notes, and case disposition remain separate.',
 });
@@ -345,10 +333,10 @@ export const BRAND_PROFILE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 });
 export const CAMPAIGN_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION,
-  supportedVersions: CAMPAIGN_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
+  supportedVersions: CAMPAIGN_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_CAMPAIGN_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Non-destructive merge; unversioned legacy campaign arrays remain accepted.',
+  note: 'The unchanged public version 1 campaign export merges non-destructively by bounded campaign identity.',
 });
 export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION,
@@ -360,14 +348,14 @@ export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION,
   supportedVersions: SUPPORTED_SHORTLIST_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_SHORTLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Non-destructive domain merge retains schema 2 records while schema 3 adds Opportunity model identity.',
+  note: 'The unchanged public schema 3 shortlist export merges bounded domain records non-destructively.',
 });
 export const DETECTION_RULE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
-  supportedVersions: DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: true,
-  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
+  supportedVersions: DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_RULE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.',
 });
@@ -381,23 +369,23 @@ export const RELATIONSHIP_OBSERVATION_EXPORT_COMPATIBILITY = defineSchemaCompati
 export const WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.website-snapshots', kind: 'export', schema: WEBSITE_SNAPSHOT_SCHEMA,
   currentVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION, supportedVersions: SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The existing archive section and direct portable document retain website-profile snapshot versions one through four and merge non-destructively without retaining fetched bodies.',
+  note: 'The unchanged public schema 4 archive section merges non-destructively without retaining fetched bodies.',
 });
 export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-sessions', kind: 'export', schema: BULK_SESSION_SCHEMA, currentVersion: BULK_SESSION_SCHEMA_VERSION,
   supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Portable compact Bulk sessions with explicit source states, comparison limitations, and schema-4 bounded profile-context provenance. Schemas 1 through 3 merge with profile-dependent conclusions withheld because those rows cannot prove which profile context was evaluated.',
+  note: 'The unchanged public schema 4 portable sessions retain explicit source states, comparison limitations, and bounded profile-context provenance.',
 });
 export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA,
   currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Portable bounded analyst-authored guide definitions with allowlisted stage identities and request gates; version 1 remains readable only for the original recipe identifiers.',
+  note: 'The unchanged public version 2 writer remains the exact bounded analyst-authored guide baseline with allowlisted stage identities and request gates.',
 });
 export const BULK_REVIEW_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-review', kind: 'export', schema: BULK_REVIEW_SCHEMA, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
@@ -417,6 +405,32 @@ export const WORKSPACE_PORTABILITY_COMPATIBILITY = Object.freeze([
   WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY, BULK_SESSION_EXPORT_COMPATIBILITY,
   INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY, BULK_REVIEW_EXPORT_COMPATIBILITY,
 ] as const);
+
+function archiveSectionReference(
+  sectionId: string,
+  descriptor: typeof WORKSPACE_PORTABILITY_COMPATIBILITY[number],
+) {
+  if (!descriptor.schema) throw new TypeError(`Workspace archive section ${sectionId} must name a portable schema.`);
+  return Object.freeze({
+    sectionId,
+    schema: descriptor.schema,
+    version: descriptor.currentVersion,
+    supportedVersions: descriptor.supportedVersions,
+  });
+}
+
+export const WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES = Object.freeze([
+  archiveSectionReference(CAMPAIGNS_SECTION_ID, CAMPAIGN_EXPORT_COMPATIBILITY),
+  archiveSectionReference(BRAND_PROFILES_SECTION_ID, BRAND_PROFILE_EXPORT_COMPATIBILITY),
+  archiveSectionReference(WATCHLISTS_SECTION_ID, WATCHLIST_EXPORT_COMPATIBILITY),
+  archiveSectionReference(SHORTLIST_SECTION_ID, SHORTLIST_EXPORT_COMPATIBILITY),
+  archiveSectionReference(DETECTION_RULES_SECTION_ID, DETECTION_RULE_EXPORT_COMPATIBILITY),
+  archiveSectionReference(RELATIONSHIP_OBSERVATIONS_SECTION_ID, RELATIONSHIP_OBSERVATION_EXPORT_COMPATIBILITY),
+  archiveSectionReference(BULK_SESSIONS_SECTION_ID, BULK_SESSION_EXPORT_COMPATIBILITY),
+  archiveSectionReference(WEBSITE_SNAPSHOTS_SECTION_ID, WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY),
+  archiveSectionReference(INVESTIGATION_TEMPLATES_SECTION_ID, INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY),
+  archiveSectionReference(BULK_REVIEW_SECTION_ID, BULK_REVIEW_EXPORT_COMPATIBILITY),
+]);
 
 export function serialiseWorkspacePortableJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -696,76 +710,6 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = Object.freeze([
   {
-    "id": "workspace.browser.brand.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-brand-v1.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.brand-profile-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.browser.brand.shape"
-  },
-  {
-    "id": "workspace.browser.brand.v2",
-    "path": "test/fixtures/workspace-lifecycle/browser-brand-v2.json",
-    "bytes": 37,
-    "sha256": "546deb2dca85c7fcd408afba9857c198abce342b2d80de34d31ed6ba0e20c685",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.brand-profile-store",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.browser.brand.shape"
-  },
-  {
-    "id": "workspace.browser.brand.v3",
-    "path": "test/fixtures/workspace-lifecycle/browser-brand-v3.json",
-    "bytes": 37,
-    "sha256": "dd9638a076ba6693a1bfb029441e740ecd33aa50e709b08aa43e6e37f06cd63e",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.brand-profile-store",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.browser.brand.shape"
-  },
-  {
-    "id": "workspace.browser.brand.v4",
-    "path": "test/fixtures/workspace-lifecycle/browser-brand-v4.json",
-    "bytes": 37,
-    "sha256": "b37e1a5f5383ab96c38b131bc37c5c36541af3c5933ed31eb3d4a330594b513f",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.brand-profile-store",
-    "version": 4,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.browser.brand.shape"
-  },
-  {
-    "id": "workspace.browser.brand.v5",
-    "path": "test/fixtures/workspace-lifecycle/browser-brand-v5.json",
-    "bytes": 37,
-    "sha256": "a198f01231aaf63323bcbe6ad11d2a4c101519e5d0b2d00aba54c465ad913b73",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.brand-profile-store",
-    "version": 5,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.browser.brand.shape"
-  },
-  {
     "id": "workspace.browser.brand.v6",
     "path": "test/fixtures/workspace-lifecycle/browser-brand-v6.json",
     "bytes": 37,
@@ -773,67 +717,25 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.browser.brand-profile-store",
     "version": 6,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.browser.brand.v7",
+    "scope": "repository",
+    "shapeId": "workspace.browser.brand.shape"
+  },
+  {
+    "id": "workspace.browser.brand.v7",
+    "path": "test/fixtures/workspace-lifecycle/browser-brand-v7.json",
+    "bytes": 37,
+    "sha256": "c866b2aff3dad05236114e96d3997a1c6af571658b38faa6aeb3c224d125a46b",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.browser.brand-profile-store",
+    "version": 7,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.browser.brand.shape"
-  },
-  {
-    "id": "workspace.browser.bulk.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-bulk-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.bulk-session-store",
-    "version": 4,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.bulk.shape"
-  },
-  {
-    "id": "workspace.browser.bulk.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-bulk-v1.json",
-    "bytes": 77,
-    "sha256": "a4334a399ad2ada23a09f1ad925e0ba427525c80efe14745d25d7e78722600a7",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.bulk-session-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.bulk.shape"
-  },
-  {
-    "id": "workspace.browser.bulk.v2",
-    "path": "test/fixtures/workspace-lifecycle/browser-bulk-v2.json",
-    "bytes": 77,
-    "sha256": "fd118a87cddafa62af69954c5a535e6918e88fa24422f842b021d81c1c84a40d",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.bulk-session-store",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.bulk.shape"
-  },
-  {
-    "id": "workspace.browser.bulk.v3",
-    "path": "test/fixtures/workspace-lifecycle/browser-bulk-v3.json",
-    "bytes": 77,
-    "sha256": "bb07f47fd8156f0f83bc802e6510a063e134f525746c72d8bb00dc615bc1f1bb",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.bulk-session-store",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.bulk.shape"
   },
   {
     "id": "workspace.browser.bulk.v4",
@@ -850,20 +752,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.bulk.shape"
   },
   {
-    "id": "workspace.browser.campaign.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-campaign-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.campaign-store",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.campaign.shape"
-  },
-  {
     "id": "workspace.browser.campaign.v1",
     "path": "test/fixtures/workspace-lifecycle/browser-campaign-v1.json",
     "bytes": 38,
@@ -876,34 +764,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.browser.campaign.shape"
-  },
-  {
-    "id": "workspace.browser.ct.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-ct-v1.json",
-    "bytes": 36,
-    "sha256": "7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.ct-history-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.ct.v3",
-    "scope": "repository",
-    "shapeId": "workspace.browser.ct.shape"
-  },
-  {
-    "id": "workspace.browser.ct.v2",
-    "path": "test/fixtures/workspace-lifecycle/browser-ct-v2.json",
-    "bytes": 36,
-    "sha256": "f1c885228806650cb1dbe016a4ec9be63266317e7eeb47c9c59117d2fe6b90bc",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.ct-history-store",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.ct.v3",
-    "scope": "repository",
-    "shapeId": "workspace.browser.ct.shape"
   },
   {
     "id": "workspace.browser.ct.v3",
@@ -920,20 +780,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.ct.shape"
   },
   {
-    "id": "workspace.browser.detection.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-detection-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.detection-rule-store",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.detection.shape"
-  },
-  {
     "id": "workspace.browser.detection.v1",
     "path": "test/fixtures/workspace-lifecycle/browser-detection-v1.json",
     "bytes": 34,
@@ -946,20 +792,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.browser.detection.shape"
-  },
-  {
-    "id": "workspace.browser.relationship.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-relationship-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.relationship-observation-store",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.relationship.shape"
   },
   {
     "id": "workspace.browser.relationship.v1",
@@ -976,20 +808,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.relationship.shape"
   },
   {
-    "id": "workspace.browser.review.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-review-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.bulk-review-store",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.review.shape"
-  },
-  {
     "id": "workspace.browser.review.v1",
     "path": "test/fixtures/workspace-lifecycle/browser-review-v1.json",
     "bytes": 88,
@@ -1002,34 +820,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.browser.review.shape"
-  },
-  {
-    "id": "workspace.browser.shortlist.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-shortlist-v1.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.shortlist-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.shortlist.v3",
-    "scope": "repository",
-    "shapeId": "workspace.browser.shortlist.shape"
-  },
-  {
-    "id": "workspace.browser.shortlist.v2",
-    "path": "test/fixtures/workspace-lifecycle/browser-shortlist-v2.json",
-    "bytes": 72,
-    "sha256": "f170dbdbe22d6cb5b5f619d04f87ff7f31df53f50fa98bbce6acf8073d7cd278",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.shortlist-store",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.shortlist.v3",
-    "scope": "repository",
-    "shapeId": "workspace.browser.shortlist.shape"
   },
   {
     "id": "workspace.browser.shortlist.v3",
@@ -1046,34 +836,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.shortlist.shape"
   },
   {
-    "id": "workspace.browser.template.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-template-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.investigation-template-store",
-    "version": 2,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.template.shape"
-  },
-  {
-    "id": "workspace.browser.template.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-template-v1.json",
-    "bytes": 88,
-    "sha256": "543fb7644e5f3b8bb72c15697ebb67265947f803e3b31da9849580bcbeb8964b",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.investigation-template-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.template.v2",
-    "scope": "repository",
-    "shapeId": "workspace.browser.template.shape"
-  },
-  {
     "id": "workspace.browser.template.v2",
     "path": "test/fixtures/workspace-lifecycle/browser-template-v2.json",
     "bytes": 88,
@@ -1086,20 +848,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.browser.template.shape"
-  },
-  {
-    "id": "workspace.browser.watchlist.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-watchlist-v1.json",
-    "bytes": 3,
-    "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.watchlist-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.watchlist.v2",
-    "scope": "repository",
-    "shapeId": "workspace.browser.watchlist.shape"
   },
   {
     "id": "workspace.browser.watchlist.v2",
@@ -1116,62 +864,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.watchlist.shape"
   },
   {
-    "id": "workspace.browser.website.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/browser-website-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.website-snapshot-store",
-    "version": 4,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.browser.website.shape"
-  },
-  {
-    "id": "workspace.browser.website.v1",
-    "path": "test/fixtures/workspace-lifecycle/browser-website-v1.json",
-    "bytes": 90,
-    "sha256": "350f008211952c14ef46868dfc9ef8ef646710de13cb8260e7126c9530be6353",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.website-snapshot-store",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.website.shape"
-  },
-  {
-    "id": "workspace.browser.website.v2",
-    "path": "test/fixtures/workspace-lifecycle/browser-website-v2.json",
-    "bytes": 90,
-    "sha256": "7aef4b2f179e1fd74ff00867e0c54bbfe1eaa86779741d34a6e2bd2d5991e0d9",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.website-snapshot-store",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.website.shape"
-  },
-  {
-    "id": "workspace.browser.website.v3",
-    "path": "test/fixtures/workspace-lifecycle/browser-website-v3.json",
-    "bytes": 90,
-    "sha256": "9307eedc0479d8c4b5a471e1023c75b5c4fbbb6598923acdacc1a4369268be0e",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.browser.website-snapshot-store",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.browser.website.shape"
-  },
-  {
     "id": "workspace.browser.website.v4",
     "path": "test/fixtures/workspace-lifecycle/browser-website-v4.json",
     "bytes": 90,
@@ -1186,62 +878,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.browser.website.shape"
   },
   {
-    "id": "workspace.portable.brand.v2",
-    "path": "test/fixtures/workspace-lifecycle/portable-brand-v2.json",
-    "bytes": 122,
-    "sha256": "28bc687850d4990c93d029302bddb3a3a39081ec1026d58d94afe237a412581a",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.brand-profiles",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.portable.brand.shape"
-  },
-  {
-    "id": "workspace.portable.brand.v3",
-    "path": "test/fixtures/workspace-lifecycle/portable-brand-v3.json",
-    "bytes": 122,
-    "sha256": "e6b58fd89c9ac1580db225b8b1a4e5eee0e10f6954945c0483b4f37be22d1a67",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.brand-profiles",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.portable.brand.shape"
-  },
-  {
-    "id": "workspace.portable.brand.v4",
-    "path": "test/fixtures/workspace-lifecycle/portable-brand-v4.json",
-    "bytes": 122,
-    "sha256": "674c5c19dbfe732d366f9f486ee7336d13fc70608a9c3c8bad7685384f9b9efd",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.brand-profiles",
-    "version": 4,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.portable.brand.shape"
-  },
-  {
-    "id": "workspace.portable.brand.v5",
-    "path": "test/fixtures/workspace-lifecycle/portable-brand-v5.json",
-    "bytes": 122,
-    "sha256": "7f497ecde13da0fa70fae123ce9f88ed52a0597ba727031c1b6913c484e6a586",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.brand-profiles",
-    "version": 5,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.brand.v6",
-    "scope": "repository",
-    "shapeId": "workspace.portable.brand.shape"
-  },
-  {
     "id": "workspace.portable.brand.v6",
     "path": "test/fixtures/workspace-lifecycle/portable-brand-v6.json",
     "bytes": 122,
@@ -1249,53 +885,25 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.brand-profiles",
     "version": 6,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.portable.brand.v7",
+    "scope": "repository",
+    "shapeId": "workspace.portable.brand.shape"
+  },
+  {
+    "id": "workspace.portable.brand.v7",
+    "path": "test/fixtures/workspace-lifecycle/portable-brand-v7.json",
+    "bytes": 122,
+    "sha256": "49db0b0a2d5c00da9dc55fd5b03702d7412550e17329b917567acf6c4ec3ebb9",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.brand-profiles",
+    "version": 7,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.portable.brand.shape"
-  },
-  {
-    "id": "workspace.portable.bulk.v1",
-    "path": "test/fixtures/workspace-lifecycle/portable-bulk-v1.json",
-    "bytes": 338,
-    "sha256": "210c38c7e11e15e87a88be33bbedfc93bf0b7bf554b7776b7546e7d79ea75223",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.bulk-sessions",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.bulk.shape"
-  },
-  {
-    "id": "workspace.portable.bulk.v2",
-    "path": "test/fixtures/workspace-lifecycle/portable-bulk-v2.json",
-    "bytes": 338,
-    "sha256": "74c958d143d5bff429f3676f74d0479c034f0d7730eeb5968f87cd0dd427ee53",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.bulk-sessions",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.bulk.shape"
-  },
-  {
-    "id": "workspace.portable.bulk.v3",
-    "path": "test/fixtures/workspace-lifecycle/portable-bulk-v3.json",
-    "bytes": 338,
-    "sha256": "6373567283c03cb139d882223514f84d2c4c720b07acd93a1c04ba08063b5603",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.bulk-sessions",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.bulk.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.bulk.shape"
   },
   {
     "id": "workspace.portable.bulk.v4",
@@ -1312,20 +920,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.portable.bulk.shape"
   },
   {
-    "id": "workspace.portable.campaign.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/portable-campaign-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.campaigns",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.portable.campaign.shape"
-  },
-  {
     "id": "workspace.portable.campaign.v1",
     "path": "test/fixtures/workspace-lifecycle/portable-campaign-v1.json",
     "bytes": 281,
@@ -1338,20 +932,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.portable.campaign.shape"
-  },
-  {
-    "id": "workspace.portable.detection.legacy-root",
-    "path": "test/fixtures/workspace-lifecycle/portable-detection-legacy.json",
-    "bytes": 3,
-    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.detection-rules",
-    "version": 1,
-    "role": "current",
-    "expectation": "accepted_exact",
-    "expectedOutputFixtureId": null,
-    "scope": "repository",
-    "shapeId": "workspace.portable.detection.shape"
   },
   {
     "id": "workspace.portable.detection.v1",
@@ -1396,20 +976,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "shapeId": "workspace.portable.review.shape"
   },
   {
-    "id": "workspace.portable.shortlist.v2",
-    "path": "test/fixtures/workspace-lifecycle/portable-shortlist-v2.json",
-    "bytes": 116,
-    "sha256": "80e2ea62fa053fc47b53797467e30cd81a757e4dd7e59369b94f1f4ee3a8bc8f",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.shortlist",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.shortlist.v3",
-    "scope": "repository",
-    "shapeId": "workspace.portable.shortlist.shape"
-  },
-  {
     "id": "workspace.portable.shortlist.v3",
     "path": "test/fixtures/workspace-lifecycle/portable-shortlist-v3.json",
     "bytes": 116,
@@ -1422,20 +988,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.portable.shortlist.shape"
-  },
-  {
-    "id": "workspace.portable.template.v1",
-    "path": "test/fixtures/workspace-lifecycle/portable-template-v1.json",
-    "bytes": 471,
-    "sha256": "64d06935e0d85897b6e71467c87e4ac734c22d60c9099a644027c47214ad9891",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.investigation-templates",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.template.v2",
-    "scope": "repository",
-    "shapeId": "workspace.portable.template.shape"
   },
   {
     "id": "workspace.portable.template.v2",
@@ -1464,48 +1016,6 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "expectedOutputFixtureId": null,
     "scope": "repository",
     "shapeId": "workspace.portable.watchlist.shape"
-  },
-  {
-    "id": "workspace.portable.website.v1",
-    "path": "test/fixtures/workspace-lifecycle/portable-website-v1.json",
-    "bytes": 135,
-    "sha256": "fdc8076700a3eb0cef5e52e7d2d36829dc8ddb45774baf4229941508d9e42ec2",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.website-profile-snapshots",
-    "version": 1,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.website.shape"
-  },
-  {
-    "id": "workspace.portable.website.v2",
-    "path": "test/fixtures/workspace-lifecycle/portable-website-v2.json",
-    "bytes": 135,
-    "sha256": "25fd7e59afc00554651693cfb6d018c2d84115a61035574ebc4153e02a89ee2e",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.website-profile-snapshots",
-    "version": 2,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.website.shape"
-  },
-  {
-    "id": "workspace.portable.website.v3",
-    "path": "test/fixtures/workspace-lifecycle/portable-website-v3.json",
-    "bytes": 135,
-    "sha256": "979a969536d5b9808dd5ce95e10914f6ce5878f0809ccff9bb54d6004a59950e",
-    "contentDigestSha256": null,
-    "schema": "whoisleuth.website-profile-snapshots",
-    "version": 3,
-    "role": "historical",
-    "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.website.v4",
-    "scope": "repository",
-    "shapeId": "workspace.portable.website.shape"
   },
   {
     "id": "workspace.portable.website.v4",

@@ -18,7 +18,7 @@ function retainedEvidence(inputHostname: unknown) {
   };
 }
 
-describe('Case v14 exact submitted hostname', () => {
+describe('Case v13 exact submitted hostname', () => {
   test('normalises strict Unicode input to canonical lower-case A-label form and binds it to the Case parent', () => {
     assert.equal(
       model.normalizeEvidenceHostnameForCase('CAFÉ.Example.Test', 'example.test'),
@@ -93,13 +93,32 @@ describe('Case v14 exact submitted hostname', () => {
     }, { caseDomain: 'example.test' }), null);
   });
 
-  test('migrates Case v13 with null and never reconstructs from Case domain or URL evidence', () => {
-    const migrated = model.normalizeCaseStore({
+  test('rejects ambiguous unreleased Case v13 and never reconstructs a migrated hostname from Case domain or URL evidence', () => {
+    assert.throws(() => model.normalizeCaseStore({
       version: 13,
       cases: [{
         domain: 'example.test',
         evidenceHistory: [{
-          ...retainedEvidence('login.example.test'),
+          scanDepth: 'deep',
+          availability: 'registered',
+          confidence: 'high',
+          registrar: 'Reserved Registrar',
+          capturedAt: FIRST,
+        }],
+        createdAt: FIRST,
+        updatedAt: FIRST,
+      }],
+    }), /unreleased local Case checkpoints are not interpreted as the v2 format.*no data was changed/iu);
+
+    const migrated = model.normalizeCaseStore({
+      version: 12,
+      cases: [{
+        domain: 'example.test',
+        evidenceHistory: [{
+          scanDepth: 'deep',
+          availability: 'registered',
+          confidence: 'high',
+          registrar: 'Reserved Registrar',
           httpSummaryVersion: 1,
           httpEvidenceStatus: 'success',
           httpFinalOrigin: 'https://redirect.example.test',
@@ -109,11 +128,11 @@ describe('Case v14 exact submitted hostname', () => {
         updatedAt: FIRST,
       }],
     });
-    assert.equal(migrated.version, 14);
+    assert.equal(migrated.version, 13);
     assert.equal(migrated.cases[0]?.evidenceHistory[0]?.inputHostname, null);
 
     const current = model.normalizeCaseStore({
-      version: 14,
+      version: 13,
       cases: [{
         domain: 'example.test',
         evidenceHistory: [{ ...retainedEvidence('login.example.test'), capturedAt: FIRST }],

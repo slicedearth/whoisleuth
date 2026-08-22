@@ -4,6 +4,7 @@ import {
   ACQUISITION_DECISION_PACKET_SCHEMA,
   ACQUISITION_DECISION_PACKET_VERSION,
 } from '../contracts/investigation-portability.mts';
+import { isValidAsciiDomainName } from '../../lib/hostname.mts';
 
 export { ACQUISITION_DECISION_PACKET_SCHEMA, ACQUISITION_DECISION_PACKET_VERSION };
 
@@ -40,11 +41,13 @@ function timestamp(value: unknown): string | null {
 }
 
 function target(value: unknown): string {
-  const normalized = text(value, 253).toLowerCase().replace(/\.$/u, '');
-  if (!normalized || !normalized.includes('.') || /[/\\\s]/u.test(normalized)) {
+  const submitted = typeof value === 'string'
+    ? value.trim().replace(/\.$/u, '')
+    : '';
+  if (!isValidAsciiDomainName(submitted, { requireDot: true })) {
     throw new Error('A canonical domain is required for an acquisition decision packet.');
   }
-  return normalized;
+  return submitted.toLowerCase();
 }
 
 function decision(value: unknown): AcquisitionDecision {

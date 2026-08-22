@@ -158,7 +158,7 @@ describe('CLI shell completion', () => {
       ['whoisleuth sharing-review package.json --recipient-scope ', ['public', 'community', 'organization', 'named-recipients']],
       ['whoisleuth case-pack package.json --palette ', ['auto', 'light', 'dark']],
       ['whoisleuth bulk package.json --concurrency ', ['1', '2', '3', '4', '5', '6', '7', '8']],
-      ['whoisleuth workflow-plan ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
+      ['whoisleuth workflow-plan ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison', 'campaign-review', 'certificate-anomaly', 'registry-disagreement', 'evidence-handoff', 'planned-domain-change', 'post-change-verification']],
       ['whoisleuth workflow-run ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
       ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
     ] as const) {
@@ -279,7 +279,7 @@ describe('CLI shell completion', () => {
     assert.match(stdout.value(), /Collection: network\./u);
     assert.match(stdout.value(), /130 analyst cancellation/u);
     assert.match(stdout.value(), /palette auto, light, or dark/u);
-    assert.match(stdout.value(), /save-lookup/u);
+    assert.match(stdout.value(), /save\\-lookup/u);
     assert.match(stdout.value(), /selected response, excludes raw header values/u);
     assert.match(stdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.equal(stderr.value(), '');

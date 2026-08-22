@@ -11,7 +11,7 @@ export const REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA = 'whoisleuth.reviewed-relati
 
 const RELATIONSHIP_GRAPH_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.relationship-graph', kind: 'export', schema: RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
-  currentVersion: RELATIONSHIP_GRAPH_EXPORT_VERSION, supportedVersions: [1, 2, RELATIONSHIP_GRAPH_EXPORT_VERSION],
+  currentVersion: RELATIONSHIP_GRAPH_EXPORT_VERSION, supportedVersions: [RELATIONSHIP_GRAPH_EXPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
   owner: RELATIONSHIP_CONTRACT_OWNER,
@@ -45,8 +45,6 @@ export const RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFa
       requiredKeys: ['schema', 'version', 'generatedAt', 'source', 'graph', 'limitations'], optionalKeys: [],
       hook: { module: 'packages/relationships/case-relationship-graph-export.mts', exportName: 'buildRelationshipGraphDocument', role: 'builder', runtime: 'shared' },
       fixtures: [
-        { id: 'relationship-graph-v1', path: 'test/fixtures/extracted-domain-lifecycle/relationship-graph-v1.json', bytes: 283, sha256: 'ddc5420ca4c89959f604566b89f80d98cfa8f53c37a264f00abb7d20fdac45db', version: 1 },
-        { id: 'relationship-graph-v2', path: 'test/fixtures/extracted-domain-lifecycle/relationship-graph-v2.json', bytes: 283, sha256: 'a3e6dcb99c5d3d49cf01dd715e255236d4e21c7ba13e70613923abb2c22645a3', version: 2 },
         { id: 'relationship-graph-v3', path: 'test/fixtures/extracted-domain-lifecycle/relationship-graph-v3.json', bytes: 283, sha256: '4cef26648fc6901357274b6b4e4efe630549b0b61d6720a98bf25b5829c4a7db', version: RELATIONSHIP_GRAPH_EXPORT_VERSION },
       ],
     },

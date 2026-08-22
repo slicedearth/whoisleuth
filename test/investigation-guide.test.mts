@@ -8,7 +8,6 @@ import {
   createInvestigationGuide,
   INVESTIGATION_GUIDE_EXPORT_SCHEMA,
   INVESTIGATION_GUIDE_EXPORT_VERSION,
-  INVESTIGATION_GUIDE_LEGACY_VERSION,
   INVESTIGATION_GUIDE_VERSION,
   INVESTIGATION_RECIPES,
   investigationGuideApprovedHref,
@@ -92,27 +91,16 @@ test('normalizes IDN hostnames without mutating the input', () => {
   assert.equal(value, 'café.example');
 });
 
-test('normalizes deployed version 1 navigation into the current new-domain triage schema', () => {
+test('rejects reader-only version 1 navigation without reinterpreting it', () => {
   const legacy = {
-    version: INVESTIGATION_GUIDE_LEGACY_VERSION,
+    version: 1,
     domain: 'Example.Test.',
     createdAt: STARTED_AT,
     updatedAt: OPENED_AT,
     visitedStages: ['lookup', 'invented', 'lookup', 'bulk', 'monitor', 'extra'],
     rawEvidence: 'must not escape',
   };
-  const parsed = parseInvestigationGuide(legacy);
-  assert.ok(parsed);
-  assert.equal(parsed.version, INVESTIGATION_GUIDE_VERSION);
-  assert.equal(parsed.recipeId, 'new_domain_triage');
-  assert.equal(parsed.domain, 'example.test');
-  assert.deepEqual(parsed.reviewDomains, ['example.test']);
-  assert.deepEqual(parsed.stages.map((stage) => [stage.id, stage.openedAt]), [
-    ['lookup', OPENED_AT],
-    ['bulk', OPENED_AT],
-    ['monitor', OPENED_AT],
-  ]);
-  assert.equal('rawEvidence' in parsed, false);
+  assert.equal(parseInvestigationGuide(legacy), null);
   assert.equal(legacy.version, 1);
 });
 
@@ -155,7 +143,7 @@ test('rejects malformed and future records without treating them as an empty rec
   }]) assert.equal(parseInvestigationGuide(value), null);
 });
 
-test('requires explicit zones for current guides and migrates legacy guide instants as UTC', () => {
+test('requires explicit zones for current guides and rejects reader-only instants', () => {
   const current = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
   assert.ok(current);
   const zoneLess = '2026-01-15T12:00:00.000';
@@ -167,8 +155,7 @@ test('requires explicit zones for current guides and migrates legacy guide insta
     updatedAt: zoneLess,
     stages: current.stages.map((stage) => ({ ...stage, updatedAt: zoneLess })),
   });
-  assert.equal(legacy?.createdAt, '2026-01-15T12:00:00.000Z');
-  assert.ok(legacy?.stages.every((stage) => stage.updatedAt === '2026-01-15T12:00:00.000Z'));
+  assert.equal(legacy, null);
   assert.equal(parseInvestigationGuide({
     ...current,
     createdAt: '2026-01-15T12:00:00.000+01:00',

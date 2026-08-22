@@ -2,10 +2,10 @@ import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
-export const LEGACY_CLI_LOOKUP_VERSION = 1;
+export const PUBLIC_CLI_LOOKUP_VERSION = 1;
 export const CLI_LOOKUP_VERSION = 2;
 export const SUPPORTED_CLI_LOOKUP_VERSIONS = Object.freeze([
-  LEGACY_CLI_LOOKUP_VERSION,
+  PUBLIC_CLI_LOOKUP_VERSION,
   CLI_LOOKUP_VERSION,
 ] as const);
 export const MAX_CLI_LOOKUP_BYTES = 8 * 1024 * 1024;
@@ -74,7 +74,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     {
       compatibilityId: CLI_LOOKUP_COMPATIBILITY.id,
       schema: CLI_LOOKUP_SCHEMA,
-      version: LEGACY_CLI_LOOKUP_VERSION,
+      version: PUBLIC_CLI_LOOKUP_VERSION,
       role: 'document',
       lifecycle: 'legacy',
       readable: true,
@@ -112,7 +112,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: '0e6601693e384b29285ead97b20947c3a464baf2521277901ff86ad5a6e3a59e',
       contentDigestSha256: null,
       schema: CLI_LOOKUP_SCHEMA,
-      version: LEGACY_CLI_LOOKUP_VERSION,
+      version: PUBLIC_CLI_LOOKUP_VERSION,
       role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
@@ -138,7 +138,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: 'bb06e18c67527e559a039f7f826d4d605d7581a556e2e6e511c461ba97dcfdef',
       contentDigestSha256: null,
       schema: CLI_LOOKUP_SCHEMA,
-      version: LEGACY_CLI_LOOKUP_VERSION,
+      version: PUBLIC_CLI_LOOKUP_VERSION,
       role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
@@ -165,7 +165,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       {
         id: 'cli-lookup.document.v1',
         schema: CLI_LOOKUP_SCHEMA,
-        versions: [LEGACY_CLI_LOOKUP_VERSION],
+        versions: [PUBLIC_CLI_LOOKUP_VERSION],
         objects: [
           { path: '$', requiredKeys: CLI_LOOKUP_REQUIRED_ROOT_KEYS, optionalKeys: CLI_LOOKUP_OPTIONAL_ROOT_KEYS, unknownKeys: 'preserve_bounded' },
           { path: '$.diagnostics', requiredKeys: CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS, optionalKeys: [], unknownKeys: 'preserve_bounded' },
@@ -220,7 +220,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       {
         id: 'cli-lookup.json.v1-v2',
         schema: CLI_LOOKUP_SCHEMA,
-        versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION],
+        versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION],
         mediaType: 'application/json',
         encoding: 'utf-8',
         bom: false,
@@ -311,7 +311,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-read-all',
         plane: 'cli',
         operation: 'read-all-query-types',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
         emittedContract: null,
         shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
@@ -328,7 +328,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-read-domain',
         plane: 'cli',
         operation: 'read-domain-only',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct', discriminator: { path: '$.type', values: ['domain'] } }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct', discriminator: { path: '$.type', values: ['domain'] } }],
         emittedContract: null,
         shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
@@ -345,7 +345,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-source-report',
         plane: 'cli',
         operation: 'build-source-reliability-report',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
         emittedContract: null,
         shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
@@ -362,7 +362,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-offline-verify',
         plane: 'cli',
         operation: 'verify-structure',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
         emittedContract: null,
         shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
@@ -379,7 +379,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-sharing-review',
         plane: 'cli',
         operation: 'build-redacted-sharing-review',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [LEGACY_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
         emittedContract: null,
         shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],

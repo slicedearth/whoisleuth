@@ -1,4 +1,5 @@
 import type { CliCommand } from './arguments.mts';
+import { terminalSafeJson } from './formatters/json.mts';
 import type { WritableTerminal } from './terminal-presentation.mts';
 
 export const CLI_PROGRESS_EVENT_SCHEMA = 'whoisleuth.cli.progress';
@@ -71,7 +72,7 @@ function createCliProgressEvents(
         ...(typeof fields.ok === 'boolean' ? { ok: fields.ok } : {}),
         ...(exitCode !== null ? { exitCode } : {}),
       };
-      stream.write(`${JSON.stringify(document)}\n`);
+      stream.write(`${terminalSafeJson(document)}\n`);
       sequence += 1;
     },
   });

@@ -66,6 +66,18 @@ describe('bounded SPF expansion', () => {
     assert.ok(result.branches.some((branch) => branch.state === 'invalid'));
   });
 
+  test('rejects non-ASCII case-folding aliases without issuing DNS queries', async () => {
+    const resolver = fixtureResolver({});
+    const result = await expandSpfPolicy(
+      'example.test',
+      query(['v=spf1 include:\u017fpf.example.net include:\u212aey.example.net -all']),
+      resolver.resolveTxt,
+    );
+
+    assert.deepEqual(resolver.requests, []);
+    assert.equal(result.branches.filter((branch) => branch.state === 'invalid').length, 2);
+  });
+
   test('stops expansion when the observed DNS-term budget is exceeded', async () => {
     const resolver = fixtureResolver({
       '_wide.example.net': query(['v=spf1 a mx exists:a.example.net exists:b.example.net exists:c.example.net exists:d.example.net exists:e.example.net exists:f.example.net exists:g.example.net exists:h.example.net -all']),

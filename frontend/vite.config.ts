@@ -10,6 +10,13 @@ const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta
 const THEME_INIT_ASSET = 'theme-init.js';
 const ROOT_PACKAGE_PATH = fileURLToPath(new URL('../package.json', import.meta.url));
 
+export const LOCAL_API_PROXY = {
+  target: 'http://localhost:3000',
+  // The authentication boundary compares Origin with Host. Preserve the
+  // browser-facing development host instead of rewriting it to the API host.
+  changeOrigin: false,
+};
+
 async function applicationVersion(): Promise<string> {
   const document = JSON.parse(await readFile(ROOT_PACKAGE_PATH, 'utf8')) as { version?: unknown };
   return normalizeBoundedSemanticVersion(document.version, 'Root package');
@@ -88,7 +95,7 @@ export default defineConfig(async () => ({
   plugins: [themeInitializerPlugin(), sveltekit()],
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': LOCAL_API_PROXY,
     },
   },
 }));

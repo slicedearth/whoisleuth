@@ -26,7 +26,7 @@
   <div>
     <p class="eyebrow">Result layout</p>
     <h3 id="lookup-presentation-title">Choose what to review</h3>
-    <p>Focus reorders the same evidence for the task at hand. Open individual families or all of them without changing collection, source states, Risk, availability, exports, or saved evidence.</p>
+    <p>Focus only changes section order. Open individual evidence families or all of them.</p>
   </div>
   <label>Focus
     <select value={task} onchange={(event) => setTask(event.currentTarget.value as LookupTaskView)}>

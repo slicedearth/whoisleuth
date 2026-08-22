@@ -348,6 +348,20 @@ function fixtureResponse(): Record<string, unknown> {
 }
 
 describe('lookup evidence export', () => {
+  test('does not normalise non-ASCII case-folding aliases into exported hostnames', () => {
+    for (const inputHostname of ['portal.\u212a.example', 'portal.\u017f.example']) {
+      assert.deepEqual(evidence.projectLookupEvidenceQuery({
+        type: 'domain', inputHostname, registrableDomain: 'example.test', submitted: inputHostname,
+      }), {
+        submitted: 'example.test',
+        type: 'domain',
+        inputHostname: 'example.test',
+        registrableDomain: 'example.test',
+        isSubdomain: false,
+      });
+    }
+  });
+
   test('requires explicit zones for current source provenance timestamps', () => {
     const zoneLess = evidence.projectLookupEvidenceRdapSourcePublication({
       status: 'success',
@@ -671,7 +685,7 @@ describe('lookup evidence export', () => {
     assert.equal(projected.registryContactsExcluded, true);
   });
 
-  test('sanitizes URL-shaped schema-28 strings after whitespace and default-ignorable prefixes', () => {
+  test('sanitizes URL-shaped current-schema strings after whitespace and default-ignorable prefixes', () => {
     const hiddenCredentialUrl = '\u034fhttps://analyst:secret@evidence.example.test/path?trace=private#fragment';
     const response = fixtureResponse();
     recordValue(response.availability).structuredDataIdentity = analyzeStructuredDataIdentity({

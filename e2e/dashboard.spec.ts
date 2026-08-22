@@ -1,10 +1,11 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
+import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
@@ -51,6 +52,22 @@ function caseRecord(id: string, domain: string, status: string) {
     notes: [],
     source: 'lookup',
     evidenceHistory: [],
+    ...(status === 'resolved' ? {
+      closures: {
+        records: [{
+          id: `${id}-closure`,
+          reason: 'risk_accepted',
+          summary: 'The reserved fixture was deliberately closed after bounded review.',
+          observedEffectReviewId: null,
+          actionId: null,
+          limitations: [],
+          createdAt: NOW,
+        }],
+        omitted: 0,
+        preV13HistoryUnavailable: false,
+        limitations: [],
+      },
+    } : {}),
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -98,31 +115,26 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
       createdAt: NOW, updatedAt: NOW,
     };
-  await page.evaluate(() => sessionStorage.setItem('whoisleuth:investigation-guide:v1', JSON.stringify({ domain: 'private.invalid' })));
+  await page.evaluate((key) => sessionStorage.setItem(key, JSON.stringify({ domain: 'private.invalid' })), INVESTIGATION_GUIDE_KEY);
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [archiveCase] },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [archiveCase] },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [{
       id: 'archive-campaign', name: 'Archive campaign', description: 'Portable workspace fixture',
       domains: ['archive-case.invalid'], createdAt: NOW, updatedAt: NOW,
-    }] },
-    'whois-rdap-brand-profiles-v1': { version: 2, profiles: [archiveProfile] },
+    }] }),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([archiveProfile]),
     'whois-rdap-active-brand-profile-v1': 'archive-profile',
-    'whois-rdap-watchlist-v1': {
-      schema: 'whoisleuth.watchlists', version: 2,
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {
       watchlists: { 'Archive watchlist': { updatedAt: NOW, results: [], baseline: [], history: [] } },
-    },
-    'whois-rdap-shortlist-v1': {
-      schema: 'whoisleuth.shortlist', version: 2,
+    }),
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', {
       entries: [{ domain: 'archive-case.invalid', availability: 'unknown', mutationTypes: [], savedAt: NOW }],
-    },
-    'whoisleuth-detection-rules-v1': {
-      version: 1,
+    }),
+    'whoisleuth-detection-rules-v1': currentBrowserLocalDocument('detection_rules', {
       rules: [{ id: 'archive-rule', name: 'Archive rule', enabled: true, match: 'all',
         conditions: [{ field: 'status', operator: 'equals', value: 'new' }], riskDelta: 0, tag: 'archive' }],
-    },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    }),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [{
         id: 'relationship-fixture-alias',
         type: 'ip_address',
@@ -141,10 +153,8 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         truncated: false,
         limitations: ['Shared infrastructure is not proof of common control.'],
       }],
-    },
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 1,
+    }),
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [{
         id: 'archive-website-snapshot',
         domain: 'archive-case.invalid',
@@ -165,10 +175,8 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         },
         sources: [{ source: 'page', state: 'success' }],
       }],
-    },
-    'whoisleuth-investigation-templates-v1': {
-      schema: 'whoisleuth.investigation-templates',
-      version: 1,
+    }),
+    'whoisleuth-investigation-templates-v1': currentBrowserLocalDocument('investigation_templates', {
       templates: [{
         id: 'archive-investigation-template',
         label: 'Archive review template',
@@ -186,10 +194,8 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         createdAt: NOW,
         updatedAt: NOW,
       }],
-    },
-    'whoisleuth-bulk-review-v1': {
-      schema: 'whoisleuth.bulk-review',
-      version: 1,
+    }),
+    'whoisleuth-bulk-review-v1': currentBrowserLocalDocument('bulk_review', {
       presets: [{
         kind: 'preset',
         id: 'archive-review-view',
@@ -218,13 +224,15 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         state: 'reviewing',
         updatedAt: NOW,
       }],
-    },
+    }),
     'whoisleuth:theme:v1': 'light',
     'unrelated-private-key': 'must-not-export',
   }, { clearStorage: true });
+  await openDashboardSecondaryWorkspaces(page);
 }
 
 async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByText('How workspace backups work', { exact: true }).click();
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download unencrypted backup' }).click();
@@ -237,6 +245,7 @@ async function downloadEncryptedWorkspaceArchive(
   page: import('@playwright/test').Page,
   passphrase: string,
 ) {
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('button', { name: 'Download encrypted backup' }).click();
   await page.getByLabel(/^Passphrase/).fill(passphrase);
   await page.getByLabel('Confirm passphrase').fill(passphrase);
@@ -247,7 +256,34 @@ async function downloadEncryptedWorkspaceArchive(
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the Dashboard presents Investigate, Respond, and Assure without becoming a fourth job', {
+type WorkspaceBackupFile = {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+};
+
+async function reviewWorkspaceBackup(
+  page: import('@playwright/test').Page,
+  file: WorkspaceBackupFile,
+) {
+  const savedWorkTrigger = page.getByRole('button', { name: 'Open saved-work tools' });
+  const importTrigger = page.getByRole('button', { name: /Import existing work/u });
+  await expect(savedWorkTrigger.or(importTrigger)).toBeVisible();
+  if (await savedWorkTrigger.isVisible()) {
+    await openDashboardSecondaryWorkspaces(page);
+  } else {
+    if (await importTrigger.getAttribute('aria-expanded') !== 'true') await importTrigger.click();
+    await expect(importTrigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('heading', { name: 'Import existing work', exact: true })).toBeVisible();
+  }
+  await page.getByLabel('Review backup file').setInputFiles(file);
+}
+
+function workspaceArchiveStatus(page: import('@playwright/test').Page) {
+  return page.locator('.workspace-archive .status[role="status"]');
+}
+
+test('the Dashboard waits for every collection and then presents only genuine first-use actions', {
   tag: ['@analyst-journey', '@journey-first-domain-assessment'],
 }, async ({ page }) => {
   await page.goto('/dashboard');
@@ -256,50 +292,56 @@ test('the Dashboard presents Investigate, Respond, and Assure without becoming a
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('href', '/');
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('target', '_blank');
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveAttribute('rel', 'noopener noreferrer');
-  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.workflow-lane')).toHaveCount(3);
-  await expect(page.locator('.workflow-lane .workflow-icon svg')).toHaveCount(3);
-  await expect(page.getByRole('heading', { name: 'Investigate', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Respond', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Assure', exact: true })).toBeVisible();
-  await expect(page.locator('.workflow-action')).toHaveCount(11);
-  await expect(page.getByRole('navigation', { name: 'Investigate actions' }).getByRole('link', { name: /Lookup a target/u })).toHaveAttribute('href', '/lookup');
-  await expect(page.getByRole('navigation', { name: 'Respond actions' }).getByRole('link', { name: /Cases & response/u })).toHaveAttribute('href', '/monitor?view=cases');
-  await expect(page.getByRole('navigation', { name: 'Assure actions' }).getByRole('link', { name: /Owned-domain controls/u })).toHaveAttribute('href', '/brands');
-  const acquisitionTaskPack = page.locator('[data-task-pack="acquisition"]');
-  await expect(acquisitionTaskPack).toHaveCount(1);
-  await expect(acquisitionTaskPack).toHaveAttribute('href', '/lookup?depth=deep&task=acquisition#query');
-  await expect(acquisitionTaskPack).toContainText('no request starts automatically');
+  await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Try the synthetic demo/u })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: /Investigate one target/u })).toHaveAttribute('href', '/lookup');
+  await expect(page.getByRole('button', { name: /Start a guided investigation/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Import existing work/u })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Continue saved work' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toHaveCount(0);
+  await expect(page.locator('.workflow-lane')).toHaveCount(0);
+  await expect(page.locator('.workflow-action')).toHaveCount(0);
   await expect(page.locator('.quick-card')).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(0);
-  await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
-  await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
-  await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
-  await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
-  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('href', '/resources#start');
-  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('target', '_blank');
-  await expect(page.getByRole('link', { name: /Open resources/ })).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(page.locator('.summary-card')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open saved-work tools' })).toHaveCount(0);
+  await page.getByRole('button', { name: /Start a guided investigation/u }).click();
+  await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toHaveCount(0);
-  await expect(page.getByLabel('First domain')).toHaveCount(0);
-  await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
 });
 
 test('the Dashboard keeps interaction blue and outcome green in the dark theme', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('dark-case', 'dark.invalid', 'new')] },
+  });
 
   await expect(page.locator('.workflow-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
   await expect(page.locator('.workflow-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
   await expect(page.locator('.workflow-action').first().locator('.action-arrow')).toHaveCSS('color', 'rgb(94, 179, 255)');
   await expect(page.locator('.summary-icon').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
   await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
+});
+
+test('the Dashboard never classifies an unavailable required collection as empty', async ({ page }) => {
+  await page.goto('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
+  await failBrowserLocalCollectionReads(page, 'analyst_review_state');
+  const navigation = page.getByRole('navigation', { name: 'Console' });
+  await navigation.getByRole('link', { name: /^Monitor/u }).click();
+  await expect(page).toHaveURL('/monitor');
+  await expect(page.getByRole('heading', { name: 'Monitor', exact: true })).toBeVisible();
+  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+
+  await expect(page.getByText(/cannot classify this workspace as empty/iu)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Get started' })).toHaveCount(0);
+  await expect(page.getByText(/no work/iu)).toHaveCount(0);
 });
 
 test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', {
@@ -343,6 +385,10 @@ test('the Console navigation exposes semantic groups without changing link order
 
 test('the privacy-safe browser handoff previews exact third-party disclosure before opening', async ({ page }) => {
   await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('handoff-case', 'handoff.invalid', 'new')] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByLabel('Domain or URL').fill('https://user:secret@Sub.Example.Invalid:8443/private?token=secret#fragment');
   await page.getByLabel('Destination').selectOption('external_https');
   await page.getByLabel('Disclose', { exact: true }).selectOption('sanitized_url');
@@ -378,7 +424,7 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
   await page.goto('/dashboard');
   const stored = {
     cases: {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord('case-open', 'open.invalid', 'new'),
         caseRecord('case-resolved', 'resolved.invalid', 'resolved'),
@@ -392,14 +438,17 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
   };
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': stored.cases,
-    'whois-rdap-watchlist-v1': stored.watchlists,
-    'whois-rdap-brand-profiles-v1': stored.profiles,
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', stored.watchlists),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore(stored.profiles),
   }, { clearStorage: true });
 
   await expect(page.locator('.summary-card', { hasText: 'Open cases' }).locator('strong')).toHaveText('1');
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toContainText('2 total saved cases');
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' }).locator('strong')).toHaveText('2');
   await expect(page.locator('.summary-card', { hasText: 'Brand profiles' }).locator('strong')).toHaveText('2');
+  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Attention needed' })).toBeVisible();
+  await openDashboardSecondaryWorkspaces(page);
   const recentWork = page.getByRole('list', { name: 'Recent local investigation work' });
   await expect(page.getByRole('heading', { name: 'Recent saved work' })).toBeVisible();
   await expect(recentWork.locator(':scope > li')).toHaveCount(6);
@@ -412,6 +461,10 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
 
 test('saved-work cards open the matching Monitor view', async ({ page }) => {
   await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('saved-card-case', 'saved-card.invalid', 'new')] },
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Saved: watchlistEntry('saved-card.invalid') }),
+  });
   await page.locator('.summary-card', { hasText: 'Open cases' }).click();
   await expect(page).toHaveURL('/monitor?view=cases');
   await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
@@ -432,10 +485,10 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
-  expect(archive.version).toBe(5);
-  expect(archive.manifest.sectionCount).toBe(12);
+  expect(archive.version).toBe(6);
+  expect(archive.manifest.sectionCount).toBe(13);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
-    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview', 'settings',
+    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview', 'analystReviewState', 'settings',
   ]);
   expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
   const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
@@ -454,7 +507,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 12 verified data sections');
+  await expect(workspaceArchiveStatus(page)).toContainText('Downloaded an unencrypted workspace backup with 13 verified data sections');
 });
 
 test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
@@ -481,7 +534,7 @@ test('reviewed case evidence keeps the same workspace content through two CLI an
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(firstCasePack)),
   });
-  await expect(page.getByRole('status')).toContainText('Imported 1 new');
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 new' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'round-trip.invalid' })).toBeVisible();
 
   await page.goto('/dashboard');
@@ -503,7 +556,7 @@ test('reviewed case evidence keeps the same workspace content through two CLI an
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(secondCasePack)),
   });
-  await expect(page.getByRole('status')).toContainText('Imported 1 new');
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 new' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'round-trip.invalid' })).toBeVisible();
 
   await page.goto('/dashboard');
@@ -534,25 +587,25 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   expect(content).not.toContain('archive-case.invalid');
   expect(content).not.toContain('Analyst archive note');
   expect(content).not.toContain(passphrase);
-  await expect(page.getByRole('status')).toContainText('Keep the passphrase separately');
+  await expect(workspaceArchiveStatus(page)).toContainText('Keep the passphrase separately');
 
   await migrateLegacyBrowserData(page, {}, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({
+  await reviewWorkspaceBackup(page, {
     name: 'workspace-encrypted.json',
     mimeType: 'application/json',
     buffer: Buffer.from(content),
   });
-  await expect(page.getByRole('status')).toContainText('Encrypted backup selected');
+  await expect(workspaceArchiveStatus(page)).toContainText('Encrypted backup selected');
   await page.getByLabel('Backup passphrase').fill('incorrect archive passphrase');
   await page.getByRole('button', { name: 'Unlock and review' }).click();
-  await expect(page.getByRole('status')).toContainText('passphrase is incorrect or the encrypted file is corrupted');
+  await expect(workspaceArchiveStatus(page)).toContainText('passphrase is incorrect or the encrypted file is corrupted');
   await expect(page.getByLabel('Backup passphrase')).toHaveValue('');
 
   await page.getByLabel('Backup passphrase').fill(passphrase);
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(12);
+  await expect(preview.locator('li')).toHaveCount(13);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -568,23 +621,23 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   const { content } = await downloadWorkspaceArchive(page);
 
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
       id: 'local-case', domain: 'local-only.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
       source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
     }] },
   }, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await reviewWorkspaceBackup(page, { name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
 
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(12);
+  await expect(preview.locator('li')).toHaveCount(13);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 12 sections' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 13 sections' }).first()).toBeVisible();
   const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, bulkReview, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
@@ -622,7 +675,7 @@ test('workspace application skips the same malformed Brand Profile identifiers a
   profileManifest.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
 
   await migrateLegacyBrowserData(page, {}, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({
+  await reviewWorkspaceBackup(page, {
     name: 'workspace-malformed-profile.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(archive)),
@@ -649,10 +702,10 @@ test('workspace Settings preview and application preserve the active profile whe
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile('local-profile', 'Local retained profile')]),
     'whois-rdap-active-brand-profile-v1': 'local-profile',
   }, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({
+  await reviewWorkspaceBackup(page, {
     name: 'workspace-settings-with-profile.json',
     mimeType: 'application/json',
     buffer: Buffer.from(content),
@@ -676,7 +729,7 @@ test('workspace Settings preview and application preserve the active profile whe
   if (!await settings.getByRole('checkbox').isChecked()) await settings.getByRole('checkbox').check();
   await preview.getByRole('button', { name: 'Add selected data' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
   const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(storedProfiles.records.map((record) => record.value.name)).toEqual(['Local retained profile']);
@@ -688,13 +741,13 @@ test('workspace Settings application preserves malformed active-profile values a
   const { content } = await downloadWorkspaceArchive(page);
   const sourceArchive = JSON.parse(content) as WorkspaceArchiveDocument;
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('local-profile', 'Local retained profile')] },
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile('local-profile', 'Local retained profile')]),
     'whois-rdap-active-brand-profile-v1': 'local-profile',
     'whoisleuth:theme:v1': 'dark',
   }, { clearStorage: true });
 
   const importOnlySettings = async (archive: WorkspaceArchiveDocument, filename: string) => {
-    await page.getByLabel('Review backup file').setInputFiles({
+    await reviewWorkspaceBackup(page, {
       name: filename,
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(archive)),
@@ -722,7 +775,7 @@ test('workspace Settings application preserves malformed active-profile values a
   await expect(malformedPreview.settings).toContainText('1 skipped');
   await expect(malformedPreview.settings).toContainText('missing or malformed');
   await malformedPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status').filter({ hasText: '1 skipped' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '1 skipped' }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBe('local-profile');
   expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('light');
 
@@ -735,7 +788,7 @@ test('workspace Settings application preserves malformed active-profile values a
   const clearPreview = await importOnlySettings(clear, 'workspace-settings-clear.json');
   await expect(clearPreview.settings).toContainText('0 skipped');
   await clearPreview.preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 1 sections:' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /Added backup data from 1 sections:.*0 skipped/u }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whois-rdap-active-brand-profile-v1'))).toBeNull();
   const storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(storedProfiles.records.map((record) => record.value.id)).toEqual(['local-profile']);
@@ -746,10 +799,10 @@ test('workspace identifier collisions cannot rebind Cases or the active-profile 
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': { version: 6, profiles: [profile('archive-profile', 'Local distinct profile')] },
-    'whois-rdap-cases-v1': { version: 12, cases: [{ ...caseRecord('local-collision-case', 'local-collision.invalid', 'new'), brandProfileIds: ['archive-profile'] }] },
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile('archive-profile', 'Local distinct profile')]),
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{ ...caseRecord('local-collision-case', 'local-collision.invalid', 'new'), brandProfileIds: ['archive-profile'] }] },
   }, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({
+  await reviewWorkspaceBackup(page, {
     name: 'workspace-profile-collision.json',
     mimeType: 'application/json',
     buffer: Buffer.from(content),
@@ -800,7 +853,7 @@ test('workspace archive import reports future sections and rolls back an interru
   futureWatchlistManifest.version = 999;
   futureWatchlistManifest.bytes = new TextEncoder().encode(JSON.stringify(future.sections.watchlists)).byteLength;
   futureWatchlistManifest.checksum = await sha256ArtifactDigest(future.sections.watchlists);
-  await page.getByLabel('Review backup file').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
+  await reviewWorkspaceBackup(page, { name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
@@ -817,12 +870,12 @@ test('workspace archive import reports future sections and rolls back an interru
   })).toEqual({ borderStyle: 'dotted', colourMatches: true });
 
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
       id: 'rollback-case', domain: 'rollback.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
       source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
     }] },
   }, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await reviewWorkspaceBackup(page, { name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
   const preview = page.locator('.preview');
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
@@ -832,7 +885,7 @@ test('workspace archive import reports future sections and rolls back an interru
   await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'campaigns');
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('No archive changes were kept');
+  await expect(page.getByRole('status').filter({ hasText: 'No archive changes were kept' }).first()).toBeVisible();
   const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
   expect(domains).toEqual(['rollback.invalid']);
 });
@@ -842,13 +895,13 @@ test('workspace rollback preserves a settings value changed after the import beg
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
       id: 'settings-rollback-case', domain: 'settings-rollback.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
       source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
     }] },
     'whoisleuth:theme:v1': 'dark',
   }, { clearStorage: true });
-  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await reviewWorkspaceBackup(page, { name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
   const preview = page.locator('.preview');
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
@@ -867,7 +920,7 @@ test('workspace rollback preserves a settings value changed after the import beg
   });
   await preview.getByRole('button', { name: 'Add selected data' }).click();
 
-  await expect(page.getByRole('status')).toContainText('could not be fully restored');
+  await expect(page.getByRole('status').filter({ hasText: 'could not be fully restored' }).first()).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('whoisleuth:theme:v1'))).toBe('system');
   const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
   expect(domains).toEqual(['settings-rollback.invalid']);

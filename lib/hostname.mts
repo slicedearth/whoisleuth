@@ -2,7 +2,7 @@
 // helper deliberately independent of public-suffix policy: callers decide
 // whether a syntactically valid hostname must also be registrable.
 
-const ASCII_LABEL_RE = /^[a-z0-9-]+$/iu;
+const ASCII_LABEL_RE = /^[A-Za-z0-9-]+$/u;
 
 function isValidAsciiHostname(value: unknown, options: Readonly<{
   requireDot?: boolean;

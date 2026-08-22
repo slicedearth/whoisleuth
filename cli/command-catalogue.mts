@@ -2,7 +2,13 @@ import {
   CLI_COMMAND_CATALOGUE_SCHEMA,
   CLI_COMMAND_CATALOGUE_VERSION,
 } from '../packages/contracts/cli-command-catalogue.mts';
-import type { CliCommand, CommandCollection, CommandDetail } from './command-reference.mts';
+import type {
+  CliCommand,
+  CliCommandDefinition,
+  CliHelpGroup,
+  CommandCollection,
+  CommandDetail,
+} from './command-reference.mts';
 
 export {
   CLI_COMMAND_CATALOGUE_SCHEMA,
@@ -24,6 +30,23 @@ type CliCommandCatalogue = Readonly<{
   packageVersion: string;
   commands: readonly CommandCatalogueEntry[];
 }>;
+
+type CliCommandCatalogueFilter = Readonly<{
+  common: boolean;
+  group: CliHelpGroup | null;
+  mode: 'offline' | 'network' | null;
+}>;
+
+function selectCliCommands(
+  definitions: readonly CliCommandDefinition[],
+  filter: CliCommandCatalogueFilter,
+): readonly CliCommand[] {
+  return Object.freeze(definitions
+    .filter((definition) => !filter.common || definition.documentation.common)
+    .filter((definition) => filter.group === null || definition.help.group === filter.group)
+    .filter((definition) => filter.mode === null || definition.collection.mode === filter.mode)
+    .map((definition) => definition.command));
+}
 
 function buildCliCommandCatalogue(options: Readonly<{
   commands: readonly CliCommand[];
@@ -63,9 +86,10 @@ function formatCliCommandCatalogue(catalogue: CliCommandCatalogue): string {
       `  ${entry.usage}`,
     );
   }
+  if (catalogue.commands.length === 0) lines.push('No commands match the selected filters.');
   lines.push('', 'Run "whoisleuth <command> --help" for examples and collection boundaries.');
   return `${lines.join('\n')}\n`;
 }
 
-export { buildCliCommandCatalogue, formatCliCommandCatalogue };
-export type { CliCommandCatalogue, CommandCatalogueEntry };
+export { buildCliCommandCatalogue, formatCliCommandCatalogue, selectCliCommands };
+export type { CliCommandCatalogue, CliCommandCatalogueFilter, CommandCatalogueEntry };

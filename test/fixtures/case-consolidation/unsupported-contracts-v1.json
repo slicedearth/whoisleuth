@@ -1,0 +1,58 @@
+{
+  "schema": "whoisleuth.case-compatibility-rejections",
+  "version": 1,
+  "retired": {
+    "browserCase": {
+      "version": 11,
+      "cases": []
+    },
+    "portableCase": {
+      "version": 11,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "cases": []
+    },
+    "responsePacket": {
+      "schema": "whoisleuth.case-response-packet",
+      "schemaVersion": 5
+    },
+    "cliCasePack": {
+      "version": 11,
+      "cases": [],
+      "packet": {
+        "schema": "whoisleuth.cli.case-pack",
+        "version": 1
+      }
+    },
+    "workspaceArchive": {
+      "schema": "whoisleuth.workspace-archive",
+      "version": 4
+    }
+  },
+  "future": {
+    "browserCase": {
+      "version": 14,
+      "cases": []
+    },
+    "portableCase": {
+      "version": 14,
+      "exportedAt": "2026-08-22T00:00:00.000Z",
+      "cases": []
+    },
+    "responsePacket": {
+      "schema": "whoisleuth.case-response-packet",
+      "schemaVersion": 8
+    },
+    "cliCasePack": {
+      "version": 14,
+      "cases": [],
+      "packet": {
+        "schema": "whoisleuth.cli.case-pack",
+        "version": 3
+      }
+    },
+    "workspaceArchive": {
+      "schema": "whoisleuth.workspace-archive",
+      "version": 7
+    }
+  }
+}

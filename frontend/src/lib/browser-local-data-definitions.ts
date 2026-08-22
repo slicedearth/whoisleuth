@@ -11,7 +11,6 @@ import {
 } from './analysis/campaign-model.ts';
 import type { CampaignRecord } from './analysis/campaign-model.ts';
 import {
-  BRAND_PROFILE_SCHEMA,
   brandProfileStoreVersion,
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
@@ -80,6 +79,16 @@ import {
 } from './analysis/bulk-review-model.ts';
 import type { BulkReviewRecord, BulkReviewStore } from './analysis/bulk-review-model.ts';
 import {
+  ANALYST_REVIEW_STATE_SCHEMA,
+  analystReviewStateRecords,
+  analystReviewStateStoreFromRecords,
+  analystReviewStateStoreVersion,
+  emptyAnalystReviewStateStore,
+  normalizeAnalystReviewStateStore,
+  serializeAnalystReviewStateStore,
+} from './analysis/analyst-review-state.ts';
+import type { AnalystReviewStateRecord, AnalystReviewStateStore } from './analysis/analyst-review-state.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -92,6 +101,7 @@ import type {
 } from './browser-local-data.ts';
 import {
   LEGACY_BULK_REVIEW_KEY,
+  LEGACY_ANALYST_REVIEW_STATE_KEY,
   LEGACY_BULK_SESSIONS_KEY,
   LEGACY_CAMPAIGNS_KEY,
   LEGACY_CASES_KEY,
@@ -119,6 +129,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   website_snapshots: WebsiteProfileSnapshot;
   investigation_templates: InvestigationTemplate;
   bulk_review: BulkReviewRecord;
+  analyst_review_state: AnalystReviewStateRecord;
 }>;
 
 export type BrowserLocalCollectionDocumentMap = Readonly<{
@@ -134,6 +145,7 @@ export type BrowserLocalCollectionDocumentMap = Readonly<{
   website_snapshots: WebsiteProfileSnapshot[];
   investigation_templates: InvestigationTemplate[];
   bulk_review: BulkReviewStore;
+  analyst_review_state: AnalystReviewStateStore;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -165,9 +177,9 @@ function positiveVersion(value: unknown): boolean {
 function arrayOrVersionedList(
   raw: unknown,
   key: string,
-  options: Readonly<{ schema?: string; allowArray?: boolean }> = {},
+  options: Readonly<{ schema?: string }> = {},
 ): boolean {
-  if (Array.isArray(raw)) return options.allowArray === true;
+  if (Array.isArray(raw)) return false;
   const value = record(raw);
   if (!value || !positiveVersion(value.version) || !Array.isArray(value[key])) return false;
   if (options.schema !== undefined && value.schema !== options.schema) return false;
@@ -175,21 +187,20 @@ function arrayOrVersionedList(
   return true;
 }
 
-function watchlistLegacyRoot(raw: unknown): boolean {
+function watchlistVersionedRoot(raw: unknown): boolean {
   const value = record(raw);
-  if (!value) return false;
-  if (value.schema === 'whoisleuth.watchlists' && record(value.watchlists)) {
-    const watchlists = record(value.watchlists);
-    return positiveVersion(value.version) && watchlists !== null;
-  }
-  return Object.values(value).every((item) => Array.isArray(record(item)?.results));
+  return value?.schema === 'whoisleuth.watchlists'
+    && positiveVersion(value.version)
+    && record(value.watchlists) !== null;
 }
 
 export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
   legacyKey: LEGACY_CASES_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'cases', { allowArray: true }),
+  // Recognise the retired unversioned list only so the provider can preserve
+  // it and report the explicit retired-schema path; it is never normalised.
+  acceptLegacyRoot: (raw) => Array.isArray(raw) || arrayOrVersionedList(raw, 'cases'),
   normalize: (raw) => normalizeCaseStore(raw).cases,
   version: parseStoreVersion,
   serialize: serializeCaseStore,
@@ -201,7 +212,7 @@ export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
   legacyKey: LEGACY_CAMPAIGNS_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'campaigns', { allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'campaigns'),
   normalize: (raw) => normalizeCampaignStore(raw).campaigns,
   version: campaignStoreVersion,
   serialize: serializeCampaignStore,
@@ -213,10 +224,7 @@ export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> 
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,
   legacyKey: LEGACY_PROFILES_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => (
-    arrayOrVersionedList(raw, 'profiles', { allowArray: true })
-    || arrayOrVersionedList(raw, 'profiles', { schema: BRAND_PROFILE_SCHEMA })
-  ),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'profiles'),
   normalize: (raw) => normalizeBrandProfileStore(raw).profiles,
   version: brandProfileStoreVersion,
   serialize: serializeBrandProfileStore,
@@ -228,7 +236,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistColle
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.watchlists,
   legacyKey: LEGACY_WATCHLIST_KEY,
   empty: () => ({}),
-  acceptLegacyRoot: watchlistLegacyRoot,
+  acceptLegacyRoot: watchlistVersionedRoot,
   normalize: (raw) => normalizeWatchlistStore(raw).watchlists,
   version: watchlistStoreVersion,
   serialize: serializeWatchlistStore,
@@ -244,7 +252,7 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
   legacyKey: LEGACY_SHORTLIST_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: 'whoisleuth.shortlist', allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: 'whoisleuth.shortlist' }),
   normalize: (raw) => normalizeShortlistStore(raw).entries,
   version: shortlistStoreVersion,
   serialize: serializeShortlistStore,
@@ -268,7 +276,7 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<Detection
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.detection_rules,
   legacyKey: LEGACY_DETECTION_RULES_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'rules', { allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'rules'),
   normalize: (raw) => normalizeDetectionRuleStore(raw).rules,
   version: detectionRuleStoreVersion,
   serialize: serializeDetectionRuleStore,
@@ -280,7 +288,7 @@ export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.relationship_observations,
   legacyKey: LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'observations', { schema: RELATIONSHIP_OBSERVATION_SCHEMA, allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'observations', { schema: RELATIONSHIP_OBSERVATION_SCHEMA }),
   normalize: (raw) => normalizeRelationshipObservationStore(raw).observations,
   version: relationshipObservationStoreVersion,
   serialize: serializeRelationshipObservationStore,
@@ -296,7 +304,7 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_sessions,
   legacyKey: LEGACY_BULK_SESSIONS_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'sessions', { schema: BULK_SESSION_SCHEMA, allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'sessions', { schema: BULK_SESSION_SCHEMA }),
   normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
   version: bulkSessionStoreVersion,
   serialize: serializeBulkSessionStore,
@@ -312,7 +320,7 @@ export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<Website
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.website_snapshots,
   legacyKey: LEGACY_WEBSITE_SNAPSHOTS_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'snapshots', { schema: WEBSITE_SNAPSHOT_SCHEMA, allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'snapshots', { schema: WEBSITE_SNAPSHOT_SCHEMA }),
   normalize: (raw) => normalizeWebsiteSnapshotStore(raw).snapshots,
   version: websiteSnapshotStoreVersion,
   serialize: serializeWebsiteSnapshotStore,
@@ -328,7 +336,7 @@ export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<I
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.investigation_templates,
   legacyKey: LEGACY_INVESTIGATION_TEMPLATES_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'templates', { schema: INVESTIGATION_TEMPLATE_SCHEMA, allowArray: true }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'templates', { schema: INVESTIGATION_TEMPLATE_SCHEMA }),
   normalize: (raw) => normalizeInvestigationTemplateStore(raw).templates,
   version: investigationTemplateStoreVersion,
   serialize: serializeInvestigationTemplateStore,
@@ -344,7 +352,7 @@ export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewSto
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
   legacyKey: LEGACY_BULK_REVIEW_KEY,
   empty: () => enforceBulkReviewBudget(null),
-  acceptLegacyRoot: (raw) => Array.isArray(raw) || (
+  acceptLegacyRoot: (raw) => (
     record(raw)?.schema === 'whoisleuth.bulk-review'
     && positiveVersion(record(raw)?.version)
     && Array.isArray(record(raw)?.presets)
@@ -355,6 +363,22 @@ export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewSto
   serialize: serializeBulkReviewStore,
   split: (store) => bulkReviewRecords(store).map((value) => ({ id: value.id, value })),
   join: (records) => bulkReviewStoreFromRecords(records.map((record) => record.value)),
+});
+
+export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<AnalystReviewStateStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
+  legacyKey: LEGACY_ANALYST_REVIEW_STATE_KEY,
+  empty: emptyAnalystReviewStateStore,
+  acceptLegacyRoot: (raw) => (
+    record(raw)?.schema === ANALYST_REVIEW_STATE_SCHEMA
+    && positiveVersion(record(raw)?.version)
+    && Array.isArray(record(raw)?.records)
+  ),
+  normalize: normalizeAnalystReviewStateStore,
+  version: analystReviewStateStoreVersion,
+  serialize: serializeAnalystReviewStateStore,
+  split: (store) => analystReviewStateRecords(store).map((value) => ({ id: value.subjectKey, value })),
+  join: (records) => analystReviewStateStoreFromRecords(records.map((record) => record.value)),
 });
 
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
@@ -370,6 +394,7 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   WEBSITE_SNAPSHOTS_COLLECTION,
   INVESTIGATION_TEMPLATES_COLLECTION,
   BULK_REVIEW_COLLECTION,
+  ANALYST_REVIEW_STATE_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

@@ -115,7 +115,7 @@ const TYPE_METADATA: Record<RelationshipObservationType, {
     description: 'These domains used an identical or perceptually similar favicon in the retained scan.',
   }),
   official_asset: Object.freeze({
-    label: 'Official asset relationship',
+    label: 'Official asset host match',
     method: 'Configured-domain host match',
     description: 'One or more pages loaded an asset from this configured official domain or its subdomain.',
   }),

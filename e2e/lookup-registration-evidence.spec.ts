@@ -7,6 +7,7 @@ import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
+import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -324,7 +325,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(network.getByText('TLS connection', { exact: true })).toBeVisible();
   await expect(network.getByText('Example network holder', { exact: true })).toBeVisible();
   await expect(network.getByText('93.184.216.0/24', { exact: true })).toBeVisible();
-  await expect(network.getByText(/does not prove hosting control, ownership, intent, or maliciousness/i)).toBeVisible();
+  await expect(network.getByText(/Shared services and location-dependent DNS mean the address may not be the origin/i)).toBeVisible();
   await network.getByText('IP RDAP source', { exact: true }).click();
   await expect(network.getByText(/deliberately-long-provenance-segment-for-wrapping/)).toBeVisible();
   const responseRoutes = page.locator('.response');
@@ -708,9 +709,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(option).toBeVisible();
   await expect(malwareOption).toBeVisible();
   await expect(iocOption).toBeVisible();
-  await expect(page.getByText(/does not submit the domain for scanning/i)).toBeVisible();
-  await expect(page.getByText(/does not submit a URL or sample/i)).toBeVisible();
-  await expect(page.getByText(/does not submit an IOC, URL, or sample/i)).toBeVisible();
+  await expect(page.getByText(/Nothing is submitted for scanning or reporting/i)).toBeVisible();
+  await expect(page.getByText(/no URL or sample is provided/i)).toBeVisible();
+  await expect(page.getByText(/no IOC or sample is provided/i)).toBeVisible();
   await option.check();
   await malwareOption.check();
   await iocOption.check();
@@ -726,7 +727,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\bgood\b/);
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
-  await expect(section.getByText(/never affect availability/i)).toBeVisible();
+  await expect(section.getByText(/do not decide availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
   const riskExplanation = page.locator('.risk-band details.score-detail > summary');
   await riskExplanation.focus();
@@ -745,6 +746,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   }
 
   await page.setViewportSize({ width: 360, height: 780 });
+  await expect(page.locator('.risk-band .factor-chart')).toHaveCount(1);
   await expect(page.locator('.risk-band .factor-chart')).toBeHidden();
   await expect(exactRiskFactors).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -986,16 +988,16 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
 });
 
 test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }) => {
-  await page.evaluate(() => {
+  await page.evaluate((profileVersion) => {
     const profile = {
       id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
       approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
       createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
     };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify({ version: profileVersion, profiles: [profile] }));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
-  });
+  }, BRAND_PROFILE_SCHEMA_VERSION);
   await migrateLegacyBrowserData(page, {});
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

@@ -1,6 +1,5 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import {
@@ -25,15 +24,26 @@ import {
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import {
+  BULK_REVIEW_MANIFEST_SCHEMA,
+  BULK_REVIEW_MANIFEST_VERSION,
+  INVESTIGATION_CAPSULE_SCHEMA,
+  INVESTIGATION_CAPSULE_VERSION,
+  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
+} from '../packages/contracts/investigation-portability.mts';
+import {
   buildCaseResponsePacket,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_RESPONSE_ACTION_HISTORY,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
+import {
+  CASE_RESPONSE_PACKET_SCHEMA,
+  CASE_RESPONSE_PACKET_VERSION,
+  PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+} from '../packages/contracts/case-portability.mts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
-import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   appendCaseAction,
@@ -44,9 +54,6 @@ import {
   MAX_CASE_EVIDENCE_PINS,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
-import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
-import { historicalCaseResponsePacketFixture } from './case-response-packet-fixtures.mts';
-import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
 import {
@@ -55,7 +62,16 @@ import {
 } from './homepage-metadata-fixtures.mts';
 
 const PASSPHRASE = 'fixture archive passphrase';
-const LOOKUP_EVIDENCE_V25_FIXTURE_SHA256 = '4ad2d13417fbfe24f9dff51d5baf77ca82a0f7c1a68c76e4c7bbdea18d055fcd';
+async function unsupportedCaseContracts(): Promise<{
+  retired: { cliCasePack: Record<string, unknown>; responsePacket: Record<string, unknown> };
+}> {
+  return JSON.parse(await readFile(
+    new URL('./fixtures/case-consolidation/unsupported-contracts-v1.json', import.meta.url),
+    'utf8',
+  )) as {
+    retired: { cliCasePack: Record<string, unknown>; responsePacket: Record<string, unknown> };
+  };
+}
 
 function decodeBase64url(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(Buffer.from(value, 'base64url'));
@@ -86,30 +102,25 @@ async function replaceAuthenticatedWorkspacePlaintext(
 
 async function resignArtifact<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
-  const packetVersion = (value.packet as Record<string, unknown> | undefined)?.version;
-  const casePack = packetVersion !== undefined;
-  const current = packetVersion === undefined ? Number(value.version) > 1 : packetVersion === 2;
-  const canonicalization = current ? 'sorted-json-v2' : casePack ? 'sorted-json-v1' : undefined;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      ...(canonicalization === undefined ? {} : { canonicalization }),
-      digestSha256: await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned)),
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     },
   } as unknown as T;
 }
 
 async function resignCaseResponsePacket<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
-  const current = Number(value.schemaVersion) >= 6;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: current ? 'sorted-json-v2' : 'sorted-json-v1',
+      canonicalization: 'sorted-json-v2',
       scope: 'packet excluding integrity',
-      digestSha256: (await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned))).slice('sha256:'.length),
+      digestSha256: (await sha256ArtifactDigestV2(unsigned)).slice('sha256:'.length),
     },
   } as unknown as T;
 }
@@ -316,11 +327,11 @@ describe('offline artifact verifier', () => {
       /selection.*malformed structure/iu,
     );
 
-    const contentFree = {
+    const unsupportedReaderOnly = {
       schema: 'whoisleuth.bulk-review-manifest', version: 1,
       integrity: { algorithm: 'SHA-256', digestSha256: await sha256ArtifactDigest({ schema: 'whoisleuth.bulk-review-manifest', version: 1 }) },
     };
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify(contentFree)), /malformed structure/iu);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(unsupportedReaderOnly)), /not supported|malformed structure/iu);
   });
 
   test('verifies a reviewed CLI case pack before browser import', async () => {
@@ -369,32 +380,12 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('inherits authentic historical Case identities and strict report projection across every audience', async () => {
-    for (const audience of ['public', 'trusted', 'internal'] as const) {
-      const authentic = historicalCasePackFixture(11, audience);
-      const verified = await verifyOfflineArtifact(JSON.stringify(authentic));
-      assert.equal(verified.state, 'verified', audience);
-      assert.equal(verified.summary.recordCount, 1, audience);
-
-      for (const field of ['id', 'fingerprint'] as const) {
-        const changed = structuredClone(authentic);
-        const item = (changed.cases as Array<Record<string, unknown>>)[0]!;
-        const snapshot = (item.evidenceHistory as Array<Record<string, unknown>>)[0]!;
-        snapshot[field] = field === 'id' ? 'ev-forged' : 'forged';
-        await assert.rejects(
-          verifyOfflineArtifact(JSON.stringify(await resignArtifact(changed))),
-          /invalid historical evidence identity|changed or unbounded historical evidenceHistory/iu,
-        );
-      }
-
-      const scalar = structuredClone(authentic);
-      const report = (((scalar.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!);
-      report.application = 'private material';
-      await assert.rejects(
-        verifyOfflineArtifact(JSON.stringify(await resignArtifact(scalar))),
-        /invalid or mismatched historical Case report projection/iu,
-      );
-    }
+  test('rejects a retired Case-pack before reading its historical projections', async () => {
+    const { retired } = await unsupportedCaseContracts();
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(retired.cliCasePack)),
+      /case-pack version 1 is retired.*no data was changed/iu,
+    );
   });
 
   test('validates saved Lookup structure without claiming content integrity', async () => {
@@ -466,48 +457,13 @@ describe('offline artifact verifier', () => {
     assert.equal(JSON.parse(stdout).artifact.kind, 'lookup_evidence');
   });
 
-  test('keeps one frozen internally consistent schema-25 Lookup export readable', async () => {
-    const raw = await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8');
-    assert.equal(createHash('sha256').update(raw).digest('hex'), LOOKUP_EVIDENCE_V25_FIXTURE_SHA256);
-    const report = await verifyOfflineArtifact(raw);
-    assert.deepEqual(report.artifact, {
-      kind: 'lookup_evidence',
-      schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
-      version: lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    });
-    assert.equal(report.state, 'structure_valid');
-  });
-
   test('keeps one frozen strict schema-26 Lookup export readable after later schemas become current', async () => {
     const report = await verifyOfflineArtifact(await loadLookupEvidenceV26Fixture());
     assert.deepEqual(report.artifact, {
       kind: 'lookup_evidence',
       schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
-      version: lookupEvidenceModule.PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      version: lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
-    assert.equal(report.state, 'structure_valid');
-  });
-
-  test('keeps schema-27 homepage evidence readable after the privacy-minimized schema becomes current', async () => {
-    const legacy = structuredClone(lookupEvidenceArtifact());
-    legacy.schemaVersion = lookupEvidenceModule.HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION;
-    const sources = legacy.sources as Record<string, Record<string, unknown>>;
-    const diagnostics = legacy.diagnostics as Record<string, Record<string, unknown>>;
-    sources.rdap!.raw = null;
-    const analysis = legacy.analysis as Record<string, unknown>;
-    analysis.availability = lookupEvidenceModule.projectLookupEvidenceAvailabilityLegacy(
-      analysis.availability,
-    );
-    analysis.registryInsights = buildRegistryInsights({
-      rdapParsed: sources.rdap!.parsed,
-      rdapStatus: diagnostics.rdap!.status,
-      rdapFetchedAt: sources.rdap!.fetchedAt,
-      whoisParsed: sources.whois!.parsed,
-      whoisStatus: diagnostics.whois!.status,
-      whoisQueriedAt: sources.whois!.queriedAt,
-    });
-    const report = await verifyOfflineArtifact(JSON.stringify(legacy));
-    assert.equal(report.artifact.version, lookupEvidenceModule.HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(report.state, 'structure_valid');
   });
 
@@ -548,16 +504,6 @@ describe('offline artifact verifier', () => {
       verifyOfflineArtifact(JSON.stringify(legacy)),
       /Lookup evidence homepage metadata epoch.*malformed structure/iu,
     );
-  });
-
-  test('verifies authentic frozen schema-25 Fast, unavailable, error, and not-found wrapper states', async () => {
-    const fixtures = await loadLookupEvidenceV25CompatibilityFixtures();
-    for (const fixture of fixtures) {
-      const report = await verifyOfflineArtifact(JSON.stringify(fixture.document));
-      assert.equal(report.artifact.kind, 'lookup_evidence', fixture.name);
-      assert.equal(report.artifact.version, lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION, fixture.name);
-      assert.equal(report.state, 'structure_valid', fixture.name);
-    }
   });
 
   test('rejects malformed, over-bound, legacy, and future Lookup-evidence documents', async () => {
@@ -784,7 +730,7 @@ describe('offline artifact verifier', () => {
       /limited to 5 MiB/iu,
     );
 
-    for (const schemaVersion of [lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
+    for (const schemaVersion of [lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
       const unsupported = { ...lookupEvidenceArtifact(), schemaVersion };
       await assert.rejects(
         verifyOfflineArtifact(JSON.stringify(unsupported)),
@@ -890,62 +836,41 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('rejects recomputed content-free digest envelopes for every supported review schema', async () => {
-    const schemas = [
-      ['whoisleuth.acquisition-decision', 1, null], ['whoisleuth.acquisition-decision', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-comparison', 3, null], ['whoisleuth.domain-comparison', 4, 'sorted-json-v2'],
-      ['whoisleuth.bulk-mail-exposure', 1, null], ['whoisleuth.bulk-mail-exposure', 2, 'sorted-json-v2'],
-      ['whoisleuth.bulk-review-manifest', 1, null], ['whoisleuth.bulk-review-manifest', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-control-manifest', 1, 'sorted-json-v1'], ['whoisleuth.domain-control-manifest', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-change-packet', 1, null], ['whoisleuth.domain-change-packet', 2, 'sorted-json-v2'],
-      ['whoisleuth.investigation-manifest', 1, null], ['whoisleuth.investigation-manifest', 2, 'sorted-json-v2'],
-    ] as const;
-    for (const [schema, version, canonicalization] of schemas) {
-      const unsigned = { schema, version };
-      const contentFree = {
-        ...unsigned,
-        integrity: {
-          algorithm: 'SHA-256',
-          ...(canonicalization ? { canonicalization } : {}),
-          digestSha256: await (canonicalization === 'sorted-json-v2'
-            ? sha256ArtifactDigestV2(unsigned)
-            : sha256ArtifactDigest(unsigned)),
-        },
-      };
-      await assert.rejects(
-        verifyOfflineArtifact(JSON.stringify(contentFree)),
-        /unsupported or malformed structure/iu,
-        schema,
-      );
-    }
+  test('rejects recomputed content-free digest envelopes at supported version edges', async () => {
+    const unsigned = { schema: BULK_REVIEW_MANIFEST_SCHEMA, version: BULK_REVIEW_MANIFEST_VERSION };
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
+      ...unsigned,
+      integrity: {
+        algorithm: 'SHA-256',
+        canonicalization: 'sorted-json-v2',
+        digestSha256: await sha256ArtifactDigestV2(unsigned),
+      },
+    })), /unsupported or malformed structure/iu);
 
-    for (const schemaVersion of [5, 6] as const) {
-      const packetUnsigned = { schema: 'whoisleuth.case-response-packet', schemaVersion };
+    for (const schemaVersion of [PUBLIC_CASE_RESPONSE_PACKET_VERSION, CASE_RESPONSE_PACKET_VERSION]) {
+      const packetUnsigned = { schema: CASE_RESPONSE_PACKET_SCHEMA, schemaVersion };
       await assert.rejects(verifyOfflineArtifact(JSON.stringify({
         ...packetUnsigned,
         integrity: {
-          algorithm: 'SHA-256', canonicalization: schemaVersion === 6 ? 'sorted-json-v2' : 'sorted-json-v1', scope: 'packet excluding integrity',
-          digestSha256: (await (schemaVersion === 6 ? sha256ArtifactDigestV2(packetUnsigned) : sha256ArtifactDigest(packetUnsigned))).slice('sha256:'.length),
+          algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'packet excluding integrity',
+          digestSha256: (await sha256ArtifactDigestV2(packetUnsigned)).slice('sha256:'.length),
         },
       })), /unsupported or malformed structure/iu);
     }
-    for (const schemaVersion of [1, 2] as const) {
+    for (const schemaVersion of [PUBLIC_INVESTIGATION_CAPSULE_VERSION, INVESTIGATION_CAPSULE_VERSION]) {
       await assert.rejects(verifyOfflineArtifact(JSON.stringify({
-        schema: 'whoisleuth.investigation-capsule', schemaVersion,
-        integrity: schemaVersion === 1
-          ? { algorithm: 'SHA-256', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null }
-          : { algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null, digestSha256: `sha256:${'0'.repeat(64)}` },
+        schema: INVESTIGATION_CAPSULE_SCHEMA, schemaVersion,
+        integrity: { algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null, digestSha256: `sha256:${'0'.repeat(64)}` },
       })), /unsupported or malformed structure/iu);
     }
   });
 
-  test('verifies frozen response packets v5 and v6, current v7, and the exact v7 review binding', async () => {
-    for (const version of [5, 6] as const) {
-      const historical = historicalCaseResponsePacketFixture(version);
-      const verified = await verifyOfflineArtifact(JSON.stringify(historical));
-      assert.equal(verified.state, 'verified');
-      assert.equal(verified.artifact.version, version);
-    }
+  test('rejects retired response packets and verifies current v7 with the exact review binding', async () => {
+    const { retired } = await unsupportedCaseContracts();
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(retired.responsePacket)),
+      /version 5 is retired.*no data was changed/iu,
+    );
 
     const caseRecord = createCase({
       domain: 'review-binding.example',
@@ -1049,7 +974,7 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('enforces the real Case v5 collection maxima before accepting a recomputed packet digest', async () => {
+  test('enforces current Case collection maxima before accepting a recomputed packet digest', async () => {
     const caseRecord = createCase({
       domain: 'bounded-response.example',
       status: 'escalated',

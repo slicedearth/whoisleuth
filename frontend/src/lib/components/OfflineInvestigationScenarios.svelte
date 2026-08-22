@@ -44,7 +44,7 @@
     <div>
       <p class="eyebrow">Offline practice</p>
       <h3 id="scenario-lab-title">Try a guided analyst decision.</h3>
-      <p>These fixed exercises cover all three investigation paths. They use reserved fictional domains, make no requests, save nothing, and never produce a finding.</p>
+      <p>These fixed exercises cover Investigate, Respond and Assure with reserved fictional domains.</p>
     </div>
     <label><span>Scenario</span>
       <select aria-label="Practice scenario" value={scenarioId} onchange={selectScenario}>

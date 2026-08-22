@@ -18,12 +18,13 @@ The destination must not already exist. The package writes a fixed-size PNG,
 a sanitised DOM digest containing hashes and element counts rather than page
 text or HTML, and a version 2 `whoisleuth.web-capture-manifest` that can be
 reviewed before import into Cases. The manifest also retains one
-control-sanitised page title of up to 300 characters. File permissions are private where the
-platform supports POSIX modes.
+control-sanitised page title of up to 300 characters. File permissions are
+private where the platform supports POSIX modes.
 The structured manifest and DOM-digest fields exclude resource paths, queries,
-raw DOM, and body text. The screenshot necessarily preserves visible rendered
-content and may include page text or a page-reflected path or query until the
-operator deletes the output directory.
+raw DOM, and body text as dedicated fields, but the page-controlled title may
+itself reproduce a path or query. The screenshot necessarily preserves visible
+rendered content and may include page text or a page-reflected path or query
+until the operator deletes the output directory.
 Rendered DOM counts are capped at 20,000 and the body text-node sequence is
 hashed only through a valid UTF-8 boundary within 256 KiB. Reaching either bound marks the
 capture partial so the resulting version-2 artefact remains accepted by the
@@ -51,7 +52,9 @@ Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted
 request headers. Structured manifest and digest fields keep only the target
 hostname, final HTTP(S) origin, one control-sanitised page title of up to 300
-characters, and admitted public resource hostnames, never those paths or queries. It accepts at most 100 HTTP(S)
+characters, and admitted public resource hostnames. They contain no dedicated
+request-path or query fields, but the title may itself reproduce a path or query.
+It accepts at most 100 HTTP(S)
 requests and 30 request hostnames, blocks credentials, non-default ports,
 service workers, dedicated and shared workers, downloads, WebSockets, WebRTC, WebTransport, non-HTTP
 protocols, and hosts resolving to private or reserved addresses. The hostname

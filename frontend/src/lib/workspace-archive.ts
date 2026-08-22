@@ -22,6 +22,7 @@ import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bul
 import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
 import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
 import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
+import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
@@ -31,6 +32,7 @@ import { loadBulkSessions } from './bulk-sessions';
 import { loadWebsiteSnapshots } from './website-snapshots';
 import { loadInvestigationTemplates } from './investigation-templates';
 import { loadBulkReviewStore } from './bulk-review';
+import { loadAnalystReviewState } from './analyst-review-state';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
@@ -76,7 +78,7 @@ function importSummary(
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview] = await Promise.all([
+  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview, analystReviewState] = await Promise.all([
     loadCases(),
     loadCampaigns(),
     loadProfiles(),
@@ -88,6 +90,7 @@ async function localInput() {
     loadWebsiteSnapshots(),
     loadInvestigationTemplates(),
     loadBulkReviewStore(),
+    loadAnalystReviewState(),
   ]);
   return {
     cases,
@@ -101,6 +104,7 @@ async function localInput() {
     websiteSnapshots,
     investigationTemplates,
     bulkReview,
+    analystReviewState,
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -221,6 +225,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     ['websiteSnapshots', 'website_snapshots'],
     ['investigationTemplates', 'investigation_templates'],
     ['bulkReview', 'bulk_review'],
+    ['analystReviewState', 'analyst_review_state'],
   ] as const;
   const definitionEntries = await Promise.all(sectionCollections.map(async ([section, collection]) => [
     section,
@@ -289,6 +294,10 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
           } else if (section.id === 'bulkReview') {
             const result = mergeBulkReviewStores(documents.get('bulk_review'), section.data);
             next.set('bulk_review', result.store);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'analystReviewState') {
+            const result = mergeAnalystReviewStateStores(documents.get('analyst_review_state'), section.data);
+            next.set('analyst_review_state', result.store);
             summaries.push(importSummary(section.id, result));
           } else continue;
         }

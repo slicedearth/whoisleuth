@@ -117,10 +117,27 @@ describe('acquisition decision packet', () => {
     }
   });
 
-  test('rejects an empty or path-like target', async () => {
-    await assert.rejects(
-      buildAcquisitionDecisionPacket({ target: '/candidate.example', review: review() }),
-      /canonical domain/u,
-    );
+  test('rejects every target outside the canonical verifier domain grammar', async () => {
+    for (const target of [
+      '',
+      '/candidate.example',
+      'bad_name.example',
+      'candidate?.example',
+      '-candidate.example',
+      'candidate-.example',
+      'candidate..example',
+      'bücher.example',
+      'ſ.example',
+      'K.example',
+      '192.0.2.1',
+      `${'a'.repeat(64)}.example`,
+      `${Array.from({ length: 43 }, () => 'aaaaa').join('.')}.example`,
+    ]) {
+      await assert.rejects(
+        buildAcquisitionDecisionPacket({ target, review: review() }),
+        /canonical domain/u,
+        target,
+      );
+    }
   });
 });

@@ -12,11 +12,11 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../lib/homepage-metadata-contract.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   CLI_LOOKUP_SCHEMA as SAVED_LOOKUP_SCHEMA,
   CLI_LOOKUP_VERSION as SAVED_LOOKUP_SCHEMA_VERSION,
-  LEGACY_CLI_LOOKUP_VERSION as LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+  PUBLIC_CLI_LOOKUP_VERSION as PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION,
   MAX_CLI_LOOKUP_BYTES as MAX_SAVED_LOOKUP_INPUT_BYTES,
   MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS as MAX_BOUNDED_JSON_CONTAINER_ITEMS,
   MAX_CLI_LOOKUP_JSON_DEPTH as MAX_BOUNDED_JSON_DEPTH,
@@ -39,7 +39,7 @@ type UnknownRecord = Record<string, unknown>;
 type CliLookupQueryType = 'domain' | 'ipv4' | 'ipv6' | 'asn';
 type CliLookupDocument = UnknownRecord & {
   schema: typeof SAVED_LOOKUP_SCHEMA;
-  version: typeof LEGACY_SAVED_LOOKUP_SCHEMA_VERSION | typeof SAVED_LOOKUP_SCHEMA_VERSION;
+  version: typeof PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION | typeof SAVED_LOOKUP_SCHEMA_VERSION;
   type: CliLookupQueryType;
   mode: 'fast' | 'deep';
   query: string;
@@ -365,13 +365,9 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   assertLookupQueryIdentity(document, query, document.type as CliLookupQueryType);
 
   const rawGeneratedAt = requiredBoundedString(document.generatedAt, 'generatedAt');
-  const generatedAt = document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
-    ? normalizeLegacyIsoTimestamp(rawGeneratedAt)
-    : normalizeExplicitIsoTimestamp(rawGeneratedAt);
+  const generatedAt = normalizeExplicitIsoTimestamp(rawGeneratedAt);
   if (!generatedAt) {
-    throw new TypeError(document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
-      ? 'generatedAt must be a valid ISO timestamp.'
-      : 'generatedAt must be a valid timestamp with an explicit timezone.');
+    throw new TypeError('generatedAt must be a valid timestamp with an explicit timezone.');
   }
 
   const diagnostics = objectOrNull(document.diagnostics);
@@ -387,9 +383,9 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   const httpResponse = objectOrNull(http?.response);
   const publicationMetadata = pageIdentity?.publicationMetadata;
   const deliveryMetadata = httpResponse?.deliveryMetadata;
-  if (document.version === LEGACY_SAVED_LOOKUP_SCHEMA_VERSION
+  if (document.version === PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION
     && (publicationMetadata !== undefined || deliveryMetadata !== undefined)) {
-    throw new TypeError(`${label} version ${LEGACY_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} homepage metadata.`);
+    throw new TypeError(`${label} version ${PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} homepage metadata.`);
   }
   if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
     && (publicationMetadata !== undefined && (
@@ -580,7 +576,7 @@ export {
   MAX_SAVED_LOOKUP_INPUT_BYTES,
   MAX_SAVED_LOOKUP_STRING_LENGTH,
   SAVED_LOOKUP_SCHEMA,
-  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+  PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION,
   SAVED_LOOKUP_SCHEMA_VERSION,
   SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
   buildCliLookupDocument,

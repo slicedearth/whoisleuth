@@ -121,27 +121,54 @@ function validateManifest(value: unknown): Manifest {
   return Object.freeze(manifest);
 }
 
-// These are reviewed regression ceilings with deliberate headroom over the
-// current production build, not performance targets or network guarantees.
-export const FRONTEND_ROUTE_GZIP_BUDGETS: Readonly<Record<string, number>> = Object.freeze({
-  '/': kibibytes(150),
-  '/brands': kibibytes(320),
-  '/bulk': kibibytes(380),
-  '/contact': kibibytes(80),
-  '/dashboard': kibibytes(325),
-  '/demo': kibibytes(225),
-  '/discover': kibibytes(320),
-  '/guide': kibibytes(100),
-  '/login': kibibytes(80),
-  '/lookup': kibibytes(520),
-  '/monitor': kibibytes(510),
-  '/privacy': kibibytes(105),
-  '/registry-support': kibibytes(285),
-  '/request-policy': kibibytes(80),
-  '/resources': kibibytes(90),
-  '/resources/[slug]': kibibytes(90),
-  '/terms': kibibytes(80),
+// Reviewed against three clean production builds on 2026-08-24. Each ceiling
+// is the largest observed gzip total plus 15% regression headroom, rounded up
+// to the next 5 KiB. They are tripwires, not performance targets or network
+// guarantees.
+export const FRONTEND_ROUTE_BUDGET_BASIS = Object.freeze({
+  measuredBuilds: 3,
+  reviewedOn: '2026-08-24',
+  headroomPercent: 15,
+  roundingKibibytes: 5,
 });
+
+export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string, number>> = Object.freeze({
+  '/': 85.5,
+  '/brands': 325.63,
+  '/bulk': 381.51,
+  '/cli': 82.98,
+  '/contact': 71.52,
+  '/coverage': 74.74,
+  '/dashboard': 100.09,
+  '/demo': 225.34,
+  '/discover': 322.79,
+  '/examples': 73.81,
+  '/guide': 66.19,
+  '/login': 68.78,
+  '/lookup': 492.16,
+  '/methodology': 72.42,
+  '/monitor': 454.16,
+  '/privacy': 73.75,
+  '/registry-support': 112.57,
+  '/request-policy': 69.13,
+  '/resources': 85.63,
+  '/resources/[slug]': 72.61,
+  '/terms': 68.94,
+});
+
+export function deriveFrontendRouteGzipBudgets(
+  observed: Readonly<Record<string, number>> = FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES,
+): Readonly<Record<string, number>> {
+  return Object.freeze(Object.fromEntries(Object.entries(observed).map(([route, maximum]) => {
+    if (!Number.isFinite(maximum) || maximum <= 0) throw new TypeError(`Observed route maximum for ${route} must be positive.`);
+    const withHeadroom = maximum * (1 + FRONTEND_ROUTE_BUDGET_BASIS.headroomPercent / 100);
+    const rounded = Math.ceil(withHeadroom / FRONTEND_ROUTE_BUDGET_BASIS.roundingKibibytes)
+      * FRONTEND_ROUTE_BUDGET_BASIS.roundingKibibytes;
+    return [route, kibibytes(rounded)];
+  })));
+}
+
+export const FRONTEND_ROUTE_GZIP_BUDGETS = deriveFrontendRouteGzipBudgets();
 
 function publicPath(routeKey: string): string {
   const value = routeKey.replace(/\/\([^/]+\)/gu, '');

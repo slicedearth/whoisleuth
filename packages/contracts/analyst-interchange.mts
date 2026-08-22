@@ -5,7 +5,7 @@ export const ANALYST_INTERCHANGE_CONTRACT_OWNER = 'packages/contracts/analyst-in
 export const INVESTIGATION_CACAO_SPEC_VERSION = 'cacao-2.0';
 export const INVESTIGATION_CACAO_PROFILE_VERSION = 2;
 export const INVESTIGATION_CACAO_PROFILE_SEMVER = '2.0.0';
-export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [1, INVESTIGATION_CACAO_PROFILE_VERSION] as const;
+export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [INVESTIGATION_CACAO_PROFILE_VERSION] as const;
 export const MAX_INVESTIGATION_CACAO_IMPORT_BYTES = 384 * 1024;
 export const BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA = 'whoisleuth.brand-protection-operations-report';
 export const BRAND_PROTECTION_OPERATIONS_REPORT_VERSION = 2;
@@ -35,22 +35,22 @@ export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
 
 const CACAO_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-cacao-profile', kind: 'export', schema: INVESTIGATION_CACAO_SPEC_VERSION,
-  currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: [1, INVESTIGATION_CACAO_PROFILE_VERSION],
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
+  currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS,
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   note: 'Restricted CACAO 2.0 profile with a connected linear sequence of manual analyst steps; version 2 adds fixed response recipe identifiers while executable commands, branches, targets, credentials, and arbitrary operations remain rejected.',
 });
 const OPERATIONS_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.brand-protection-operations-report', kind: 'export', schema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
-  currentVersion: BRAND_PROTECTION_OPERATIONS_REPORT_VERSION, supportedVersions: [1, BRAND_PROTECTION_OPERATIONS_REPORT_VERSION],
+  currentVersion: BRAND_PROTECTION_OPERATIONS_REPORT_VERSION, supportedVersions: [BRAND_PROTECTION_OPERATIONS_REPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: MAX_OPERATIONS_REPORT_BYTES, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   note: 'Version 2 aggregates typed action and independent-effect events with explicit denominators, omissions, time-window basis, and limitations. It excludes case identities and is not a service level or provider ranking.',
 });
 const DEFENSIVE_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.defensive-indicators', kind: 'export', schema: null,
-  currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1, DEFENSIVE_INDICATOR_EXPORT_VERSION],
+  currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [DEFENSIVE_INDICATOR_EXPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   note: 'Review-only indicator, provenance-manifest, and rollback formats; never submitted or applied automatically.',
@@ -78,11 +78,11 @@ const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
 });
 const WEB_CAPTURE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-manifest', kind: 'export', schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [1, WEB_CAPTURE_MANIFEST_VERSION],
+  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [WEB_CAPTURE_MANIFEST_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_MANIFEST_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Metadata-only capture manifest; the browser accepts versions 1 and 2 while offline artefact comparison requires current version 2.',
+  note: 'Metadata-only capture manifest; the browser and offline artefact comparison accept the v1.47.4 current-writer version 2.',
 });
 const DEFENSIVE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.defensive-indicator-manifest', kind: 'export', schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
@@ -145,21 +145,18 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       optionalKeys: ['description', 'playbook_types', 'playbook_activities', 'created_by', 'playbook_extensions', 'agent_definitions', 'x_whoisleuth_profile_version'],
       hook: { module: 'packages/interchange/investigation-playbook-interchange.mts', exportName: 'parseCacaoInvestigationPlaybook', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'investigation-cacao-profile-v1', path: 'test/fixtures/investigation-cacao-profile-v1.json', bytes: 3333, sha256: '5f7b0d7a4ecaf3902b86099cb14dc70c7c45f521d045caa632ffa19aeade036b', version: 1 },
         { id: 'investigation-cacao-profile-v2', path: `${F}investigation-cacao-profile-v2.json`, bytes: 4_091, sha256: '7e9a3de6e12b83477690c0c58e03e6efbbb8b0c11fd98dc8470bdb6784d42358', version: INVESTIGATION_CACAO_PROFILE_VERSION },
       ] },
     { descriptor: OPERATIONS_REPORT_COMPATIBILITY, lifecycleSchema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt', 'window', 'limitations'], optionalKeys: ['sourceState', 'summary', 'counts', 'states', 'actionTypes', 'durations', 'denominators', 'omissions'],
       hook: { module: 'packages/interchange/brand-protection-operations-report.mts', exportName: 'serializeBrandProtectionOperationsReport', role: 'builder', runtime: 'shared' },
       fixtures: [
-        { id: 'brand-protection-operations-report-v1', path: `${F}brand-protection-operations-report-v1.json`, bytes: 154, sha256: 'f679b2b1c5bed8788a23e856c3453d5f0bd6424d917b633f9632a7a59d72bbf6', version: 1 },
         { id: 'brand-protection-operations-report-v2', path: `${F}brand-protection-operations-report-v2.json`, bytes: 187, sha256: 'd38bf9b2c5cfc9c83df267ff2303ea2c3cdb398dd12c6607fbedb265b880a324', version: BRAND_PROTECTION_OPERATIONS_REPORT_VERSION },
       ] },
     { descriptor: DEFENSIVE_INDICATORS_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_LIFECYCLE_SCHEMA,
       requiredKeys: ['version', 'format'], optionalKeys: ['generatedAt', 'expiresAt', 'domains', 'entries', 'indicators', 'exclusions', 'explicitSelection', 'includeWildcards', 'truncated', 'filename', 'manifestFilename', 'rollbackFilename', 'mimeType', 'content', 'manifestContent', 'rollbackContent', 'limitations'],
       hook: { module: 'packages/interchange/defensive-indicator-export.mts', exportName: 'buildDefensiveIndicatorExport', role: 'builder', runtime: 'shared' },
       fixtures: [
-        { id: 'defensive-indicators-v1', path: `${F}defensive-indicators-v1.json`, bytes: 66, sha256: 'ced9ff63669e3fe0748a236329d9d805bf771a5a4ade3cd91ffb86f9c8fe8128', version: 1 },
         { id: 'defensive-indicators-v2', path: `${F}defensive-indicators-v2.json`, bytes: 66, sha256: '597794782fbb2291acbcd854ced48bb2b8142f175fd9dd8ab99d53dd5532701e', version: DEFENSIVE_INDICATOR_EXPORT_VERSION },
       ] },
     { descriptor: STIX_INDICATORS_COMPATIBILITY, lifecycleSchema: STIX_INDICATOR_LIFECYCLE_SCHEMA,
@@ -178,7 +175,6 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: [],
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureManifest', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'web-capture-manifest-v1', path: `${F}web-capture-manifest-v1.json`, bytes: 494, sha256: '37dec08317224ef71fdd08c0035f92ba29461bedbabb546d67cbf80e5d5b31f9', version: 1 },
         { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: WEB_CAPTURE_MANIFEST_VERSION },
       ] },
     { descriptor: DEFENSIVE_MANIFEST_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,

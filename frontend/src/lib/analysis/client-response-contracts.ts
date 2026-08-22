@@ -80,7 +80,7 @@ type ClientResponseParseResult<T> =
   | { readonly ok: false; readonly error: string };
 
 const INVALID_AVAILABILITY_CAPTURE_RESPONSE = 'Official-site capture returned an invalid response.';
-const INVALID_DOMAIN_POSTURE_RESPONSE = 'Official-domain audit returned an invalid response.';
+const INVALID_DOMAIN_POSTURE_RESPONSE = 'Official-domain review returned an invalid response.';
 const MAX_CLIENT_ERROR_LENGTH = 240;
 const MAX_AVAILABILITY_KEYS = 128;
 const MAX_PAGE_IDENTITY_KEYS = 32;

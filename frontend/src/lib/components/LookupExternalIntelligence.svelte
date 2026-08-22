@@ -29,7 +29,7 @@
 
 <section class="threat-intelligence evidence-card card" aria-labelledby="threat-intelligence-title">
   <header class="section-head"><div><p class="eyebrow">External intelligence</p><h4 id="threat-intelligence-title">Archived provider verdicts</h4></div><span>Separately attributed</span></header>
-  <p class="card-note">These are bounded third-party observations, not proof that the domain is safe, malicious, active, or controlled by any party. They never affect availability. A lone publisher contributes no Risk points; only qualifying records corroborated across at least two independent publisher families can add one bounded, explainable factor.</p>
+  <p class="card-note">Third-party observations remain attributed and do not decide availability. Risk changes only when qualifying records agree across at least two publisher families.</p>
   {#if riskContext.eligibleProviderCount}
     <p class="callout warn external-risk-context">
       {#if riskContext.contribution}

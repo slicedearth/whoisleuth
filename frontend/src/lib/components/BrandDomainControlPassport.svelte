@@ -170,9 +170,9 @@
 <section class="passport card" aria-labelledby="domain-passport-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Portable control state</p>
-      <h2 id="domain-passport-title">Domain-control passport</h2>
-      <p>Move a deliberately selected subset of official-domain expectations between the browser Console and CLI. Integrity is verified locally before import.</p>
+      <p class="eyebrow">Import and export</p>
+      <h2 id="domain-passport-title">Portable domain settings</h2>
+      <p>Move selected official-domain expectations between the browser Console and CLI. Integrity is verified locally before import.</p>
     </div>
     <label class="btn file-btn" class:disabled={busy}>Review passport<input type="file" accept="application/json,.json" onchange={choosePassport} disabled={busy}></label>
   </header>

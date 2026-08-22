@@ -4,7 +4,6 @@ import {
   BULK_SESSION_SCHEMA,
   BULK_SESSION_SCHEMA_VERSION,
   BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
-  BULK_PROFILE_CONTEXT_LEGACY_LIMITATION,
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   MAX_BULK_SESSIONS,
   buildBulkSessionExport,
@@ -302,17 +301,10 @@ describe('saved Bulk sessions', () => {
     assert.ok(complete);
     assert.deepEqual(complete.results.map((item) => item.domain), ['priority.invalid', 'second.invalid']);
 
-    const legacySalvage = normalizeBulkSessionStore({
-      schema: BULK_SESSION_SCHEMA,
-      version: 3,
-      sessions: [session('legacy-salvage', {
-        domains: ['priority.invalid', 'missing.invalid'],
-        results: [result(), result('outside.invalid', { profileContext: undefined })],
-        profileContext: READY_PROFILE_CONTEXT,
-      })],
-    });
-    assert.equal(legacySalvage.sessions[0]?.id, 'legacy-salvage');
-    assert.deepEqual(legacySalvage.sessions[0]?.results.map((item) => item.domain), ['priority.invalid']);
+    assert.throws(
+      () => normalizeBulkSessionStore({ schema: BULK_SESSION_SCHEMA, version: 3, sessions: [] }),
+      /schema 3 is unsupported.*no data was changed/u,
+    );
   });
 
   test('retains unavailable profile-dependent values as null', () => {
@@ -426,9 +418,9 @@ describe('saved Bulk sessions', () => {
     );
   });
 
-  test('migrates schemas one to three without presenting profile-derived evidence as current', () => {
+  test('rejects reader-only schemas one to three without partial interpretation', () => {
     for (const version of [1, 2, 3]) {
-      const normalized = normalizeBulkSessionStore({
+      const unsupported = {
         schema: BULK_SESSION_SCHEMA,
         version,
         sessions: [session(`legacy-session-${version}`, {
@@ -447,26 +439,13 @@ describe('saved Bulk sessions', () => {
             },
           })],
         })],
-      });
-
-      const migrated = normalized.sessions[0];
-      const migratedResult = migrated?.results[0];
-      assert.equal(normalized.version, BULK_SESSION_SCHEMA_VERSION);
-      assert.equal(migrated?.id, `legacy-session-${version}`);
-      assert.equal(migratedResult?.comparisonEvidence, null);
-      assert.equal(migratedResult?.risk, null);
-      assert.equal(migratedResult?.riskModelVersion, null);
-      assert.deepEqual(migratedResult?.riskFactors, []);
-      assert.equal(migratedResult?.trusted, null);
-      assert.equal(migratedResult?.faviconMatch, null);
-      assert.equal(migratedResult?.faviconNearMatch, null);
-      assert.equal(migratedResult?.reusesOfficialAssets, null);
-      assert.equal(migratedResult?.idnReferenceMatch, null);
-      assert.equal(migratedResult?.pageBaselineMatch, null);
-      assert.equal(migratedResult?.hasActiveBrandProfile, null);
-      assert.deepEqual(migratedResult?.relationship.officialAssetHosts, []);
-      assert.equal(migrated?.profileContext.sourceState, 'unavailable');
-      assert.equal(migrated?.profileContext.limitation, BULK_PROFILE_CONTEXT_LEGACY_LIMITATION);
+      };
+      const before = structuredClone(unsupported);
+      assert.throws(
+        () => normalizeBulkSessionStore(unsupported),
+        new RegExp(`schema ${version} is unsupported.*no data was changed`, 'u'),
+      );
+      assert.deepEqual(unsupported, before);
     }
   });
 
@@ -561,7 +540,7 @@ describe('saved Bulk sessions', () => {
     assert.match(missingRisk?.limitations.join(' ') ?? '', /Risk deltas are omitted/u);
   });
 
-  test('exports the current contract and accepts supported legacy sessions non-destructively', () => {
+  test('round-trips the current contract and rejects reader-only envelopes', () => {
     const exported = buildBulkSessionExport([session()]);
     assert.equal(exported.schema, BULK_SESSION_SCHEMA);
     assert.equal(exported.version, BULK_SESSION_SCHEMA_VERSION);
@@ -572,9 +551,12 @@ describe('saved Bulk sessions', () => {
     assert.equal(merged.sessions.length, 1);
     assert.equal(merged.sessions[0]?.results[0]?.opportunity, 20);
     assert.equal(merged.sessions[0]?.results[0]?.opportunityModelVersion, 2);
-    assert.equal(mergeBulkSessions([], { ...exported, version: 1 }).added, 1);
-    assert.equal(mergeBulkSessions([], { ...exported, version: 2 }).added, 1);
-    assert.equal(mergeBulkSessions([], { ...exported, version: 3 }).added, 1);
+    for (const version of [1, 2, 3]) {
+      const unsupported = { ...exported, version };
+      const before = structuredClone(unsupported);
+      assert.throws(() => mergeBulkSessions([], unsupported), /Expected Bulk session schema 4/u);
+      assert.deepEqual(unsupported, before);
+    }
     assert.throws(
       () => mergeBulkSessions([], { ...exported, version: 5 }),
       /newer schema 5/i,

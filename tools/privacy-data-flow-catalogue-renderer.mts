@@ -47,9 +47,59 @@ function tokenList(values: readonly string[]): string {
 export function principalPrivacyBoundarySummary(
   catalogue: PrivacyDataFlowCatalogue = PRIVACY_DATA_FLOW_CATALOGUE,
 ): string {
-  const capability = catalogue.coverage.capabilityManifest;
-  const lifecycle = catalogue.coverage.schemaLifecycleRegistry;
-  return `Contract ${catalogue.schema} version ${catalogue.version} covers ${capability.capabilityCount} capability families, ${capability.cliOperationCount} CLI operations, ${capability.cliVariantCount} conditional CLI variants, ${lifecycle.compatibilityCount} registered compatibility entries, ${lifecycle.privacyProfileCount} privacy profiles and ${lifecycle.consumerFlowCount} consumer flows. It distinguishes transient processing, browser-local retention, deliberate local-file export, hosted bounded processing, configured worker storage, third-party disclosure and offline processing with no request.`;
+  return `Contract ${catalogue.schema} version ${catalogue.version} derives its coverage from the canonical capability, command, lifecycle, privacy-profile, and consumer-flow owners. It distinguishes transient processing, browser-local retention, deliberate local-file export, hosted bounded processing, configured worker storage, third-party disclosure and offline processing with no request.`;
+}
+
+export function humanPrivacySummary(
+  catalogue: PrivacyDataFlowCatalogue = PRIVACY_DATA_FLOW_CATALOGUE,
+) {
+  const requiredClasses = [
+    'transient_processing',
+    'browser_local_retention',
+    'deliberate_local_file_export',
+    'configured_worker_storage',
+    'third_party_disclosure',
+    'offline_processing_no_request',
+  ] as const;
+  const availableClasses = new Set(catalogue.processingClasses.map((item) => item.id));
+  for (const id of requiredClasses) {
+    if (!availableClasses.has(id)) throw new Error(`Human privacy summary requires processing class ${id}.`);
+  }
+  const retentionModes = new Set(catalogue.capabilityFlows.map((flow) => flow.retention.mode));
+  for (const mode of ['transient', 'browser_deliberate', 'local_output_deliberate', 'worker_compact_encrypted']) {
+    if (!retentionModes.has(mode)) throw new Error(`Human privacy summary requires retention mode ${mode}.`);
+  }
+  const scheduledMonitoring = catalogue.capabilityFlows.find((flow) => flow.id === 'scheduled_monitoring');
+  if (!scheduledMonitoring || scheduledMonitoring.retention.mode !== 'worker_compact_encrypted') {
+    throw new Error('Human privacy summary requires the canonical optional scheduled-monitoring boundary.');
+  }
+  return Object.freeze([
+    Object.freeze({
+      id: 'leaves-device',
+      question: 'What leaves the device?',
+      answer: 'A deliberate network-capable operation sends only its declared bounded target or evidence classes to the relevant hosted service, registry, DNS resolver, target service or explicitly selected provider. Offline review, plans, public catalogue filtering and documentation make no investigation request.',
+    }),
+    Object.freeze({
+      id: 'stays-browser',
+      question: 'What stays in the browser?',
+      answer: 'Only deliberately retained bounded workspace records, such as Cases, profiles, watchlists and Review Item decisions, stay in the current browser profile or tab. They are not copied to hosted custody unless a separate documented action says so.',
+    }),
+    Object.freeze({
+      id: 'hosted-monitoring',
+      question: 'What does optional hosted monitoring store?',
+      answer: `${scheduledMonitoring.title} retains only its documented compact application-encrypted projection and bounded store metadata under operator control. It is not general evidence custody, and disabling collection does not delete retained ciphertext.`,
+    }),
+    Object.freeze({
+      id: 'retention',
+      question: 'How long does retained data remain?',
+      answer: 'Transient data lasts only for the bounded operation or cache lifetime. Browser-local data remains until the user deletes it or clears site data; optional worker data follows the configured retention and deliberate-deletion policy; downloaded files remain under the operator’s control.',
+    }),
+    Object.freeze({
+      id: 'export-delete',
+      question: 'How do users export or delete it?',
+      answer: 'Exports require an explicit browser or CLI action. Users can delete browser records, site data and downloaded files. Scheduled-watchlist deletion rewrites encrypted logical state; its storage object needs separate hosting-operator deletion.',
+    }),
+  ] as const);
 }
 
 export function renderPrivacyDataFlowCatalogueJson(
@@ -136,13 +186,4 @@ export function renderPrivacyDataFlowCatalogueMarkdown(
     '',
   );
   return lines.join('\n');
-}
-
-export function renderPrivacyDataFlowSummaryModule(
-  catalogue: PrivacyDataFlowCatalogue = PRIVACY_DATA_FLOW_CATALOGUE,
-): string {
-  const capability = catalogue.coverage.capabilityManifest;
-  const lifecycle = catalogue.coverage.schemaLifecycleRegistry;
-  const principalBoundaries = catalogue.processingClasses.map((item) => item.title);
-  return `export const PRIVACY_DATA_FLOW_SUMMARY = Object.freeze({\n  version: ${catalogue.version},\n  capabilityCount: ${capability.capabilityCount},\n  cliOperationCount: ${capability.cliOperationCount},\n  cliVariantCount: ${capability.cliVariantCount},\n  schemaFamilyCount: ${lifecycle.familyCount},\n  schemaContractCount: ${lifecycle.compatibilityCount},\n  privacyProfileCount: ${lifecycle.privacyProfileCount},\n  consumerFlowCount: ${lifecycle.consumerFlowCount},\n  principalBoundaries: Object.freeze(${JSON.stringify(principalBoundaries, null, 2).replaceAll('\n', '\n  ')}),\n  summary: ${JSON.stringify(principalPrivacyBoundarySummary(catalogue))},\n  limitations: Object.freeze(${JSON.stringify(catalogue.invariants, null, 2).replaceAll('\n', '\n  ')}),\n});\n`;
 }

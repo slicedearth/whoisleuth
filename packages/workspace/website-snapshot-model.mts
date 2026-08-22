@@ -1,5 +1,5 @@
 import { normalizeDomain } from '../cases/case-model.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   MAX_WEBSITE_SNAPSHOTS,
@@ -108,10 +108,8 @@ function text(value: unknown, maximum: number): string {
     ? value.trim()
     : '';
 }
-function timestamp(value: unknown, legacy = false): string {
-  return normalizeExplicitIsoTimestamp(value)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null)
-    ?? '';
+function timestamp(value: unknown): string {
+  return normalizeExplicitIsoTimestamp(value) ?? '';
 }
 function digest(value: unknown): string | null {
   const candidate = text(value, 128).toLowerCase();
@@ -174,7 +172,7 @@ function nullableBoolean(value: unknown): boolean | null {
 function nullableText(value: unknown, maximum: number): string | null {
   return text(value, maximum) || null;
 }
-function certificate(value: unknown, legacyTimestamps = false): WebsiteCertificateObservation | null {
+function certificate(value: unknown): WebsiteCertificateObservation | null {
   const item = record(value);
   const fingerprintSha256 = text(item?.fingerprintSha256, 64).toLowerCase();
   if (!SHA256_RE.test(fingerprintSha256)) return null;
@@ -189,8 +187,8 @@ function certificate(value: unknown, legacyTimestamps = false): WebsiteCertifica
     issuer: nullableText(item?.issuer, 180),
     subject: nullableText(item?.subject, 180),
     serialNumber: SERIAL_RE.test(serialCandidate) ? serialCandidate : null,
-    validFrom: timestamp(item?.validFrom, legacyTimestamps) || null,
-    validTo: timestamp(item?.validTo, legacyTimestamps) || null,
+    validFrom: timestamp(item?.validFrom) || null,
+    validTo: timestamp(item?.validTo) || null,
     authorized: nullableBoolean(item?.authorized),
     hostnameMatches: nullableBoolean(item?.hostnameMatches),
     validity: nullableText(item?.validity, 40),
@@ -244,15 +242,11 @@ function identityValues(value: unknown): WebsiteIdentityValues {
   return { resourceHosts, trackingIdentifiers, formActionOrigins };
 }
 
-export function normalizeWebsiteProfileSnapshot(
-  raw: unknown,
-  sourceVersion = WEBSITE_SNAPSHOT_SCHEMA_VERSION,
-): WebsiteProfileSnapshot | null {
+export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSnapshot | null {
   const value = record(raw);
-  const legacyTimestamps = sourceVersion < WEBSITE_SNAPSHOT_SCHEMA_VERSION;
   const domain = normalizeDomain(value?.domain);
-  const observedAt = timestamp(value?.observedAt, legacyTimestamps);
-  const savedAt = timestamp(value?.savedAt, legacyTimestamps);
+  const observedAt = timestamp(value?.observedAt);
+  const savedAt = timestamp(value?.savedAt);
   const id = text(value?.id, 128);
   if (!domain || !observedAt || !savedAt || !id) return null;
   return {
@@ -268,7 +262,7 @@ export function normalizeWebsiteProfileSnapshot(
     identityValues: identityValues(value?.identityValues),
     sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
     dependencies: values(value?.dependencies, 20, dependency) as WebsiteSnapshotDependency[],
-    certificate: certificate(value?.certificate, legacyTimestamps),
+    certificate: certificate(value?.certificate),
   };
 }
 
@@ -285,15 +279,11 @@ export function normalizeWebsiteSnapshotStore(raw: unknown) {
     && !SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS.includes(Number(value.version))) {
     throw new Error('This website-snapshot collection uses an unsupported schema and cannot be read safely.');
   }
-  const sourceVersion = value?.schema === WEBSITE_SNAPSHOT_SCHEMA
-    && Number.isSafeInteger(value.version)
-    ? Number(value.version)
-    : WEBSITE_SNAPSHOT_SCHEMA_VERSION;
   const sourceValues = Array.isArray(raw) ? raw : Array.isArray(value?.snapshots) ? value.snapshots : [];
   const snapshots = values(
     sourceValues,
     MAX_WEBSITE_SNAPSHOTS * 2,
-    (candidate) => normalizeWebsiteProfileSnapshot(candidate, sourceVersion),
+    (candidate) => normalizeWebsiteProfileSnapshot(candidate),
   ) as WebsiteProfileSnapshot[];
   const perDomain = new Map<string, number>();
   const retained: WebsiteProfileSnapshot[] = [];

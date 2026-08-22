@@ -8,6 +8,7 @@ import { normalizeCtQuery } from '../../lib/ct-query.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
+  CT_HISTORY_BROWSER_SUPPORTED_VERSIONS,
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_DISCARDED_CHECKS,
   MAX_CT_HISTORY_DOMAINS,
@@ -20,6 +21,7 @@ import {
 } from '../contracts/workspace-portability.mts';
 
 export {
+  CT_HISTORY_BROWSER_SUPPORTED_VERSIONS,
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_DISCARDED_CHECKS,
   MAX_CT_HISTORY_DOMAINS,
@@ -121,7 +123,7 @@ function normalizeDomains(values: unknown, limit: number): { values: string[]; c
   return { values: [...domains].sort().slice(0, limit), complete };
 }
 
-function normalizeEvent(raw: unknown, sourceVersion: number | null): CtHistoryEvent | null {
+function normalizeEvent(raw: unknown): CtHistoryEvent | null {
   const event = plainRecord(raw);
   if (!event) return null;
   const checkedAt = normalizeTimestamp(event.checkedAt);
@@ -146,8 +148,7 @@ function normalizeEvent(raw: unknown, sourceVersion: number | null): CtHistoryEv
     && firstObservedCount.value >= firstObservedDomains.values.length
     && reappearedCount.value >= reappearedDomains.values.length;
   const classifiedCount = firstObservedCount.value + continuingCount.value + reappearedCount.value + historyUnknownCount.value;
-  const classificationComplete = sourceVersion === CT_HISTORY_SCHEMA_VERSION
-    && !truncated
+  const classificationComplete = !truncated
     && event.classificationComplete === true
     && countsValid
     && classifiedCount === resultCount.value;
@@ -173,16 +174,13 @@ type CtHistoryRetention = Pick<
   'discardedCheckCount' | 'discardedCheckCountKnown' | 'discardedCheckCountCapped'
 >;
 
-function normalizedRetention(entry: Record<string, unknown>, sourceVersion: number | null): CtHistoryRetention {
+function normalizedRetention(entry: Record<string, unknown>): CtHistoryRetention {
   const rawCount = entry.discardedCheckCount;
   const countValid = Number.isSafeInteger(rawCount) && Number(rawCount) >= 0;
   const validCount = countValid ? Number(rawCount) : 0;
   return {
     discardedCheckCount: Math.min(validCount, MAX_CT_HISTORY_DISCARDED_CHECKS),
-    // Schema 1 had no pruning provenance. Preserve that uncertainty instead
-    // of silently treating a full legacy array as proof that nothing was lost.
-    discardedCheckCountKnown: (sourceVersion === 2 || sourceVersion === CT_HISTORY_SCHEMA_VERSION)
-      && countValid
+    discardedCheckCountKnown: countValid
       && entry.discardedCheckCountKnown === true,
     discardedCheckCountCapped: entry.discardedCheckCountCapped === true
       || validCount > MAX_CT_HISTORY_DISCARDED_CHECKS,
@@ -200,7 +198,7 @@ function addDiscardedChecks(retention: CtHistoryRetention, count: number): CtHis
   };
 }
 
-function normalizeEntry(raw: unknown, sourceVersion: number | null): CtHistoryEntry | null {
+function normalizeEntry(raw: unknown): CtHistoryEntry | null {
   const entry = plainRecord(raw);
   if (!entry) return null;
   const query = normalizeCtHistoryQuery(entry.query);
@@ -209,23 +207,19 @@ function normalizeEntry(raw: unknown, sourceVersion: number | null): CtHistoryEn
   const normalizedDomains = normalizedBaselineAt
     ? normalizeDomains(entry.domains, MAX_CT_HISTORY_DOMAINS)
     : { values: [], complete: true };
-  const baselineAt = normalizedBaselineAt
-    && (sourceVersion !== CT_HISTORY_SCHEMA_VERSION || normalizedDomains.complete)
-    ? normalizedBaselineAt
-    : null;
+  const baselineAt = normalizedBaselineAt && normalizedDomains.complete ? normalizedBaselineAt : null;
   const domains = baselineAt ? normalizedDomains.values : [];
   const rawEverSeen = Array.isArray(entry.everSeenDomains) ? entry.everSeenDomains : [];
   const normalizedEverSeen = normalizeDomains(rawEverSeen, MAX_CT_HISTORY_EVER_SEEN_DOMAINS);
   const normalizedEverSeenSet = new Set(normalizedEverSeen.values);
   const baselineMissingFromEverSeen = domains.some((domain) => !normalizedEverSeenSet.has(domain));
-  let combinedEverSeen = [
+  const combinedEverSeen = [
     ...domains,
     ...normalizedEverSeen.values.filter((domain) => !domains.includes(domain)),
   ].slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS).sort();
   const scannedEverSeen = rawEverSeen.slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS * 4);
   const malformedEverSeen = scannedEverSeen.some((value) => !normalizeDomain(value));
-  const everSeenDomainsComplete = sourceVersion === CT_HISTORY_SCHEMA_VERSION
-    && entry.everSeenDomainsComplete === true
+  const everSeenDomainsComplete = entry.everSeenDomainsComplete === true
     && (normalizedBaselineAt === null || normalizedDomains.complete)
     && Array.isArray(entry.everSeenDomains)
     && normalizedEverSeen.complete
@@ -236,21 +230,14 @@ function normalizeEntry(raw: unknown, sourceVersion: number | null): CtHistoryEn
   const rawHistory = Array.isArray(entry.history) ? entry.history : [];
   const historyInputs = rawHistory.slice(-MAX_CT_HISTORY_EVENTS * 4);
   const normalizedHistory = historyInputs
-    .map((event) => normalizeEvent(event, sourceVersion))
+    .map((event) => normalizeEvent(event))
     .filter((event) => event !== null)
     .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt));
   const history = normalizedHistory.slice(-MAX_CT_HISTORY_EVENTS);
-  if (sourceVersion !== CT_HISTORY_SCHEMA_VERSION) {
-    const retainedLegacyEvidence = history.flatMap((event) => event.newDomains);
-    combinedEverSeen = [
-      ...domains,
-      ...[...new Set(retainedLegacyEvidence)].sort().filter((domain) => !domains.includes(domain)),
-    ].slice(0, MAX_CT_HISTORY_EVER_SEEN_DOMAINS).sort();
-  }
   const discardedDuringNormalization = Math.max(0, rawHistory.length - historyInputs.length)
     + Math.max(0, normalizedHistory.length - history.length);
   const retention = addDiscardedChecks(
-    normalizedRetention(entry, sourceVersion),
+    normalizedRetention(entry),
     discardedDuringNormalization,
   );
   const updatedAt = normalizeTimestamp(entry.updatedAt) || history.at(-1)?.checkedAt || baselineAt;
@@ -278,10 +265,13 @@ export function normalizeCtHistoryStore(raw: unknown): CtHistoryStore {
   assertWorkspaceDeclaredVersion(raw, 'Certificate Transparency history store');
   const value = plainRecord(raw) || {};
   const sourceVersion = ctHistoryStoreVersion(value);
+  if (sourceVersion !== null && !CT_HISTORY_BROWSER_SUPPORTED_VERSIONS.includes(sourceVersion)) {
+    throw new Error(`Certificate Transparency history schema ${sourceVersion} is unsupported; no data was changed.`);
+  }
   const entries = Array.isArray(value.entries) ? value.entries.slice(0, MAX_CT_HISTORY_SEARCHES * 4) : [];
   const byQuery = new Map<string, CtHistoryEntry>();
   for (const candidate of entries) {
-    const entry = normalizeEntry(candidate, sourceVersion);
+    const entry = normalizeEntry(candidate);
     if (!entry) continue;
     const existing = byQuery.get(entry.query);
     if (!existing || entry.updatedAt > existing.updatedAt) byQuery.set(entry.query, entry);

@@ -10,16 +10,14 @@
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify status" /></a>
 </p>
 
-WHOISleuth is a local-first domain intelligence and brand-protection console.
-It brings registration, DNS, certificate, website, network, and brand context
-into one review workflow without treating an unavailable source as evidence of
-absence or safety.
+WHOISleuth is a local-first domain investigation and brand-protection tool. It
+keeps registration, DNS, certificate, website, network and analyst evidence
+separately attributed, including unavailable and partial sources.
 
-Use it to inspect a domain, IP address, or ASN; discover possible brand
-lookalikes; compare a bounded list of domains; document cases; and monitor
-material changes. Evidence stays attributed to its source, collection limits
-remain visible, and scores remain explainable prioritisation aids rather than
-automated verdicts.
+Use it to investigate a domain, IP address or ASN; discover possible brand
+lookalikes; compare domain sets; retain reviewed Cases; prepare response
+material; and compare later observations. Scores are explainable prioritisation
+aids rather than automated verdicts.
 
 <p align="center">
   <a href="https://whoisleuth.com"><strong>View WHOISleuth</strong></a>
@@ -30,329 +28,132 @@ automated verdicts.
 </p>
 
 <p align="center">
-  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation workflow" /></a>
+  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation" /></a>
 </p>
 
-The demo uses fixed fictional evidence on reserved domains. Its six-stage
-progress rail distinguishes the current, completed, available, and upcoming
-parts of the workflow. It does not sign in, run live analysis, or write to the
-protected Console's investigation data. Its later stages reuse the production
-source-map, lifecycle, activity, and evidence-card components with fixed
-fixtures. The public Resources hub maps common goals to the relevant tool and
-interpretation sections and keeps the focused topic library alongside them,
-while the Privacy page provides local section navigation without shortening
-the policy.
+The demo uses fixed fictional evidence on reserved domains. It makes no live
+investigation request, requires no sign-in and writes no Console workspace data.
 
-The optional repo-local rendered-capture package is a separate, explicitly
-authorised workflow. It executes remote page JavaScript and necessarily sends
-each admitted resource's exact path and query to that resource operator, while
-structured manifest and digest fields retain only origins, hostnames, one
-control-sanitised page title of up to 300 characters, and bounded artefact
-metadata. The screenshot necessarily preserves visible rendered content and
-may include page text or a page-reflected path or query until the operator
-deletes it. It is not part of hosted or distributable collection; see the
-[CLI reference](docs/cli-reference.md#optional-local-rendered-capture).
+## How work is organised
 
-## What it does
+WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 
-| Area | Purpose | Important boundary |
-| --- | --- | --- |
-| **Dashboard** | Start or resume investigations, defensive reviews, comparisons, and case work. | Guided recipes require explicit approval before requests and cannot run arbitrary actions. |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can compare bounded SOA publication across selected authorities and compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, direct DNS failures remain inconclusive, and no warning-list miss establishes safety. |
-| **Discover** | Generate bounded local lookalikes, review names and issuance groups observed in public certificate logs, or deliberately pivot through one registry's RDAP nameserver-search results. | Registry pivots are suffix-scoped lower bounds. Certificate co-issuance is a review lead, not attribution. Sorting does not change evidence or score. |
-| **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | One job accepts up to 500 Fast or 50 Deep targets. Each domain is a separate request, and incomplete coverage remains distinct from failure or absence. |
-| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, reviewed desired posture, a cross-domain posture matrix, portable domain-control passports, control-planning context, transient DMARC/TLS aggregate-report review, a local inbox for explicitly associated cases, and a transient Brand Asset Register. | Public observations, imported reports, desired state, retained comparison points, analyst attestations, and case associations remain separate. The register joins direct profile and Case scope with one-hop retained leads without making a request or write; candidates never become authored roles or further anchors, and unavailable or incomplete sources remain explicit. |
-| **Monitor** | Retain cases, explicit Brand Profile associations, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. Review a campaign through an explicitly selected Brand Profile scope using bounded rationales derived from retained evidence. | Ordinary workspace state stays in IndexedDB. Deleting a profile does not rewrite a case, so an unmatched opaque association remains visible. Cohort review is transient, keeps incomplete sources explicit, and never establishes ownership or attribution. Response packets and defensive exports require human review and are never submitted automatically. |
-| **Registry support** | Inspect fixture-backed parser coverage, access constraints, and the fields attempted by each lookup profile. | Coverage describes support and limitations; it does not decide availability or promise that a source will publish a value. |
+| Tool | Purpose |
+| --- | --- |
+| **Dashboard** | Start or resume work across the three jobs. |
+| **Lookup** | Inspect one domain, IP address or ASN. |
+| **Discover** | Generate lookalikes or review certificate and registry observations. |
+| **Bulk** | Triage and compare a selected domain set. |
+| **Brands** | Record official scope, reviewed baselines and owned-domain controls. |
+| **Monitor** | Review Cases, changes, response preparation, watchlists and local rules. |
 
-The Console can export a versioned workspace archive or an encrypted portable
-backup. Encryption protects the downloaded file while locked; the active
-IndexedDB workspace remains plaintext and browser-local. Optional hosted
-monitoring retains only encrypted compact watchlist state.
+The public [Resources hub](https://whoisleuth.com/resources) is the shortest
+user guide. [Application documentation](docs/application-guide.md) covers the
+browser tools and saved work.
 
-Lookup can explicitly export a checksummed source-aware passport for one claim
-readiness row. The bounded file keeps stable requirement identifiers, exact
-source states, observation time, model versions, and limitations while
-excluding raw source payloads, contacts, page values, request paths,
-credentials, and signer-authentication claims; the local CLI verifies it
-offline.
+## Privacy and safety
 
-Case schema 12 retains up to eight exact opaque Brand Profile identifiers
-chosen by an analyst. Ordinary case exports, Case report v8 JSON and Markdown,
-and workspace archives preserve them. Public CLI case packs clear the
-identifiers from both cases and embedded reports and disclose the omission
-count; trusted and internal packs preserve them.
-Case parsing and import inspect at most 2,000 parsed records before the
-500-case store cap is applied; records beyond the inspection bound are
-reported as skipped rather than traversed.
+Ordinary retained work stays in IndexedDB in the current browser profile.
+Explicit network operations send only their declared bounded target or evidence
+classes to the relevant hosted boundary, public source or selected provider.
+Optional hosted monitoring is separately configured and stores only its compact
+application-encrypted projection. Local exports and CLI files remain under the
+operator's control.
 
-Deep Lookup keeps source health and provenance visible while organising long
-supporting evidence into a scannable result. Reports, retained facts, website
-profiles, acquisition checklists, external pivots, and visual summaries are
-analyst-controlled views over already collected evidence. They do not make an
-enforcement decision, prove ownership or safety, or silently start another
-request.
-
-For a full Deep domain Lookup, the same bounded homepage response can also
-yield fixed publication-declaration counts and selected-response delivery and
-cache metadata. These summaries retain only allowlisted tokens, booleans, and
-counts. They do not fetch another resource, execute page code, enter compact
-Bulk or ordinary browser-local stores, or establish indexing, accessibility,
-cache effectiveness, performance, identity, safety, or maliciousness.
-
-For field-level behaviour, limits, result states, saved-work semantics, and
-complete workflows, use the [application guide](docs/application-guide.md).
-The public [Resources hub](https://whoisleuth.com/resources) is the shortest introduction and the topic library.
-
-## Design principles
-
-- **Authority-aware conclusions.** Registry evidence controls registration
-  decisions. Registrar, website, and provider evidence cannot silently replace
-  it.
-- **Source health is evidence.** Unsupported, skipped, partial, not found,
-  rate-limited, unavailable, inconclusive, and error states remain distinct.
-- **Bounded collection.** Requests, responses, redirects, arrays, strings,
-  concurrency, caches, browser stores, and exports have explicit limits.
-- **Safe outbound networking.** HTTP and TLS collection validate public
-  addresses, reject HTTP resolutions with more than 64 address candidates per
-  hop, revalidate redirects, resist DNS rebinding, and avoid private network
-  targets.
-- **Local-first investigation state.** Cases, evidence pins, analyst decisions,
-  response actions, profiles, watchlists, campaigns, shortlist entries, retained
-  relationship observations, saved Bulk sessions, explicit website-profile
-  snapshots, investigation templates, and rules use bounded IndexedDB stores in
-  the current browser.
-- **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
-  technology, and posture findings expose their evidence and limitations.
-- **Supplementary visuals.** Charts summarise bounded data already present in
-  the page. Accessible source lists and tables remain the complete review
-  surfaces.
-- **Human-controlled action.** WHOISleuth does not send reports, submit targets,
-  run takedowns, or turn a score into an enforcement decision automatically.
-  Common analyst-owned edits offer a short tab-memory undo; collection,
-  imports, exports, confirmed deletion, and source evidence never do.
+The generated [privacy/data-flow catalogue](docs/privacy-data-flow-catalogue.md)
+and [JSON](docs/privacy-data-flow-catalogue.json) list exact capability data
+flows. See the [privacy notice](PRIVACY.md) for retention, export and deletion.
 
 ## Quick start
 
-Requirements:
-
-- Node.js 24 or later
-- npm
-
-Install, build, and start the Express deployment:
+Requirements: Node.js 24 or later and npm.
 
 ```bash
-npm install
+npm ci
+npm run dev
+```
+
+Build and start the Express host:
+
+```bash
 SITE_PASSWORD=choose-a-password \
 SESSION_SECRET=choose-a-separate-random-secret \
-SESSION_MAX_AGE_DAYS=7 \
 npm start
 ```
 
-Open `http://localhost:3000` for the public overview or
-`http://localhost:3000/login` for the protected Console.
-
-Published CLI releases can run without hosting the application:
+The public CLI package runs locally and does not require the hosted application:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth example.test --plan --json
 ```
 
-Running `whoisleuth` with no arguments in a capable interactive terminal opens
-a bounded launcher for Fast or Deep Lookup, offline workflow planning, and the
-command catalogue. Unsupported or redirected terminals continue to print help,
-and no request begins until a Lookup plan is displayed and confirmed. Deep
-Lookup can use `--browse` for progressive source-state navigation, bounded
-rendered-panel search, and an optional private `--save-lookup <file>` written
-only after the browser closes normally.
-
-An ICANN-recognised public domain, reserved `.test` or `.example` documentation
-domain, IP address, or ASN can be entered directly as conservative Lookup
-shorthand. The explicit `lookup` command remains available for its convenient
-query normalisation and the same bounded options.
-
-The CLI also provides isolated, explicitly authorised DNSSEC chain validation
-and selected-MX SMTP/STARTTLS review. Those actions require a caller-selected
-public resolver, a local trust-anchor document, and per-run acknowledgement;
-they are never part of Lookup, Bulk, monitoring, or automatic recipes. See the
-[CLI reference](docs/cli-reference.md#isolated-cryptographic-and-mail-transport-review)
-for the exact network, retention, and non-inference boundaries. Mail address
-selection, public revalidation, confirmed connection, and cryptographic address
-authentication remain distinct; DNSSEC chain state never upgrades an
-unvalidated A, AAAA, or CNAME observation. Address authentication is
-`not_evaluated` only after a candidate is retained and `unavailable` when no
-candidate exists. If a DANE-TA TLSA usage 2 association is published, active
-STARTTLS review retains only the observed leaf certificate and leaves that
-comparison partial because it does not construct or validate a certificate
-path to a TLSA trust anchor. For SMTP relay on port 25, PKIX-TA usage 0 and
-PKIX-EE usage 1 records are retained as unsupported and cannot complete SMTP
-DANE assurance; a separately attributable usage 3 match remains eligible.
-Saved Lookup JSON is scanned
-for bounded depth, aggregate entries, per-container size, and duplicate keys before CLI parsing and portable
-evidence projection.
-
-`SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
-should be a separate random value, such as 32 random bytes encoded as hex. The
-optional `SESSION_MAX_AGE_DAYS` setting accepts a whole number from 1 to 30 and
-defaults to 7. The application has no individual accounts, roles, or selective
-session revocation. See the [getting-started guide](docs/getting-started.md) for
-local development, verification, browser tests, and CLI usage.
+`--plan` describes a Lookup without collecting. Use
+[Getting started](docs/getting-started.md) for local development and browser
+tests, or the [CLI guide](docs/cli.md) for installed commands.
 
 ## Architecture
 
-WHOISleuth uses a prerendered SvelteKit frontend and a small Node network
-boundary. Shared modules under `lib/` own classification, collection,
-validation, normalisation, scoring, and evidence contracts. Thin adapters call
-those modules from either:
+The application is a TypeScript modular monolith:
 
-- `server.mts`, an Express server that also serves `frontend/build/`; or
-- TypeScript functions under `netlify/functions/`.
+- `packages/` owns runtime-neutral contracts and domain rules;
+- `lib/` owns shared bounded hosted/runtime services;
+- `frontend/` owns SvelteKit routes, browser state and IndexedDB adapters;
+- `cli/` and `bin/` own local command grammar, handlers and terminal output;
+- Express and Netlify functions adapt the same hosted request boundary.
 
-The browser cannot open raw WHOIS TCP sockets. The backend does not keep a
-general investigation database. It returns bounded request results, while
-deliberate browser actions decide which compact records are retained locally or
-exported.
+The backend has no general investigation database. The browser decides which
+bounded records to retain or export. The CLI has separate offline, networked and
+authorised-active contracts. See [architecture](docs/architecture.md),
+[current product boundaries](docs/product-boundary.md) and the
+[threat model](docs/threat-model.md).
 
-For the full request pipeline, trust boundaries, persistence model, and
-deployment parity, see the [architecture orientation](docs/architecture.md).
+Version 2 directly reads the exact durable formats written by public release
+1.47.4 and writes the current v2 contracts. Exact Case and workspace readers are
+listed in the generated [Case portability reference](docs/case-contracts.md);
+other shared formats are in the
+[portable compatibility reference](docs/portable-domain-contracts.md).
 
 ## Documentation
 
 | Document | Use it for |
 | --- | --- |
-| [Application guide](docs/application-guide.md) | Tool workflow, Fast and Deep modes, result states, scoring, saved work, guided investigations, and exports. |
-| [Getting started](docs/getting-started.md) | Installation, local development, verification commands, browser tests, and CLI entry points. |
-| [Release discipline](docs/releasing.md) | Semantic-version selection, manifest checks, protected-branch delivery, tagging, and rollback evidence. |
-| [Operations and deployment](docs/operations.md) | Authentication, proxy trust, feature switches, optional providers, rate and operation limits, hosted monitoring, Netlify, and deployment checks. |
-| [Architecture orientation](docs/architecture.md) | Components, request flow, outbound trust boundaries, persistence, and deliberate trade-offs. |
-| [Registry data contract](docs/registry-data-contract.md) | Normalised RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
-| [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
-| [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
-| [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behaviour. |
-| [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
-| [CLI guide](docs/cli.md) and [reference](docs/cli-reference.md) | Installation and first-use workflow, plus complete command, terminal, diagnostics, discovery, saved-evidence, optional local capture, output, exit-code, and export contracts. |
-| [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
-| [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
-
-The public `/resources` route combines the shortest user-facing introduction,
-practice, glossary, FAQ, and focused topic library. The legacy `/guide` route
-redirects there. These repository documents provide the operator and engineering
-detail behind it.
+| [Application guide](docs/application-guide.md) | Browser tools, evidence states, saved work and exports. |
+| [Getting started](docs/getting-started.md) | Local setup, development and verification. |
+| [CLI guide](docs/cli.md) and [reference](docs/cli-reference.md) | Installed commands, output and safety. |
+| [Operations](docs/operations.md) | Authentication, limits, optional providers, monitoring and deployment. |
+| [Architecture](docs/architecture.md) | Components, request pipeline, persistence and verification. |
+| [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, backup, encryption and deletion. |
+| [Registry data](docs/registry-data-contract.md) and [compatibility](docs/registry-compatibility.md) | Normalised registration contracts and fixture-backed support. |
+| [Generated capability contract](docs/capability-manifest.md) | Exhaustive execution, disclosure, budget and failure metadata. |
+| [Privacy notice](PRIVACY.md) | Processing, recipients, storage, retention, exports and rights. |
+| [Release discipline](docs/releasing.md) | Versioning, candidate verification, delivery and rollback. |
 
 ## Verification
 
-The main local verification sequence is:
+Start with the checks relevant to your change:
 
 ```bash
 npm test
 npm run typecheck
 npm run check
 npm run build
-npm run architecture:check
-npm run schema:inventory
-npm run licenses:check
-npm run cli:package:check
-npm run test:e2e:built
 git diff --check
-npm run dependencies:audit
 ```
 
-Install Playwright's Chromium build once with `npm run test:e2e:install`.
-Additional offline or bounded maintainer checks include:
+The complete gate matrix, including browser, architecture, privacy,
+compatibility, package and security checks, is in
+[Getting started](docs/getting-started.md#verification).
 
-```bash
-npm run maintenance:duplication
-npm run test:coverage
-npm run test:properties
-npm run test:profile
-npm run registry:fixtures
-npm run benchmark:technology
-npm run technology:fixture-review -- reviewed-input.json
-npm run benchmark:workflow
-npm run lookup:transport-spike
-npm run lookup:transport-qualify
-npm run sslbl:status
-npm run sslbl:check -- --input=sslblacklist.csv
-npm run study:first-use -- --template=desktop
-npm run study:first-use -- sessions.json
-npm run platform:local-data
-npm run release:check
-npm run security:codeql
-npm run registry:drift
-npm run rdap-extensions:drift
-npm run deployment:self-check -- https://your-deployment.example
-```
-
-`registry:fixtures`, the benchmarks, the reviewed-fixture tool, the first-use
-study template and aggregator, the local SSLBL snapshot check, the transport
-checks, and the local-data evaluation are
-deterministic offline checks. The transport qualification suite exercises
-buffering, cancellation, slow consumers, authentication expiry, duplicate
-events, timeouts, and final-response equivalence without enabling response
-streaming in any deployed adapter.
-The registry-drift and deployment checks make only their documented, fixed,
-bounded network requests. The RDAP extension audit is offline by default; its
-explicit `--live` mode makes one bounded request to the fixed official registry
-URL. Automated unit and browser tests use deterministic fixtures and do not
-query live registries, domains, or providers.
-
-## Deployment summary
-
-Netlify reads `netlify.toml`, builds the static frontend, and packages the
-TypeScript functions. Before the first production deployment, set
-`SITE_PASSWORD` and a separate `SESSION_SECRET`. Optional providers, distributed
-operation controls, and encrypted scheduled monitoring remain disabled unless
-their complete configurations are supplied. The existing Netlify or Express
-buffered Lookup remains the only production contract.
-
-Read [operations and deployment](docs/operations.md) before exposing a
-deployment publicly. It documents the shared-login boundary, reverse-proxy
-trust, feature switches, optional credentials, fail-closed states, limits, and
-post-deployment checks.
-
-## Licence, attribution, and responsible use
+## Licence and responsible use
 
 WHOISleuth is licensed under the [GNU Affero General Public License version 3
-only](LICENSE) (`AGPL-3.0-only`). Commercial use is permitted, but an operator
-that modifies WHOISleuth and makes that version available over a network must
-offer the corresponding source under the AGPL. Existing versions previously
-released under Apache License 2.0 remain available under the licence supplied
-with those versions. Third-party packages, services, and data retain their own
-licences and terms.
+only](LICENSE) (`AGPL-3.0-only`). Third-party packages, services and data retain
+their own terms. The [trademark policy](TRADEMARKS.md), [notices](NOTICE),
+[dual-use disclosure](DISCLOSURE) and [security policy](SECURITY.md) apply
+separately.
 
-The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
-separately from the source licence. Copyright and attribution details are in
-[NOTICE](NOTICE). The generated
-[third-party production notices](frontend/static/third-party-notices.txt)
-retain the exact locked package inventory and the licence documents distributed
-with those packages.
-
-The software is provided **as is, without warranty**. Registration data can be
-redacted, stale, incomplete, or parsed imperfectly. Scores and generated
-candidates require analyst review. Use collection, contact data, and report
-drafts only where you have a legitimate purpose and comply with applicable
-registry terms, privacy law, anti-spam law, and authorisation boundaries.
-The [dual-use disclosure](DISCLOSURE) defines the supported defensive scope and
-the capability boundaries deliberately excluded from WHOISleuth.
-
-See [PRIVACY.md](PRIVACY.md) for data handling and deletion guidance. Review
-and adapt that notice before sharing your own deployment. Report suspected
-vulnerabilities privately through the [security policy](SECURITY.md).
-
-## Project structure
-
-```text
-server.mts              Express, authentication, API, and static-site adapter
-lib/                    Shared bounded collection and analysis modules
-netlify/functions/      Thin Netlify adapters and optional scheduled worker
-frontend/               Prerendered SvelteKit public site and protected Console
-bin/ and cli/            First-party command-line interface
-fixtures/               Sanitised deterministic registry fixtures
-test/ and e2e/           Unit, integration, and browser verification
-tools/                  Maintainer checks and offline evaluation commands
-docs/                   User, operator, architecture, contract, and CLI guides
-```
-
-The generated `frontend/build/` output is ignored. Both deployment adapters
-serve the same frontend and call the same shared intelligence modules.
+The software is provided as is, without warranty. Registration and technical
+data can be redacted, stale, partial or wrong. Use collection, contact data and
+response material only with an appropriate purpose, authorisation and review of
+applicable law and provider terms.

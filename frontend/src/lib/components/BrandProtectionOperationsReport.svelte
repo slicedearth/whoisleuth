@@ -56,8 +56,8 @@
   <header>
     <div>
       <p class="eyebrow">Recorded outcomes</p>
-      <h2 id="operations-report-title">Brand-protection operations report</h2>
-      <p>Review bounded aggregate counts derived only from explicit Case action states. Packet preparation, provider delivery, and outcome success are never inferred.</p>
+      <h2 id="operations-report-title">Case action summary</h2>
+      <p>Review aggregate counts derived only from explicit Case action states. Packet preparation, provider delivery and outcome success are not inferred.</p>
     </div>
     <button class="btn" type="button" onclick={downloadReport} disabled={sourceState !== 'ready'}>Export aggregate JSON</button>
   </header>
@@ -105,7 +105,7 @@
     {:else}
       <div class="metric-grid" role="group" aria-label="Executive recorded outcome counts">
         <article><strong>{counts.casesWithActions}</strong><span>Cases with actions</span><small>Denominator: {counts.casesInspected} inspected Cases</small></article>
-        <article><strong>{counts.terminal}</strong><span>Terminal actions</span><small>Terminal workflow state, not independent remediation</small></article>
+        <article><strong>{counts.terminal}</strong><span>Completed actions</span><small>Recorded provider state; check independent change separately</small></article>
         <article><strong>{counts.withProviderOutcome}</strong><span>Typed provider outcomes</span><small>Actions with a separately typed provider outcome</small></article>
         <article><strong>{counts.independentChangedReviews}</strong><span>Independent changed reviews</span><small>Point-in-time reviews recording changed, not a success rate</small></article>
       </div>

@@ -173,7 +173,7 @@
 <section class="template-manager card" aria-labelledby="template-manager-title" aria-busy={loadState === 'loading'}>
   <header>
     <div>
-      <p class="eyebrow">Reusable local workflow</p>
+      <p class="eyebrow">Saved templates</p>
       <h2 id="template-manager-title">Investigation templates</h2>
       <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate. A restricted CACAO export contains manual steps only.</p>
     </div>

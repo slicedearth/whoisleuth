@@ -10,9 +10,6 @@ import {
 import type { CaseRecord } from '../cases/case-model.mts';
 import {
   assertBrandProfileStoreBudget,
-  BRAND_PROFILE_SCHEMA,
-  BRAND_PROFILE_SCHEMA_VERSION,
-  SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
   buildBrandProfileExport,
   mergeBrandProfiles,
   normalizeBrandProfileId,
@@ -21,66 +18,51 @@ import type { BrandProfile } from './brand-profile-model.mts';
 import {
   assertCampaignStoreBudget,
   buildCampaignExport,
-  CAMPAIGN_SCHEMA,
-  CAMPAIGN_SCHEMA_VERSION,
   mergeCampaigns,
 } from './campaign-model.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { assertWorkspaceInputGraph } from './hostile-input.mts';
 import {
   assertWatchlistStoreBudget,
   buildWatchlistExport,
   mergeWatchlistStores,
-  WATCHLIST_SCHEMA,
-  WATCHLIST_SCHEMA_VERSION,
 } from './watchlist-store.mts';
 import {
   assertShortlistStoreBudget,
   buildShortlistExport,
   mergeShortlistStores,
-  SHORTLIST_SCHEMA,
-  SHORTLIST_SCHEMA_VERSION,
-  SUPPORTED_SHORTLIST_SCHEMA_VERSIONS,
 } from './shortlist-model.mts';
 import {
   assertDetectionRuleStoreBudget,
   buildDetectionRuleExport,
-  DETECTION_RULE_SCHEMA,
-  DETECTION_RULE_SCHEMA_VERSION,
   mergeDetectionRules,
 } from './detection-rule-model.mts';
 import {
   buildRelationshipObservationExport,
   mergeRelationshipObservations,
-  RELATIONSHIP_OBSERVATION_SCHEMA,
-  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
 } from './relationship-observation-model.mts';
 import {
-  BULK_SESSION_SCHEMA,
-  BULK_SESSION_SCHEMA_VERSION,
-  SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
   buildBulkSessionExport,
   enforceBulkSessionStoreBudget,
   mergeBulkSessions,
 } from './bulk-session-model.mts';
 import {
-  WEBSITE_SNAPSHOT_SCHEMA,
-  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
-  SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
   buildWebsiteSnapshotExport,
   mergeWebsiteSnapshots,
 } from './website-snapshot-model.mts';
 import {
-  INVESTIGATION_TEMPLATE_SCHEMA,
-  INVESTIGATION_TEMPLATE_VERSION,
   buildInvestigationTemplateExport,
   mergeInvestigationTemplates,
 } from './investigation-template-model.mts';
 import {
-  BULK_REVIEW_SCHEMA,
-  BULK_REVIEW_SCHEMA_VERSION,
   buildBulkReviewExport,
   mergeBulkReviewStores,
 } from './bulk-review-model.mts';
+import {
+  buildAnalystReviewStateExport,
+  emptyAnalystReviewStateStore,
+  mergeAnalystReviewStateStores,
+} from '../monitoring/analyst-review-state.mts';
 import {
   isSupportedWorkspaceArchiveVersion,
   MAX_WORKSPACE_ARCHIVE_BYTES,
@@ -91,10 +73,15 @@ import {
   WORKSPACE_ARCHIVE_CASE_SECTION,
   WORKSPACE_ARCHIVE_SCHEMA,
   WORKSPACE_ARCHIVE_SECTION_IDS,
+  PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS,
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_SETTINGS_COMPATIBILITY,
   WORKSPACE_SETTINGS_SCHEMA,
   WORKSPACE_SETTINGS_VERSION,
 } from '../contracts/case-portability.mts';
+import { ANALYST_REVIEW_STATE_COMPATIBILITY } from '../contracts/analyst-review-state.mts';
+import { WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES } from '../contracts/workspace-portability.mts';
 
 export {
   isSupportedWorkspaceArchiveVersion,
@@ -105,6 +92,8 @@ export {
   WORKSPACE_ARCHIVE_CASE_SECTION,
   WORKSPACE_ARCHIVE_SCHEMA,
   WORKSPACE_ARCHIVE_SECTION_IDS,
+  PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS,
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_SETTINGS_SCHEMA,
   WORKSPACE_SETTINGS_VERSION,
@@ -165,6 +154,7 @@ export interface WorkspaceArchiveSectionMap {
   websiteSnapshots: ReturnType<typeof buildWebsiteSnapshotExport>;
   investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
   bulkReview: ReturnType<typeof buildBulkReviewExport>;
+  analystReviewState: ReturnType<typeof buildAnalystReviewStateExport>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -207,6 +197,7 @@ interface NormalizedWorkspaceInput {
   websiteSnapshots: unknown[];
   investigationTemplates: unknown[];
   bulkReview: unknown;
+  analystReviewState: unknown;
   settings: UnknownRecord;
 }
 
@@ -233,13 +224,7 @@ interface WorkspaceSectionDefinition {
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const CHECKSUM_RE = /^sha256:[a-f0-9]{64}$/;
-const WORKSPACE_ARCHIVE_ROOT_KEYS: Readonly<Record<number, readonly string[]>> = Object.freeze({
-  1: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
-  2: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
-  3: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
-  4: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
-  5: Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']),
-});
+const WORKSPACE_ARCHIVE_ROOT_KEYS = Object.freeze(['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations']);
 const WORKSPACE_ARCHIVE_MANIFEST_KEYS = Object.freeze(['sectionCount', 'totalRecords', 'sections']);
 const WORKSPACE_ARCHIVE_MANIFEST_ENTRY_KEYS = Object.freeze(['id', 'schema', 'version', 'recordCount', 'bytes', 'checksum']);
 
@@ -270,10 +255,10 @@ function clone<T>(value: T): T {
   return JSON.parse(serialize(value)) as T;
 }
 
-function timestamp(value: unknown, fallback: string | null = null, legacy = false): string | null {
+function timestamp(value: unknown, fallback: string | null = null): string | null {
   const explicit = normalizeExplicitIsoTimestamp(value);
   if (explicit) return explicit;
-  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
+  return fallback;
 }
 
 function boundedText(value: unknown, maximum = 300): string {
@@ -338,6 +323,7 @@ function workspaceArchiveSections(
     websiteSnapshots: buildWebsiteSnapshotExport(input.websiteSnapshots, now),
     investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
     bulkReview: buildBulkReviewExport(input.bulkReview),
+    analystReviewState: buildAnalystReviewStateExport(input.analystReviewState),
     settings: settingsDocument(input),
   };
 }
@@ -351,6 +337,27 @@ function objectCount(data: unknown, key: string): number {
   const value = record(data);
   const nested = value ? record(value[key]) : null;
   return nested ? Object.keys(nested).length : 0;
+}
+
+function sectionContract(sectionId: string): Readonly<{
+  id: WorkspaceArchiveSectionId;
+  schema: string;
+  version: number;
+  supportedVersions: readonly number[];
+}> {
+  const reference = WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES.find((entry) => entry.sectionId === sectionId);
+  if (!reference) throw new TypeError(`Workspace archive section ${sectionId} has no canonical contract reference.`);
+  return Object.freeze({
+    id: reference.sectionId as WorkspaceArchiveSectionId,
+    schema: reference.schema,
+    version: reference.version,
+    supportedVersions: reference.supportedVersions,
+  });
+}
+
+function compatibilitySchema(descriptor: Readonly<{ id: string; schema: string | null }>): string {
+  if (!descriptor.schema) throw new TypeError(`Workspace compatibility ${descriptor.id} must name a schema.`);
+  return descriptor.schema;
 }
 
 const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
@@ -368,7 +375,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'campaigns', label: 'Campaigns', schema: CAMPAIGN_SCHEMA, version: CAMPAIGN_SCHEMA_VERSION,
+    ...sectionContract('campaigns'), label: 'Campaigns',
     count: (data) => arrayCount(data, 'campaigns'),
     merge: (local, data) => {
       const result = mergeCampaigns(local.campaigns, data);
@@ -376,8 +383,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'brandProfiles', label: 'Brand profiles', schema: BRAND_PROFILE_SCHEMA, version: BRAND_PROFILE_SCHEMA_VERSION,
-    supportedVersions: SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
+    ...sectionContract('brandProfiles'), label: 'Brand profiles',
     count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
@@ -385,7 +391,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'watchlists', label: 'Watchlists', schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION,
+    ...sectionContract('watchlists'), label: 'Watchlists',
     count: (data) => objectCount(data, 'watchlists'),
     merge: (local, data) => {
       const result = mergeWatchlistStores(local.watchlists, data);
@@ -393,8 +399,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'shortlist', label: 'Shortlist', schema: SHORTLIST_SCHEMA, version: SHORTLIST_SCHEMA_VERSION,
-    supportedVersions: SUPPORTED_SHORTLIST_SCHEMA_VERSIONS,
+    ...sectionContract('shortlist'), label: 'Shortlist',
     count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
@@ -402,7 +407,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'detectionRules', label: 'Detection rules', schema: DETECTION_RULE_SCHEMA, version: DETECTION_RULE_SCHEMA_VERSION,
+    ...sectionContract('detectionRules'), label: 'Detection rules',
     count: (data) => arrayCount(data, 'rules'),
     merge: (local, data) => {
       const result = mergeDetectionRules(local.detectionRules, data);
@@ -410,19 +415,14 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'relationshipObservations',
+    ...sectionContract('relationshipObservations'),
     label: 'Retained relationship observations',
-    schema: RELATIONSHIP_OBSERVATION_SCHEMA,
-    version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
     count: (data) => arrayCount(data, 'observations'),
     merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
   },
   {
-    id: 'bulkSessions',
+    ...sectionContract('bulkSessions'),
     label: 'Saved Bulk sessions',
-    schema: BULK_SESSION_SCHEMA,
-    version: BULK_SESSION_SCHEMA_VERSION,
-    supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'sessions'),
     merge: (local, data) => {
       const result = mergeBulkSessions(local.bulkSessions, data);
@@ -431,32 +431,36 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     },
   },
   {
-    id: 'websiteSnapshots',
+    ...sectionContract('websiteSnapshots'),
     label: 'Website profile snapshots',
-    schema: WEBSITE_SNAPSHOT_SCHEMA,
-    version: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
-    supportedVersions: SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
     count: (data) => arrayCount(data, 'snapshots'),
     merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
   },
   {
-    id: 'investigationTemplates',
+    ...sectionContract('investigationTemplates'),
     label: 'Investigation templates',
-    schema: INVESTIGATION_TEMPLATE_SCHEMA,
-    version: INVESTIGATION_TEMPLATE_VERSION,
     count: (data) => arrayCount(data, 'templates'),
     merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
   },
   {
-    id: 'bulkReview',
+    ...sectionContract('bulkReview'),
     label: 'Bulk saved views and review queue',
-    schema: BULK_REVIEW_SCHEMA,
-    version: BULK_REVIEW_SCHEMA_VERSION,
     count: (data) => arrayCount(data, 'presets') + arrayCount(data, 'rows'),
     merge: (local, data) => mergeBulkReviewStores(local.bulkReview, data),
   },
   {
-    id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
+    id: 'analystReviewState',
+    label: 'Analyst Review Item lifecycle',
+    schema: compatibilitySchema(ANALYST_REVIEW_STATE_COMPATIBILITY),
+    version: ANALYST_REVIEW_STATE_COMPATIBILITY.currentVersion,
+    supportedVersions: ANALYST_REVIEW_STATE_COMPATIBILITY.supportedVersions,
+    count: (data) => arrayCount(data, 'records'),
+    merge: (local, data) => mergeAnalystReviewStateStores(local.analystReviewState, data),
+  },
+  {
+    id: 'settings', label: 'Workspace settings', schema: compatibilitySchema(WORKSPACE_SETTINGS_COMPATIBILITY),
+    version: WORKSPACE_SETTINGS_COMPATIBILITY.currentVersion,
+    supportedVersions: WORKSPACE_SETTINGS_COMPATIBILITY.supportedVersions,
     count: () => 1,
     merge: null,
   },
@@ -487,6 +491,7 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     websiteSnapshots: Array.isArray(value.websiteSnapshots) ? value.websiteSnapshots : [],
     investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
     bulkReview: record(value.bulkReview) || {},
+    analystReviewState: record(value.analystReviewState) || emptyAnalystReviewStateStore(),
     settings: record(value.settings) || {},
   };
 }
@@ -563,23 +568,28 @@ function manifestEntry(raw: unknown): WorkspaceArchiveManifestEntry | null {
 
 /** Validate structure, section byte counts, and checksums without applying data. */
 export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
+  assertWorkspaceInputGraph(raw, 'Workspace archive');
   const value = record(raw);
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
-  if (
-    !isSupportedWorkspaceArchiveVersion(value.version)
-  ) {
-    if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
-      throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);
+  if (!isSupportedWorkspaceArchiveVersion(value.version)) {
+    if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version < WORKSPACE_ARCHIVE_VERSION) {
+      throw new Error(`Workspace archive schema ${value.version} is retired. Export it as schema ${WORKSPACE_ARCHIVE_VERSION} with the last broad-reader release before importing; no data was changed.`);
     }
-    throw new Error(`Expected workspace archive schema 1, 2, 3, 4, or ${WORKSPACE_ARCHIVE_VERSION}.`);
+    if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
+      throw new Error(`Workspace archive schema ${value.version} is newer than the supported schema ${WORKSPACE_ARCHIVE_VERSION}; no data was changed.`);
+    }
+    throw new Error(`Expected a well-formed workspace archive using schema ${WORKSPACE_ARCHIVE_VERSION}; no data was changed.`);
   }
   const sourceVersion = value.version;
-  const generatedAt = timestamp(value.generatedAt, null, sourceVersion < WORKSPACE_ARCHIVE_VERSION);
+  const expectedSectionIds: readonly string[] = sourceVersion === PUBLIC_WORKSPACE_ARCHIVE_VERSION
+    ? PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS
+    : WORKSPACE_ARCHIVE_SECTION_IDS;
+  const generatedAt = timestamp(value.generatedAt);
   if (!generatedAt) throw new Error('The workspace archive generation time is invalid.');
   const { bytes } = ensureArchiveBudget(value);
-  assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS[sourceVersion] ?? [], `version ${sourceVersion} envelope`);
+  assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS, `version ${sourceVersion} envelope`);
   const manifest = record(value.manifest);
   const sectionValues = record(value.sections);
   if (!manifest || !sectionValues || !Array.isArray(manifest.sections)) {
@@ -633,9 +643,11 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
       reason = 'This app does not recognise the archive section.';
     } else if (!(definition.supportedVersions ?? [definition.version]).includes(entry.version) || entry.schema !== definition.schema) {
       status = 'unsupported';
-      reason = entry.version > definition.version
-        ? `This section uses newer schema ${entry.version}.`
-        : 'This section uses an unsupported schema contract.';
+      reason = entry.schema !== definition.schema
+        ? 'This section uses an unsupported schema contract.'
+        : entry.version > definition.version
+          ? `This section uses newer schema ${entry.version}.`
+          : `This section uses retired schema ${entry.version}. Export it with the last broad-reader release before importing; no data was changed.`;
     } else if (definition.count(data) !== entry.recordCount) {
       throw new Error(`${entry.id} does not match its manifest record count.`);
     }
@@ -647,6 +659,24 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   }
   if (manifest.sectionCount !== sections.length || manifest.totalRecords !== totalRecords) {
     throw new Error('The workspace archive manifest totals do not match its sections.');
+  }
+  if (seen.size !== expectedSectionIds.length || expectedSectionIds.some((id) => !seen.has(id))) {
+    throw new Error(`Workspace archive schema ${sourceVersion} does not contain its exact required section set.`);
+  }
+  if (sourceVersion === PUBLIC_WORKSPACE_ARCHIVE_VERSION) {
+    const data = emptyAnalystReviewStateStore();
+    sections.push({
+      id: 'analystReviewState',
+      label: 'Analyst Review Item lifecycle',
+      schema: compatibilitySchema(ANALYST_REVIEW_STATE_COMPATIBILITY),
+      version: ANALYST_REVIEW_STATE_COMPATIBILITY.currentVersion,
+      recordCount: 0,
+      bytes: byteLength(serialize(data)),
+      checksum: await checksum(data, options.cryptoProvider),
+      status: 'ready',
+      reason: `Workspace schema ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} did not contain Review Item lifecycle state. Import supplies an empty section and invents no analyst decisions.`,
+      data,
+    });
   }
   sections.sort(canonicalSectionOrder);
   return {
@@ -725,7 +755,7 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         status: 'ready',
         reason: definition.id === 'settings' && selected && (result.skipped ?? 0) > 0
           ? result.reason ?? 'The imported workspace preference was skipped. Existing browser-local context is preserved.'
-          : '',
+          : section.reason,
         added: result.added ?? 0,
         updated: result.updated ?? 0,
         skipped: result.skipped ?? 0,

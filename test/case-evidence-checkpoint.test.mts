@@ -49,6 +49,7 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
         records: {
           a: ['192.0.2.10'],
           aaaa: ['2001:db8::10'],
+          caa: [{ critical: 0, tag: 'issue', value: 'fixture-ca.example' }],
         },
       },
       http: {
@@ -64,6 +65,8 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
         certificate: {
           fingerprintSha256: 'a'.repeat(64),
           issuer: { name: 'Example CA' },
+          publicKey: { fingerprintSha256: 'b'.repeat(64) },
+          subjectAltNames: { dnsNames: ['checkpoint.example', '*.service.checkpoint.example'] },
           validTo: '2026-12-01T00:00:00.000Z',
         },
         limitations: ['The certificate chain was incomplete.'],
@@ -104,7 +107,14 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 
 describe('case evidence checkpoints', () => {
   test('projects bounded normalized facts from every supported evidence family', () => {
-    const facts = buildLookupCheckpointFacts(response(), {
+    const ordinary = response();
+    const source = response({
+      availability: {
+        ...ordinary.availability,
+        pageTitle: 'Checkpoint\u009b\u202e page\u00ad',
+      },
+    });
+    const facts = buildLookupCheckpointFacts(source, {
       collectionDepth: 'deep',
       generatedAt: OBSERVED_AT,
     });
@@ -112,10 +122,15 @@ describe('case evidence checkpoints', () => {
 
     assert.equal(byField.get('registration.registrar')?.value, 'Example Registrar');
     assert.equal(byField.get('dns.addresses')?.value, '192.0.2.10 · 2001:db8::10');
+    assert.equal(byField.get('dns.caa')?.value, '0 issue fixture-ca.example');
     assert.equal(byField.get('tls.protocol')?.value, 'TLSv1.3');
+    assert.equal(byField.get('tls.certificate_sha256')?.value, 'a'.repeat(64));
+    assert.equal(byField.get('tls.spki_sha256')?.value, 'b'.repeat(64));
+    assert.equal(byField.get('tls.san_dns_names')?.value, '*.service.checkpoint.example · checkpoint.example');
     assert.equal(byField.get('network.cidrs')?.value, '192.0.2.0/24');
     assert.equal(byField.get('http.final_origin')?.value, 'https://checkpoint.example');
     assert.equal(byField.get('page.password_field')?.value, 'Observed');
+    assert.equal(byField.get('page.title')?.value, 'Checkpoint page');
     assert.equal(byField.get('tls.protocol')?.completeness, 'partial');
     assert.equal(byField.get('tls.valid_to')?.value, '2026-12-01T00:00:00.000Z');
     assert.equal(byField.get('disclosure.security_txt_expires')?.value, '2026-10-01T00:00:00.000Z');

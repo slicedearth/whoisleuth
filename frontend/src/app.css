@@ -272,6 +272,8 @@ body {
 }
 
 a { color: inherit; text-decoration: none; }
+a[href], summary { cursor: pointer; }
+a[href]:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 button, input, select, textarea { color: var(--text); font: inherit; }
 button { cursor: pointer; }
 button, select { font-family: var(--mono); }
@@ -552,8 +554,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .local-nav-prompt { flex: 0 0 auto; align-self: center; padding: 0 7px; color: var(--interface-accent); font: 700 var(--text-2xs) var(--mono); text-shadow: 0 0 7px rgb(var(--interface-accent-rgb) / .3); }
 .local-nav a { position: relative; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-hover-alpha)); }
-.local-nav a.active { padding-left: 20px; color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); box-shadow: inset 0 -2px var(--interface-accent); }
-.local-nav a.active::before { content: "❯"; left: 7px; top: 9px; color: var(--interface-accent); }
+.local-nav a.active { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); box-shadow: inset 0 -2px var(--interface-accent); }
 .result-section { --local-nav-anchor-offset: 72px; scroll-margin-top: var(--local-nav-anchor-offset); }
 @media (max-width: 900px) {
   .local-nav-shell { top: 70px; }
@@ -594,27 +595,26 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .terminal-strip .prompt-sigil { flex: 0 0 auto; color: var(--interface-accent); font: .78rem var(--mono); text-shadow: 0 0 6px rgb(var(--interface-accent-rgb) / var(--cursor-glow-alpha)); }
 .terminal-strip span:not(.prompt-sigil) { min-width: 0; overflow: hidden; color: var(--muted); font: var(--text-2xs) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .brand { display: flex; gap: 11px; align-items: center; margin: 20px 16px 0; }
-.brand span span, .brand strong, .brand small, nav a strong, nav a small { display: block; }
+.brand span span, .brand strong, .brand small, .shell > aside nav a strong, .shell > aside nav a small { display: block; }
 .brand strong { font: 700 1.13rem var(--mono); letter-spacing: -.02em; }
 @media (prefers-reduced-motion: reduce) {
   .skip-link { transition: none; }
 }
-.brand small, nav a small { color: var(--muted); font-size: var(--text-2xs); line-height: 1.4; }
+.brand small, .shell > aside nav a small { color: var(--muted); font-size: var(--text-2xs); line-height: 1.4; }
 .mark { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; }
 .mark .brand-mark { display: block; width: 100%; height: 100%; }
 .mark.small { width: 33px; height: 33px; }
 
-nav { flex: 0 0 auto; margin: 30px 16px 0; }
+.shell > aside nav { flex: 0 0 auto; margin: 30px 16px 0; }
 .eyebrow { color: var(--interface-accent); font: 700 var(--text-2xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-nav a { position: relative; display: block; margin: 5px 0; padding: 10px 11px 10px 22px; border: 1px solid transparent; border-radius: var(--radius-sm); }
-nav a::before { content: ""; position: absolute; left: 8px; top: 11px; color: var(--interface-accent); font: 700 .72rem var(--mono); }
-nav a.active::before { content: "❯"; text-shadow: 0 0 6px rgb(var(--interface-accent-rgb) / .45); }
+.shell > aside nav a { position: relative; display: block; margin: 5px 0; padding: 10px 11px 10px 22px; border: 1px solid transparent; border-radius: var(--radius-sm); }
+.shell > aside nav a::before { content: ""; position: absolute; left: 8px; top: 11px; color: var(--interface-accent); font: 700 .72rem var(--mono); }
 .shell > aside nav a.active::before { content: ""; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; background: var(--interface-accent); text-shadow: none; }
-nav a:hover, nav a.active { border-color: var(--border); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
-nav a.active { border-left-color: var(--interface-accent); }
-nav a.active strong { color: var(--accent); }
-nav a strong { font: 650 var(--text-md) var(--mono); }
-nav a small { margin-top: 2px; }
+.shell > aside nav a:hover, .shell > aside nav a.active { border-color: var(--border); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
+.shell > aside nav a.active { border-left-color: var(--interface-accent); }
+.shell > aside nav a.active strong { color: var(--accent); }
+.shell > aside nav a strong { font: 650 var(--text-md) var(--mono); }
+.shell > aside nav a small { margin-top: 2px; }
 .session { --theme-options-top: auto; --theme-options-bottom: calc(100% + 6px); display: grid; flex: 0 0 auto; gap: 10px; margin: auto 16px 16px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
 .session-row { display: flex; min-width: 0; gap: 12px; align-items: center; }
 .session-row span { min-width: 0; flex: 1 1 auto; margin-right: auto; overflow: visible; text-overflow: clip; white-space: nowrap; }

@@ -4,7 +4,7 @@ import {
   type InvestigationGuideTemplateSnapshot,
   type InvestigationRecipeId,
 } from './investigation-guide.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   INVESTIGATION_TEMPLATE_SCHEMA,
@@ -29,29 +29,25 @@ export interface InvestigationTemplate extends InvestigationGuideTemplateSnapsho
 }
 
 type UnknownRecord = Record<string, unknown>;
-const LEGACY_RECIPE_IDS = new Set<InvestigationRecipeId>(['brand_sweep', 'infrastructure_pivot', 'new_domain_triage']);
 
 function record(value: unknown): UnknownRecord | null {
   return ordinaryWorkspaceRecord(value, 'Investigation-template input');
 }
 
-function timestamp(value: unknown, legacy = false): string {
-  return normalizeExplicitIsoTimestamp(value)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(value) : null)
-    ?? '';
+function timestamp(value: unknown): string {
+  return normalizeExplicitIsoTimestamp(value) ?? '';
 }
 
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function template(raw: unknown, sourceVersion: number = INVESTIGATION_TEMPLATE_VERSION): InvestigationTemplate | null {
+function template(raw: unknown): InvestigationTemplate | null {
   const value = record(raw);
   const snapshot = normalizeInvestigationGuideTemplateSnapshot(value);
-  const legacyTimestamps = sourceVersion < INVESTIGATION_TEMPLATE_VERSION;
-  const createdAt = timestamp(value?.createdAt, legacyTimestamps);
-  const updatedAt = timestamp(value?.updatedAt, legacyTimestamps);
-  return snapshot && createdAt && updatedAt && (sourceVersion !== 1 || LEGACY_RECIPE_IDS.has(snapshot.recipeId))
+  const createdAt = timestamp(value?.createdAt);
+  const updatedAt = timestamp(value?.updatedAt);
+  return snapshot && createdAt && updatedAt
     ? { ...snapshot, createdAt, updatedAt }
     : null;
 }
@@ -65,15 +61,14 @@ export function normalizeInvestigationTemplateStore(raw: unknown) {
   assertWorkspaceDeclaredVersion(raw, 'Investigation-template store');
   const value = record(raw);
   if (value?.schema === INVESTIGATION_TEMPLATE_SCHEMA
-    && Number(value.version) > INVESTIGATION_TEMPLATE_VERSION) {
-    throw new Error('This investigation-template collection uses a newer schema and cannot be read safely.');
+    && !(INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS as readonly number[]).includes(Number(value.version))) {
+    throw new Error(`Investigation-template schema ${String(value.version)} is unsupported; no data was changed.`);
   }
-  const sourceVersion = Array.isArray(raw) ? INVESTIGATION_TEMPLATE_VERSION : Number(value?.version) || INVESTIGATION_TEMPLATE_VERSION;
   const source = Array.isArray(raw) ? raw : Array.isArray(value?.templates) ? value.templates : [];
   const templates: InvestigationTemplate[] = [];
   const seen = new Set<string>();
   for (const candidate of source.slice(0, MAX_INVESTIGATION_TEMPLATES * 2)) {
-    const normalized = template(candidate, sourceVersion);
+    const normalized = template(candidate);
     if (!normalized || seen.has(normalized.id)) continue;
     seen.add(normalized.id);
     templates.push(normalized);
@@ -160,7 +155,7 @@ function strictImport(raw: unknown) {
     throw new Error('This investigation-template export uses a newer schema and cannot be imported safely.');
   }
   if (!(INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS as readonly number[]).includes(Number(value.version))) {
-    throw new Error(`Expected investigation-template schema 1 or ${INVESTIGATION_TEMPLATE_VERSION}.`);
+    throw new Error(`Expected investigation-template schema ${INVESTIGATION_TEMPLATE_VERSION}.`);
   }
   return normalizeInvestigationTemplateStore(value).templates;
 }

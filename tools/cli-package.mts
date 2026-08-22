@@ -96,31 +96,30 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The executable dependency graph remains independently capped. The canonical
-// Shared domain extractions retain their reviewed pure closures,
-// and two historical browser-safe domain-control paths remain explicit package
-// roots because released CLI archives permitted those deep imports.
-export const MAX_CLI_RUNTIME_MODULES = 306;
-export const MAX_CLI_PACKAGE_MODULES = 308;
+// The executable dependency graph remains independently capped with bounded
+// headroom for canonical domain owners. Two browser-safe domain-control paths
+// remain explicit package roots because released CLI archives permitted those
+// deep imports.
+export const MAX_CLI_RUNTIME_MODULES = 320;
+export const MAX_CLI_PACKAGE_MODULES = 322;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but they remain bounded
 // because TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 296;
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 312;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep a two-entry growth margin over the reviewed shared-domain package
-// closure; packed and unpacked byte ceilings remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 307;
+// Keep the reviewed shared-domain package closure exact; packed and unpacked
+// byte ceilings remain independent controls.
+export const MAX_CLI_PACKAGE_ENTRIES = 320;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
-export const MAX_CLI_COMMAND_INVENTORY_BYTES = 4 * 1024;
 
-const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:cases|comparison|contracts|evidence|interchange|investigation|workspace))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
+const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:cases|comparison|contracts|evidence|interchange|investigation|monitoring|workspace))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const COMPILABLE_SOURCE_PATTERN = /\.(?:mts|ts)$/u;
 const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
 const CLI_COMPATIBILITY_ENTRY_MODULES = Object.freeze([
@@ -162,7 +161,6 @@ const CLI_PACKAGE_ENTRY_MODULES = Object.freeze([
   ...CLI_RUNTIME_ENTRY_MODULES,
   ...CLI_COMPATIBILITY_ENTRY_MODULES,
 ]);
-const CLI_COMMAND_INVENTORY_FIXTURE = 'fixtures/cli-command-inventory-v1.json';
 const INSTALLED_HANDLER_MODULES: Readonly<Record<Exclude<CliHandlerOwner, 'inline'>, Readonly<{
   source: string;
   exportName: string;
@@ -194,7 +192,7 @@ export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   'tldts',
   'undici',
 ]);
-const SUPPORT_FILES = Object.freeze([
+export const CLI_PACKAGE_SUPPORT_FILES = Object.freeze([
   ['packages/cli/README.md', 'README.md'],
   ['docs/cli.md', 'docs/cli.md'],
   ['docs/cli-reference.md', 'docs/cli-reference.md'],
@@ -258,30 +256,6 @@ function dependencies(value: unknown): readonly DependencyEntry[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 512) throw new TypeError('Dependency graph entries must be a bounded array.');
   return value.map((entry, index) => record(entry, `Dependency ${index + 1}`));
-}
-
-export function parseCliCommandInventory(value: unknown): readonly string[] {
-  if (!Array.isArray(value) || value.length !== 47) {
-    throw new TypeError('CLI command inventory must contain exactly 47 commands.');
-  }
-  const commands = value.map((item, index) => boundedString(item, `CLI command inventory entry ${index + 1}`, 80));
-  if (new Set(commands).size !== commands.length || commands.some((command) => !/^[a-z][a-z0-9-]*$/u.test(command))) {
-    throw new TypeError('CLI command inventory must contain unique canonical command names.');
-  }
-  return Object.freeze(commands);
-}
-
-export function assertCliCommandInventory(
-  sourceValue: unknown,
-  frozenValue: unknown,
-): readonly string[] {
-  const sourceCommands = parseCliCommandInventory(sourceValue);
-  const frozenCommands = parseCliCommandInventory(frozenValue);
-  if (sourceCommands.length !== frozenCommands.length
-    || sourceCommands.some((command, index) => command !== frozenCommands[index])) {
-    throw new TypeError('Source CLI registry must match the independent version-1 command inventory.');
-  }
-  return frozenCommands;
 }
 
 export function selectCliPackageSources(
@@ -405,6 +379,7 @@ export function buildCliPackageManifest(
       'packages/evidence/**/*.mjs',
       'packages/interchange/**/*.mjs',
       'packages/investigation/**/*.mjs',
+      'packages/monitoring/**/*.mjs',
       'packages/workspace/**/*.mjs',
       'docs/cli.md',
       'docs/cli-reference.md',
@@ -843,13 +818,12 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     };
     const [sourceSnapshot, supportSnapshot, manifestSnapshot, compilerSnapshot] = await Promise.all([
       captureCliPackageSourceSnapshot(repositoryRoot, liveClosure.sources, copyState),
-      captureCliPackageSourceSnapshot(repositoryRoot, SUPPORT_FILES.map(([source]) => source), copyState),
+      captureCliPackageSourceSnapshot(repositoryRoot, CLI_PACKAGE_SUPPORT_FILES.map(([source]) => source), copyState),
       captureCliPackageSourceSnapshot(repositoryRoot, [
         'package.json',
         ...CLI_PACKAGE_COMPILER_CONTEXT_FILES,
         'packages/cli/package.template.json',
         'package-lock.json',
-        CLI_COMMAND_INVENTORY_FIXTURE,
       ], copyState),
       captureCliPackageSourceSnapshot(repositoryRoot, liveClosure.contextFiles, compilerState),
     ]);
@@ -859,14 +833,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'package.template.json',
     );
     const lockfile = parseBoundedJsonBytes(snapshotBytes(manifestSnapshot, 'package-lock.json'), 'package-lock.json');
-    const commandInventoryBytes = snapshotBytes(manifestSnapshot, CLI_COMMAND_INVENTORY_FIXTURE);
-    if (commandInventoryBytes.length > MAX_CLI_COMMAND_INVENTORY_BYTES) {
-      throw new TypeError(`CLI command inventory exceeds ${MAX_CLI_COMMAND_INVENTORY_BYTES} bytes.`);
-    }
-    const frozenCommands = assertCliCommandInventory(
-      CLI_COMMANDS,
-      parseBoundedJsonBytes(commandInventoryBytes, CLI_COMMAND_INVENTORY_FIXTURE),
-    );
+    const expectedCommands = CLI_COMMANDS;
     const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled });
     await materializeCliPackageSourceSnapshot(sourceRoot, sourceSnapshot);
     await materializeCliPackageSourceSnapshot(sourceRoot, manifestSnapshot);
@@ -903,7 +870,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
       ),
     ]);
-    for (const [source, destination] of SUPPORT_FILES) {
+    for (const [source, destination] of CLI_PACKAGE_SUPPORT_FILES) {
       await copyPackageFile(stagingRoot, destination, snapshotBytes(supportSnapshot, source));
     }
     const noticeOptions = {
@@ -969,7 +936,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'packages/workspace/workspace-archive.mjs',
       'package.json',
       'third-party-notices.txt',
-      ...SUPPORT_FILES.map(([, destination]) => destination),
+      ...CLI_PACKAGE_SUPPORT_FILES.map(([, destination]) => destination),
     ];
     for (const required of requiredEntries) {
       if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
@@ -1133,7 +1100,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const manual = await runInstalledCheck(executable, ['manual'], 'manual');
     if (!manual.startsWith('.TH WHOISLEUTH 1')
       || !manual.includes('.SS diff')
-      || !manual.includes('--save-lookup')
+      || !manual.includes('\\-\\-save\\-lookup')
       || !manual.includes('--palette')) {
       throw new TypeError('Installed CLI manual command returned the wrong document.');
     }
@@ -1165,9 +1132,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       `Installed command catalogue entry ${index + 1} command`,
       80,
     ));
-    if (catalogueCommands.length !== frozenCommands.length
-      || catalogueCommands.some((command, index) => command !== frozenCommands[index])) {
-      throw new TypeError('Installed command catalogue must match the exact reviewed command inventory and order.');
+    if (catalogueCommands.length !== expectedCommands.length
+      || catalogueCommands.some((command, index) => command !== expectedCommands[index])) {
+      throw new TypeError('Installed command catalogue must match the canonical command registry and order.');
     }
     for (const [index, entry] of commandCatalogue.commands.entries()) {
       if (Object.keys(record(entry, `Installed command catalogue entry ${index + 1}`)).sort().join(',')

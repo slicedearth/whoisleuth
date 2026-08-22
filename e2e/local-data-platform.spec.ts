@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { runIndexedDbFeasibilityProbe } from '../frontend/src/lib/local-data-platform-probe';
-import { readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, openBulkShortlist, openDashboardSecondaryWorkspaces, readBrowserLocalCollection } from './helpers';
 import type {
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
@@ -12,10 +12,8 @@ import {
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 
-function legacyShortlist() {
-  return {
-    schema: 'whoisleuth.shortlist',
-    version: 2,
+function publicShortlist() {
+  return currentBrowserLocalDocument('shortlist', {
     entries: [{
       domain: 'priority.invalid',
       scanDepth: 'fast',
@@ -26,7 +24,7 @@ function legacyShortlist() {
       mutationTypes: ['omission'],
       savedAt: '2026-07-22T01:00:00.000Z',
     }],
-  };
+  });
 }
 
 async function rawLocalDataSnapshot(page: import('@playwright/test').Page): Promise<string> {
@@ -87,8 +85,8 @@ test('native IndexedDB satisfies the bounded local data feasibility probe', asyn
   expect(retainedProbeDatabases).toEqual([]);
 });
 
-test('legacy browser data migrates once into verified IndexedDB records without deleting the source', async ({ page }) => {
-  const legacy = legacyShortlist();
+test('public browser data migrates once into verified IndexedDB records without deleting the source', async ({ page }) => {
+  const legacy = publicShortlist();
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
     value: legacy,
@@ -141,27 +139,38 @@ test('wrong-shaped legacy data remains unavailable and is never normalized to an
   expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
 });
 
-test('historical unversioned array stores remain readable during migration', async ({ page }) => {
+test('retired unversioned Case stores remain preserved and unavailable during migration', async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, '[]'), CASES_COLLECTION.legacyKey);
 
   await page.goto('/dashboard');
 
-  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toHaveCount(0);
-  const collection = await readBrowserLocalCollection(page, 'cases');
-  expect(collection.manifest).toMatchObject({
-    collection: 'cases',
-    recordCount: 0,
-    source: 'legacy-localstorage',
-  });
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Unversioned Cases data is retired. Export it with the last broad-reader release or choose an explicit reset before continuing; no data was changed.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), CASES_COLLECTION.legacyKey)).toBe('[]');
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
 });
 
 test('application writes remain authoritative across reloads while the retained legacy source stays untouched', async ({ page }) => {
-  const legacy = legacyShortlist();
+  const legacy = publicShortlist();
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
     value: legacy,
   });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+    key: CAMPAIGNS_COLLECTION.legacyKey,
+    value: currentBrowserLocalDocument('campaigns', {
+      campaigns: [{
+        id: 'rollback-tools-campaign',
+        name: 'Rollback tools fixture',
+        description: '',
+        domains: [],
+        createdAt: '2026-07-22T01:00:00.000Z',
+        updatedAt: '2026-07-22T01:00:00.000Z',
+      }],
+    }),
+  });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear shortlist' }).click();
@@ -174,6 +183,7 @@ test('application writes remain authoritative across reloads while the retained 
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual(legacy);
 
   await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByText('How workspace backups work', { exact: true }).click();
   await page.getByRole('button', { name: 'Update legacy rollback copy' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Updated the legacy rollback copy' })).toBeVisible();
@@ -187,9 +197,10 @@ test('application writes remain authoritative across reloads while the retained 
 test('a tampered IndexedDB record stops the console instead of presenting an empty collection', async ({ page }) => {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
-    value: legacyShortlist(),
+    value: publicShortlist(),
   });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
@@ -226,12 +237,13 @@ test('a tampered IndexedDB record stops the console instead of presenting an emp
   await expect(page.getByText('Shortlist contains a record that could not be verified.')).toBeVisible();
 });
 
-test('an older IndexedDB collection schema is normalized and recommitted at the current version', async ({ page }) => {
+test('a retired local-only IndexedDB schema remains preserved and unavailable', async ({ page }) => {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
-    value: legacyShortlist(),
+    value: publicShortlist(),
   });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
@@ -259,9 +271,20 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   });
   await page.reload();
 
-  const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1, minimumRevision: 2 });
-  expect(collection.manifest).toMatchObject({ schemaVersion: 3, revision: 2, source: 'application' });
-  expect(collection.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Shortlist schema 1 is retired. Restore or export it with the last broad-reader release, or choose an explicit reset; no data was changed.')).toBeVisible();
+  const retained = JSON.parse(await rawLocalDataSnapshot(page)) as {
+    manifests: BrowserLocalCollectionManifest[];
+    records: BrowserLocalStoredRecord[];
+  };
+  expect(retained.manifests.find((manifest) => manifest.collection === 'shortlist')).toMatchObject({
+    schemaVersion: 1,
+    revision: 1,
+    recordCount: 1,
+    source: 'legacy-localstorage',
+  });
+  expect(retained.records).toHaveLength(1);
+  expect(retained.records[0]?.payload).toContain('priority.invalid');
 });
 
 test('initialization validates every existing collection before writing a missing collection', async ({ page }) => {
@@ -301,7 +324,7 @@ test('initialization validates every existing collection before writing a missin
   await page.reload();
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
-  await expect(page.getByText('Campaigns was created by a newer app version. Update the app before reading it.')).toBeVisible();
+  await expect(page.getByText('Campaigns schema 2 was created by a newer app version. Update the app before reading it; no data was changed.')).toBeVisible();
   expect(await rawLocalDataSnapshot(page)).toBe(beforeReload);
 });
 

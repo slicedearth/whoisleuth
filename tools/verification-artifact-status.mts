@@ -14,6 +14,7 @@ const GROUPS = Object.freeze({
     'frontend/build',
     'frontend/.svelte-kit',
     'frontend/playwright/.auth',
+    'playwright/.auth',
     'playwright-report',
     'playwright-results.json',
     'test-results',

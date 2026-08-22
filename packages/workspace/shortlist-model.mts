@@ -5,7 +5,7 @@
 import { compactWatchlistResults } from './watchlist-history.mts';
 import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
 import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   MAX_SHORTLIST_ENTRIES,
@@ -54,7 +54,6 @@ export type ShortlistStore = {
 };
 type NormalizeShortlistOptions = {
   fallbackTimestamp?: unknown;
-  legacyTimestamps?: boolean;
 };
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -74,7 +73,7 @@ function entryList(raw: unknown): unknown[] | null {
 }
 
 export function shortlistStoreVersion(raw: unknown): number | null {
-  if (Array.isArray(raw)) return 1;
+  if (Array.isArray(raw)) return SHORTLIST_SCHEMA_VERSION;
   const value = plainRecord(raw);
   if (!value || !isEnvelope(value)) return null;
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0
@@ -88,10 +87,8 @@ function score(value: unknown): number | null {
     : null;
 }
 
-function timestamp(value: unknown, fallback: string = EPOCH, legacy = false): string {
-  const normalized = normalizeExplicitIsoTimestamp(value);
-  if (normalized) return normalized;
-  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
+function timestamp(value: unknown, fallback: string = EPOCH): string {
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function factors(value: unknown): ShortlistFactor[] {
@@ -134,7 +131,6 @@ export function normalizeShortlistRecord(
     savedAt: timestamp(
       value.savedAt,
       timestamp(options.fallbackTimestamp, EPOCH),
-      options.legacyTimestamps === true,
     ),
   };
 }
@@ -145,13 +141,14 @@ export function normalizeShortlistStore(raw: unknown): ShortlistStore {
   assertWorkspaceDeclaredVersion(raw, 'Shortlist store');
   const source = entryList(raw);
   const sourceVersion = shortlistStoreVersion(raw);
-  const legacyTimestamps = !Array.isArray(raw)
-    && sourceVersion !== null
-    && sourceVersion < SHORTLIST_SCHEMA_VERSION;
+  if (!Array.isArray(raw) && sourceVersion !== null
+    && !SUPPORTED_SHORTLIST_SCHEMA_VERSIONS.includes(sourceVersion)) {
+    throw new Error(`Shortlist schema ${sourceVersion} is unsupported; no data was changed.`);
+  }
   const byDomain = new Map<string, ShortlistRecord>();
   if (source) {
     for (const item of source.slice(0, MAX_SHORTLIST_INPUTS)) {
-      const record = normalizeShortlistRecord(item, { legacyTimestamps });
+      const record = normalizeShortlistRecord(item);
       if (!record) continue;
       byDomain.set(record.domain, record);
       if (byDomain.size >= MAX_SHORTLIST_ENTRIES) break;
@@ -244,9 +241,7 @@ export function mergeShortlistStores(localRaw: unknown, importedRaw: unknown) {
   const imported = new Map<string, ShortlistRecord>();
   let skipped = Math.max(0, input.length - MAX_SHORTLIST_INPUTS);
   for (const item of input.slice(0, MAX_SHORTLIST_INPUTS)) {
-    const record = normalizeShortlistRecord(item, {
-      legacyTimestamps: importedVersion !== null && importedVersion < SHORTLIST_SCHEMA_VERSION,
-    });
+    const record = normalizeShortlistRecord(item);
     if (!record) { skipped++; continue; }
     if (imported.has(record.domain)) skipped++;
     imported.set(record.domain, record);

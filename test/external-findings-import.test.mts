@@ -39,28 +39,24 @@ describe('strict external findings import', () => {
     assert.equal(parsed.findings[0]?.evidenceClass, 'provider_report');
   });
 
-  test('migrates version 1 to a provider report and preserves deployment observations', () => {
-    const { evidenceClass: _evidenceClass, ...legacyFinding } = document().findings[0]!;
-    const legacy = document({ schemaVersion: 1, findings: [legacyFinding] });
-    assert.equal(parseExternalFindingsDocument(legacy).findings[0]?.evidenceClass, 'provider_report');
+  test('rejects reader-only version 1 and preserves current deployment observations', () => {
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 1 })), /schema version 4/u);
     const deployment = document({ findings: [{ ...document().findings[0], evidenceClass: 'deployment_observation' }] });
     assert.equal(parseExternalFindingsDocument(deployment).findings[0]?.evidenceClass, 'deployment_observation');
   });
 
-  test('requires explicit zones in schema 4 while migrating legacy timestamps as UTC', () => {
+  test('requires explicit zones in schema 4 and rejects reader-only timestamps', () => {
     const zoneLess = '2026-07-27T12:00:00.000';
     assert.throws(() => parseExternalFindingsDocument(document({
       source: { name: 'Current import', reference: null, collectedAt: zoneLess },
       findings: [{ ...document().findings[0], observedAt: zoneLess }],
     })), /explicit timezone/u);
 
-    const legacy = parseExternalFindingsDocument(document({
+    assert.throws(() => parseExternalFindingsDocument(document({
       schemaVersion: 3,
       source: { name: 'Legacy import', reference: null, collectedAt: zoneLess },
       findings: [{ ...document().findings[0], observedAt: zoneLess }],
-    }));
-    assert.equal(legacy.source.collectedAt, '2026-07-27T12:00:00.000Z');
-    assert.equal(legacy.findings[0]?.observedAt, '2026-07-27T12:00:00.000Z');
+    })), /schema version 4/u);
 
     const offset = parseExternalFindingsDocument(document({
       source: { name: 'Current import', reference: null, collectedAt: '2026-07-27T12:00:00.000+01:00' },
@@ -70,7 +66,7 @@ describe('strict external findings import', () => {
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 1, 2, 3, or 4/u);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 4/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -104,7 +100,7 @@ describe('strict external findings import', () => {
     assert.throws(() => parseExternalFindingsDocument(document({
       schemaVersion: 3,
       findings: [certificate],
-    })), /requires external-findings schema version 4/u);
+    })), /schema version 4/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...certificate, structuredObservation: { ...structuredObservation, certificateSha256: 'c'.repeat(64) } }],
     })), /digest must match/u);

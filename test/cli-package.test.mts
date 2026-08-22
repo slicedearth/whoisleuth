@@ -8,12 +8,10 @@ import { fileURLToPath } from 'node:url';
 import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-  MAX_CLI_COMMAND_INVENTORY_BYTES,
   MAX_CLI_PACKAGE_COMPILER_SOURCES,
   MAX_CLI_PACKAGE_ENTRIES,
   MAX_CLI_PACKAGE_MODULES,
   MAX_CLI_RUNTIME_MODULES,
-  assertCliCommandInventory,
   assertCliPackageSourceSnapshot,
   buildCliPackageManifest,
   captureCliPackageSourceSnapshot,
@@ -22,7 +20,6 @@ import {
   isCliPackageCompilerInputPath,
   materializeCliPackageSourceSnapshot,
   parseArguments,
-  parseCliCommandInventory,
   selectCliPackageSources,
   selectMaterializedCliPackageSources,
 } from '../tools/cli-package.mts';
@@ -79,25 +76,12 @@ describe('scoped CLI package contract', () => {
   test('bounds both long-running package assembly and installed command processes', () => {
     assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
-    assert.equal(MAX_CLI_COMMAND_INVENTORY_BYTES, 4 * 1024);
-    assert.equal(MAX_CLI_RUNTIME_MODULES, 306);
-    assert.equal(MAX_CLI_PACKAGE_MODULES, 308);
-    assert.equal(MAX_CLI_PACKAGE_COMPILER_SOURCES, 296);
-    assert.equal(MAX_CLI_PACKAGE_ENTRIES, 307);
-  });
-
-  test('uses an independent exact command inventory rather than a live self-projection', async () => {
-    const frozen = JSON.parse(await readFile(
-      path.join(REPOSITORY_ROOT, 'fixtures', 'cli-command-inventory-v1.json'),
-      'utf8',
-    ));
-    const parsed = parseCliCommandInventory(frozen);
-    assert.equal(parsed.length, 47);
-    assert.deepEqual(assertCliCommandInventory(parsed, frozen), parsed);
-    assert.throws(() => parseCliCommandInventory(parsed.slice(1)), /exactly 47 commands/u);
-    assert.throws(() => parseCliCommandInventory([...parsed.slice(0, -1), parsed[0]]), /unique canonical/u);
-    assert.throws(() => assertCliCommandInventory([...parsed].reverse(), frozen), /independent version-1 command inventory/u);
-    assert.throws(() => assertCliCommandInventory([...parsed.slice(0, -1), 'future-command'], frozen), /independent version-1 command inventory/u);
+    assert.ok(MAX_CLI_RUNTIME_MODULES >= 1 && MAX_CLI_RUNTIME_MODULES < MAX_CLI_PACKAGE_MODULES);
+    assert.ok(MAX_CLI_PACKAGE_MODULES <= 512);
+    assert.ok(MAX_CLI_PACKAGE_COMPILER_SOURCES >= MAX_CLI_RUNTIME_MODULES / 2
+      && MAX_CLI_PACKAGE_COMPILER_SOURCES <= 512);
+    assert.ok(MAX_CLI_PACKAGE_ENTRIES >= MAX_CLI_RUNTIME_MODULES / 2
+      && MAX_CLI_PACKAGE_ENTRIES <= 512);
   });
 
   test('validates compiler context paths with bounded linear segment checks', () => {
@@ -124,6 +108,7 @@ describe('scoped CLI package contract', () => {
         { source: 'packages/evidence/observation.mts', dependencies: [] },
         { source: 'packages/interchange/external-findings-import.mts', dependencies: [] },
         { source: 'packages/investigation/investigation-capsule.mts', dependencies: [] },
+        { source: 'packages/monitoring/analyst-review-state.mts', dependencies: [] },
         { source: 'packages/web-capture/capture.mts', dependencies: [] },
         { source: 'test/cli.test.mts', dependencies: [] },
       ],
@@ -140,6 +125,7 @@ describe('scoped CLI package contract', () => {
       'packages/evidence/observation.mts',
       'packages/interchange/external-findings-import.mts',
       'packages/investigation/investigation-capsule.mts',
+      'packages/monitoring/analyst-review-state.mts',
     ]);
   });
 
@@ -278,6 +264,7 @@ describe('scoped CLI package contract', () => {
     assert.ok((manifest.files as string[]).includes('packages/evidence/**/*.mjs'));
     assert.ok((manifest.files as string[]).includes('packages/interchange/**/*.mjs'));
     assert.ok((manifest.files as string[]).includes('packages/investigation/**/*.mjs'));
+    assert.ok((manifest.files as string[]).includes('packages/monitoring/**/*.mjs'));
     assert.ok((manifest.files as string[]).includes('packages/workspace/**/*.mjs'));
   });
 

@@ -8,15 +8,7 @@
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
   import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
   import BrandAssetRegisterSummary from '$lib/components/BrandAssetRegisterSummary.svelte';
-  import BrandAssetRegister from '$lib/components/BrandAssetRegister.svelte';
-  import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
-  import BrandPortfolioPostureMatrix from '$lib/components/BrandPortfolioPostureMatrix.svelte';
-  import BrandDesiredPostureBaselines from '$lib/components/BrandDesiredPostureBaselines.svelte';
-  import BrandDomainControlPassport from '$lib/components/BrandDomainControlPassport.svelte';
-  import BrandCertificateEventReplay from '$lib/components/BrandCertificateEventReplay.svelte';
-  import BrandProtectionAttestations from '$lib/components/BrandProtectionAttestations.svelte';
-  import DomainControlCentre from '$lib/components/DomainControlCentre.svelte';
-  import MailReportWorkbench from '$lib/components/MailReportWorkbench.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, isBrandProfileMutationCommittedError, loadProfiles, MAX_PROFILE_IMPORT_BYTES, normalizeProfile, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
@@ -34,8 +26,10 @@
   } from '$lib/analysis/client-response-contracts';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { LARGE_JSON_RESPONSE_BYTES, requestJsonCapped, STANDARD_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
+  import { preloadBestEffort } from '$lib/idle-preload';
   type AuditResult={domain:string;report:DomainPostureHttpResponse|null;error:string};
   type BrandsView='overview'|'assets';
+  type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
   type ProfilePersistenceResult={committed:true}|{committed:false;message:string};
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'allowDomains'|'allowRegistrars'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
@@ -55,6 +49,21 @@
   const postureDisabled=$derived(disabledCapability(capabilityReport?.()||null,'domain_posture'));
   const active=$derived(profileSourceState==='ready'&&activePreferenceSourceState==='ready'?profiles.find(p=>p.id===activeId)||null:null);
   const brandsView=$derived<BrandsView>(page.url.searchParams.get('view')==='assets'?'assets':'overview');
+  const brandWorkbenchOptions:ReadonlyArray<Readonly<{id:BrandWorkbench;label:string}>>=[
+    {id:'control',label:'Domain controls'},
+    {id:'portfolio',label:'Compare owned domains'},
+    {id:'posture',label:'Review current settings'},
+    {id:'baselines',label:'Expected domain settings'},
+    {id:'passport',label:'Portable domain settings'},
+    {id:'certificates',label:'Certificate events'},
+    {id:'attestations',label:'Reviewed account controls'},
+    {id:'mail',label:'Mail reports'},
+  ];
+  const brandWorkbench=$derived.by<BrandWorkbench|null>(()=>{
+    if(page.url.searchParams.has('baseline'))return'baselines';
+    const requested=page.url.searchParams.get('workbench');
+    return brandWorkbenchOptions.some((option)=>option.id===requested)?requested as BrandWorkbench:null;
+  });
   const brandReviewInbox=$derived(buildBrandReviewInbox({cases,profiles,activeProfileId:activeId,sourceStates:{cases:caseSourceState,profiles:profileSourceState,activePreference:activePreferenceSourceState}}));
   const brandAssetRegister=$derived(buildBrandAssetRegister({profiles,activeProfileId:activeId,cases,relationships,sourceStates:{profiles:profileSourceState,activePreference:activePreferenceSourceState,cases:caseSourceState,relationships:relationshipSourceState}}));
   const localContextStatus=$derived([
@@ -65,7 +74,7 @@
   ].filter(Boolean).join(' '));
   const editorValues=$derived({name,official,products,tlds,partners,allowDomains,allowRegistrars,selectors,retiredSelectors,mailProtectionProfile,trademarkOwner,trademarkRegistration,faviconHash});
   const siteIdentityReason=$derived(siteIdentityDisabled?siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.':'');
-  const postureReason=$derived(postureDisabled?postureDisabled.reason||'Official-domain posture checks are disabled by deployment policy.':'');
+  const postureReason=$derived(postureDisabled?postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.':'');
   function closeActivePreferenceSource(){cancelAudit();activeId='';auditResults=[];activePreferenceSourceState='unavailable';}
   function closeProfileSource(){cancelAudit();cancelIdentityCapture();profiles=[];editing='';showForm=false;pageBaseline=null;profileSourceState='unavailable';}
   function closeCaseSource(){cases=[];caseSourceState='unavailable';certificateReplayUnavailable=true;}
@@ -90,7 +99,39 @@
   }
   async function refreshCasesForBrands(){caseSourceState='loading';cases=[];certificateReplayUnavailable=true;try{const loaded=await loadCases();cases=loaded;caseSourceState='ready';certificateReplayUnavailable=false;return loaded;}catch(cause){closeCaseSource();throw cause;}}
   async function refreshRelationshipsForBrands(){relationshipSourceState='loading';relationships=[];try{const loaded=await loadRelationshipObservations();relationships=loaded;relationshipSourceState='ready';return loaded;}catch(cause){closeRelationshipSource();throw cause;}}
-  async function selectBrandsView(next:BrandsView){if(next===brandsView)return;const url=new URL(page.url);if(next==='overview')url.searchParams.delete('view');else url.searchParams.set('view','assets');if(next==='overview')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);url.hash='';await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});}
+  function preloadBrandsView(next:BrandsView){if(next==='assets')preloadBestEffort(()=>import('$lib/components/BrandAssetRegister.svelte'));}
+  async function selectBrandsView(next:BrandsView){preloadBrandsView(next);if(next===brandsView)return;const url=new URL(page.url);if(next==='overview')url.searchParams.delete('view');else url.searchParams.set('view','assets');if(next==='overview')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);url.hash='';await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});}
+  function preloadBrandWorkbench(next:string){
+    if(next==='control')preloadBestEffort(()=>import('$lib/components/DomainControlCentre.svelte'));
+    else if(next==='portfolio')preloadBestEffort(()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte'));
+    else if(next==='posture')preloadBestEffort(()=>import('$lib/components/BrandPostureAudit.svelte'));
+    else if(next==='baselines')preloadBestEffort(()=>import('$lib/components/BrandDesiredPostureBaselines.svelte'));
+    else if(next==='passport')preloadBestEffort(()=>import('$lib/components/BrandDomainControlPassport.svelte'));
+    else if(next==='certificates')preloadBestEffort(()=>import('$lib/components/BrandCertificateEventReplay.svelte'));
+    else if(next==='attestations')preloadBestEffort(()=>import('$lib/components/BrandProtectionAttestations.svelte'));
+    else if(next==='mail')preloadBestEffort(()=>import('$lib/components/MailReportWorkbench.svelte'));
+  }
+  async function selectBrandWorkbench(next:string){
+    const url=new URL(page.url);
+    const selected=brandWorkbenchOptions.some((option)=>option.id===next)?next as BrandWorkbench:null;
+    if(selected)preloadBrandWorkbench(selected);
+    if(selected)url.searchParams.set('workbench',selected);else url.searchParams.delete('workbench');
+    if(selected!=='baselines')url.searchParams.delete('baseline');
+    url.searchParams.delete('view');
+    for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);
+    url.hash=selected==='baselines'&&page.url.hash==='#desired-posture-baseline'?page.url.hash:'';
+    await goto(`${url.pathname}${url.search}${url.hash}`,{noScroll:true,keepFocus:true});
+  }
+  async function deferredBrandReady(){
+    await tick();
+    const hash=page.url.hash;
+    if(!hash.startsWith('#')||hash.length>257)return;
+    let targetId='';
+    try{targetId=decodeURIComponent(hash.slice(1));}catch{return;}
+    const target=document.getElementById(targetId);
+    target?.scrollIntoView({block:'center'});
+    target?.focus({preventScroll:true});
+  }
   function brandsViewKeydown(event:KeyboardEvent){const views:BrandsView[]=['overview','assets'];const current=views.indexOf(brandsView);let index=-1;if(event.key==='ArrowRight')index=(current+1)%views.length;else if(event.key==='ArrowLeft')index=(current+views.length-1)%views.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=views.length-1;if(index<0)return;const next=views[index];if(!next)return;event.preventDefault();void selectBrandsView(next);const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
   async function focusEditor(){await tick();document.getElementById('brand-profile-name')?.focus();}
   function cancelIdentityCapture(){identityCaptureGeneration+=1;identityCaptureController?.abort();identityCaptureController=null;capturingIdentity=false;if(message==='Capturing official-site identity…')message='';}
@@ -159,18 +200,18 @@
     message=`Deleted "${profile.name}". ${issue?`${committedIssueText(issue,'deletion')} `:''}${associationState}`;
     return true;
   }
-  async function saveAttestations(attestations:ProtectionAttestation[]){if(!active)return;try{const result=await commitProfileWrite({...active,protectionAttestations:attestations},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved reviewed protection attestations. ${committedIssueText(result.issue)}`:'Saved reviewed protection attestations. Expired statements remain visible until reviewed again.';}catch(cause){message=profileWriteFailureMessage(cause,'Could not save protection attestations.');}}
-  async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileWrite({...active,desiredPostureBaselines},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved analyst-authored desired posture baselines. ${committedIssueText(result.issue)}`:'Saved analyst-authored desired posture baselines.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save desired posture baselines.');message=failure;return{committed:false,message:failure};}}
+  async function saveAttestations(attestations:ProtectionAttestation[]){if(!active)return;try{const result=await commitProfileWrite({...active,protectionAttestations:attestations},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved reviewed account controls. ${committedIssueText(result.issue)}`:'Saved reviewed account controls. Expired statements remain visible until reviewed again.';}catch(cause){message=profileWriteFailureMessage(cause,'Could not save reviewed account controls.');}}
+  async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileWrite({...active,desiredPostureBaselines},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');message=failure;return{committed:false,message:failure};}}
   async function saveBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{return persistBaselines(desiredPostureBaselines);}
   async function savePassportProfile(profile:BrandProfile):Promise<ProfilePersistenceResult>{try{const result=await commitProfileWrite(profile,profile.id);message=result.issue?`Imported and saved the selected domain-control passport fields. ${committedIssueText(result.issue)}`:'Imported the selected domain-control passport fields.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save imported domain-control fields.');message=failure;return{committed:false,message:failure};}}
-  async function retainObservation(report:DomainPostureHttpResponse){if(!active)return;const baseline=active.desiredPostureBaselines.find((item)=>item.domain===report.domain);if(!baseline){message='Configure a desired posture baseline before retaining an observation.';return;}const observation=buildDesiredPostureObservation(report);const history=[...(baseline.observationHistory||(baseline.previousObservation?[baseline.previousObservation]:[])).filter((item)=>item.observedAt!==observation.observedAt),observation].sort((left,right)=>Date.parse(left.observedAt)-Date.parse(right.observedAt)).slice(-12);const saved=await persistBaselines(active.desiredPostureBaselines.map((item)=>item.domain===report.domain?{...item,previousObservation:observation,observationHistory:history,updatedAt:new Date().toISOString()}:item));if(saved.committed&&profileSourceState==='ready'&&activePreferenceSourceState==='ready')message=`Retained the compact ${report.checkedAt} posture observation for ${report.domain}.`;}
+  async function retainObservation(report:DomainPostureHttpResponse){if(!active)return;const baseline=active.desiredPostureBaselines.find((item)=>item.domain===report.domain);if(!baseline){message='Configure expected domain settings before retaining an observation.';return;}const observation=buildDesiredPostureObservation(report);const history=[...(baseline.observationHistory||(baseline.previousObservation?[baseline.previousObservation]:[])).filter((item)=>item.observedAt!==observation.observedAt),observation].sort((left,right)=>Date.parse(left.observedAt)-Date.parse(right.observedAt)).slice(-12);const saved=await persistBaselines(active.desiredPostureBaselines.map((item)=>item.domain===report.domain?{...item,previousObservation:observation,observationHistory:history,updatedAt:new Date().toISOString()}:item));if(saved.committed&&profileSourceState==='ready'&&activePreferenceSourceState==='ready')message=`Saved the ${report.checkedAt} settings observation for ${report.domain}.`;}
   function cancelAudit(){auditGeneration+=1;auditController?.abort();auditController=null;auditing=false;auditResults=[];}
   function auditProfileFingerprint(profile:BrandProfile){const normalized=normalizeProfile(profile);return JSON.stringify([normalized.id,normalized.officialDomains,normalized.mailProtectionProfile,normalized.dkimSelectors,normalized.retiredDkimSelectors]);}
   function activate(id:string){cancelAudit();try{setActiveProfile(id);activeId=id;activePreferenceSourceState='ready';const profile=profiles.find(item=>item.id===id);message=profile?`Set "${profile.name}" active.`:'Set the selected Brand Profile active.';return true;}catch(cause){closeActivePreferenceSource();message=cause instanceof BrowserLocalDataError?'Could not set the active profile. The active-profile preference is unavailable; reload to retry.':cause instanceof Error?cause.message:'Could not set the active profile.';return false;}}
   async function captureSiteIdentity(){if(siteIdentityDisabled){message=siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.';return;}const domain=parseList(official,true)[0];if(!domain){message='Enter an official domain first.';return;}cancelIdentityCapture();const generation=identityCaptureGeneration;const editingSnapshot=editing;const controller=new AbortController();identityCaptureController=controller;const ownsRequest=()=>generation===identityCaptureGeneration&&identityCaptureController===controller;const canPublish=()=>ownsRequest()&&showForm&&editing===editingSnapshot&&(parseList(official,true)[0]||'')===domain;capturingIdentity=true;message='Capturing official-site identity…';try{const{response,body:raw}=await requestJsonCapped(`/api/availability?q=${encodeURIComponent(domain)}`,{cache:'no-store',signal:controller.signal},{maximumBytes:LARGE_JSON_RESPONSE_BYTES,timeoutMs:40_000});if(!canPublish())return;if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Official-site capture failed'));const parsed=parseAvailabilityCaptureResponse(raw,domain);if(!parsed.ok)throw new Error(parsed.error);const body=parsed.value;const captured=createPageBaseline(domain,body);if(!captured){message=`No page fingerprint baseline was available for ${domain}.${pageBaseline?' The existing baseline is unchanged.':''}`;return;}faviconHash=captured.faviconHash||'';faviconPHash=captured.faviconPHash||'';pageBaseline=captured;message=`Captured a ${captured.complete?'complete':'partial'} page baseline for ${domain}. Save the profile to retain it.`;}catch(cause){if(!canPublish()||controller.signal.aborted)return;message=cause instanceof Error?cause.message:'Official-site capture failed';}finally{if(ownsRequest()){identityCaptureController=null;capturingIdentity=false;}}}
   function baselineDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown time':date.toLocaleString('en-AU');}
   async function audit(){
-    if(postureDisabled){message=postureDisabled.reason||'Official-domain posture checks are disabled by deployment policy.';return;}
+    if(postureDisabled){message=postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.';return;}
     if(!active?.officialDomains.length)return;
     const profileSnapshot=normalizeProfile(active);
     const profileId=profileSnapshot.id;
@@ -183,15 +224,15 @@
     const canPublish=()=>{const current=active;return ownsRequest()&&activeId===profileId&&current!==null&&auditProfileFingerprint(current)===profileFingerprint;};
     auditing=true;auditResults=[];
     const domains=profileSnapshot.officialDomains.slice(0,20);
-    message=`Auditing ${domains.length} official domain${domains.length===1?'':'s'}…`;
+    message=`Reviewing ${domains.length} official domain${domains.length===1?'':'s'}…`;
     let cursor=0;
     const next:AuditResult[]=new Array(domains.length);
-    const worker=async()=>{while(cursor<domains.length&&!controller.signal.aborted){const index=cursor++,domain=domains[index];if(domain===undefined)break;try{const params=new URLSearchParams({q:domain,mailProfile:profileSnapshot.mailProtectionProfile});if(profileSnapshot.dkimSelectors.length)params.set('selectors',profileSnapshot.dkimSelectors.join(','));if(profileSnapshot.retiredDkimSelectors.length)params.set('retiredSelectors',profileSnapshot.retiredDkimSelectors.join(','));const{response,body:raw}=await requestJsonCapped(`/api/domain-posture?${params}`,{cache:'no-store',signal:controller.signal},{maximumBytes:STANDARD_JSON_RESPONSE_BYTES,timeoutMs:40_000});if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Audit failed'));const parsed=parseDomainPostureHttpResponse(raw,domain);if(!parsed.ok)throw new Error(parsed.error);next[index]={domain,report:parsed.value,error:''};}catch(cause){if(controller.signal.aborted)return;next[index]={domain,report:null,error:cause instanceof Error?cause.message:'Audit failed'};}}};
+    const worker=async()=>{while(cursor<domains.length&&!controller.signal.aborted){const index=cursor++,domain=domains[index];if(domain===undefined)break;try{const params=new URLSearchParams({q:domain,mailProfile:profileSnapshot.mailProtectionProfile});if(profileSnapshot.dkimSelectors.length)params.set('selectors',profileSnapshot.dkimSelectors.join(','));if(profileSnapshot.retiredDkimSelectors.length)params.set('retiredSelectors',profileSnapshot.retiredDkimSelectors.join(','));const{response,body:raw}=await requestJsonCapped(`/api/domain-posture?${params}`,{cache:'no-store',signal:controller.signal},{maximumBytes:STANDARD_JSON_RESPONSE_BYTES,timeoutMs:40_000});if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Review failed'));const parsed=parseDomainPostureHttpResponse(raw,domain);if(!parsed.ok)throw new Error(parsed.error);next[index]={domain,report:parsed.value,error:''};}catch(cause){if(controller.signal.aborted)return;next[index]={domain,report:null,error:cause instanceof Error?cause.message:'Review failed'};}}};
     try{
       await Promise.all(Array.from({length:Math.min(3,domains.length)},worker));
       if(!canPublish())return;
       auditResults=next;
-      message=`Audited ${next.filter(v=>v?.report).length}/${domains.length} official domain${domains.length===1?'':'s'}.`;
+      message=`Reviewed ${next.filter(v=>v?.report).length}/${domains.length} official domain${domains.length===1?'':'s'}.`;
     }finally{
       if(ownsRequest()){auditing=false;auditController=null;}
     }
@@ -214,7 +255,7 @@
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Assure" title="Brands" description="Review owned-domain profiles, trusted dependencies, and externally visible control posture."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button><button class="btn" onclick={download} disabled={profileSourceState!=='ready'||!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
+<PageHeading eyebrow="Assure" title="Brands" description="Review owned-domain profiles, trusted dependencies and externally visible security settings."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button><button class="btn" onclick={download} disabled={profileSourceState!=='ready'||!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 {#if message}<p class="message" role="status" aria-label="Brand Profile action status" aria-live="polite" aria-atomic="true">{message}</p>{/if}
 {#if profileSourceState === 'loading'}
@@ -227,18 +268,40 @@
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
 <div class="brand-views" role="tablist" aria-label="Brands views">
   <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
-  <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
+  <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onpointerenter={()=>preloadBrandsView('assets')} onfocus={()=>preloadBrandsView('assets')} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
 </div>
 
 {#if brandsView==='overview'}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-overview">
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
     <BrandReviewInbox inbox={brandReviewInbox} />
-    {#if active}<DomainControlCentre {active} /><BrandPortfolioPostureMatrix {active} /><BrandPostureAudit {active} disabledReason={postureReason} {auditing} results={auditResults} {audit} {retainObservation} /><BrandDesiredPostureBaselines {active} {saveBaselines} requestedDomain={page.url.searchParams.get('baseline') || ''} /><BrandDomainControlPassport {active} saveProfile={savePassportProfile} /><BrandCertificateEventReplay {active} {cases} unavailable={certificateReplayUnavailable} /><BrandProtectionAttestations {active} {saveAttestations} /><MailReportWorkbench {active} />{/if}
+    {#if active}
+      <section class="workbench-launcher card" aria-labelledby="brand-workbench-title">
+        <div><h2 id="brand-workbench-title">Profile tools</h2><p>Choose a tool for the active Brand Profile.</p></div>
+        <label for="brand-workbench">Tool<select id="brand-workbench" value={brandWorkbench??''} onfocus={()=>preloadBrandWorkbench(brandWorkbench??'control')} oninput={(event)=>preloadBrandWorkbench(event.currentTarget.value)} onchange={(event)=>void selectBrandWorkbench(event.currentTarget.value)}><option value="">Choose a tool</option>{#each brandWorkbenchOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
+      </section>
+      {#if brandWorkbench==='control'}
+        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." />
+      {:else if brandWorkbench==='portfolio'}
+        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." />
+      {:else if brandWorkbench==='posture'}
+        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." />
+      {:else if brandWorkbench==='baselines'}
+        <DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} />
+      {:else if brandWorkbench==='passport'}
+        <DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." />
+      {:else if brandWorkbench==='certificates'}
+        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." />
+      {:else if brandWorkbench==='attestations'}
+        <DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." />
+      {:else if brandWorkbench==='mail'}
+        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." />
+      {/if}
+    {/if}
   </div>
 {:else}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-assets">
-    <BrandAssetRegister projection={brandAssetRegister} />
+    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} />
   </div>
 {/if}
 
@@ -253,8 +316,10 @@
   .brand-views button.active{border-color:rgb(var(--interface-accent-rgb) / .45);background:rgb(var(--interface-accent-rgb) / .08);color:var(--interface-accent)}
   .brand-views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   #brands-view-panel{min-width:0}
+  .workbench-launcher{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:20px;margin-top:20px;padding:16px 18px}.workbench-launcher>div{min-width:0}.workbench-launcher h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.workbench-launcher p:not(.eyebrow){margin:6px 0 0;color:var(--muted);font-size:var(--text-xs)}.workbench-launcher label{flex:0 1 340px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}.workbench-launcher select{display:block;width:100%;min-width:0;margin-top:6px}
   @media(max-width:750px){
     .top-actions{margin-top:14px}
     .brand-views button{min-height:44px}
+    .workbench-launcher{align-items:stretch;flex-direction:column}.workbench-launcher label{width:100%;flex-basis:auto}
   }
 </style>

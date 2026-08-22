@@ -1,17 +1,9 @@
 export const INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v5';
-export const PREVIOUS_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v4';
-export const LEGACY_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v3';
-export const ORIGINAL_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
-export const EARLIEST_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
 export const INVESTIGATION_GUIDE_EVENT = 'whoisleuth:investigation-guide-change';
 
 export function hasStoredInvestigationGuide(): boolean {
   try {
-    return sessionStorage.getItem(INVESTIGATION_GUIDE_KEY) !== null
-      || sessionStorage.getItem(PREVIOUS_INVESTIGATION_GUIDE_KEY) !== null
-      || sessionStorage.getItem(LEGACY_INVESTIGATION_GUIDE_KEY) !== null
-      || sessionStorage.getItem(ORIGINAL_INVESTIGATION_GUIDE_KEY) !== null
-      || sessionStorage.getItem(EARLIEST_INVESTIGATION_GUIDE_KEY) !== null;
+    return sessionStorage.getItem(INVESTIGATION_GUIDE_KEY) !== null;
   } catch {
     return false;
   }

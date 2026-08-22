@@ -119,6 +119,13 @@ describe('page fingerprints', () => {
     assert.equal(requiredValue(result.visibleText).value, requiredValue(expected.visibleText).value);
   });
 
+  test('terminal controls and bidi formatting do not alter retained fingerprints', () => {
+    const unsafe = fingerprints('<main>Visible\u009b\u202e account\u00ad words</main>');
+    const clean = fingerprints('<main>Visible account words</main>');
+    assert.equal(unsafe.normalizedHtml.value, clean.normalizedHtml.value);
+    assert.equal(requiredValue(unsafe.visibleText).value, requiredValue(clean.visibleText).value);
+  });
+
   test('an unclosed raw-text element cannot leak its body into visible-text fingerprints', () => {
     const result = fingerprints('<main>Visible words</main><script>private trailing script content');
     const expected = fingerprints('<main>Visible words</main><script></script>');

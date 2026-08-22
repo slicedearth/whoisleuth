@@ -5,6 +5,10 @@ import {
   filterAnalystReviewItems,
   MAX_ANALYST_REVIEW_ITEMS,
 } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
+import {
+  emptyAnalystReviewStateStore,
+  setAnalystReviewDecision,
+} from '../frontend/src/lib/analysis/analyst-review-state.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import type { WatchlistCollection } from '../frontend/src/lib/analysis/watchlist-store.ts';
@@ -277,5 +281,50 @@ describe('analyst review inbox', () => {
     const inbox = buildAnalystReviewInbox({ cases }, NOW);
     assert.equal(inbox.items.length, MAX_ANALYST_REVIEW_ITEMS);
     assert.equal(inbox.truncated, true);
+  });
+
+  test('filters derived recurrence and invalidation without treating either as a permanent disposition', () => {
+    const original = caseRecord();
+    const initial = buildAnalystReviewInbox({ cases: [original] }, NOW);
+    const action = initial.items.find((item) => item.kind === 'case_action');
+    assert.ok(action);
+    const reviewState = setAnalystReviewDecision(emptyAnalystReviewStateStore(), action, {
+      disposition: 'suppressed',
+      rationale: 'The exact retained action is temporarily suppressed for fixture review.',
+      reviewedAt: '2026-07-28T07:00:00.000Z',
+      expiresAt: '2026-07-29T07:00:00.000Z',
+    });
+    assert.equal(filterAnalystReviewItems(
+      buildAnalystReviewInbox({ cases: [original], reviewState }, NOW).items,
+      { lifecycle: 'suppressed' },
+    ).length, 1);
+
+    const changed = caseRecord();
+    changed.actions[0]!.recipient = 'Different reviewed route';
+    const invalidated = buildAnalystReviewInbox({ cases: [changed], reviewState }, NOW);
+    const recurrent = filterAnalystReviewItems(invalidated.items, { lifecycle: 'recurred' });
+    assert.equal(recurrent.length, 1);
+    assert.equal(recurrent[0]?.lifecycle.state, 'invalidated');
+    assert.equal(recurrent[0]?.lifecycle.recurred, true);
+    assert.equal(filterAnalystReviewItems(invalidated.items, { lifecycle: 'invalidated' }).length, 1);
+  });
+
+  test('preserves imported lifecycle state as explicitly orphaned when source evidence is unavailable', () => {
+    const action = buildAnalystReviewInbox({ cases: [caseRecord()] }, NOW)
+      .items.find((item) => item.kind === 'case_action');
+    assert.ok(action);
+    const reviewState = setAnalystReviewDecision(emptyAnalystReviewStateStore(), action, {
+      disposition: 'expected',
+      rationale: 'The exact source-qualified action was reviewed before export.',
+      reviewedAt: '2026-07-28T07:00:00.000Z',
+      expiresAt: '2026-07-29T07:00:00.000Z',
+    });
+    const importedWithoutEvidence = buildAnalystReviewInbox({ reviewState }, NOW);
+    assert.equal(importedWithoutEvidence.items.length, 1);
+    assert.equal(importedWithoutEvidence.items[0]?.kind, 'orphaned_state');
+    assert.equal(importedWithoutEvidence.items[0]?.lifecycle.state, 'orphaned');
+    assert.equal(importedWithoutEvidence.items[0]?.lifecycle.effectiveDisposition, 'open');
+    assert.equal(importedWithoutEvidence.items[0]?.completeness, 'inconclusive');
+    assert.equal(filterAnalystReviewItems(importedWithoutEvidence.items, { lifecycle: 'orphaned' }).length, 1);
   });
 });

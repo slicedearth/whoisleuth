@@ -35,23 +35,23 @@ describe('shared Case domain facades', () => {
     assertExactFacade(browserPacket, sharedPacket);
   });
 
-  test('preserve Node and browser-facade normalisation, ordering, migration, and refusal semantics', async () => {
-    const historical = await fixture('browser-case-v12');
-    assert.deepEqual(browserCase.normalizeCaseStore(historical), sharedCase.normalizeCaseStore(historical));
+  test('preserve exact-current Node and browser-facade normalisation, ordering, and refusal semantics', async () => {
+    const current = await fixture('browser-case-v13');
+    assert.deepEqual(browserCase.normalizeCaseStore(current), sharedCase.normalizeCaseStore(current));
 
-    const portable = await fixture('case-export-v12');
+    const portable = await fixture('case-export-v13');
     assert.deepEqual(browserCase.mergeCases([], portable), sharedCase.mergeCases([], portable));
     assert.equal(sharedResponse.isLegalCaseActionTransition('drafting', 'ready_for_review', 'analyst'), true);
     assert.equal(sharedResponse.isLegalCaseActionTransition('acknowledged', 'submitted', 'analyst'), false);
 
-    assert.deepEqual(
-      browserCase.normalizeCaseStore({ version: 15, cases: [] }),
-      sharedCase.normalizeCaseStore({ version: 15, cases: [] }),
-    );
-    assert.equal(sharedCase.parseStoreVersion({ version: 15 }), 15);
+    for (const owner of [browserCase, sharedCase]) {
+      assert.throws(() => owner.normalizeCaseStore({ version: 11, cases: [] }), /schema 11 is not part of the public compatibility boundary/iu);
+      assert.throws(() => owner.normalizeCaseStore({ version: 14, cases: [] }), /newer than the supported schema 13/iu);
+    }
+    assert.equal(sharedCase.parseStoreVersion({ version: 14 }), 14);
     assert.throws(
-      () => sharedCase.mergeCases([], { version: 15, cases: [] }),
-      /newer version/iu,
+      () => sharedCase.mergeCases([], { version: 14, cases: [] }),
+      /newer than the supported schema 13/iu,
     );
   });
 
@@ -74,8 +74,8 @@ describe('shared Case domain facades', () => {
     assert.equal(await sharedPacket.verifyCaseResponsePacketIntegrity(packet as never), true);
     assert.equal(await browserPacket.verifyCaseResponsePacketIntegrity(packet as never), true);
 
-    const archive = await fixture<{ sections: { cases: unknown } }>('workspace-archive-v5-current');
-    const currentCase = sharedCase.normalizeCaseStore(archive.sections.cases).cases[0];
+    const currentStore = await fixture('browser-case-v13');
+    const currentCase = sharedCase.normalizeCaseStore(currentStore).cases[0];
     assert.ok(currentCase);
     assert.deepEqual(
       browserReport.buildCaseReport(currentCase, { generatedAt: '2026-08-22T00:00:00.000Z' }),

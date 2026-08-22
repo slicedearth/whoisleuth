@@ -15,7 +15,7 @@ import {
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../contracts/web-capture.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -28,7 +28,6 @@ const MAX_CAPTURE_TECHNOLOGIES = 20;
 const MAX_CAPTURE_ORIGINS = 30;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/i;
-const SUPPORTED_WEB_CAPTURE_MANIFEST_VERSIONS = new Set([1, WEB_CAPTURE_MANIFEST_VERSION]);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
@@ -74,11 +73,10 @@ function text(value: unknown, maximum: number, label: string, optional = false):
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function timestamp(value: unknown, label: string, optional = false, legacy = false): string | null {
+function timestamp(value: unknown, label: string, optional = false): string | null {
   const candidate = text(value, 64, label, optional);
   if (candidate === null) return null;
-  const normalized = normalizeExplicitIsoTimestamp(candidate)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(candidate) : null);
+  const normalized = normalizeExplicitIsoTimestamp(candidate);
   if (!normalized) throw new Error(`${label} must be a valid date and time with an explicit timezone.`);
   return normalized;
 }
@@ -215,17 +213,15 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     !root
     || !onlyKeys(root, ROOT_KEYS)
     || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
-    || !SUPPORTED_WEB_CAPTURE_MANIFEST_VERSIONS.has(Number(root.schemaVersion))
+    || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION
   ) {
-    throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version 1 or ${WEB_CAPTURE_MANIFEST_VERSION}.`);
+    throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version ${WEB_CAPTURE_MANIFEST_VERSION}.`);
   }
-  const manifestVersion = Number(root.schemaVersion);
-  const legacyTimestamps = manifestVersion < WEB_CAPTURE_MANIFEST_VERSION;
   const source = record(root.source);
   if (!source || !onlyKeys(source, SOURCE_KEYS)) throw new Error('Web capture manifests require a bounded source object.');
   const sourceName = text(source.name, 80, 'Capture source name');
   const sourceReference = text(source.reference, 500, 'Capture source reference', true);
-  const sourceCollectedAt = timestamp(source.collectedAt, 'Capture source collection time', true, legacyTimestamps);
+  const sourceCollectedAt = timestamp(source.collectedAt, 'Capture source collection time', true);
   if (!Array.isArray(root.captures) || !root.captures.length || root.captures.length > MAX_WEB_CAPTURE_SUMMARIES) {
     throw new Error(`Web capture manifests must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} captures.`);
   }
@@ -246,7 +242,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     if (domainCounts.size > MAX_EXTERNAL_FINDING_DOMAINS) {
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
     }
-    const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`, false, legacyTimestamps);
+    const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`);
     const completeness = ['complete', 'inconclusive', 'partial', 'unknown'].includes(String(capture.completeness))
       ? capture.completeness
       : 'unknown';
@@ -288,7 +284,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         const height = positiveInteger(artifact.height, 10_000, `Web capture manifest ${index + 1} screenshot height`);
         const perceptualHash = artifact.perceptualHash === undefined || artifact.perceptualHash === null || artifact.perceptualHash === ''
           ? null
-          : manifestVersion >= 2 && typeof artifact.perceptualHash === 'string' && PERCEPTUAL_HASH_RE.test(artifact.perceptualHash)
+          : typeof artifact.perceptualHash === 'string' && PERCEPTUAL_HASH_RE.test(artifact.perceptualHash)
             ? artifact.perceptualHash.toLowerCase()
             : (() => { throw new Error(`Web capture manifest ${index + 1} screenshot perceptual hash is unsupported.`); })();
         artifactSummaries.push(`Screenshot ${fileName}: ${mimeType}, ${width}x${height}, ${bytes} bytes, SHA-256 ${sha256}${perceptualHash ? `, dHash ${perceptualHash}` : ''}.`);

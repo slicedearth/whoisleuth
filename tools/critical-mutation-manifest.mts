@@ -30,7 +30,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     id: 'schema-future-version-descriptor-refusal',
     area: 'schema_refusal',
     file: 'packages/contracts/schema-lifecycle.mts',
-    line: 1447,
+    line: 1449,
     search: '          : contract.futureVersionBehaviour !== descriptor.futureVersionBehavior)\n',
     replacement: '          : false)\n',
     focusedTests: Object.freeze(['test/schema-lifecycle-v4.test.mts']),

@@ -80,19 +80,19 @@ describe('canonical Risk calibration contract', () => {
     assert.deepEqual(CLI_SUPPORTED_DATASET_VERSIONS, SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS);
   });
 
-  test('freezes exact compatibility histories and canonical descriptors', () => {
-    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS, [1, 2]);
-    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS, [1, 2, 3]);
+  test('freezes exact current-writer compatibility and canonical descriptors', () => {
+    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS, [2]);
+    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS, [3]);
     assert.equal(Object.isFrozen(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS), true);
     assert.equal(Object.isFrozen(SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_DATASET_COMPATIBILITY), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_REPORT_COMPATIBILITY), true);
-    assert.deepEqual(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions, [1, 2]);
-    assert.deepEqual(RISK_CALIBRATION_REPORT_COMPATIBILITY.supportedVersions, [1, 2, 3]);
+    assert.deepEqual(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions, [2]);
+    assert.deepEqual(RISK_CALIBRATION_REPORT_COMPATIBILITY.supportedVersions, [3]);
   });
 
-  test('preserves legacy and current dataset reader semantics', () => {
+  test('accepts only the exact public current-writer dataset', () => {
     const base = {
       schema: RISK_CALIBRATION_DATASET_SCHEMA,
       records: [{
@@ -102,11 +102,14 @@ describe('canonical Risk calibration contract', () => {
         evidence: { availability: 'registered', scanDepth: 'deep' },
       }],
     };
-    assert.equal(parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 1 })).version, 1);
     assert.equal(parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 2 })).version, 2);
     assert.throws(
+      () => parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 1 })),
+      /version 2/u,
+    );
+    assert.throws(
       () => parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 3 })),
-      /version 1 or 2/u,
+      /version 2/u,
     );
   });
 

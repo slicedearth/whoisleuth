@@ -6,6 +6,9 @@ import { describe, test } from 'node:test';
 
 import {
   BROWSER_LOCAL_CHUNK_NAME,
+  FRONTEND_ROUTE_BUDGET_BASIS,
+  FRONTEND_ROUTE_GZIP_BUDGETS,
+  FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES,
   MAX_FRONTEND_ASSET_BYTES,
   buildFrontendLoadingReport,
   formatFrontendLoadingReport,
@@ -62,6 +65,20 @@ function report(publicImports?: readonly string[]) {
 }
 
 describe('frontend loading report', () => {
+  test('records how route ceilings were calibrated', () => {
+    assert.deepEqual(FRONTEND_ROUTE_BUDGET_BASIS, {
+      measuredBuilds: 3,
+      reviewedOn: '2026-08-24',
+      headroomPercent: 15,
+      roundingKibibytes: 5,
+    });
+    assert.deepEqual(Object.keys(FRONTEND_ROUTE_GZIP_BUDGETS), Object.keys(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES));
+    for (const [route, observed] of Object.entries(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES)) {
+      const expectedKibibytes = Math.ceil((observed * 1.15) / 5) * 5;
+      assert.equal(FRONTEND_ROUTE_GZIP_BUDGETS[route], expectedKibibytes * 1024, route);
+    }
+  });
+
   test('parses route groups and keeps the browser-local workspace outside public routes', () => {
     const result = report();
     assert.equal(result.ready, true);

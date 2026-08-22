@@ -1,0 +1,609 @@
+{
+  "schema": "whoisleuth.evidence-storage-measurement",
+  "version": 1,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "startingRevision": "d3349cf85cded65989ab5ec542967429414bc1b7",
+  "fixtureIdentity": {
+    "corpus": "test/fixtures/evidence-storage/analyst-journeys-v1.json",
+    "corpusSha256": "sha256:d67a75a5c5063a2b203a150de2a2f9903196ba8d1ca20b1faf775c6649a66856",
+    "startingCurrentFixtures": [
+      {
+        "file": "test/fixtures/case-lifecycle/browser-case-v13.json",
+        "bytes": 3096,
+        "sha256": "sha256:d679030e52340ecc7795ac88de15316d88c8c07b94b34da60fd52589a0375712"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/case-export-v13.json",
+        "bytes": 3140,
+        "sha256": "sha256:fd2aa7623c2aaea385b952727ad74cf5af0f1ee21dc478c0e5c820a332376a0d"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/case-report-v9.json",
+        "bytes": 2761,
+        "sha256": "sha256:d9903318123c63ae7a385f153286a5596585a401771c8def8149792b9b7b9326"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/case-response-packet-v7.json",
+        "bytes": 10000,
+        "sha256": "sha256:0ea150d920710b331839be0a0f995d4597a133ecb930ef850de1eecfca4d94e3"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/case-response-review-inputs-v1.json",
+        "bytes": 5555,
+        "sha256": "sha256:67d3d36f316cf17898e04c39f2ba0ba7599abdc4b4e387baef5f5866a73c7b9c"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v13.json",
+        "bytes": 9288,
+        "sha256": "sha256:77b7bce093a967d04a2cf0ead3b715625c00903c4c194227c5b74886f2b847c6"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/workspace-archive-v6-empty-current.json",
+        "bytes": 5557,
+        "sha256": "sha256:7a0701c7b0401de76df132fe7b2332fd1e2f1fade007a8af0103c8cec5a1b2f9"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/workspace-settings-v1.json",
+        "bytes": 110,
+        "sha256": "sha256:75675baf68765da5d36e9911d106dd8b72a8fd3c859136b651411d8041a4e184"
+      },
+      {
+        "file": "test/fixtures/case-lifecycle/encrypted-workspace-archive-v1.json",
+        "bytes": 7502,
+        "sha256": "sha256:d7279ba0afb548d3ce41bdfc56acebffd05dc9b0b5b1451cb57a1164be881733"
+      }
+    ]
+  },
+  "boundaries": {
+    "networkRequests": 0,
+    "browserRecordsRead": 0,
+    "userDataRead": false,
+    "productionStorageChanged": false,
+    "liveTargets": false,
+    "eligibleFields": [
+      "evidenceHistory",
+      "evidencePins",
+      "decisions",
+      "actions"
+    ],
+    "browserDatabase": "whoisleuth-browser-data-v1",
+    "browserDatabaseVersion": 1,
+    "browserObjectStores": [
+      "records",
+      "manifests"
+    ],
+    "browserCodec": "json-v1",
+    "browserCollectionCount": 12
+  },
+  "scenarios": [
+    {
+      "id": "low-duplication",
+      "classification": "representative_low",
+      "caseCount": 8,
+      "evidenceSnapshots": 16,
+      "evidencePins": 8,
+      "decisions": 8,
+      "responseActions": 8,
+      "responseActionEvents": 8,
+      "browserLocal": {
+        "serializedCaseBytes": 42894,
+        "retainedEvidenceBytes": 35198,
+        "evidenceHistoryBytes": 22006,
+        "evidencePinBytes": 4824,
+        "decisionHistoryBytes": 1696,
+        "responseActionHistoryBytes": 6736,
+        "indexedDbRecordPayloadBytes": 43070,
+        "indexedDbRecordEnvelopeBytes": 48518,
+        "indexedDbManifestBytes": 283,
+        "indexedDbSerializedContractBytes": 48801,
+        "currentQuotaRatio": 0.010227,
+        "projectedContentAddressedBytes": 77550,
+        "projectedQuotaRatio": 0.018489
+      },
+      "duplication": {
+        "eligiblePayloads": 40,
+        "uniqueCanonicalPayloads": 40,
+        "exactDuplicatePayloadGroups": [],
+        "exactDuplicateGroupCount": 0,
+        "canonicallyEquivalentPayloadGroups": [],
+        "canonicallyEquivalentGroupCount": 0,
+        "canonicalOnlyGroupCount": 0,
+        "grossExactDuplicateBytes": 0,
+        "grossCanonicalDuplicateBytes": 0,
+        "currentEligibleBytes": 31230,
+        "artifactBytes": 38278,
+        "referenceBytes": 4888,
+        "manifestBytes": 200,
+        "indexBytes": 7264,
+        "orphanMetadataBytes": 4960,
+        "collisionMetadataBytes": 5176,
+        "repairPreviewMetadataBytes": 5120,
+        "operationalMetadataBytes": 15256,
+        "candidateBytesBeforeOperationalReserve": 50630,
+        "candidateBytesAfterAllOverhead": 65886,
+        "netSavingsBytes": -34656,
+        "deduplicableBytesAfterAllOverhead": 0,
+        "architectureDeltaBytes": 34656
+      },
+      "portable": {
+        "workspaceArchive": {
+          "caseCount": 8,
+          "totalBytes": 48428,
+          "retainedEvidenceBytes": 35199
+        },
+        "cliCasePack": {
+          "caseCount": 8,
+          "totalBytes": 113780,
+          "retainedEvidenceBytes": 84938,
+          "caseLimitApplied": false
+        }
+      }
+    },
+    {
+      "id": "representative-duplication",
+      "classification": "representative_mixed",
+      "caseCount": 24,
+      "evidenceSnapshots": 48,
+      "evidencePins": 24,
+      "decisions": 24,
+      "responseActions": 24,
+      "responseActionEvents": 24,
+      "browserLocal": {
+        "serializedCaseBytes": 128722,
+        "retainedEvidenceBytes": 105682,
+        "evidenceHistoryBytes": 66008,
+        "evidencePinBytes": 14500,
+        "decisionHistoryBytes": 5116,
+        "responseActionHistoryBytes": 20250,
+        "indexedDbRecordPayloadBytes": 129298,
+        "indexedDbRecordEnvelopeBytes": 145656,
+        "indexedDbManifestBytes": 285,
+        "indexedDbSerializedContractBytes": 145941,
+        "currentQuotaRatio": 0.03069,
+        "projectedContentAddressedBytes": 156199,
+        "projectedQuotaRatio": 0.037241
+      },
+      "duplication": {
+        "eligiblePayloads": 120,
+        "uniqueCanonicalPayloads": 84,
+        "exactDuplicatePayloadGroups": [
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:134ee1296682d408426bdca59fbea98d850eba4d4414bad7fe1a95dee7c5e9ae",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:1b40e7496928ba72b461998faa82b9e34d53c015da912b743c841f3fbdd732ad",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:1f5ba9b1e076115618041b9f1bcfad0f6302ae96b8a22e2060ee87e0c4847614",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:29971b98d4e23fd167a608f7404b7e7faafc2a2d1065232aef1876a5fb15e1ff",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:65127c81cedad6681a8679f9fe74d095195c5101a79a55009aa42be92d0c887e",
+            "occurrences": 4,
+            "payloadBytes": 1371,
+            "grossDuplicateBytes": 4113
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:6d6cd74b6f215fa3f955ee459e3d02bc17c5c10ea8eb169d9df062ce1a439c6d",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:7ab6adf7aa571c88f07a5fcef6b32fa8c799cc0c06dd1210be69e17a1af50f6e",
+            "occurrences": 4,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:7cc7289c96291ecdb44876be6c88cf8558ccc547aace8f303f82d7fb5a17411e",
+            "occurrences": 4,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:8ce1fdc823b4ccdfd2376553e9269ade6afc48fa243ff4314e9e1e2ca7992932",
+            "occurrences": 4,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:a0e1d0137223b31285a4409ae827ee42d78159c3f02af12f823f0fa1ce2005f2",
+            "occurrences": 4,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:c01b42e4955aeaea2e163a7d9df8fdabc7acf1f2ad5fa7da2e8c30a66870512c",
+            "occurrences": 4,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:ee0034c8d5d64ceb2b9ef883fd70320fc034a12dc1f9942253d0260c051fce43",
+            "occurrences": 4,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          }
+        ],
+        "exactDuplicateGroupCount": 12,
+        "canonicallyEquivalentPayloadGroups": [
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:1556ca5737b2f5870f26e94b3f20e453f320a089e085a11f92c493206e877173",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:176921510ce0645c4dcecdb10ea521f62bc12eaa73994f902a0ff49f5f5d2ce8",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:66e76261ad0f07ff0bd89b9b1975e7e3d46ded073d9215738aa77c04d936e26b",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:6c3149564be66b667e5e334f76d066699a380649f4a51c02b5247b1a25321fb5",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:6c7c4c7c6d154d90497e761a754a1223ffa1d21ec469bf65a1400c51f92dae22",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:8d69f6739aa1738db172fd77ec326f47ab41e6157c8bf1582396e33317202f5f",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:8dd5303260ee7b7651fce9e440aaa9acaa3aabf811b3b6fdff156650f4e624f6",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:a6024895ea4a529fa4b511735011c8ac11fda41137ccc553273af9f1b0075f75",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:ae07ba755819921a94bced55896abafe6923462bf1576115f9ca5d82ee389add",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 4119
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:bea1cbcb6369f0db530cdda8d380847adee969666423c8c3e7bec8d52d2ed4b6",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1371,
+            "grossDuplicateBytes": 4113
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:d099c858531d4453e89717597348e5217558c81f7abf6567fdb35e1973984197",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:efdf862c49b4cf440cfede4eb0ff87151fd9e23669d996864f8e29acac502bdc",
+            "occurrences": 4,
+            "exactForms": 1,
+            "payloadBytes": 1375,
+            "grossDuplicateBytes": 4125
+          }
+        ],
+        "canonicallyEquivalentGroupCount": 12,
+        "canonicalOnlyGroupCount": 0,
+        "grossExactDuplicateBytes": 49452,
+        "grossCanonicalDuplicateBytes": 49452,
+        "currentEligibleBytes": 93764,
+        "artifactBytes": 59120,
+        "referenceBytes": 14664,
+        "manifestBytes": 201,
+        "indexBytes": 15240,
+        "orphanMetadataBytes": 10416,
+        "collisionMetadataBytes": 10848,
+        "repairPreviewMetadataBytes": 10752,
+        "operationalMetadataBytes": 32016,
+        "candidateBytesBeforeOperationalReserve": 89225,
+        "candidateBytesAfterAllOverhead": 121241,
+        "netSavingsBytes": -27477,
+        "deduplicableBytesAfterAllOverhead": 0,
+        "architectureDeltaBytes": 27477
+      },
+      "portable": {
+        "workspaceArchive": {
+          "caseCount": 24,
+          "totalBytes": 134259,
+          "retainedEvidenceBytes": 105683
+        },
+        "cliCasePack": {
+          "caseCount": 24,
+          "totalBytes": 339815,
+          "retainedEvidenceBytes": 254988,
+          "caseLimitApplied": false
+        }
+      }
+    },
+    {
+      "id": "high-duplication-boundary",
+      "classification": "synthetic_worst_case",
+      "caseCount": 500,
+      "evidenceSnapshots": 500,
+      "evidencePins": 500,
+      "decisions": 500,
+      "responseActions": 500,
+      "responseActionEvents": 500,
+      "browserLocal": {
+        "serializedCaseBytes": 1991524,
+        "retainedEvidenceBytes": 1512000,
+        "evidenceHistoryBytes": 687500,
+        "evidencePinBytes": 301500,
+        "decisionHistoryBytes": 106000,
+        "responseActionHistoryBytes": 421000,
+        "indexedDbRecordPayloadBytes": 2004000,
+        "indexedDbRecordEnvelopeBytes": 2277390,
+        "indexedDbManifestBytes": 287,
+        "indexedDbSerializedContractBytes": 2277677,
+        "currentQuotaRatio": 0.474816,
+        "projectedContentAddressedBytes": 977234,
+        "projectedQuotaRatio": 0.232991
+      },
+      "duplication": {
+        "eligiblePayloads": 2000,
+        "uniqueCanonicalPayloads": 4,
+        "exactDuplicatePayloadGroups": [
+          {
+            "kind": "decision_history",
+            "payloadDigest": "sha256:e338ac054fdf1a4af450913e66eff0af3430fa19bbc89a6c6749a9244186f38f",
+            "occurrences": 500,
+            "payloadBytes": 210,
+            "grossDuplicateBytes": 104790
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:29971b98d4e23fd167a608f7404b7e7faafc2a2d1065232aef1876a5fb15e1ff",
+            "occurrences": 500,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 685127
+          },
+          {
+            "kind": "evidence_pin",
+            "payloadDigest": "sha256:55e36a38a7b98b2373059e81877cdb327a0630e1bdb46d442a0ab9a42b16393b",
+            "occurrences": 500,
+            "payloadBytes": 601,
+            "grossDuplicateBytes": 299899
+          },
+          {
+            "kind": "response_action_event",
+            "payloadDigest": "sha256:eb6c71fdf992a7b454b7e05e2cc9360e1d107038b44e9e321101210d511d1dc9",
+            "occurrences": 500,
+            "payloadBytes": 345,
+            "grossDuplicateBytes": 172155
+          }
+        ],
+        "exactDuplicateGroupCount": 4,
+        "canonicallyEquivalentPayloadGroups": [
+          {
+            "kind": "decision_history",
+            "payloadDigest": "sha256:089ead08847afb76e893399ce50b9cb689d6122c89a3255e07caaf43553ec451",
+            "occurrences": 500,
+            "exactForms": 1,
+            "payloadBytes": 210,
+            "grossDuplicateBytes": 104790
+          },
+          {
+            "kind": "evidence_history",
+            "payloadDigest": "sha256:ae07ba755819921a94bced55896abafe6923462bf1576115f9ca5d82ee389add",
+            "occurrences": 500,
+            "exactForms": 1,
+            "payloadBytes": 1373,
+            "grossDuplicateBytes": 685127
+          },
+          {
+            "kind": "evidence_pin",
+            "payloadDigest": "sha256:58ba7bcec1a940b88a932d9d4cdcf7bb817984184ce1cc0648c3ea43a0a55fae",
+            "occurrences": 500,
+            "exactForms": 1,
+            "payloadBytes": 601,
+            "grossDuplicateBytes": 299899
+          },
+          {
+            "kind": "response_action_event",
+            "payloadDigest": "sha256:b66c27dc9cba920922cfdd80795e72806c1c4204361534b6ceeb9e45a7b8148a",
+            "occurrences": 500,
+            "exactForms": 1,
+            "payloadBytes": 345,
+            "grossDuplicateBytes": 172155
+          }
+        ],
+        "canonicallyEquivalentGroupCount": 4,
+        "canonicalOnlyGroupCount": 0,
+        "grossExactDuplicateBytes": 1261971,
+        "grossCanonicalDuplicateBytes": 1261971,
+        "currentEligibleBytes": 1264500,
+        "artifactBytes": 3234,
+        "referenceBytes": 244500,
+        "manifestBytes": 201,
+        "indexBytes": 734,
+        "orphanMetadataBytes": 504,
+        "collisionMetadataBytes": 517,
+        "repairPreviewMetadataBytes": 520,
+        "operationalMetadataBytes": 1541,
+        "candidateBytesBeforeOperationalReserve": 248669,
+        "candidateBytesAfterAllOverhead": 250210,
+        "netSavingsBytes": 1014290,
+        "deduplicableBytesAfterAllOverhead": 1014290,
+        "architectureDeltaBytes": -1014290
+      },
+      "portable": {
+        "workspaceArchive": {
+          "caseCount": 500,
+          "totalBytes": 1997064,
+          "retainedEvidenceBytes": 1512001
+        },
+        "cliCasePack": {
+          "caseCount": 25,
+          "totalBytes": 276001,
+          "retainedEvidenceBytes": 187675,
+          "caseLimitApplied": true
+        }
+      }
+    }
+  ],
+  "decision": {
+    "outcome": "no_build",
+    "representativeScenario": "representative-duplication",
+    "representativeNetSavingsBytes": 0,
+    "representativeNetSavingsRatio": 0,
+    "threshold": {
+      "minimumRepresentativeNetSavingsBytes": 524288,
+      "minimumRepresentativeNetSavingsRatio": 0.2,
+      "minimumQuotaPressureRatio": 0.75
+    },
+    "rationale": "Representative repeated immutable evidence does not recover the digest, reference, manifest, index, collision, orphan, and repair overhead required by a second persistence layer.",
+    "reconsiderWhen": {
+      "evidence": "A refreshed representative corpus, not only a synthetic worst case, must meet both savings thresholds.",
+      "minimumNetSavingsBytes": 524288,
+      "minimumNetSavingsRatio": 0.2,
+      "quotaPressureRatio": 0.75
+    }
+  },
+  "historicalCompatibility": {
+    "starting": {
+      "revision": "d3349cf85cded65989ab5ec542967429414bc1b7",
+      "compatibilityDescriptors": 9,
+      "supportedVersionSlots": 54,
+      "lifecycleContracts": 53,
+      "legacyContracts": 32,
+      "retiredOutputContracts": 12,
+      "migrations": 29,
+      "readerEdges": 10,
+      "writerEdges": 9,
+      "readerVersionSlots": 61,
+      "lifecycleFixtures": 87,
+      "lifecycleFixtureBytes": 579486,
+      "legacyAndRetiredFixtures": 45,
+      "legacyAndRetiredFixtureBytes": 302908,
+      "lifecycleShapes": 19,
+      "lifecycleBoundProfiles": 7,
+      "lifecycleHooks": 18,
+      "lifecycleSerialisationProfiles": 7,
+      "lifecyclePrivacyProfiles": 3,
+      "lifecycleConsumerEdges": 16,
+      "versionSensitiveProductionLines": 365,
+      "versionSensitiveBranches": 79,
+      "generatedInventoryEntries": 9,
+      "generatedDocumentationEntries": 17,
+      "focusedVerification": {
+        "testFiles": 13,
+        "tests": 276,
+        "passed": 276,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": 35068.222209,
+        "elapsedSeconds": 35.24,
+        "reliability": "single_local_observation_not_drift_gated"
+      }
+    },
+    "postConsolidation": {
+      "compatibilityDescriptors": 9,
+      "supportedVersionSlots": 13,
+      "lifecycleContracts": 13,
+      "legacyContracts": 4,
+      "retiredOutputContracts": 0,
+      "migrations": 3,
+      "readerEdges": 10,
+      "writerEdges": 9,
+      "readerVersionSlots": 17,
+      "lifecycleFixtures": 14,
+      "lifecycleFixtureBytes": 64903,
+      "legacyAndRetiredFixtures": 4,
+      "legacyAndRetiredFixtureBytes": 12947,
+      "lifecycleShapes": 13,
+      "lifecycleBoundProfiles": 7,
+      "lifecycleHooks": 18,
+      "lifecycleSerialisationProfiles": 7,
+      "lifecyclePrivacyProfiles": 3,
+      "lifecycleConsumerEdges": 16,
+      "versionSensitiveProductionLines": 221,
+      "versionSensitiveBranches": 54,
+      "generatedInventoryEntries": 9,
+      "generatedDocumentationEntries": 11,
+      "sourceMeasurement": {
+        "sourceFiles": 13,
+        "versionSensitiveProductionLines": 221,
+        "versionSensitiveBranches": 54,
+        "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
+      }
+    }
+  },
+  "limitations": [
+    "The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.",
+    "IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.",
+    "Quota ratios compare the current and proposed logical Case representations with the 4 MiB application Case ceiling; they are not browser-origin quota estimates.",
+    "Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.",
+    "The high-duplication boundary is deliberately synthetic and cannot by itself justify a second persistence abstraction.",
+    "Digest identity would establish only byte identity under the declared canonicalisation, not source truth, authority, ownership, or safety.",
+    "The focused verification duration is one local observation and is retained for maintenance context, not as a deterministic drift threshold."
+  ]
+}

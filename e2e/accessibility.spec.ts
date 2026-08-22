@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -166,6 +166,7 @@ test('public and dashboard support content exposes semantic labels and link cues
   await expect(attribution).toHaveAccessibleName(/opens in a new tab/);
 
   await page.goto('/dashboard');
+  await page.getByRole('button', { name: /Start a guided investigation/u }).click();
   await expect(
     page.getByRole('navigation', { name: 'Investigation help' }),
   ).toBeVisible();
@@ -205,7 +206,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
-  await expect(page.getByRole('heading', { name: 'Case evidence, not a live watchlist' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
 
@@ -255,11 +256,7 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': {
-      schema: 'whoisleuth.brand-profiles',
-      version: 6,
-      exportedAt: '2026-08-13T00:00:00.000Z',
-      profiles: [{
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{
         id: 'accessibility-asset-profile',
         name: 'Accessibility asset profile',
         officialDomains: ['official.example'],
@@ -280,8 +277,7 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
         pageBaseline: null,
         createdAt: '2026-08-13T00:00:00.000Z',
         updatedAt: '2026-08-13T00:00:00.000Z',
-      }],
-    },
+      }]),
     'whois-rdap-active-brand-profile-v1': 'accessibility-asset-profile',
   }, { destination: '/brands?view=assets' });
   await expect(page.getByRole('region', { name: 'Brand asset register' })).toBeVisible();
@@ -336,6 +332,7 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');
+  await page.getByRole('button', { name: /Start a guided investigation/u }).click();
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await page.getByRole('button', { name: 'Start guide' }).click();
   const currentAction = page.locator('.guide .current-action');

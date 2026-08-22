@@ -8,7 +8,7 @@ import {
   CLI_LOOKUP_SCHEMA,
   CLI_LOOKUP_SCHEMA_LIFECYCLE,
   CLI_LOOKUP_VERSION,
-  LEGACY_CLI_LOOKUP_VERSION,
+  PUBLIC_CLI_LOOKUP_VERSION,
   MAX_CLI_LOOKUP_BYTES,
 } from '../packages/contracts/cli-lookup.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
@@ -105,7 +105,7 @@ describe('CLI Lookup schema lifecycle', () => {
         raw: await fixture(FIXTURE_URLS.legacy),
         bytes: 952,
         digest: '0e6601693e384b29285ead97b20947c3a464baf2521277901ff86ad5a6e3a59e',
-        version: LEGACY_CLI_LOOKUP_VERSION,
+        version: PUBLIC_CLI_LOOKUP_VERSION,
         type: 'domain',
       },
       {
@@ -113,7 +113,7 @@ describe('CLI Lookup schema lifecycle', () => {
         raw: await fixture(FIXTURE_URLS.legacyAsn),
         bytes: 714,
         digest: 'bb06e18c67527e559a039f7f826d4d605d7581a556e2e6e511c461ba97dcfdef',
-        version: LEGACY_CLI_LOOKUP_VERSION,
+        version: PUBLIC_CLI_LOOKUP_VERSION,
         type: 'asn',
       },
       {

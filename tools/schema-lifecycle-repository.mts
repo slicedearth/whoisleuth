@@ -58,6 +58,7 @@ import * as stixIndicatorExportModule from '../packages/interchange/stix-indicat
 import * as webCaptureImportModule from '../packages/interchange/web-capture-import.mts';
 import * as scheduledMonitorDispatcherModule from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
 import * as scheduledMonitorModelModule from '../packages/monitoring/scheduled-monitor-model.mts';
+import * as analystReviewStateModule from '../packages/monitoring/analyst-review-state.mts';
 import * as caseRelationshipClustersModule from '../packages/relationships/case-relationship-clusters.mts';
 import * as caseRelationshipGraphExportModule from '../packages/relationships/case-relationship-graph-export.mts';
 import * as brandProfileModelModule from '../packages/workspace/brand-profile-model.mts';
@@ -176,6 +177,7 @@ export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
   'packages/interchange/web-capture-import.mts': webCaptureImportModule,
   'packages/monitoring/scheduled-monitor-dispatcher.mts': scheduledMonitorDispatcherModule,
   'packages/monitoring/scheduled-monitor-model.mts': scheduledMonitorModelModule,
+  'packages/monitoring/analyst-review-state.mts': analystReviewStateModule,
   'packages/relationships/case-relationship-clusters.mts': caseRelationshipClustersModule,
   'packages/relationships/case-relationship-graph-export.mts': caseRelationshipGraphExportModule,
   'packages/workspace/brand-profile-model.mts': brandProfileModelModule,

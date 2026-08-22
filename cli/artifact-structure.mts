@@ -23,10 +23,9 @@ import {
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  LEGACY_CASE_RESPONSE_PACKET_VERSION,
-  PREVIOUS_CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSIVE_URLS,
   MAX_RESPONSE_ARTEFACT_REFERENCES,
   MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS,
@@ -67,15 +66,14 @@ import {
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
   INVESTIGATION_CAPSULE_SCHEMA,
   INVESTIGATION_CAPSULE_VERSION,
-  LEGACY_INVESTIGATION_CAPSULE_VERSION,
-  PREVIOUS_INVESTIGATION_CAPSULE_VERSION,
+  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
 } from '../packages/investigation/investigation-capsule.mts';
 import {
   LOOKUP_ASSET_GRAPH_SCHEMA,
   LOOKUP_ASSET_GRAPH_VERSION,
 } from '../packages/investigation/lookup-asset-graph.mts';
 import {
-  LEGACY_LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION,
   LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
   LOOKUP_INVESTIGATION_BRIEF_VERSION,
   MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES,
@@ -128,12 +126,11 @@ import {
 import {
   assertLookupEvidencePrivacySafeTree,
   assertLookupEvidencePortableTree,
-  HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
-  projectLookupEvidenceAvailabilityLegacy,
+  projectLookupEvidenceAvailabilityPublic,
   projectLookupEvidenceQuery,
   projectLookupEvidenceRdapPublication,
   projectLookupEvidenceRegistryInsights,
@@ -262,7 +259,7 @@ const LOOKUP_TIMING_SOURCES = [
   'network_context', 'security_txt', 'external_intelligence',
   'malware_host_intelligence', 'malware_ioc_intelligence',
 ] as const;
-const LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
+const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
   'applicable', 'type', 'domain', 'state', 'confidence', 'detail', 'source',
   'rdapServer', 'nameservers', 'statuses', 'registrar', 'registrant', 'abuse',
   'createdDate', 'expiryDate', 'createdDateIso', 'expiryDateIso', 'domainAgeDays',
@@ -275,7 +272,7 @@ const LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
   'securityPosture', 'dns', 'tls', 'hasMx', 'hasNullMx', 'mxHosts', 'hasSpf',
   'hasDmarc', 'bulkComparison', 'limitations',
 ] as const;
-const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS.filter(
+const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS.filter(
   (key) => !['registrar', 'registrant', 'abuse'].includes(key),
 );
 const LOOKUP_IDN_ANALYSIS_KEYS = [
@@ -299,7 +296,7 @@ function validateLookupEvidenceHomepageMetadata(
     : record(http.response, 'Lookup evidence HTTP response');
   const publicationPresent = Boolean(pageIdentity && Object.hasOwn(pageIdentity, 'publicationMetadata'));
   const deliveryPresent = Boolean(response && Object.hasOwn(response, 'deliveryMetadata'));
-  if (version < HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
+  if (version < LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
     fail('Lookup evidence homepage metadata epoch');
   }
   if (publicationPresent && !validPagePublicationMetadata(pageIdentity?.publicationMetadata)) {
@@ -492,29 +489,23 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     const error = exact(source, ['status', 'error', 'attempts'], 'Lookup evidence RDAP source');
     text(error.error, 'Lookup evidence RDAP error', 10_000);
     array(error.attempts, 'Lookup evidence RDAP attempts', 16).forEach((item, index) => {
-      if (version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) record(item, `Lookup evidence legacy RDAP attempt ${index + 1}`);
-      else validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
+      validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
     });
     return 'error';
   }
   const complete = exact(source, version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed']
     : ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed', 'raw'], 'Lookup evidence RDAP source');
-  const status = enumeration(complete.status, version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    ? ['success', 'not_found']
-    : ['success', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence RDAP status');
+  const status = enumeration(complete.status, ['success', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence RDAP status');
   let endpoint: URL | null = null;
   if (complete.endpoint !== null) endpoint = absoluteUrl(complete.endpoint, 'Lookup evidence RDAP endpoint', ['http:', 'https:']);
   if (complete.transportSecurity !== null) enumeration(complete.transportSecurity, ['http', 'https'], 'Lookup evidence RDAP transport');
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
-    if (endpoint && complete.transportSecurity !== endpoint.protocol.slice(0, -1)) fail('Lookup evidence RDAP transport');
-    if (!endpoint && complete.transportSecurity !== null) fail('Lookup evidence RDAP transport');
-  }
+  if (endpoint && complete.transportSecurity !== endpoint.protocol.slice(0, -1)) fail('Lookup evidence RDAP transport');
+  if (!endpoint && complete.transportSecurity !== null) fail('Lookup evidence RDAP transport');
   if (complete.httpStatus !== null) integer(complete.httpStatus, 'Lookup evidence RDAP HTTP status', 100, 599);
   iso(complete.fetchedAt, 'Lookup evidence RDAP fetchedAt', true);
   array(complete.attempts, 'Lookup evidence RDAP attempts', 16).forEach((item, index) => {
-    if (version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) record(item, `Lookup evidence legacy RDAP attempt ${index + 1}`);
-    else validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
+    validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
   });
   nullableRecord(complete.parsed, 'Lookup evidence RDAP parsed data');
   if (version < LOOKUP_EVIDENCE_SCHEMA_VERSION) nullableRecord(complete.raw, 'Lookup evidence RDAP raw data');
@@ -522,10 +513,8 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceRdapPublication(complete.parsed))) {
     fail('Lookup evidence RDAP portable publication');
   }
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    && status === 'success' && complete.parsed === null) fail('Lookup evidence RDAP publication');
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    && !['success', 'partial'].includes(status)
+  if (status === 'success' && complete.parsed === null) fail('Lookup evidence RDAP publication');
+  if (!['success', 'partial'].includes(status)
     && (complete.parsed !== null || (version < LOOKUP_EVIDENCE_SCHEMA_VERSION && complete.raw !== null))) fail('Lookup evidence RDAP unavailable publication');
   return status;
 }
@@ -538,9 +527,7 @@ function validateLookupEvidenceWhois(value: unknown, version: number): string {
     return 'error';
   }
   const complete = exact(source, ['status', 'queriedAt', 'authoritativeHop', 'failedHop', 'conflictingHop', 'parsed', 'chain'], 'Lookup evidence WHOIS source');
-  const status = enumeration(complete.status, version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    ? ['complete', 'partial', 'unknown']
-    : ['complete', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence WHOIS status');
+  const status = enumeration(complete.status, ['complete', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence WHOIS status');
   iso(complete.queriedAt, 'Lookup evidence WHOIS queriedAt', true);
   optionalText(complete.authoritativeHop, 'Lookup evidence WHOIS authoritative hop', 253);
   optionalText(complete.failedHop, 'Lookup evidence WHOIS failed hop', 253);
@@ -551,12 +538,10 @@ function validateLookupEvidenceWhois(value: unknown, version: number): string {
     fail('Lookup evidence WHOIS portable publication');
   }
   array(complete.chain, 'Lookup evidence WHOIS chain', 16).forEach((item, index) => {
-    if (version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) record(item, `Lookup evidence legacy WHOIS chain item ${index + 1}`);
-    else validateLookupEvidenceWhoisHop(item, `Lookup evidence WHOIS chain item ${index + 1}`);
+    validateLookupEvidenceWhoisHop(item, `Lookup evidence WHOIS chain item ${index + 1}`);
   });
   if (status === 'complete' && complete.parsed === null) fail('Lookup evidence WHOIS publication');
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    && !['complete', 'partial'].includes(status)
+  if (!['complete', 'partial'].includes(status)
     && (complete.parsed !== null || (complete.chain as unknown[]).length !== 0)) fail('Lookup evidence WHOIS unavailable publication');
   return status;
 }
@@ -783,7 +768,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'application', 'query', 'diagnostics', 'sources', 'analysis'], 'Lookup evidence');
   if (root.schema !== LOOKUP_EVIDENCE_SCHEMA
     || !SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.includes(Number(root.schemaVersion))) fail('Lookup evidence');
-  const version = integer(root.schemaVersion, 'Lookup evidence version', LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+  const version = integer(root.schemaVersion, 'Lookup evidence version', PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION, LOOKUP_EVIDENCE_SCHEMA_VERSION);
   iso(root.generatedAt, 'Lookup evidence generatedAt');
 
   const application = exact(root.application, ['name', 'version', 'projectUrl'], 'Lookup evidence application');
@@ -800,60 +785,30 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     if (query.inputHostname !== null) domain(query.inputHostname, 'Lookup evidence input hostname');
     domain(query.registrableDomain, 'Lookup evidence registrable domain');
   } else if (query.inputHostname !== null || query.registrableDomain !== null || query.isSubdomain !== false) fail('Lookup evidence query');
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    && !isDeepStrictEqual(query, projectLookupEvidenceQuery(query))) fail('Lookup evidence query');
+  if (!isDeepStrictEqual(query, projectLookupEvidenceQuery(query))) fail('Lookup evidence query');
 
   let diagnostics: UnknownRecord;
   let rdapDiagnosticStatus: string;
   let whoisDiagnosticStatus: string;
-  let currentDiagnosticStates: LookupEvidenceDiagnosticStates | null = null;
-  if (version === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
-    diagnostics = exactOptional(root.diagnostics, ['rdap', 'whois'], ['version', 'availability', 'timing', 'registryAccess', 'reverseDns', 'network', 'securityTxt', 'sslbl'], 'Lookup evidence diagnostics');
-    if (diagnostics.version !== undefined) integer(diagnostics.version, 'Lookup evidence diagnostics version', 1, 10);
-    const rdapDiagnostics = record(diagnostics.rdap, 'Lookup evidence rdap diagnostics');
-    const whoisDiagnostics = record(diagnostics.whois, 'Lookup evidence whois diagnostics');
-    rdapDiagnosticStatus = enumeration(rdapDiagnostics.status, ['success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled'], 'Lookup evidence RDAP diagnostic status');
-    whoisDiagnosticStatus = enumeration(whoisDiagnostics.status, ['complete', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled'], 'Lookup evidence WHOIS diagnostic status');
-    for (const id of ['availability', 'timing', 'registryAccess', 'reverseDns', 'network', 'securityTxt', 'sslbl'] as const) {
-      if (diagnostics[id] !== undefined) record(diagnostics[id], `Lookup evidence ${id} diagnostics`);
-    }
-  } else {
-    diagnostics = record(root.diagnostics, 'Lookup evidence diagnostics');
-    currentDiagnosticStates = validateLookupEvidenceCurrentDiagnostics(diagnostics);
-    rdapDiagnosticStatus = currentDiagnosticStates.rdap;
-    whoisDiagnosticStatus = currentDiagnosticStates.whois;
-  }
+  diagnostics = record(root.diagnostics, 'Lookup evidence diagnostics');
+  const currentDiagnosticStates: LookupEvidenceDiagnosticStates = validateLookupEvidenceCurrentDiagnostics(diagnostics);
+  rdapDiagnosticStatus = currentDiagnosticStates.rdap;
+  whoisDiagnosticStatus = currentDiagnosticStates.whois;
 
   const sources = exact(root.sources, ['rdap', 'whois', 'reverseDns', 'network', 'securityTxt', 'sslbl'], 'Lookup evidence sources');
   const rdapSourceStatus = validateLookupEvidenceRdap(sources.rdap, version);
   const whoisSourceStatus = validateLookupEvidenceWhois(sources.whois, version);
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
-    if (rdapSourceStatus !== rdapDiagnosticStatus) fail('Lookup evidence RDAP source state');
-    if (whoisSourceStatus !== whoisDiagnosticStatus) fail('Lookup evidence WHOIS source state');
-  } else {
-    const rdapSource = record(sources.rdap, 'Lookup evidence legacy RDAP source');
-    const whoisSource = record(sources.whois, 'Lookup evidence legacy WHOIS source');
-    if (rdapDiagnosticStatus === 'success'
-      && (rdapSourceStatus !== 'success' || rdapSource.parsed === null)) fail('Lookup evidence legacy RDAP source state');
-    if (rdapDiagnosticStatus === 'not_found' && rdapSourceStatus !== 'not_found') fail('Lookup evidence legacy RDAP source state');
-    if (rdapDiagnosticStatus === 'error' && rdapSourceStatus !== 'error') fail('Lookup evidence legacy RDAP source state');
-    if (whoisDiagnosticStatus === 'complete'
-      && (whoisSourceStatus !== 'complete' || whoisSource.parsed === null)) fail('Lookup evidence legacy WHOIS source state');
-    if (whoisDiagnosticStatus === 'partial'
-      && (whoisSourceStatus !== 'partial' || whoisSource.parsed === null)) fail('Lookup evidence legacy WHOIS source state');
-    if (whoisDiagnosticStatus === 'error' && whoisSourceStatus !== 'error') fail('Lookup evidence legacy WHOIS source state');
-  }
+  if (rdapSourceStatus !== rdapDiagnosticStatus) fail('Lookup evidence RDAP source state');
+  if (whoisSourceStatus !== whoisDiagnosticStatus) fail('Lookup evidence WHOIS source state');
   const reverseDnsState = validateLookupEvidenceReverseDns(sources.reverseDns);
   const networkState = validateLookupEvidenceNetwork(sources.network);
-  if (currentDiagnosticStates) {
-    if (currentDiagnosticStates.reverseDns
-      && !isDeepStrictEqual(reverseDnsState, currentDiagnosticStates.reverseDns)) {
-      fail('Lookup evidence reverse DNS source state');
-    }
-    if (currentDiagnosticStates.network !== null
-      && (networkState?.status ?? null) !== currentDiagnosticStates.network) {
-      fail('Lookup evidence network source state');
-    }
+  if (currentDiagnosticStates.reverseDns
+    && !isDeepStrictEqual(reverseDnsState, currentDiagnosticStates.reverseDns)) {
+    fail('Lookup evidence reverse DNS source state');
+  }
+  if (currentDiagnosticStates.network !== null
+    && (networkState?.status ?? null) !== currentDiagnosticStates.network) {
+    fail('Lookup evidence network source state');
   }
   validateLookupEvidenceSecurityTxt(sources.securityTxt);
   validateLookupEvidenceSslbl(sources.sslbl);
@@ -864,19 +819,18 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     const availability = exactOptional(
       analysis.availability,
       currentAvailability ? ['registryContactsExcluded'] : [],
-      currentAvailability ? LOOKUP_AVAILABILITY_ANALYSIS_KEYS : LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+      currentAvailability ? LOOKUP_AVAILABILITY_ANALYSIS_KEYS : PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
       'Lookup evidence availability analysis',
     );
     if (currentAvailability && availability.registryContactsExcluded !== true) {
       fail('Lookup evidence availability contact exclusion');
     }
     validateLookupEvidenceHomepageMetadata(availability, version);
-    if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION
-      && !isDeepStrictEqual(
+    if (!isDeepStrictEqual(
         analysis.availability,
         currentAvailability
           ? projectLookupEvidenceAvailability(analysis.availability)
-          : projectLookupEvidenceAvailabilityLegacy(analysis.availability),
+          : projectLookupEvidenceAvailabilityPublic(analysis.availability),
       )) fail('Lookup evidence availability analysis');
   }
   if (analysis.idn !== null) {
@@ -885,7 +839,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
   const registryInsights = record(analysis.registryInsights, 'Lookup evidence registry insights');
   const registryComparison = record(analysis.registryComparison, 'Lookup evidence registry comparison');
   validateLookupEvidenceRegistrarComparison(analysis.registrarPublicationComparison);
-  if (version !== LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
+  {
     const rdap = record(sources.rdap, 'Lookup evidence RDAP source');
     const whois = record(sources.whois, 'Lookup evidence WHOIS source');
     const rdapParsed = ['success', 'partial'].includes(rdapDiagnosticStatus) ? rdap.parsed : null;
@@ -916,17 +870,11 @@ function validateIntegrity(
   value: unknown,
   label: string,
   version: unknown,
-  legacyVersion: number,
   currentVersion: number,
-  legacyExplicit = false,
 ): void {
-  const explicit = version === currentVersion || (version === legacyVersion && legacyExplicit);
-  if (version !== legacyVersion && version !== currentVersion) fail(label);
-  const integrity = exact(value, explicit
-    ? ['algorithm', 'canonicalization', 'digestSha256']
-    : ['algorithm', 'digestSha256'], label);
-  if (integrity.algorithm !== 'SHA-256') fail(label);
-  if (explicit && integrity.canonicalization !== (version === currentVersion ? 'sorted-json-v2' : 'sorted-json-v1')) fail(label);
+  if (version !== currentVersion) fail(label);
+  const integrity = exact(value, ['algorithm', 'canonicalization', 'digestSha256'], label);
+  if (integrity.algorithm !== 'SHA-256' || integrity.canonicalization !== 'sorted-json-v2') fail(label);
   digest(integrity.digestSha256, label);
 }
 
@@ -974,7 +922,7 @@ function validateAcquisition(value: UnknownRecord): void {
   strings(evidence.nextSteps, 'Acquisition next steps', 6, 600);
   strings(evidence.limitations, 'Acquisition evidence limitations', 12, 600);
   strings(root.limitations, 'Acquisition limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Acquisition integrity', root.version, 1, ACQUISITION_DECISION_PACKET_VERSION);
+  validateIntegrity(root.integrity, 'Acquisition integrity', root.version, ACQUISITION_DECISION_PACKET_VERSION);
 }
 
 const CLAIM_PASSPORT_SOURCE_STATES = ['complete', 'not_found', 'partial', 'skipped', 'unavailable', 'unknown', 'unsupported'] as const;
@@ -1052,7 +1000,7 @@ function validateLookupClaimPassport(value: UnknownRecord): void {
   if (models.claimReadiness !== LOOKUP_CLAIM_READINESS_VERSION) fail('Lookup claim passport models');
   if (models.risk !== null) integer(models.risk, 'Lookup claim passport Risk model', 1, 1_000);
   strings(root.limitations, 'Lookup claim passport limitations', MAX_LOOKUP_CLAIM_PASSPORT_LIMITATIONS, 600);
-  validateIntegrity(root.integrity, 'Lookup claim passport integrity', root.version, LOOKUP_CLAIM_PASSPORT_VERSION, LOOKUP_CLAIM_PASSPORT_VERSION);
+  validateIntegrity(root.integrity, 'Lookup claim passport integrity', root.version, LOOKUP_CLAIM_PASSPORT_VERSION);
 }
 
 const COMPARISON_STATES = ['conflicting', 'different', 'equal', 'missing', 'not_recorded', 'unavailable'] as const;
@@ -1102,7 +1050,7 @@ function validateDomainComparison(value: UnknownRecord): void {
     if (integer(counts[state], `Domain comparison ${state} count`, 0, rows.length) !== actual.get(state)) fail('Domain comparison counts');
   }
   strings(comparison.limitations, 'Domain comparison limitations', 12, 600);
-  validateIntegrity(root.integrity, 'Domain comparison integrity', root.version, 3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION);
+  validateIntegrity(root.integrity, 'Domain comparison integrity', root.version, BULK_DOMAIN_COMPARISON_EXPORT_VERSION);
 }
 
 const MAIL_STATES = ['authenticated_mail', 'evidence_incomplete', 'mail_auth_gap', 'mail_auth_incomplete', 'no_explicit_mx', 'null_mx'] as const;
@@ -1160,7 +1108,7 @@ function validateMailExposure(value: UnknownRecord): void {
   const declaredUnevaluated = integer(report.profileContextUnevaluatedCount, 'Bulk mail exposure unevaluated count', 0, rows.length);
   if (declaredUnevaluated < unevaluated) fail('Bulk mail exposure unevaluated count');
   strings(report.limitations, 'Bulk mail exposure limitations', 12, 600);
-  validateIntegrity(root.integrity, 'Bulk mail exposure integrity', root.version, 1, BULK_MAIL_EXPOSURE_EXPORT_VERSION);
+  validateIntegrity(root.integrity, 'Bulk mail exposure integrity', root.version, BULK_MAIL_EXPOSURE_EXPORT_VERSION);
 }
 
 function validateBulkView(value: unknown, label: string): void {
@@ -1203,7 +1151,7 @@ function validateBulkReviewManifest(value: UnknownRecord): void {
   }
   if (rows.length !== domains.length) fail('Bulk review manifest selection');
   strings(root.limitations, 'Bulk review manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, 1, BULK_REVIEW_MANIFEST_VERSION);
+  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, BULK_REVIEW_MANIFEST_VERSION);
 }
 
 function validateInvestigationManifest(value: UnknownRecord): void {
@@ -1234,25 +1182,7 @@ function validateInvestigationManifest(value: UnknownRecord): void {
   if (integer(summary.artifactCount, 'Investigation manifest artifact count', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS) !== artifacts.length
     || integer(summary.totalBytes, 'Investigation manifest total bytes', 1, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) !== totalBytes) fail('Investigation manifest summary');
   strings(root.limitations, 'Investigation manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, 1, INVESTIGATION_MANIFEST_VERSION);
-}
-
-const LEGACY_CASE_ACTION_STATES = ['planned', 'ready_for_review', 'submitted', 'acknowledged', 'resolved', 'closed'] as const;
-
-function validateActionSummary(value: unknown, label: string): void {
-  const summary = exact(value, ['total', 'active', 'submitted', 'acknowledged', 'resolved', 'closed', 'overdue', 'followUpDue', 'withOutcome', 'latestOutcomes'], label);
-  const total = integer(summary.total, label, 0, MAX_CASE_ACTIONS);
-  for (const key of ['active', 'submitted', 'acknowledged', 'resolved', 'closed', 'overdue', 'followUpDue', 'withOutcome'] as const) integer(summary[key], label, 0, total);
-  if (Number(summary.resolved) + Number(summary.closed) + Number(summary.active) !== total) fail(label);
-  const outcomes = array(summary.latestOutcomes, label, 5);
-  for (const candidate of outcomes) {
-    const outcome = exact(candidate, ['actionId', 'recipient', 'state', 'outcome', 'updatedAt'], label);
-    text(outcome.actionId, label, 64);
-    text(outcome.recipient, label, 320);
-    enumeration(outcome.state, LEGACY_CASE_ACTION_STATES, label);
-    text(outcome.outcome, label, 2_000);
-    iso(outcome.updatedAt, label);
-  }
+  validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, INVESTIGATION_MANIFEST_VERSION);
 }
 
 const CASE_RESPONSE_PREFLIGHT_IDS = [
@@ -1267,6 +1197,24 @@ const CASE_RESPONSE_PREFLIGHT_IDS = [
   'action_tracking',
 ] as const;
 
+const PUBLIC_CASE_ACTION_STATES = ['planned', 'ready_for_review', 'submitted', 'acknowledged', 'resolved', 'closed'] as const;
+
+function validatePublicActionSummary(value: unknown, label: string): void {
+  const summary = exact(value, ['total', 'active', 'submitted', 'acknowledged', 'resolved', 'closed', 'overdue', 'followUpDue', 'withOutcome', 'latestOutcomes'], label);
+  const total = integer(summary.total, label, 0, MAX_CASE_ACTIONS);
+  for (const key of ['active', 'submitted', 'acknowledged', 'resolved', 'closed', 'overdue', 'followUpDue', 'withOutcome'] as const) integer(summary[key], label, 0, total);
+  if (Number(summary.resolved) + Number(summary.closed) + Number(summary.active) !== total) fail(label);
+  const outcomes = array(summary.latestOutcomes, label, 5);
+  for (const candidate of outcomes) {
+    const outcome = exact(candidate, ['actionId', 'recipient', 'state', 'outcome', 'updatedAt'], label);
+    text(outcome.actionId, label, 64);
+    text(outcome.recipient, label, 320);
+    enumeration(outcome.state, PUBLIC_CASE_ACTION_STATES, label);
+    text(outcome.outcome, label, 2_000);
+    iso(outcome.updatedAt, label);
+  }
+}
+
 function expectedObservationAge(observedAt: string, generatedAt: string): Readonly<{
   ageSeconds: number;
   band: 'future_or_clock_skew' | 'one_to_seven_days' | 'over_seven_days' | 'under_24_hours';
@@ -1279,9 +1227,9 @@ function expectedObservationAge(observedAt: string, generatedAt: string): Readon
   return { ageSeconds, band: 'over_seven_days', refreshRecommended: true };
 }
 
-function validateLegacyCaseResponsePacket(value: UnknownRecord): void {
+function validateCaseResponsePacketV6(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'reviewRequired', 'submissionPerformed', 'profile', 'case', 'incident', 'contacts', 'preflight', 'escalationHistory', 'provenance', 'integrity'], 'Case-response packet');
-  if (root.schemaVersion !== LEGACY_CASE_RESPONSE_PACKET_VERSION && root.schemaVersion !== PREVIOUS_CASE_RESPONSE_PACKET_VERSION) fail('Case-response packet');
+  if (root.schemaVersion !== PUBLIC_CASE_RESPONSE_PACKET_VERSION) fail('Case-response packet v6');
   iso(root.generatedAt, 'Case-response packet generatedAt');
   if (root.reviewRequired !== true || root.submissionPerformed !== false) fail('Case-response packet review state');
   const profile = exact(root.profile, ['id', 'label', 'audience', 'subject', 'checklist', 'evidenceOrder', 'includedEvidence', 'excludedEvidence', 'redactions', 'attachments', 'followUpFields'], 'Case-response profile');
@@ -1356,14 +1304,14 @@ function validateLegacyCaseResponsePacket(value: UnknownRecord): void {
   }
   const expectedStatus = actualCounts.block ? 'needs_input' : actualCounts.caution ? 'review_cautions' : 'ready_for_review';
   if (preflight.status !== expectedStatus || preflight.canExport !== (actualCounts.block === 0)) fail('Case-response preflight status');
-  validateActionSummary(preflight.actionSummary, 'Case-response action summary');
+  validatePublicActionSummary(preflight.actionSummary, 'Case-response action summary');
   const history = array(root.escalationHistory, 'Case-response escalation history', MAX_RESPONSE_ACTION_HISTORY);
   for (const candidate of history) {
     const action = exact(candidate, ['type', 'recipient', 'contactSource', 'state', 'reference', 'outcome', 'createdAt', 'updatedAt'], 'Case-response escalation action');
     enumeration(action.type, CASE_ACTION_TYPES, 'Case-response action type');
     text(action.recipient, 'Case-response action recipient', 320, true);
     text(action.contactSource, 'Case-response action source', 120, true);
-    enumeration(action.state, LEGACY_CASE_ACTION_STATES, 'Case-response action state');
+    enumeration(action.state, PUBLIC_CASE_ACTION_STATES, 'Case-response action state');
     optionalText(action.reference, 'Case-response action reference', 500);
     optionalText(action.outcome, 'Case-response action outcome', 2_000);
     iso(action.createdAt, 'Case-response action createdAt');
@@ -1384,7 +1332,7 @@ function validateLegacyCaseResponsePacket(value: UnknownRecord): void {
   strings(provenance.limitations, 'Case-response limitations', 8, 600);
   const integrity = exact(root.integrity, ['algorithm', 'canonicalization', 'scope', 'digestSha256'], 'Case-response integrity');
   if (integrity.algorithm !== 'SHA-256'
-    || integrity.canonicalization !== (root.schemaVersion === PREVIOUS_CASE_RESPONSE_PACKET_VERSION ? 'sorted-json-v2' : 'sorted-json-v1')
+    || integrity.canonicalization !== 'sorted-json-v2'
     || integrity.scope !== 'packet excluding integrity') fail('Case-response integrity');
   if (typeof integrity.digestSha256 !== 'string' || !HEX_DIGEST_RE.test(integrity.digestSha256)) fail('Case-response integrity');
 }
@@ -1846,8 +1794,14 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
 }
 
 function validateCaseResponsePacket(value: UnknownRecord): void {
-  if (value.schemaVersion === CASE_RESPONSE_PACKET_VERSION) validateCaseResponsePacketV7(value);
-  else validateLegacyCaseResponsePacket(value);
+  if (value.schemaVersion === PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateCaseResponsePacketV6(value);
+  if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) < CASE_RESPONSE_PACKET_VERSION) {
+    throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is not part of the public compatibility boundary; no data was changed.`);
+  }
+  if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) > CASE_RESPONSE_PACKET_VERSION) {
+    throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is newer than the supported version ${CASE_RESPONSE_PACKET_VERSION}; no data was changed.`);
+  }
+  validateCaseResponsePacketV7(value);
 }
 
 function validateBriefFact(value: unknown, label: string): void {
@@ -1877,10 +1831,10 @@ function validateDecisionEntry(value: unknown, label: string): void {
   if (typeof entry.href !== 'string' || !/^#[^\u0000-\u001f\u007f]{1,160}$/u.test(entry.href)) fail(label);
 }
 
-function validateLegacyBrief(value: unknown): void {
+function validatePublicBrief(value: unknown): void {
   const brief = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'target', 'targetType', 'task', 'taskLabel', 'question', 'summary', 'observation', 'verifiedFacts', 'contradictions', 'unknowns', 'nextActions', 'relationships', 'limitations'], 'Investigation capsule brief');
   if (brief.schema !== LOOKUP_INVESTIGATION_BRIEF_SCHEMA
-    || brief.schemaVersion !== LEGACY_LOOKUP_INVESTIGATION_BRIEF_VERSION) fail('Investigation capsule brief');
+    || brief.schemaVersion !== PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION) fail('Investigation capsule brief');
   iso(brief.generatedAt, 'Investigation capsule brief generatedAt');
   text(brief.target, 'Investigation capsule brief target', 253);
   text(brief.targetType, 'Investigation capsule brief target type', 40);
@@ -2250,8 +2204,7 @@ function validateAnalystRecords(value: unknown): void {
 
 export function validateInvestigationCapsuleStructure(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'application', 'target', 'sourceContracts', 'investigationBrief', 'graphSnapshot', 'analystRecords', 'integrity', 'limitations'], 'Investigation capsule');
-  if (root.schemaVersion !== LEGACY_INVESTIGATION_CAPSULE_VERSION
-    && root.schemaVersion !== PREVIOUS_INVESTIGATION_CAPSULE_VERSION
+  if (root.schemaVersion !== PUBLIC_INVESTIGATION_CAPSULE_VERSION
     && root.schemaVersion !== INVESTIGATION_CAPSULE_VERSION) fail('Investigation capsule');
   iso(root.generatedAt, 'Investigation capsule generatedAt');
   const application = exact(root.application, ['name', 'version'], 'Investigation capsule application');
@@ -2277,7 +2230,7 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
     : ['lookup-evidence', 'investigation-brief', 'asset-graph', 'analyst-records'];
   const expectedBriefVersion = root.schemaVersion === INVESTIGATION_CAPSULE_VERSION
     ? LOOKUP_INVESTIGATION_BRIEF_VERSION
-    : LEGACY_LOOKUP_INVESTIGATION_BRIEF_VERSION;
+    : PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION;
   if (!sameValues(contracts.map((candidate) => (candidate as UnknownRecord).id), expectedContractIds)) fail('Investigation capsule source contracts');
   if (!byId.has('lookup-evidence') || !byId.has('investigation-brief') || !byId.has('asset-graph')
     || byId.get('lookup-evidence')?.embedded !== false
@@ -2291,7 +2244,7 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
       || byId.get('analyst-records')?.version !== INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION
       || byId.get('analyst-records')?.embedded !== true))) fail('Investigation capsule source contracts');
   if (root.schemaVersion === INVESTIGATION_CAPSULE_VERSION) validateCurrentBrief(root.investigationBrief);
-  else validateLegacyBrief(root.investigationBrief);
+  else validatePublicBrief(root.investigationBrief);
   validateGraph(root.graphSnapshot);
   validateAnalystRecords(root.analystRecords);
   const brief = root.investigationBrief as UnknownRecord;
@@ -2300,15 +2253,10 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
     || graph.targetId === undefined
     || (brief.relationships as UnknownRecord).nodes !== (graph.nodes as unknown[]).length
     || (brief.relationships as UnknownRecord).edges !== (graph.edges as unknown[]).length) fail('Investigation capsule projection linkage');
-  const wholeIntegrity = root.schemaVersion !== LEGACY_INVESTIGATION_CAPSULE_VERSION;
-  const integrity = exact(root.integrity, wholeIntegrity
-    ? ['algorithm', 'canonicalization', 'scope', 'briefDigest', 'graphDigest', 'analystRecordsDigest', 'digestSha256']
-    : ['algorithm', 'briefDigest', 'graphDigest', 'analystRecordsDigest'], 'Investigation capsule integrity');
+  const integrity = exact(root.integrity, ['algorithm', 'canonicalization', 'scope', 'briefDigest', 'graphDigest', 'analystRecordsDigest', 'digestSha256'], 'Investigation capsule integrity');
   if (integrity.algorithm !== 'SHA-256') fail('Investigation capsule integrity');
-  if (wholeIntegrity) {
-    if (integrity.canonicalization !== 'sorted-json-v2' || integrity.scope !== 'capsule excluding integrity') fail('Investigation capsule integrity');
-    digest(integrity.digestSha256, 'Investigation capsule digest');
-  }
+  if (integrity.canonicalization !== 'sorted-json-v2' || integrity.scope !== 'capsule excluding integrity') fail('Investigation capsule integrity');
+  digest(integrity.digestSha256, 'Investigation capsule digest');
   digest(integrity.briefDigest, 'Investigation capsule brief digest');
   digest(integrity.graphDigest, 'Investigation capsule graph digest');
   if (integrity.analystRecordsDigest !== null) digest(integrity.analystRecordsDigest, 'Investigation capsule analyst digest');
@@ -2528,7 +2476,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
       || !sameValues(item.afterValues as unknown[], expected.afterValues);
   })) fail('Domain change packet summary');
   strings(root.limitations, 'Domain change packet limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, 1, DOMAIN_CHANGE_PACKET_VERSION);
+  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, DOMAIN_CHANGE_PACKET_VERSION);
 }
 
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {

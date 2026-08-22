@@ -334,11 +334,9 @@ describe('pure domain-control runtime ownership', () => {
     }
   });
 
-  test('serialises both supported document histories to their exact portable bytes', async () => {
-    for (const fixture of ['domain-control-manifest-v1.json', 'domain-control-manifest-v2.json']) {
-      const raw = await readFile(new URL(`./fixtures/${fixture}`, import.meta.url), 'utf8');
-      assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
-    }
+  test('serialises the exact current document to its portable bytes', async () => {
+    const raw = await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8');
+    assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
   });
 
   test('returns only the detached validated snapshot from Node and browser verifiers', async () => {

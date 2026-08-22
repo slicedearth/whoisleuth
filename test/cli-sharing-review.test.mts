@@ -63,20 +63,6 @@ describe('CLI sharing review', () => {
     assert.doesNotMatch(JSON.stringify(report), /AS64496|\bfast\b/u);
   });
 
-  test('withholds ready status for a legacy capsule with projection-only integrity', async () => {
-    const fixture = JSON.parse(readFileSync(new URL('./fixtures/artifact-integrity-v1.json', import.meta.url), 'utf8')) as {
-      artifacts: { capsule: Record<string, unknown> };
-    };
-    const capsule = fixture.artifacts.capsule;
-    const report = await buildSharingReview(JSON.stringify(capsule), {
-      marking: 'amber', recipientScope: 'organization', purpose: 'Reviewed handoff',
-      humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
-    }, NOW);
-    assert.equal(report.artifact.integrity, 'projection_integrity');
-    assert.equal(report.summary.status, 'review_cautions');
-    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
-  });
-
   test('blocks a requested downgrade from imported TLP and unreviewed sensitive fields', async () => {
     const report = await buildSharingReview(savedLookup({
       markings: ['TLP:RED'],

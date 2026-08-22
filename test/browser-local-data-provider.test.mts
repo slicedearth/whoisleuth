@@ -55,6 +55,13 @@ const WRITE_DEFINITION: LocalDataCollectionDefinition<string[]> = {
   join: (records) => records.flatMap((record) => typeof record.value === 'string' ? [record.value] : []),
 };
 
+const SECOND_WRITE_DEFINITION: LocalDataCollectionDefinition<string[]> = {
+  ...WRITE_DEFINITION,
+  id: 'fixture-write-second',
+  label: 'Second fixture writes',
+  legacyKey: 'fixture-write-second-key',
+};
+
 type DelayedWriteState = {
   manifest: BrowserLocalCollectionManifest;
   records: BrowserLocalStoredRecord[];
@@ -322,6 +329,94 @@ function stalledFactory(calls: { transactions: number; reads: number }): IDBFact
     },
   } as unknown as IDBFactory;
 }
+
+function readyEmptyCollectionsFactory(
+  definitions: readonly LocalDataCollectionDefinition<string[]>[],
+): IDBFactory {
+  const manifests = new Map(definitions.map((definition) => [definition.id, {
+    ...emptyWriteManifest(),
+    collection: definition.id,
+    legacyKey: definition.legacyKey,
+  }]));
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction() {
+      let transaction: IDBTransaction;
+      transaction = {
+        error: null,
+        oncomplete: null,
+        onabort: null,
+        onerror: null,
+        abort() { transaction.onabort?.call(transaction, new Event('abort')); },
+        objectStore(name: string) {
+          if (name === 'manifests') {
+            return {
+              get(key: IDBValidKey) {
+                return successfulRequest(manifests.get(String(key)));
+              },
+            } as unknown as IDBObjectStore;
+          }
+          return {
+            index() {
+              return { getAll: () => successfulRequest([]) } as unknown as IDBIndex;
+            },
+          } as unknown as IDBObjectStore;
+        },
+      } as unknown as IDBTransaction;
+      queueMicrotask(() => transaction.oncomplete?.call(transaction, new Event('complete')));
+      return transaction;
+    },
+  } as unknown as IDBDatabase;
+  return {
+    open() {
+      const request = {
+        result: database,
+        error: null,
+        onupgradeneeded: null,
+        onsuccess: null,
+        onerror: null,
+        onblocked: null,
+      } as unknown as IDBOpenDBRequest;
+      queueMicrotask(() => request.onsuccess?.call(request, new Event('success')));
+      return request;
+    },
+  } as unknown as IDBFactory;
+}
+
+test('preserves a concurrent legacy value when a later rollback-copy write fails', async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const values = new Map<string, string>([
+    [WRITE_DEFINITION.legacyKey, '["previous-one"]'],
+    [SECOND_WRITE_DEFINITION.legacyKey, '["previous-two"]'],
+  ]);
+  try {
+    const provider = new BrowserLocalDataProvider({
+      databaseName: 'fixture-legacy-rollback-conflict',
+      indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]),
+      storage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem(key, value) {
+          if (key === SECOND_WRITE_DEFINITION.legacyKey) {
+            values.set(WRITE_DEFINITION.legacyKey, '["concurrent-tab"]');
+            throw new DOMException('Fixture quota reached.', 'QuotaExceededError');
+          }
+          values.set(key, value);
+        },
+        removeItem: (key) => { values.delete(key); },
+      },
+    });
+    await provider.initialize([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]);
+    await assert.rejects(
+      provider.restoreLegacyCopies([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_CONFLICT',
+    );
+    assert.equal(values.get(WRITE_DEFINITION.legacyKey), '["concurrent-tab"]');
+    assert.equal(values.get(SECOND_WRITE_DEFINITION.legacyKey), '["previous-two"]');
+  } finally {
+    restoreKeyRange();
+  }
+});
 
 test('observes a deferred transaction timeout without masking the caller rejection', {
   timeout: 1_000,

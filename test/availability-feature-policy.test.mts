@@ -161,7 +161,7 @@ test('deep DNS collection receives the bounded registry publication without anot
   assert.equal(dnsCalls, 1);
 });
 
-test('enabled TLS intelligence runs once in parallel and remains explicit in deep evidence', async () => {
+test('enabled TLS evidence collection runs once in parallel and remains explicit in deep evidence', async () => {
   let tlsCalls = 0;
   const result = await availability('example.com', {
     featurePolicy: networkFeaturePolicy({

@@ -1,4 +1,17 @@
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
+import {
+  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+} from '../lib/evidence-export.mts';
+import {
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+} from '../packages/contracts/risk-calibration.mts';
+import {
+  CASE_SCHEMA_VERSION,
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_ARCHIVE_VERSION,
+} from '../packages/contracts/case-portability.mts';
 
 const COMMAND_ORDER = Object.freeze([
   'completion',
@@ -63,7 +76,8 @@ type CommandCollection = Readonly<{
 }>;
 type CliNetworkEffect = 'offline' | 'always_network' | 'conditional_network';
 type CliInvocationNetworkEffect = 'offline' | 'network';
-type CliHelpGroup = 'investigate' | 'discover' | 'review' | 'integrity' | 'terminal';
+type CliHelpGroup = 'investigate' | 'respond' | 'assure' | 'utilities';
+type CliDisclosureClass = 'none' | 'bounded_passive' | 'conditional_bounded_passive' | 'bounded_authorised_active';
 type CliOptionValueKind = 'enum' | 'file' | 'flag' | 'integer' | 'policy_list' | 'text';
 type CliOptionOccurrence = 'idempotent' | 'once';
 type CliOptionScope = 'command' | 'common';
@@ -143,9 +157,34 @@ type CliCommandDefinition = Readonly<{
     group: CliHelpGroup;
     summary: string;
   }>;
+  documentation: Readonly<{
+    common: boolean;
+    disclosureClass: CliDisclosureClass;
+    explicitAuthorisationRequired: boolean;
+    planSupport: boolean;
+    failurePolicySupport: boolean;
+    supportedSchemaIdentifiers: readonly string[];
+    inputLimits: readonly string[];
+    outputLimits: readonly string[];
+    outputFormats: readonly string[];
+    primaryEvidenceArtefacts: readonly string[];
+  }>;
 }>;
 
 const INVESTIGATION_PLAN_RECIPES = Object.freeze([
+  'domain-triage',
+  'lookalike-review',
+  'owned-domain-review',
+  'historical-comparison',
+  'campaign-review',
+  'certificate-anomaly',
+  'registry-disagreement',
+  'evidence-handoff',
+  'planned-domain-change',
+  'post-change-verification',
+] as const);
+
+const RUNNABLE_INVESTIGATION_PLAN_RECIPES = Object.freeze([
   'domain-triage',
   'lookalike-review',
   'owned-domain-review',
@@ -178,7 +217,7 @@ const CLI_META_ACTION_BY_ID = Object.freeze(Object.fromEntries(
 // additions do not expand the already broad runtime controller.
 
 const HELP_INTRO = `WHOISleuth CLI
-Source-aware domain investigation from your terminal.
+Domain investigation from your terminal.
 
 Quick start:
   whoisleuth
@@ -194,7 +233,7 @@ redirected or unsupported terminals continue to print this help. No request
 starts until a Lookup plan is shown and the analyst confirms collection.
 Use --json or --jsonl where supported for machine-readable stdout.
 Use --output <file> for atomic private file output and --force to replace it.
-Place --palette auto|light|dark after the command to select a fixed terminal
+Use --palette auto, light, or dark after the command to select a fixed terminal
 colour palette; --no-color, NO_COLOR, and redirected output still suppress ANSI.
 Use --config <file> and --profile <name> for explicit versioned safe defaults.
 Registry scaffold is the exception: its --profile selects a fixture capability
@@ -211,7 +250,7 @@ Source and licence: ${WHOISLEUTH_SOURCE_REPOSITORY_URL}
 const COMMAND_USAGE_SEED: Readonly<Record<CliCommand, string>> = Object.freeze({
   completion: 'whoisleuth completion <bash|zsh|fish|powershell>',
   doctor: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
-  commands: 'whoisleuth commands [--json] [--quiet] [--no-color]',
+  commands: 'whoisleuth commands [--common] [--group <group>] [--mode <offline|network>] [--json] [--quiet] [--no-color]',
   manual: 'whoisleuth manual',
   manifest: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
   'map-observations': 'whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]',
@@ -250,7 +289,7 @@ const COMMAND_USAGE_SEED: Readonly<Record<CliCommand, string>> = Object.freeze({
   assurance: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
   'change-packet': 'whoisleuth change-packet [change-packet-input.json] [--json] [--quiet] [--no-color]',
   'sharing-review': 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]',
-  'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> [--json] [--quiet] [--no-color]',
+  'workflow-plan': 'whoisleuth workflow-plan <recipe> <domain|brand> | --list | --explain <recipe> [--json] [--quiet] [--no-color]',
   'workflow-run': 'whoisleuth workflow-run <recipe> <domain|brand> [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
   diff: 'whoisleuth diff <left.json> <right.json> [--left-session <id> --right-session <id>] [--json] [--quiet] [--no-color]',
   reconcile: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
@@ -390,9 +429,9 @@ const COMMAND_DETAILS_SEED: Readonly<Record<CliCommand, CommandDetail>> = Object
     boundary: 'The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.',
   },
   'inspect-archive': {
-    description: 'Summarise or search one workspace archive with redacted output by default.',
+    description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact public version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION} support and redacted output by default.`,
     example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
-    boundary: 'Exact matches require --reveal. Content identity excludes export time and formatting. The archive is read locally and is never uploaded.',
+    boundary: 'Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.',
   },
   'sign-artifact': {
     description: 'Sign one reviewed response packet or supported manifest with a local private key.',
@@ -435,7 +474,7 @@ const COMMAND_DETAILS_SEED: Readonly<Record<CliCommand, CommandDetail>> = Object
     boundary: 'The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.',
   },
   'case-pack': {
-    description: 'Build a reviewed, audience-specific and browser-importable case package.',
+    description: `Build a reviewed, audience-specific Case-pack v2 from an exact Case-schema-${CASE_SCHEMA_VERSION} export.`,
     example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
     boundary: 'The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.',
   },
@@ -492,7 +531,7 @@ const COMMAND_DETAILS_SEED: Readonly<Record<CliCommand, CommandDetail>> = Object
   export: {
     description: 'Convert one saved lookup into a versioned evidence report.',
     example: 'whoisleuth export lookup.json --markdown',
-    boundary: 'Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; schemas 25-27 remain readable for compatibility, with schema 26 retaining its strict source/publication binding and schema 25 retaining its documented historical wrapper semantics. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.',
+    boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; exact public schema ${PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remains readable with its strict source/publication binding, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
   },
 });
 
@@ -523,7 +562,7 @@ const COMMAND_COLLECTION_SEED: Readonly<Record<CliCommand, CommandCollection>> =
   'lookalike-calibrate': { mode: 'offline', scope: 'Reads at most 5,000 reviewed candidate labels from one dataset capped at 2 MiB.' },
   'verify-artifact': { mode: 'offline', scope: 'Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
   'interchange-report': { mode: 'offline', scope: 'Reads one selected bounded portable artefact and emits fixed compatibility metadata only.' },
-  'inspect-archive': { mode: 'offline', scope: 'Reads one selected bounded workspace archive with redacted output by default.' },
+  'inspect-archive': { mode: 'offline', scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact v${PUBLIC_WORKSPACE_ARCHIVE_VERSION} compatibility, and redacts output by default.` },
   'sign-artifact': { mode: 'offline', scope: 'Reads one selected artefact and one local private key without transmitting either.' },
   'verify-signature': { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
   'source-report': { mode: 'offline', scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
@@ -531,8 +570,8 @@ const COMMAND_COLLECTION_SEED: Readonly<Record<CliCommand, CommandCollection>> =
   'page-compare': { mode: 'offline', scope: 'Reads two saved Lookup documents and executes no page code.' },
   'mail-review': { mode: 'offline', scope: 'Reads one saved Bulk result and sends no DNS or SMTP traffic.' },
   'review-evidence': { mode: 'offline', scope: 'Reads one bounded versioned evidence or request-planning document and performs no collection.' },
-  brief: { mode: 'offline', scope: 'Reads one bounded saved Lookup and emits a compact source-aware decision brief.' },
-  'case-pack': { mode: 'offline', scope: 'Reads one bounded browser case export and writes a separate audience-specific package.' },
+  brief: { mode: 'offline', scope: 'Reads one bounded saved Lookup and emits a compact source-attributed decision brief.' },
+  'case-pack': { mode: 'offline', scope: `Reads one bounded Case-schema-${CASE_SCHEMA_VERSION} browser export and writes a separate audience-specific Case-pack v2.` },
   'domain-control': { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
   'monitor-once': { mode: 'network', scope: 'Runs deep collection for at most 20 manifest domains with concurrency capped at 3.' },
   assurance: { mode: 'offline', scope: 'Reads one versioned plan capped at 2 MiB and makes no request or configuration change.' },
@@ -592,19 +631,22 @@ const OPTIONS_BY_COMMAND_SEED: Readonly<Record<CliCommand, readonly string[]>> =
   assurance: ['--json', '--quiet', '--no-color'],
   'change-packet': ['--json', '--quiet', '--no-color'],
   'sharing-review': ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
-  'workflow-plan': ['--json', '--quiet', '--no-color'],
+  'workflow-plan': ['--list', '--explain', '--json', '--quiet', '--no-color'],
   'workflow-run': ['--approve-network', '--resume', '--json', '--quiet', '--no-color'],
   diff: ['--left-session', '--right-session', '--json', '--quiet', '--no-color'],
   reconcile: ['--json', '--quiet', '--no-color'],
   timeline: ['--json', '--quiet', '--no-color'],
   export: ['--markdown', '--html', '--compact', '--no-attribution'],
   completion: [],
-  commands: ['--json', '--quiet', '--no-color'],
+  commands: ['--common', '--group', '--mode', '--json', '--quiet', '--no-color'],
   doctor: ['--network', '--json', '--quiet', '--no-color'],
   manual: [],
 });
 
 const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  '--group': Object.freeze(['investigate', 'respond', 'assure', 'utilities']),
+  '--mode': Object.freeze(['offline', 'network']),
+  '--explain': INVESTIGATION_PLAN_RECIPES,
   '--preset': Object.freeze(['common', 'impersonation', 'all']),
   '--keyboard': Object.freeze(['qwerty', 'azerty', 'qwertz', 'all']),
   '--mail-profile': Object.freeze(['standard', 'defensive-no-mail', 'parked']),
@@ -707,11 +749,11 @@ const POSITIONALS_BY_COMMAND_SEED: Readonly<Record<CliCommand, readonly CliPosit
   'change-packet': OPTIONAL_FILE_POSITIONAL,
   'sharing-review': OPTIONAL_FILE_POSITIONAL,
   'workflow-plan': Object.freeze([
-    positional('recipe', 'enum', 1, 1, INVESTIGATION_PLAN_RECIPES),
-    positional('subject', 'text', 1, 1),
+    positional('recipe', 'enum', 0, 1, INVESTIGATION_PLAN_RECIPES),
+    positional('subject', 'text', 0, 1),
   ]),
   'workflow-run': Object.freeze([
-    positional('recipe', 'enum', 1, 1, INVESTIGATION_PLAN_RECIPES),
+    positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
   ]),
   diff: Object.freeze([positional('sources', 'file', 2, 2)]),
@@ -805,6 +847,7 @@ const MACHINE_OUTPUT_OPTIONS = Object.freeze([
   '--html', '--sarif', '--summary-json',
 ]);
 const GRAMMAR_CONSTRAINTS_SEED: Readonly<Partial<Record<CliCommand, readonly CliGrammarConstraint[]>>> = Object.freeze({
+  commands: Object.freeze([]),
   manifest: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),
   ]),
@@ -875,6 +918,9 @@ const GRAMMAR_CONSTRAINTS_SEED: Readonly<Partial<Record<CliCommand, readonly Cli
   ]),
   'sharing-review': Object.freeze([
     constraint({ kind: 'required', options: ['--marking', '--recipient-scope', '--purpose'] }),
+  ]),
+  'workflow-plan': Object.freeze([
+    constraint({ kind: 'mutually_exclusive', options: ['--list', '--explain'] }),
   ]),
   export: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--markdown', '--html'] }),
@@ -976,24 +1022,23 @@ const COMMAND_DESCRIPTIONS_SEED: Readonly<Record<CliCommand, string>> = Object.f
 
 const HELP_COMMANDS_BY_GROUP = Object.freeze({
   investigate: Object.freeze([
-    'lookup', 'bulk', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'posture',
+    'lookup', 'bulk', 'ct-search', 'ct-intake', 'discover', 'discover-scan',
+    'posture', 'http', 'tls', 'registry-support', 'registry-doctor',
+    'registry-cohort', 'source-report', 'compare', 'page-compare', 'mail-review',
+    'review-evidence', 'brief',
   ] satisfies readonly CliCommand[]),
-  discover: Object.freeze([
-    'ct-search', 'ct-intake', 'discover', 'discover-scan', 'registry-support',
-    'registry-doctor', 'registry-cohort', 'registry-scaffold',
+  respond: Object.freeze([
+    'map-observations', 'oam-export', 'case-pack', 'change-packet',
+    'sharing-review', 'export',
   ] satisfies readonly CliCommand[]),
-  review: Object.freeze([
-    'map-observations', 'oam-export', 'source-report', 'compare', 'page-compare',
-    'mail-review', 'review-evidence', 'brief', 'case-pack', 'domain-control',
-    'monitor-once', 'assurance', 'change-packet', 'sharing-review', 'workflow-plan',
-    'workflow-run', 'diff', 'reconcile', 'timeline', 'export', 'inspect-archive',
-    'verify-artifact', 'interchange-report',
+  assure: Object.freeze([
+    'dnssec-validate', 'mail-transport', 'domain-control', 'monitor-once',
+    'assurance', 'workflow-plan', 'workflow-run', 'diff', 'reconcile', 'timeline',
+    'inspect-archive', 'verify-artifact', 'interchange-report', 'manifest',
+    'sign-artifact', 'verify-signature', 'risk-calibrate', 'lookalike-calibrate',
   ] satisfies readonly CliCommand[]),
-  integrity: Object.freeze([
-    'manifest', 'sign-artifact', 'verify-signature', 'risk-calibrate', 'lookalike-calibrate',
-  ] satisfies readonly CliCommand[]),
-  terminal: Object.freeze([
-    'doctor', 'commands', 'completion', 'manual',
+  utilities: Object.freeze([
+    'registry-scaffold', 'doctor', 'commands', 'completion', 'manual',
   ] satisfies readonly CliCommand[]),
 } satisfies Readonly<Record<CliHelpGroup, readonly CliCommand[]>>);
 
@@ -1103,6 +1148,128 @@ const NETWORK_EFFECT_BY_COMMAND: Readonly<Record<CliCommand, CliNetworkEffect>> 
   export: 'offline',
 });
 
+const COMMON_COMMANDS = Object.freeze([
+  'doctor', 'commands', 'lookup', 'bulk', 'discover', 'discover-scan', 'verify-artifact',
+  'review-evidence', 'case-pack', 'workflow-plan', 'diff', 'export',
+] as const satisfies readonly CliCommand[]);
+
+const SCHEMA_IDENTIFIERS_BY_COMMAND: Readonly<Partial<Record<CliCommand, readonly string[]>>> = Object.freeze({
+  commands: Object.freeze(['whoisleuth.cli.command-catalogue']),
+  doctor: Object.freeze(['whoisleuth.cli.doctor']),
+  manifest: Object.freeze(['whoisleuth.investigation-manifest']),
+  'map-observations': Object.freeze(['whoisleuth.external-observation-mapping']),
+  'oam-export': Object.freeze(['whoisleuth.open-asset-model-bridge']),
+  lookup: Object.freeze(['whoisleuth.cli.lookup', 'whoisleuth.cli.lookup-plan']),
+  bulk: Object.freeze(['whoisleuth.cli.bulk', 'whoisleuth.cli.bulk.item', 'whoisleuth.cli.bulk-checkpoint']),
+  'ct-search': Object.freeze(['whoisleuth.cli.ct-search']),
+  'ct-intake': Object.freeze(['whoisleuth.ct-event-batch', 'whoisleuth.external-findings']),
+  discover: Object.freeze(['whoisleuth.cli.discover', 'whoisleuth.cli.discover.item', 'whoisleuth.cli.discovery-snapshot']),
+  'discover-scan': Object.freeze(['whoisleuth.cli.discovery-scan', 'whoisleuth.cli.discovery-scan.item', 'whoisleuth.cli.discovery-observation-snapshot']),
+  posture: Object.freeze(['whoisleuth.cli.posture']),
+  http: Object.freeze(['whoisleuth.cli.http']),
+  tls: Object.freeze(['whoisleuth.cli.tls']),
+  'dnssec-validate': Object.freeze(['whoisleuth.dnssec-chain-validation', 'whoisleuth.dnssec-trust-anchor']),
+  'mail-transport': Object.freeze(['whoisleuth.mail-transport.input', 'whoisleuth.cli.mail-transport-review']),
+  'registry-support': Object.freeze(['whoisleuth.cli.registry-support', 'whoisleuth.registry-standards-coverage']),
+  'registry-doctor': Object.freeze(['whoisleuth.cli.registry-doctor']),
+  'registry-cohort': Object.freeze(['whoisleuth.cli.registry-cohort']),
+  'risk-calibrate': Object.freeze([RISK_CALIBRATION_DATASET_SCHEMA, RISK_CALIBRATION_REPORT_SCHEMA]),
+  'lookalike-calibrate': Object.freeze(['whoisleuth.lookalike-calibration-input', 'whoisleuth.lookalike-calibration']),
+  'verify-artifact': Object.freeze(['whoisleuth.offline-artifact-verification']),
+  'interchange-report': Object.freeze(['whoisleuth.interchange-fidelity-report']),
+  'inspect-archive': Object.freeze(['whoisleuth.workspace-archive-inspection']),
+  'sign-artifact': Object.freeze(['whoisleuth.signed-evidence-package']),
+  'verify-signature': Object.freeze(['whoisleuth.evidence-signature-verification']),
+  'source-report': Object.freeze(['whoisleuth.source-reliability-report']),
+  compare: Object.freeze(['whoisleuth.cli.compare']),
+  'page-compare': Object.freeze(['whoisleuth.cli.page-compare']),
+  'mail-review': Object.freeze(['whoisleuth.cli.mail-review']),
+  'review-evidence': Object.freeze([
+    'whoisleuth.cli.offline-evidence-review',
+    'whoisleuth.rdap-search-input',
+    'whoisleuth.dnssec-evidence-input',
+    'whoisleuth.tlsa-evidence-input',
+    'whoisleuth.rpki-route-input',
+    'whoisleuth.local-geoip-query',
+    'whoisleuth.encrypted-dns-plan-input',
+  ]),
+  brief: Object.freeze(['whoisleuth.cli.lookup-brief']),
+  'case-pack': Object.freeze(['whoisleuth.cli.case-pack', 'whoisleuth.case-report']),
+  'domain-control': Object.freeze(['whoisleuth.cli.domain-control-review-input', 'whoisleuth.cli.domain-control-review']),
+  'monitor-once': Object.freeze(['whoisleuth.cli.domain-control-monitor', 'whoisleuth.domain-control-flight-recorder.input']),
+  assurance: Object.freeze(['whoisleuth.domain-assurance.input', 'whoisleuth.domain-assurance']),
+  'change-packet': Object.freeze(['whoisleuth.domain-change-packet.input', 'whoisleuth.domain-change-packet']),
+  'sharing-review': Object.freeze(['whoisleuth.cli.sharing-review']),
+  'workflow-plan': Object.freeze(['whoisleuth.cli.investigation-plan', 'whoisleuth.cli.workflow-recipe-catalogue']),
+  'workflow-run': Object.freeze(['whoisleuth.cli.investigation-run']),
+  diff: Object.freeze(['whoisleuth.cli.lookup-diff']),
+  reconcile: Object.freeze(['whoisleuth.cli.lookup-reconciliation']),
+  timeline: Object.freeze(['whoisleuth.cli.lookup-timeline']),
+  export: Object.freeze(['whoisleuth.lookup-evidence']),
+});
+
+const PRIMARY_ARTEFACTS_BY_COMMAND: Readonly<Partial<Record<CliCommand, readonly string[]>>> = Object.freeze({
+  lookup: Object.freeze(['Source-qualified Lookup', 'Lookup request plan']),
+  bulk: Object.freeze(['Bulk result', 'Bulk checkpoint']),
+  discover: Object.freeze(['Candidate set', 'Discovery snapshot']),
+  'discover-scan': Object.freeze(['Reviewed candidate queue', 'Observation snapshot']),
+  'verify-artifact': Object.freeze(['Offline verification report']),
+  'case-pack': Object.freeze(['Reviewed Case-pack v2']),
+  'workflow-plan': Object.freeze(['Plan-only workflow document']),
+  'workflow-run': Object.freeze(['Resumable workflow state']),
+  diff: Object.freeze(['Retained-evidence comparison']),
+  timeline: Object.freeze(['Bounded retained-observation timeline']),
+  export: Object.freeze(['Portable evidence report']),
+});
+
+function documentationMetadata(
+  command: CliCommand,
+  commandOptions: readonly string[],
+  positionals: readonly CliPositionalSpec[],
+): CliCommandDefinition['documentation'] {
+  const effect = NETWORK_EFFECT_BY_COMMAND[command];
+  const explicitAuthorisationRequired = commandOptions.some((option) => (
+    option === '--owned-or-authorized' || option === '--active-probe' || option === '--approve-network'
+  ));
+  const outputOptionFormats = [
+    ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
+    ['--csv', 'CSV'], ['--domains', 'domain list'], ['--queries', 'query list'],
+    ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
+    ['--summary-json', 'summary JSON'],
+  ] as const;
+  const outputFormats = new Set<string>(['terminal']);
+  for (const [option, label] of outputOptionFormats) {
+    if (commandOptions.includes(option)) outputFormats.add(label);
+  }
+  if (command === 'export') outputFormats.add('JSON');
+  const positionalLimits = positionals.map((item) => (
+    `${item.name}: ${item.minimum}-${item.maximum} ${item.valueKind} value${item.maximum === 1 ? '' : 's'}`
+  ));
+  return Object.freeze({
+    common: COMMON_COMMANDS.includes(command as typeof COMMON_COMMANDS[number]),
+    disclosureClass: effect === 'offline'
+      ? 'none'
+      : explicitAuthorisationRequired
+        ? 'bounded_authorised_active'
+        : effect === 'conditional_network'
+          ? 'conditional_bounded_passive'
+          : 'bounded_passive',
+    explicitAuthorisationRequired,
+    planSupport: commandOptions.includes('--plan') || command === 'workflow-plan',
+    failurePolicySupport: commandOptions.includes('--fail-on') || commandOptions.includes('--strict-exit'),
+    supportedSchemaIdentifiers: Object.freeze([...(SCHEMA_IDENTIFIERS_BY_COMMAND[command] ?? [])]),
+    inputLimits: Object.freeze([COMMAND_COLLECTION_SEED[command].scope, ...positionalLimits]),
+    outputLimits: Object.freeze([
+      'Output is bounded by the command-owned formatter and document contract.',
+      ...(commonOptionsSeedForCommand(command).includes('--output')
+        ? ['Selected file output is atomic and replacement requires --force.']
+        : []),
+    ]),
+    outputFormats: Object.freeze([...outputFormats]),
+    primaryEvidenceArtefacts: Object.freeze([...(PRIMARY_ARTEFACTS_BY_COMMAND[command] ?? [])]),
+  });
+}
+
 const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
   COMMAND_ORDER.map((command, order) => {
     const commonOptions = Object.freeze([...commonOptionsSeedForCommand(command)]);
@@ -1140,6 +1307,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
         group: HELP_GROUP_BY_COMMAND[command],
         summary: COMMAND_DESCRIPTIONS_SEED[command],
       }),
+      documentation: documentationMetadata(command, commandOptions, POSITIONALS_BY_COMMAND_SEED[command]),
     });
   }),
 );
@@ -1218,10 +1386,9 @@ function commandPositionalSpecs(command: CliCommand): readonly CliPositionalSpec
 
 const HELP_GROUP_LABELS: Readonly<Record<CliHelpGroup, string>> = Object.freeze({
   investigate: 'Investigate',
-  discover: 'Discover',
-  review: 'Review saved evidence',
-  integrity: 'Integrity and calibration',
-  terminal: 'Terminal',
+  respond: 'Respond',
+  assure: 'Assure',
+  utilities: 'Utilities',
 });
 
 function renderRootHelpCommands(): string {
@@ -1288,6 +1455,7 @@ export {
   HELP,
   HELP_COMMANDS_BY_GROUP,
   INVESTIGATION_PLAN_RECIPES,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   LIMITED_CONCURRENCY_VALUES,
   OPTIONS_BY_COMMAND,
   STANDARD_CONCURRENCY_VALUES,
@@ -1307,6 +1475,7 @@ export {
 export type {
   CliCommand,
   CliCommandDefinition,
+  CliDisclosureClass,
   CliHandlerOwner,
   CliHelpGroup,
   CliInvocationNetworkEffect,

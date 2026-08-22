@@ -14,6 +14,7 @@ import {
   isCanonicalLocalSchemaIdentifier,
   type SchemaCompatibilityEntry,
 } from '../packages/contracts/schema-compatibility.mts';
+import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { compareCodeUnits as ordinalCompare } from './maintainer-tool-helpers.mts';
 
 export const MAX_SCHEMA_SOURCE_FILES = 1_024;
@@ -98,6 +99,7 @@ const SCHEMA_METADATA_FILES = new Set([
   'packages/contracts/schema-compatibility.mts',
   'packages/contracts/schema-lifecycle.mts',
   'packages/contracts/workspace-portability.mts',
+  'tools/public-product-catalogue-renderer.mts',
   'tools/schema-compatibility.mts',
   'tools/schema-source-coverage.mts',
 ]);
@@ -138,91 +140,63 @@ const MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH = 240;
 const MAX_SCHEMA_CLASSIFICATION_SOURCE_USES = 16;
 
 const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
-  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', [1]],
-  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure.mts', [224]],
-  ['whoisleuth.external-findings', 'cli/ct-event-intake.mts', [174]],
-  ['whoisleuth.external-findings', 'cli/external-observation-mapping.mts', [148]],
-  ['whoisleuth.lookup-evidence', 'frontend/src/lib/analysis/case-evidence-checkpoint.ts', [236]],
-  ['whoisleuth.registry-standards-coverage', 'lib/registry-capability-catalogue.mts', [85]],
-  ['whoisleuth.shortlist', 'frontend/src/lib/browser-local-data-definitions.ts', [247, 252]],
-  ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', [5]],
-  ['whoisleuth.watchlists', 'frontend/src/lib/browser-local-data-definitions.ts', [237]],
-] as const);
-
-const SCHEMA_DYNAMIC_EMITTER_ALLOWLIST = Object.freeze([
-  ['cli/artifact-structure.mts', 'schema', 'reader', [2535]],
-  ['cli/artifact-verify.mts', 'schema', 'writer', [370, 514, 548, 578]],
-  ['cli/formatters/json.mts', 'schema', 'writer', [119]],
-  ['cli/investigation-manifest.mts', 'schema', 'writer', [82]],
-  ['cli/sharing-review.mts', 'artifactSchema', 'writer', [229]],
-  ['packages/investigation/investigation-capsule.mts', 'evidenceSchema', 'writer', [168]],
+  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', 1],
+  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure.mts', 1],
+  ['whoisleuth.external-findings', 'cli/ct-event-intake.mts', 1],
+  ['whoisleuth.lookup-evidence', 'frontend/src/lib/analysis/case-evidence-checkpoint.ts', 1],
+  ['whoisleuth.registry-standards-coverage', 'lib/registry-capability-catalogue.mts', 1],
+  ['whoisleuth.shortlist', 'frontend/src/lib/browser-local-data-definitions.ts', 2],
+  ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', 1],
+  ['whoisleuth.watchlists', 'frontend/src/lib/browser-local-data-definitions.ts', 1],
 ] as const);
 
 const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
-  ['frontend/src/lib/browser-local-data-definitions.ts', 173, 'reader', 'Compares an optional legacy-store marker selected by the static collection definition.'],
-  ['packages/contracts/analyst-interchange.mts', 37, 'writer', 'Registers the reviewed external CACAO profile identity without changing its public spec marker.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 66, 'writer', 'Projects a statically registered lifecycle migration target.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 77, 'writer', 'Projects a statically registered fixture lifecycle identity.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 102, 'writer', 'Projects a statically registered lifecycle contract identity.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 111, 'reader', 'Matches an immutable fixture to its statically registered lifecycle contract.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 119, 'writer', 'Projects a statically registered lifecycle shape identity.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 194, 'writer', 'Projects a statically registered readable lifecycle identity.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 201, 'writer', 'Projects a statically registered emitted lifecycle identity.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 225, 'writer', 'Projects a statically registered serialisation profile identity.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 648, 'writer', 'Projects a compatibility descriptor identity already validated by the canonical lifecycle registry.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 688, 'writer', 'Projects a consumer contract identity already validated by the canonical lifecycle registry.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 990, 'writer', 'Copies a bounded registered lifecycle identity into the detached catalogue.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 1047, 'writer', 'Copies a bounded accepted-contract identity into the detached catalogue.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 1058, 'writer', 'Copies a bounded emitted-contract identity into the detached catalogue.'],
-  ['cli/archive-inspect.mts', 135, 'writer', 'Copies a validated archive section marker into the content identity.'],
-  ['cli/archive-inspect.mts', 272, 'writer', 'Copies a validated archive section marker into the inspection report.'],
-  ['cli/artifact-verify.mts', 438, 'writer', 'Reports the marker already validated from an encrypted workspace envelope.'],
-  ['cli/artifact-verify.mts', 608, 'writer', 'Projects a bounded marker from the verified artifact metadata.'],
-  ['cli/artifact-verify.mts', 645, 'reader', 'Compares two bounded artifact markers during manifest verification.'],
-  ['cli/artifact-verify.mts', 645, 'writer', 'Reports the result of the bounded artifact-marker comparison.'],
-  ['cli/evidence-signing.mts', 288, 'writer', 'Copies the verified source artifact marker into signature metadata.'],
-  ['cli/export-evidence.mts', 47, 'reader', 'Checks a builder result against its injected canonical contract marker.'],
-  ['cli/interchange-report.mts', 92, 'reader', 'Matches a bounded container marker to a reviewed interchange contract.'],
-  ['cli/interchange-report.mts', 231, 'writer', 'Copies the matched interchange contract marker into the report.'],
-  ['cli/retained-artifact-diff.mts', 430, 'reader', 'Requires both bounded retained documents to declare the same marker.'],
-  ['cli/risk-calibration.mts', 558, 'writer', 'Copies the validated calibration dataset marker into report metadata.'],
-  ['packages/relationships/case-relationship-graph-export.mts', 462, 'writer', 'Copies the canonical graph marker into GraphML metadata.'],
-  ['packages/relationships/case-relationship-graph-export.mts', 497, 'writer', 'Copies the canonical graph marker into GEXF metadata.'],
-  ['packages/interchange/external-findings-import.mts', 373, 'reader', 'Compares bounded nested source-provenance markers.'],
-  ['packages/interchange/external-findings-import.mts', 403, 'writer', 'Copies a validated nested source-provenance marker.'],
-  ['packages/monitoring/scheduled-monitor-model.mts', 476, 'writer', 'Copies the normalised monitor-state marker into an export.'],
-  ['packages/workspace/workspace-archive.mts', 360, 'writer', 'Copies the canonical embedded Case-section marker into the runtime section definition.'],
-  ['packages/workspace/workspace-archive-crypto.mts', 154, 'writer', 'Copies the validated envelope marker into authenticated metadata.'],
-  ['packages/workspace/workspace-archive.mts', 521, 'writer', 'Copies a reviewed section definition marker into the archive manifest.'],
-  ['packages/workspace/workspace-archive.mts', 634, 'reader', 'Compares a bounded archive entry marker to its reviewed section definition.'],
-  ['packages/cases/case-response-model.mts', 536, 'writer', 'Copies bounded source-provenance fields after local normalisation.'],
-  ['packages/interchange/external-findings-converters.mts', 137, 'reader', 'Checks an input marker supplied by a reviewed observation-row adapter.'],
-  ['packages/workspace/workspace-archive.mts', 560, 'writer', 'Copies a bounded archive-section marker after local normalisation.'],
-  ['packages/workspace/workspace-archive.mts', 624, 'reader', 'Compares two bounded archive-section markers during import.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 140, 'reader', 'Dispatches a bounded local import through its reviewed marker family.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 177, 'reader', 'Dispatches a bounded local import through its reviewed marker family.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 193, 'reader', 'Dispatches a bounded local import through its reviewed marker family.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 206, 'reader', 'Dispatches a bounded local import through its reviewed marker family.'],
-  ['frontend/src/routes/(console)/bulk/+page.svelte', 157, 'writer', 'Initialises a browser-local store from its reviewed contract constant.'],
-  ['tools/first-use-analyst-study.mts', 90, 'writer', 'Hashes the fixed study-task fixture contract into a local report.'],
-  ['tools/first-use-analyst-study.mts', 222, 'writer', 'Copies the fixed study-task fixture marker into a local report.'],
-  ['tools/registry-fixture-freshness.mts', 209, 'writer', 'Copies fixed fixture provenance into a maintainer report.'],
-  ['tools/synthetic-analyst-journeys.mts', 71, 'writer', 'Copies the fixed journey fixture marker into a maintainer result.'],
-  ['tools/synthetic-analyst-journeys.mts', 96, 'writer', 'Copies the fixed journey fixture marker into a maintainer result.'],
-  ['tools/synthetic-analyst-journeys.mts', 209, 'writer', 'Copies the fixed journey fixture marker into a maintainer report.'],
-  ['tools/technology-example-review.mts', 372, 'writer', 'Copies the fixed technology-review input marker into a maintainer review.'],
-  ['tools/technology-example-review.mts', 390, 'writer', 'Copies the fixed technology-review input marker into a maintainer review.'],
-  ['tools/technology-example-review.mts', 403, 'writer', 'Copies fixed source provenance into a maintainer review.'],
-  ['tools/technology-fixture-review.mts', 282, 'reader', 'Checks a bounded fixture against its reviewed source marker.'],
-  ['tools/technology-fixture-review.mts', 343, 'writer', 'Copies the fixed reviewed-fixture marker into a maintainer record.'],
-  ['tools/technology-review-candidate.mts', 254, 'writer', 'Copies the fixed review-input marker into a candidate record.'],
-  ['tools/technology-signature-benchmark.mts', 475, 'writer', 'Copies the fixed signature-fixture marker into a benchmark record.'],
-  ['tools/technology-signature-benchmark.mts', 479, 'writer', 'Copies the fixed reviewed-fixture marker into a benchmark record.'],
+  ['cli/archive-inspect.mts', 'writer', 2, 'Copies validated archive markers into inspection projections.'],
+  ['cli/artifact-structure.mts', 'reader', 1, 'Dispatches a bounded document through its selected canonical schema contract.'],
+  ['cli/artifact-verify.mts', 'reader', 1, 'Compares bounded artifact markers during manifest verification.'],
+  ['cli/artifact-verify.mts', 'writer', 7, 'Projects verified canonical and bounded artifact markers into reports.'],
+  ['cli/evidence-signing.mts', 'writer', 1, 'Copies a verified source-artifact marker into signature metadata.'],
+  ['cli/export-evidence.mts', 'reader', 1, 'Checks a builder result against its injected canonical contract marker.'],
+  ['cli/formatters/json.mts', 'writer', 1, 'Projects the selected canonical CLI result marker.'],
+  ['cli/interchange-report.mts', 'reader', 1, 'Matches a bounded container marker to a reviewed interchange contract.'],
+  ['cli/interchange-report.mts', 'writer', 1, 'Copies the matched interchange marker into a report.'],
+  ['cli/investigation-manifest.mts', 'writer', 1, 'Projects a reviewed manifest-entry marker.'],
+  ['cli/retained-artifact-diff.mts', 'reader', 1, 'Requires bounded retained documents to declare the same marker.'],
+  ['cli/risk-calibration.mts', 'writer', 1, 'Copies the validated calibration marker into report metadata.'],
+  ['cli/sharing-review.mts', 'writer', 1, 'Projects a bounded reviewed artifact marker.'],
+  ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 1, 'Compares the marker selected by a canonical collection definition.'],
+  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 4, 'Dispatches bounded local imports through reviewed marker families.'],
+  ['frontend/src/routes/(console)/bulk/+page.svelte', 'writer', 1, 'Initialises a browser-local store from its reviewed contract constant.'],
+  ['packages/cases/case-response-model.mts', 'writer', 1, 'Copies bounded source-provenance fields after local normalisation.'],
+  ['packages/contracts/analyst-interchange.mts', 'writer', 1, 'Registers the reviewed external profile identity.'],
+  ['packages/contracts/case-supported-contract-baseline.mts', 'writer', 1, 'Projects a validated compatibility marker into the Case baseline.'],
+  ['packages/contracts/extracted-domain-lifecycle.mts', 'reader', 1, 'Matches immutable fixtures to registered lifecycle contracts.'],
+  ['packages/contracts/extracted-domain-lifecycle.mts', 'writer', 7, 'Projects statically registered lifecycle identities.'],
+  ['packages/contracts/privacy-data-flow-catalogue.mts', 'writer', 5, 'Projects validated canonical lifecycle identities.'],
+  ['packages/interchange/external-findings-converters.mts', 'reader', 1, 'Checks a marker supplied by a reviewed observation-row adapter.'],
+  ['packages/interchange/external-findings-import.mts', 'reader', 1, 'Compares bounded nested source-provenance markers.'],
+  ['packages/interchange/external-findings-import.mts', 'writer', 1, 'Copies a validated nested source-provenance marker.'],
+  ['packages/investigation/investigation-capsule.mts', 'writer', 1, 'Projects the linked evidence contract marker.'],
+  ['packages/monitoring/scheduled-monitor-model.mts', 'writer', 1, 'Copies a normalised monitor-state marker into an export.'],
+  ['packages/relationships/case-relationship-graph-export.mts', 'writer', 2, 'Copies canonical graph markers into portable projections.'],
+  ['packages/workspace/workspace-archive-crypto.mts', 'writer', 1, 'Copies a validated envelope marker into authenticated metadata.'],
+  ['packages/workspace/workspace-archive.mts', 'reader', 3, 'Compares bounded archive-section markers with canonical definitions.'],
+  ['packages/workspace/workspace-archive.mts', 'writer', 7, 'Projects canonical section markers into runtime definitions and manifests.'],
+  ['tools/evidence-storage-measurement.mts', 'writer', 1, 'Copies a validated measurement-fixture marker into the deterministic profile.'],
+  ['tools/first-use-analyst-study.mts', 'writer', 2, 'Projects fixed study-task markers into local reports.'],
+  ['tools/registry-fixture-freshness.mts', 'writer', 1, 'Copies fixed fixture provenance into a maintainer report.'],
+  ['tools/synthetic-analyst-journeys.mts', 'writer', 3, 'Projects fixed journey markers into maintainer results.'],
+  ['tools/technology-example-review.mts', 'writer', 3, 'Projects fixed review-input and provenance markers.'],
+  ['tools/technology-fixture-review.mts', 'reader', 1, 'Checks a bounded fixture against its reviewed source marker.'],
+  ['tools/technology-fixture-review.mts', 'writer', 1, 'Copies a fixed reviewed-fixture marker into a maintainer record.'],
+  ['tools/technology-review-candidate.mts', 'writer', 1, 'Copies a fixed review-input marker into a candidate record.'],
+  ['tools/technology-signature-benchmark.mts', 'writer', 2, 'Copies fixed signature-fixture markers into a benchmark record.'],
 ] as const);
 
 const SCHEMA_OWNER_USE_ALLOWLIST = Object.freeze([
-  ['cli.web-capture-comparison', 'packages/web-capture/compare.mts', 'writer', [405]],
-  ['export.web-capture-dom-digest', 'packages/web-capture/capture.mts', 'writer', [791]],
+  ['cli.web-capture-comparison', 'packages/web-capture/compare.mts', 'writer', 1],
+  ['export.web-capture-dom-digest', 'packages/web-capture/capture.mts', 'writer', 1],
+  ['browser.analyst-review-state', 'packages/contracts/analyst-review-state.mts', 'writer', 1],
 ] as const);
 
 type SourceOccurrence = Readonly<{
@@ -336,11 +310,6 @@ function exactSchemaIdentifier(value: string): string | null {
 
 function hasLocalSchemaPrefix(value: string): boolean {
   return /^whoisleuth\./iu.test(value);
-}
-
-function exactLineSet(actual: readonly number[], expected: readonly number[]): boolean {
-  const sorted = [...actual].sort((left, right) => left - right);
-  return sorted.length === expected.length && sorted.every((line, index) => line === expected[index]);
 }
 
 function appendBounded<Value>(
@@ -1303,8 +1272,8 @@ function discoverTypeScriptSource(
         symbol: null,
         role: pending.role,
       });
-      if (!SCHEMA_DYNAMIC_USE_ALLOWLIST.some(([allowedFile, allowedLine, allowedRole]) => (
-        allowedFile === file && allowedLine === line && allowedRole === pending.role
+      if (!SCHEMA_DYNAMIC_USE_ALLOWLIST.some(([allowedFile, allowedRole]) => (
+        allowedFile === file && allowedRole === pending.role
       ))) {
         admitBinding(dynamicConstructions, {
           file,
@@ -1803,6 +1772,10 @@ async function collectFiles(
     for (const entry of entries) {
       const relative = path.posix.join(relativeDirectory, entry.name);
       const absolute = path.join(absoluteDirectory, entry.name);
+      if (entry.isDirectory() && (
+        SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES.has(entry.name)
+        || relative === 'frontend/src/lib/generated'
+      )) continue;
       const metadata = await lstat(absolute);
       if (metadata.isSymbolicLink()) throw new TypeError(`Schema source path ${relative} must not be a symbolic link.`);
       if (metadata.isDirectory()) {
@@ -2243,33 +2216,23 @@ function buildCanonicalSourceBindings(
     boundByFile.set(file, values);
   };
   for (const definition of discovery.definitions) bind(definition.file, definition.identifier);
-  const dynamicAllowlist = new Map<string, readonly number[]>();
-  const dynamicUseAllowlist = new Map<string, readonly number[]>();
+  const dynamicUseAllowlist = new Map<string, number>();
   if (enforceRepositoryLedgers) {
-    for (const [file, symbol, role, expectedLines] of SCHEMA_DYNAMIC_EMITTER_ALLOWLIST) {
-      const key = `${sourceSymbolKey(file, symbol)}\0${role}`;
-      if (dynamicAllowlist.has(key)) throw new Error(`Schema source dynamic-emitter allowance is duplicated: ${file}#${symbol}.`);
-      dynamicAllowlist.set(key, expectedLines);
-    }
-    for (const [file, line, role] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
-      const key = `${file}\0${line}\0${role}`;
-      if (dynamicUseAllowlist.has(key)) throw new Error(`Schema source dynamic-use allowance is duplicated: ${file}:${line} (${role}).`);
-      dynamicUseAllowlist.set(key, [line]);
+    for (const [file, role, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
+      const key = `${file}\0${role}`;
+      if (dynamicUseAllowlist.has(key)) throw new Error(`Schema source dynamic-use allowance is duplicated: ${file} (${role}).`);
+      dynamicUseAllowlist.set(key, expectedCount);
     }
   }
-  const usedDynamicAllowlist = new Map<string, number[]>();
-  const usedDynamicUseAllowlist = new Map<string, number[]>();
+  const usedDynamicUseAllowlist = new Map<string, number>();
   const uses: ResolvedSchemaUse[] = [];
   const unresolvedUses: string[] = [];
   for (const emitter of discovery.emitters) {
     const identifier = emitter.identifier ?? (emitter.symbol ? resolve(emitter.file, emitter.symbol) : null);
     if (!identifier) {
-      const key = emitter.symbol ? `${sourceSymbolKey(emitter.file, emitter.symbol)}\0${emitter.role}` : '';
-      const useKey = `${emitter.file}\0${emitter.line}\0${emitter.role}`;
-      if (dynamicAllowlist.has(key)) {
-        usedDynamicAllowlist.set(key, [...(usedDynamicAllowlist.get(key) ?? []), emitter.line]);
-      } else if (dynamicUseAllowlist.has(useKey)) {
-        usedDynamicUseAllowlist.set(useKey, [...(usedDynamicUseAllowlist.get(useKey) ?? []), emitter.line]);
+      const useKey = `${emitter.file}\0${emitter.role}`;
+      if (dynamicUseAllowlist.has(useKey)) {
+        usedDynamicUseAllowlist.set(useKey, (usedDynamicUseAllowlist.get(useKey) ?? 0) + 1);
       } else {
         if (unresolvedUses.length < 64) unresolvedUses.push(`${emitter.role} ${emitter.file}:${emitter.line}`);
       }
@@ -2280,20 +2243,12 @@ function buildCanonicalSourceBindings(
   if (unresolvedUses.length) {
     throw new Error(`Schema source uses do not resolve to canonical schema definitions: ${unresolvedUses.join(', ')}.`);
   }
-  for (const [allowedFile, allowedSymbol, allowedRole, expectedLines] of SCHEMA_DYNAMIC_EMITTER_ALLOWLIST) {
+  for (const [allowedFile, allowedRole, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
     if (!enforceRepositoryLedgers) break;
-    const key = `${sourceSymbolKey(allowedFile, allowedSymbol)}\0${allowedRole}`;
-    const actualLines = usedDynamicAllowlist.get(key) ?? [];
-    if (!exactLineSet(actualLines, expectedLines)) {
-      throw new Error(`Schema source dynamic-emitter allowance expected lines ${expectedLines.join(',')} but found ${[...actualLines].sort((left, right) => left - right).join(',') || 'none'}: ${allowedFile}#${allowedSymbol}.`);
-    }
-  }
-  for (const [allowedFile, allowedLine, allowedRole] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
-    if (!enforceRepositoryLedgers) break;
-    const key = `${allowedFile}\0${allowedLine}\0${allowedRole}`;
-    const actualLines = usedDynamicUseAllowlist.get(key) ?? [];
-    if (!exactLineSet(actualLines, [allowedLine])) {
-      throw new Error(`Schema source dynamic-use allowance expected one use at line ${allowedLine} but found ${actualLines.length}: ${allowedFile} (${allowedRole}).`);
+    const key = `${allowedFile}\0${allowedRole}`;
+    const actualCount = usedDynamicUseAllowlist.get(key) ?? 0;
+    if (actualCount !== expectedCount) {
+      throw new Error(`Schema source dynamic-use allowance expected ${expectedCount} uses but found ${actualCount}: ${allowedFile} (${allowedRole}).`);
     }
   }
   return {
@@ -2339,15 +2294,15 @@ export async function validateSchemaSourceCoverage(
       [...(literalEmittersByIdentifier.get(emitter.identifier) ?? []), emitter],
     );
   }
-  const inlineAllowlist = new Map<string, readonly number[]>();
+  const inlineAllowlist = new Map<string, number>();
   if (enforceRepositoryLedgers) {
-    for (const [identifier, file, expectedLines] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
+    for (const [identifier, file, expectedCount] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
       const key = `${identifier}\0${file}`;
       if (inlineAllowlist.has(key)) throw new Error(`Schema source inline-emitter allowance is duplicated: ${identifier} (${file}).`);
-      inlineAllowlist.set(key, expectedLines);
+      inlineAllowlist.set(key, expectedCount);
     }
   }
-  const usedInlineAllowlist = new Map<string, number[]>();
+  const usedInlineAllowlist = new Map<string, number>();
   for (const [identifier, emitters] of literalEmittersByIdentifier) {
     const definitions = definitionsByIdentifier.get(identifier) ?? [];
     if (!definitions.length && emitters.length > 1) {
@@ -2360,18 +2315,29 @@ export async function validateSchemaSourceCoverage(
       if (!inlineAllowlist.has(key)) {
         throw new Error(`Schema identifier has an unreviewed disconnected inline emitter: ${identifier} (${emitter.file}:${emitter.line}).`);
       }
-      usedInlineAllowlist.set(key, [...(usedInlineAllowlist.get(key) ?? []), emitter.line]);
+      usedInlineAllowlist.set(key, (usedInlineAllowlist.get(key) ?? 0) + 1);
     }
   }
-  for (const [identifier, file, expectedLines] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
+  for (const [identifier, file, expectedCount] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
     if (!enforceRepositoryLedgers) break;
     const key = `${identifier}\0${file}`;
-    const actualLines = usedInlineAllowlist.get(key) ?? [];
-    if (!exactLineSet(actualLines, expectedLines)) {
-      throw new Error(`Schema source inline-emitter allowance expected lines ${expectedLines.join(',')} but found ${[...actualLines].sort((left, right) => left - right).join(',') || 'none'}: ${identifier} (${file}).`);
+    const actualCount = usedInlineAllowlist.get(key) ?? 0;
+    if (actualCount !== expectedCount) {
+      throw new Error(`Schema source inline-emitter allowance expected ${expectedCount} uses but found ${actualCount}: ${identifier} (${file}).`);
     }
   }
   const canonicalBindings = buildCanonicalSourceBindings(discovery, enforceRepositoryLedgers);
+
+  const lifecycleMetadataByIdentifier = new Map<string, Set<string>>();
+  for (const family of SCHEMA_LIFECYCLE_REGISTRY) {
+    for (const contract of family.contracts) {
+      const entry = entryById.get(contract.compatibilityId);
+      if (!entry || entry.schema !== null || !isCanonicalLocalSchemaIdentifier(contract.schema)) continue;
+      const entryIds = lifecycleMetadataByIdentifier.get(contract.schema) ?? new Set<string>();
+      entryIds.add(entry.id);
+      lifecycleMetadataByIdentifier.set(contract.schema, entryIds);
+    }
+  }
 
   const classificationByIdentifier = new Map<string, SchemaSourceClassificationRecord>();
   let previousClassification = '';
@@ -2381,7 +2347,9 @@ export async function validateSchemaSourceCoverage(
       throw new Error('Schema source classifications must use unique ordinal identifier order.');
     }
     previousClassification = raw.identifier;
-    if (classificationByIdentifier.has(raw.identifier) || inventoryBySchema.has(raw.identifier)) {
+    if (classificationByIdentifier.has(raw.identifier)
+      || inventoryBySchema.has(raw.identifier)
+      || lifecycleMetadataByIdentifier.has(raw.identifier)) {
       throw new Error(`Schema source classification is duplicated or overlaps the inventory: ${raw.identifier}`);
     }
     if (!await ordinaryFile(discovery.repositoryRoot, raw.owner)) {
@@ -2424,7 +2392,9 @@ export async function validateSchemaSourceCoverage(
 
   const discovered = new Set(discovery.identifiers);
   for (const identifier of discovery.identifiers) {
-    if (!inventoryBySchema.has(identifier) && !classificationByIdentifier.has(identifier)) {
+    if (!inventoryBySchema.has(identifier)
+      && !classificationByIdentifier.has(identifier)
+      && !lifecycleMetadataByIdentifier.has(identifier)) {
       throw new Error(`Schema source identifier is not inventoried or classified: ${identifier}`);
     }
   }
@@ -2434,11 +2404,20 @@ export async function validateSchemaSourceCoverage(
   for (const identifier of classificationByIdentifier.keys()) {
     if (!discovered.has(identifier)) throw new Error(`Schema source classification is stale: ${identifier}`);
   }
+  for (const [identifier, entryIds] of lifecycleMetadataByIdentifier) {
+    if (!discovered.has(identifier)) throw new Error(`Schema lifecycle metadata identity is stale: ${identifier}`);
+    for (const entryId of entryIds) {
+      if (!entryById.has(entryId)) throw new Error(`Schema lifecycle metadata identity ${identifier} references an unknown compatibility entry ${entryId}.`);
+    }
+  }
 
   const classificationsThatMayEmit = new Set(['provenance_marker', 'serialised_unversioned', 'transient_projection']);
   for (const use of canonicalBindings.uses) {
     if (use.source.role !== 'writer' || !use.identifier) continue;
     const classification = classificationByIdentifier.get(use.identifier);
+    if (lifecycleMetadataByIdentifier.has(use.identifier)) {
+      throw new Error(`Schema lifecycle metadata identity ${use.identifier} cannot mask a schema emitter at ${use.source.file}:${use.source.line}.`);
+    }
     if (classification && !classificationsThatMayEmit.has(classification.reason)) {
       throw new Error(`Schema source classification ${use.identifier} cannot mask a schema emitter at ${use.source.file}:${use.source.line}.`);
     }
@@ -2454,11 +2433,11 @@ export async function validateSchemaSourceCoverage(
     }
   }
 
-  const ownerUseAllowlist = new Map<string, { owner: string; role: 'reader' | 'writer'; expectedLines: readonly number[] }>();
+  const ownerUseAllowlist = new Map<string, { owner: string; role: 'reader' | 'writer'; expectedCount: number }>();
   if (enforceRepositoryLedgers) {
-    for (const [entryId, owner, role, expectedLines] of SCHEMA_OWNER_USE_ALLOWLIST) {
+    for (const [entryId, owner, role, expectedCount] of SCHEMA_OWNER_USE_ALLOWLIST) {
       if (ownerUseAllowlist.has(entryId)) throw new Error(`Schema source owner-use allowance is duplicated: ${entryId}.`);
-      ownerUseAllowlist.set(entryId, { owner, role, expectedLines });
+      ownerUseAllowlist.set(entryId, { owner, role, expectedCount });
     }
   }
   const usedOwnerAllowlist = new Set<string>();
@@ -2472,13 +2451,13 @@ export async function validateSchemaSourceCoverage(
         && literalWriters[0]?.file === entry.owner) continue;
       const allowance = ownerUseAllowlist.get(entry.id);
       if (allowance && allowance.owner === entry.owner) {
-        const actualLines = canonicalBindings.uses.filter((use) => (
+        const actualCount = canonicalBindings.uses.filter((use) => (
           use.identifier === identifier
           && use.source.file === entry.owner
           && use.source.role === allowance.role
-        )).map((use) => use.source.line);
-        if (!exactLineSet(actualLines, allowance.expectedLines)) {
-          throw new Error(`Schema source owner-use allowance expected lines ${allowance.expectedLines.join(',')} but found ${[...actualLines].sort((left, right) => left - right).join(',') || 'none'}: ${entry.id}.`);
+        )).length;
+        if (actualCount !== allowance.expectedCount) {
+          throw new Error(`Schema source owner-use allowance expected ${allowance.expectedCount} uses but found ${actualCount}: ${entry.id}.`);
         }
         usedOwnerAllowlist.add(entry.id);
         continue;
@@ -2497,7 +2476,7 @@ export async function validateSchemaSourceCoverage(
     totalBytes: discovery.totalBytes,
     identifiers: discovery.identifiers.length,
     inventoriedIdentifiers: inventoryBySchema.size,
-    classifiedIdentifiers: classificationByIdentifier.size,
+    classifiedIdentifiers: classificationByIdentifier.size + lifecycleMetadataByIdentifier.size,
     definitions: discovery.definitions.length,
     digestSha256: discovery.digestSha256,
   });

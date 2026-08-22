@@ -28,9 +28,9 @@ type ParsedRecord = Readonly<{
   block: Uint8Array;
 }>;
 
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const SHA_HEX_RE = /^[a-f0-9]+$/iu;
-const BASE32_RE = /^[a-z2-7]+$/iu;
+const BASE32_RE = /^[A-Za-z2-7]+$/u;
 const MAX_EXCLUSIONS = 20;
 const MAX_TITLE_LENGTH = 240;
 

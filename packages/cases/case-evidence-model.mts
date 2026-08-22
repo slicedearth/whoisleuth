@@ -251,7 +251,7 @@ function buildSnapshot(
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
   const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
-  const acceptsInputHostname = options.sourceVersion === undefined || Number(options.sourceVersion) >= 14;
+  const acceptsInputHostname = options.sourceVersion === undefined || Number(options.sourceVersion) >= 13;
   const fields: CaseEvidenceMaterial = {
     inputHostname: acceptsInputHostname
       ? normalizeEvidenceHostnameForCase(record.inputHostname, options.caseDomain)

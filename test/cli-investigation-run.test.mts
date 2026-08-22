@@ -16,6 +16,12 @@ function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], sub
 }
 
 describe('fixed investigation execution', () => {
+  test('keeps plan-only recipes outside workflow-run execution', () => {
+    assert.throws(
+      () => parseCliArguments(['workflow-run', 'campaign-review', 'Example Organisation']),
+      /workflow-run recipe must be one of/iu,
+    );
+  });
   test('pauses before network collection without approval', async () => {
     let executed = 0;
     const result = await runInvestigationRecipe('domain-triage', 'example.test', {

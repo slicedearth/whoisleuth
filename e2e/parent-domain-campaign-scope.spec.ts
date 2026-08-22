@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
+  currentBrowserLocalDocument,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   failNextBrowserLocalCollectionReadAfterWrite,
@@ -72,13 +73,12 @@ function otherParentCase() {
 function parentScopeStorage(records = [retainedParentCase(), otherParentCase()]) {
   return {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records },
-    'whoisleuth-campaigns-v1': {
-      version: 1,
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', {
       campaigns: [
         campaign('parent-scope-campaign', 'Exact parent review', ['example.test']),
         campaign('other-parent-campaign', 'Other parent review', ['other.test']),
       ],
-    },
+    }),
   };
 }
 
@@ -318,8 +318,8 @@ test('presents unavailable and insufficient parent-domain evidence without misle
     }),
   ]), { destination: '/monitor?view=campaigns&campaign=parent-scope-campaign' });
   scope = page.getByRole('region', { name: 'Parent-domain scope' });
-  await expect(scope).toContainText('There is insufficient retained evidence');
-  await expect(scope).toContainText('This is not proof that no child hostname exists');
+  await expect(scope).toContainText('two distinct hostnames with a child under one registrable parent');
+  await expect(scope).toContainText('this is insufficient evidence, not proof that no child hostname exists');
   await expect(scope.getByRole('table')).toHaveCount(0);
 });
 

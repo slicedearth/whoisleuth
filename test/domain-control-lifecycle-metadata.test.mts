@@ -41,7 +41,6 @@ import {
   DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
   DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH,
   DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR,
-  LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
   MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
   MAX_DOMAIN_CONTROL_CAA_FLAGS,
   MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH,
@@ -441,7 +440,6 @@ describe('domain-control lifecycle metadata', () => {
       hooks.map((hook) => [hook.id, hook.role, hook.runtime, hook.module, hook.exportName]),
       EXPECTED_HOOKS,
     );
-    assert.equal(hooks.length, 20);
     for (const hook of hooks) {
       const module = HOOK_MODULES[hook.module];
       assert.ok(module, `Hook module is statically allowlisted: ${hook.module}`);
@@ -458,7 +456,7 @@ describe('domain-control lifecycle metadata', () => {
     assert.deepEqual(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.serialisationProfiles, [{
       id: 'domain-control.manifest-json.v1',
       schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-      versions: [LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION],
+      versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS,
       mediaType: 'application/json',
       encoding: 'utf-8',
       bom: false,

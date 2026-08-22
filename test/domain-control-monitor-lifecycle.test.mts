@@ -13,7 +13,6 @@ import * as jsonFormatterModule from '../cli/formatters/json.mts';
 import { formatCliJunit } from '../cli/ci-report.mts';
 import { formatJsonDocument } from '../cli/formatters/json.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
-import { canonicalArtifactJson, SORTED_JSON_V1 } from '../packages/evidence/artifact-integrity.mts';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -46,7 +45,6 @@ import {
   MAX_DOMAIN_CONTROL_MONITOR_DOMAINS as MANIFEST_MONITOR_DOMAINS,
   MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY as MANIFEST_MONITOR_MINIMUM_CONCURRENCY,
   MIN_DOMAIN_CONTROL_MONITOR_DOMAINS as MANIFEST_MONITOR_MINIMUM_DOMAINS,
-  LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
 } from '../packages/contracts/domain-control-manifest.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
@@ -400,42 +398,21 @@ describe('domain-control monitor schema lifecycle', () => {
     assert.equal(calls, 0);
   });
 
-  test('reuses a checkpoint built from a supported supplied-order version-1 manifest', async () => {
-    const current = manifest(['aa.example', 'z.example']);
-    const { integrity, ...unsigned } = current;
-    const legacyUnsigned = Object.freeze({
-      ...unsigned,
-      version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
-      entries: Object.freeze([...unsigned.entries].reverse()),
-    });
-    const legacyManifest = Object.freeze({
-      ...legacyUnsigned,
-      integrity: Object.freeze({
-        ...integrity,
-        canonicalization: SORTED_JSON_V1,
-        digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(legacyUnsigned)).digest('hex')}`,
-      }),
-    });
+  test('rejects a reader-only manifest before collection', async () => {
+    const unsupported = { ...manifest(['aa.example', 'z.example']), version: 1 };
+    const before = structuredClone(unsupported);
     let calls = 0;
-    const executeLookup = async () => {
-      calls += 1;
-      return unsupportedResult();
-    };
-    const first = await runDomainControlMonitor(JSON.stringify(legacyManifest), null, {
-      executeLookup,
+    await assert.rejects(runDomainControlMonitor(JSON.stringify(unsupported), null, {
+      executeLookup: async () => {
+        calls += 1;
+        return unsupportedResult();
+      },
       now: () => GENERATED_AT,
       limit: 2,
       concurrency: 1,
-    });
-    assert.deepEqual(first.review.domains.map((item) => item.domain), ['z.example', 'aa.example']);
-    const second = await runDomainControlMonitor(JSON.stringify(legacyManifest), JSON.stringify(first), {
-      executeLookup,
-      now: () => '2026-08-21T00:00:00.000Z',
-      limit: 2,
-      concurrency: 1,
-    });
-    assert.equal(calls, 4);
-    assert.equal(second.flightRecorder.observationCount, 4);
+    }), /bounded integrity contract/iu);
+    assert.equal(calls, 0);
+    assert.deepEqual(unsupported, before);
   });
 
   test('rejects impossible success and failure identity projections before collection', async () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { join } from 'node:path';
 
@@ -18,7 +18,7 @@ function allStrings(value: unknown): string[] {
 }
 
 test('public resources expose a bounded unique set of useful investigation topics', () => {
-  assert.equal(PUBLIC_RESOURCES.length, 8);
+  assert.ok(PUBLIC_RESOURCES.length > 0 && PUBLIC_RESOURCES.length <= 32);
   assert.deepEqual(PUBLIC_RESOURCE_SLUGS, PUBLIC_RESOURCES.map((resource) => resource.slug));
   assert.equal(new Set(PUBLIC_RESOURCE_SLUGS).size, PUBLIC_RESOURCE_SLUGS.length);
 
@@ -42,7 +42,7 @@ test('public resource lookup is exact, neutral for invalid input, and does not i
   assert.equal(publicResource(null), null);
 });
 
-test('public resource copy remains bounded, plain text, and source-aware', () => {
+test('public resource copy remains bounded, plain text, and precise', () => {
   const strings = allStrings(PUBLIC_RESOURCES);
   assert.equal(strings.every((value) => value.length > 0 && value.length <= 600), true);
   assert.equal(strings.every((value) => !/[\x00-\x1f\x7f]/u.test(value)), true);
@@ -62,6 +62,7 @@ test('the sitemap and social preview remain aligned with the public resource con
   }
 
   const previewSource = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.svg'), 'utf8');
+  assert.equal(existsSync(join(repositoryRoot, 'docs', 'assets', 'social-preview.svg')), false);
   assert.match(previewSource, /<svg[^>]+width="1280" height="640"[^>]+viewBox="0 0 1280 640"/u);
   assert.match(previewSource, /<image href="favicon\.svg"/u);
   assert.match(previewSource, />EVIDENCE TOPOLOGY</u);

@@ -188,7 +188,7 @@ describe('buildPostureReport', () => {
     assert.equal(byId(report, 'nameservers').status, 'warning');
   });
 
-  test('keeps DNSSEC delegation and retained DS consistency source-aware', () => {
+  test('keeps DNSSEC delegation and retained DS consistency source-attributed', () => {
     const input = strongInput();
     input.registry = {
       statuses: [],

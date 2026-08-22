@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import {
@@ -21,8 +22,6 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
-import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
-import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import {
   MAX_BOUNDED_JSON_DEPTH,
@@ -103,8 +102,8 @@ async function casePackWithNestedReference() {
   };
 }
 
-async function historicalInternalCasePackWithScalarProjection() {
-  const pack = structuredClone(historicalCasePackFixture(11, 'internal'));
+async function currentInternalCasePackWithScalarProjection() {
+  const pack = structuredClone(casePack('internal')) as unknown as Record<string, unknown>;
   const packet = pack.packet as Record<string, unknown>;
   const report = (packet.reports as Array<Record<string, unknown>>)[0]!;
   report.currentAssessment = 'private material';
@@ -113,8 +112,8 @@ async function historicalInternalCasePackWithScalarProjection() {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: 'sorted-json-v1',
-      digestSha256: await sha256ArtifactDigest(unsigned),
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     },
   };
 }
@@ -163,7 +162,7 @@ describe('interchange fidelity report', () => {
     assert.deepEqual(interchangeContractFor('brand_profiles').versions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(interchangeContractFor('workspace').versions, [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS]);
     assert.deepEqual(interchangeContractFor('encrypted_workspace').versions, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION]);
-    assert.deepEqual(interchangeContractFor('case_pack').versions, [1, CLI_CASE_PACK_VERSION]);
+    assert.deepEqual(interchangeContractFor('case_pack').versions, [CLI_CASE_PACK_VERSION]);
     assert.deepEqual(interchangeContractFor('lookup_evidence').versions, [...lookupEvidenceModule.SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]);
     assert.equal(interchangeContractFor('domain_control_passport').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('brand_profiles').requiredAssurance, 'structure');
@@ -207,21 +206,10 @@ describe('interchange fidelity report', () => {
     assert.equal(unsupported.compatibility.fidelity, 'unsupported');
   });
 
-  test('recognises authentic frozen schema-25 Lookup wrapper variants as supported legacy evidence', async () => {
-    for (const fixture of await loadLookupEvidenceV25CompatibilityFixtures()) {
-      const report = await buildInterchangeFidelityReport(JSON.stringify(fixture.document), { generatedAt: NOW });
-      assert.equal(report.artifact.id, 'lookup_evidence', fixture.name);
-      assert.equal(report.artifact.version, lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION, fixture.name);
-      assert.equal(report.verification.state, 'structure_valid', fixture.name);
-      assert.equal(report.verification.assuranceSatisfied, true, fixture.name);
-      assert.equal(report.compatibility.browser?.import, 'supported', fixture.name);
-    }
-  });
-
   test('recognises the frozen strict schema-26 Lookup evidence contract after schema 27 becomes current', async () => {
     const report = await buildInterchangeFidelityReport(await loadLookupEvidenceV26Fixture(), { generatedAt: NOW });
     assert.equal(report.artifact.id, 'lookup_evidence');
-    assert.equal(report.artifact.version, lookupEvidenceModule.PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(report.artifact.version, lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(report.verification.state, 'structure_valid');
     assert.equal(report.verification.assuranceSatisfied, true);
     assert.equal(report.compatibility.browser?.import, 'supported');
@@ -244,26 +232,27 @@ describe('interchange fidelity report', () => {
     assert.equal(profileCurrent.verification.state, 'structure_valid');
     assert.equal(profileCurrent.compatibility.fidelity, 'normalised_merge');
 
-    const profilePrior = await buildInterchangeFidelityReport(JSON.stringify({
-      schema: 'whoisleuth.brand-profiles', version: 2, exportedAt: NOW, profiles: [],
+    const profilePublic = await buildInterchangeFidelityReport(JSON.stringify({
+      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: NOW, profiles: [],
     }), { generatedAt: NOW });
-    assert.equal(profilePrior.artifact.versionSupported, true);
-    assert.equal(profilePrior.compatibility.fidelity, 'normalised_merge');
+    assert.equal(profilePublic.artifact.versionSupported, true);
+    assert.equal(profilePublic.compatibility.fidelity, 'normalised_merge');
 
-    const profileLegacyZoneLess = await buildInterchangeFidelityReport(JSON.stringify({
+    const profileRetired = await buildInterchangeFidelityReport(JSON.stringify({
       schema: 'whoisleuth.brand-profiles', version: 5, exportedAt: '2026-08-07T12:00:00', profiles: [],
     }), { generatedAt: NOW });
-    assert.equal(profileLegacyZoneLess.verification.state, 'structure_valid');
+    assert.equal(profileRetired.artifact.versionSupported, false);
+    assert.equal(profileRetired.verification.state, 'unsupported_version');
 
     const profileCurrentZoneLess = await buildInterchangeFidelityReport(JSON.stringify({
-      schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: '2026-08-07T12:00:00', profiles: [],
+      schema: 'whoisleuth.brand-profiles', version: 7, exportedAt: '2026-08-07T12:00:00', profiles: [],
     }), { generatedAt: NOW });
     assert.equal(profileCurrentZoneLess.verification.state, 'not_verified');
 
-    const profileCurrentOffset = await buildInterchangeFidelityReport(JSON.stringify({
+    const profilePublicOffset = await buildInterchangeFidelityReport(JSON.stringify({
       schema: 'whoisleuth.brand-profiles', version: 6, exportedAt: '2026-08-07T12:00:00+01:00', profiles: [],
     }), { generatedAt: NOW });
-    assert.equal(profileCurrentOffset.verification.state, 'structure_valid');
+    assert.equal(profilePublicOffset.verification.state, 'structure_valid');
 
     const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
     const workspaceReport = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
@@ -289,9 +278,9 @@ describe('interchange fidelity report', () => {
     assert.doesNotMatch(JSON.stringify(report), /hidden-reference/iu);
   });
 
-  test('inherits historical internal Case-pack scalar projection closure', async () => {
+  test('inherits current internal Case-pack scalar projection closure', async () => {
     const report = await buildInterchangeFidelityReport(
-      JSON.stringify(await historicalInternalCasePackWithScalarProjection()),
+      JSON.stringify(await currentInternalCasePackWithScalarProjection()),
       { generatedAt: NOW },
     );
     assert.equal(report.artifact.id, 'case_pack');
@@ -300,31 +289,19 @@ describe('interchange fidelity report', () => {
     assert.doesNotMatch(JSON.stringify(report), /private material/iu);
   });
 
-  test('reports authentic historical Case packs as verified and rejects changed evidence identities without echoing them', async () => {
-    for (const audience of ['public', 'trusted', 'internal'] as const) {
-      const authentic = historicalCasePackFixture(11, audience);
-      const verified = await buildInterchangeFidelityReport(JSON.stringify(authentic), { generatedAt: NOW });
-      assert.equal(verified.artifact.id, 'case_pack', audience);
-      assert.equal(verified.verification.state, 'verified', audience);
-      assert.equal(verified.compatibility.fidelity, 'lossy_by_design', audience);
-
-      for (const field of ['id', 'fingerprint'] as const) {
-        const changed = structuredClone(authentic);
-        const item = (changed.cases as Array<Record<string, unknown>>)[0]!;
-        const snapshot = (item.evidenceHistory as Array<Record<string, unknown>>)[0]!;
-        snapshot[field] = field === 'id' ? 'ev-forged-private' : 'forged-private';
-        const { integrity: _integrity, ...unsigned } = changed;
-        changed.integrity = {
-          algorithm: 'SHA-256',
-          canonicalization: 'sorted-json-v1',
-          digestSha256: await sha256ArtifactDigest(unsigned),
-        };
-        const rejected = await buildInterchangeFidelityReport(JSON.stringify(changed), { generatedAt: NOW });
-        assert.equal(rejected.verification.assuranceSatisfied, false, `${audience} ${field}`);
-        assert.equal(rejected.compatibility.fidelity, 'not_verified', `${audience} ${field}`);
-        assert.doesNotMatch(JSON.stringify(rejected), /forged-private/iu);
-      }
-    }
+  test('reports a retired Case-pack as unsupported without echoing its values', async () => {
+    const fixture = JSON.parse(await readFile(
+      new URL('./fixtures/case-consolidation/unsupported-contracts-v1.json', import.meta.url),
+      'utf8',
+    )) as { retired: { cliCasePack: Record<string, unknown> } };
+    fixture.retired.cliCasePack.privateNote = 'hidden-retired-value';
+    const report = await buildInterchangeFidelityReport(
+      JSON.stringify(fixture.retired.cliCasePack),
+      { generatedAt: NOW },
+    );
+    assert.equal(report.verification.assuranceSatisfied, false);
+    assert.equal(report.compatibility.fidelity, 'unsupported');
+    assert.doesNotMatch(JSON.stringify(report), /hidden-retired-value/iu);
   });
 
   test('uses the Brand Profile importer to reject malformed or partially skipped rows', async () => {

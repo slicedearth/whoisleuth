@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
 import { boundedCliErrorMessage } from '../cli/errors.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -164,7 +164,10 @@ describe('CLI argument parsing', () => {
       action: 'doctor', network: true, output: 'json', quiet: false, color: true,
     });
     assert.deepEqual(parseCliArguments(['commands', '--json']), {
-      action: 'commands', output: 'json', quiet: false, color: true,
+      action: 'commands', output: 'json', common: false, group: null, mode: null, quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['commands', '--common', '--group', 'respond', '--mode', 'offline']), {
+      action: 'commands', output: 'terminal', common: true, group: 'respond', mode: 'offline', quiet: false, color: true,
     });
     assert.throws(() => parseCliArguments(['completion', 'nushell']), /bash, zsh, fish, or powershell/u);
     assert.throws(() => parseCliArguments(['doctor', '--network', '--network']), /only once/u);
@@ -262,13 +265,14 @@ describe('CLI argument parsing', () => {
     assert.equal(launchedCommands, 0);
   });
 
-  test('help groups workflows and gives each command a purpose, example, and boundary', async () => {
+  test('help groups commands by analyst job and gives each a purpose, example, and boundary', async () => {
     const stdout = capture();
     const stderr = capture();
     assert.equal(await runCli([], { stdout: stdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(stdout.value(), /Investigate:\n/u);
-    assert.match(stdout.value(), /Discover:\n/u);
-    assert.match(stdout.value(), /Review saved evidence:\n/u);
+    assert.match(stdout.value(), /Respond:\n/u);
+    assert.match(stdout.value(), /Assure:\n/u);
+    assert.match(stdout.value(), /Utilities:\n/u);
     assert.match(stdout.value(), /Fast lookup is the default/u);
     assert.equal(stderr.value(), '');
 
@@ -290,8 +294,9 @@ describe('CLI argument parsing', () => {
     const exportStdout = capture();
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
-    assert.match(exportStdout.value(), /schema-28 exports/u);
-    assert.match(exportStdout.value(), /schemas 25-27 remain readable for compatibility/u);
+    assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
+    assert.match(exportStdout.value(), /exact public schema \d+ remains readable/u);
+    assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });
 
@@ -304,7 +309,7 @@ describe('CLI argument parsing', () => {
     const catalogue = JSON.parse(stdout.value());
     assert.equal(catalogue.schema, 'whoisleuth.cli.command-catalogue');
     assert.equal(catalogue.version, 1);
-    assert.equal(catalogue.commands.length, 47);
+    assert.equal(catalogue.commands.length, CLI_COMMANDS.length);
     for (const entry of catalogue.commands) {
       assert.deepEqual(Object.keys(entry).sort(), [
         'boundary', 'collection', 'command', 'description', 'example', 'usage',
@@ -314,6 +319,38 @@ describe('CLI argument parsing', () => {
     assert.equal(lookup.collection.mode, 'network');
     assert.match(lookup.usage, /--plan/u);
     assert.match(lookup.boundary, /Fast is the default/u);
+
+    let readCalled = false;
+    let collectionCalled = false;
+    const filteredStdout = capture();
+    assert.equal(await runCli([
+      'commands', '--common', '--group', 'respond', '--mode', 'offline', '--json',
+    ], {
+      stdout: filteredStdout.stream,
+      stderr: stderr.stream,
+      readDiffInput: async () => { readCalled = true; return '{}'; },
+      runUnifiedLookup: async () => { collectionCalled = true; return lookupResult(); },
+    }), EXIT_CODES.SUCCESS);
+    const filtered = JSON.parse(filteredStdout.value());
+    assert.equal(filtered.schema, catalogue.schema);
+    assert.equal(filtered.version, 1);
+    assert.deepEqual(filtered.commands.map((entry: { command: string }) => entry.command), [
+      'case-pack', 'export',
+    ]);
+    assert.ok(filtered.commands.every((entry: Record<string, unknown>) => (
+      Object.keys(entry).sort().join(',') === 'boundary,collection,command,description,example,usage'
+    )));
+    assert.equal(readCalled, false);
+    assert.equal(collectionCalled, false);
+
+    const emptyStdout = capture();
+    assert.equal(await runCli(['commands', '--common', '--group', 'investigate', '--mode', 'offline'], {
+      stdout: emptyStdout.stream,
+      stderr: stderr.stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(emptyStdout.value(), /discover \[offline\]/u);
+    assert.match(emptyStdout.value(), /review-evidence \[offline\]/u);
+    assert.doesNotMatch(emptyStdout.value(), /\u001b/u);
   });
 
   test('parses bounded offline artifact verification inputs', () => {

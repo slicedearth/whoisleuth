@@ -1,4 +1,13 @@
 import { DOMAIN_CONTROL_MANIFEST_COMPATIBILITY } from '../packages/contracts/domain-control-manifest.mts';
+import {
+  CLI_CASE_PACK_COMPATIBILITY,
+  ENCRYPTED_WORKSPACE_ARCHIVE_COMPATIBILITY,
+  WORKSPACE_ARCHIVE_COMPATIBILITY,
+} from '../packages/contracts/case-portability.mts';
+import { LOOKUP_CLAIM_PASSPORT_COMPATIBILITY } from '../packages/contracts/investigation-portability.mts';
+import { BRAND_PROFILE_EXPORT_COMPATIBILITY } from '../packages/contracts/workspace-portability.mts';
+import type { SchemaCompatibilityDescriptor } from '../packages/contracts/schema-compatibility.mts';
+import { LOOKUP_EVIDENCE_COMPATIBILITY } from './evidence-export.mts';
 
 export type InterchangeSupport = 'supported' | 'unsupported' | 'verification_only';
 export type InterchangeFidelity =
@@ -28,12 +37,22 @@ export type InterchangeArtifactContract = Readonly<{
 
 const exact = Object.freeze(['domain_identity', 'dns_control_expectations', 'certificate_control_expectations', 'registrar_control_expectations', 'renewal_review']);
 
+function compatibilityReference(descriptor: SchemaCompatibilityDescriptor) {
+  if (!descriptor.schema || descriptor.futureVersionBehavior !== 'reject') {
+    throw new TypeError(`Interchange compatibility ${descriptor.id} must name a schema and reject future versions.`);
+  }
+  return Object.freeze({
+    compatibilityEntryId: descriptor.id,
+    schema: descriptor.schema,
+    versions: descriptor.supportedVersions,
+    futureVersionBehaviour: 'reject' as const,
+  });
+}
+
 export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContract[] = Object.freeze([
   Object.freeze({
     id: 'lookup_claim_passport',
-    compatibilityEntryId: 'export.lookup-claim-passport',
-    schema: 'whoisleuth.lookup-claim-passport',
-    versions: Object.freeze([1]),
+    ...compatibilityReference(LOOKUP_CLAIM_PASSPORT_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'unsupported', export: 'supported' }),
@@ -42,13 +61,10 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'whole_integrity',
     preservedFieldGroups: Object.freeze(['target_identity', 'claim_identity', 'evidence_requirement_ids', 'source_states', 'observation_times', 'model_versions', 'limitations']),
     excludedFieldGroups: Object.freeze(['raw_registry_payloads', 'contacts', 'page_values', 'request_paths', 'credentials', 'browser_local_records', 'signer_authentication']),
-    futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
     id: 'lookup_evidence',
-    compatibilityEntryId: 'export.lookup-evidence',
-    schema: LOOKUP_EVIDENCE_SCHEMA,
-    versions: Object.freeze([...SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]),
+    ...compatibilityReference(LOOKUP_EVIDENCE_COMPATIBILITY),
     versionField: 'schemaVersion',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
@@ -57,13 +73,10 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'structure',
     preservedFieldGroups: Object.freeze(['query_context', 'generator_metadata', 'source_health', 'normalised_registration_evidence', 'bounded_replay_facts', 'observation_times', 'limitations']),
     excludedFieldGroups: Object.freeze(['browser_local_records', 'case_context', 'brand_profiles', 'credentials', 'session_material', 'request_headers', 'cookies', 'signer_authentication', 'raw_payload_rendering_during_replay']),
-    futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
     id: 'domain_control_passport',
-    compatibilityEntryId: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
-    schema: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.schema!,
-    versions: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.supportedVersions,
+    ...compatibilityReference(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
@@ -72,15 +85,10 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'whole_integrity',
     preservedFieldGroups: exact,
     excludedFieldGroups: Object.freeze(['profile_identity', 'brand_context', 'contacts', 'notes', 'observations', 'planning_context', 'suppression_context']),
-    futureVersionBehaviour: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.futureVersionBehavior === 'reject'
-      ? 'reject'
-      : (() => { throw new TypeError('Domain-control interchange must reject future manifest versions.'); })(),
   }),
   Object.freeze({
     id: 'brand_profiles',
-    compatibilityEntryId: 'export.brand-profiles',
-    schema: 'whoisleuth.brand-profiles',
-    versions: Object.freeze([2, 3, 4, 5, 6]),
+    ...compatibilityReference(BRAND_PROFILE_EXPORT_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
@@ -89,28 +97,22 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'structure',
     preservedFieldGroups: Object.freeze(['profile_identity', 'brand_context', 'domain_scope', 'mail_posture', 'desired_posture', 'reviewed_planning', 'retained_observations']),
     excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'raw_upstream_payloads']),
-    futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
     id: 'workspace',
-    compatibilityEntryId: 'export.workspace-archive',
-    schema: 'whoisleuth.workspace-archive',
-    versions: Object.freeze([1, 2, 3, 4, 5]),
+    ...compatibilityReference(WORKSPACE_ARCHIVE_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'verification_only', write: 'unsupported', verify: 'supported' }),
     fidelity: 'normalised_merge',
     requiredAssurance: 'whole_integrity',
-    preservedFieldGroups: Object.freeze(['supported_workspace_sections', 'section_versions', 'section_checksums', 'merge_metadata']),
-    excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'hosted_monitor_keys', 'raw_upstream_payloads', 'tab_state']),
-    futureVersionBehaviour: 'reject',
+    preservedFieldGroups: Object.freeze(['supported_workspace_sections', 'section_versions', 'section_checksums', 'merge_metadata', 'analyst_review_lifecycle']),
+    excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'hosted_monitor_keys', 'raw_upstream_payloads', 'tab_state', 'certificate_transparency_history']),
   }),
   Object.freeze({
     id: 'encrypted_workspace',
-    compatibilityEntryId: 'export.encrypted-workspace-archive',
-    schema: 'whoisleuth.encrypted-workspace-archive',
-    versions: Object.freeze([1]),
+    ...compatibilityReference(ENCRYPTED_WORKSPACE_ARCHIVE_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze([]),
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
@@ -119,13 +121,10 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'authenticated_whole_integrity',
     preservedFieldGroups: Object.freeze(['encrypted_workspace_envelope', 'authenticated_ciphertext', 'inner_workspace_after_decryption']),
     excludedFieldGroups: Object.freeze(['passphrase', 'derived_key']),
-    futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
     id: 'case_pack',
-    compatibilityEntryId: 'export.cli-case-pack',
-    schema: 'whoisleuth.cli.case-pack',
-    versions: Object.freeze([1, 2]),
+    ...compatibilityReference(CLI_CASE_PACK_COMPATIBILITY),
     versionField: 'version',
     nestedSchemaPath: Object.freeze(['packet']),
     browser: Object.freeze({ import: 'supported', export: 'unsupported' }),
@@ -134,7 +133,6 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     requiredAssurance: 'whole_integrity',
     preservedFieldGroups: Object.freeze(['redacted_case_collection', 'case_schema_version', 'trusted_internal_case_brand_profile_references']),
     excludedFieldGroups: Object.freeze(['package_reports', 'package_redaction_manifest', 'package_integrity_envelope', 'audience_excluded_case_fields', 'public_audience_case_brand_profile_references']),
-    futureVersionBehaviour: 'reject',
   }),
   Object.freeze({
     id: 'legacy_desired_baseline',
@@ -158,7 +156,3 @@ export function interchangeContractFor(id: InterchangeArtifactContract['id']): I
   if (!contract) throw new TypeError('Interchange contract is not registered.');
   return contract;
 }
-import {
-  LOOKUP_EVIDENCE_SCHEMA,
-  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
-} from './evidence-export.mts';

@@ -2,11 +2,13 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
 import {
+  currentBulkSessionBrowserStore,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   holdBrowserLocalReads,
   migrateLegacyBrowserData,
 } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const OBSERVED_AT = '2026-08-08T00:00:00.000Z';
 const REVIEWED_AT = '2026-08-14T00:00:00.000Z';
@@ -40,10 +42,7 @@ function evidencePin(
 }
 
 function bulkSessionStore() {
-  return {
-    schema: 'whoisleuth.bulk-sessions',
-    version: 3,
-    sessions: [{
+  return currentBulkSessionBrowserStore([{
       id: 'evidence-debt-session',
       name: `Saved ${'S'.repeat(90)}`,
       mode: 'deep',
@@ -68,13 +67,12 @@ function bulkSessionStore() {
       startedAt: OBSERVED_AT,
       updatedAt: OBSERVED_AT,
       completedAt: OBSERVED_AT,
-    }],
-  };
+    }]);
 }
 
 function casesStore() {
   return {
-    version: 8,
+    version: CASE_SCHEMA_VERSION,
     cases: [
       {
         ...caseRecord({
@@ -152,7 +150,7 @@ async function installNoSideEffectCounters(page: Page) {
   });
 }
 
-test('projects exact retained debt, exposes deliberate actions, and stays read-only on mobile', async ({ page }) => {
+test('projects exact retained evidence gaps, exposes deliberate actions, and stays read-only on mobile', async ({ page }) => {
   const collectionRequests: string[] = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
@@ -161,16 +159,16 @@ test('projects exact retained debt, exposes deliberate actions, and stays read-o
   await page.goto('/monitor');
   await seedEvidenceDebt(page);
 
-  const region = page.getByRole('region', { name: 'Evidence-debt matrix' });
+  const region = page.getByRole('region', { name: 'Evidence gaps' });
   await expect(region).toBeVisible();
   await installNoSideEffectCounters(page);
-  await expect(region.locator('.review-heading > strong')).toHaveText('4 actionable evidence-debt items');
+  await expect(region.locator('.review-heading > strong')).toHaveText('4 evidence gaps to review');
   await expect(region.getByRole('row', { name: /Bulk RDAP 0 0 0 1 0 0 1/u })).toBeVisible();
   await expect(region).toContainText('1 scanned Bulk row has no retained per-source coverage');
   await expect(region).toContainText('1 active case has no separately pinned evidence source');
   await expect(region).toContainText('1 retained source state explicitly records skipped collection');
 
-  const filters = region.getByRole('group', { name: 'Evidence-debt queue filters' });
+  const filters = region.getByRole('group', { name: 'Evidence-gap filters' });
   await filters.getByLabel('Owner').selectOption('case');
   await filters.getByLabel('State').selectOption('conflicting');
   const conflicting = region.locator('.queue > li', { hasText: 'conflicting.invalid' });
@@ -186,8 +184,8 @@ test('projects exact retained debt, exposes deliberate actions, and stays read-o
   await expect(page.locator('#case-head-case-conflicting')).toBeFocused();
   await page.getByRole('tab', { name: /^Inbox/u }).click();
 
-  const returnedRegion = page.getByRole('region', { name: 'Evidence-debt matrix' });
-  const returnedFilters = returnedRegion.getByRole('group', { name: 'Evidence-debt queue filters' });
+  const returnedRegion = page.getByRole('region', { name: 'Evidence gaps' });
+  const returnedFilters = returnedRegion.getByRole('group', { name: 'Evidence-gap filters' });
   await returnedFilters.getByLabel('Source').selectOption({ label: 'WHOIS' });
   const rateLimited = returnedRegion.locator('.queue > li', { hasText: 'rate-limited.invalid' });
   await expect(rateLimited).toBeVisible();
@@ -214,18 +212,18 @@ test('projects exact retained debt, exposes deliberate actions, and stays read-o
   await expectNoHorizontalOverflow(page);
 });
 
-test('keeps readable Bulk debt visible while the Case source is unavailable', async ({ page }) => {
+test('keeps readable Bulk gaps visible while the Case source is unavailable', async ({ page }) => {
   await page.goto('/bulk');
   await seedEvidenceDebt(page, '/bulk');
   await expect(page.locator('#console-navigation')).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
   await page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
 
-  const region = page.getByRole('region', { name: 'Evidence-debt matrix' });
+  const region = page.getByRole('region', { name: 'Evidence gaps' });
   await expect(region.getByRole('alert')).toContainText('Cases could not be read');
   await expect(region.locator('.review-heading > strong')).toHaveText('2 visible · incomplete');
   await expect(region.locator('.queue > li', { hasText: 'bulk-debt.invalid' })).toHaveCount(2);
-  await expect(region.getByText(/No actionable debt is visible/u)).toHaveCount(0);
+  await expect(region.getByText(/No matching evidence gap is visible/u)).toHaveCount(0);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 });
@@ -237,12 +235,12 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   await holdBrowserLocalReads(page, 1_500);
   const navigation = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
 
-  const region = page.getByRole('region', { name: 'Evidence-debt matrix' });
+  const region = page.getByRole('region', { name: 'Evidence gaps' });
   await expect(region).toHaveAttribute('aria-busy', 'true');
   await expect(region.locator('.review-heading > strong')).toHaveText('—');
   await expect(region.getByRole('status')).toContainText('Loading saved Bulk sessions and Cases');
   await expect(region.getByText(/No actionable partial/u)).toHaveCount(0);
   await navigation;
   await expect(region).toHaveAttribute('aria-busy', 'false', { timeout: 5_000 });
-  await expect(region.locator('.review-heading > strong')).toHaveText('4 actionable evidence-debt items');
+  await expect(region.locator('.review-heading > strong')).toHaveText('4 evidence gaps to review');
 });

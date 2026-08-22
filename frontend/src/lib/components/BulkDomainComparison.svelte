@@ -4,9 +4,11 @@
   let {
     comparison,
     exportComparison,
+    openSettledRow,
   }: {
     comparison: BulkDomainComparison | null;
     exportComparison: () => void | Promise<void>;
+    openSettledRow: () => void;
   } = $props();
 
   function category(value: string): string {
@@ -64,13 +66,13 @@
                 <span class="exact-value">{row.left}</span>
                 <small>{row.source}</small>
                 <small>Exact source state <code>{row.leftSourceState}</code></small>
-                {#if row.leftEvidenceHref}<a class="evidence-link" href={row.leftEvidenceHref}>View settled row</a>{/if}
+                {#if row.leftEvidenceHref}<a class="evidence-link" href={row.leftEvidenceHref} onclick={openSettledRow}>View settled row</a>{/if}
               </td>
               <td data-label={comparison.rightDomain}>
                 <span class="exact-value">{row.right}</span>
                 <small>{row.source}</small>
                 <small>Exact source state <code>{row.rightSourceState}</code></small>
-                {#if row.rightEvidenceHref}<a class="evidence-link" href={row.rightEvidenceHref}>View settled row</a>{/if}
+                {#if row.rightEvidenceHref}<a class="evidence-link" href={row.rightEvidenceHref} onclick={openSettledRow}>View settled row</a>{/if}
               </td>
               <td data-label="Delta">
                 <span class={`chip state-${row.state}`}>{assessment(row.state)}</span>

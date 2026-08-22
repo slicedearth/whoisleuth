@@ -38,7 +38,7 @@ function caseRecord(
 }
 
 describe('transient Brand review inbox', () => {
-  test('keys existing source-aware review rows to the active explicit association only', () => {
+  test('keys existing source-attributed review rows to the active explicit association only', () => {
     const active = profile('profile-active', 'Active profile', ['matching.invalid']);
     const other = profile('profile-other', 'Other profile');
     const linked = caseRecord('case-linked', 'unrelated.invalid', [active.id]);

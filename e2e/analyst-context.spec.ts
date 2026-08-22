@@ -1,10 +1,13 @@
 import { expect, test } from './fixtures';
 import {
+  currentBrandProfileBrowserStore,
+  currentBrowserLocalDocument,
   expectNoHorizontalOverflow,
   failBrowserLocalCollectionReads,
   failBrowserLocalReads,
   migrateLegacyBrowserData,
 } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const OBSERVED_AT = '2026-08-01T02:00:00.000Z';
 
@@ -32,14 +35,12 @@ test('saved context stays dormant until keyboard activation and then renders a b
   });
   await page.goto('/lookup?q=saved-context');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [0, 1, 2].map(retainedCase) },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns: [] },
-    'whois-rdap-brand-profiles-v1': { version: 2, profiles: [] },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [0, 1, 2].map(retainedCase) },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [] }),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([]),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [],
-    },
+    }),
   }, { clearStorage: true });
 
   await expect(page.getByRole('heading', { name: 'Preview saved context for this target' })).toBeVisible();
@@ -101,14 +102,12 @@ test('saved context retains successful matches and unavailable source state afte
   });
   await page.goto('/lookup?q=saved-context-0.invalid');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [retainedCase(0)] },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns: [] },
-    'whois-rdap-brand-profiles-v1': { version: 2, profiles: [] },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [retainedCase(0)] },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [] }),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([]),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [],
-    },
+    }),
   }, { clearStorage: true });
   const openButton = page.getByRole('button', { name: 'Open saved context' });
   await expect(openButton).toBeVisible();

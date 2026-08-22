@@ -288,6 +288,28 @@ describe('DNS delegation health', () => {
     assert.equal(result.diagnostics.unreachableAuthorityCount, 0);
   });
 
+  test('rejects non-ASCII case-folding aliases before authority queries', async () => {
+    const calls: string[] = [];
+    const nameservers = ['ns1.example.test', 'n\u212a.example.test', 'n\u017f.example.test'];
+    const result = await collectDnsDelegationHealth('example.test', {
+      ...PARENT,
+      records: nameservers,
+    }, {
+      registryEvidence: {
+        nameservers,
+        nameserverDetails: nameservers.map((name) => ({ name, addresses: ['8.8.8.8'] })),
+      },
+      queryAuthority: async ({ nameserver }) => {
+        calls.push(nameserver);
+        return { nameservers: ['ns1.example.test'], soaPrimary: 'ns1.example.test', errorCode: null, error: null };
+      },
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.deepEqual(calls, ['ns1.example.test']);
+    assert.deepEqual(result.authorities.map((item) => item.nameserver), ['ns1.example.test']);
+  });
+
   test('keeps resolver failure inconclusive and exposes no source payload', async () => {
     const result = await collectDnsDelegationHealth('example.test', {
       status: 'error',

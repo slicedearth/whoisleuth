@@ -92,14 +92,16 @@ describe('privacy-safe source reliability report', () => {
       earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
       latestGeneratedAt: '2026-07-15T00:00:00.000Z',
     });
-    const legacy = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+    const legacy = lookupDocument({
       version: 1,
       generatedAt: '2026-07-15T00:00:00',
-    })));
-    assert.deepEqual(legacy.sampleWindow, {
-      earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
-      latestGeneratedAt: '2026-07-15T00:00:00.000Z',
     });
+    const before = structuredClone(legacy);
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(legacy)),
+      /supported bounded CLI Lookup document/u,
+    );
+    assert.deepEqual(legacy, before);
   });
 
   test('accepts saved Lookup versions 1 and 2 without widening the Bulk contract', () => {

@@ -10,3 +10,4 @@ export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
 export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
 export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
 export const LEGACY_BULK_REVIEW_KEY = 'whoisleuth-bulk-review-v1';
+export const LEGACY_ANALYST_REVIEW_STATE_KEY = 'whoisleuth-analyst-review-state-v1';

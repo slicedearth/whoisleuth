@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
-  LEGACY_SAVED_LOOKUP_SCHEMA_VERSION,
+  PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION,
   SAVED_LOOKUP_SCHEMA_VERSION,
   SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
   parseSavedLookupDocument,
@@ -17,7 +17,7 @@ describe('saved Lookup compatibility', () => {
   test('accepts the frozen v1 document and a current v2 document without rewriting either version', async () => {
     const legacyRaw = await loadCliLookupV1Fixture();
     const legacy = parseSavedLookupDocument(legacyRaw);
-    assert.equal(legacy.version, LEGACY_SAVED_LOOKUP_SCHEMA_VERSION);
+    assert.equal(legacy.version, PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION);
 
     const current = JSON.parse(legacyRaw) as Record<string, unknown>;
     current.version = SAVED_LOOKUP_SCHEMA_VERSION;
@@ -30,13 +30,15 @@ describe('saved Lookup compatibility', () => {
     assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
   });
 
-  test('canonicalizes legacy timestamps as UTC and requires explicit zones for current documents', async () => {
+  test('requires explicit zones for public and current documents', async () => {
     const base = JSON.parse(await loadCliLookupV1Fixture()) as Record<string, unknown>;
-    const legacy = parseSavedLookupDocument(JSON.stringify({
-      ...base,
-      generatedAt: '2026-01-15T12:00:00',
-    }));
-    assert.equal(legacy.generatedAt, '2026-01-15T12:00:00.000Z');
+    assert.throws(
+      () => parseSavedLookupDocument(JSON.stringify({
+        ...base,
+        generatedAt: '2026-01-15T12:00:00',
+      })),
+      /explicit timezone/u,
+    );
     assert.throws(
       () => parseSavedLookupDocument(JSON.stringify({
         ...base,

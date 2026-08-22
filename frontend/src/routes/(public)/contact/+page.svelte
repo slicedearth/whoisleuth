@@ -203,7 +203,7 @@
 
 <PublicSeo
   title="Contact | WHOISleuth"
-  description="Prepare a privacy, outbound-request, or security email through a protected local-first handoff."
+  description="Prepare a privacy, outbound-request, or security email for the relevant project address."
   path="/contact"
   indexable={false}
 />
@@ -267,7 +267,7 @@
       <div><dt>Outbound request concern</dt><dd>Unexpected or problematic requests that appear to originate from WHOISleuth.</dd></div>
       <div><dt>Security report</dt><dd>A vulnerability or security concern involving WHOISleuth itself.</dd></div>
     </dl>
-    <p>This form does not submit an abuse report about a third-party domain, host, registrar, or registry. Use the evidence and response workflow in the Console to identify and review an appropriate recipient.</p>
+    <p>This form does not submit third-party abuse reports. Use a Console case to review the evidence and recipient first.</p>
     <p>The verification widget is provided by Cloudflare and receives ordinary browser request data under its <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy policy<span class="sr-only"> (opens in a new tab)</span></a>.</p>
   </aside>
 </div>

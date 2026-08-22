@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   DOMAIN_CONTROL_REVIEW_VERSION,
   buildDomainControlManifest,
@@ -382,64 +383,54 @@ describe('domain control manifests', () => {
     assert.equal(verification.state, 'verified');
   });
 
-  it('keeps frozen historical, future-version, and expiry semantics aligned across consumers', async () => {
-    const [legacyRaw, currentRaw] = await Promise.all([
-      readFile(new URL('./fixtures/domain-control-manifest-v1.json', import.meta.url), 'utf8'),
-      readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8'),
-    ]);
-    for (const [version, raw] of [[1, legacyRaw], [2, currentRaw]] as const) {
-      const document = JSON.parse(raw) as Record<string, unknown>;
-      assert.doesNotThrow(() => validateSignedDigestArtifactStructure(DOMAIN_CONTROL_MANIFEST_SCHEMA, document));
-      const offline = await verifyOfflineArtifact(raw);
-      assert.equal(offline.artifact.schema, DOMAIN_CONTROL_MANIFEST_SCHEMA);
-      assert.equal(offline.artifact.version, version);
-      assert.equal(offline.state, 'verified');
-      assert.equal(offline.checks.structure, 'verified');
-      assert.equal(offline.checks.contentIntegrity, 'verified');
-
-      const interchange = await buildInterchangeFidelityReport(raw, {
-        generatedAt: '2026-08-20T00:00:00.000Z',
-      });
-      assert.equal(interchange.recognised, true);
-      assert.equal(interchange.artifact.id, 'domain_control_passport');
-      assert.equal(interchange.artifact.version, version);
-      assert.equal(interchange.artifact.versionSupported, true);
-      assert.equal(interchange.verification.state, 'verified');
-      assert.equal(interchange.verification.assuranceSatisfied, true);
-      assert.equal(interchange.compatibility.fidelity, 'normalised_merge');
-    }
-
+  it('keeps current, unsupported-version, and expiry semantics aligned across consumers', async () => {
+    const currentRaw = await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8');
     const current = JSON.parse(currentRaw) as Record<string, unknown>;
-    const future = structuredClone(current);
-    future.version = 3;
-    const futureEntries = future.entries as Array<Record<string, unknown>>;
-    futureEntries[0]!.domain = 'future-private.example';
-    const futureRaw = JSON.stringify(future);
+    assert.doesNotThrow(() => validateSignedDigestArtifactStructure(DOMAIN_CONTROL_MANIFEST_SCHEMA, current));
+    const offline = await verifyOfflineArtifact(currentRaw);
+    assert.equal(offline.artifact.schema, DOMAIN_CONTROL_MANIFEST_SCHEMA);
+    assert.equal(offline.artifact.version, DOMAIN_CONTROL_MANIFEST_VERSION);
+    assert.equal(offline.state, 'verified');
+    const currentInterchange = await buildInterchangeFidelityReport(currentRaw, {
+      generatedAt: '2026-08-20T00:00:00.000Z',
+    });
+    assert.equal(currentInterchange.artifact.versionSupported, true);
+    assert.equal(currentInterchange.verification.state, 'verified');
+    assert.equal(currentInterchange.compatibility.fidelity, 'normalised_merge');
+
+    const unsupported = structuredClone(current);
+    unsupported.version = 1;
+    const unsupportedEntries = unsupported.entries as Array<Record<string, unknown>>;
+    unsupportedEntries[0]!.domain = 'unsupported-private.example';
+    const unsupportedRaw = JSON.stringify(unsupported);
     let structureError = '';
     try {
-      validateSignedDigestArtifactStructure(DOMAIN_CONTROL_MANIFEST_SCHEMA, future);
+      validateSignedDigestArtifactStructure(DOMAIN_CONTROL_MANIFEST_SCHEMA, unsupported);
     } catch (error) {
       structureError = String(error);
     }
     assert.match(structureError, /unsupported or malformed structure/iu);
-    assert.doesNotMatch(structureError, /future-private/iu);
+    assert.doesNotMatch(structureError, /unsupported-private/iu);
     await assert.rejects(
-      () => verifyOfflineArtifact(futureRaw),
+      () => verifyOfflineArtifact(unsupportedRaw),
       (error: unknown) => {
         assert.match(String(error), /schema or version is not supported/iu);
-        assert.doesNotMatch(String(error), /future-private/iu);
+        assert.doesNotMatch(String(error), /unsupported-private/iu);
         return true;
       },
     );
-    const futureInterchange = await buildInterchangeFidelityReport(futureRaw, {
+    const unsupportedInterchange = await buildInterchangeFidelityReport(unsupportedRaw, {
       generatedAt: '2026-08-20T00:00:00.000Z',
     });
-    assert.equal(futureInterchange.recognised, true);
-    assert.equal(futureInterchange.artifact.version, 3);
-    assert.equal(futureInterchange.artifact.versionSupported, false);
-    assert.equal(futureInterchange.verification.state, 'unsupported_version');
-    assert.equal(futureInterchange.compatibility.fidelity, 'unsupported');
-    assert.doesNotMatch(JSON.stringify(futureInterchange), /future-private/iu);
+    assert.equal(unsupportedInterchange.recognised, true);
+    assert.equal(unsupportedInterchange.artifact.version, 1);
+    assert.equal(unsupportedInterchange.artifact.versionSupported, false);
+    assert.equal(unsupportedInterchange.verification.state, 'unsupported_version');
+    assert.equal(unsupportedInterchange.compatibility.fidelity, 'unsupported');
+    assert.doesNotMatch(JSON.stringify(unsupportedInterchange), /unsupported-private/iu);
+
+    const future = { ...current, version: DOMAIN_CONTROL_MANIFEST_VERSION + 1 };
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(future)), /not supported/iu);
 
     const expiredAt = '2026-10-01T00:00:00.000Z';
     assert.deepEqual(verifyDomainControlManifest(current), current);

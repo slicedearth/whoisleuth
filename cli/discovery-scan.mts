@@ -7,6 +7,7 @@ import { runBulkLookups } from './bulk.mts';
 import { REGISTERED_STATES, availabilityState, bulkDnsSummary } from './bulk-output.mts';
 import { cliCsvCell } from './csv.mts';
 import { CliUsageError } from './errors.mts';
+import { terminalSafeJson } from './formatters/json.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 
 export const CLI_DISCOVERY_SCAN_SCHEMA = 'whoisleuth.cli.discovery-scan';
@@ -280,7 +281,10 @@ function buildDiscoveryScanDocument(
     collection: {
       chunkSize: metadata.chunkSize,
       concurrency: metadata.concurrency,
-      resolver: metadata.resolverServers.length ? 'analyst_selected' : 'system_default',
+      resolver: metadata.resolverServers.length ? 'mixed' : 'system_default',
+      dnsResolver: metadata.resolverServers.length ? 'analyst_selected' : 'system_default',
+      registryEndpointResolution: 'system_default',
+      serviceAddressResolution: 'system_default',
       resolverServers: [...metadata.resolverServers],
     },
     filter: metadata.filter,
@@ -306,6 +310,9 @@ function buildDiscoveryScanDocument(
       'Failed, partial, rate-limited, and unavailable sources remain inconclusive and are not interpreted as absence or safety.',
       'The allowlist changes review priority only. It does not remove collected evidence or assert that a domain is benign.',
       'Relationship groups use exact bounded DNS observations from this run and can include common shared infrastructure.',
+      ...(metadata.resolverServers.length
+        ? ['The analyst-selected resolver applies to DNS record and delegation evidence only. Registry, WHOIS, HTTP, redirect, favicon, and TLS endpoint address resolution remains system-default and is reported separately.']
+        : []),
     ],
   };
 }
@@ -337,7 +344,7 @@ async function runDiscoveryScanChunks(
 
 function formatDiscoveryScanJsonLines(document: ReturnType<typeof buildDiscoveryScanDocument>): string {
   return document.results.length
-    ? `${document.results.map((item) => JSON.stringify({ ...item, generatedAt: document.generatedAt })).join('\n')}\n`
+    ? `${document.results.map((item) => terminalSafeJson({ ...item, generatedAt: document.generatedAt })).join('\n')}\n`
     : '';
 }
 
@@ -365,6 +372,7 @@ function formatTerminalDiscoveryScan(document: ReturnType<typeof buildDiscoveryS
     `Matched          ${document.summary.matched}`,
     `Source failures  ${document.summary.failed}`,
     `Relationships    ${document.relationships.length}`,
+    `Resolution       ${document.collection.resolver === 'mixed' ? 'mixed (selected DNS; system service addresses)' : 'system default'}`,
     '',
     'Review queue',
   ];

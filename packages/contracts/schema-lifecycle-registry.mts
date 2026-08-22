@@ -15,6 +15,7 @@ import { MONITORING_PORTABILITY_LIFECYCLE_FAMILY } from './monitoring-portabilit
 import { RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY } from './relationship-portability.mts';
 import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from './tab-portability.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY } from './privacy-data-flow-catalogue.mts';
+import { ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY } from './analyst-review-state.mts';
 import { defineSchemaLifecycleRegistry } from './schema-lifecycle.mts';
 
 export const SCHEMA_LIFECYCLE_REGISTRY = defineSchemaLifecycleRegistry([
@@ -35,4 +36,5 @@ export const SCHEMA_LIFECYCLE_REGISTRY = defineSchemaLifecycleRegistry([
   RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY,
   ANALYST_INTERCHANGE_LIFECYCLE_FAMILY,
   PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY,
+  ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY,
 ]);

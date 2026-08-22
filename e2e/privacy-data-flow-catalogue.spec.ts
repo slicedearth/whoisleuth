@@ -9,7 +9,7 @@ async function selectTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
 
-test('privacy catalogue guidance adds no data-collection request and stays semantic and responsive', async ({ page }) => {
+test('privacy guidance stays concise, request-free and responsive', async ({ page }) => {
   test.slow();
   const dataRequests: string[] = [];
   page.on('request', (request) => {
@@ -26,46 +26,33 @@ test('privacy catalogue guidance adds no data-collection request and stays seman
     { width: 390, height: 844, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });
-    for (const route of ['/privacy', '/resources'] as const) {
-      dataRequests.length = 0;
-      await page.goto(route);
-      await selectTheme(page, surface.theme);
+    dataRequests.length = 0;
+    await page.goto('/privacy');
+    await selectTheme(page, surface.theme);
 
-      const summary = page.getByTestId('privacy-data-flow-summary');
-      await expect(summary).toBeVisible();
-      await expect(summary.getByRole('heading', {
-        name: 'Structured privacy and data-flow catalogue',
-        level: route === '/privacy' ? 3 : 2,
-      })).toBeVisible();
-      await expect(summary.getByRole('list', { name: 'Privacy processing classes' }).getByRole('listitem')).toHaveCount(7);
-      await expect(summary).toContainText('32 capability families');
-      await expect(summary).toContainText('47 CLI operations');
-      await expect(summary).toContainText('Opening this guidance makes no capability or provider request');
-
-      const links = summary.getByRole('link');
-      await expect(links).toHaveCount(2);
-      await expect(links.nth(0)).toHaveAccessibleName(/Read the concise catalogue.*opens in a new tab/u);
-      await expect(links.nth(1)).toHaveAccessibleName(/Open version 1 JSON.*opens in a new tab/u);
-      await links.nth(0).focus();
-      await page.keyboard.press('Tab');
-      await expect(links.nth(1)).toBeFocused();
-      const focusStyle = await links.nth(1).evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
-      });
-      expect(focusStyle.outlineStyle).not.toBe('none');
-      expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThanOrEqual(2);
-
-      const summaryGeometry = await summary.evaluate((element) => ({
-        scrollWidth: element.scrollWidth,
-        clientWidth: element.clientWidth,
-      }));
-      expect(summaryGeometry.scrollWidth).toBeLessThanOrEqual(summaryGeometry.clientWidth + 1);
-      await expectNoHorizontalOverflow(page);
-      expect(
-        dataRequests,
-        `${route} made a request beyond the existing public-navigation session-status check at ${surface.width}px in ${surface.theme} theme`,
-      ).toEqual(['GET /api/session']);
-    }
+    await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
+    const sections = page.getByRole('navigation', { name: 'Privacy policy sections' });
+    await expect(sections.getByRole('link')).toHaveCount(8);
+    await expect(page.getByText(/Current Case schema 13.*Case schema 12 remains readable/iu)).toBeVisible();
+    await expect(page.getByText(/current writer emits workspace archive version 6.*version 5 remains readable/iu)).toBeVisible();
+    await expect(page.getByText(/IndexedDB as plaintext JSON/iu)).toBeVisible();
+    const catalogueLink = page.getByRole('link', { name: /data-flow catalogue.*opens in a new tab/u });
+    await expect(catalogueLink).toHaveAttribute('href', /docs\/privacy-data-flow-catalogue\.md$/u);
+    await catalogueLink.focus();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(catalogueLink).toBeFocused();
+    const focusStyle = await catalogueLink.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+    });
+    expect(focusStyle.outlineStyle).not.toBe('none');
+    expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    expect(
+      dataRequests,
+      `/privacy made a request beyond the existing public-navigation session-status check at ${surface.width}px in ${surface.theme} theme`,
+    ).toEqual(['GET /api/session']);
   }
 });

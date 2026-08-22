@@ -1,8 +1,6 @@
 import type { CaseRecord } from '../cases/case-model.mts';
 import {
-  canonicalArtifactJson,
   canonicalArtifactJsonV2,
-  sha256ArtifactDigest,
   sha256ArtifactDigestV2,
   SORTED_JSON_V2,
 } from '../evidence/artifact-integrity.mts';
@@ -20,8 +18,7 @@ import {
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
   INVESTIGATION_CAPSULE_SCHEMA,
   INVESTIGATION_CAPSULE_VERSION,
-  LEGACY_INVESTIGATION_CAPSULE_VERSION,
-  PREVIOUS_INVESTIGATION_CAPSULE_VERSION,
+  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
 } from '../contracts/investigation-portability.mts';
 
@@ -30,8 +27,7 @@ export {
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
   INVESTIGATION_CAPSULE_SCHEMA,
   INVESTIGATION_CAPSULE_VERSION,
-  LEGACY_INVESTIGATION_CAPSULE_VERSION,
-  PREVIOUS_INVESTIGATION_CAPSULE_VERSION,
+  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
 };
 
@@ -204,51 +200,33 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
   };
 }
 
-type PreviousInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief'> & Readonly<{
-  schemaVersion: typeof PREVIOUS_INVESTIGATION_CAPSULE_VERSION;
+type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief'> & Readonly<{
+  schemaVersion: typeof PUBLIC_INVESTIGATION_CAPSULE_VERSION;
   investigationBrief: Readonly<Record<string, unknown>>;
-}>;
-
-type LegacyInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief' | 'integrity'> & Readonly<{
-  schemaVersion: typeof LEGACY_INVESTIGATION_CAPSULE_VERSION;
-  investigationBrief: Readonly<Record<string, unknown>>;
-  integrity: Readonly<{
-    algorithm: 'SHA-256';
-    briefDigest: string;
-    graphDigest: string;
-    analystRecordsDigest: string | null;
-  }>;
 }>;
 
 export type SupportedInvestigationCapsule = InvestigationCapsule
-  | PreviousInvestigationCapsule
-  | LegacyInvestigationCapsule;
+  | PublicInvestigationCapsule;
 
 export async function verifyInvestigationCapsule(capsule: SupportedInvestigationCapsule): Promise<Readonly<{
   valid: boolean;
   brief: boolean;
   graph: boolean;
   analystRecords: boolean | null;
-  whole: boolean | null;
+  whole: boolean;
 }>> {
   const current = capsule.schemaVersion === INVESTIGATION_CAPSULE_VERSION;
-  const previous = capsule.schemaVersion === PREVIOUS_INVESTIGATION_CAPSULE_VERSION;
-  const legacy = capsule.schemaVersion === LEGACY_INVESTIGATION_CAPSULE_VERSION;
-  const wholeIntegrity = current || previous;
+  const publicVersion = capsule.schemaVersion === PUBLIC_INVESTIGATION_CAPSULE_VERSION;
   const integrityRecord = capsule.integrity as unknown as Record<string, unknown>;
-  if ((!current && !previous && !legacy)
-    || (wholeIntegrity && (integrityRecord.canonicalization !== SORTED_JSON_V2
-      || integrityRecord.scope !== 'capsule excluding integrity'))
-    || (legacy && (Object.hasOwn(integrityRecord, 'canonicalization')
-      || Object.hasOwn(integrityRecord, 'scope')
-      || Object.hasOwn(integrityRecord, 'digestSha256')))) {
-    return { valid: false, brief: false, graph: false, analystRecords: null, whole: wholeIntegrity ? false : null };
+  if ((!current && !publicVersion)
+    || integrityRecord.canonicalization !== SORTED_JSON_V2
+    || integrityRecord.scope !== 'capsule excluding integrity') {
+    return { valid: false, brief: false, graph: false, analystRecords: null, whole: false };
   }
-  const projectionDigest = wholeIntegrity ? sha256ArtifactDigestV2 : sha256ArtifactDigest;
   const [briefDigest, graphDigest, analystRecordsDigest] = await Promise.all([
-    projectionDigest(capsule.investigationBrief),
-    projectionDigest(capsule.graphSnapshot),
-    capsule.analystRecords ? projectionDigest(capsule.analystRecords) : Promise.resolve(null),
+    sha256ArtifactDigestV2(capsule.investigationBrief),
+    sha256ArtifactDigestV2(capsule.graphSnapshot),
+    capsule.analystRecords ? sha256ArtifactDigestV2(capsule.analystRecords) : Promise.resolve(null),
   ]);
   const brief = briefDigest === capsule.integrity.briefDigest;
   const graph = graphDigest === capsule.integrity.graphDigest;
@@ -257,15 +235,12 @@ export async function verifyInvestigationCapsule(capsule: SupportedInvestigation
     : capsule.integrity.analystRecordsDigest === null
       ? null
       : false;
-  let whole: boolean | null = null;
-  if (wholeIntegrity) {
-    const { integrity: _integrity, ...unsigned } = capsule;
-    whole = integrityRecord.algorithm === 'SHA-256'
-      && integrityRecord.canonicalization === SORTED_JSON_V2
-      && integrityRecord.scope === 'capsule excluding integrity'
-      && integrityRecord.digestSha256 === await sha256ArtifactDigestV2(unsigned);
-  }
-  return { valid: brief && graph && analystRecords !== false && whole !== false, brief, graph, analystRecords, whole };
+  const { integrity: _integrity, ...unsigned } = capsule;
+  const whole = integrityRecord.algorithm === 'SHA-256'
+    && integrityRecord.canonicalization === SORTED_JSON_V2
+    && integrityRecord.scope === 'capsule excluding integrity'
+    && integrityRecord.digestSha256 === await sha256ArtifactDigestV2(unsigned);
+  return { valid: brief && graph && analystRecords !== false && whole, brief, graph, analystRecords, whole };
 }
 
 export function investigationCapsuleFilename(capsule: SupportedInvestigationCapsule): string {
@@ -274,7 +249,5 @@ export function investigationCapsuleFilename(capsule: SupportedInvestigationCaps
 }
 
 export function serializeInvestigationCapsule(capsule: SupportedInvestigationCapsule): string {
-  return `${capsule.schemaVersion !== LEGACY_INVESTIGATION_CAPSULE_VERSION
-    ? canonicalArtifactJsonV2(capsule)
-    : canonicalArtifactJson(capsule)}\n`;
+  return `${canonicalArtifactJsonV2(capsule)}\n`;
 }

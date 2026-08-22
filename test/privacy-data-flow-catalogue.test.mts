@@ -38,16 +38,20 @@ import {
 } from '../packages/contracts/privacy-data-flow-catalogue.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
+  CASE_SCHEMA_VERSION,
+  PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_ARCHIVE_VERSION,
+} from '../packages/contracts/case-portability.mts';
+import {
   PRIVACY_DATA_FLOW_CATALOGUE,
-  principalPrivacyBoundarySummary,
+  humanPrivacySummary,
   renderPrivacyDataFlowCatalogueJson,
   renderPrivacyDataFlowCatalogueMarkdown,
-  renderPrivacyDataFlowSummaryModule,
 } from '../tools/privacy-data-flow-catalogue-renderer.mts';
 
 const JSON_PATH = new URL('../docs/privacy-data-flow-catalogue.json', import.meta.url);
 const MARKDOWN_PATH = new URL('../docs/privacy-data-flow-catalogue.md', import.meta.url);
-const FRONTEND_SUMMARY_PATH = new URL('../frontend/src/lib/generated/privacy-data-flow-summary.ts', import.meta.url);
 
 const ROOT_KEYS = [
   'schema', 'version', 'coverage', 'processingClasses', 'invariants', 'capabilityFlows',
@@ -116,6 +120,24 @@ function canonicalBuildInput() {
 }
 
 describe('privacy data-flow catalogue', () => {
+  test('projects the five practical privacy questions from canonical boundaries', () => {
+    const summary = humanPrivacySummary();
+    assert.deepEqual(summary.map((item) => item.question), [
+      'What leaves the device?',
+      'What stays in the browser?',
+      'What does optional hosted monitoring store?',
+      'How long does retained data remain?',
+      'How do users export or delete it?',
+    ]);
+    assert.match(summary[0]!.answer, /documentation make no investigation request/u);
+    assert.match(summary[1]!.answer, /current browser profile or tab/u);
+    assert.match(summary[2]!.answer, /compact application-encrypted projection/u);
+    assert.match(summary[3]!.answer, /until the user deletes it or clears site data/u);
+    assert.match(summary[4]!.answer, /Exports require an explicit browser or CLI action/u);
+    assert.equal(Object.isFrozen(summary), true);
+    assert.equal(summary.every((item) => Object.isFrozen(item)), true);
+  });
+
   test('joins every canonical capability, CLI variant, lifecycle contract, profile and consumer exactly once', () => {
     const catalogue = PRIVACY_DATA_FLOW_CATALOGUE;
     assert.equal(catalogue.schema, PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA);
@@ -143,6 +165,9 @@ describe('privacy data-flow catalogue', () => {
     const lifecycleConsumers = SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => (
       'metadata' in family ? family.metadata.consumerEdges.map((item) => item.id) : []
     ));
+    const metadataVersions = [...new Set(SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => (
+      'metadata' in family ? [family.metadata.metadataVersion] : []
+    )))].sort((left, right) => left - right);
     assert.deepEqual(catalogue.schemaFamilies.map((item) => item.id), sorted(lifecycleFamilies));
     assert.deepEqual(catalogue.schemaContracts.map((item) => item.id), sorted(lifecycleContracts));
     assert.deepEqual(catalogue.schemaPrivacyProfiles.map((item) => item.id), sorted(lifecycleProfiles));
@@ -151,20 +176,20 @@ describe('privacy data-flow catalogue', () => {
       capabilityManifest: {
         schema: CAPABILITY_MANIFEST_SCHEMA,
         version: CAPABILITY_MANIFEST_VERSION,
-        capabilityCount: 32,
-        cliOperationCount: 47,
-        cliVariantCount: 16,
+        capabilityCount: CAPABILITY_MANIFEST.capabilities.length,
+        cliOperationCount: CAPABILITY_MANIFEST.cliOperations.length,
+        cliVariantCount: CAPABILITY_MANIFEST.cliOperations.reduce((sum, operation) => sum + (operation.variants?.length ?? 0), 0),
       },
       cliCommandCatalogue: {
         schema: CLI_COMMAND_CATALOGUE_SCHEMA,
         version: CLI_COMMAND_CATALOGUE_VERSION,
       },
       schemaLifecycleRegistry: {
-        familyCount: 17,
-        compatibilityCount: 84,
-        privacyProfileCount: 44,
-        consumerFlowCount: 139,
-        metadataVersions: [2, 3, 4],
+        familyCount: lifecycleFamilies.length,
+        compatibilityCount: lifecycleContracts.length,
+        privacyProfileCount: lifecycleProfiles.length,
+        consumerFlowCount: lifecycleConsumers.length,
+        metadataVersions,
       },
       outsideLifecycleRegistry: {
         classification: 'not_applicable',
@@ -386,18 +411,16 @@ describe('privacy data-flow catalogue', () => {
 
   test('preserves version-1 capability contracts and byte-exact generated artefacts', () => {
     const manifestBytes = JSON.stringify(CAPABILITY_MANIFEST);
-    assert.equal(Buffer.byteLength(manifestBytes, 'utf8'), 81_830);
-    assert.equal(sha256(manifestBytes), '87a0cc15e2f65669f286d9bfbce8be9f7a7f414055148676eff4b50cb549dcf6');
+    assert.equal(Buffer.byteLength(manifestBytes, 'utf8'), 82_381);
+    assert.equal(sha256(manifestBytes), 'dd80ec029ee520ef32e63aee55308be0ba39dc4d274df97fb8096a2980b1e33a');
     const publicReportBytes = JSON.stringify(capabilityReport('express', {}));
     assert.equal(Buffer.byteLength(publicReportBytes, 'utf8'), 2_545);
     assert.equal(sha256(publicReportBytes), 'd67a69dc51fcf2db4c564d9e8764ddd684abbdcae54a413d71d760912b80611a');
 
     const json = readFileSync(JSON_PATH, 'utf8');
     const markdown = readFileSync(MARKDOWN_PATH, 'utf8');
-    const frontendSummary = readFileSync(FRONTEND_SUMMARY_PATH, 'utf8');
     assert.equal(json, renderPrivacyDataFlowCatalogueJson());
     assert.equal(markdown, renderPrivacyDataFlowCatalogueMarkdown());
-    assert.equal(frontendSummary, renderPrivacyDataFlowSummaryModule());
     assert.equal(json, serialisePrivacyDataFlowCatalogue(JSON.parse(json)));
 
     const fixture = PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY.fixtures[0]!;
@@ -415,7 +438,6 @@ describe('privacy data-flow catalogue', () => {
     const generated = [
       readFileSync(JSON_PATH, 'utf8'),
       readFileSync(MARKDOWN_PATH, 'utf8'),
-      readFileSync(FRONTEND_SUMMARY_PATH, 'utf8'),
     ].join('\n');
     assert.doesNotMatch(generated, /(?:example\.(?:com|test)|192\.0\.2\.|AS64500)/iu);
     assert.doesNotMatch(generated, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu);
@@ -440,30 +462,29 @@ describe('privacy data-flow catalogue', () => {
     }
   });
 
-  test('keeps public privacy, usage, API and frontend guidance on the generated principal summary', () => {
-    const summary = normaliseWhitespace(principalPrivacyBoundarySummary());
-    const publicDocuments = [
-      '../PRIVACY.md',
-      '../README.md',
-      '../docs/application-guide.md',
-      '../docs/cli-reference.md',
-      '../docs/cli.md',
-      '../docs/operations.md',
-      '../docs/registry-data-contract.md',
-      '../packages/cli/README.md',
-    ];
-    for (const path of publicDocuments) {
-      const contents = normaliseWhitespace(readFileSync(new URL(path, import.meta.url), 'utf8'));
-      assert.ok(contents.includes(summary), `${path} has drifted from the principal privacy summary`);
+  test('keeps critical public privacy facts aligned without duplicating catalogue prose', () => {
+    const privacyPage = readFileSync(new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url), 'utf8');
+    const privacyNotice = readFileSync(new URL('../PRIVACY.md', import.meta.url), 'utf8');
+    const publicPrivacySurfaces = [privacyPage, privacyNotice].map(normaliseWhitespace);
+    const criticalFacts = [
+      { category: 'compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remains readable`, 'iu') },
+      { category: 'compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*version ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} remains readable`, 'iu') },
+      { category: 'storage', pattern: /IndexedDB as plaintext JSON/iu },
+      { category: 'network', pattern: /Single and Bulk lookups send the selected target/iu },
+      { category: 'export', pattern: /full saved Lookup.*Review every file before sharing/iu },
+      { category: 'deletion', pattern: /Deleting browser data does not delete separately downloaded files/iu },
+    ] as const;
+    for (const fact of criticalFacts) {
+      for (const contents of publicPrivacySurfaces) {
+        assert.match(contents, fact.pattern, `Public privacy surface omits ${fact.category} fact.`);
+      }
     }
 
-    const privacyPage = readFileSync(new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url), 'utf8');
     const resourcesPage = readFileSync(new URL('../frontend/src/routes/(public)/resources/+page.svelte', import.meta.url), 'utf8');
-    const summaryComponent = readFileSync(new URL('../frontend/src/lib/components/PrivacyDataFlowSummary.svelte', import.meta.url), 'utf8');
-    assert.match(privacyPage, /<PrivacyDataFlowSummary headingLevel="h3"/u);
-    assert.match(resourcesPage, /id="privacy-boundaries"[\s\S]*<PrivacyDataFlowSummary/u);
-    assert.match(summaryComponent, /\$lib\/generated\/privacy-data-flow-summary/u);
-    assert.match(summaryComponent, /Opening this guidance makes no capability or provider request/u);
+    assert.doesNotMatch(privacyPage, /<PrivacyDataFlowSummary/u);
+    assert.match(privacyPage, /privacy-data-flow-catalogue\.md/u);
+    assert.doesNotMatch(resourcesPage, /<PrivacyDataFlowSummary/u);
+    assert.match(resourcesPage, /id="privacy"[\s\S]*href="\/privacy"/u);
     const apiGuidance = readFileSync(new URL('../docs/registry-data-contract.md', import.meta.url), 'utf8');
     assert.match(apiGuidance, /fixed documentation, not a new runtime endpoint/u);
     assert.match(apiGuidance, /neither changes nor\s+extends the version-1 `\/api\/capabilities` response/u);

@@ -2,16 +2,47 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
-import { gzipSync, zipSync } from 'fflate';
+import { gzipSync, Zip, ZipDeflate, zipSync } from 'fflate';
+import zipFixtures from '../fixtures/zip-fixtures.mts';
 
 import {
   buildMailReportReview,
   expandMailReportFile,
+  MAX_MAIL_REPORT_EXPANDED_BYTES,
   parseMailReportFiles,
 } from '../frontend/src/lib/analysis/mail-report-workbench.ts';
 
+const { patchZipDataDescriptorUncompressedSize, patchZipDeclaredUncompressedSize } = zipFixtures;
+
 const encoder = new TextEncoder();
 const ISO = '2026-08-04T00:00:00.000Z';
+
+async function streamingZip(name: string, bytes: Uint8Array): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    const archive = new Zip((error, chunk, final) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      chunks.push(chunk.slice());
+      total += chunk.byteLength;
+      if (!final) return;
+      const output = new Uint8Array(total);
+      let offset = 0;
+      for (const retained of chunks) {
+        output.set(retained, offset);
+        offset += retained.byteLength;
+      }
+      resolve(output);
+    });
+    const entry = new ZipDeflate(name);
+    archive.add(entry);
+    entry.push(bytes, true);
+    archive.end();
+  });
+}
 
 const DMARC_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <feedback>
@@ -275,8 +306,29 @@ describe('local aggregate mail report parsing', () => {
     const archiveReports = await parseMailReportFiles('reports.zip', archive);
     assert.deepEqual(archiveReports.map((report) => report.kind).sort(), ['dmarc', 'tls-rpt']);
 
+    const streamingArchive = await streamingZip('aggregate.xml', encoder.encode(DMARC_XML));
+    const streamingReports = await parseMailReportFiles('streaming.zip', streamingArchive);
+    assert.equal(streamingReports[0]?.kind, 'dmarc');
+    const inconsistentDescriptor = patchZipDataDescriptorUncompressedSize(
+      streamingArchive,
+      'aggregate.xml',
+      encoder.encode(DMARC_XML).byteLength + 7,
+    );
+    assert.throws(
+      () => expandMailReportFile('inconsistent-descriptor.zip', inconsistentDescriptor),
+      /inconsistent ZIP metadata/u,
+    );
+
     const unsafe = zipSync({ '../outside.xml': encoder.encode(DMARC_XML) });
     assert.throws(() => expandMailReportFile('unsafe.zip', unsafe), /unsafe path/u);
+
+    const understated = patchZipDeclaredUncompressedSize(zipSync({
+      'large.xml': new Uint8Array(MAX_MAIL_REPORT_EXPANDED_BYTES + 1),
+    }), 'large.xml', 1);
+    assert.throws(
+      () => expandMailReportFile('understated.zip', understated),
+      /decompression limit/u,
+    );
   });
 
   test('builds a deterministic profile-scoped review without changing evidence meaning', async () => {

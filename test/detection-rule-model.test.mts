@@ -169,7 +169,7 @@ test('store recovery drops invalid, duplicate and excess records', () => {
 
 test('import validates schema and version and merges by stable id', () => {
   assert.throws(() => mergeDetectionRules([], { schema: 'other', rules: [] }), /not a WHOISleuth/);
-  assert.throws(() => mergeDetectionRules([], { version: 2, rules: [] }), /newer schema/);
+  assert.throws(() => mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 2, rules: [] }), /newer schema/);
   const result = mergeDetectionRules([rule()], { schema: 'whoisleuth.detection-rules', version: 1, rules: [rule({ name: 'Replacement' }), rule({ id: 'rule-2' }), { name: 'invalid' }] });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 1 });
   const replacement = result.rules.find((item) => item.id === 'rule-1');

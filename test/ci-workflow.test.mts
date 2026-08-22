@@ -146,6 +146,17 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
   });
 
+  test('runs local performance authorities once after the parallel browser project', () => {
+    assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
+    assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
+    assert.equal(
+      PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
+      'playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
+    );
+  });
+
   test('browser tests synchronize on observable state instead of fixed delays', () => {
     for (const { entry, source } of E2E_SOURCES) {
       assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);

@@ -101,7 +101,7 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
   }],
   ['domain_loaded_official_asset', {
     type: 'official_asset',
-    label: 'Official asset relationship',
+    label: 'Official asset host match',
     description: 'An analyst-retained observation records that these cases loaded an asset from the same configured official domain or subdomain.',
   }],
 ]);

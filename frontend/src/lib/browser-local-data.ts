@@ -27,6 +27,8 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
   label: string;
   legacyKey: string;
   schemaVersion: number;
+  minimumReadableVersion?: number;
+  acceptsUnversionedLegacy?: boolean;
   maximumBytes: number;
   maximumRecords: number;
   empty: () => T;
@@ -47,6 +49,8 @@ export type AnyLocalDataCollectionDefinition = Readonly<{
   label: string;
   legacyKey: string;
   schemaVersion: number;
+  minimumReadableVersion?: number;
+  acceptsUnversionedLegacy?: boolean;
   maximumBytes: number;
   maximumRecords: number;
   empty(): unknown;
@@ -265,6 +269,15 @@ function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): L
   if (!Number.isSafeInteger(definition.schemaVersion) || definition.schemaVersion < 1) {
     throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid schema version.`);
   }
+  if (definition.minimumReadableVersion !== undefined
+    && (!Number.isSafeInteger(definition.minimumReadableVersion)
+      || definition.minimumReadableVersion < 1
+      || definition.minimumReadableVersion > definition.schemaVersion)) {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid minimum readable schema version.`);
+  }
+  if (definition.acceptsUnversionedLegacy !== undefined && typeof definition.acceptsUnversionedLegacy !== 'boolean') {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid unversioned-data policy.`);
+  }
   if (!Number.isSafeInteger(definition.maximumBytes) || definition.maximumBytes < 1) {
     throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid byte bound.`);
   }
@@ -478,16 +491,30 @@ export class BrowserLocalDataProvider {
     catch (cause) {
       throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_UNAVAILABLE', 'Could not read the legacy rollback copy before updating it.', { cause });
     }
+    const applied: Array<{ key: string; value: string }> = [];
     try {
-      for (const copy of copies) this.#storage.setItem(copy.key, copy.value);
+      for (const copy of copies) {
+        this.#storage.setItem(copy.key, copy.value);
+        applied.push({ key: copy.key, value: copy.value });
+      }
     } catch (cause) {
+      let concurrentChange = false;
       try {
-        for (const [key, value] of snapshot) {
-          if (value === null) this.#storage.removeItem(key);
-          else this.#storage.setItem(key, value);
+        for (let index = applied.length - 1; index >= 0; index -= 1) {
+          const copy = applied[index]!;
+          if (this.#storage.getItem(copy.key) !== copy.value) {
+            concurrentChange = true;
+            continue;
+          }
+          const previous = snapshot.get(copy.key) ?? null;
+          if (previous === null) this.#storage.removeItem(copy.key);
+          else this.#storage.setItem(copy.key, previous);
         }
       } catch (rollbackCause) {
         throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_ROLLBACK_FAILED', 'Could not save or fully restore the legacy rollback copy. Download a workspace backup before changing this browser data.', { cause: rollbackCause });
+      }
+      if (concurrentChange) {
+        throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', 'The legacy rollback copy changed in another tab while it was being saved. Concurrent data was preserved; retry after reviewing the current browser state.', { cause });
       }
       if (cause instanceof DOMException && cause.name === 'QuotaExceededError') {
         throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', 'The current workspace is too large for a legacy local-storage rollback copy. Download a workspace backup instead.', { cause });
@@ -599,8 +626,20 @@ export class BrowserLocalDataProvider {
       throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`);
     }
     const version = definition.version(parsed);
+    if (version === null && definition.acceptsUnversionedLegacy === false) {
+      throw new BrowserLocalDataError(
+        'LOCAL_DATA_RETIRED_SCHEMA',
+        `Unversioned ${definition.label} data is retired. Export it with the last broad-reader release or choose an explicit reset before continuing; no data was changed.`,
+      );
+    }
+    if (version !== null && version < (definition.minimumReadableVersion ?? 1)) {
+      throw new BrowserLocalDataError(
+        'LOCAL_DATA_RETIRED_SCHEMA',
+        `${definition.label} schema ${version} is retired. Export it as schema ${definition.schemaVersion} with the last broad-reader release or choose an explicit reset; no data was changed.`,
+      );
+    }
     if (version !== null && version > definition.schemaVersion) {
-      throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} was created by a newer app version. Update the app before migration.`);
+      throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} schema ${version} was created by a newer app version. Update the app before migration; no data was changed.`);
     }
     try { return definition.normalize(parsed); }
     catch (cause) {
@@ -795,7 +834,13 @@ export class BrowserLocalDataProvider {
       throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} has an invalid migration manifest.`);
     }
     if (manifest.schemaVersion > definition.schemaVersion) {
-      throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} was created by a newer app version. Update the app before reading it.`);
+      throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} schema ${manifest.schemaVersion} was created by a newer app version. Update the app before reading it; no data was changed.`);
+    }
+    if (manifest.schemaVersion < (definition.minimumReadableVersion ?? 1)) {
+      throw new BrowserLocalDataError(
+        'LOCAL_DATA_RETIRED_SCHEMA',
+        `${definition.label} schema ${manifest.schemaVersion} is retired. Restore or export it with the last broad-reader release, or choose an explicit reset; no data was changed.`,
+      );
     }
   }
 

@@ -86,7 +86,7 @@ async function resign<T extends Record<string, unknown>>(document: T): Promise<T
   } as unknown as T;
 }
 
-test('builds a bounded source-aware claim passport and verifies it offline', async () => {
+test('builds a bounded source-attributed claim passport and verifies it offline', async () => {
   const exported = await passport();
   assert.equal(exported.document.schema, LOOKUP_CLAIM_PASSPORT_SCHEMA);
   assert.deepEqual(exported.document.target, { type: 'domain', value: 'example.com' });

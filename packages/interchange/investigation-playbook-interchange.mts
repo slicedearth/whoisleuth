@@ -119,7 +119,6 @@ function profileExtension(value: unknown): ProfileMetadata | null {
     || typeof item.recipe_id !== 'string'
     || !Array.isArray(item.limitations)) return null;
   const profileVersion = Number(item.profile_version);
-  if (profileVersion === 1 && !['brand_sweep', 'infrastructure_pivot', 'new_domain_triage'].includes(item.recipe_id)) return null;
   return {
     profile_version: profileVersion,
     template_id: item.template_id,

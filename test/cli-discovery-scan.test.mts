@@ -11,6 +11,7 @@ import {
   buildDiscoveryScanDocument,
   formatDiscoveryScanCsv,
   formatDiscoveryScanDomains,
+  formatDiscoveryScanJsonLines,
   parseDiscoveryScanAllowlist,
   readDiscoveryScanListBounded,
   runDiscoveryScanChunks,
@@ -189,6 +190,20 @@ describe('discovery scan allowlists and relationships', () => {
     const document = buildDiscoveryScanDocument(candidates().slice(0, 1), [failed], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set());
     assert.match(formatDiscoveryScanCsv(document), /"'=HYPERLINK\(""https:\/\/example\.invalid""\)"/u);
   });
+
+  test('reversibly escapes terminal-unsafe collection errors in JSONL output', () => {
+    const error = 'visible\u009b[31m\u202ereversed';
+    const failed: BulkLookupResult = { index: 0, query: 'one.example', ok: false, error };
+    const document = buildDiscoveryScanDocument(
+      candidates().slice(0, 1),
+      [failed],
+      metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }),
+      new Set(),
+    );
+    const jsonl = formatDiscoveryScanJsonLines(document);
+    assert.doesNotMatch(jsonl, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+    assert.equal(JSON.parse(jsonl).error, error);
+  });
 });
 
 describe('chunked discovery collection', () => {
@@ -307,13 +322,13 @@ describe('discovery observation snapshots', () => {
     }
   });
 
-  test('migrates a version 1 snapshot before replacing it with component-aware version 2 evidence', async () => {
+  test('rejects a reader-only version 1 snapshot without replacing its contents', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-v1-'));
     const snapshot = path.join(directory, 'observed.json');
     const domains = ['one.example'];
     const configuration = { domains, deep: true, resolverServers: [] as string[] };
     try {
-      await writeFile(snapshot, `${JSON.stringify({
+      const retired = `${JSON.stringify({
         schema: CLI_DISCOVERY_OBSERVATION_SCHEMA,
         version: 1,
         generatedAt: '2026-07-31T00:00:00.000Z',
@@ -328,15 +343,16 @@ describe('discovery observation snapshots', () => {
           confidence: 'high',
           dns: { status: 'success', a: ['192.0.2.1'], aaaa: [], ns: [], mx: [], hasNullMx: false, hasSpf: false, hasDmarc: false },
         }],
-      }, null, 2)}\n`, { mode: 0o600 });
-      await updateDiscoveryObservationSnapshot(
-        snapshot, candidates().slice(0, 1), [success(0, 'one.example')],
-        { deep: true, resolverServers: [] }, '2026-08-01T00:00:00.000Z',
+      }, null, 2)}\n`;
+      await writeFile(snapshot, retired, { mode: 0o600 });
+      await assert.rejects(
+        updateDiscoveryObservationSnapshot(
+          snapshot, candidates().slice(0, 1), [success(0, 'one.example')],
+          { deep: true, resolverServers: [] }, '2026-08-01T00:00:00.000Z',
+        ),
+        /must use whoisleuth\.cli\.discovery-observation-snapshot version 2/u,
       );
-      const stored = JSON.parse(await readFile(snapshot, 'utf8'));
-      assert.equal(stored.version, 2);
-      assert.equal(stored.observations[0].registrationObservedAt, '2026-08-01T00:00:00.000Z');
-      assert.equal(stored.observations[0].dnsObservedAt, '2026-08-01T00:00:00.000Z');
+      assert.equal(await readFile(snapshot, 'utf8'), retired);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -395,7 +411,16 @@ describe('discover-scan runner', () => {
     assert.equal(document.schema, 'whoisleuth.cli.discovery-scan');
     assert.equal(document.summary.collected, 2);
     assert.equal(document.generation.generatedCandidateCount, 3);
-    assert.equal(document.collection.resolver, 'analyst_selected');
+    assert.deepEqual(document.collection, {
+      chunkSize: 25,
+      concurrency: 4,
+      resolver: 'mixed',
+      dnsResolver: 'analyst_selected',
+      registryEndpointResolution: 'system_default',
+      serviceAddressResolution: 'system_default',
+      resolverServers: ['8.8.8.8'],
+    });
+    assert.match(document.limitations.join(' '), /selected resolver applies to DNS record and delegation evidence only/iu);
     assert.ok(received.every((options) => options.fast === true && options.compact === true));
     assert.equal(stderr.value(), '');
   });

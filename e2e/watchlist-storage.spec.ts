@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -14,7 +14,8 @@ function entry(domain: string) {
 }
 
 async function seed(page: import('@playwright/test').Page, value: unknown) {
-  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: value });
+  const stored = currentBrowserLocalDocument('watchlists', value);
+  await page.addInitScript(({ key, stored: fixture }) => localStorage.setItem(key, JSON.stringify(fixture)), { key: WATCHLIST_KEY, stored });
   await page.goto('/monitor');
   await page.getByRole('tab', { name: /Watchlists/ }).click();
 }
@@ -25,13 +26,13 @@ test('a future watchlist schema is never overwritten by an older app', async ({ 
   await page.goto('/monitor');
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
-  await expect(page.getByText('Watchlists was created by a newer app version.')).toBeVisible();
+  await expect(page.getByText('Watchlists schema 99 was created by a newer app version. Update the app before migration; no data was changed.')).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), WATCHLIST_KEY);
   expect(stored).toEqual(future);
 });
 
 test('a watchlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
-  const previous = { schema: 'whoisleuth.watchlists', version: 2, watchlists: { Priority: entry('priority.invalid') } };
+  const previous = { watchlists: { Priority: entry('priority.invalid') } };
   await seed(page, previous);
   await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'watchlists');

@@ -104,8 +104,8 @@ describe('maintainer-tool duplication report', () => {
 
   test('measures the checked-out maintainer-tool inventory without source values', async () => {
     const report = await buildMaintainerDuplicationReport();
-    assert.equal(report.scope.fileCount, 60);
-    assert.equal(report.scope.entrypointCount, 50);
+    assert.equal(report.scope.fileCount, 64);
+    assert.equal(report.scope.entrypointCount, 53);
     assert.ok(report.callGraph.staticEdgeCount > 500);
     assert.equal(report.repeatedImplementations.exactClusterCount, 0);
     assert.equal(report.repeatedImplementations.repeatedLineCount, 0);

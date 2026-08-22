@@ -135,7 +135,7 @@ test('imports reject malformed and future structured exports', () => {
   assert.throws(() => mergeShortlistStores([], {}), /current WHOISleuth shortlist export/i);
   assert.throws(() => mergeShortlistStores([], [record()]), /current WHOISleuth shortlist export/i);
   assert.throws(() => mergeShortlistStores([], { schema: 'whoisleuth.cases', entries: [] }), /current WHOISleuth shortlist export/i);
-  assert.throws(() => mergeShortlistStores([], { schema: SHORTLIST_SCHEMA, version: 1, entries: [] }), /using schema 2/i);
+  assert.throws(() => mergeShortlistStores([], { schema: SHORTLIST_SCHEMA, version: 1, entries: [] }), /using schema 3/i);
   assert.throws(() => mergeShortlistStores([], { schema: SHORTLIST_SCHEMA, version: 99, entries: [] }), /newer schema 99/i);
 });
 

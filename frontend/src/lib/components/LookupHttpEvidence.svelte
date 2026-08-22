@@ -38,7 +38,7 @@
 <details class="http-card evidence-card card" aria-labelledby="http-title" open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="http-title" role="heading" aria-level="4">HTTP intelligence</span><span class="evidence-summary-detail">Expand for response, redirect, provenance, and limitation detail</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="http-title" role="heading" aria-level="4">HTTP evidence</span><span class="evidence-summary-detail">Expand for response, redirect, provenance, and limitation detail</span></span>
       <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>

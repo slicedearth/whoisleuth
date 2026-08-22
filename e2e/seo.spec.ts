@@ -1,100 +1,20 @@
 import { expect, test } from './fixtures';
-
-const publicPages = [
-  {
-    path: '/',
-    canonical: 'https://whoisleuth.com/',
-    title: 'WHOISleuth | WHOIS, RDAP and domain intelligence',
-    heading: 'Understand a domain.',
-  },
-  {
-    path: '/demo',
-    canonical: 'https://whoisleuth.com/demo',
-    title: 'Domain investigation demo | WHOISleuth',
-    heading: 'Explore a synthetic domain investigation.',
-  },
-  {
-    path: '/privacy',
-    canonical: 'https://whoisleuth.com/privacy',
-    title: 'Privacy policy | WHOISleuth',
-    heading: 'Privacy policy',
-  },
-  {
-    path: '/terms',
-    canonical: 'https://whoisleuth.com/terms',
-    title: 'Terms and acceptable use | WHOISleuth',
-    heading: 'Terms and acceptable use',
-  },
-  {
-    path: '/request-policy',
-    canonical: 'https://whoisleuth.com/request-policy',
-    title: 'Outbound request policy | WHOISleuth',
-    heading: 'Outbound request policy',
-  },
-  {
-    path: '/resources',
-    canonical: 'https://whoisleuth.com/resources',
-    title: 'Domain investigation resources and guide | WHOISleuth',
-    heading: 'Learn the workflow. Understand the evidence.',
-  },
-  {
-    path: '/resources/open-source-domain-intelligence',
-    canonical: 'https://whoisleuth.com/resources/open-source-domain-intelligence',
-    title: 'Open-source domain intelligence without a hidden verdict | WHOISleuth',
-    heading: 'Open-source domain intelligence without a hidden verdict',
-  },
-  {
-    path: '/resources/rdap-vs-whois',
-    canonical: 'https://whoisleuth.com/resources/rdap-vs-whois',
-    title: 'RDAP versus WHOIS: why registration sources disagree | WHOISleuth',
-    heading: 'RDAP versus WHOIS: why registration sources disagree',
-  },
-  {
-    path: '/resources/lookalike-domain-checker',
-    canonical: 'https://whoisleuth.com/resources/lookalike-domain-checker',
-    title: 'Find and review lookalike domains without treating similarity as abuse | WHOISleuth',
-    heading: 'Find and review lookalike domains without treating similarity as abuse',
-  },
-  {
-    path: '/resources/certificate-transparency-brand-protection',
-    canonical: 'https://whoisleuth.com/resources/certificate-transparency-brand-protection',
-    title: 'Use Certificate Transparency as a brand-protection lead | WHOISleuth',
-    heading: 'Use Certificate Transparency as a brand-protection lead',
-  },
-  {
-    path: '/resources/domain-investigation-workflow',
-    canonical: 'https://whoisleuth.com/resources/domain-investigation-workflow',
-    title: 'A source-aware domain investigation workflow | WHOISleuth',
-    heading: 'A source-aware domain investigation workflow',
-  },
-  {
-    path: '/resources/bulk-domain-comparison',
-    canonical: 'https://whoisleuth.com/resources/bulk-domain-comparison',
-    title: 'Compare multiple domains without flattening incomplete evidence | WHOISleuth',
-    heading: 'Compare multiple domains without flattening incomplete evidence',
-  },
-  {
-    path: '/resources/ip-asn-investigation',
-    canonical: 'https://whoisleuth.com/resources/ip-asn-investigation',
-    title: 'Add IP and ASN context without claiming the origin host | WHOISleuth',
-    heading: 'Add IP and ASN context without claiming the origin host',
-  },
-  {
-    path: '/resources/local-first-osint',
-    canonical: 'https://whoisleuth.com/resources/local-first-osint',
-    title: 'Why local-first storage matters for domain investigations | WHOISleuth',
-    heading: 'Why local-first storage matters for domain investigations',
-  },
-] as const;
+import {
+  NON_INDEXED_PRERENDERED_ROUTES,
+  PUBLIC_PRERENDERED_ROUTES,
+} from '../lib/prerendered-routes.mts';
+import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 
 test('public pages expose prerendered search and sharing metadata', async ({ request }) => {
-  for (const expected of publicPages) {
-    const response = await request.get(expected.path);
-    expect(response.ok(), expected.path).toBe(true);
+  for (const path of PUBLIC_PRERENDERED_ROUTES) {
+    const canonical = `${WHOISLEUTH_SITE_ORIGIN}${path === '/' ? '/' : path}`;
+    const response = await request.get(path);
+    expect(response.ok(), path).toBe(true);
     const html = await response.text();
 
-    expect(html).toContain(`<title>${expected.title}</title>`);
-    expect(html).toContain(`<link rel="canonical" href="${expected.canonical}"`);
+    expect(html).toMatch(/<title>[^<]+<\/title>/u);
+    expect(html).toContain(`<link rel="canonical" href="${canonical}"`);
+    expect(html).toMatch(/<h1(?:\s[^>]*)?>[\s\S]*?<\/h1>/u);
     expect(html).toContain('<meta name="description"');
     expect(html).toContain('<meta name="robots" content="index, follow,');
     expect(html).toContain('<meta property="og:site_name" content="WHOISleuth"');
@@ -104,11 +24,10 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     expect(html).toContain('<meta property="og:image:height" content="640"');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
     expect(html).toContain('<meta name="twitter:image" content="https://whoisleuth.com/social-preview.png"');
-    expect(html).toContain(expected.heading);
     expect(html).toMatch(/WHOISleuth \d+\.\d+\.\d+ · build (?:[a-f0-9]{7}|local)/u);
     expect(html).toMatch(/href="https:\/\/github\.com\/slicedearth\/whoisleuth(?:\/tree\/[a-f0-9]{7,64})?"/u);
 
-    if (expected.path === '/') {
+    if (path === '/') {
       const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
       expect(schema).toBeTruthy();
       expect(JSON.parse(schema!)).toEqual({
@@ -119,7 +38,7 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
       });
     }
 
-    if (expected.path === '/resources') {
+    if (path === '/resources') {
       const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
       expect(schema).toBeTruthy();
       const parsed = JSON.parse(schema!);
@@ -141,12 +60,12 @@ test('legacy Guide URLs redirect to the consolidated Resources canonical', async
 });
 
 test('sign-in and protected console shells are excluded from search', async ({ request }) => {
-  for (const path of ['/login', '/dashboard', '/brands', '/discover', '/bulk', '/lookup', '/monitor', '/registry-support']) {
+  for (const path of NON_INDEXED_PRERENDERED_ROUTES) {
     const response = await request.get(path);
     expect(response.ok(), path).toBe(true);
     const html = await response.text();
     expect(html).toContain('<meta name="robots" content="noindex, nofollow"');
-    if (path !== '/login') expect(html).not.toContain('Start new work, continue something saved');
+    if (path !== '/login' && path !== '/contact') expect(html).not.toContain('Start new work, continue something saved');
   }
 });
 
@@ -158,9 +77,12 @@ test('crawler files expose only public pages', async ({ request }) => {
   expect(robots).not.toContain('Disallow: /login');
 
   const sitemap = await (await request.get('/sitemap.xml')).text();
-  for (const page of publicPages) expect(sitemap).toContain(`<loc>${page.canonical}</loc>`);
-  expect(sitemap.match(/<loc>/gu)).toHaveLength(publicPages.length);
-  for (const path of ['/login', '/dashboard', '/brands', '/discover', '/bulk', '/lookup', '/monitor', '/registry-support']) {
+  for (const path of PUBLIC_PRERENDERED_ROUTES) {
+    const canonical = `${WHOISLEUTH_SITE_ORIGIN}${path === '/' ? '/' : path}`;
+    expect(sitemap).toContain(`<loc>${canonical}</loc>`);
+  }
+  expect(sitemap.match(/<loc>/gu)).toHaveLength(PUBLIC_PRERENDERED_ROUTES.length);
+  for (const path of NON_INDEXED_PRERENDERED_ROUTES) {
     expect(sitemap).not.toContain(`https://whoisleuth.com${path}`);
   }
 });

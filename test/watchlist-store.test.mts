@@ -54,7 +54,7 @@ test('versioned stores retain only bounded known evidence fields', () => {
   assert.equal(parsed.watchlists.Priority.results[0].private, undefined);
 });
 
-test('current stores require explicit zones while legacy stores assign UTC deterministically', () => {
+test('current envelopes and internal maps require explicit timestamp zones', () => {
   const zoneLess = entry({
     updatedAt: '2026-01-15T12:00:00.000',
     history: [{
@@ -74,9 +74,9 @@ test('current stores require explicit zones while legacy stores assign UTC deter
   }).watchlists.Priority;
   assert.equal(current?.updatedAt, '1970-01-01T00:00:00.000Z');
   assert.equal(current?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
-  const legacy = normalizeWatchlistStore({ Priority: zoneLess }).watchlists.Priority;
-  assert.equal(legacy?.updatedAt, '2026-01-15T12:00:00.000Z');
-  assert.equal(legacy?.history[0]?.checkedAt, '2026-01-15T12:00:00.000Z');
+  const internal = normalizeWatchlistStore({ Priority: zoneLess }).watchlists.Priority;
+  assert.equal(internal?.updatedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(internal?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
 });
 
 test('store recovery caps input collection work and retained watchlists', () => {

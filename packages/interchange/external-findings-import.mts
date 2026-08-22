@@ -4,7 +4,7 @@ import {
   updateCase,
   type CaseRecord,
 } from '../cases/case-model.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -146,11 +146,10 @@ function optionalText(value: unknown, maximum: number, label: string): string | 
   return requiredText(value, maximum, label);
 }
 
-function iso(value: unknown, label: string, optional = false, legacy = false): string | null {
+function iso(value: unknown, label: string, optional = false): string | null {
   if (optional && (value === undefined || value === null || value === '')) return null;
   const text = requiredText(value, 64, label);
-  const normalized = normalizeExplicitIsoTimestamp(text)
-    ?? (legacy ? normalizeLegacyIsoTimestamp(text) : null);
+  const normalized = normalizeExplicitIsoTimestamp(text);
   if (!normalized) throw new Error(`${label} must be a valid date and time with an explicit timezone.`);
   return normalized;
 }
@@ -165,7 +164,7 @@ function limitations(value: unknown, index: number): string[] {
   return [...unique];
 }
 
-function structuredObservation(value: unknown, index: number, documentVersion: number): ExternalFindingStructuredObservation | null {
+function structuredObservation(value: unknown, index: number): ExternalFindingStructuredObservation | null {
   if (value === undefined || value === null) return null;
   const item = record(value);
   if (!item || !hasOnlyKeys(item, STRUCTURED_OBSERVATION_KEYS)) {
@@ -180,12 +179,7 @@ function structuredObservation(value: unknown, index: number, documentVersion: n
   const field = requiredText(item.field, 40, `Finding ${index + 1} structured observation field`);
   const observationValue = requiredText(item.value, 500, `Finding ${index + 1} structured observation value`);
   const issuer = optionalText(item.issuer, 160, `Finding ${index + 1} certificate issuer`);
-  const notAfter = iso(
-    item.notAfter,
-    `Finding ${index + 1} certificate expiry`,
-    true,
-    documentVersion < EXTERNAL_FINDINGS_VERSION,
-  );
+  const notAfter = iso(item.notAfter, `Finding ${index + 1} certificate expiry`, true);
   const certificateSchema = item.sourceSchema === 'whoisleuth.certificate-observation-rows';
   if (certificateSchema && (field === 'certificateSha256' || field === 'fingerprintSha256') && !SHA256_RE.test(observationValue.toLowerCase())) {
     throw new Error(`Finding ${index + 1} certificate observation value must be a SHA-256 hexadecimal digest.`);
@@ -201,7 +195,7 @@ function structuredObservation(value: unknown, index: number, documentVersion: n
   let dnsNameCount: number | null = null;
   let namesComplete: boolean | null = null;
   if (declaresEventMetadata) {
-    if (!certificateSchema || documentVersion < 4) {
+    if (!certificateSchema) {
       throw new Error(`Finding ${index + 1} certificate-event metadata requires external-findings schema version 4.`);
     }
     eventId = requiredText(item.eventId, 64, `Finding ${index + 1} certificate event id`);
@@ -260,12 +254,10 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   }
   if (
     root.schema !== EXTERNAL_FINDINGS_SCHEMA
-    || ![1, 2, 3, EXTERNAL_FINDINGS_VERSION].includes(Number(root.schemaVersion))
+    || root.schemaVersion !== EXTERNAL_FINDINGS_VERSION
   ) {
-    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 1, 2, 3, or ${EXTERNAL_FINDINGS_VERSION}.`);
+    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version ${EXTERNAL_FINDINGS_VERSION}.`);
   }
-  const documentVersion = Number(root.schemaVersion);
-  const legacyTimestamps = documentVersion < EXTERNAL_FINDINGS_VERSION;
   const sourceValue = record(root.source);
   if (!sourceValue || !hasOnlyKeys(sourceValue, SOURCE_KEYS)) {
     throw new Error('External findings require a bounded source object without additional fields.');
@@ -273,7 +265,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   const source = {
     name: requiredText(sourceValue.name, 80, 'Source name'),
     reference: optionalText(sourceValue.reference, 500, 'Source reference'),
-    collectedAt: iso(sourceValue.collectedAt, 'Source collection time', true, legacyTimestamps),
+    collectedAt: iso(sourceValue.collectedAt, 'Source collection time', true),
   };
   if (!Array.isArray(root.findings) || !root.findings.length || root.findings.length > MAX_EXTERNAL_FINDINGS) {
     throw new Error(`External findings must contain between 1 and ${MAX_EXTERNAL_FINDINGS} findings.`);
@@ -296,9 +288,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
     if (typeof item.completeness !== 'string' || !COMPLETENESS.has(item.completeness)) {
       throw new Error(`Finding ${index + 1} completeness is unsupported.`);
     }
-    const evidenceClass = item.evidenceClass === undefined && root.schemaVersion === 1
-      ? 'provider_report'
-      : item.evidenceClass;
+    const evidenceClass = item.evidenceClass;
     if (evidenceClass !== 'deployment_observation' && evidenceClass !== 'provider_report') {
       throw new Error(`Finding ${index + 1} evidence class is unsupported.`);
     }
@@ -307,11 +297,11 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       category: item.category as ExternalFindingCategory,
       evidenceClass,
       summary: requiredText(item.summary, 900, `Finding ${index + 1} summary`),
-      observedAt: iso(item.observedAt, `Finding ${index + 1} observation time`, false, legacyTimestamps) as string,
+      observedAt: iso(item.observedAt, `Finding ${index + 1} observation time`) as string,
       completeness: item.completeness as ExternalFinding['completeness'],
       limitations: limitations(item.limitations, index),
       reference: optionalText(item.reference, 500, `Finding ${index + 1} reference`),
-      structuredObservation: structuredObservation(item.structuredObservation, index, documentVersion),
+      structuredObservation: structuredObservation(item.structuredObservation, index),
     };
     const key = findingKey(finding, source.name);
     if (seen.has(key)) continue;

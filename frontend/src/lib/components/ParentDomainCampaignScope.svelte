@@ -123,7 +123,7 @@
     <button class="btn small" type="button" onclick={download} disabled={['loading', 'unavailable', 'unsupported', 'future_schema'].includes(review.state)}>Export hostname review</button>
   </header>
 
-  <p class="qualification">Namespace hierarchy does not establish common ownership, operator, authorship, coordination, intent, compromise, safety, or maliciousness.</p>
+  <p class="qualification">Namespace hierarchy is a lead, not an attribution.</p>
   <p class="sharing-note">This deliberate review export contains exact investigated hostnames. Review it before sharing.</p>
 
   {#if review.state === 'loading'}
@@ -135,7 +135,7 @@
   {:else if review.state === 'future_schema'}
     <p class="source-state" role="alert">The Case source uses a future schema and remains untouched. Its hostname evidence was not interpreted.</p>
   {:else if review.state === 'insufficient_evidence'}
-    <p class="source-state">There is insufficient retained evidence to group two distinct hostnames with at least one child under one registrable parent. This is not proof that no child hostname exists.</p>
+    <p class="source-state">The retained evidence does not contain two distinct hostnames with a child under one registrable parent.</p>
   {:else}
     {#if review.state === 'partial'}
       <p class="source-state">The review is partial. Visible rows remain attributable; omitted or unavailable evidence is not treated as absence.</p>

@@ -5,16 +5,21 @@ import { expectNoHorizontalOverflow } from './helpers';
 test.use({ storageState: { cookies: [], origins: [] } });
 
 async function progressToLookup(page: Page) {
+  const workspace = page.locator('#demo-workspace');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await expect(page.locator('.discover-candidates article')).toHaveCount(3);
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
 }
 
 async function workspaceTop(page: Page) {
@@ -40,17 +45,12 @@ test('completes the guided synthetic workflow without investigation requests or 
   await page.goto('/demo');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('heading', { name: 'Explore a synthetic domain investigation.' })).toBeVisible();
-  await expect(page.getByText('Synthetic fixtures · No live findings')).toBeVisible();
-  await expect(page.locator('.demo-stage-summary')).toContainText('Stage 1 of 6');
+  await expect(page.getByText('Synthetic demo · State resets with this tab')).toBeVisible();
+  await expect(page.locator('.demo-stage-summary')).toContainText('Tool substep 1 of 6');
   await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
   await expect(page.getByRole('button', { name: /Monitor.*Upcoming/ })).toBeDisabled();
-  const stageGuidance = page.getByLabel('What this stage teaches');
-  await expect(stageGuidance).toContainText('Task');
-  await expect(stageGuidance).toContainText('Decision');
-  await expect(stageGuidance).toContainText('Boundary');
-
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Northstar Outfitters' })).toBeVisible();
   await expect(page.getByText(/northstar\.example · Complete/)).toBeVisible();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
@@ -91,9 +91,9 @@ test('completes the guided synthetic workflow without investigation requests or 
 
   await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DNS evidence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(page.getByText('Also separated in the signed-in Console')).toBeVisible();
 
   await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
@@ -118,7 +118,7 @@ test('completes the guided synthetic workflow without investigation requests or 
 
   await monitorHandoff.click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
-  await expect(page.getByRole('heading', { name: 'Case evidence, not a live watchlist' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
 
   await page.getByLabel('Status').selectOption('reviewing');
@@ -198,7 +198,7 @@ test('retains the stage surface until scrolling completes or reaches its bounded
   expect(await workspaceNeedsScroll(page)).toBe(true);
   await page.getByRole('button', { name: 'Begin with Brands' }).evaluate((button: HTMLButtonElement) => button.click());
   await expect(workspace).toHaveAttribute('aria-busy', 'true');
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
   expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
 
   await page.evaluate(() => window.dispatchEvent(new Event('scrollend')));
@@ -220,38 +220,20 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/demo');
   const rail = page.locator('.demo-steps');
-  const mobileGuidance = page.locator('.mobile-stage-guidance');
-  const desktopGuidance = page.locator('.stage-guidance');
+  const stageSummary = page.locator('.demo-stage-summary');
   expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(await rail.locator('button').evaluateAll((buttons) => buttons.every((button) => button.getBoundingClientRect().height >= 44))).toBe(true);
-  await expect(desktopGuidance).toHaveCount(1);
-  await expect(desktopGuidance).toBeHidden();
-  await expect(mobileGuidance).toBeVisible();
-  await expect(mobileGuidance).not.toHaveAttribute('open', '');
+  await expect(stageSummary).toBeVisible();
+  await expect(stageSummary).toContainText('Tool substep 1 of 6');
+  await expect(stageSummary.locator('span')).toBeHidden();
   await expect(page.locator('.hero-full-title')).toBeVisible();
+  await expect(page.locator('.hero-compact-title')).toHaveCount(1);
   await expect(page.locator('.hero-compact-title')).toBeHidden();
-  expect(await mobileGuidance.evaluate((element) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(56);
-  const guidanceSummary = mobileGuidance.locator('summary');
-  await guidanceSummary.focus();
-  await guidanceSummary.press('Enter');
-  await expect(mobileGuidance).toHaveAttribute('open', '');
-  await expect(mobileGuidance.locator(':scope > div').first()).toBeVisible();
-  expect(await mobileGuidance.evaluate((element) => {
-    const summaryLabels = element.querySelectorAll<HTMLElement>('.mobile-stage-guidance-headings > *');
-    const firstGuidance = element.querySelector<HTMLElement>(':scope > div');
-    const guidanceFields = firstGuidance?.querySelectorAll<HTMLElement>(':scope > *');
-    if (summaryLabels.length !== 2 || guidanceFields?.length !== 2) return false;
-    return Math.abs(summaryLabels[0]!.getBoundingClientRect().left - guidanceFields[0]!.getBoundingClientRect().left) <= 1
-      && Math.abs(summaryLabels[1]!.getBoundingClientRect().left - guidanceFields[1]!.getBoundingClientRect().left) <= 1;
-  })).toBe(true);
-  await expect(guidanceSummary).toBeFocused();
-  await guidanceSummary.press('Space');
-  await expect(mobileGuidance).not.toHaveAttribute('open', '');
-  await expect(guidanceSummary).toBeFocused();
   await expect(page.locator('.demo-panel')).toHaveCSS('min-height', '0px');
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(page.locator('.hero-full-title')).toHaveCount(1);
   await expect(page.locator('.hero-full-title')).toBeHidden();
   await expect(page.locator('.hero-compact-title')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use synthetic profile' })).toBeInViewport();
@@ -284,6 +266,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.reload();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).not.toBeFocused();
+  await expect(page.locator('.hero-full-title')).toHaveCount(1);
   await expect(page.locator('.hero-full-title')).toBeHidden();
   await expect(page.locator('.hero-compact-title')).toBeVisible();
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
@@ -293,7 +276,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect(page.getByRole('region', { name: 'Exact source comparisons' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
-  await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);
 
@@ -318,6 +301,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeFocused();
   await expect(page.locator('.hero-full-title')).toBeVisible();
+  await expect(page.locator('.hero-compact-title')).toHaveCount(1);
   await expect(page.locator('.hero-compact-title')).toBeHidden();
 });
 
@@ -349,7 +333,7 @@ test('keeps progressing in memory when tab storage is unavailable', async ({ pag
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await expect(page.getByRole('heading', { name: 'Three candidates, two evidence origins' })).toBeVisible();
-  await expect(page.getByRole('status')).toHaveText('Loaded three fixed synthetic candidates without making an investigation request.');
+  await expect(page.getByRole('status')).toHaveText('Loaded three synthetic candidates.');
   await expect(page.getByRole('button', { name: /Bulk.*Upcoming/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
@@ -362,7 +346,7 @@ test('uses immediate focus-safe transitions when reduced motion is requested', a
   const start = page.getByRole('button', { name: 'Begin with Brands' });
   await start.focus();
   await start.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Define the protected identity' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
   const firstTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(firstTop);

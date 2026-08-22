@@ -23,7 +23,6 @@ import {
   DOMAIN_CONTROL_RECORD_LIST_FIELDS,
   DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH,
   DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR,
-  LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION as DOMAIN_CONTROL_PASSPORT_VERSION,
   MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
   MAX_DOMAIN_CONTROL_CAA_FLAGS,
   MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH,
@@ -51,6 +50,8 @@ import {
   MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES,
   MIN_DOMAIN_CONTROL_RECORDS,
 } from '../contracts/domain-control-manifest.mts';
+
+const DOMAIN_CONTROL_PASSPORT_VERSION = DOMAIN_CONTROL_MANIFEST_INPUT_VERSION;
 
 export {
   DOMAIN_CONTROL_MANIFEST_VERSION,
@@ -90,7 +91,7 @@ export type DomainControlPassportEntry = Readonly<{
 
 export type UnsignedDomainControlPassport = Readonly<{
   schema: typeof DOMAIN_CONTROL_PASSPORT_SCHEMA;
-  version: typeof DOMAIN_CONTROL_PASSPORT_VERSION | typeof DOMAIN_CONTROL_MANIFEST_VERSION;
+  version: typeof DOMAIN_CONTROL_MANIFEST_VERSION;
   generatedAt: string;
   expiresAt: string;
   entries: readonly DomainControlPassportEntry[];
@@ -648,10 +649,9 @@ function normalizeDomainControlPassportDocumentInternal(value: unknown): Normali
     expiresAt: source.expiresAt,
     entries: manifestEntries,
   }, source.generatedAt, {
-    legacyGeneratedAt: source.version === DOMAIN_CONTROL_PASSPORT_VERSION,
     preserveEntryOrder: true,
   });
-  const unsigned = Object.freeze({ ...baseUnsigned, version: source.version }) as UnsignedDomainControlPassport;
+  const unsigned = baseUnsigned;
   const { integrity: _integrity, ...suppliedUnsigned } = source;
   const canonicalUnsigned = canonicalArtifactJsonFor(unsigned, canonicalization);
   if (canonicalArtifactJsonFor(suppliedUnsigned, canonicalization) !== canonicalUnsigned) {
@@ -698,7 +698,6 @@ export function serializeDomainControlManifest(value: unknown): string {
 export {
   DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA as DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   DOMAIN_CONTROL_PASSPORT_SCHEMA as DOMAIN_CONTROL_MANIFEST_SCHEMA,
-  DOMAIN_CONTROL_PASSPORT_VERSION as LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_PASSPORT_LIMITATIONS as DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
   MAX_DOMAIN_CONTROL_PASSPORT_ENTRIES as MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES,
   assertDomainControlPassportByteBudget as assertDomainControlManifestByteBudget,

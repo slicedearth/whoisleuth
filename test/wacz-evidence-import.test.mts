@@ -6,10 +6,13 @@ import { gzipSync, zipSync, type Zippable } from 'fflate';
 
 import {
   MAX_WACZ_IMPORT_BYTES,
+  MAX_WACZ_MANIFEST_BYTES,
   parseWaczEvidenceArchive,
 } from '../frontend/src/lib/analysis/wacz-evidence-import.ts';
+import zipFixtures from '../fixtures/zip-fixtures.mts';
 
 const encoder = new TextEncoder();
+const { patchZipDeclaredUncompressedSize } = zipFixtures;
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -143,6 +146,14 @@ describe('portable WACZ evidence import', () => {
     await assert.rejects(
       () => parseWaczEvidenceArchive(new ArrayBuffer(MAX_WACZ_IMPORT_BYTES + 1), 'capture.wacz'),
       /must be between/iu,
+    );
+
+    const understated = patchZipDeclaredUncompressedSize(zipSync({
+      'datapackage.json': new Uint8Array(MAX_WACZ_MANIFEST_BYTES + 1),
+    }), 'datapackage.json', 1);
+    await assert.rejects(
+      () => parseWaczEvidenceArchive(toArrayBuffer(understated), 'capture.wacz'),
+      /manifest entry exceeds its bounded extraction allowance/iu,
     );
   });
 

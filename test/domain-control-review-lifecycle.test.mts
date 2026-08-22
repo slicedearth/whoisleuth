@@ -12,7 +12,7 @@ import * as jsonFormatterModule from '../cli/formatters/json.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import * as nodeReviewModule from '../lib/domain-control-manifest.mts';
-import { canonicalArtifactJson, SORTED_JSON_V1 } from '../packages/evidence/artifact-integrity.mts';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_FIELD_KEYS,
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS,
@@ -56,7 +56,6 @@ import {
   DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
   DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
   DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH,
-  LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
   MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
   MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH,
   MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH,
@@ -199,23 +198,21 @@ describe('domain-control review schema lifecycle', () => {
       })),
     }, '2026-08-19T00:00:00.000Z');
     const { integrity, ...unsigned } = baseManifest;
-    const legacyUnsigned = Object.freeze({
+    const suppliedOrder = Object.freeze({
       ...unsigned,
-      version: LEGACY_DOMAIN_CONTROL_MANIFEST_VERSION,
       entries: Object.freeze([...unsigned.entries].reverse()),
     });
-    const legacyManifest = Object.freeze({
-      ...legacyUnsigned,
+    const reorderedManifest = Object.freeze({
+      ...suppliedOrder,
       integrity: Object.freeze({
         ...integrity,
-        canonicalization: SORTED_JSON_V1,
-        digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJson(legacyUnsigned)).digest('hex')}`,
+        digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(suppliedOrder)).digest('hex')}`,
       }),
     });
     const review = nodeReviewModule.reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
       version: DOMAIN_CONTROL_REVIEW_VERSION,
-      manifest: legacyManifest,
+      manifest: reorderedManifest,
       observations: [{
         domain: 'aa.example',
         fields: {
@@ -409,13 +406,6 @@ describe('domain-control review schema lifecycle', () => {
       /limited to current emitted-only documents/u,
     );
 
-    const legacyDocument = structuredClone(DOMAIN_CONTROL_SCHEMA_LIFECYCLE) as any;
-    legacyDocument.contracts.find((contract: { lifecycle: string }) => contract.lifecycle === 'legacy')
-      .futureVersionBehaviour = 'not_applicable';
-    assert.throws(
-      () => defineSchemaLifecycleFamily(legacyDocument),
-      /limited to current emitted-only documents/u,
-    );
   });
 
   test('routes the frozen saved-Lookup review without any collection request', async () => {

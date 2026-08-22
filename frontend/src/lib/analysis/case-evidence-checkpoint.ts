@@ -15,7 +15,7 @@ import type {
 } from './case-response-model.ts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
-export const MAX_CHECKPOINT_FACTS = 24;
+export const MAX_CHECKPOINT_FACTS = 26;
 export const MAX_CHECKPOINT_LIMITATIONS = 6;
 
 export type CheckpointComparisonState =
@@ -81,7 +81,7 @@ const UNAVAILABLE_STATES = new Set([
   'unsupported',
 ]);
 const CONFLICT_STATES = new Set(['conflict', 'conflicting']);
-const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
+const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 
 function text(value: unknown, maximum = 300): string {
   if (typeof value !== 'string') return '';
@@ -107,6 +107,23 @@ function normalizedStrings(value: unknown, maximum = 20): string[] {
     .filter(Boolean))]
     .sort((left, right) => left.localeCompare(right))
     .slice(0, maximum);
+}
+
+function caaRecords(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .slice(0, 40)
+    .flatMap((item) => {
+      const candidate = record(item);
+      const critical = Number.isInteger(candidate.critical) && Number(candidate.critical) >= 0 && Number(candidate.critical) <= 255
+        ? String(candidate.critical)
+        : '';
+      const tag = text(candidate.tag, 32).toLowerCase();
+      const recordValue = text(candidate.value, 300);
+      return tag && recordValue ? [[critical, tag, recordValue].filter(Boolean).join(' ')] : [];
+    }))]
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, 20);
 }
 
 function factValue(value: unknown): string | null {
@@ -186,6 +203,8 @@ export function buildLookupCheckpointFacts(
   const tlsState = sourceState(tls.status);
   const tlsObservedAt = timestamp(tls.observedAt, generatedAt);
   const tlsCertificate = record(tls.certificate);
+  const tlsAltNames = record(tlsCertificate.subjectAltNames);
+  const tlsPublicKey = record(tlsCertificate.publicKey);
   const tlsIssuer = record(tlsCertificate.issuer ?? tls.issuer);
   const network = record(view.observedNetworkContext);
   const networkRegistration = record(network.network);
@@ -211,11 +230,14 @@ export function buildLookupCheckpointFacts(
     { field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: factValue(availability.nameservers ?? view.rdapParsed.nameservers), source: 'DNS or registry publication', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.addresses', category: 'dns', label: 'A and AAAA addresses', value: factValue([...normalizedStrings(dnsRecords.a), ...normalizedStrings(dnsRecords.aaaa)]), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.mx', category: 'dns', label: 'MX hosts', value: factValue(availability.mxHosts ?? dnsRecords.mx), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
+    { field: 'dns.caa', category: 'dns', label: 'CAA records', value: factValue(caaRecords(dnsRecords.caa)), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true || (Array.isArray(dnsRecords.caa) && dnsRecords.caa.length > 20) ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.spf', category: 'dns', label: 'SPF publication', value: factValue(availability.hasSpf), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.dmarc', category: 'dns', label: 'DMARC publication', value: factValue(availability.hasDmarc), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'tls.protocol', category: 'tls', label: 'TLS protocol', value: factValue(tls.protocol), source: 'TLS', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
     { field: 'tls.certificate_sha256', category: 'tls', label: 'TLS certificate SHA-256', value: factValue(tlsCertificate.fingerprintSha256), source: 'TLS', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
+    { field: 'tls.spki_sha256', category: 'tls', label: 'TLS public-key SHA-256', value: factValue(tlsPublicKey.fingerprintSha256), source: 'TLS certificate public key', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: ['A public-key digest is not a certificate digest.', ...sourceLimitations(tls.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
     { field: 'tls.issuer', category: 'tls', label: 'TLS issuer', value: entityName(tlsIssuer), source: 'TLS certificate', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
+    { field: 'tls.san_dns_names', category: 'tls', label: 'TLS certificate DNS names', value: factValue(tlsAltNames.dnsNames), source: 'TLS certificate', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true || tlsAltNames.truncated === true || (Array.isArray(tlsAltNames.dnsNames) && tlsAltNames.dnsNames.length > 20) ? true : null, limitations: ['Certificate names are bounded and may be incomplete when the source is truncated.', ...sourceLimitations(tls.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
     { field: 'tls.valid_to', category: 'tls', label: 'TLS certificate expiry', value: factValue(tlsCertificate.validTo), source: 'TLS certificate', sourceState: tlsState, observedAt: tlsObservedAt, collectionDepth: depth, completeness: completeness(tlsState), truncated: tls.truncated === true ? true : null, limitations: sourceLimitations(tls.limitations) },
     { field: 'network.selected_address', category: 'network', label: 'Observed network address', value: factValue(networkEndpoint.address), source: 'IP RDAP context', sourceState: networkState, observedAt: networkObservedAt, collectionDepth: depth, completeness: completeness(networkState), truncated: network.truncated === true ? true : null, limitations: sourceLimitations(network.limitations) },
     { field: 'network.registration', category: 'network', label: 'Observed network registration', value: factValue(networkRegistration.name ?? networkRegistration.handle), source: 'IP RDAP context', sourceState: networkState, observedAt: networkObservedAt, collectionDepth: depth, completeness: completeness(networkState), truncated: network.truncated === true ? true : null, limitations: sourceLimitations(network.limitations) },

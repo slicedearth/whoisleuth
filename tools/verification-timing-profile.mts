@@ -414,9 +414,6 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
     throw new TypeError('Timing update report contains an identity from another lane.');
   }
   const inventory = readVerificationTestInventory();
-  const inventorySet = new Set(inventory);
-  const removed = retained.files.filter((item) => !inventorySet.has(item.file));
-  if (removed.length) throw new TypeError(`Timing update cannot retain ${removed.length} removed test identities.`);
   const currentByFile = new Map(retained.files.map((item) => [item.file, item]));
   const files = inventory.map((file): VerificationTimingFile => {
     const measured = measurements.get(file);

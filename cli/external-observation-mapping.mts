@@ -7,6 +7,8 @@ import {
   requireRecord,
 } from '../lib/bounded-contract-normalizers.mts';
 import {
+  EXTERNAL_FINDINGS_SCHEMA,
+  EXTERNAL_FINDINGS_VERSION,
   EXTERNAL_FINDING_CATEGORIES,
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
@@ -145,8 +147,8 @@ export function mapExternalObservations(inputRaw: unknown) {
   }
   const truncated = selected.length < seen.size;
   const document = {
-    schema: 'whoisleuth.external-findings',
-    schemaVersion: 3,
+    schema: EXTERNAL_FINDINGS_SCHEMA,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source,
     findings: selected.map((finding) => ({
       ...finding,

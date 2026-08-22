@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import {
@@ -20,7 +19,6 @@ import {
 } from '../frontend/src/lib/analysis/evidence-export.ts';
 import { compareRegistrySources } from '../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
-import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
@@ -153,7 +151,25 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
 });
 
-test('replay requires explicit current timestamps and migrates legacy zone-less times as UTC', async () => {
+test('replay preserves the exact submitted hostname as its identity and graph root', async () => {
+  const document = evidence();
+  document.query = {
+    submitted: 'portal.example.test',
+    inputHostname: 'portal.example.test',
+    registrableDomain: 'example.test',
+    type: 'domain',
+  };
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  assert.equal(replay.target, 'portal.example.test');
+  assert.ok(replay.graph.nodes.some((node) => (
+    node.kind === 'target' && node.label === 'portal.example.test'
+  )));
+  assert.equal(replay.graph.nodes.some((node) => (
+    node.kind === 'target' && node.label === 'example.test'
+  )), false);
+});
+
+test('replay requires explicit timestamps in supported documents', async () => {
   await assert.rejects(
     () => parseLookupEvidenceReplay(JSON.stringify(evidence({ generatedAt: '2026-07-31T12:00:00.000' }))),
     /timestamp is missing or invalid/u,
@@ -163,20 +179,13 @@ test('replay requires explicit current timestamps and migrates legacy zone-less 
   await assert.rejects(() => parseLookupEvidenceReplay(JSON.stringify(currentSource)), /explicit timezone/u);
   const offset = await parseLookupEvidenceReplay(JSON.stringify(evidence({ generatedAt: '2026-07-31T12:00:00.000+01:00' })));
   assert.equal(offset.exportedAt, '2026-07-31T11:00:00.000Z');
-
-  const legacy = JSON.parse(await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8')) as Record<string, unknown>;
-  legacy.generatedAt = '2026-07-31T12:00:00.000';
-  const migrated = await parseLookupEvidenceReplay(JSON.stringify(legacy));
-  assert.equal(migrated.exportedAt, '2026-07-31T12:00:00.000Z');
 });
 
-test('replay keeps the frozen schema-25 compatibility fixture readable', async () => {
-  const input = await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8');
-  const replay = await parseLookupEvidenceReplay(input);
-  assert.equal(replay.schemaVersion, 25);
-  assert.equal(replay.target, 'legacy.example.test');
-  assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
-  assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'complete'));
+test('replay rejects reader-only Lookup evidence without mutating it', async () => {
+  const unsupported = { schema: LOOKUP_EVIDENCE_SCHEMA, schemaVersion: 25 };
+  const before = structuredClone(unsupported);
+  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /schemas 26 or 27/iu);
+  assert.deepEqual(unsupported, before);
 });
 
 test('replay keeps the frozen strict schema-26 compatibility fixture readable without inventing current metadata', async () => {
@@ -187,7 +196,18 @@ test('replay keeps the frozen strict schema-26 compatibility fixture readable wi
   assert.equal(replay.httpDeliveryMetadata, null);
 });
 
-test('replay rejects schema-28 documents that carry excluded or arbitrary publication fields', async () => {
+test('replay sanitises terminal controls from exact public evidence without rewriting the input', async () => {
+  const document = JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>;
+  const analysis = document.analysis as Record<string, Record<string, unknown>>;
+  analysis.availability!.pageTitle = 'Account\u009b\u202e centre\u00ad';
+  const input = JSON.stringify(document);
+  const replay = await parseLookupEvidenceReplay(input);
+  assert.equal(replay.facts.find((fact) => fact.id === 'page.title')?.value, 'Account centre');
+  assert.doesNotMatch(JSON.stringify(replay), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  assert.match(input, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+});
+
+test('replay rejects current documents that carry excluded or arbitrary publication fields', async () => {
   const mutations: Array<(document: Record<string, unknown>) => void> = [
     (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.raw = { entities: [] }; },
     (document) => {
@@ -377,10 +397,7 @@ test('replay projects only exact current homepage metadata and rejects it from l
   assert.equal(replay.httpDeliveryMetadata?.rows.find((item) => item.id === 'delivery.cache.max_age')?.value, '3600 seconds');
   assert.doesNotMatch(JSON.stringify(replay), /must-not-retain|private-header/iu);
 
-  for (const fixture of [
-    JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>,
-    JSON.parse(await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8')) as Record<string, unknown>,
-  ]) {
+  for (const fixture of [JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>]) {
     const legacyAvailability = (fixture.analysis as Record<string, Record<string, unknown>>).availability!;
     legacyAvailability.pageIdentity = {
       ...((legacyAvailability.pageIdentity as Record<string, unknown> | undefined) ?? {}),
@@ -421,31 +438,6 @@ test('replay rejects current homepage metadata beneath unavailable parent source
       () => parseLookupEvidenceReplay(JSON.stringify(withChild)),
       /metadata contradicts its parent source state/iu,
     );
-  }
-});
-
-test('replay treats schema-25 diagnostics as authoritative across historical wrapper mismatches', async () => {
-  const fixtures = await loadLookupEvidenceV25CompatibilityFixtures();
-  for (const fixture of fixtures) {
-    const replay = await parseLookupEvidenceReplay(JSON.stringify(fixture.document));
-    assert.equal(replay.schemaVersion, 25, fixture.name);
-    if (fixture.name === 'fast-whois-skipped') {
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'skipped'));
-      assert.ok(replay.limitations.some((item) => item.includes('legacy publication wrappers')));
-    }
-    if (fixture.name === 'unsupported-sources') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'unsupported'));
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'unsupported'));
-      assert.ok(!replay.facts.some((fact) => ['rdap', 'whois'].includes(fact.sourceId)));
-    }
-    if (fixture.name === 'source-errors') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'error'));
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'error'));
-    }
-    if (fixture.name === 'rdap-not-found') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'not found'));
-      assert.ok(!replay.facts.some((fact) => fact.sourceId === 'rdap'));
-    }
   }
 });
 

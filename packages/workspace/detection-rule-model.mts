@@ -353,12 +353,16 @@ export function mergeDetectionRules(localRaw: unknown, importedRaw: unknown) {
   assertWorkspaceInputGraph(importedRaw, 'Imported detection-rule document');
   assertWorkspacePortableVersion(importedRaw, DETECTION_RULE_SCHEMA_VERSION, 'Imported detection-rule document');
   const importedRecord = record(importedRaw);
-  if (typeof importedRecord.schema === 'string' && importedRecord.schema !== DETECTION_RULE_SCHEMA) {
+  if (importedRecord.schema !== DETECTION_RULE_SCHEMA
+    || !Array.isArray(importedRecord.rules)) {
     throw new Error('This JSON file is not a WHOISleuth custom-rule export.');
   }
   const version = detectionRuleStoreVersion(importedRaw);
   if (version !== null && version > DETECTION_RULE_SCHEMA_VERSION) {
     throw new Error(`This custom-rule file uses newer schema ${version}. Update the app before importing it.`);
+  }
+  if (version !== DETECTION_RULE_SCHEMA_VERSION) {
+    throw new Error(`Expected custom-rule schema ${DETECTION_RULE_SCHEMA_VERSION}.`);
   }
   const local = normalizeDetectionRuleStore(localRaw).rules;
   const byId = new Map(local.map((rule) => [rule.id, rule]));

@@ -3,7 +3,7 @@
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
+  import DeferredCaseResponseWorkspace from '$lib/components/DeferredCaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -46,6 +46,7 @@
     setPage,
     brandProfiles,
     brandProfilesUnavailable,
+    responseCaseId = '',
   }: {
     records: CaseRecord[];
     allRecords: CaseRecord[];
@@ -75,6 +76,7 @@
     setPage: (value: number) => void;
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
+    responseCaseId?: string;
   } = $props();
 
   function focusMovedAway(origin: Element | null): boolean {
@@ -150,7 +152,7 @@
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
           <CaseRelationships {record} records={allRecords} onselect={expand} />
           {#key record.id}<EvidenceTimeline {record} />{/key}
-          {#key record.id}<CaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} />{/key}
+          {#key record.id}<DeferredCaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} openInitially={responseCaseId===record.id} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
           <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>

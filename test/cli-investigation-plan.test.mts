@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { parseCliArguments } from '../cli/arguments.mts';
-import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
+import {
+  buildInvestigationPlan,
+  buildWorkflowRecipeCatalogue,
+  INVESTIGATION_PLAN_RECIPES,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
+} from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 
@@ -55,8 +60,41 @@ describe('fixed investigation plans', () => {
     assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.investigation-plan');
   });
 
+  test('lists and explains every fixed recipe without reading evidence or executing a step', async () => {
+    const catalogue = buildWorkflowRecipeCatalogue();
+    assert.equal(catalogue.schema, 'whoisleuth.cli.workflow-recipe-catalogue');
+    assert.equal(catalogue.version, 1);
+    assert.deepEqual(catalogue.recipes.map((recipe) => recipe.id), INVESTIGATION_PLAN_RECIPES);
+    assert.deepEqual(
+      catalogue.recipes.filter((recipe) => recipe.runnableByWorkflowRun).map((recipe) => recipe.id),
+      RUNNABLE_INVESTIGATION_PLAN_RECIPES,
+    );
+    assert.ok(catalogue.recipes.every((recipe) => recipe.steps.length >= 3));
+    assert.deepEqual(parseCliArguments(['workflow-plan', '--list', '--json']), {
+      action: 'workflow-plan', discovery: 'list', output: 'json', quiet: false, color: true,
+    });
+    assert.deepEqual(parseCliArguments(['workflow-plan', '--explain', 'campaign-review']), {
+      action: 'workflow-plan', discovery: 'explain', recipe: 'campaign-review', output: 'terminal', quiet: false, color: true,
+    });
+    let collectionCalled = false;
+    let readCalled = false;
+    const stdout = capture();
+    const code = await runCli(['workflow-plan', '--explain', 'certificate-anomaly', '--json'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      runUnifiedLookup: async () => { collectionCalled = true; },
+      readDiffInput: async () => { readCalled = true; return '{}'; },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(collectionCalled, false);
+    assert.equal(readCalled, false);
+    assert.deepEqual(JSON.parse(stdout.value()).recipes.map((recipe: { id: string }) => recipe.id), ['certificate-anomaly']);
+  });
+
   test('rejects unsupported recipes and non-domain subjects where required', () => {
     assert.throws(() => parseCliArguments(['workflow-plan', 'unknown', 'example.test']), /recipe must be one of/iu);
+    assert.throws(() => parseCliArguments(['workflow-plan', '--list', 'example.test']), /do not accept a subject/iu);
+    assert.throws(() => parseCliArguments(['workflow-plan', '--list', '--explain', 'domain-triage']), /mutually exclusive/iu);
     assert.throws(() => buildInvestigationPlan('domain-triage', 'not a domain', NOW), /requires one valid domain/iu);
     assert.throws(
       () => buildInvestigationPlan('domain-triage', 'example.test', '2026-08-03T05:00:00'),

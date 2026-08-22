@@ -13,9 +13,9 @@
     allowRehearsal = false,
     initiallyExpanded = false,
     headingId = 'dns-title',
-    title = 'DNS intelligence',
+    title = 'DNS evidence',
     summaryDetail = 'Expand for observed records, provenance, and limitations',
-    note = 'Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.',
+    note = 'Point-in-time resolver evidence. Verify shared DNS infrastructure independently.',
   }: {
     status: string;
     complete: boolean;

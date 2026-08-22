@@ -55,7 +55,7 @@
         "path": "^(?:test/fixtures/architecture/)?packages/cases/"
       },
       "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
         "reachable": true
       }
     },

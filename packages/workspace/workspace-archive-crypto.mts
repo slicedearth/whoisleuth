@@ -4,6 +4,8 @@
 
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
+  WORKSPACE_ARCHIVE_VERSION,
+  SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.mts';
@@ -17,6 +19,7 @@ import {
   MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS,
   WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
 } from '../contracts/case-portability.mts';
+import { assertWorkspaceInputGraph } from './hostile-input.mts';
 
 export {
   ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
@@ -172,6 +175,7 @@ function validateEnvelope(raw: unknown): {
   iv: Uint8Array;
   ciphertext: Uint8Array;
 } {
+  assertWorkspaceInputGraph(raw, 'Encrypted workspace archive');
   const value = record(raw);
   if (!value || value.schema !== ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not an encrypted WHOISleuth workspace archive.');
@@ -190,6 +194,14 @@ function validateEnvelope(raw: unknown): {
   }
 
   const content = record(value.content);
+  if (content?.schema === WORKSPACE_ARCHIVE_SCHEMA && Number.isSafeInteger(content.version)) {
+    if ((content.version as number) < Math.min(...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS)) {
+      throw new Error(`Encrypted workspace content schema ${String(content.version)} is retired. Decrypt and re-export it as schema ${WORKSPACE_ARCHIVE_VERSION} with the last broad-reader release; no data was changed.`);
+    }
+    if ((content.version as number) > WORKSPACE_ARCHIVE_VERSION) {
+      throw new Error(`Encrypted workspace content schema ${String(content.version)} is newer than the supported schema ${WORKSPACE_ARCHIVE_VERSION}; no data was changed.`);
+    }
+  }
   if (
     !content
     || !hasExactKeys(content, ['schema', 'version'])

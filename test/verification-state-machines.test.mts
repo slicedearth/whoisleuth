@@ -3,7 +3,10 @@ import { describe, test, type TestContext } from 'node:test';
 
 import fc from 'fast-check';
 
-import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
+import {
+  buildInvestigationPlan,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
+} from '../cli/investigation-plan.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
 import { requestLookup, type LookupRequestOptions } from '../lib/lookup-request.mts';
 import {
@@ -200,7 +203,7 @@ describe('bounded verification state machines', () => {
   test('runs only fixed workflow prefixes and pauses at network or analyst approval boundaries', async (context) => {
     replay(context, 'fixed workflow lifecycle');
     await fc.assert(fc.asyncProperty(
-      fc.constantFrom(...INVESTIGATION_PLAN_RECIPES),
+      fc.constantFrom(...RUNNABLE_INVESTIGATION_PLAN_RECIPES),
       fc.boolean(),
       async (recipe, approveNetwork) => {
         const subject = recipe === 'lookalike-review' ? 'Example Organisation' : 'workflow-state.example';

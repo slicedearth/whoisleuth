@@ -113,6 +113,12 @@ evidence:
 npm run schema:inventory
 ```
 
+This gate also reconciles the bounded production-source scan with canonical
+owners, intentional multi-profile contracts, and the finite non-schema or
+nested-identifier classifications. A new local schema-like identifier cannot
+remain outside the compatibility decision simply because it was added outside
+the CLI or maintainer-tool directories.
+
 Then run the complete verification sequence from the
 [getting-started guide](getting-started.md#verification). Record exact checks
 and totals in the commit and pull-request evidence.

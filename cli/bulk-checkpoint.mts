@@ -4,7 +4,7 @@ import { lstat } from 'node:fs/promises';
 import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { BulkLookupResult } from './bulk.mts';
 import { boundedCliInputError, CliUsageError } from './errors.mts';
@@ -12,7 +12,6 @@ import { writePrivateFile } from './output-file.mts';
 
 export const CLI_BULK_CHECKPOINT_SCHEMA = 'whoisleuth.cli.bulk-checkpoint';
 export const CLI_BULK_CHECKPOINT_VERSION = 2;
-const SUPPORTED_BULK_CHECKPOINT_VERSIONS = new Set([1, CLI_BULK_CHECKPOINT_VERSION]);
 export const MAX_BULK_CHECKPOINT_BYTES = 16 * 1024 * 1024;
 const MAX_CHECKPOINT_JSON_DEPTH = 12;
 const MAX_CHECKPOINT_OBJECT_KEYS = 256;
@@ -46,10 +45,8 @@ function checkpointDigest(queries: readonly string[], deep: boolean): string {
     .digest('hex');
 }
 
-function normalizedTimestamp(value: unknown, legacy = false): string | null {
-  const normalized = normalizeExplicitIsoTimestamp(value);
-  if (normalized) return normalized;
-  return legacy ? normalizeLegacyIsoTimestamp(value) : null;
+function normalizedTimestamp(value: unknown): string | null {
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function isBoundedCheckpointJson(value: unknown, depth = 0): boolean {
@@ -81,18 +78,15 @@ function normalizeCheckpointResult(
   value: unknown,
   queries: readonly string[],
   classifyQuery: ClassifyQuery,
-  version = CLI_BULK_CHECKPOINT_VERSION,
 ): BulkLookupResult | null {
   const item = recordOrNull(value);
   const index = item?.index;
   if (!Number.isSafeInteger(index) || Number(index) < 0 || Number(index) >= queries.length) return null;
   const query = queries[Number(index)];
   if (typeof item?.query !== 'string' || item.query !== query) return null;
-  const observedAt = version >= 2
-    ? item.observedAt === null
-      ? null
-      : normalizedTimestamp(item.observedAt) ?? undefined
-    : null;
+  const observedAt = item.observedAt === null
+    ? null
+    : normalizedTimestamp(item.observedAt) ?? undefined;
   if (observedAt === undefined) return null;
   if (item.ok === false) {
     if (typeof item.error !== 'string' || !item.error || item.error.length > 300) return null;
@@ -126,23 +120,23 @@ function parseBulkCheckpoint(
   const version = typeof document?.version === 'number' && Number.isSafeInteger(document.version)
     ? document.version
     : 0;
-  if (document?.schema !== CLI_BULK_CHECKPOINT_SCHEMA || !SUPPORTED_BULK_CHECKPOINT_VERSIONS.has(version)) {
-    throw new CliUsageError(`Bulk checkpoint must use ${CLI_BULK_CHECKPOINT_SCHEMA} version 1 or ${CLI_BULK_CHECKPOINT_VERSION}.`);
+  if (document?.schema !== CLI_BULK_CHECKPOINT_SCHEMA || version !== CLI_BULK_CHECKPOINT_VERSION) {
+    throw new CliUsageError(`Bulk checkpoint must use ${CLI_BULK_CHECKPOINT_SCHEMA} version ${CLI_BULK_CHECKPOINT_VERSION}.`);
   }
   if (document.mode !== (options.deep ? 'deep' : 'fast')
     || document.inputDigestSha256 !== expectedDigest
     || document.queryCount !== options.queries.length) {
     throw new CliUsageError('Bulk checkpoint does not match the current input or scan mode.');
   }
-  const startedAt = normalizedTimestamp(document.startedAt, version === 1);
-  const updatedAt = normalizedTimestamp(document.updatedAt, version === 1);
+  const startedAt = normalizedTimestamp(document.startedAt);
+  const updatedAt = normalizedTimestamp(document.updatedAt);
   if (!startedAt || !updatedAt || !Array.isArray(document.results)) {
     throw new CliUsageError('Bulk checkpoint metadata is invalid.');
   }
   const results: BulkLookupResult[] = [];
   const seen = new Set<number>();
   for (const candidate of document.results.slice(0, options.queries.length + 1)) {
-    const result = normalizeCheckpointResult(candidate, options.queries, options.classifyQuery, version);
+    const result = normalizeCheckpointResult(candidate, options.queries, options.classifyQuery);
     if (!result || seen.has(result.index)) throw new CliUsageError('Bulk checkpoint contains an invalid or duplicate result.');
     seen.add(result.index);
     results.push({ ...result, collectionOrigin: 'resumed_checkpoint' });

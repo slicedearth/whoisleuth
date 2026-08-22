@@ -50,6 +50,62 @@
       "environmentClass": "local-darwin-arm64-chromium-node26",
       "sampleBasis": "exact-no-retry-changed-bulk-spec-postfix",
       "sampleCount": 1
+    },
+    {
+      "id": "unit-local-consolidation-d3349cf8",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "accepted-focused-consolidation-working-tree-based-on-d3349cf8",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-batch1-deferred-20260823",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
+      "sampleBasis": "exact-seven-interaction-production-build-working-tree-based-on-b3a38562",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-batch2-20260823",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node24",
+      "sampleBasis": "exact-six-new-unit-files-working-tree-based-on-ee5380c6",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-batch2-20260823",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
+      "sampleBasis": "exact-analyst-operations-production-build-working-tree-based-on-ee5380c6",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-batch3-20260823",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node24",
+      "sampleBasis": "exact-public-product-catalogue-working-tree-based-on-f3525a48",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-batch3-20260823",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
+      "sampleBasis": "exact-public-product-production-build-working-tree-based-on-f3525a48",
+      "sampleCount": 1
+    },
+    {
+      "id": "compatibility-reset-20260823",
+      "lane": "unit",
+      "environmentClass": "macos-arm64-node26",
+      "sampleBasis": "focused-passing-contract-synchronisation",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-docs-overhaul-20260824",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node26",
+      "sampleBasis": "focused-passing-idle-preload-working-tree-based-on-c0bea918",
+      "sampleCount": 1
     }
   ],
   "files": [
@@ -66,6 +122,13 @@
       "weightMs": 2274,
       "sampleCount": 1,
       "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/analyst-operations.spec.ts",
+      "lane": "browser",
+      "weightMs": 2889,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-batch2-20260823"
     },
     {
       "file": "e2e/auth.setup.ts",
@@ -171,6 +234,13 @@
       "weightMs": 22096,
       "sampleCount": 1,
       "provenanceId": "browser-local-change-60400ba9"
+    },
+    {
+      "file": "e2e/deferred-interactions.spec.ts",
+      "lane": "browser",
+      "weightMs": 11000,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-batch1-deferred-20260823"
     },
     {
       "file": "e2e/deletion-focus.spec.ts",
@@ -320,6 +390,13 @@
       "provenanceId": "browser-local-start-60400ba9"
     },
     {
+      "file": "e2e/public-product-batch3.spec.ts",
+      "lane": "browser",
+      "weightMs": 3237,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-batch3-20260823"
+    },
+    {
       "file": "e2e/registry-support.spec.ts",
       "lane": "browser",
       "weightMs": 8383,
@@ -416,6 +493,20 @@
       "weightMs": 18,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/analyst-review-local-projections.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
+    },
+    {
+      "file": "test/analyst-review-state.test.mts",
+      "lane": "unit",
+      "weightMs": 63,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
     },
     {
       "file": "test/analyst-taxonomy.test.mts",
@@ -887,13 +978,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/case-response-packet-fixtures.mts",
-      "lane": "unit",
-      "weightMs": 130,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/case-response-packet.test.mts",
       "lane": "unit",
       "weightMs": 131,
@@ -915,6 +999,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/case-supported-contract-baseline.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-consolidation-d3349cf8"
+    },
+    {
       "file": "test/certificate-extension-profile.test.mts",
       "lane": "unit",
       "weightMs": 29,
@@ -927,6 +1018,13 @@
       "weightMs": 14,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/certificate-review-inbox.test.mts",
+      "lane": "unit",
+      "weightMs": 17,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
     },
     {
       "file": "test/ci-workflow.test.mts",
@@ -1412,6 +1510,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/dashboard-workspace-state.test.mts",
+      "lane": "unit",
+      "weightMs": 8,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
+    },
+    {
       "file": "test/decision-fact.test.mts",
       "lane": "unit",
       "weightMs": 37,
@@ -1734,6 +1839,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/evidence-storage-measurement.test.mts",
+      "lane": "unit",
+      "weightMs": 1816,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-consolidation-d3349cf8"
+    },
+    {
       "file": "test/evidence-topology.test.mts",
       "lane": "unit",
       "weightMs": 10,
@@ -2049,13 +2161,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/historical-case-pack-fixtures.mts",
-      "lane": "unit",
-      "weightMs": 139,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/homepage-metadata-fixtures.mts",
       "lane": "unit",
       "weightMs": 162,
@@ -2096,6 +2201,13 @@
       "weightMs": 64,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/idle-preload.test.mts",
+      "lane": "unit",
+      "weightMs": 149,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-docs-overhaul-20260824"
     },
     {
       "file": "test/idn-confusables.test.mts",
@@ -2143,13 +2255,6 @@
       "file": "test/investigation-capsule.test.mts",
       "lane": "unit",
       "weightMs": 73,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/investigation-compatibility-fixtures.test.mts",
-      "lane": "unit",
-      "weightMs": 33,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
     },
@@ -2399,13 +2504,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/lookup-evidence-v25-fixtures.mts",
-      "lane": "unit",
-      "weightMs": 127,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/lookup-evidence-v26-fixture.mts",
       "lane": "unit",
       "weightMs": 126,
@@ -2495,6 +2593,13 @@
       "weightMs": 30,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/lookup-task-guidance.test.mts",
+      "lane": "unit",
+      "weightMs": 2,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
     },
     {
       "file": "test/lookup.test.mts",
@@ -2770,6 +2875,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/public-product-catalogue.test.mts",
+      "lane": "unit",
+      "weightMs": 401,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch3-20260823"
+    },
+    {
       "file": "test/public-resources.test.mts",
       "lane": "unit",
       "weightMs": 9,
@@ -2957,6 +3069,13 @@
       "weightMs": 213,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/relationship-admission-preview.test.mts",
+      "lane": "unit",
+      "weightMs": 16,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-batch2-20260823"
     },
     {
       "file": "test/relationship-evidence.test.mts",
@@ -3418,7 +3537,7 @@
       "lane": "unit",
       "weightMs": 4,
       "sampleCount": 1,
-      "provenanceId": "unit-local-change-60400ba9"
+      "provenanceId": "compatibility-reset-20260823"
     },
     {
       "file": "test/theme-assets.test.mts",

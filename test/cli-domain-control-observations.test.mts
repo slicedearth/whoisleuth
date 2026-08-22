@@ -79,7 +79,7 @@ describe('CLI domain-control observations', () => {
     const first = lookup('example.test', '2026-08-04T15:30:00.000Z');
     const firstDns = (first.availability.dns as Record<string, unknown>).records as Record<string, unknown>;
     firstDns.mx = [{ priority: 20, exchange: 'older-mail.example.test' }];
-    const latest = lookup('example.test', '2026-08-05T01:00:00');
+    const latest = lookup('example.test', '2026-08-05T01:00:00.000Z');
     const report = buildCliDomainControlReview(JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
       version: 1,

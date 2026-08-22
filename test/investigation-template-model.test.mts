@@ -93,7 +93,7 @@ test('caps, sorts, serializes, and refuses future local collections', () => {
     schema: INVESTIGATION_TEMPLATE_SCHEMA,
     version: INVESTIGATION_TEMPLATE_VERSION + 1,
     templates: [],
-  }), /newer schema/u);
+  }), /unsupported.*no data was changed/u);
 });
 
 test('exports and non-destructively merges only the strict versioned schema', () => {
@@ -119,12 +119,8 @@ test('exports and non-destructively merges only the strict versioned schema', ()
     version: INVESTIGATION_TEMPLATE_VERSION + 1,
   }), /newer schema/u);
 
-  const legacy = mergeInvestigationTemplates([], { ...exported, version: 1 });
-  assert.equal(legacy.added, 1);
-  const epochSmuggle = mergeInvestigationTemplates([], {
-    ...exported,
-    version: 1,
-    templates: [{ ...candidate(), recipeId: 'mail_abuse_response' }],
-  });
-  assert.equal(epochSmuggle.added, 0);
+  const unsupported = { ...exported, version: 1 };
+  const before = structuredClone(unsupported);
+  assert.throws(() => mergeInvestigationTemplates([], unsupported), /schema 2/u);
+  assert.deepEqual(unsupported, before);
 });

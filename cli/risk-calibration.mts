@@ -144,7 +144,7 @@ type RiskCalibrationReport = {
   generatedAt: string;
   dataset: {
     schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-    version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
+    version: typeof RISK_CALIBRATION_DATASET_VERSION;
     recordCount: number;
   };
   riskModelVersion: number;
@@ -338,7 +338,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     : null;
   if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA
     || documentVersion === null
-    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as 1 | 2)) {
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION)) {
     throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.join(' or ')}.`);
   }
   if (!Array.isArray(document.records) || !document.records.length) {
@@ -374,7 +374,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
   });
   return {
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: documentVersion as 1 | typeof RISK_CALIBRATION_DATASET_VERSION,
+    version: documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION,
     records,
   };
 }

@@ -1,42 +1,26 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { getContext, onMount, tick, untrack } from 'svelte';
+  import { getContext, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
-  import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
-  import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
-  import BrandProtectionOperationsReport from '$lib/components/BrandProtectionOperationsReport.svelte';
-  import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
-  import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
-  import CalibrationExportReview from '$lib/components/CalibrationExportReview.svelte';
-  import RiskCalibrationDashboard from '$lib/components/RiskCalibrationDashboard.svelte';
-  import ExternalFindingsImport from '$lib/components/ExternalFindingsImport.svelte';
-  import GuidedCaseQueue from '$lib/components/GuidedCaseQueue.svelte';
-  import CaseFilters from '$lib/components/CaseFilters.svelte';
-  import CaseList from '$lib/components/CaseList.svelte';
-  import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
-  import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
-  import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
-  import RetainedEvidenceTimeline from '$lib/components/RetainedEvidenceTimeline.svelte';
-  import RetainedChangeReview from '$lib/components/RetainedChangeReview.svelte';
-  import WebsiteProfileClusters from '$lib/components/WebsiteProfileClusters.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import BrandProtectionOperationsReport from '$lib/components/BrandProtectionOperationsReport.svelte';
+  import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
+  import UnifiedAnalystReviewInbox from '$lib/components/UnifiedAnalystReviewInbox.svelte';
+  import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
+  import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
-  import CampaignManager from '$lib/components/CampaignManager.svelte';
-  import CaseRelationshipWorkspace from '$lib/components/CaseRelationshipWorkspace.svelte';
-  import CaseRelationshipClusters from '$lib/components/CaseRelationshipClusters.svelte';
   import { registerAnalystUndo } from '$lib/analyst-undo';
-  import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
-  import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
   import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
+  import { preloadBestEffort } from '$lib/idle-preload';
   import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
@@ -47,7 +31,6 @@
   } from '$lib/cases';
   import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
   import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
-  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import {
     deleteRelationshipObservation,
     loadRelationshipObservations,
@@ -56,14 +39,19 @@
   import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadBulkSessions } from '$lib/bulk-sessions';
+  import { loadAnalystReviewState, saveAnalystReviewDecision } from '$lib/analyst-review-state';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildEvidenceDebtReview } from '$lib/analysis/evidence-debt-review.ts';
   import {
     analystReviewDismissalReasonLabel,
-    buildAnalystReviewInbox,
     type AnalystReviewDismissalReason,
     type AnalystReviewItem,
   } from '$lib/analysis/analyst-review-inbox.ts';
+  import {
+    emptyAnalystReviewStateStore,
+    type AnalystReviewDisposition,
+    type AnalystReviewStateStore,
+  } from '$lib/analysis/analyst-review-state.ts';
   import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
   import {
     buildWebsiteClusterAssertion,
@@ -72,19 +60,19 @@
   } from '$lib/analysis/website-profile-clusters.ts';
   import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
 
-  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
-  const MONITOR_VIEWS = new Set<View>(['inbox','timeline','watchlists','cases','campaigns','relationships','rules']);
+  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules' | 'certificates';
+  const MONITOR_VIEWS = new Set<View>(['inbox','timeline','watchlists','cases','campaigns','relationships','rules','certificates']);
   const RESPOND_VIEWS = new Set<View>(['inbox','cases','campaigns','relationships']);
   const CASE_PAGE_SIZE=25;
   let view=$state<View>('inbox');
   const monitorWorkflow=$derived(RESPOND_VIEWS.has(view)
     ? {
         eyebrow:'Respond',
-        description:'Review retained evidence, organise cases, prepare responses, examine campaigns, and continue follow-up.',
+        description:'Review retained evidence, organise cases and prepare responses.',
       }
     : {
         eyebrow:'Assure',
-        description:'Review monitoring history, watchlists, and local control rules without starting collection automatically.',
+        description:'Review monitoring history, watchlists and local control rules.',
       });
   $effect(()=>{
     const currentUrl=page.url;
@@ -98,6 +86,7 @@
   const scheduledCapability=$derived(featureCapability(capabilityReport?.()||null,'scheduled_monitoring'));
 
   async function navigateMonitor(next:View,focus?:{parameter:'case'|'watchlist'|'campaign'|'observation';value:string}){
+    preloadMonitorView(next);
     view=next;
     const url=new URL(page.url);
     url.searchParams.set('view',next);
@@ -110,6 +99,15 @@
   function selectMonitorView(next:View){
     if(next===view)return;
     void navigateMonitor(next);
+  }
+  function preloadMonitorView(next:View){
+    if(next==='certificates')preloadBestEffort(()=>import('$lib/components/CertificateReviewInbox.svelte'));
+    else if(next==='timeline')preloadBestEffort(()=>Promise.all([import('$lib/components/RetainedEvidenceTimeline.svelte'),import('$lib/components/RetainedChangeReview.svelte')]));
+    else if(next==='campaigns')preloadBestEffort(()=>import('$lib/components/CampaignManager.svelte'));
+    else if(next==='relationships')preloadBestEffort(()=>Promise.all([import('$lib/components/WebsiteProfileClusters.svelte'),import('$lib/components/RetainedRelationshipObservations.svelte'),import('$lib/components/CaseRelationshipClusters.svelte'),import('$lib/components/CaseRelationshipWorkspace.svelte')]));
+    else if(next==='rules')preloadBestEffort(()=>import('$lib/components/DetectionRuleManager.svelte'));
+    else if(next==='cases')preloadBestEffort(()=>Promise.all([import('$lib/components/CaseWorkspaceToolbar.svelte'),import('$lib/components/ExternalFindingsImport.svelte'),import('$lib/components/CaseFilters.svelte'),import('$lib/components/CaseList.svelte')]));
+    else if(next==='watchlists')preloadBestEffort(()=>Promise.all([import('$lib/components/MonitorActivityHeatmap.svelte'),import('$lib/components/WatchlistWorkspace.svelte'),import('$lib/components/HostedWatchlistManager.svelte')]));
   }
 
   // --- Watchlists ---
@@ -145,8 +143,11 @@
   let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   let websiteSnapshotsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  let analystReviewState=$state<AnalystReviewStateStore>(emptyAnalystReviewStateStore());
+  let analystReviewStateSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  let certificateReviewCount=$state<number|null>(null);
+  let reviewInboxCount=$state<number|null>(null);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
-  const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
   const evidenceDebtReview=$derived(buildEvidenceDebtReview({
     cases,
     bulkSessions,
@@ -314,6 +315,11 @@
       `Recorded the reviewed evidence-gap dismissal for ${record.domain}. The underlying evidence and assertions were not changed.`,
     );
   }
+  async function recordAnalystReviewDecision(item:AnalystReviewItem,input:{disposition:AnalystReviewDisposition;rationale:string;expiresAt:string|null;reviewDueAt:string|null}){
+    analystReviewState=await saveAnalystReviewDecision(item,input);
+    analystReviewStateSourceState='ready';
+    caseMessage=`Recorded ${input.disposition.replaceAll('_',' ')} for ${item.title}. The retained evidence, Case disposition, score, and collection state were not changed.`;
+  }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function trackDomain(){
     const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}
@@ -420,6 +426,24 @@
 
   let appliedMonitorRouteKey='';
   function monitorRouteKey(url:URL){return `${url.pathname}${url.search}${url.hash}`;}
+  function restoreGuidedQueueTarget(){
+    if(page.url.hash!=='#case-review-queue')return;
+    const target=document.getElementById('case-review-queue');
+    target?.scrollIntoView({block:'center'});
+    target?.focus({preventScroll:true});
+  }
+  function restoreWatchlistTarget(){
+    if(!page.url.searchParams.get('watchlist'))return;
+    const target=document.getElementById('watchlist-history');
+    target?.scrollIntoView({block:'start'});
+    target?.focus({preventScroll:true});
+  }
+  async function restoreCaseListTarget(){
+    const caseId=page.url.searchParams.get('case');
+    if(!caseId||caseId!==expandedId||page.url.hash===`#case-response-${encodeURIComponent(caseId)}`)return;
+    const target=cases.find((record)=>record.id===caseId);
+    if(target)await focusCase(target);
+  }
   async function applyMonitorRouteTarget(
     currentUrl:URL,
     routeKey:string,
@@ -472,11 +496,7 @@
       guidedDomainsTruncated=Boolean(guide?.reviewDomainsTruncated);
       await tick();
       if(monitorRouteKey(page.url)!==routeKey)return;
-      if(currentUrl.hash==='#case-review-queue'){
-        const target=document.getElementById('case-review-queue');
-        target?.scrollIntoView({block:'center'});
-        target?.focus({preventScroll:true});
-      }
+      if(currentUrl.hash==='#case-review-queue')restoreGuidedQueueTarget();
     }else{
       if(guideDomain)view='cases';
       newDomain=guideDomain;
@@ -494,54 +514,79 @@
     untrack(()=>{void applyMonitorRouteTarget(currentUrl,routeKey,loadedCases,caseState,loadedWatchlists,watchlistState);});
   });
 
-  onMount(()=>{void (async()=>{
-    const campaignLoad=loadCampaigns();
-    void campaignLoad.then(
-      (loadedCampaigns)=>{campaigns=loadedCampaigns;campaignCount=loadedCampaigns.length;campaignsSourceState='ready';},
-      ()=>{campaignsSourceState='unavailable';},
-    );
-    const initialLoads=await Promise.allSettled([
-      loadWatchlists(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),
-      loadWebsiteSnapshots(),campaignLoad,loadDetectionRules(),loadProfiles(),
-    ]);
-    const [watchlistResult,caseResult,relationshipResult,bulkResult,websiteResult,campaignResult,ruleResult,profileResult]=initialLoads;
-    if(watchlistResult.status==='fulfilled'){watchlists=watchlistResult.value;watchlistsSourceState='ready';if(selected&&!watchlists[selected])selected='';}else watchlistsSourceState='unavailable';
-    if(caseResult.status==='fulfilled'){cases=caseResult.value;casesSourceState='ready';parentDomainCasesSourceState='ready';}else{casesSourceState='unavailable';parentDomainCasesSourceState=parentDomainCaseFailureState(caseResult.reason);}
-    if(relationshipResult.status==='fulfilled'){retainedRelationships=relationshipResult.value;relationshipsSourceState='ready';}else relationshipsSourceState='unavailable';
-    if(bulkResult.status==='fulfilled'){bulkSessions=bulkResult.value;bulkSessionsSourceState='ready';}else bulkSessionsSourceState='unavailable';
-    if(websiteResult.status==='fulfilled'){websiteSnapshots=websiteResult.value;websiteSnapshotsSourceState='ready';}else websiteSnapshotsSourceState='unavailable';
-    if(campaignResult.status==='fulfilled'){campaigns=campaignResult.value;campaignCount=campaigns.length;campaignsSourceState='ready';}else campaignsSourceState='unavailable';
-    if(ruleResult.status==='fulfilled'){detectionRules=ruleResult.value;customRuleCount=detectionRules.length;detectionRulesSourceState='ready';}else detectionRulesSourceState='unavailable';
-    if(profileResult.status==='fulfilled'){brandProfiles=profileResult.value;brandProfilesUnavailable=false;brandProfilesSourceState='ready';}else brandProfilesSourceState='unavailable';
-    refreshRelationships();
-    const unavailable=unavailableLocalContextLabels(initialLoads,['watchlists','cases','retained relationships','Bulk sessions','website profiles','campaigns','rules','Brand Profiles']);
-    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
-  })();});
+  const collectionLoads=new Map<string,Promise<void>>();
+  function noteUnavailableCollection(label:string){
+    const prefix='Some browser-local context could not be loaded (';
+    const labels=localContextStatus.startsWith(prefix)
+      ?localContextStatus.slice(prefix.length,localContextStatus.indexOf(').')).split(', ').filter(Boolean)
+      :[];
+    if(!labels.includes(label))labels.push(label);
+    localContextStatus=`Some browser-local context could not be loaded (${labels.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
+  }
+  function loadCollection(key:string,work:()=>Promise<void>):Promise<void>{
+    const existing=collectionLoads.get(key);
+    if(existing)return existing;
+    const pending=work();
+    collectionLoads.set(key,pending);
+    return pending;
+  }
+  function ensureWatchlists(){return loadCollection('watchlists',async()=>{try{await refresh();}catch{noteUnavailableCollection('watchlists');}});}
+  function ensureCases(){return loadCollection('cases',async()=>{try{await refreshCases();}catch{noteUnavailableCollection('cases');}});}
+  function ensureRelationships(){return loadCollection('relationships',async()=>{try{await refreshRetainedRelationships();refreshRelationships();}catch{noteUnavailableCollection('retained relationships');}});}
+  function ensureBulkSessions(){return loadCollection('bulk-sessions',async()=>{try{bulkSessions=await loadBulkSessions();bulkSessionsSourceState='ready';}catch{bulkSessionsSourceState='unavailable';noteUnavailableCollection('Bulk sessions');}});}
+  function ensureWebsiteSnapshots(){return loadCollection('website-snapshots',async()=>{try{websiteSnapshots=await loadWebsiteSnapshots();websiteSnapshotsSourceState='ready';}catch{websiteSnapshotsSourceState='unavailable';noteUnavailableCollection('website profiles');}});}
+  function ensureCampaigns(){return loadCollection('campaigns',async()=>{try{campaigns=await loadCampaigns();campaignCount=campaigns.length;campaignsSourceState='ready';refreshRelationships();}catch{campaignsSourceState='unavailable';noteUnavailableCollection('campaigns');}});}
+  function ensureRules(){return loadCollection('rules',async()=>{try{detectionRules=await loadDetectionRules();customRuleCount=detectionRules.length;detectionRulesSourceState='ready';}catch{detectionRulesSourceState='unavailable';noteUnavailableCollection('rules');}});}
+  function ensureProfiles(){return loadCollection('profiles',async()=>{try{brandProfiles=await loadProfiles();brandProfilesUnavailable=false;brandProfilesSourceState='ready';}catch{brandProfilesSourceState='unavailable';noteUnavailableCollection('Brand Profiles');}});}
+  function ensureAnalystReviewState(){return loadCollection('analyst-review-state',async()=>{try{analystReviewState=await loadAnalystReviewState();analystReviewStateSourceState='ready';}catch{analystReviewStateSourceState='unavailable';noteUnavailableCollection('analyst Review Item lifecycle');}});}
+  async function ensureMonitorViewData(next:View){
+    const loads=next==='inbox'
+      ?[ensureCases(),ensureWatchlists(),ensureBulkSessions(),ensureAnalystReviewState(),ensureProfiles(),ensureRules(),ensureWebsiteSnapshots()]
+      :next==='timeline'
+        ?[ensureCases(),ensureWatchlists(),ensureBulkSessions(),ensureRelationships(),ensureWebsiteSnapshots()]
+        :next==='watchlists'
+          ?[ensureWatchlists()]
+          :next==='cases'
+            ?[ensureCases(),ensureProfiles()]
+            :next==='certificates'
+              ?[ensureCases(),ensureProfiles(),ensureAnalystReviewState()]
+            :next==='campaigns'
+              ?[ensureCampaigns(),ensureCases(),ensureProfiles(),ensureRelationships()]
+              :next==='relationships'
+                ?[ensureCases(),ensureCampaigns(),ensureRelationships(),ensureWebsiteSnapshots()]
+                :[ensureRules(),ensureCases()];
+    await Promise.all(loads);
+  }
+  $effect(()=>{
+    const selectedView=view;
+    untrack(()=>{preloadMonitorView(selectedView);void ensureMonitorViewData(selectedView);});
+  });
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow={monitorWorkflow.eyebrow} title="Monitor" description={monitorWorkflow.description} />
 
 <MonitorViewTabs {view} counts={{
-  inbox:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'?reviewInbox.counts.all:null,
+  inbox:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&analystReviewStateSourceState==='ready'&&brandProfilesSourceState==='ready'&&detectionRulesSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?reviewInboxCount:null,
   timeline:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?retainedTimeline.counts.all:null,
   cases:casesSourceState==='ready'?cases.length:null,
   campaigns:campaignsSourceState==='ready'?campaignCount:null,
   relationships:casesSourceState==='ready'&&campaignsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?relationshipCount:null,
   rules:detectionRulesSourceState==='ready'?customRuleCount:null,
   watchlists:watchlistsSourceState==='ready'?names.length:null,
-}} setView={selectMonitorView} />
+  certificates:certificateReviewCount,
+}} preloadView={preloadMonitorView} setView={selectMonitorView} />
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   <BrandProtectionOperationsReport records={cases} sourceState={casesSourceState} />
   <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
-  {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'}
-    <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
+  {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&analystReviewStateSourceState==='ready'&&brandProfilesSourceState==='ready'&&detectionRulesSourceState==='ready'&&websiteSnapshotsSourceState==='ready'}
+    <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
-    <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'?'loading':'unavailable'} title="Review inbox evidence unavailable" detail="Cases, watchlists, and saved Bulk sessions must all be readable before the combined inbox can distinguish zero review items from missing browser-local evidence. Fulfilled collections remain available in their own views." />
+    <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||analystReviewStateSourceState==='loading'||brandProfilesSourceState==='loading'||detectionRulesSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
   {/if}
   {#if casesSourceState==='ready'}
     <CaseDecisionQuality report={decisionQuality} />
@@ -550,11 +595,22 @@
 </div>
 {/if}
 
+{#if view==='certificates'}
+<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-certificates">
+  {#if casesSourceState==='ready'&&brandProfilesSourceState==='ready'&&analystReviewStateSourceState==='ready'}
+    <DeferredSurface load={()=>import('$lib/components/CertificateReviewInbox.svelte')} loadingLabel="Loading retained certificate review…" unavailableLabel="The certificate review inbox could not be loaded." props={{profiles:brandProfiles,cases,reviewState:analystReviewState,profileId:page.url.searchParams.get('profile')??'',onreview:recordAnalystReviewDecision,oncount:(count:number)=>certificateReviewCount=count}} />
+    {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
+  {:else}
+    <LocalCollectionState state={casesSourceState==='loading'||brandProfilesSourceState==='loading'||analystReviewStateSourceState==='loading'?'loading':'unavailable'} title="Certificate review unavailable" detail="Readable Brand Profiles, retained Cases, and the analyst lifecycle overlay are required. Missing collections are not treated as empty certificate evidence." />
+  {/if}
+</div>
+{/if}
+
 {#if view==='timeline'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-timeline">
   {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'}
-    <RetainedEvidenceTimeline timeline={retainedTimeline} />
-    <RetainedChangeReview {cases} {websiteSnapshots} {watchlists} {bulkSessions} />
+    <DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} />
+    <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} />
   {:else}
     <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||relationshipsSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Retained timeline unavailable" detail="The combined timeline requires readable cases, watchlists, saved Bulk sessions, relationship observations, and website snapshots. No empty history is inferred while any required collection is unavailable." />
   {/if}
@@ -564,7 +620,7 @@
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   {#if campaignsSourceState==='ready'}
-    <CampaignManager records={cases} profiles={brandProfiles} {relationshipSummary} cohortSourceStates={{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState}} parentDomainSourceState={parentDomainCasesSourceState} initialCampaigns={campaigns} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} onchange={(nextCampaigns)=>{campaigns=nextCampaigns;refreshRelationships();}} />
+    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>{campaigns=nextCampaigns;refreshRelationships();}}} />
   {:else}
     <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The browser-local campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}
@@ -574,26 +630,22 @@
 {#if view==='relationships'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
   {#if websiteSnapshotsSourceState==='ready'}
-    <WebsiteProfileClusters summary={websiteProfileClusters} onpin={casesSourceState==='ready'?recordWebsiteClusterLead:null} />
+    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} />
   {:else}
     <LocalCollectionState state={websiteSnapshotsSourceState} title="Website-profile relationships unavailable" detail="Saved website snapshots could not be read, so no missing cluster is inferred and review-lead recording from that source remains unavailable." />
   {/if}
   {#if relationshipsSourceState==='ready'}
-    <RetainedRelationshipObservations
-      records={retainedRelationships}
-      focusId={page.url.searchParams.get('observation')||''}
-      ondelete={removeRetainedRelationship}
-    />
+    <DeferredSurface load={()=>import('$lib/components/RetainedRelationshipObservations.svelte')} loadingLabel="Loading retained relationship observations…" unavailableLabel="Retained relationship observations could not be loaded." props={{records:retainedRelationships,focusId:page.url.searchParams.get('observation')||'',ondelete:removeRetainedRelationship}} />
   {:else}
     <LocalCollectionState state={relationshipsSourceState} title="Retained relationships unavailable" detail="Retained relationship observations could not be read, so their count and deletion controls remain unavailable." />
   {/if}
   {#if casesSourceState==='ready'}
     {#if campaignsSourceState==='ready'&&relationshipsSourceState==='ready'}
-      <CaseRelationshipClusters summary={relationshipClusters} />
+      <DeferredSurface load={()=>import('$lib/components/CaseRelationshipClusters.svelte')} loadingLabel="Loading Case relationship clusters…" unavailableLabel="Case relationship clusters could not be loaded." props={{summary:relationshipClusters}} />
     {:else}
       <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Relationship augmentation incomplete" detail="Readable Case evidence remains below. Campaign or retained-relationship augmentation could not be fully loaded, so combined relationship counts remain unavailable rather than being inferred as zero." />
     {/if}
-    <CaseRelationshipWorkspace records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
+    <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} />
   {:else}
     <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Cases must be readable before cross-case relationships can be projected. Readable website-profile and retained-relationship evidence remains separately attributed above." />
   {/if}
@@ -603,7 +655,7 @@
 {#if view==='rules'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-rules">
   {#if detectionRulesSourceState==='ready'}
-    <DetectionRuleManager records={cases} caseSourceState={casesSourceState} initialRules={detectionRules} onselect={openRelatedCase} oncount={(count)=>customRuleCount=count} onchange={(nextRules)=>detectionRules=nextRules} />
+    <DeferredSurface load={()=>import('$lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} />
   {:else}
     <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The browser-local rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
   {/if}
@@ -614,23 +666,22 @@
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-cases" aria-busy={casesRefreshing}>
   {#if casesSourceState==='ready'}
   {#if casesRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>{/if}
-  {#if guidedDomains.length}<GuidedCaseQueue domains={guidedDomains} existingDomains={existingCaseDomains} truncated={guidedDomainsTruncated} openDomain={openGuidedCase} />{/if}
-  <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length} {downloadCases} {reviewCalibrationDataset} {importCaseFile} message={caseMessage} />
+  {#if guidedDomains.length}<DeferredSurface load={()=>import('$lib/components/GuidedCaseQueue.svelte')} loadingLabel="Loading guided Case queue…" unavailableLabel="The guided Case queue could not be loaded." onready={restoreGuidedQueueTarget} props={{domains:guidedDomains,existingDomains:existingCaseDomains,truncated:guidedDomainsTruncated,openDomain:openGuidedCase}} />{/if}
+  <DeferredSurface load={()=>import('$lib/components/CaseWorkspaceToolbar.svelte')} loadingLabel="Loading Case workspace controls…" unavailableLabel="Case workspace controls could not be loaded." props={{domain:newDomain,setDomain:(value:string)=>newDomain=value,trackDomain,caseCount:cases.length,calibrationSelectedCount:calibrationCaseIds.length,downloadCases,reviewCalibrationDataset,importCaseFile,message:caseMessage}} />
   {#if calibrationReview}
-    <CalibrationExportReview
-      preview={calibrationReview}
-      busy={calibrationExportBusy}
-      confirm={downloadCalibrationDataset}
-      cancel={() => { if (!calibrationExportBusy) calibrationReview=null; }}
-    />
+    <DeferredSurface load={()=>import('$lib/components/CalibrationExportReview.svelte')} loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded." props={{preview:calibrationReview,busy:calibrationExportBusy,confirm:downloadCalibrationDataset,cancel:()=>{if(!calibrationExportBusy)calibrationReview=null;}}} />
   {/if}
-  <RiskCalibrationDashboard />
-  <ExternalFindingsImport {cases} oncomplete={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={(value)=>caseMessage=value} />
+  <details class="advanced-case-tools">
+    <summary>Advanced Case tools</summary>
+    <p>Calibration is a secondary reference for reviewing how triage performed.</p>
+    <DeferredSurface load={()=>import('$lib/components/RiskCalibrationDashboard.svelte')} loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
+  </details>
+  <DeferredSurface load={()=>import('$lib/components/ExternalFindingsImport.svelte')} loadingLabel="Loading external-findings import…" unavailableLabel="External-findings import could not be loaded." props={{cases,oncomplete:refreshCases,oncommitted:installCommittedCaseSnapshot,onmessage:(value:string)=>caseMessage=value}} />
 
   {#if cases.length}
-    <CaseFilters status={statusFilter} setStatus={(value)=>{statusFilter=value;casePage=1;}} disposition={dispositionFilter} setDisposition={(value)=>{dispositionFilter=value;casePage=1;}} search={caseSearch} setSearch={(value)=>{caseSearch=value;casePage=1;}} sort={caseSort} setSort={(value)=>{caseSort=value;casePage=1;}} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={()=>{clearCaseFilters();casePage=1;}} matchedCount={filteredCases.length} totalCount={cases.length} />
+    <DeferredSurface load={()=>import('$lib/components/CaseFilters.svelte')} loadingLabel="Loading Case filters…" unavailableLabel="Case filters could not be loaded." props={{status:statusFilter,setStatus:(value:string)=>{statusFilter=value;casePage=1;},disposition:dispositionFilter,setDisposition:(value:string)=>{dispositionFilter=value;casePage=1;},search:caseSearch,setSearch:(value:string)=>{caseSearch=value;casePage=1;},sort:caseSort,setSort:(value:'updated'|'domain'|'status')=>{caseSort=value;casePage=1;},statusOptions:CASE_STATUSES,dispositionOptions:CASE_DISPOSITIONS,clear:()=>{clearCaseFilters();casePage=1;},matchedCount:filteredCases.length,totalCount:cases.length}} />
 
-    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {pendingNoteCaseIds} calibrationCaseIds={calibrationCaseIds} {toggleCalibrationCase} {expand} {setStatus} {setDisposition} {setReviewReason} {addBrandProfileAssociation} {removeBrandProfileAssociation} {saveTags} {addNote} {removeCase} {refreshCases} {installCommittedCaseSnapshot} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} {brandProfiles} {brandProfilesUnavailable} />
+    <DeferredSurface load={()=>import('$lib/components/CaseList.svelte')} loadingLabel="Loading retained Cases…" unavailableLabel="The retained Case list could not be loaded." onready={restoreCaseListTarget} props={{records:pagedCases,allRecords:cases,expandedId,tagDraft,setTagDraft:(value:string)=>tagDraft=value,noteDraft,setNoteDraft:(value:string)=>noteDraft=value,pendingNoteCaseIds,calibrationCaseIds,toggleCalibrationCase,expand,setStatus,setDisposition,setReviewReason,addBrandProfileAssociation,removeBrandProfileAssociation,saveTags,addNote,removeCase,refreshCases,installCommittedCaseSnapshot,setMessage:(value:string)=>caseMessage=value,formatDate:date,currentPage:currentCasePage,pageCount:casePageCount,setPage:setCasePage,brandProfiles,brandProfilesUnavailable,responseCaseId:page.url.hash===`#case-response-${encodeURIComponent(expandedId)}`||(page.url.searchParams.get('response')==='1'&&page.url.searchParams.get('case')===expandedId)?expandedId:''}} />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}
@@ -644,9 +695,9 @@
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-watchlists" aria-busy={watchlistsRefreshing}>
   {#if watchlistsSourceState==='ready'}
     {#if watchlistsRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing watchlists while the last readable snapshot remains available.</p>{/if}
-    <MonitorActivityHeatmap events={watchlistActivity} />
-    <WatchlistWorkspace {watchlists} {names} {entry} {selected} setSelected={(value)=>selected=value} {history} {changedOnly} setChangedOnly={(value)=>changedOnly=value} {message} {downloadWatchlists} {importFile} {clearAll} {rescan} {remove} openCase={openWatchlistCase} formatDate={date} />
-    <HostedWatchlistManager capability={scheduledCapability} localWatchlists={watchlists} localNames={names} restoreHosted={restoreHostedWatchlist} formatDate={date} />
+    <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
+    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,openCase:openWatchlistCase,formatDate:date}} />
+    <DeferredSurface load={()=>import('$lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
   {:else}
     <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Browser-local watchlists could not be read, so their count, empty state, imports, hosted restore, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
@@ -658,4 +709,7 @@
   .case-message{margin:12px 2px;color:var(--accent);font-size:var(--text-sm)}
   .refresh-status{margin:10px 2px;color:var(--muted);font-size:var(--text-xs)}
   .local-context-status{margin:12px 2px;color:var(--amber);font-size:var(--text-sm)}
+  .advanced-case-tools{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .advanced-case-tools summary{cursor:pointer;font:700 var(--text-sm) var(--mono)}
+  .advanced-case-tools>p{color:var(--muted);font-size:var(--text-sm)}
 </style>

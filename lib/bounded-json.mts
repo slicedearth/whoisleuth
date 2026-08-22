@@ -55,24 +55,59 @@ export function assertBoundedJsonStructure(
     if (typeof current !== 'object') throw new TypeError(`${label} contains a non-JSON value.`);
     if (ancestors.has(current)) throw new TypeError(`${label} contains a cyclic object reference.`);
 
+    let prototype: object | null;
+    let ownKeys: readonly PropertyKey[];
+    let descriptors: PropertyDescriptorMap;
+    try {
+      prototype = Object.getPrototypeOf(current);
+      ownKeys = Reflect.ownKeys(current);
+      descriptors = Object.getOwnPropertyDescriptors(current);
+    } catch {
+      throw new TypeError(`${label} could not be inspected safely.`);
+    }
+    if (ownKeys.some((key) => typeof key !== 'string')) {
+      throw new TypeError(`${label} contains a symbol key.`);
+    }
+    if (ownKeys.some((key) => {
+      const descriptor = descriptors[String(key)];
+      return !descriptor || !Object.hasOwn(descriptor, 'value');
+    })) {
+      throw new TypeError(`${label} contains an accessor property.`);
+    }
+
     ancestors.add(current);
     if (Array.isArray(current)) {
-      if (current.length > maximumContainerItems) {
+      if (prototype !== Array.prototype) {
+        throw new TypeError(`${label} contains an array with a custom prototype.`);
+      }
+      const length = descriptors.length?.value;
+      if (!Number.isSafeInteger(length) || (length as number) < 0 || (length as number) > maximumContainerItems) {
         throw new TypeError(`${label} contains a container with more than ${maximumContainerItems} items.`);
       }
-      for (const item of current) visit(item, depth + 1);
+      const indexes = ownKeys.filter((key) => key !== 'length') as string[];
+      if (indexes.length !== length
+        || indexes.some((key, index) => key !== String(index) || descriptors[key]?.enumerable !== true)) {
+        throw new TypeError(`${label} contains a sparse, extended, or non-enumerable array.`);
+      }
+      for (const key of indexes) visit(descriptors[key]!.value, depth + 1);
     } else {
-      const entries = Object.entries(current as UnknownRecord);
-      if (entries.length > maximumContainerItems) {
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new TypeError(`${label} contains an object with a custom prototype.`);
+      }
+      const objectKeys = ownKeys as string[];
+      if (objectKeys.length > maximumContainerItems) {
         throw new TypeError(`${label} contains a container with more than ${maximumContainerItems} items.`);
       }
-      keys += entries.length;
+      if (objectKeys.some((key) => descriptors[key]?.enumerable !== true)) {
+        throw new TypeError(`${label} contains a non-enumerable object property.`);
+      }
+      keys += objectKeys.length;
       if (keys > maximumKeys) {
         throw new TypeError(`${label} exceeds the ${maximumKeys}-key limit.`);
       }
-      for (const [key, item] of entries) {
+      for (const key of objectKeys) {
         if (!isSafeJsonObjectKey(key)) throw new TypeError(`${label} contains an unsafe object key.`);
-        visit(item, depth + 1);
+        visit(descriptors[key]!.value, depth + 1);
       }
     }
     ancestors.delete(current);

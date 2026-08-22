@@ -7,16 +7,14 @@ import {
   validPagePublicationMetadata,
 } from './homepage-metadata-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { defineSchemaCompatibility } from '../packages/contracts/schema-compatibility.mts';
+import { isValidAsciiHostname } from './hostname.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
-export const PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
-export const HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 28;
+export const PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
 export const SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS = Object.freeze([
-  LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  PREVIOUS_LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  HOMEPAGE_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 ]);
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES = 5 * 1024 * 1024;
@@ -25,6 +23,21 @@ export const LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH = 24;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS = 10_000;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_KEY_LENGTH = 256;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH = 1024 * 1024;
+
+export const LOOKUP_EVIDENCE_COMPATIBILITY = defineSchemaCompatibility({
+  id: 'export.lookup-evidence',
+  kind: 'export',
+  schema: LOOKUP_EVIDENCE_SCHEMA,
+  currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  supportedVersions: SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+  acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'reject',
+  migration: 'read_only',
+  writeSemantics: 'read_only',
+  byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  owner: 'lib/evidence-export.mts',
+  note: 'Exact v1.47.4 version 26 remains replayable; version 27 is the single v2 successor with bounded homepage and privacy-minimised registration projections.',
+});
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown; applicationVersion?: unknown };
@@ -60,7 +73,7 @@ const LOOKUP_TIMING_SOURCES = new Set([
   'network_context', 'security_txt', 'external_intelligence',
   'malware_host_intelligence', 'malware_ioc_intelligence',
 ]);
-const LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
+const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   'applicable', 'type', 'domain', 'state', 'confidence', 'detail', 'source',
   'rdapServer', 'nameservers', 'statuses', 'registrar', 'registrant', 'abuse',
   'createdDate', 'expiryDate', 'createdDateIso', 'expiryDateIso', 'domainAgeDays',
@@ -74,7 +87,7 @@ const LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   'hasDmarc', 'bulkComparison', 'limitations',
 ]);
 const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
-  ...[...LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
+  ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
     .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
   'registryContactsExcluded',
 ]);
@@ -337,7 +350,7 @@ export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
   return projectLookupEvidencePrivacySafeTreeValue(value, { entries: 0 }, 0);
 }
 
-function projectLookupEvidenceAvailabilityLegacyValue(
+function projectLookupEvidenceAvailabilityPublicValue(
   value: unknown,
   parentKey: string | null,
   state: PortableProjectionState,
@@ -353,7 +366,7 @@ function projectLookupEvidenceAvailabilityLegacyValue(
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidenceAvailabilityLegacyValue(item, parentKey, state, depth + 1));
+      .map((item) => projectLookupEvidenceAvailabilityPublicValue(item, parentKey, state, depth + 1));
   }
   const source = recordOrNull(value);
   if (!source) return null;
@@ -361,7 +374,7 @@ function projectLookupEvidenceAvailabilityLegacyValue(
   for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
     if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
       || privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityLegacyValue(item, key, state, depth + 1);
+    output[key] = projectLookupEvidenceAvailabilityPublicValue(item, key, state, depth + 1);
   }
   return output;
 }
@@ -429,7 +442,7 @@ function projectLookupEvidenceAvailabilityWithKeys(
     if (privateEvidenceKey(key, item)) continue;
     output[key] = currentPrivacyRules
       ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1)
-      : projectLookupEvidenceAvailabilityLegacyValue(item, key, state, 1);
+      : projectLookupEvidenceAvailabilityPublicValue(item, key, state, 1);
   }
   if (registryContactsExcluded) output.registryContactsExcluded = true;
   const pageIdentity = recordOrNull(source.pageIdentity);
@@ -461,11 +474,11 @@ function projectLookupEvidenceAvailabilityWithKeys(
   return output;
 }
 
-/** Frozen availability projection used only to validate schemas 25 through 27. */
-export function projectLookupEvidenceAvailabilityLegacy(value: unknown): UnknownRecord | null {
+/** Exact availability projection used only to validate public schema 26. */
+export function projectLookupEvidenceAvailabilityPublic(value: unknown): UnknownRecord | null {
   return projectLookupEvidenceAvailabilityWithKeys(
     value,
-    LEGACY_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+    PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
     false,
     false,
   );
@@ -633,11 +646,8 @@ function boundedStringList(value: unknown, count: number, length: number): strin
 }
 
 function boundedHostname(value: unknown): string | null {
-  const text = boundedString(value, 253)?.toLowerCase().replace(/\.+$/u, '') || null;
-  if (!text || !text.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label))) {
-    return null;
-  }
-  return text;
+  const text = boundedString(value, 253)?.replace(/\.+$/u, '') || null;
+  return text && isValidAsciiHostname(text, { requireDot: false }) ? text.toLowerCase() : null;
 }
 
 function canonicalIpv4(value: unknown): string | null {

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, failBrowserLocalManifestWrites, openBulkShortlist, readBrowserLocalCollection } from './helpers';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -18,23 +18,26 @@ function record(domain: string) {
 }
 
 async function seed(page: import('@playwright/test').Page, value: unknown) {
-  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: value });
+  const stored = currentBrowserLocalDocument('shortlist', value);
+  await page.addInitScript(({ key, stored: fixture }) => localStorage.setItem(key, JSON.stringify(fixture)), { key: SHORTLIST_KEY, stored });
   await page.goto('/bulk');
 }
 
 test('a future shortlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.shortlist', version: 99, entries: [record('future.invalid')], futureMetadata: { retain: true } };
-  await seed(page, future);
+  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: future });
+  await page.goto('/bulk');
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
-  await expect(page.getByText('Shortlist was created by a newer app version.')).toBeVisible();
+  await expect(page.getByText('Shortlist schema 99 was created by a newer app version. Update the app before migration; no data was changed.')).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY);
   expect(stored).toEqual(future);
 });
 
 test('a shortlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
-  const previous = { schema: 'whoisleuth.shortlist', version: 2, entries: [record('priority.invalid')] };
+  const previous = { entries: [record('priority.invalid')] };
   await seed(page, previous);
+  await openBulkShortlist(page);
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'shortlist');
 

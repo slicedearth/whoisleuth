@@ -222,17 +222,12 @@ describe('website profile snapshots', () => {
     );
   });
 
-  test('keeps version 2 records readable without inventing certificate or dependency evidence', () => {
-    const legacy = snapshot('legacy-snapshot');
-    Reflect.deleteProperty(legacy, 'certificate');
-    Reflect.deleteProperty(legacy, 'dependencies');
-    const store = normalizeWebsiteSnapshotStore({
-      schema: WEBSITE_SNAPSHOT_SCHEMA,
-      version: 2,
-      snapshots: [legacy],
-    });
-    assert.equal(store.version, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
-    assert.equal(store.snapshots[0]?.certificate, null);
-    assert.deepEqual(store.snapshots[0]?.dependencies, []);
+  test('rejects reader-only versions without partial interpretation', () => {
+    for (const version of [1, 2, 3]) {
+      const unsupported = { schema: WEBSITE_SNAPSHOT_SCHEMA, version, snapshots: [snapshot('private-snapshot')] };
+      const before = structuredClone(unsupported);
+      assert.throws(() => normalizeWebsiteSnapshotStore(unsupported), /unsupported schema/u);
+      assert.deepEqual(unsupported, before);
+    }
   });
 });

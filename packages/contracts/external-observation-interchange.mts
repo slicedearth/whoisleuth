@@ -5,7 +5,7 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_CONTRACT_OWNER = 'packages/contrac
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';
 export const EXTERNAL_FINDINGS_VERSION = 4;
-export const SUPPORTED_EXTERNAL_FINDINGS_VERSIONS = Object.freeze([1, 2, 3, EXTERNAL_FINDINGS_VERSION] as const);
+export const SUPPORTED_EXTERNAL_FINDINGS_VERSIONS = Object.freeze([EXTERNAL_FINDINGS_VERSION] as const);
 export const MAX_EXTERNAL_FINDINGS_IMPORT_BYTES = 384 * 1024;
 export const MAX_EXTERNAL_FINDINGS = 100;
 export const MAX_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
@@ -27,7 +27,7 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_COMPATIBILITY_FACADES = Object.fre
 export const EXTERNAL_FINDINGS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.external-findings', kind: 'export', schema: EXTERNAL_FINDINGS_SCHEMA,
   currentVersion: EXTERNAL_FINDINGS_VERSION, supportedVersions: SUPPORTED_EXTERNAL_FINDINGS_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES, owner: EXTERNAL_OBSERVATION_INTERCHANGE_CONTRACT_OWNER,
   note: 'Strict local findings import. Version 4 can retain bounded certificate event identity and name-completeness metadata while analyst assertions remain a separate case workflow.',
 });
@@ -73,9 +73,6 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_COMPATIBILITY = Object.freeze([
 ]);
 
 const EXTERNAL_INTERCHANGE_FIXTURES = Object.freeze([
-  { id: 'external-findings-v1', path: 'test/fixtures/external-observation-interchange/external-findings-v1.json', bytes: 592, sha256: '56c03f12a746110ff1a82e79301b3c529f89ea3116f5e1a0c1ec270c6ab0b2c8', schema: EXTERNAL_FINDINGS_SCHEMA, version: 1, role: 'historical' as const, expectation: 'normalises_to_current_output' as const, expectedOutputFixtureId: 'external-findings-v4' },
-  { id: 'external-findings-v2', path: 'test/fixtures/external-observation-interchange/external-findings-v2.json', bytes: 634, sha256: '900ce48c07e562903fb269c47b2579cf9c55f89e00edcdba2d18e3f9208647ab', schema: EXTERNAL_FINDINGS_SCHEMA, version: 2, role: 'historical' as const, expectation: 'normalises_to_current_output' as const, expectedOutputFixtureId: 'external-findings-v4' },
-  { id: 'external-findings-v3', path: 'test/fixtures/external-observation-interchange/external-findings-v3.json', bytes: 634, sha256: '34652dcb00890794a507bd9841ff52b546f1ddac1cfddd807954171b3f2350dc', schema: EXTERNAL_FINDINGS_SCHEMA, version: 3, role: 'historical' as const, expectation: 'normalises_to_current_output' as const, expectedOutputFixtureId: 'external-findings-v4' },
   { id: 'external-findings-v4', path: 'test/fixtures/external-observation-interchange/external-findings-v4.json', bytes: 634, sha256: 'ceab916e1dcf99704c94e1b0cd82f5a061f138ae6a07ce8335273080c73b7624', schema: EXTERNAL_FINDINGS_SCHEMA, version: 4, role: 'current' as const, expectation: 'accepted_exact' as const, expectedOutputFixtureId: null },
   { id: 'external-finding-rows-v1', path: 'test/fixtures/external-observation-interchange/external-finding-rows-v1.json', bytes: 435, sha256: '09048325d801fdc837134580fd887cacde28744c9f87a43afc388c96117a4659', schema: EXTERNAL_FINDING_ROWS_SCHEMA, version: 1, role: 'input' as const, expectation: 'normalises_to_current_output' as const, expectedOutputFixtureId: 'external-finding-rows-v1-output' },
   { id: 'external-finding-rows-v1-output', path: 'test/fixtures/external-observation-interchange/external-finding-rows-v1-output.json', bytes: 581, sha256: '7f84a9f6177d3245acd6fc21275276694fbe9e8cd94922b1e6997a73afa3149a', schema: EXTERNAL_FINDINGS_SCHEMA, version: 4, role: 'current' as const, expectation: 'accepted_exact' as const, expectedOutputFixtureId: null },
@@ -175,7 +172,7 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
     metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: [
-      externalShape('external-interchange.findings.v1-v4', EXTERNAL_FINDINGS_SCHEMA, [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], ['schema', 'schemaVersion', 'source', 'findings'], 'preserve_document'),
+      externalShape('external-interchange.findings.v4', EXTERNAL_FINDINGS_SCHEMA, [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], ['schema', 'schemaVersion', 'source', 'findings'], 'preserve_document'),
       externalShape('external-interchange.finding-rows.v1', EXTERNAL_FINDING_ROWS_SCHEMA, [1], ['schema', 'schemaVersion', 'source', 'rows'], 'input_to_current'),
       externalShape('external-interchange.domain-rows.v1', DOMAIN_OBSERVATION_ROWS_SCHEMA, [1], ['schema', 'schemaVersion', 'source', 'observations'], 'input_to_current'),
       externalShape('external-interchange.dns-rows.v1', DNS_OBSERVATION_ROWS_SCHEMA, [1], ['schema', 'schemaVersion', 'source', 'observations'], 'input_to_current'),
@@ -194,7 +191,7 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
       { id: 'external-interchange.findings.merge', role: 'merger', runtime: 'shared', module: 'packages/interchange/external-findings-import.mts', exportName: 'mergeExternalFindingsIntoCases' },
     ],
     serialisationProfiles: [{
-      id: 'external-interchange.findings.json.v1-v4', schema: EXTERNAL_FINDINGS_SCHEMA,
+      id: 'external-interchange.findings.json.v4', schema: EXTERNAL_FINDINGS_SCHEMA,
       versions: [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], mediaType: 'application/json', encoding: 'utf-8', bom: false,
       indentSpaces: 2, terminalLf: true, propertyOrder: 'normalised_fixed', canonicalisation: null, integrity: 'none',
       serializerHookId: 'external-interchange.findings.serialise', verifierHookIds: [],
@@ -209,18 +206,18 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
         id: 'external-interchange.consumer.findings-normalise', plane: 'shared', operation: 'normalise-strict-findings',
         acceptedContracts: [{ schema: EXTERNAL_FINDINGS_SCHEMA, versions: [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], mode: 'direct' }],
         emittedContract: { schema: EXTERNAL_FINDINGS_SCHEMA, version: EXTERNAL_FINDINGS_VERSION },
-        shapeIds: ['external-interchange.findings.v1-v4'], boundProfileIds: ['external-interchange.document.bounds'],
+        shapeIds: ['external-interchange.findings.v4'], boundProfileIds: ['external-interchange.document.bounds'],
         hookIds: ['external-interchange.findings.normalise', 'external-interchange.findings.serialise'],
-        serialisationProfileId: 'external-interchange.findings.json.v1-v4', privacyProfileId: 'external-interchange.privacy.transient',
+        serialisationProfileId: 'external-interchange.findings.json.v4', privacyProfileId: 'external-interchange.privacy.transient',
         retentionEffect: 'transient_report', ...externalConsumerCommon,
       },
       {
         id: 'external-interchange.consumer.finding-rows', plane: 'shared', operation: 'convert-finding-rows',
         acceptedContracts: [{ schema: EXTERNAL_FINDING_ROWS_SCHEMA, versions: [1], mode: 'direct' }],
         emittedContract: { schema: EXTERNAL_FINDINGS_SCHEMA, version: EXTERNAL_FINDINGS_VERSION },
-        shapeIds: ['external-interchange.finding-rows.v1', 'external-interchange.findings.v1-v4'], boundProfileIds: ['external-interchange.document.bounds'],
+        shapeIds: ['external-interchange.finding-rows.v1', 'external-interchange.findings.v4'], boundProfileIds: ['external-interchange.document.bounds'],
         hookIds: ['external-interchange.finding-rows.convert', 'external-interchange.findings.serialise'],
-        serialisationProfileId: 'external-interchange.findings.json.v1-v4', privacyProfileId: 'external-interchange.privacy.transient',
+        serialisationProfileId: 'external-interchange.findings.json.v4', privacyProfileId: 'external-interchange.privacy.transient',
         retentionEffect: 'transient_report', ...externalConsumerCommon,
       },
       {
@@ -231,15 +228,15 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
           { schema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA, versions: [1], mode: 'direct' },
         ],
         emittedContract: { schema: EXTERNAL_FINDINGS_SCHEMA, version: EXTERNAL_FINDINGS_VERSION },
-        shapeIds: ['external-interchange.domain-rows.v1', 'external-interchange.dns-rows.v1', 'external-interchange.certificate-rows.v1', 'external-interchange.findings.v1-v4'],
+        shapeIds: ['external-interchange.domain-rows.v1', 'external-interchange.dns-rows.v1', 'external-interchange.certificate-rows.v1', 'external-interchange.findings.v4'],
         boundProfileIds: ['external-interchange.document.bounds'], hookIds: ['external-interchange.observation-rows.convert', 'external-interchange.findings.serialise'],
-        serialisationProfileId: 'external-interchange.findings.json.v1-v4', privacyProfileId: 'external-interchange.privacy.transient',
+        serialisationProfileId: 'external-interchange.findings.json.v4', privacyProfileId: 'external-interchange.privacy.transient',
         retentionEffect: 'transient_report', ...externalConsumerCommon,
       },
       {
         id: 'external-interchange.consumer.case-merge', plane: 'shared', operation: 'non-destructive-case-merge',
         acceptedContracts: [{ schema: EXTERNAL_FINDINGS_SCHEMA, versions: [EXTERNAL_FINDINGS_VERSION], mode: 'direct' }], emittedContract: null,
-        shapeIds: ['external-interchange.findings.v1-v4'], boundProfileIds: ['external-interchange.document.bounds'],
+        shapeIds: ['external-interchange.findings.v4'], boundProfileIds: ['external-interchange.document.bounds'],
         hookIds: ['external-interchange.findings.merge'], serialisationProfileId: null,
         privacyProfileId: 'external-interchange.privacy.case-merge', retentionEffect: 'browser_indexeddb', ...externalConsumerCommon,
       },

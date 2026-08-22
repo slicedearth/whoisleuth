@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import {
   appendCaseAction,
   appendCaseActionTransition,
@@ -80,7 +81,7 @@ describe('case response record normalization', () => {
         sourceSchema: {
           collection: 'lookup_result',
           schema: 'whoisleuth.lookup-evidence',
-          version: 21,
+          version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
         },
         observedAt: NOW,
         collectionDepth: 'deep',
@@ -103,7 +104,7 @@ describe('case response record normalization', () => {
     ], NOW);
     assert.equal(pins.length, 2);
     assert.equal(pins[0]?.field, 'dns.mx');
-    assert.equal(pins[0]?.sourceSchema?.version, 21);
+    assert.equal(pins[0]?.sourceSchema?.version, LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(pins[1]?.truncated, true);
   });
 

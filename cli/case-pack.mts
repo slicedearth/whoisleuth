@@ -3,56 +3,43 @@ import { Buffer } from 'node:buffer';
 
 import {
   canonicalArtifactJson,
-  canonicalArtifactJsonFor,
   canonicalArtifactJsonV2,
-  resolveArtifactCanonicalization,
-  SORTED_JSON_V1,
   SORTED_JSON_V2,
 } from '../packages/evidence/artifact-integrity.mts';
 import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { assertBoundedJsonStructure, scanBoundedJson } from '../lib/bounded-json.mts';
 import {
-  CONCLUSIVE_AVAILABILITY,
   assertCaseBrandProfileIds,
-  caseEvidenceIncomparableReasons,
-  compareCaseEvidence,
-  hashString,
   normalizeDomain,
   normalizeCaseStore,
-  normalizeSnapshot,
   safeId,
-  type CaseEvidenceSnapshot,
   type CaseRecord,
 } from '../packages/cases/case-model.mts';
 import {
-  caseReportVersionMatchesCase,
-  CASE_IMPORT_VERSIONS,
   CASE_REPORT_SCHEMA,
+  CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
+  CLI_CASE_PACK_PUBLIC_REPORT_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS as INTEGRITY_KEYS,
-  CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
   CLI_CASE_PACK_LIMITATIONS as PACKET_LIMITATIONS,
   CLI_CASE_PACK_PACKET_KEYS as PACKET_KEYS,
   CLI_CASE_PACK_REPORT_KEYS as REPORT_KEYS,
   CLI_CASE_PACK_ROOT_KEYS as ROOT_KEYS,
-  LEGACY_CLI_CASE_PACK_VERSION,
   MAX_CASE_IMPORT_BYTES,
   MAX_CASE_PACK_CASES,
   MAX_CASE_PACK_INPUT_BYTES,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+  PUBLIC_CASE_SCHEMA_VERSION,
+  caseReportVersionMatchesCase,
 } from '../packages/contracts/case-portability.mts';
-import { buildPortableGeneratorMetadata } from '../lib/portable-generator.mts';
-import { analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import { CliUsageError } from './errors.mts';
 
 export {
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
-  LEGACY_CLI_CASE_PACK_VERSION,
   MAX_CASE_PACK_CASES,
   MAX_CASE_PACK_INPUT_BYTES,
 };
@@ -61,84 +48,33 @@ export type CasePackAudience = 'internal' | 'public' | 'trusted';
 const MAX_CASE_PACK_REFERENCE_SCAN_DEPTH = 64;
 const INTERNAL_EXCLUSIONS = Object.freeze(['Raw upstream payloads and credentials are outside the case schema.']);
 const TRUSTED_EXCLUSIONS = Object.freeze(['Case notes', 'Recipient values', 'Manual trail targets', 'Raw upstream payloads and credentials']);
-const PUBLIC_EXCLUSIONS_V10 = Object.freeze(['Case notes', 'Actions and recipient values', 'Analyst assertions', 'Manual trail targets', 'Raw upstream payloads and credentials']);
-const PUBLIC_EXCLUSIONS_V11 = Object.freeze([...PUBLIC_EXCLUSIONS_V10.slice(0, 3), 'Investigation branches', ...PUBLIC_EXCLUSIONS_V10.slice(3)]);
-const PUBLIC_EXCLUSIONS_V12 = Object.freeze(['Case notes', 'Brand Profile references', ...PUBLIC_EXCLUSIONS_V11.slice(1)]);
-const PUBLIC_EXCLUSIONS = Object.freeze([...PUBLIC_EXCLUSIONS_V12, 'Independent observed-effect reviews and closure history']);
-const SENSITIVE_CASE_PACK_FIELDS = Object.freeze(['brandProfileIds', 'notes', 'actions', 'assertions', 'manualTrail', 'observedEffects', 'closures', 'branches', 'recipient', 'target']);
+const PUBLIC_EXCLUSIONS = Object.freeze([
+  'Case notes',
+  'Brand Profile references',
+  'Actions and recipient values',
+  'Analyst assertions',
+  'Investigation branches',
+  'Manual trail targets',
+  'Raw upstream payloads and credentials',
+  'Independent observed-effect reviews and closure history',
+]);
+const PUBLIC_V12_EXCLUSIONS = Object.freeze(PUBLIC_EXCLUSIONS.slice(0, -1));
+const SENSITIVE_CASE_PACK_FIELDS = Object.freeze([
+  'brandProfileIds', 'notes', 'actions', 'assertions', 'manualTrail', 'observedEffects',
+  'closures', 'branches', 'recipient', 'target',
+]);
 const PUBLIC_OBSERVED_EFFECT_LIMITATION = 'Independent observed-effect review records were excluded from this public Case pack.';
 const PUBLIC_CLOSURE_LIMITATION = 'Deliberate closure records were excluded from this public Case pack.';
-const LEGACY_RISK_MODEL_LIMITATION = 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
-const LEGACY_SCORING_MODEL_LIMITATION = 'This report contains normalized browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
-const LEGACY_PORTABLE_LIMITATION = 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Generated locally in the browser. Review the package before sharing it.';
-const LEGACY_PROFILE_LIMITATION = 'This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Generated locally in the browser. Review the package before sharing it.';
-const LEGACY_REPORT_LIMITATION_BY_VERSION = new Map<number, string>([
-  [1, LEGACY_RISK_MODEL_LIMITATION],
-  [2, LEGACY_RISK_MODEL_LIMITATION],
-  [3, LEGACY_RISK_MODEL_LIMITATION],
-  [4, LEGACY_RISK_MODEL_LIMITATION],
-  [5, LEGACY_SCORING_MODEL_LIMITATION],
-  [6, LEGACY_PORTABLE_LIMITATION],
-  [7, LEGACY_PORTABLE_LIMITATION],
-  [8, LEGACY_PROFILE_LIMITATION],
-]);
-
-const HISTORICAL_BASE_MATERIAL_FIELDS = Object.freeze([
-  'scanDepth',
-  'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityScore',
-  'riskFactors', 'opportunityFactors',
-  'registrar', 'createdDate', 'expiryDate', 'nameservers',
-  'hasMx', 'hasSpf', 'hasDmarc',
-  'activityStatus', 'websiteProbeDetail', 'pageTitle',
-  'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
-  'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
-  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch',
-  'mutationTypes',
-] as const);
-const HISTORICAL_EXTERNAL_FORM_MATERIAL_FIELDS = Object.freeze([
-  ...HISTORICAL_BASE_MATERIAL_FIELDS.slice(0, -2),
-  'hasExternalFormAction',
-  ...HISTORICAL_BASE_MATERIAL_FIELDS.slice(-2),
-] as const);
-const HISTORICAL_CONTEXT_MATERIAL_FIELDS = Object.freeze([
-  'scanDepth',
-  'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
-  'riskFactors', 'opportunityFactors',
-  'registrar', 'createdDate', 'expiryDate', 'nameservers',
-  'hasMx', 'hasSpf', 'hasDmarc',
-  'activityStatus', 'websiteProbeDetail', 'pageTitle',
-  'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
-  'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
-  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
-  'privacyProtected', 'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
-  'mutationTypes',
-] as const);
-const HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS = Object.freeze([
-  ...HISTORICAL_CONTEXT_MATERIAL_FIELDS.slice(0, -1),
-  'profileContextState', 'profileContextLimitation',
-  ...HISTORICAL_CONTEXT_MATERIAL_FIELDS.slice(-1),
-] as const);
-const HISTORICAL_CHANGE_ORDER = Object.freeze([
-  'availability', 'confidence', 'riskScore', 'riskFactors', 'opportunityScore', 'opportunityFactors',
-  'registrar', 'createdDate', 'expiryDate', 'nameservers', 'hasMx', 'hasSpf', 'hasDmarc',
-  'activityStatus', 'websiteProbeDetail', 'pageTitle', 'httpEvidenceStatus', 'httpFinalOrigin',
-  'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount', 'httpCrossOriginRedirect',
-  'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders', 'faviconMatch', 'faviconNearMatch',
-  'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch', 'mutationTypes',
-]);
-
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
 }
 
-function expectedExclusions(audience: CasePackAudience, caseVersion: number): readonly string[] {
+function expectedExclusions(audience: CasePackAudience, caseVersion = CASE_SCHEMA_VERSION): readonly string[] {
   if (audience === 'internal') return INTERNAL_EXCLUSIONS;
   if (audience === 'trusted') return TRUSTED_EXCLUSIONS;
-  if (caseVersion >= 13) return PUBLIC_EXCLUSIONS;
-  if (caseVersion === 12) return PUBLIC_EXCLUSIONS_V12;
-  return caseVersion === 11 ? PUBLIC_EXCLUSIONS_V11 : PUBLIC_EXCLUSIONS_V10;
+  return caseVersion === PUBLIC_CASE_SCHEMA_VERSION ? PUBLIC_V12_EXCLUSIONS : PUBLIC_EXCLUSIONS;
 }
 
 function stringListsMatch(value: unknown, expected: readonly string[]): boolean {
@@ -154,70 +90,20 @@ function assertOnlyKeys(value: Record<string, unknown>, allowed: readonly string
   }
 }
 
-type JsonNodeKind = 'array' | 'null' | 'object' | 'scalar';
-
-function jsonNodeKind(value: unknown): JsonNodeKind {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value === 'object' ? 'object' : 'scalar';
-}
-
-/** Historical records may omit later object fields, but every retained value must match the bounded projection. */
-function assertProjectionKeys(actual: unknown, projection: unknown, path: string, depth = 0): void {
-  if (depth > MAX_CASE_PACK_REFERENCE_SCAN_DEPTH) {
-    throw new TypeError('The CLI case pack exceeds its bounded projection depth.');
-  }
-  const actualKind = jsonNodeKind(actual);
-  const projectionKind = jsonNodeKind(projection);
-  if (actualKind !== projectionKind) {
-    throw new TypeError(`The CLI case pack contains an invalid ${path} projection node.`);
-  }
-  if (actualKind === 'array') {
-    const actualArray = actual as unknown[];
-    const projectionArray = projection as unknown[];
-    if (actualArray.length > projectionArray.length) {
-      throw new TypeError(`The CLI case pack contains data outside its normalised ${path} projection.`);
-    }
-    for (let index = 0; index < actualArray.length; index++) {
-      const expected = projectionArray[index];
-      if (expected === undefined) {
-        throw new TypeError(`The CLI case pack contains data outside its normalised ${path} projection.`);
-      }
-      assertProjectionKeys(actualArray[index], expected, `${path}[${index}]`, depth + 1);
-    }
-    return;
-  }
-  if (actualKind === 'object') {
-    const actualRecord = actual as Record<string, unknown>;
-    const projectionRecord = record(projection);
-    if (!projectionRecord) throw new TypeError(`The CLI case pack contains an invalid ${path} projection.`);
-    for (const key of Object.keys(actualRecord)) {
-      if (!Object.hasOwn(projectionRecord, key)) {
-        throw new TypeError(`The CLI case pack contains an unexpected ${path}.${key} field.`);
-      }
-      assertProjectionKeys(actualRecord[key], projectionRecord[key], `${path}.${key}`, depth + 1);
-    }
-    return;
-  }
-  if (!canonicalValuesMatch(actual, projection)) {
-    throw new TypeError(`The CLI case pack contains a changed or unbounded ${path} projection value.`);
-  }
-}
-
 function assertClosedEnvelopes(
   root: Record<string, unknown>,
   packet: Record<string, unknown>,
   integrity: Record<string, unknown>,
   redactionManifest: Record<string, unknown>,
   reports: readonly unknown[],
-  supportsBrandProfileReferences: boolean,
+  caseVersion: number,
 ): void {
   assertOnlyKeys(root, ROOT_KEYS, 'root envelope');
   assertOnlyKeys(packet, PACKET_KEYS, 'packet envelope');
   assertOnlyKeys(integrity, INTEGRITY_KEYS, 'integrity envelope');
   assertOnlyKeys(
     redactionManifest,
-    supportsBrandProfileReferences ? CLI_CASE_PACK_CURRENT_REDACTION_KEYS : CLI_CASE_PACK_LEGACY_REDACTION_KEYS,
+    CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
     'redaction manifest',
   );
   if (!stringListsMatch(packet.limitations, PACKET_LIMITATIONS)) {
@@ -226,7 +112,11 @@ function assertClosedEnvelopes(
   for (const value of reports) {
     const report = record(value);
     if (!report) throw new TypeError('The CLI case pack contains an invalid Case report envelope.');
-    assertOnlyKeys(report, REPORT_KEYS, 'Case report envelope');
+    assertOnlyKeys(
+      report,
+      caseVersion === PUBLIC_CASE_SCHEMA_VERSION ? CLI_CASE_PACK_PUBLIC_REPORT_KEYS : REPORT_KEYS,
+      'Case report envelope',
+    );
   }
 }
 
@@ -250,8 +140,8 @@ function listItemPath(path: readonly (number | string)[], list: 'actions' | 'man
       && path[3] === 'analystResponse' && path[4] === list && typeof path[5] === 'number');
 }
 
-function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[], supportsBrandProfileReferences: boolean): boolean {
-  if (key === 'brandProfileIds') return supportsBrandProfileReferences && (topCasePath(path) || reportCasePath(path));
+function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[]): boolean {
+  if (key === 'brandProfileIds') return topCasePath(path) || reportCasePath(path);
   if (key === 'notes') return topCasePath(path) || reportCasePath(path);
   if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'observedEffects' || key === 'closures' || key === 'branches') {
     return topCasePath(path) || analystResponsePath(path);
@@ -262,7 +152,7 @@ function allowedSensitiveFieldPath(key: string, path: readonly (number | string)
 }
 
 /** Rejects hidden audience-sensitive copies with a budget proven by the serialized byte bound. */
-function assertSensitiveFieldPlacement(root: Record<string, unknown>, supportsBrandProfileReferences: boolean, serializedLength: number): void {
+function assertSensitiveFieldPlacement(root: Record<string, unknown>, serializedLength: number): void {
   const stack: Array<{ value: unknown; path: readonly (number | string)[]; depth: number }> = [{ value: root, path: [], depth: 0 }];
   const visited = new Set<object>();
   let inspected = 0;
@@ -270,7 +160,7 @@ function assertSensitiveFieldPlacement(root: Record<string, unknown>, supportsBr
     const entry = stack.pop();
     if (!entry || !entry.value || typeof entry.value !== 'object') continue;
     for (const key of SENSITIVE_CASE_PACK_FIELDS) {
-      if (Object.hasOwn(entry.value, key) && !allowedSensitiveFieldPath(key, entry.path, supportsBrandProfileReferences)) {
+      if (Object.hasOwn(entry.value, key) && !allowedSensitiveFieldPath(key, entry.path)) {
         throw new TypeError('The CLI case pack contains audience-sensitive data outside its versioned case or report fields.');
       }
     }
@@ -333,43 +223,6 @@ function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: r
   }
 }
 
-function assertCase13Projection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string): void {
-  const projected = normalised.map((item) => ({
-    ...structuredClone(item),
-    evidenceHistory: item.evidenceHistory.map(({ inputHostname: _inputHostname, ...snapshot }) => snapshot),
-  }));
-  if (rawCases.length !== projected.length
-    || rawCases.some((item, index) => !canonicalValuesMatch(item, projected[index]))) {
-    throw new TypeError(`${label} contains a schema 13 Case that would be changed beyond the declared schema-14 inputHostname migration.`);
-  }
-}
-
-function requiredHistoricalCaseKeys(caseVersion: number): readonly string[] {
-  return [
-    'id', 'domain', 'status', 'disposition', 'tags', 'notes', 'source', 'evidenceHistory', 'createdAt', 'updatedAt',
-    ...(caseVersion >= 3 ? ['evidencePins', 'decisions', 'actions'] : []),
-    ...(caseVersion >= 4 ? ['assertions', 'manualTrail'] : []),
-    ...(caseVersion >= 9 ? ['sightings'] : []),
-    ...(caseVersion >= 12 ? ['brandProfileIds'] : []),
-  ];
-}
-
-function assertHistoricalCaseOwnKeys(cases: readonly unknown[], caseVersion: number): void {
-  const required = requiredHistoricalCaseKeys(caseVersion);
-  for (let index = 0; index < cases.length; index++) {
-    const item = record(cases[index]);
-    if (!item) throw new TypeError(`The CLI case pack contains an invalid historical Case at cases[${index}].`);
-    const missing = required.find((key) => !Object.hasOwn(item, key));
-    if (missing) {
-      throw new TypeError(`The CLI case pack is missing required historical Case field cases[${index}].${missing}.`);
-    }
-  }
-}
-
-function reportVersionMatchesCase(caseVersion: number, reportVersion: unknown): boolean {
-  return caseReportVersionMatchesCase(caseVersion, reportVersion);
-}
-
 function publicObservedEffectHistory(preV13HistoryUnavailable: boolean): CaseRecord['observedEffects'] {
   return {
     reviews: [],
@@ -400,16 +253,13 @@ function publicClosureHistory(preV13HistoryUnavailable: boolean): CaseRecord['cl
   };
 }
 
-function assertAudienceFields(value: Record<string, unknown>, audience: CasePackAudience, supportsBranches: boolean): void {
-  if (!supportsBranches && Object.hasOwn(value, 'branches')) {
-    throw new TypeError('The CLI case pack contains an Investigation branch outside its versioned fields.');
-  }
+function assertAudienceFields(value: Record<string, unknown>, audience: CasePackAudience): void {
   if (audience === 'internal') return;
   if (Object.hasOwn(value, 'notes') && (!Array.isArray(value.notes) || value.notes.length !== 0)) {
     throw new TypeError('The CLI case pack contains Case notes excluded by its audience.');
   }
   if (audience === 'public') {
-    for (const field of ['actions', 'assertions', ...(supportsBranches ? ['branches'] : [])]) {
+    for (const field of ['actions', 'assertions', 'branches']) {
       if (Object.hasOwn(value, field) && (!Array.isArray(value[field]) || (value[field] as unknown[]).length !== 0)) {
         throw new TypeError(`The public CLI case pack contains ${field} excluded by its audience.`);
       }
@@ -462,354 +312,6 @@ function assertCurrentReportProjection(report: Record<string, unknown>, rawCase:
   }
 }
 
-type HistoricalMaterialField = (typeof HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS)[number];
-type HistoricalSnapshot = Record<string, unknown>;
-
-function historicalMaterialFields(caseVersion: number): readonly HistoricalMaterialField[] {
-  if (caseVersion <= 7) return HISTORICAL_BASE_MATERIAL_FIELDS;
-  if (caseVersion <= 9) return HISTORICAL_EXTERNAL_FORM_MATERIAL_FIELDS;
-  if (caseVersion <= 11) return HISTORICAL_CONTEXT_MATERIAL_FIELDS;
-  return HISTORICAL_PROFILE_CONTEXT_MATERIAL_FIELDS;
-}
-
-function historicalMaterialValue(field: HistoricalMaterialField, snapshot: CaseEvidenceSnapshot): unknown {
-  switch (field) {
-    case 'availability':
-      return typeof snapshot.availability === 'string' && CONCLUSIVE_AVAILABILITY.has(snapshot.availability)
-        ? snapshot.availability
-        : null;
-    case 'registrar':
-      return String(snapshot.registrar ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() || null;
-    case 'createdDate':
-    case 'expiryDate': {
-      const value = snapshot[field];
-      return typeof value === 'string' ? value.slice(0, 10) : null;
-    }
-    case 'riskFactors':
-    case 'opportunityFactors':
-      return snapshot[field].map((factor) => [factor.label, factor.points]);
-    default:
-      return snapshot[field] ?? null;
-  }
-}
-
-function historicalMaterialIsEmpty(value: unknown): boolean {
-  if (value === null || value === undefined) return true;
-  if (Array.isArray(value)) return value.length === 0;
-  return typeof value === 'string' ? value.trim() === '' : false;
-}
-
-/**
- * Recreates the exact material identity used by each historical Case epoch.
- * Current migration happens separately so adding schema-12 fields can never
- * invalidate an authentic old fingerprint or make a forged one look valid.
- */
-function normalizeHistoricalEvidenceHistory(rawHistory: unknown, caseVersion: number): HistoricalSnapshot[] {
-  if (!Array.isArray(rawHistory) || rawHistory.length > MAX_EVIDENCE_SNAPSHOTS_PER_CASE) {
-    throw new TypeError('The CLI case pack contains an invalid historical evidence collection.');
-  }
-  const fields = historicalMaterialFields(caseVersion);
-  const materialSeen = new Set<string>();
-  const built = rawHistory.map((raw, index) => {
-    const rawSnapshot = record(raw);
-    const normalized = normalizeSnapshot(raw, { fallback: null, sourceVersion: caseVersion });
-    if (!rawSnapshot || !normalized) {
-      throw new TypeError(`The CLI case pack contains an invalid historical evidence snapshot ${index}.`);
-    }
-    const materialRecord: Record<string, unknown> = {};
-    let hasEvidence = false;
-    for (const field of fields) {
-      const value = historicalMaterialValue(field, normalized);
-      materialRecord[field] = value;
-      if (field !== 'scanDepth' && field !== 'confidence' && !historicalMaterialIsEmpty(value)) hasEvidence = true;
-    }
-    if (!hasEvidence) {
-      throw new TypeError(`The CLI case pack contains an empty historical evidence snapshot ${index}.`);
-    }
-    const material = JSON.stringify(materialRecord);
-    if (materialSeen.has(material)) {
-      throw new TypeError('The CLI case pack contains duplicate historical evidence material.');
-    }
-    materialSeen.add(material);
-    const fingerprint = hashString(material);
-    return {
-      material,
-      snapshot: {
-        id: `ev-${fingerprint}`,
-        fingerprint,
-        firstCapturedAt: normalized.firstCapturedAt,
-        capturedAt: normalized.capturedAt,
-        source: normalized.source,
-        ...Object.fromEntries(fields.map((field) => [field, normalized[field] ?? null])),
-      } satisfies HistoricalSnapshot,
-      rawSnapshot,
-    };
-  });
-  built.sort((left, right) => (
-    Date.parse(String(left.snapshot.capturedAt)) - Date.parse(String(right.snapshot.capturedAt))
-    || Date.parse(String(left.snapshot.firstCapturedAt)) - Date.parse(String(right.snapshot.firstCapturedAt))
-    || String(left.snapshot.fingerprint).localeCompare(String(right.snapshot.fingerprint))
-  ));
-  const usedIds = new Set<string>();
-  for (const item of built) {
-    const base = String(item.snapshot.id);
-    let id = base;
-    let suffix = 2;
-    while (usedIds.has(id)) id = `${base}-${suffix++}`;
-    usedIds.add(id);
-    item.snapshot.id = id;
-  }
-  const projected = built.map((item) => item.snapshot);
-  assertProjectionKeys(rawHistory, projected, 'historical evidenceHistory');
-  for (let index = 0; index < built.length; index++) {
-    const item = built[index];
-    if (!item
-      || item.rawSnapshot.id !== item.snapshot.id
-      || item.rawSnapshot.fingerprint !== item.snapshot.fingerprint) {
-      throw new TypeError(`The CLI case pack contains an invalid historical evidence identity at snapshot ${index}.`);
-    }
-  }
-  return projected;
-}
-
-function historicalEvidenceChanges(
-  previous: HistoricalSnapshot,
-  current: HistoricalSnapshot,
-  caseVersion: number,
-): ReturnType<typeof compareCaseEvidence> {
-  const previousSnapshot = previous as unknown as CaseEvidenceSnapshot;
-  const currentSnapshot = current as unknown as CaseEvidenceSnapshot;
-  const changes = compareCaseEvidence(previousSnapshot, currentSnapshot)
-    .filter((change) => caseVersion >= 10 || !['opportunityScore', 'opportunityFactors'].includes(change.field));
-  if (caseVersion <= 9 && previous.opportunityScore !== current.opportunityScore) {
-    changes.push({
-      field: 'opportunityScore',
-      label: 'Opportunity score',
-      before: previous.opportunityScore ?? null,
-      after: current.opportunityScore ?? null,
-      tone: 'neutral',
-    });
-  }
-  if (caseVersion <= 9 && !canonicalValuesMatch(previous.opportunityFactors, current.opportunityFactors)) {
-    changes.push({
-      field: 'opportunityFactors',
-      label: 'Opportunity factors',
-      before: previous.opportunityFactors,
-      after: current.opportunityFactors,
-      tone: 'neutral',
-    });
-  }
-  const order = new Map(HISTORICAL_CHANGE_ORDER.map((field, index) => [field, index]));
-  return changes
-    .sort((left, right) => (order.get(left.field) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.field) ?? Number.MAX_SAFE_INTEGER))
-    .slice(0, 40);
-}
-
-function historicalEvidenceTimeline(history: readonly HistoricalSnapshot[], caseVersion: number) {
-  return history.map((snapshot, index) => {
-    if (index === 0) {
-      return {
-        snapshot,
-        isBaseline: true,
-        hasRepeatedObservation: snapshot.firstCapturedAt !== snapshot.capturedAt,
-        changes: null,
-        hasIncomparableChange: false,
-        incomparableReasons: [],
-      };
-    }
-    const previous = history[index - 1];
-    if (!previous) throw new TypeError('The CLI case pack contains an invalid historical evidence timeline.');
-    const changes = historicalEvidenceChanges(previous, snapshot, caseVersion);
-    let incomparableReasons = caseEvidenceIncomparableReasons(
-      previous as unknown as CaseEvidenceSnapshot,
-      snapshot as unknown as CaseEvidenceSnapshot,
-    ).filter((reason) => caseVersion >= 10 || reason !== 'opportunity-model') as string[];
-    if (changes.length === 0 && snapshot.fingerprint !== previous.fingerprint && incomparableReasons.length === 0) {
-      incomparableReasons = ['other'];
-    }
-    return {
-      snapshot,
-      isBaseline: false,
-      hasRepeatedObservation: snapshot.firstCapturedAt !== snapshot.capturedAt,
-      changes: changes.length ? changes : null,
-      hasIncomparableChange: incomparableReasons.length > 0,
-      incomparableReasons,
-    };
-  });
-}
-
-function pickHistoricalFields(value: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
-  return Object.fromEntries(fields.map((field) => [field, structuredClone(value[field])])) as Record<string, unknown>;
-}
-
-function historicalAnalystResponse(caseRecord: CaseRecord, caseVersion: number, reportVersion: number) {
-  if (reportVersion === 1) return null;
-  const oldPinFields = ['id', 'label', 'value', 'source', 'observedAt', 'completeness', 'limitations', 'createdAt'];
-  const expandedPinFields = [
-    'id', 'checkpointId', 'field', 'category', 'label', 'value', 'source', 'sourceState', 'sourceSchema',
-    'observedAt', 'collectionDepth', 'completeness', 'truncated',
-    ...(caseVersion >= 7 ? ['transitionExpectation'] : []),
-    'limitations', 'createdAt',
-  ];
-  const evidencePins = caseRecord.evidencePins.map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    caseVersion >= 5 ? expandedPinFields : oldPinFields,
-  ));
-  const decisions = caseRecord.decisions.map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    ['id', 'summary', 'rationale', 'evidencePinIds', 'createdAt'],
-  ));
-  const actions = caseRecord.actions.map((item) => {
-    const projected = pickHistoricalFields(
-      item as unknown as Record<string, unknown>,
-      ['id', 'type', 'recipient', 'contactSource', 'contactLimitations', 'dueAt', 'state', 'reference', 'followUpAt', 'outcome', 'createdAt', 'updatedAt'],
-    );
-    const migrationState = item.history.find((event) => event.sourceClass === 'migration')?.limitations
-      .map((limitation) => /current state "([^"]+)"/u.exec(limitation)?.[1] ?? null)
-      .find((value) => value !== null);
-    if (migrationState && ['planned', 'ready_for_review', 'submitted', 'acknowledged', 'resolved', 'closed'].includes(migrationState)) {
-      projected.state = migrationState;
-    }
-    return projected;
-  });
-  const assertions = caseRecord.assertions.map((item) => {
-    const projected = pickHistoricalFields(
-      item as unknown as Record<string, unknown>,
-      [
-        'id', 'kind', 'statement', 'rationale', 'evidencePinIds',
-        ...(reportVersion >= 6 ? ['evidenceRelations'] : []),
-        'state', 'createdAt', 'updatedAt',
-      ],
-    );
-    if (caseVersion >= 7 && item.provenance) projected.provenance = structuredClone(item.provenance);
-    return projected;
-  });
-  const manualTrail = caseRecord.manualTrail.map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    ['id', 'kind', 'summary', 'target', 'createdAt'],
-  ));
-  const sightings = caseRecord.sightings.map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    ['id', 'state', 'sourceClass', 'category', 'source', 'observedAt', 'completeness', 'evidencePinId', 'limitations', 'createdAt'],
-  ));
-  const branches = (caseRecord.branches ?? []).map((item) => pickHistoricalFields(
-    item as unknown as Record<string, unknown>,
-    ['id', 'name', 'state', 'evidencePinIds', 'checkpointIds', 'assertionIds', 'actionIds', 'createdAt', 'updatedAt'],
-  ));
-  return {
-    evidencePins,
-    decisions,
-    actions,
-    ...(reportVersion >= 3 ? { assertions, manualTrail } : {}),
-    ...(reportVersion >= 4 ? { sightings } : {}),
-    ...(reportVersion >= 7 ? { branches } : {}),
-  };
-}
-
-function assertHistoricalCaseResponseEpoch(
-  rawCase: Record<string, unknown>,
-  caseRecord: CaseRecord,
-  caseVersion: number,
-  reportVersion: number,
-  path: string,
-): void {
-  const expected = historicalAnalystResponse(caseRecord, caseVersion, reportVersion);
-  const introductions = new Map<string, number>([
-    ['evidencePins', 3], ['decisions', 3], ['actions', 3],
-    ['assertions', 4], ['manualTrail', 4], ['sightings', 9], ['branches', 11],
-  ]);
-  for (const [field, introduced] of introductions) {
-    if (caseVersion < introduced) {
-      if (Object.hasOwn(rawCase, field)) {
-        throw new TypeError(`The CLI case pack contains ${path}.${field} outside its historical Case epoch.`);
-      }
-      continue;
-    }
-    if (Object.hasOwn(rawCase, field)) {
-      const projection = record(expected)?.[field];
-      assertProjectionKeys(rawCase[field], projection, `${path}.${field}`);
-    }
-  }
-  if (caseVersion < 10 && Object.hasOwn(rawCase, 'reviewReasonCode')) {
-    throw new TypeError(`The CLI case pack contains ${path}.reviewReasonCode outside its historical Case epoch.`);
-  }
-}
-
-function historicalReportProjection(
-  caseRecord: CaseRecord,
-  evidenceHistory: readonly HistoricalSnapshot[],
-  report: Record<string, unknown>,
-  caseVersion: number,
-  reportVersion: number,
-  generatedAt: string,
-) {
-  const limitation = LEGACY_REPORT_LIMITATION_BY_VERSION.get(reportVersion);
-  if (!limitation) throw new TypeError('The CLI case pack contains an unsupported historical Case report.');
-  const reportCase: Record<string, unknown> = {
-    id: caseRecord.id,
-    domain: caseRecord.domain,
-    status: caseRecord.status,
-    disposition: caseRecord.disposition,
-    ...(reportVersion >= 5 ? { reviewReasonCode: caseRecord.reviewReasonCode ?? null } : {}),
-    ...(reportVersion >= 6 ? { interoperabilityTags: analystInteroperabilityTags(caseRecord.disposition, caseRecord.reviewReasonCode) } : {}),
-    ...(reportVersion >= 8 ? { brandProfileIds: [...caseRecord.brandProfileIds] } : {}),
-    tags: [...caseRecord.tags],
-    source: caseRecord.source,
-    openedAt: caseRecord.createdAt,
-    updatedAt: caseRecord.updatedAt,
-    notesIncluded: false,
-  };
-  const response = historicalAnalystResponse(caseRecord, caseVersion, reportVersion);
-  return {
-    schema: CASE_REPORT_SCHEMA,
-    schemaVersion: reportVersion,
-    generatedAt,
-    application: reportVersion >= 6
-      ? buildPortableGeneratorMetadata(reportApplicationVersion(report))
-      : { name: 'WHOISleuth' },
-    case: reportCase,
-    currentAssessment: evidenceHistory.at(-1) ?? null,
-    evidenceTimeline: historicalEvidenceTimeline(evidenceHistory, caseVersion),
-    ...(response ? { analystResponse: response } : {}),
-    limitations: limitation,
-  };
-}
-
-function assertLegacyProfileContextEpoch(rawCase: Record<string, unknown>, report: Record<string, unknown>): void {
-  const assertSnapshot = (value: unknown, path: string) => {
-    const snapshot = record(value);
-    if (snapshot && (Object.hasOwn(snapshot, 'profileContextState') || Object.hasOwn(snapshot, 'profileContextLimitation'))) {
-      throw new TypeError(`The CLI case pack contains schema-12 profile context fields outside the historical ${path} epoch.`);
-    }
-  };
-  if (Array.isArray(rawCase.evidenceHistory)) {
-    rawCase.evidenceHistory.forEach((snapshot, index) => assertSnapshot(snapshot, `cases evidence snapshot ${index}`));
-  }
-  assertSnapshot(report.currentAssessment, 'current assessment');
-  if (Array.isArray(report.evidenceTimeline)) {
-    report.evidenceTimeline.forEach((entry, index) => {
-      const timelineEntry = record(entry);
-      assertSnapshot(timelineEntry?.snapshot, `report timeline snapshot ${index}`);
-      if (!Array.isArray(timelineEntry?.changes)) return;
-      timelineEntry.changes.forEach((value, changeIndex) => {
-        const change = record(value);
-        if (!change) return;
-        const field = change.field;
-        const label = change.label;
-        const carriesProfileContextField = ['profileContextState', 'profileContextLimitation'].some((key) => (
-          Object.hasOwn(change, key)
-          || field === key
-          || [change.before, change.after].some((candidate) => Boolean(record(candidate) && Object.hasOwn(record(candidate)!, key)))
-        ));
-        if (carriesProfileContextField
-          || (typeof label === 'string' && /profile[ -]?context/iu.test(label))) {
-          throw new TypeError(`The CLI case pack contains schema-12 profile context fields outside the historical report timeline change ${index}.${changeIndex} epoch.`);
-        }
-      });
-    });
-  }
-}
-
 function redactedCase(record: CaseRecord, audience: CasePackAudience): CaseRecord {
   if (audience === 'internal') return structuredClone(record);
   return {
@@ -846,23 +348,27 @@ export function buildCliCasePack(
     parsed = JSON.parse(normalized);
   } catch { throw new CliUsageError('Case-pack input must be valid bounded JSON without duplicate keys.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  if (typeof root.version !== 'number' || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number]) || !Array.isArray(root.cases)) {
-    throw new CliUsageError(`Case-pack input must be a supported WHOISleuth case export through schema ${CASE_SCHEMA_VERSION}.`);
+  if (Number.isSafeInteger(root.version) && (root.version as number) < CASE_SCHEMA_VERSION) {
+    throw new CliUsageError(`Case schema ${String(root.version)} is retired. Export it as schema ${CASE_SCHEMA_VERSION} with the last broad-reader release before packaging; no data was changed.`);
   }
-  if (root.version === CASE_SCHEMA_VERSION) {
-    try {
-      assertCanonicalCaseIdentities(root.cases, 'Case-pack input');
-      for (const item of root.cases) {
-        const rawCase = record(item);
-        if (!rawCase || !Object.hasOwn(rawCase, 'brandProfileIds')) throw new Error('missing');
-        assertCaseBrandProfileIds(rawCase.brandProfileIds);
-      }
-    } catch (cause) {
-      if (cause instanceof TypeError && /Case identity/u.test(cause.message)) {
-        throw new CliUsageError(cause.message);
-      }
-      throw new CliUsageError(`Case-pack schema ${CASE_SCHEMA_VERSION} input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array on every case.`);
+  if (Number.isSafeInteger(root.version) && (root.version as number) > CASE_SCHEMA_VERSION) {
+    throw new CliUsageError(`Case schema ${String(root.version)} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+  }
+  if (root.version !== CASE_SCHEMA_VERSION || !Array.isArray(root.cases)) {
+    throw new CliUsageError(`Case-pack input must be a well-formed WHOISleuth Case schema ${CASE_SCHEMA_VERSION} export.`);
+  }
+  try {
+    assertCanonicalCaseIdentities(root.cases, 'Case-pack input');
+    for (const item of root.cases) {
+      const rawCase = record(item);
+      if (!rawCase || !Object.hasOwn(rawCase, 'brandProfileIds')) throw new Error('missing');
+      assertCaseBrandProfileIds(rawCase.brandProfileIds);
     }
+  } catch (cause) {
+    if (cause instanceof TypeError && /Case identity/u.test(cause.message)) {
+      throw new CliUsageError(cause.message);
+    }
+    throw new CliUsageError(`Case-pack schema ${CASE_SCHEMA_VERSION} input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array on every case.`);
   }
   const normalised = normalizeCaseStore(root).cases;
   if (!normalised.length) throw new CliUsageError('Case-pack input did not contain a valid case.');
@@ -872,10 +378,8 @@ export function buildCliCasePack(
   if (normalised.length > MAX_CASE_PACK_CASES) {
     throw new CliUsageError(`Case packs are limited to ${MAX_CASE_PACK_CASES} reviewed cases. Export a smaller selected set so no case is silently omitted.`);
   }
-  if (root.version === CASE_SCHEMA_VERSION) {
-    try { assertCurrentCaseProjection(root.cases, normalised, 'Case-pack input'); }
-    catch (cause) { throw new CliUsageError(cause instanceof Error ? cause.message : `Case-pack schema ${CASE_SCHEMA_VERSION} input is not exact.`); }
-  }
+  try { assertCurrentCaseProjection(root.cases, normalised, 'Case-pack input'); }
+  catch (cause) { throw new CliUsageError(cause instanceof Error ? cause.message : `Case-pack schema ${CASE_SCHEMA_VERSION} input is not exact.`); }
   const cases = normalised.map((item) => redactedCase(item, options.audience));
   const brandProfileReferencesOmitted = options.audience === 'public'
     ? normalised.reduce((count, item) => count + item.brandProfileIds.length, 0)
@@ -885,7 +389,7 @@ export function buildCliCasePack(
     includeNotes: false,
     generatedAt,
   }).json);
-  const exclusions = expectedExclusions(options.audience, CASE_SCHEMA_VERSION);
+  const exclusions = expectedExclusions(options.audience);
   const packet = Object.freeze({
     schema: CLI_CASE_PACK_SCHEMA,
     version: CLI_CASE_PACK_VERSION,
@@ -915,27 +419,46 @@ export function buildCliCasePack(
 }
 
 export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number }> {
+  assertBoundedJsonStructure(input, 'CLI case pack');
   const root = record(input);
+  const packet = record(root?.packet);
+  const packetVersion = packet?.version;
+  if (packet?.schema === CLI_CASE_PACK_SCHEMA && Number.isSafeInteger(packetVersion)) {
+    if ((packetVersion as number) < CLI_CASE_PACK_VERSION) {
+      throw new TypeError(`CLI case-pack version ${String(packetVersion)} is retired. Export it again as version ${CLI_CASE_PACK_VERSION} before importing; no data was changed.`);
+    }
+    if ((packetVersion as number) > CLI_CASE_PACK_VERSION) {
+      throw new TypeError(`CLI case-pack version ${String(packetVersion)} is newer than the supported version ${CLI_CASE_PACK_VERSION}; no data was changed.`);
+    }
+  }
+  const caseVersion = root?.version;
+  if (Number.isSafeInteger(caseVersion)) {
+    if ((caseVersion as number) < CASE_SCHEMA_VERSION
+      && !CASE_IMPORT_VERSIONS.includes(caseVersion as typeof CASE_IMPORT_VERSIONS[number])) {
+      throw new TypeError(`Case schema ${String(caseVersion)} in this CLI case pack is not part of the public compatibility boundary; no data was changed.`);
+    }
+    if ((caseVersion as number) > CASE_SCHEMA_VERSION) {
+      throw new TypeError(`Case schema ${String(caseVersion)} in this CLI case pack is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    }
+  }
+
   let serialized: string;
-  try { serialized = JSON.stringify(root); }
+  try { serialized = JSON.stringify(input); }
   catch { throw new TypeError('The CLI case pack structure is not serializable.'); }
   if (Buffer.byteLength(serialized, 'utf8') > MAX_CASE_IMPORT_BYTES) {
     throw new TypeError('The CLI case pack exceeds the browser import limit.');
   }
-  const packet = record(root?.packet);
+
   const integrity = record(root?.integrity);
   const redactionManifest = record(packet?.redactionManifest);
   if (!root
     || !packet
     || packet.schema !== CLI_CASE_PACK_SCHEMA
-    || (packet.version !== LEGACY_CLI_CASE_PACK_VERSION && packet.version !== CLI_CASE_PACK_VERSION)
-    || (packet.version === CLI_CASE_PACK_VERSION
-      ? (root.version !== 13 && root.version !== CASE_SCHEMA_VERSION)
-      : (root.version === 13 || root.version === CASE_SCHEMA_VERSION))
+    || packet.version !== CLI_CASE_PACK_VERSION
+    || typeof root.version !== 'number'
+    || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number])
     || packet.reviewed !== true
-    || (packet.audience !== 'internal'
-      && packet.audience !== 'public'
-      && packet.audience !== 'trusted')
+    || (packet.audience !== 'internal' && packet.audience !== 'public' && packet.audience !== 'trusted')
     || !Array.isArray(packet.reports)
     || !redactionManifest
     || !Array.isArray(root.cases)
@@ -943,147 +466,84 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     || root.cases.length > MAX_CASE_PACK_CASES
     || packet.reports.length !== root.cases.length
     || typeof root.exportedAt !== 'string'
-    || typeof root.version !== 'number'
-    || !CASE_IMPORT_VERSIONS.includes(root.version as typeof CASE_IMPORT_VERSIONS[number])
     || !integrity
     || integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== SORTED_JSON_V2
     || typeof integrity.digestSha256 !== 'string'
     || !/^sha256:[a-f0-9]{64}$/u.test(integrity.digestSha256)) {
-    throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
+    throw new TypeError('The CLI case pack structure or integrity envelope is malformed.');
   }
-  let canonicalization;
-  try {
-    canonicalization = resolveArtifactCanonicalization(
-      packet.version,
-      integrity.canonicalization,
-      [
-        { version: LEGACY_CLI_CASE_PACK_VERSION, canonicalization: SORTED_JSON_V1, explicit: true },
-        { version: CLI_CASE_PACK_VERSION, canonicalization: SORTED_JSON_V2, explicit: true },
-      ],
-      'CLI case pack',
-    );
-  } catch {
-    throw new TypeError('The CLI case pack structure or integrity envelope is invalid.');
-  }
-  const { integrity: _integrity, ...unsigned } = root;
+
+  assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, root.version as number);
+  assertSensitiveFieldPlacement(root, serialized.length);
   const audience = packet.audience as CasePackAudience;
-  const current = root.version === CASE_SCHEMA_VERSION;
-  const case13 = root.version === 13;
-  const supportsBrandProfileReferences = root.version >= 12;
-  assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, supportsBrandProfileReferences);
-  assertSensitiveFieldPlacement(root, supportsBrandProfileReferences, serialized.length);
   if (!Number.isSafeInteger(redactionManifest.sourceCaseCount)
     || redactionManifest.sourceCaseCount !== root.cases.length
-    || !stringListsMatch(redactionManifest.excluded, expectedExclusions(audience, root.version))) {
+    || !stringListsMatch(redactionManifest.excluded, expectedExclusions(audience, root.version as number))) {
     throw new TypeError('The CLI case pack has an invalid audience redaction manifest.');
   }
-  const caseReferenceLists: string[][] = [];
-  const reportReferenceLists: string[][] = [];
-  if (!current && !case13) assertHistoricalCaseOwnKeys(root.cases, root.version);
+
   assertCanonicalCaseIdentities(root.cases, 'The CLI case pack');
   const normalised = normalizeCaseStore(root).cases;
   if (normalised.length !== root.cases.length) {
     throw new TypeError('The CLI case pack contains an invalid case collection.');
   }
+  if (root.version === CASE_SCHEMA_VERSION) assertCurrentCaseProjection(root.cases, normalised, 'The CLI case pack');
   const normalisedByDomain = new Map(normalised.map((item) => [item.domain, item]));
-  if (current) assertCurrentCaseProjection(root.cases, normalised, 'The CLI case pack');
-  if (case13) assertCase13Projection(root.cases, normalised, 'The CLI case pack');
-  for (let index = 0; index < root.cases.length; index++) {
+  const caseReferenceLists: string[][] = [];
+  const reportReferenceLists: string[][] = [];
+
+  for (let index = 0; index < root.cases.length; index += 1) {
     const rawCase = record(root.cases[index]);
     const report = record(packet.reports[index]);
     const reportCase = record(report?.case);
-    const reportVersion = report?.schemaVersion;
     if (!rawCase
       || !report
       || !reportCase
       || typeof rawCase.domain !== 'string'
       || report.schema !== CASE_REPORT_SCHEMA
-      || !reportVersionMatchesCase(root.version, reportVersion)
+      || !caseReportVersionMatchesCase(root.version as number, report.schemaVersion)
       || reportCase.id !== rawCase.id
-      || reportCase.domain !== rawCase.domain) {
+      || reportCase.domain !== rawCase.domain
+      || !normalisedByDomain.has(rawCase.domain)) {
       throw new TypeError('The CLI case pack contains an invalid or mismatched Case report.');
     }
-    const normalisedCase = normalisedByDomain.get(rawCase.domain);
-    if (!normalisedCase) throw new TypeError('The CLI case pack contains an invalid case collection.');
-    assertAudienceFields(rawCase, audience, root.version >= 11);
-    if (root.version < 12) assertLegacyProfileContextEpoch(rawCase, report);
-    if (supportsBrandProfileReferences) {
-      try {
-        if (!Object.hasOwn(rawCase, 'brandProfileIds') || !Object.hasOwn(reportCase, 'brandProfileIds')) throw new Error('missing');
-        caseReferenceLists.push(assertCaseBrandProfileIds(rawCase.brandProfileIds));
-        reportReferenceLists.push(assertCaseBrandProfileIds(reportCase.brandProfileIds));
-      } catch {
-        throw new TypeError('The CLI case pack contains invalid Brand Profile references.');
-      }
+    assertAudienceFields(rawCase, audience);
+    try {
+      if (!Object.hasOwn(rawCase, 'brandProfileIds') || !Object.hasOwn(reportCase, 'brandProfileIds')) throw new Error('missing');
+      caseReferenceLists.push(assertCaseBrandProfileIds(rawCase.brandProfileIds));
+      reportReferenceLists.push(assertCaseBrandProfileIds(reportCase.brandProfileIds));
+    } catch {
+      throw new TypeError('The CLI case pack contains invalid Brand Profile references.');
     }
-    if (current) {
-      assertCurrentReportProjection(report, rawCase as unknown as CaseRecord);
-    } else if (case13) {
-      if (report.generatedAt !== root.exportedAt) {
-        throw new TypeError('The CLI case pack contains an invalid or mismatched Case-13 report generation time.');
-      }
-      const expectedReport = {
-        ...buildCaseReport(normalisedCase, {
-          applicationVersion: reportApplicationVersion(report),
-          includeNotes: false,
-          generatedAt: root.exportedAt,
-        }).json,
-      };
-      if (!canonicalValuesMatch(report, expectedReport)) {
-        throw new TypeError('The CLI case pack contains an invalid or mismatched Case-13 report projection.');
-      }
-    } else {
-      const historicalHistory = normalizeHistoricalEvidenceHistory(rawCase.evidenceHistory, root.version);
-      const historicalResponse = historicalAnalystResponse(normalisedCase, root.version, reportVersion as number);
-      assertProjectionKeys(rawCase, {
-        ...normalisedCase,
-        evidenceHistory: historicalHistory,
-        ...(historicalResponse ?? {}),
-      }, `cases[${index}]`);
-      assertHistoricalCaseResponseEpoch(rawCase, normalisedCase, root.version, reportVersion as number, `cases[${index}]`);
-      if (report.generatedAt !== root.exportedAt) {
-        throw new TypeError('The CLI case pack contains an invalid or mismatched historical report generation time.');
-      }
-      const expectedReport = historicalReportProjection(
-        normalisedCase,
-        historicalHistory,
-        report,
-        root.version,
-        reportVersion as number,
-        root.exportedAt,
-      );
-      if (!canonicalValuesMatch(report, expectedReport)) {
-        throw new TypeError('The CLI case pack contains an invalid or mismatched historical Case report projection.');
-      }
-    }
+    if (root.version === CASE_SCHEMA_VERSION) assertCurrentReportProjection(report, rawCase as unknown as CaseRecord);
   }
-  if (supportsBrandProfileReferences) {
-    const omitted = redactionManifest.brandProfileReferencesOmitted;
-    if (!Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')
-      || !Number.isSafeInteger(omitted)
-      || (omitted as number) < 0
-      || (omitted as number) > MAX_CASE_PACK_CASES * 8) {
-      throw new TypeError('The CLI case pack has an invalid Brand Profile redaction manifest.');
-    }
-    const referencesMatch = caseReferenceLists.every((references, index) => {
-      const reportReferences = reportReferenceLists[index];
-      return reportReferences?.length === references.length
-        && references.every((reference, referenceIndex) => reportReferences[referenceIndex] === reference);
-    });
-    if (audience === 'public') {
-      if (caseReferenceLists.some((references) => references.length !== 0)
-        || reportReferenceLists.some((references) => references.length !== 0)) {
-        throw new TypeError('The public CLI case pack has an invalid Brand Profile redaction manifest.');
-      }
-    } else if (omitted !== 0 || !referencesMatch) {
-      throw new TypeError('The trusted or internal CLI case pack has inconsistent Brand Profile references.');
-    }
-  } else if (Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')) {
-    throw new TypeError('The legacy CLI case pack has an invalid Brand Profile redaction manifest.');
+
+  const omitted = redactionManifest.brandProfileReferencesOmitted;
+  if (!Object.hasOwn(redactionManifest, 'brandProfileReferencesOmitted')
+    || !Number.isSafeInteger(omitted)
+    || (omitted as number) < 0
+    || (omitted as number) > MAX_CASE_PACK_CASES * 8) {
+    throw new TypeError('The CLI case pack has an invalid Brand Profile redaction manifest.');
   }
+  const referencesMatch = caseReferenceLists.every((references, index) => {
+    const reportReferences = reportReferenceLists[index];
+    return reportReferences?.length === references.length
+      && references.every((reference, referenceIndex) => reportReferences[referenceIndex] === reference);
+  });
+  if (audience === 'public') {
+    if (caseReferenceLists.some((references) => references.length !== 0)
+      || reportReferenceLists.some((references) => references.length !== 0)) {
+      throw new TypeError('The public CLI case pack has an invalid Brand Profile redaction manifest.');
+    }
+  } else if (omitted !== 0 || !referencesMatch) {
+    throw new TypeError('The trusted or internal CLI case pack has inconsistent Brand Profile references.');
+  }
+
+  const { integrity: _integrity, ...unsigned } = root;
   let calculated: string;
   try {
-    calculated = `sha256:${createHash('sha256').update(canonicalArtifactJsonFor(unsigned, canonicalization)).digest('hex')}`;
+    calculated = `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex')}`;
   } catch {
     throw new TypeError('The CLI case pack structure is not serializable.');
   }
@@ -1092,7 +552,6 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   }
   return Object.freeze({ caseCount: normalised.length });
 }
-
 export function formatCliCasePack(document: ReturnType<typeof buildCliCasePack>): string {
   return [
     'Reviewed case pack',

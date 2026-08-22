@@ -44,6 +44,7 @@
 <style>
   .bulk-risk{display:grid;min-width:132px;max-width:260px;gap:3px}
   .risk-band{display:inline-flex;width:max-content;max-width:100%;align-items:center;gap:5px;padding:3px 6px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:700 var(--text-2xs) var(--mono)}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
   .risk-symbol{display:grid;width:13px;height:13px;place-items:center;border:1px solid currentColor;border-radius:50%}
   .risk-symbol::before{content:'•';font-size:8px}
   [data-risk-band='elevated'] .risk-band{border-color:var(--danger);color:var(--danger)}
@@ -55,6 +56,7 @@
   [data-risk-band='inconclusive'] .risk-symbol::before{content:'?'}
   .bulk-risk>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.35;overflow-wrap:anywhere}
   .risk-detail{min-width:0}
+  .risk-detail:not([open]) .risk-detail-body{display:none}
   .risk-detail>summary{width:max-content;max-width:100%;color:var(--accent);font:650 var(--text-2xs) var(--mono);cursor:pointer}
   .risk-detail>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .risk-detail-body{display:grid;min-width:min(420px,70vw);max-width:560px;gap:9px;margin-top:7px;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .12)}

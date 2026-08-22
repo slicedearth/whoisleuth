@@ -4,7 +4,7 @@
 
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeCaaCritical } from './dns-record-normalization.mts';
-import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   BULK_SESSION_SCHEMA,
@@ -34,7 +34,6 @@ export {
   SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS,
 } from '../contracts/workspace-portability.mts';
 export const BULK_PROFILE_CONTEXT_UNAVAILABLE_LIMITATION = 'Brand Profile context was unavailable when this row was evaluated. Trust, profile matches, and the profile-dependent Risk assessment remain inconclusive.';
-export const BULK_PROFILE_CONTEXT_LEGACY_LIMITATION = 'This legacy Bulk row did not retain profile-context provenance. Trust, profile matches, and the potentially profile-influenced Risk assessment are withheld until the domain is rescanned.';
 export const BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION = 'This saved Bulk row was evaluated with a different or unreadable Brand Profile context. Profile-derived conclusions and the Risk assessment are withheld until the domain is rescanned.';
 export const BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION = 'This row came from a portable import whose claimed Brand Profile identity and revision cannot authenticate profile-derived conclusions. Trust, profile matches, and the potentially profile-influenced Risk assessment are withheld until the domain is rescanned locally.';
 
@@ -219,10 +218,8 @@ function boundedText(value: unknown, maximum = MAX_BULK_SESSION_TEXT_LENGTH): st
     : '';
 }
 
-function timestamp(value: unknown, fallback: string | null = null, legacy = false): string | null {
-  const normalized = normalizeExplicitIsoTimestamp(value);
-  if (normalized) return normalized;
-  return (legacy ? normalizeLegacyIsoTimestamp(value) : null) ?? fallback;
+function timestamp(value: unknown, fallback: string | null = null): string | null {
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function profileContextLimitation(value: unknown, fallback: string): string {
@@ -461,24 +458,16 @@ export function normalizeBulkComparisonEvidence(value: unknown): BulkSessionComp
   };
 }
 
-export function normalizeBulkSessionResult(
-  value: unknown,
-  sourceVersion = BULK_SESSION_SCHEMA_VERSION,
-): BulkSessionResult | null {
+export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | null {
   const item = record(value);
   const domain = normalizeDomain(item?.domain);
   const status = boundedText(item?.status, 20);
   const scanDepth = boundedText(item?.scanDepth, 10);
   if (!item || !domain || !RESULT_STATES.has(status) || !MODES.has(scanDepth)) return null;
   const rawProfileContext = record(item.profileContext);
-  if (
-    sourceVersion >= 4
-    && (!rawProfileContext || !['ready', 'unavailable'].includes(String(rawProfileContext.sourceState)))
-  ) return null;
-  const profileContext = sourceVersion >= 4
-    ? normalizeBulkProfileContext(rawProfileContext)
-    : unavailableBulkProfileContext(BULK_PROFILE_CONTEXT_LEGACY_LIMITATION);
-  if (sourceVersion >= 4 && rawProfileContext?.sourceState === 'ready' && profileContext.sourceState !== 'ready') return null;
+  if (!rawProfileContext || !['ready', 'unavailable'].includes(String(rawProfileContext.sourceState))) return null;
+  const profileContext = normalizeBulkProfileContext(rawProfileContext);
+  if (rawProfileContext.sourceState === 'ready' && profileContext.sourceState !== 'ready') return null;
   const profileContextReady = profileContext.sourceState === 'ready';
   const trusted = boundedText(item.trusted, 20);
   const relationship = normalizeRelationship(item.relationship);
@@ -541,20 +530,16 @@ export function normalizeBulkSessionResult(
   };
 }
 
-export function normalizeBulkSession(
-  value: unknown,
-  sourceVersion = BULK_SESSION_SCHEMA_VERSION,
-): BulkSession | null {
+export function normalizeBulkSession(value: unknown): BulkSession | null {
   const item = record(value);
   const id = boundedText(item?.id, 128);
   const name = boundedText(item?.name, MAX_BULK_SESSION_NAME_LENGTH);
   const mode = boundedText(item?.mode, 10);
   const state = boundedText(item?.state, 20);
   const inputDigest = boundedText(item?.inputDigest, 80);
-  const legacyTimestamps = sourceVersion < BULK_SESSION_SCHEMA_VERSION;
-  const startedAt = timestamp(item?.startedAt, null, legacyTimestamps);
-  const updatedAt = timestamp(item?.updatedAt, null, legacyTimestamps);
-  const completedAt = item?.completedAt === null ? null : timestamp(item?.completedAt, null, legacyTimestamps);
+  const startedAt = timestamp(item?.startedAt);
+  const updatedAt = timestamp(item?.updatedAt);
+  const completedAt = item?.completedAt === null ? null : timestamp(item?.completedAt);
   if (
     !item
     || !SAFE_ID_RE.test(id)
@@ -567,27 +552,23 @@ export function normalizeBulkSession(
   ) return null;
   const domains = domainList(item.domains);
   if (!domains.length) return null;
-  if (sourceVersion >= 4 && !Array.isArray(item.results)) return null;
+  if (!Array.isArray(item.results)) return null;
   const allowed = new Set(domains);
   const results: BulkSessionResult[] = [];
   const seen = new Set<string>();
   for (const candidate of Array.isArray(item.results) ? item.results.slice(0, MAX_BULK_SESSION_ROWS * 2) : []) {
-    const result = normalizeBulkSessionResult(candidate, sourceVersion);
+    const result = normalizeBulkSessionResult(candidate);
     if (!result || !allowed.has(result.domain) || seen.has(result.domain)) {
-      if (sourceVersion >= 4) return null;
-      continue;
+      return null;
     }
     seen.add(result.domain);
     results.push(result);
-    if (sourceVersion < 4 && results.length >= MAX_BULK_SESSION_ROWS) break;
   }
-  if (sourceVersion >= 4 && ((state === 'complete') !== (results.length === domains.length))) return null;
+  if ((state === 'complete') !== (results.length === domains.length)) return null;
   const profileContext = summarizeBulkProfileContexts(results);
-  if (sourceVersion >= 4) {
-    if (!record(item.profileContext)) return null;
-    const declaredProfileContext = normalizeBulkProfileContext(item.profileContext);
-    if (!sameProfileContext(declaredProfileContext, profileContext)) return null;
-  }
+  if (!record(item.profileContext)) return null;
+  const declaredProfileContext = normalizeBulkProfileContext(item.profileContext);
+  if (!sameProfileContext(declaredProfileContext, profileContext)) return null;
   return {
     id,
     name,
@@ -614,10 +595,10 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
   assertWorkspaceInputGraph(raw, 'Bulk-session store');
   assertWorkspaceDeclaredVersion(raw, 'Bulk-session store');
   const value = record(raw);
-  const sourceVersion = value?.schema === BULK_SESSION_SCHEMA
-      && SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS.includes(Number(value.version))
-      ? Number(value.version)
-      : null;
+  if (value?.schema === BULK_SESSION_SCHEMA
+    && !SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS.includes(Number(value.version))) {
+    throw new Error(`Bulk-session store schema ${String(value.version)} is unsupported; no data was changed.`);
+  }
   const candidates = Array.isArray(raw)
     ? raw
     : value?.schema === BULK_SESSION_SCHEMA
@@ -627,17 +608,7 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
       : [];
   const byId = new Map<string, BulkSession>();
   for (const candidate of candidates.slice(0, MAX_BULK_SESSIONS * 4)) {
-    const candidateRecord = record(candidate);
-    const resultRecords = Array.isArray(candidateRecord?.results)
-      ? candidateRecord.results.map(record).filter((item): item is UnknownRecord => Boolean(item))
-      : [];
-    const whollyUnversionedLegacy = Array.isArray(raw)
-      && !Object.hasOwn(candidateRecord ?? {}, 'profileContext')
-      && resultRecords.every((item) => !Object.hasOwn(item, 'profileContext'));
-    const candidateVersion = Array.isArray(raw)
-      ? whollyUnversionedLegacy ? 3 : BULK_SESSION_SCHEMA_VERSION
-      : sourceVersion ?? BULK_SESSION_SCHEMA_VERSION;
-    const session = normalizeBulkSession(candidate, candidateVersion);
+    const session = normalizeBulkSession(candidate);
     if (!session) continue;
     const existing = byId.get(session.id);
     if (!existing || existing.updatedAt < session.updatedAt) byId.set(session.id, session);
@@ -833,9 +804,8 @@ export function mergeBulkSessions(
   let added = 0;
   let updated = 0;
   let skipped = 0;
-  const importedVersion = Number(imported.version);
   for (const candidate of imported.sessions.slice(0, MAX_BULK_SESSIONS * 4)) {
-    const normalized = normalizeBulkSession(candidate, importedVersion);
+    const normalized = normalizeBulkSession(candidate);
     if (!normalized) {
       skipped += 1;
       continue;

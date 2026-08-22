@@ -53,17 +53,6 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const GENERATED_AT = '2026-08-18T00:00:00.000Z';
 const EXPECTED_FIXTURES = [
   {
-    id: 'risk-calibration-dataset-v1',
-    path: 'test/fixtures/risk-calibration-dataset-v1.json',
-    bytes: 469,
-    sha256: 'aaa418ceaf06616b4436cec8bef5fb670c7d37711dce3f84678bc272307e0ec9',
-    schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: 1,
-    role: 'historical',
-    expectation: 'accepted_exact',
-    shapeId: 'risk-calibration.dataset.v1',
-  },
-  {
     id: 'risk-calibration-dataset-v2',
     path: 'test/fixtures/risk-calibration-dataset-v2.json',
     bytes: 1_154,
@@ -73,28 +62,6 @@ const EXPECTED_FIXTURES = [
     role: 'current',
     expectation: 'accepted_exact',
     shapeId: 'risk-calibration.dataset.v2',
-  },
-  {
-    id: 'risk-calibration-report-v1',
-    path: 'test/fixtures/risk-calibration-report-v1.json',
-    bytes: 3_271,
-    sha256: '36b131775d086bca7c570ca483c7ead5071f810e7c445e7cca830014225b9d71',
-    schema: RISK_CALIBRATION_REPORT_SCHEMA,
-    version: 1,
-    role: 'historical',
-    expectation: 'historical_output_exact',
-    shapeId: 'risk-calibration.report.v1',
-  },
-  {
-    id: 'risk-calibration-report-v2',
-    path: 'test/fixtures/risk-calibration-report-v2.json',
-    bytes: 6_850,
-    sha256: '4b7183cf127958ac483d4a53521bec9f5a00d576df5d1c54397afe06606747f6',
-    schema: RISK_CALIBRATION_REPORT_SCHEMA,
-    version: 2,
-    role: 'historical',
-    expectation: 'historical_output_exact',
-    shapeId: 'risk-calibration.report.v2',
   },
   {
     id: 'risk-calibration-report-v3-detailed',
@@ -275,7 +242,7 @@ function coverageDetailed(): RiskCalibrationReport {
   });
 }
 
-function providerDataset(version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION): Record<string, unknown> {
+function providerDataset(version: typeof RISK_CALIBRATION_DATASET_VERSION): Record<string, unknown> {
   return {
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
     version,
@@ -307,7 +274,7 @@ function reversedObject(value: Record<string, unknown>): Record<string, unknown>
 }
 
 describe('Risk calibration lifecycle', () => {
-  test('registers projected dataset history and exact report variants', () => {
+  test('registers the public current-writer dataset and exact report variants', () => {
     assert.equal(RISK_CALIBRATION_SCHEMA_LIFECYCLE.metadata.metadataVersion, 4);
     assert.equal(RISK_CALIBRATION_SCHEMA_LIFECYCLE.compatibility[0]?.migration, 'read_only');
     assert.equal(RISK_CALIBRATION_SCHEMA_LIFECYCLE.compatibility[1]?.futureVersionBehavior, 'reject');
@@ -321,10 +288,7 @@ describe('Risk calibration lifecycle', () => {
         extensionPolicy: contract.extensionPolicy,
       })),
       [
-        { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: 1, lifecycle: 'legacy', readable: true, emitted: false, extensionPolicy: 'discard_bounded' },
         { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: 2, lifecycle: 'current', readable: true, emitted: true, extensionPolicy: 'discard_bounded' },
-        { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: 1, lifecycle: 'retired', readable: false, emitted: false, extensionPolicy: 'reject' },
-        { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: 2, lifecycle: 'retired', readable: false, emitted: false, extensionPolicy: 'reject' },
         { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: 3, lifecycle: 'current', readable: true, emitted: true, extensionPolicy: 'reject' },
       ],
     );
@@ -408,28 +372,17 @@ describe('Risk calibration lifecycle', () => {
     }
   });
 
-  test('exercises every registered object path with bounded reader-compatible documents', async () => {
-    for (const version of [1, RISK_CALIBRATION_DATASET_VERSION] as const) {
-      const document = providerDataset(version);
-      assert.doesNotThrow(() => parseRiskCalibrationDataset(JSON.stringify(document)));
-      const shape = RISK_CALIBRATION_SCHEMA_LIFECYCLE.metadata.shapes
-        .find(({ id }) => id === `risk-calibration.dataset.v${version}`);
-      assert.ok(shape);
-      assertEveryRegisteredObjectPath(shape, [document], shape.id);
-    }
+  test('exercises every registered object path with bounded current documents', () => {
+    const document = providerDataset(RISK_CALIBRATION_DATASET_VERSION);
+    assert.doesNotThrow(() => parseRiskCalibrationDataset(JSON.stringify(document)));
+    const datasetShape = RISK_CALIBRATION_SCHEMA_LIFECYCLE.metadata.shapes
+      .find(({ id }) => id === `risk-calibration.dataset.v${RISK_CALIBRATION_DATASET_VERSION}`);
+    assert.ok(datasetShape);
+    assertEveryRegisteredObjectPath(datasetShape, [document], datasetShape.id);
 
-    const historicalV1 = JSON.parse(await readFile(
-      path.join(ROOT, 'test/fixtures/risk-calibration-report-v1.json'),
-      'utf8',
-    )) as Record<string, unknown>;
     const detailed = coverageDetailed();
-    const historicalV2 = structuredClone(detailed) as unknown as Record<string, unknown>;
-    historicalV2.version = 2;
-    delete historicalV2.mode;
     const summary = buildRiskCalibrationSummaryReport(detailed);
     const reports = new Map<string, Record<string, unknown>>([
-      ['risk-calibration.report.v1', historicalV1],
-      ['risk-calibration.report.v2', historicalV2],
       ['risk-calibration.report.v3-detailed', detailed as unknown as Record<string, unknown>],
       ['risk-calibration.report.v3-summary', summary as unknown as Record<string, unknown>],
     ]);
@@ -484,27 +437,29 @@ describe('Risk calibration lifecycle', () => {
     );
   });
 
-  test('preserves both dataset versions while discarding bounded unknown fields', async () => {
-    for (const version of [1, RISK_CALIBRATION_DATASET_VERSION] as const) {
-      const raw = JSON.parse(await readFile(
-        path.join(ROOT, `test/fixtures/risk-calibration-dataset-v${version}.json`),
-        'utf8',
-      )) as any;
-      raw.privateRoot = 'discarded';
-      raw.records[0].privateRecord = 'discarded';
-      raw.records[0].evidence = {
-        ...raw.records[0].evidence,
-        availability: 'registered',
-        state: 'available',
-        privateEvidence: 'discarded',
-      };
-      const parsed = parseRiskCalibrationDataset(JSON.stringify(raw));
-      assert.equal(parsed.version, version);
-      assert.equal(parsed.records[0]?.evidence.availability, 'registered');
-      assert.equal(Object.hasOwn(parsed as object, 'privateRoot'), false);
-      assert.equal(Object.hasOwn(parsed.records[0] as object, 'privateRecord'), false);
-      assert.equal(Object.hasOwn(parsed.records[0]?.evidence as object, 'privateEvidence'), false);
-    }
+  test('projects bounded current dataset fields and rejects reader-only versions', async () => {
+    const raw = JSON.parse(await readFile(
+      path.join(ROOT, 'test/fixtures/risk-calibration-dataset-v2.json'),
+      'utf8',
+    )) as any;
+    raw.privateRoot = 'discarded';
+    raw.records[0].privateRecord = 'discarded';
+    raw.records[0].evidence = {
+      ...raw.records[0].evidence,
+      availability: 'registered',
+      state: 'available',
+      privateEvidence: 'discarded',
+    };
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(raw));
+    assert.equal(parsed.version, RISK_CALIBRATION_DATASET_VERSION);
+    assert.equal(parsed.records[0]?.evidence.availability, 'registered');
+    assert.equal(Object.hasOwn(parsed as object, 'privateRoot'), false);
+    assert.equal(Object.hasOwn(parsed.records[0] as object, 'privateRecord'), false);
+    assert.equal(Object.hasOwn(parsed.records[0]?.evidence as object, 'privateEvidence'), false);
+    assert.throws(
+      () => parseRiskCalibrationDataset(JSON.stringify({ ...raw, version: 1 })),
+      /version 2/u,
+    );
   });
 
   test('enforces exact non-materialising pretty UTF-8 boundaries before hostile tails', () => {

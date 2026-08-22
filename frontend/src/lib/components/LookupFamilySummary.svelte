@@ -4,6 +4,7 @@
     description,
     metrics = [],
     expanded = false,
+    onpreload,
     onshow,
     onhide,
   }: {
@@ -11,6 +12,7 @@
     description: string;
     metrics?: readonly string[];
     expanded?: boolean;
+    onpreload?: () => void;
     onshow: () => void;
     onhide: () => void;
   } = $props();
@@ -24,6 +26,8 @@
   type="button"
   aria-label={`${expanded ? 'Collapse' : 'Expand'} ${accessibleLabel}`}
   aria-expanded={expanded}
+  onpointerenter={onpreload}
+  onfocus={onpreload}
   onclick={expanded ? onhide : onshow}
 >
   <span class="family-copy">

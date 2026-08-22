@@ -29,6 +29,7 @@ import { reviewZoneIntent } from '../lib/zone-intent-review.mts';
 import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
 import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
+import { safeTerminalValue } from './formatters/terminal.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
@@ -102,8 +103,8 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
     kind = 'tlsa';
     result = analyzeTlsaEvidence({
       serviceName: input.serviceName,
-      dnssecState: input.dnssecState,
-      pkixValidationState: input.pkixValidationState,
+      dnssecState: 'unavailable',
+      pkixValidationState: 'unavailable',
       records: input.records,
       certificateDerBase64: input.certificateDerBase64,
       spkiDerBase64: input.spkiDerBase64,
@@ -246,7 +247,13 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     const cards = Array.isArray(result.cards) ? result.cards : [];
     for (const value of cards) {
       const card = record(value);
-      lines.push(`${String(card.label ?? card.family ?? 'Evidence')}  ${String(card.state ?? 'unavailable').replaceAll('_', ' ')} (${String(card.completeness ?? 'unavailable')})`);
+      lines.push(`${safeTerminalValue(card.label ?? card.family, 'Evidence')}  ${safeTerminalValue(card.state, 'unavailable').replaceAll('_', ' ')} (${safeTerminalValue(card.completeness, 'unavailable')})`);
+      lines.push(`  Source ${safeTerminalValue(card.source, 'not supplied')}`);
+      lines.push(`  Authority ${safeTerminalValue(card.authority, 'not supplied')}`);
+      const cardLimitations = Array.isArray(card.limitations) ? card.limitations : [];
+      for (const limitation of cardLimitations) {
+        if (typeof limitation === 'string') lines.push(`  Limitation: ${safeTerminalValue(limitation)}`);
+      }
     }
   } else {
     for (const [label, key] of [
@@ -263,7 +270,7 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   if (reasons.length) {
     lines.push('', 'Review reasons:');
     for (const reason of reasons.slice(0, 8)) {
-      if (typeof reason === 'string') lines.push(`  - ${reason.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim().slice(0, 240)}`);
+      if (typeof reason === 'string') lines.push(`  - ${safeTerminalValue(reason)}`);
     }
     if (reasons.length > 8) lines.push(`  - ${reasons.length - 8} more reason(s) omitted.`);
   }
@@ -271,7 +278,7 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   for (const limitation of document.limitations) lines.push(`  - ${limitation}`);
   const nestedLimitations = Array.isArray(result.limitations) ? result.limitations : [];
   for (const limitation of nestedLimitations) {
-    if (typeof limitation === 'string') lines.push(`  - ${limitation}`);
+    if (typeof limitation === 'string') lines.push(`  - ${safeTerminalValue(limitation)}`);
   }
   return `${lines.join('\n')}\n`;
 }

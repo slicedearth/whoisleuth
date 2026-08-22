@@ -61,8 +61,8 @@ const MAX_DOWNLOAD_FILE_TYPES = 20;
 const MAX_TRACKING_IDENTIFIERS = 30;
 const MAX_URLS_PER_TAG = 20;
 const PAGE_IDENTITY_VERSION = 3;
-const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/g;
-const HAS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
+const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
+const HAS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 
 const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
 

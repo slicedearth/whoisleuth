@@ -1,4 +1,5 @@
 import { parseSavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
+import { safeTerminalValue } from './formatters/terminal.mts';
 
 export const CLI_LOOKUP_BRIEF_SCHEMA = 'whoisleuth.cli.lookup-brief';
 export const CLI_LOOKUP_BRIEF_VERSION = 2;
@@ -9,7 +10,11 @@ function record(value: unknown): UnknownRecord {
 
 function text(value: unknown, maximum = 300): string | null {
   if (typeof value !== 'string') return null;
-  const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum);
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, maximum);
   return normalized || null;
 }
 
@@ -101,20 +106,20 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
 
 export function formatCliLookupBrief(document: ReturnType<typeof buildCliLookupBrief>): string {
   return [
-    `Lookup brief: ${document.target}`,
-    `Observed  ${document.observedAt}`,
-    `Mode      ${document.mode}`,
+    `Lookup brief: ${safeTerminalValue(document.target)}`,
+    `Observed  ${safeTerminalValue(document.observedAt)}`,
+    `Mode      ${safeTerminalValue(document.mode)}`,
     '',
     'Verified facts',
-    ...(document.facts.length ? document.facts.map((item) => `  ${item.label}: ${item.value} (${item.source})`) : ['  No bounded fact was available.']),
+    ...(document.facts.length ? document.facts.map((item) => `  ${safeTerminalValue(item.label)}: ${safeTerminalValue(item.value)} (${safeTerminalValue(item.source)})`) : ['  No bounded fact was available.']),
     '',
     'Unknown or incomplete',
-    ...(document.unknowns.length ? document.unknowns.map((item) => `  ${item}`) : ['  No incomplete source state was identified.']),
+    ...(document.unknowns.length ? document.unknowns.map((item) => `  ${safeTerminalValue(item)}`) : ['  No incomplete source state was identified.']),
     '',
     'Recommended manual actions',
     ...document.actionPlan.flatMap((item, index) => [
-      `  ${index + 1}. ${item.action}`,
-      `     Expected outcome: ${item.expectedOutcome}`,
+      `  ${index + 1}. ${safeTerminalValue(item.action)}`,
+      `     Expected outcome: ${safeTerminalValue(item.expectedOutcome)}`,
     ]),
     '',
   ].join('\n');

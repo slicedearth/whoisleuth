@@ -202,7 +202,7 @@
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
               <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={!selectedDomain}>Add case</button></div>
             </form>{/if}
-            <details><summary>Campaign data and interpretation limits</summary><p>Campaigns store only a label, description, and normalised domain membership in this browser. Membership is an analyst organisation aid and does not prove common ownership, coordination, intent, or maliciousness.</p></details>
+            <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this browser. Membership organises review; it is not attribution.</p></details>
             <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)}>Delete campaign</button>
           </div>
         {/if}

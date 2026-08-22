@@ -82,10 +82,18 @@ describe('browser-local collection definitions', () => {
     assert.equal(isExpectedBrowserLocalDataFailure({ name: 'BrowserLocalDataError' }), false);
   });
 
-  test('every empty collection survives record splitting without changing its canonical document', () => {
+  test('every canonical empty collection survives record splitting while retired Case lists reach the explicit rejection path', () => {
     for (const definition of BROWSER_LOCAL_COLLECTIONS) {
-      assert.equal(definition.acceptLegacyRoot(definition.empty()), true, `${definition.id} empty legacy root`);
-      const result = roundTrip(definition, definition.empty());
+      const empty = definition.empty();
+      const emptyIsVersioned = !Array.isArray(empty)
+        && typeof empty === 'object'
+        && empty !== null
+        && Object.hasOwn(empty, 'version');
+      const recognisedOnlyForRetirement = definition.id === 'cases' && Array.isArray(empty);
+      assert.equal(definition.acceptLegacyRoot(empty), emptyIsVersioned || recognisedOnlyForRetirement, `${definition.id} empty root`);
+      const result = roundTrip(definition, empty);
+      const canonical = JSON.parse(result.before);
+      assert.equal(definition.acceptLegacyRoot(canonical), true, `${definition.id} canonical root`);
       assert.equal(result.after, result.before, definition.id);
     }
   });
@@ -102,7 +110,7 @@ describe('browser-local collection definitions', () => {
   test('every non-Case wrapper detects a future version before migration without changing its input', () => {
     const futureRoots: Record<string, unknown> = {
       campaigns: { version: 2, campaigns: [] },
-      brand_profiles: { version: 7, profiles: [] },
+      brand_profiles: { version: 8, profiles: [] },
       watchlists: { schema: 'whoisleuth.watchlists', version: 3, watchlists: {} },
       shortlist: { schema: 'whoisleuth.shortlist', version: 4, entries: [] },
       ct_history: { version: 4, entries: [] },
@@ -112,9 +120,13 @@ describe('browser-local collection definitions', () => {
       website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 5, snapshots: [] },
       investigation_templates: { schema: 'whoisleuth.investigation-templates', version: 3, templates: [] },
       bulk_review: { schema: 'whoisleuth.bulk-review', version: 2, presets: [], rows: [] },
+      analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: 2, records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
-    assert.equal(definitions.length, 11);
+    assert.deepEqual(
+      definitions.map(({ id }) => id).sort(),
+      Object.keys(futureRoots).sort(),
+    );
     for (const definition of definitions) {
       const raw = futureRoots[definition.id];
       assert.ok(raw, definition.id);
@@ -125,22 +137,20 @@ describe('browser-local collection definitions', () => {
     }
   });
 
-  test('Brand Profile migration accepts its supported export envelope only', () => {
-    const exported = {
-      schema: 'whoisleuth.brand-profiles',
+  test('Brand Profile migration accepts the exact public browser envelope, not a portable export', () => {
+    const browserStore = {
       version: 6,
-      exportedAt: NOW,
       profiles: [],
     };
 
-    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot(exported), true);
-    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot({ ...exported, schema: 'unrelated.store' }), false);
+    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot(browserStore), true);
+    assert.equal(PROFILES_COLLECTION.acceptLegacyRoot({ ...browserStore, schema: 'whoisleuth.brand-profiles' }), false);
   });
 
   test('shortlist records retain their semantic fields and canonical envelope', () => {
     const input = {
       schema: 'whoisleuth.shortlist',
-      version: 2,
+      version: 3,
       entries: [{
         domain: 'priority.invalid',
         scanDepth: 'fast',
@@ -182,11 +192,11 @@ describe('browser-local collection definitions', () => {
     assert.deepEqual(WATCHLISTS_COLLECTION.split(result.joined).map((record) => record.id), ['Priority', 'Secondary']);
   });
 
-  test('legacy watchlist names that resemble envelope fields remain valid collection entries', () => {
+  test('does not reinterpret legacy watchlist names as a current envelope', () => {
     const watchlist = { results: [] };
     const input = { schema: watchlist, version: watchlist, watchlists: watchlist };
 
-    assert.equal(WATCHLISTS_COLLECTION.acceptLegacyRoot(input), true);
+    assert.equal(WATCHLISTS_COLLECTION.acceptLegacyRoot(input), false);
     assert.deepEqual(Object.keys(WATCHLISTS_COLLECTION.normalize(input)), ['schema', 'version', 'watchlists']);
     assert.equal(WATCHLISTS_COLLECTION.acceptLegacyRoot({
       schema: 'unrelated.store',
@@ -231,7 +241,7 @@ describe('browser-local collection definitions', () => {
   test('saved Bulk sessions retain compact resumable rows as independent records', () => {
     const input = {
       schema: 'whoisleuth.bulk-sessions',
-      version: 1,
+      version: 4,
       sessions: [{
         id: 'bulk-session',
         name: 'Priority review',
@@ -270,7 +280,9 @@ describe('browser-local collection definitions', () => {
             truncated: false,
           },
           sourceCoverage: [{ source: 'lookup', state: 'error' }],
+          profileContext: { sourceState: 'ready', activeProfileId: null, profileUpdatedAt: null, limitation: '' },
         }],
+        profileContext: { sourceState: 'ready', activeProfileId: null, profileUpdatedAt: null, limitation: '' },
         startedAt: NOW,
         updatedAt: NOW,
         completedAt: null,
@@ -282,7 +294,7 @@ describe('browser-local collection definitions', () => {
     assert.deepEqual(BULK_SESSIONS_COLLECTION.split(result.joined).map((record) => record.id), ['bulk-session']);
   });
 
-  test('directly normalizes legacy, current, mixed, and partially forged bare Bulk arrays per candidate', () => {
+  test('directly normalizes current bare Bulk arrays while dropping legacy and partially forged candidates', () => {
     const profileContext = {
       sourceState: 'ready',
       activeProfileId: 'profile-one',
@@ -349,9 +361,7 @@ describe('browser-local collection definitions', () => {
     Reflect.deleteProperty(partial.results[0]!, 'profileContext');
 
     const legacyOnly = BULK_SESSIONS_COLLECTION.normalize([legacy]);
-    assert.equal(legacyOnly[0]?.profileContext.sourceState, 'unavailable');
-    assert.equal(legacyOnly[0]?.results[0]?.trusted, null);
-    assert.equal(legacyOnly[0]?.results[0]?.risk, null);
+    assert.deepEqual(legacyOnly, []);
 
     const currentOnly = BULK_SESSIONS_COLLECTION.normalize([currentRecord]);
     assert.equal(currentOnly[0]?.profileContext.sourceState, 'ready');
@@ -359,10 +369,8 @@ describe('browser-local collection definitions', () => {
     assert.equal(currentOnly[0]?.results[0]?.risk, 80);
 
     const mixed = BULK_SESSIONS_COLLECTION.normalize([legacy, currentRecord, partial]);
-    assert.deepEqual(mixed.map((item) => item.id), ['current', 'legacy']);
-    assert.equal(mixed.find((item) => item.id === 'legacy')?.profileContext.sourceState, 'unavailable');
-    assert.equal(mixed.find((item) => item.id === 'current')?.profileContext.sourceState, 'ready');
-    assert.equal(mixed.some((item) => item.id === 'partial'), false);
+    assert.deepEqual(mixed.map((item) => item.id), ['current']);
+    assert.equal(mixed[0]?.profileContext.sourceState, 'ready');
   });
 
   test('stored record decoding uses the codec and owning collection normalizer before typing values', async () => {

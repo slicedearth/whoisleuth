@@ -9,7 +9,7 @@ import {
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 describe('sanitised web-capture import', () => {
-  test('requires explicit zones for current captures and preserves manifest v1 UTC migration', () => {
+  test('requires explicit zones for the current manifest and rejects reader-only version 1', () => {
     const zoneLess = '2026-07-01T12:00:00.000';
     assert.throws(() => parseWebCaptureSummary({
       schema: WEB_CAPTURE_SUMMARY_SCHEMA,
@@ -32,9 +32,10 @@ describe('sanitised web-capture import', () => {
       }],
     });
     assert.throws(() => parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, zoneLess)), /explicit timezone/u);
-    const legacy = parseWebCaptureManifest(manifest(1, zoneLess));
-    assert.equal(legacy.source.collectedAt, '2026-07-01T12:00:00.000Z');
-    assert.equal(legacy.findings[0]?.observedAt, '2026-07-01T12:00:00.000Z');
+    assert.throws(
+      () => parseWebCaptureManifest(manifest(1, '2026-07-01T12:00:00.000Z')),
+      /schema version 2/u,
+    );
     assert.equal(
       parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
       '2026-07-01T11:00:00.000Z',
@@ -119,7 +120,7 @@ describe('sanitised web-capture import', () => {
   test('validates bounded capture artifact metadata without accepting artifact bytes', () => {
     const document = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: 1,
+      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
       source: { name: 'Reviewed isolated capture', reference: 'capture-17', collectedAt: '2026-07-01T00:00:00Z' },
       captures: [{
         domain: 'example.test',
@@ -151,7 +152,7 @@ describe('sanitised web-capture import', () => {
     assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artefact bytes/iu);
   });
 
-  test('accepts current screenshot perceptual hashes while retaining version 1 compatibility', () => {
+  test('accepts current screenshot perceptual hashes and rejects reader-only version 1', () => {
     const current = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
       schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
@@ -177,13 +178,13 @@ describe('sanitised web-capture import', () => {
           sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
         }],
       }],
-    }), /perceptual hash is unsupported/u);
+    }), /schema version 2/u);
   });
 
   test('rejects path traversal, archive payloads, and unsupported artifact declarations', () => {
     const base = {
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: 1,
+      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
       source: { name: 'Capture', reference: null, collectedAt: null },
       captures: [{
         domain: 'example.test',

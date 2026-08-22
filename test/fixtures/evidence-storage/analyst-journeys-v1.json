@@ -1,0 +1,48 @@
+{
+  "schema": "whoisleuth.evidence-storage-measurement-fixture",
+  "version": 1,
+  "startingRevision": "d3349cf85cded65989ab5ec542967429414bc1b7",
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "scenarios": [
+    {
+      "id": "low-duplication",
+      "caseCount": 8,
+      "evidenceSnapshotsPerCase": 2,
+      "evidenceDuplicateSpan": 1,
+      "responseDuplicateSpan": 1,
+      "classification": "representative_low"
+    },
+    {
+      "id": "representative-duplication",
+      "caseCount": 24,
+      "evidenceSnapshotsPerCase": 2,
+      "evidenceDuplicateSpan": 4,
+      "responseDuplicateSpan": 1,
+      "classification": "representative_mixed"
+    },
+    {
+      "id": "high-duplication-boundary",
+      "caseCount": 500,
+      "evidenceSnapshotsPerCase": 1,
+      "evidenceDuplicateSpan": 500,
+      "responseDuplicateSpan": 500,
+      "classification": "synthetic_worst_case"
+    }
+  ],
+  "startingCurrentFixtures": [
+    "test/fixtures/case-lifecycle/browser-case-v13.json",
+    "test/fixtures/case-lifecycle/case-export-v13.json",
+    "test/fixtures/case-lifecycle/case-report-v9.json",
+    "test/fixtures/case-lifecycle/case-response-packet-v7.json",
+    "test/fixtures/case-lifecycle/case-response-review-inputs-v1.json",
+    "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v13.json",
+    "test/fixtures/case-lifecycle/workspace-archive-v6-empty-current.json",
+    "test/fixtures/case-lifecycle/workspace-settings-v1.json",
+    "test/fixtures/case-lifecycle/encrypted-workspace-archive-v1.json"
+  ],
+  "decisionThreshold": {
+    "minimumRepresentativeNetSavingsBytes": 524288,
+    "minimumRepresentativeNetSavingsRatio": 0.2,
+    "minimumQuotaPressureRatio": 0.75
+  }
+}
