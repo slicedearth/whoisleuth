@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -21,6 +21,7 @@ import {
   parseCaptureArguments,
   sanitizeCaptureText,
 } from '../packages/web-capture/capture.mts';
+import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
 import {
   WEB_CAPTURE_COMPARISON_SCHEMA,
   compareRenderedCaptures,
@@ -354,6 +355,57 @@ describe('optional local rendered capture package', () => {
       assert.equal((await stat(path.join(destination, 'manifest.json'))).isFile(), true);
       await assert.rejects(() => mkdir(destination), /EEXIST/u);
     } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects a replaced capture destination without mutating the substitute', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-replacement-test-'));
+    const destination = path.join(parent, 'capture');
+    const reserved = path.join(parent, 'reserved-capture');
+    const substitute = path.join(parent, 'substitute');
+    await mkdir(substitute, { mode: 0o700 });
+    try {
+      await assert.rejects(() => captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => {
+          await rename(destination, reserved);
+          await symlink(substitute, destination, 'dir');
+          return fakeBrowser();
+        },
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      }), /output directory identity changed/iu);
+      await assert.rejects(() => stat(path.join(substitute, 'screenshot.png')), /ENOENT/u);
+      await assert.rejects(() => stat(path.join(substitute, 'dom-digest.json')), /ENOENT/u);
+      await assert.rejects(() => stat(path.join(substitute, 'manifest.json')), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('anchors relative artefact writes to the reserved directory inode', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-anchor-test-'));
+    const destination = path.join(parent, 'capture');
+    const moved = path.join(parent, 'moved-capture');
+    await mkdir(destination, { mode: 0o700 });
+    const identity = await stat(destination);
+    const writer = await startAnchoredArtifactWriter(
+      destination,
+      { dev: identity.dev, ino: identity.ino },
+      typeof process.getuid === 'function' ? process.getuid() : null,
+    );
+    try {
+      await rename(destination, moved);
+      await mkdir(destination, { mode: 0o700 });
+      await writer.write('dom-digest.json', Buffer.from('{}\n'), new AbortController().signal, () => {});
+      assert.equal(await readFile(path.join(moved, 'dom-digest.json'), 'utf8'), '{}\n');
+      await assert.rejects(() => stat(path.join(destination, 'dom-digest.json')), /ENOENT/u);
+      await writer.finish(true);
+      await assert.rejects(() => stat(path.join(moved, 'dom-digest.json')), /ENOENT/u);
+    } finally {
+      writer.terminate();
       await rm(parent, { recursive: true, force: true });
     }
   });

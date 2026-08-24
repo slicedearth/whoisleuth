@@ -313,11 +313,11 @@ async function archiveReport(
       schema: WORKSPACE_ARCHIVE_SCHEMA,
       version: archive.sourceVersion,
     }),
-    state: 'verified',
+    state: encrypted ? 'verified' : 'integrity_valid',
     checks: Object.freeze({
       structure: 'verified',
       contentIntegrity: 'verified',
-      contentIntegrityScope: 'whole_artifact',
+      contentIntegrityScope: encrypted ? 'whole_artifact' : 'embedded_projections',
       authenticatedEncryption: encrypted ? 'verified' : 'not_applicable',
     }),
     summary: Object.freeze({
@@ -333,7 +333,9 @@ async function archiveReport(
       fullyImportable,
     }),
     limitations: Object.freeze([
-      'Verification checks the retained file against its declared versioned integrity contract; it does not establish that the original observations were accurate or remain current.',
+      ...(encrypted
+        ? ['Authenticated decryption and archive validation cover the complete encrypted workspace content; they do not establish that the original observations were accurate or remain current.']
+        : ['Section digest verification covers the archive projections, not root metadata such as generation time or archive limitations. It does not establish that the original observations were accurate or remain current.']),
       ...(!fullyImportable
         ? ['One or more integrity-valid archive sections cannot be imported completely by this version. Inspect the archive before selecting data to restore.']
         : []),

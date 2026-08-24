@@ -12,6 +12,7 @@ import {
   isTrustedOrigin,
   isValidSessionToken,
   parseCookies,
+  productionSessionSecretWarning,
   sessionFingerprintFromCookieHeader,
 } from '../lib/auth.mts';
 import { LOCAL_API_PROXY } from '../frontend/vite.config.ts';
@@ -127,6 +128,27 @@ describe('parseCookies', () => {
 });
 
 describe('session signing', () => {
+  test('warns when a production password falls back to derived session signing', () => {
+    assert.match(productionSessionSecretWarning({
+      NODE_ENV: 'production',
+      SITE_PASSWORD: 'test-only-secret',
+    }) ?? '', /SESSION_SECRET is not set in production/u);
+    assert.match(productionSessionSecretWarning({
+      CONTEXT: 'production',
+      SITE_PASSWORD: 'test-only-secret',
+    }) ?? '', /configure a separate random SESSION_SECRET/u);
+    assert.equal(productionSessionSecretWarning({
+      NODE_ENV: 'production',
+      SITE_PASSWORD: 'test-only-secret',
+      SESSION_SECRET: 'test-only-session-signing-secret',
+    }), null);
+    assert.equal(productionSessionSecretWarning({
+      NODE_ENV: 'development',
+      SITE_PASSWORD: 'test-only-secret',
+    }), null);
+    assert.equal(productionSessionSecretWarning({ NODE_ENV: 'production' }), null);
+  });
+
   test('defaults new sessions and cookies to seven days', () => {
     const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
     const actualNow = Date.now;

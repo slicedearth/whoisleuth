@@ -191,10 +191,10 @@ export async function buildLookupClaimPassport(input: Readonly<{
   generatedAt?: unknown;
 }>): Promise<Readonly<{ document: LookupClaimPassport; content: string; filename: string }>> {
   if (input.readiness.version !== LOOKUP_CLAIM_READINESS_VERSION) {
-    throw new TypeError('The claim-readiness contract is not supported for passport export.');
+    throw new TypeError('The Evidence Readiness contract is not supported for passport export.');
   }
   if (input.readiness.entries.length > LOOKUP_CLAIM_IDS.length) {
-    throw new TypeError('The claim-readiness contract contains too many entries for passport export.');
+    throw new TypeError('The Evidence Readiness contract contains too many entries for passport export.');
   }
   const rawClaimId = exactText(input.claimId, 80);
   if (!CLAIM_IDS.has(rawClaimId)) throw new TypeError('Select a current Lookup claim to export.');

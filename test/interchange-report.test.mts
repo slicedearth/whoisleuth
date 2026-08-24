@@ -166,7 +166,7 @@ describe('interchange fidelity report', () => {
     assert.deepEqual(interchangeContractFor('lookup_evidence').versions, [...lookupEvidenceModule.SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS]);
     assert.equal(interchangeContractFor('domain_control_passport').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('brand_profiles').requiredAssurance, 'structure');
-    assert.equal(interchangeContractFor('workspace').requiredAssurance, 'whole_integrity');
+    assert.equal(interchangeContractFor('workspace').requiredAssurance, 'applicable_integrity');
     assert.equal(interchangeContractFor('encrypted_workspace').requiredAssurance, 'authenticated_whole_integrity');
     assert.equal(interchangeContractFor('case_pack').requiredAssurance, 'whole_integrity');
     assert.equal(interchangeContractFor('lookup_evidence').requiredAssurance, 'structure');
@@ -257,7 +257,9 @@ describe('interchange fidelity report', () => {
     const workspace = await buildWorkspaceArchive({}, { generatedAt: NOW });
     const workspaceReport = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
     assert.equal(workspaceReport.artifact.id, 'workspace');
-    assert.equal(workspaceReport.verification.state, 'verified');
+    assert.equal(workspaceReport.verification.state, 'integrity_valid');
+    assert.equal(workspaceReport.verification.requiredAssurance, 'applicable_integrity');
+    assert.equal(workspaceReport.verification.assuranceSatisfied, true);
     assert.equal(workspaceReport.compatibility.fidelity, 'normalised_merge');
 
     const packReport = await buildInterchangeFidelityReport(JSON.stringify(casePack()), { generatedAt: NOW });
@@ -338,7 +340,7 @@ describe('interchange fidelity report', () => {
     cases.bytes = new TextEncoder().encode(JSON.stringify(workspace.sections.cases)).byteLength;
     cases.checksum = await sha256ArtifactDigest(workspace.sections.cases);
     const report = await buildInterchangeFidelityReport(JSON.stringify(workspace), { generatedAt: NOW });
-    assert.equal(report.verification.state, 'verified');
+    assert.equal(report.verification.state, 'integrity_valid');
     assert.equal(report.verification.assuranceSatisfied, true);
     assert.equal(report.compatibility.fullyImportable, false);
     assert.equal(report.summary.unsupportedSectionCount, 1);

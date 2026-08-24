@@ -91,6 +91,23 @@ function emptyWriteManifest(): BrowserLocalCollectionManifest {
   };
 }
 
+function storedRecord(
+  lookupKey: string,
+  payload: string,
+  ordinal: number,
+  payloadBytes = new TextEncoder().encode(payload).byteLength,
+): BrowserLocalStoredRecord {
+  return {
+    key: [WRITE_DEFINITION.id, lookupKey],
+    collection: WRITE_DEFINITION.id,
+    lookupKey,
+    ordinal,
+    codec: 'json-v1',
+    payload,
+    payloadBytes,
+  };
+}
+
 function successfulRequest<T>(result: T): IDBRequest<T> {
   const request = {
     result,
@@ -99,6 +116,33 @@ function successfulRequest<T>(result: T): IDBRequest<T> {
     onerror: null,
   } as unknown as IDBRequest<T>;
   queueMicrotask(() => request.onsuccess?.call(request, new Event('success')));
+  return request;
+}
+
+function successfulCursorRequest<T>(values: readonly T[]): IDBRequest<IDBCursorWithValue | null> {
+  const request = {
+    result: null,
+    error: null,
+    onsuccess: null,
+    onerror: null,
+  } as unknown as IDBRequest<IDBCursorWithValue | null>;
+  let index = 0;
+  const deliver = () => {
+    const value = values[index];
+    Object.assign(request, {
+      result: value === undefined
+        ? null
+        : {
+            value,
+            continue() {
+              index += 1;
+              queueMicrotask(deliver);
+            },
+          } as IDBCursorWithValue,
+    });
+    request.onsuccess?.call(request, new Event('success'));
+  };
+  queueMicrotask(deliver);
   return request;
 }
 
@@ -152,8 +196,9 @@ function delayedWriteFactory(outcome: DelayedWriteOutcome): {
         },
         index() {
           return {
-            getAll(_query?: IDBValidKey | IDBKeyRange | null, count?: number) {
-              return successfulRequest(state.records.slice(0, count));
+            openCursor(query?: IDBValidKey | IDBKeyRange | null) {
+              const collection = typeof query === 'string' ? query : null;
+              return successfulCursorRequest(state.records.filter((record) => !collection || record.collection === collection));
             },
           } as unknown as IDBIndex;
         },
@@ -359,7 +404,7 @@ function readyEmptyCollectionsFactory(
           }
           return {
             index() {
-              return { getAll: () => successfulRequest([]) } as unknown as IDBIndex;
+              return { openCursor: () => successfulCursorRequest([]) } as unknown as IDBIndex;
             },
           } as unknown as IDBObjectStore;
         },
@@ -453,6 +498,57 @@ test('observes a deferred transaction timeout without masking the caller rejecti
     assert.deepEqual(unhandled, []);
   } finally {
     process.off('unhandledRejection', onUnhandled);
+  }
+});
+
+test('admits IndexedDB records incrementally before retaining bounded payloads', async (t) => {
+  const restoreKeyRange = installKeyRangeStub();
+  try {
+    const cases = [
+      {
+        name: 'record count',
+        records: Array.from({ length: WRITE_DEFINITION.maximumRecords + 1 }, (_, index) => (
+          storedRecord(`fixture-${index}`, '{}', index)
+        )),
+        manifestCount: WRITE_DEFINITION.maximumRecords,
+        expected: /bounded record count/iu,
+      },
+      {
+        name: 'declared payload bytes',
+        records: [storedRecord('fixture-0', '{}', 0, WRITE_DEFINITION.maximumBytes * 2 + 1)],
+        manifestCount: 1,
+        expected: /invalid stored record/iu,
+      },
+      {
+        name: 'actual payload bytes',
+        records: [storedRecord('fixture-0', 'x'.repeat(WRITE_DEFINITION.maximumBytes * 2 + 1), 0, 1)],
+        manifestCount: 1,
+        expected: /invalid stored record/iu,
+      },
+      {
+        name: 'aggregate payload bytes',
+        records: Array.from({ length: 3 }, (_, index) => storedRecord(`fixture-${index}`, 'x'.repeat(800), index)),
+        manifestCount: 3,
+        expected: /invalid stored record/iu,
+      },
+    ];
+    for (const fixture of cases) {
+      await t.test(fixture.name, async () => {
+        const harness = delayedWriteFactory('committed');
+        const provider = new BrowserLocalDataProvider({
+          databaseName: `fixture-bounded-cursor-${fixture.name.replace(/\s/gu, '-')}`,
+          indexedDB: harness.factory,
+          storage: NULL_STORAGE,
+          timeoutMs: WRITE_TIMEOUT_MS,
+        });
+        await provider.initialize([WRITE_DEFINITION]);
+        harness.state.records = fixture.records;
+        harness.state.manifest = { ...harness.state.manifest, recordCount: fixture.manifestCount };
+        await assert.rejects(provider.read(WRITE_DEFINITION), fixture.expected);
+      });
+    }
+  } finally {
+    restoreKeyRange();
   }
 });
 

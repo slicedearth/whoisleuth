@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   BROWSER_LOCAL_COLLECTIONS,
+  ANALYST_REVIEW_STATE_COLLECTION,
   BULK_SESSIONS_COLLECTION,
   decodeBrowserLocalCollectionRecord,
   PROFILES_COLLECTION,
@@ -20,6 +21,7 @@ import type {
   BrowserLocalStoredRecord,
   LocalDataCollectionDefinition,
 } from '../frontend/src/lib/browser-local-data.ts';
+import { ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION } from '../packages/contracts/analyst-review-state-contract.mts';
 
 const NOW = '2026-07-22T01:00:00.000Z';
 
@@ -120,7 +122,7 @@ describe('browser-local collection definitions', () => {
       website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 5, snapshots: [] },
       investigation_templates: { schema: 'whoisleuth.investigation-templates', version: 3, templates: [] },
       bulk_review: { schema: 'whoisleuth.bulk-review', version: 2, presets: [], rows: [] },
-      analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: 2, records: [] },
+      analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
     assert.deepEqual(
@@ -135,6 +137,36 @@ describe('browser-local collection definitions', () => {
       assert.equal(definition.version(raw), definition.schemaVersion + 1, definition.id);
       assert.deepEqual(raw, before, definition.id);
     }
+  });
+
+  test('uses an internal storage revision to reopen the retired development Review Item identity', () => {
+    const previous = {
+      schema: 'whoisleuth.analyst-review-state',
+      version: 1,
+      records: [{
+        subjectKey: 'review:case:0123456789abcdef',
+        reviewedFingerprint: 'material:fedcba9876543210',
+        evidenceFamily: 'case',
+        disposition: 'expected',
+        rationale: 'Earlier local review.',
+        reviewedAt: NOW,
+        reviewDueAt: '2026-07-23T01:00:00.000Z',
+        expiresAt: '2026-07-24T01:00:00.000Z',
+        caseIds: ['case-one'],
+        campaignIds: [],
+        history: [],
+      }],
+    };
+    const migrated = ANALYST_REVIEW_STATE_COLLECTION.normalize(
+      ANALYST_REVIEW_STATE_COLLECTION.join(
+        previous.records.map((value) => ({ id: value.subjectKey, value })),
+        1,
+      ),
+    );
+    assert.equal(ANALYST_REVIEW_STATE_COLLECTION.schemaVersion, ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION);
+    assert.equal(migrated.version, 1);
+    assert.equal(migrated.records[0]?.disposition, 'open');
+    assert.equal(migrated.records[0]?.history[0]?.rationale, 'Earlier local review.');
   });
 
   test('Brand Profile migration accepts the exact public browser envelope, not a portable export', () => {

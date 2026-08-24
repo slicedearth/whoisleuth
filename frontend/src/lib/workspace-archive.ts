@@ -42,6 +42,7 @@ import {
 } from './browser-local-data-service.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
+import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -312,6 +313,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
       results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0 });
     }
   } catch (cause) {
+    rethrowUnknownWorkspaceCommit(cause);
     let fullyRestored = true;
     try {
       if (dataApplied && definitions.length && previousDocuments.size) {

@@ -7,18 +7,22 @@ import type { WebsiteProfileSnapshot } from './website-snapshot-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import { buildComparisonLedgerIndex } from './comparison-ledger.ts';
 import {
-  MAX_ANALYST_REVIEW_ITEMS,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
   type AnalystReviewCompleteness,
   type AnalystReviewEvidenceFamily,
   type AnalystReviewItem,
   type AnalystReviewKind,
+  type AnalystReviewStateStore,
 } from './analyst-review-state.ts';
+import {
+  retainTopAnalystReviewItems,
+  type AnalystReviewProjectionAdmission,
+} from './analyst-review-inbox.ts';
 
 export type LocalAnalystReviewProjection = Readonly<{
   items: readonly AnalystReviewItem[];
-  truncated: boolean;
+  admission: AnalystReviewProjectionAdmission;
   limitations: readonly string[];
 }>;
 
@@ -58,11 +62,12 @@ function age(observedAt: string, now: string): AnalystReviewItem['age'] {
 function item(seed: ItemSeed, now: string): AnalystReviewItem {
   const dueAt = seed.dueAt ? timestamp(seed.dueAt, now) : null;
   const priority = seed.priority ?? (dueAt && Date.parse(dueAt) <= Date.parse(now) ? 'high' : 'normal');
+  const subjectKey = analystReviewSubjectKey(seed.family, seed.stable);
   return {
-    id: `local-review:${analystReviewSubjectKey(seed.family, seed.stable).slice(-16)}`,
+    id: `local-review:${subjectKey.slice(-64)}`,
     kind: seed.kind,
     evidenceFamily: seed.family,
-    subjectKey: analystReviewSubjectKey(seed.family, seed.stable),
+    subjectKey,
     materialFingerprint: analystReviewMaterialFingerprint(seed.material),
     requiresExpiry: seed.requiresExpiry ?? true,
     priority,
@@ -161,10 +166,11 @@ function comparisonItems(input: Readonly<{
   websiteSnapshots: readonly WebsiteProfileSnapshot[];
   watchlists: WatchlistCollection;
   bulkSessions: readonly BulkSession[];
-}>, now: string): { items: AnalystReviewItem[]; truncated: boolean } {
+}>, now: string): { items: AnalystReviewItem[]; omittedAtLeast: number; totalIsLowerBound: boolean } {
   const index = buildComparisonLedgerIndex(input);
   return {
-    truncated: index.truncated,
+    omittedAtLeast: index.omissions.indexItems,
+    totalIsLowerBound: index.omissions.inputScanTruncations > 0,
     items: index.items.map((entry) => item({
       stable: [entry.ownerType, entry.ownerId, entry.entityId, entry.mode],
       material: [entry.id, entry.earlier, entry.later, entry.completeness, entry.truncated, entry.limitations],
@@ -238,6 +244,7 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
   websiteSnapshots?: readonly WebsiteProfileSnapshot[];
   watchlists?: WatchlistCollection;
   bulkSessions?: readonly BulkSession[];
+  reviewState?: AnalystReviewStateStore;
 }>, nowRaw: unknown = new Date().toISOString()): LocalAnalystReviewProjection {
   const now = timestamp(nowRaw, new Date(0).toISOString());
   const cases = input.cases ?? [];
@@ -252,11 +259,37 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
     ...comparison.items,
     ...packetItems(cases, now),
     ...ruleItems(cases, input.detectionRules ?? [], now),
-  ].sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt)
-    || left.subjectKey.localeCompare(right.subjectKey, 'en'));
+  ];
+  const retained = retainTopAnalystReviewItems(all, {
+    now,
+    ...(input.reviewState ? { reviewState: input.reviewState } : {}),
+  });
+  const omittedAtLeast: Partial<Record<AnalystReviewEvidenceFamily, number>> = {};
+  for (const family of Object.keys(retained.candidateCounts) as AnalystReviewEvidenceFamily[]) {
+    const omitted = retained.candidateCounts[family] - retained.retainedCounts[family];
+    if (omitted > 0) omittedAtLeast[family] = omitted;
+  }
+  if (comparison.omittedAtLeast > 0) {
+    omittedAtLeast.comparison = (omittedAtLeast.comparison ?? 0) + comparison.omittedAtLeast;
+  }
+  const lowerBoundFamilies = new Set<AnalystReviewEvidenceFamily>();
+  if (comparison.totalIsLowerBound) lowerBoundFamilies.add('comparison');
+  if ((input.cases?.length ?? 0) > 500) {
+    lowerBoundFamilies.add('packet');
+    lowerBoundFamilies.add('rule');
+  }
+  const profiles = input.profiles ?? [];
+  if (profiles.length > 100 || profiles.slice(0, 100).some((profile) => profile.desiredPostureBaselines.length > 200)) {
+    lowerBoundFamilies.add('change_window');
+    lowerBoundFamilies.add('suppression');
+    lowerBoundFamilies.add('desired_posture');
+  }
   return {
-    items: all.slice(0, MAX_ANALYST_REVIEW_ITEMS),
-    truncated: comparison.truncated || all.length > MAX_ANALYST_REVIEW_ITEMS,
+    items: retained.items,
+    admission: {
+      omittedAtLeast,
+      lowerBoundFamilies: [...lowerBoundFamilies],
+    },
     limitations: [
       'These Review Items are projections over retained browser-local records. They make no request and do not rewrite their source records.',
       'Custom-rule matches and desired-posture differences are analyst review leads, not proof of compromise, ownership, safety, or maliciousness.',

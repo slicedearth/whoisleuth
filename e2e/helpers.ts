@@ -153,11 +153,13 @@ export async function expectNoHorizontalOverflow(page: Page) {
 
 export async function expandLookupFamilies(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
-  const expandAll = page
-    .getByRole('group', { name: 'Evidence family visibility' })
-    .getByRole('button', { name: 'Expand all' });
-  await expect(expandAll).toBeEnabled();
-  await expandAll.click();
+  const visibility = page.getByRole('group', { name: 'Evidence family visibility' });
+  const expandAll = visibility.getByRole('button', { name: 'Expand all' });
+  const collapseAll = visibility.getByRole('button', { name: 'Collapse all' });
+  await expect(expandAll).toBeVisible();
+  if (await expandAll.getAttribute('aria-disabled') !== 'true') await expandAll.click();
+  await expect(expandAll).toHaveAttribute('aria-disabled', 'true');
+  await expect(collapseAll).toHaveAttribute('aria-disabled', 'false');
 }
 
 export async function openDashboardSecondaryWorkspaces(page: Page): Promise<void> {

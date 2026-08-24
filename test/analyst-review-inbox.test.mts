@@ -6,8 +6,11 @@ import {
   MAX_ANALYST_REVIEW_ITEMS,
 } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import {
+  analystReviewMaterialFingerprint,
+  analystReviewSubjectKey,
   emptyAnalystReviewStateStore,
   setAnalystReviewDecision,
+  type AnalystReviewItem,
 } from '../frontend/src/lib/analysis/analyst-review-state.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
@@ -121,6 +124,11 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.items.find((item) => item.kind === 'watchlist_change')?.completeness, 'partial');
     assert.equal(inbox.items.find((item) => item.kind === 'case')?.completeness, 'inconclusive');
     assert.equal(inbox.items.find((item) => item.kind === 'bulk_session')?.href, '/bulk#bulk-sessions-title');
+    assert.equal(inbox.admission.displayed, 4);
+    assert.equal(inbox.admission.totalAtLeast, 4);
+    assert.equal(inbox.admission.omittedAtLeast, 0);
+    assert.equal(inbox.admission.totalIsExact, true);
+    assert.equal(inbox.truncated, false);
   });
 
   test('projects explicit case evidence gaps without inventing missing facts', () => {
@@ -167,7 +175,7 @@ describe('analyst review inbox', () => {
     assert.match(gap.rankingReason, /high priority/i);
     assert.match(gap.href, /case-response-case-one$/);
     assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep');
-    assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:/u);
+    assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:[a-f0-9]{64}$/u);
   });
 
   test('projects scheduled independent observed-effect follow-up without performing a request', () => {
@@ -281,6 +289,105 @@ describe('analyst review inbox', () => {
     const inbox = buildAnalystReviewInbox({ cases }, NOW);
     assert.equal(inbox.items.length, MAX_ANALYST_REVIEW_ITEMS);
     assert.equal(inbox.truncated, true);
+    assert.equal(inbox.admission.totalAtLeast, MAX_ANALYST_REVIEW_ITEMS);
+    assert.equal(inbox.admission.omittedAtLeast, 0);
+    assert.equal(inbox.admission.totalIsExact, false);
+  });
+
+  test('admits every projected family through one global order and reports bounded omissions', () => {
+    const base = buildAnalystReviewInbox({ cases: [caseRecord()] }, NOW).items[0];
+    assert.ok(base);
+    const projected = Array.from({ length: MAX_ANALYST_REVIEW_ITEMS }, (_, index): AnalystReviewItem => ({
+      ...base,
+      id: `ordinary-${index}`,
+      evidenceFamily: 'case',
+      subjectKey: analystReviewSubjectKey('case', ['ordinary', index]),
+      materialFingerprint: analystReviewMaterialFingerprint(['ordinary', index]),
+      priority: 'normal',
+      dueAt: null,
+    }));
+    const urgent: AnalystReviewItem = {
+      ...base,
+      id: 'urgent-certificate',
+      kind: 'certificate',
+      evidenceFamily: 'certificate_identity',
+      subjectKey: analystReviewSubjectKey('certificate_identity', ['urgent-certificate']),
+      materialFingerprint: analystReviewMaterialFingerprint(['urgent-certificate']),
+      priority: 'urgent',
+    };
+    const admissions = [{
+      omittedAtLeast: { comparison: 17 },
+      lowerBoundFamilies: ['comparison' as const],
+    }];
+    const inbox = buildAnalystReviewInbox({
+      projectedItems: [...projected, urgent],
+      projectedAdmissions: admissions,
+    }, NOW);
+    const reversed = buildAnalystReviewInbox({
+      projectedItems: [urgent, ...projected].reverse(),
+      projectedAdmissions: admissions,
+    }, NOW);
+
+    assert.equal(inbox.items.length, MAX_ANALYST_REVIEW_ITEMS);
+    assert.ok(inbox.items.some((item) => item.id === urgent.id));
+    assert.deepEqual(reversed.items.map((item) => item.id), inbox.items.map((item) => item.id));
+    assert.deepEqual(inbox.admission.byEvidenceFamily.certificate_identity, {
+      displayed: 1,
+      totalAtLeast: 1,
+      omittedAtLeast: 0,
+      totalIsExact: true,
+    });
+    assert.deepEqual(inbox.admission.byEvidenceFamily.case, {
+      displayed: MAX_ANALYST_REVIEW_ITEMS - 1,
+      totalAtLeast: MAX_ANALYST_REVIEW_ITEMS,
+      omittedAtLeast: 1,
+      totalIsExact: true,
+    });
+    assert.equal(inbox.admission.totalAtLeast, MAX_ANALYST_REVIEW_ITEMS + 18);
+    assert.equal(inbox.admission.omittedAtLeast, 18);
+    assert.equal(inbox.admission.totalIsExact, false);
+    assert.equal(inbox.truncated, true);
+  });
+
+  test('does not reuse a dismissal across adversarially colliding legacy gap identifiers', () => {
+    const record = caseRecord();
+    // These two identifiers collided under the retired short dismissal digest.
+    const gapPin = (id: string) => ({
+      id,
+      checkpointId: null,
+      field: 'whois.registrar',
+      category: 'registration',
+      label: 'WHOIS registrar',
+      value: 'Unavailable',
+      source: 'whois',
+      sourceState: 'partial',
+      sourceSchema: null,
+      observedAt: '2026-07-27T08:00:00.000Z',
+      collectionDepth: 'deep' as const,
+      completeness: 'partial' as const,
+      truncated: false,
+      transitionExpectation: null,
+      limitations: ['The source did not answer.'],
+      createdAt: '2026-07-27T08:00:00.000Z',
+    });
+    record.evidencePins = [gapPin('3usv5pnjrl0v')];
+    const firstTarget = buildAnalystReviewInbox({ cases: [record] }, NOW)
+      .items.find((item) => item.kind === 'evidence_gap')?.dismissalTarget;
+    record.evidencePins = [gapPin('dqbukzxeanp1')];
+    const secondTarget = buildAnalystReviewInbox({ cases: [record] }, NOW)
+      .items.find((item) => item.kind === 'evidence_gap')?.dismissalTarget;
+    assert.ok(firstTarget);
+    assert.ok(secondTarget);
+    assert.notEqual(firstTarget, secondTarget);
+
+    record.manualTrail = [{
+      id: 'legacy-collision-check',
+      kind: 'review',
+      summary: 'Reviewed a different evidence gap.',
+      target: firstTarget,
+      createdAt: NOW,
+    }];
+    assert.equal(buildAnalystReviewInbox({ cases: [record] }, NOW).counts.evidence_gap, 1);
   });
 
   test('filters derived recurrence and invalidation without treating either as a permanent disposition', () => {

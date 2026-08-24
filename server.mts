@@ -34,6 +34,7 @@ import {
   buildSessionCookie,
   buildClearCookie,
   isTrustedLoginOrigin,
+  reportSessionSecretConfigurationWarning,
 } from './lib/auth.mts';
 import {
   checkApiRateLimit,
@@ -556,6 +557,7 @@ function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, n
 app.use('/api', apiErrorHandler);
 
 function startServer() {
+  reportSessionSecretConfigurationWarning();
   return app.listen(PORT, (error: Error | undefined) => {
     if (error) throw error;
     console.log(`WHOIS/RDAP tool listening on http://localhost:${PORT}`);

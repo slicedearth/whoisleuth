@@ -331,6 +331,17 @@ describe('local aggregate mail report parsing', () => {
     );
   });
 
+  test('neutralises Unicode formatting controls in retained mail labels', async () => {
+    const unsafeXml = DMARC_XML
+      .replace('Example Reporter', 'Example\u202eReporter')
+      .replace('report-1', 'report\u2060-1');
+    const reports = await parseMailReportFiles('aggregate\u202e.xml', encoder.encode(unsafeXml));
+    assert.equal(reports[0]?.source.name, 'aggregate .xml');
+    assert.equal(reports[0]?.organization, 'Example Reporter');
+    assert.equal(reports[0]?.reportId, 'report -1');
+    assert.doesNotMatch(JSON.stringify(reports), /[\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  });
+
   test('builds a deterministic profile-scoped review without changing evidence meaning', async () => {
     const reports = [
       ...await parseMailReportFiles('aggregate.xml', encoder.encode(DMARC_XML)),

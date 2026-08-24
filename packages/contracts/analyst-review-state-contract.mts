@@ -9,12 +9,15 @@
 export const ANALYST_REVIEW_STATE_SCHEMA = 'whoisleuth.analyst-review-state';
 export const ANALYST_REVIEW_STATE_SCHEMA_VERSION = 1;
 export const ANALYST_REVIEW_STATE_SUPPORTED_VERSIONS = Object.freeze([ANALYST_REVIEW_STATE_SCHEMA_VERSION] as const);
+/** Internal IndexedDB revision; it is deliberately independent of the public document version. */
+export const ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION = 2;
 export const MAX_ANALYST_REVIEW_STATE_RECORDS = 500;
 export const MAX_ANALYST_REVIEW_STATE_BYTES = 512 * 1024;
 export const MAX_ANALYST_REVIEW_RATIONALE_LENGTH = 1_000;
 export const MAX_ANALYST_REVIEW_ASSOCIATIONS = 20;
 export const MAX_ANALYST_REVIEW_HISTORY = 8;
 export const MAX_ANALYST_REVIEW_ITEMS = 500;
+export const MAX_ANALYST_REVIEW_IDENTITY_BYTES = 1024 * 1024;
 
 export const ANALYST_REVIEW_KINDS = Object.freeze([
   'case',
@@ -119,6 +122,8 @@ export type AnalystReviewStateRecord = AnalystReviewDecisionSnapshot & Readonly<
   caseIds: readonly string[];
   campaignIds: readonly string[];
   history: readonly AnalystReviewDecisionSnapshot[];
+  /** Known earlier snapshots omitted after the bounded history was filled. */
+  historyOmitted: number;
 }>;
 
 export type AnalystReviewStateStore = Readonly<{

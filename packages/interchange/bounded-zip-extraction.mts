@@ -23,6 +23,7 @@ type BoundedZipExtractionOptions = Readonly<{
 
 type EntryPlan = Readonly<{
   info: UnzipFileInfo;
+  directory: ZipDirectoryEntry;
   selection: BoundedZipSelection;
 }>;
 
@@ -34,12 +35,33 @@ const DATA_DESCRIPTOR_SIGNATURE = 0x08074b50;
 const MAX_ZIP_COMMENT_BYTES = 0xffff;
 
 type ZipDirectoryEntry = Readonly<{
+  crc32: number;
   compression: number;
   compressedSize: number;
   originalSize: number;
   localHeaderOffset: number;
   localRegionEnd: number;
 }>;
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < table.length; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) !== 0 ? 0xedb8_8320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function updateCrc32(state: number, bytes: Uint8Array): number {
+  let next = state >>> 0;
+  for (const byte of bytes) {
+    next = CRC32_TABLE[(next ^ byte) & 0xff]! ^ (next >>> 8);
+  }
+  return next >>> 0;
+}
 
 function concat(chunks: readonly Uint8Array[], total: number): Uint8Array {
   const output = new Uint8Array(total);
@@ -168,6 +190,7 @@ function inspectZipDirectory(
     }
 
     entries.push(Object.freeze({
+      crc32,
       compression,
       compressedSize,
       originalSize,
@@ -226,7 +249,7 @@ function extractBoundedZipEntries(
         throw new TypeError('Bounded ZIP extraction received an invalid entry plan.');
       }
       if (plans.has(selection.key)) throw new Error(options.metadataMismatchMessage);
-      plans.set(selection.key, Object.freeze({ info, selection }));
+      plans.set(selection.key, Object.freeze({ info, directory: directoryEntry, selection }));
       return false;
     },
   });
@@ -249,10 +272,13 @@ function extractBoundedZipEntries(
         throw new Error(options.metadataMismatchMessage);
       }
       localEntries.add(key);
+      // Unselected entries are structurally inspected but are not decompressed or
+      // CRC-validated because their payload is outside the caller's import scope.
       if (!plan.selection.selected) return;
 
       const chunks: Uint8Array[] = [];
       let entryBytes = 0;
+      let crc32State = 0xffff_ffff;
       file.ondata = (error, chunk, final) => {
         if (failure) throw failure;
         if (error || !(chunk instanceof Uint8Array)) {
@@ -272,9 +298,11 @@ function extractBoundedZipEntries(
         }
         entryBytes += chunk.byteLength;
         selectedBytes += chunk.byteLength;
+        crc32State = updateCrc32(crc32State, chunk);
         if (chunk.byteLength) chunks.push(chunk.slice());
         if (final) {
-          if (entryBytes !== plan.info.originalSize) {
+          const actualCrc32 = (crc32State ^ 0xffff_ffff) >>> 0;
+          if (entryBytes !== plan.info.originalSize || actualCrc32 !== plan.directory.crc32) {
             failure = new Error(options.metadataMismatchMessage);
             file.terminate();
             throw failure;

@@ -5,6 +5,8 @@
     mutation: string;
     availability: string;
     risk: number;
+    nextAction: string;
+    compactAction: string;
     signals: readonly string[];
     evidence: Readonly<{
       registry: Readonly<{ status: string }>;
@@ -23,6 +25,7 @@
   const previewCandidates: readonly PreviewCandidate[] = Object.freeze([
     Object.freeze({
       id: 'credential-lure', domain: 'northstar-login.example', mutation: 'Brand + login term', availability: 'Registered', risk: 78,
+      nextAction: 'Review the limited website evidence', compactAction: 'Review website',
       signals: Object.freeze(['Recently observed registration', 'Password form present']),
       evidence: Object.freeze({
         registry: Object.freeze({ status: 'Complete' }), dns: Object.freeze({ status: 'Complete' }),
@@ -40,6 +43,7 @@
     }),
     Object.freeze({
       id: 'character-edit', domain: 'northstarr.example', mutation: 'Character duplication', availability: 'Registered', risk: 34,
+      nextAction: 'Repeat certificate collection', compactAction: 'Repeat certificate',
       signals: Object.freeze(['Character edit', 'Parked page pattern']),
       evidence: Object.freeze({
         registry: Object.freeze({ status: 'Complete' }), dns: Object.freeze({ status: 'Complete' }),
@@ -57,6 +61,7 @@
     }),
     Object.freeze({
       id: 'alternate-tld', domain: 'northstar.invalid', mutation: 'Alternate TLD', availability: 'Unknown', risk: 52,
+      nextAction: 'Repeat registration collection', compactAction: 'Repeat registration',
       signals: Object.freeze(['Official label on alternate TLD', 'Collection intentionally incomplete']),
       evidence: Object.freeze({
         registry: Object.freeze({ status: 'Inconclusive' }), dns: Object.freeze({ status: 'Unavailable' }),
@@ -86,21 +91,17 @@
     { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: sourceState(selected.evidence.dns.status), side: 'left' as const, glyph: 'D', family: 'network' as const },
     { id: 'website', label: 'Website', detail: selected.evidence.website.status, status: sourceState(selected.evidence.website.status), side: 'right' as const, glyph: 'H', family: 'web' as const },
     { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: sourceState(selected.evidence.certificate.status), side: 'right' as const, glyph: 'T', family: 'web' as const },
-    { id: 'analysis', label: 'Risk signals', detail: `${selected.signals.length} explainable cue${selected.signals.length === 1 ? '' : 's'}`, status: selected.risk >= 50 ? 'warning' : 'success', side: 'right' as const, provenance: 'derived' as const, glyph: 'A', family: 'derived' as const },
+    { id: 'analysis', label: 'Review cues', detail: `${selected.signals.length} explainable cue${selected.signals.length === 1 ? '' : 's'}`, status: selected.signals.length ? 'warning' : 'success', side: 'right' as const, provenance: 'derived' as const, glyph: 'A', family: 'derived' as const },
   ]);
   const directSourceCount = 4;
-  const derivedSourceCount = 1;
+  const completeSourceCount = $derived(Object.values(selected.evidence).filter((source) => source.status === 'Complete').length);
   const materialChange = $derived(timeline.find((entry) => entry.changes.length > 0) ?? null);
-  const monitorAction = $derived(selected.risk >= 70
-    ? 'Review this candidate now'
-    : selected.availability === 'Unknown'
-      ? 'Repeat incomplete collection'
-      : 'Watch for material change');
-  const compactMonitorAction = $derived(selected.risk >= 70
-    ? 'Review now'
-    : selected.availability === 'Unknown'
-      ? 'Repeat collection'
-      : 'Watch for change');
+  const monitorAction = $derived(selected.nextAction);
+  const compactMonitorAction = $derived(selected.compactAction);
+
+  function candidateCompleteSourceCount(candidate: PreviewCandidate): number {
+    return Object.values(candidate.evidence).filter((source) => source.status === 'Complete').length;
+  }
 
   function sourceState(value: string): 'success' | 'partial' | 'inconclusive' | 'unavailable' {
     const state = value.toLowerCase();
@@ -135,7 +136,7 @@
 
 <section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
   <article class="preview-panel discover-panel">
-    <header><span>Discover</span><small>Synthetic candidates</small></header>
+    <header><span>Candidates</span><small>Synthetic examples</small></header>
     <div class="candidate-list">
       {#each previewCandidates as candidate}
         <button
@@ -147,7 +148,7 @@
           onclick={() => selectedCandidateId = candidate.id}
         >
           <span><strong>{candidate.domain}</strong><small>{candidate.mutation}</small></span>
-          <b aria-label={`Risk score ${candidate.risk}`}>{candidate.risk}</b>
+          <b aria-label={`${candidateCompleteSourceCount(candidate)} of ${directSourceCount} direct evidence sources complete`}>{candidateCompleteSourceCount(candidate)}/{directSourceCount}</b>
         </button>
       {/each}
     </div>
@@ -187,8 +188,8 @@
       {#if previewView === 'overview'}
         <div class="assessment">
           <div><small>Registration</small><strong>{selected.availability}</strong></div>
-          <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
-          <div><small>Mapped evidence</small><strong>{directSourceCount} <span>sources + {derivedSourceCount} derived</span></strong></div>
+          <div><small>Direct evidence</small><strong>{completeSourceCount}/{directSourceCount} <span>sources complete</span></strong></div>
+          <div><small>Next review</small><strong>{compactMonitorAction}</strong><span class="triage-score">Risk triage {selected.risk}/100</span></div>
         </div>
         <div class="preview-findings" aria-label="Synthetic lookup summary">
           {#each selected.signals.slice(0, 2) as signal, index}
@@ -259,7 +260,7 @@
   .candidate-row:hover{background:color-mix(in srgb,var(--accent) 5%,var(--panel-raised))}.candidate-row:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
   .candidate-row.selected{border-left-color:var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .065)}
   .candidate-row>span{min-width:0}.candidate-row strong,.candidate-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .candidate-row strong{font:650 var(--text-xs) var(--mono)}.candidate-row small{margin-top:3px;color:var(--muted);font-size:.62rem}.candidate-row b{color:var(--amber);font:750 .9rem var(--mono)}
+  .candidate-row strong{font:650 var(--text-xs) var(--mono)}.candidate-row small{margin-top:3px;color:var(--muted);font-size:.62rem}.candidate-row b{flex:0 0 auto;color:var(--muted);font:700 .65rem var(--mono)}
   .preview-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:6px;border-bottom:1px solid var(--border);background:var(--panel-raised)}
   .preview-tabs button{min-width:0;min-height:34px;padding:6px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:650 .6rem var(--mono);text-align:center;cursor:pointer}
   .preview-tabs button:hover,.preview-tabs button.active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:var(--panel);color:var(--accent)}
@@ -267,7 +268,7 @@
   .mobile-domain-picker{display:none}
   .preview-tab-panel{min-width:0}
   .assessment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}
-  .assessment div{display:grid;gap:4px;padding:13px;background:var(--panel)}.assessment small{color:var(--muted);font:var(--text-2xs) var(--mono)}.assessment strong{color:var(--text);font:750 1.05rem var(--mono)}.assessment strong span{color:var(--muted);font-size:.62rem}
+  .assessment div{display:grid;gap:4px;padding:13px;background:var(--panel)}.assessment small{color:var(--muted);font:var(--text-2xs) var(--mono)}.assessment strong{color:var(--text);font:750 1.05rem var(--mono)}.assessment strong span{color:var(--muted);font-size:.62rem}.assessment .triage-score{color:var(--muted);font:600 .56rem var(--mono)}
   .preview-findings{display:grid;gap:1px;padding:1px;background:var(--border)}
   .preview-findings p{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:center;margin:0;padding:13px;background:var(--panel)}
   .preview-findings strong{font:650 var(--text-xs) var(--mono)}

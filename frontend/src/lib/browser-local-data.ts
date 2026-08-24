@@ -262,6 +262,68 @@ function transactionComplete(transaction: IDBTransaction, label: string, timeout
   return completion;
 }
 
+function readBoundedStoredRecords<T>(
+  index: IDBIndex,
+  definition: LocalDataCollectionDefinition<T>,
+  codec: string,
+  timeoutMs: number,
+): Promise<BrowserLocalStoredRecord[]> {
+  const label = `Reading ${definition.label}`;
+  return withDeadline(label, new Promise<BrowserLocalStoredRecord[]>((resolve, reject) => {
+    const records: BrowserLocalStoredRecord[] = [];
+    const lookupKeys = new Set<string>();
+    const maximumEncodedBytes = definition.maximumBytes * 2;
+    let retainedBytes = 0;
+    const request = index.openCursor(definition.id);
+    request.onerror = () => reject(request.error || new BrowserLocalDataError('LOCAL_DATA_REQUEST_FAILED', `${label} failed.`));
+    request.onsuccess = () => {
+      try {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve(records);
+          return;
+        }
+        if (records.length >= definition.maximumRecords) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} exceeds its bounded record count.`);
+        }
+        const record = cursor.value as BrowserLocalStoredRecord;
+        if (!record || typeof record !== 'object'
+          || record.collection !== definition.id
+          || !Array.isArray(record.key)
+          || record.key.length !== 2
+          || record.key[0] !== definition.id
+          || record.key[1] !== record.lookupKey
+          || typeof record.lookupKey !== 'string'
+          || !record.lookupKey
+          || record.lookupKey.length > MAX_LOCAL_DATA_RECORD_ID_LENGTH
+          || /[\u0000-\u001f\u007f]/u.test(record.lookupKey)
+          || lookupKeys.has(record.lookupKey)
+          || !Number.isSafeInteger(record.ordinal)
+          || record.ordinal < 0
+          || record.ordinal >= definition.maximumRecords
+          || record.codec !== codec
+          || typeof record.payload !== 'string'
+          || !Number.isSafeInteger(record.payloadBytes)
+          || record.payloadBytes < 0
+          || record.payloadBytes > maximumEncodedBytes - retainedBytes
+          || record.payload.length > maximumEncodedBytes - retainedBytes) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
+        }
+        const actualBytes = byteLength(record.payload);
+        if (record.payloadBytes !== actualBytes || actualBytes > maximumEncodedBytes - retainedBytes) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
+        }
+        lookupKeys.add(record.lookupKey);
+        retainedBytes += actualBytes;
+        records.push(record);
+        cursor.continue();
+      } catch (cause) {
+        reject(cause);
+      }
+    };
+  }), timeoutMs);
+}
+
 function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): LocalDataCollectionDefinition<T> {
   boundedIdentifier(definition.id, 'Collection identifier', 64);
   boundedIdentifier(definition.label, 'Collection label', 100);
@@ -726,17 +788,12 @@ export class BrowserLocalDataProvider {
       if (manifest.codec !== this.codec.id) {
         throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
       }
-      records = await requestResult(
-        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(
-          definition.id,
-          definition.maximumRecords + 1,
-        ) as IDBRequest<BrowserLocalStoredRecord[]>,
-        `Reading ${definition.label}`,
+      records = await readBoundedStoredRecords(
+        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX),
+        definition,
+        manifest.codec,
         this.timeoutMs,
       );
-      if (records.length > definition.maximumRecords) {
-        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} exceeds its bounded record count.`);
-      }
       await done;
     } catch (cause) {
       try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
@@ -754,34 +811,9 @@ export class BrowserLocalDataProvider {
     }
     records.sort((left, right) => left.ordinal - right.ordinal || left.lookupKey.localeCompare(right.lookupKey));
     const decoded: LocalDataRecord[] = [];
-    let payloadBytes = 0;
-    const lookupKeys = new Set<string>();
     for (const record of records) {
-      if (!record || typeof record !== 'object'
-        || record.collection !== definition.id
-        || !Array.isArray(record.key)
-        || record.key.length !== 2
-        || record.key[0] !== definition.id
-        || record.key[1] !== record.lookupKey
-        || typeof record.lookupKey !== 'string'
-        || !record.lookupKey
-        || record.lookupKey.length > MAX_LOCAL_DATA_RECORD_ID_LENGTH
-        || /[\u0000-\u001f\u007f]/u.test(record.lookupKey)
-        || lookupKeys.has(record.lookupKey)
-        || !Number.isSafeInteger(record.ordinal)
-        || record.ordinal < 0
-        || record.ordinal >= records.length
-        || record.codec !== manifest.codec
-        || typeof record.payload !== 'string'
-        || !Number.isSafeInteger(record.payloadBytes)
-        || record.payloadBytes < 0
-        || record.payloadBytes !== byteLength(record.payload)) {
+      if (record.ordinal >= records.length) {
         throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
-      }
-      lookupKeys.add(record.lookupKey);
-      payloadBytes += record.payloadBytes;
-      if (payloadBytes > definition.maximumBytes * 2) {
-        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} encoded records exceed their read bound.`);
       }
       try { decoded.push(await this.codec.decode({ collection: definition.id, lookupKey: record.lookupKey, payload: record.payload })); }
       catch (cause) {

@@ -2,6 +2,7 @@ import type { CaseRecord } from './case-model.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import {
+  ANALYST_REVIEW_EVIDENCE_FAMILIES,
   ANALYST_REVIEW_KINDS,
   MAX_ANALYST_REVIEW_ITEMS,
   analystReviewLifecycle,
@@ -23,6 +24,7 @@ import type {
 } from './analyst-review-state.ts';
 
 export {
+  ANALYST_REVIEW_EVIDENCE_FAMILIES,
   ANALYST_REVIEW_KINDS,
   MAX_ANALYST_REVIEW_ITEMS,
 } from './analyst-review-state.ts';
@@ -47,6 +49,23 @@ export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASO
 
 export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
 
+export type AnalystReviewProjectionAdmission = Readonly<{
+  omittedAtLeast: Readonly<Partial<Record<AnalystReviewEvidenceFamily, number>>>;
+  lowerBoundFamilies: readonly AnalystReviewEvidenceFamily[];
+  currentSubjectKeys?: readonly string[];
+}>;
+
+export type AnalystReviewAdmissionCount = Readonly<{
+  displayed: number;
+  totalAtLeast: number;
+  omittedAtLeast: number;
+  totalIsExact: boolean;
+}>;
+
+export type AnalystReviewAdmission = AnalystReviewAdmissionCount & Readonly<{
+  byEvidenceFamily: Readonly<Record<AnalystReviewEvidenceFamily, AnalystReviewAdmissionCount>>;
+}>;
+
 export type AnalystReviewFilter = Readonly<{
   source?: string;
   age?: AnalystReviewAge;
@@ -60,6 +79,7 @@ export type AnalystReviewFilter = Readonly<{
 export type AnalystReviewInbox = Readonly<{
   items: AnalystReviewInboxItem[];
   counts: Readonly<Record<AnalystReviewKind | 'all' | 'overdue', number>>;
+  admission: AnalystReviewAdmission;
   truncated: boolean;
   limitations: readonly string[];
 }>;
@@ -82,6 +102,7 @@ const LIMITED_SOURCE_STATES = new Set([
   'unavailable',
 ]);
 const PRIORITY_RANK: Record<AnalystReviewPriority, number> = { urgent: 0, high: 1, normal: 2 };
+const COMPLETENESS_RANK: Record<AnalystReviewCompleteness, number> = { inconclusive: 0, partial: 1, complete: 2 };
 const DISMISSAL_PREFIX = 'evidence-gap-review:';
 export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
 export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
@@ -94,29 +115,132 @@ function timestamp(value: unknown): string | null {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function itemSort(left: AnalystReviewItem, right: AnalystReviewItem, nowMs: number): number {
+type AdmissionComparableItem = AnalystReviewItem & Readonly<{ lifecycle?: AnalystReviewLifecycle }>;
+
+function lifecycleAdmissionRank(item: AdmissionComparableItem): number {
+  if (item.lifecycle?.invalidated || item.lifecycle?.recurred) return 0;
+  if (item.lifecycle?.expired || item.lifecycle?.reviewDue) return 1;
+  if (item.lifecycle?.state === 'orphaned') return 2;
+  return 3;
+}
+
+export function compareAnalystReviewAdmission(
+  left: AdmissionComparableItem,
+  right: AdmissionComparableItem,
+  now: unknown,
+): number {
+  const nowIso = timestamp(now) || new Date(0).toISOString();
+  return compareAnalystReviewAdmissionAt(left, right, Date.parse(nowIso));
+}
+
+function compareAnalystReviewAdmissionAt(
+  left: AdmissionComparableItem,
+  right: AdmissionComparableItem,
+  nowMs: number,
+): number {
   const leftDue = left.dueAt ? Date.parse(left.dueAt) : Number.POSITIVE_INFINITY;
   const rightDue = right.dueAt ? Date.parse(right.dueAt) : Number.POSITIVE_INFINITY;
   const leftOverdue = leftDue <= nowMs;
   const rightOverdue = rightDue <= nowMs;
-  if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
-  if (leftDue !== rightDue) return leftDue - rightDue;
   const priority = PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
   if (priority) return priority;
-  return Date.parse(right.observedAt) - Date.parse(left.observedAt) || compareCodeUnits(left.id, right.id);
+  if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
+  const lifecycle = lifecycleAdmissionRank(left) - lifecycleAdmissionRank(right);
+  if (lifecycle) return lifecycle;
+  if (leftDue !== rightDue) return leftDue - rightDue;
+  const completeness = COMPLETENESS_RANK[left.completeness] - COMPLETENESS_RANK[right.completeness];
+  if (completeness) return completeness;
+  const observed = Date.parse(left.observedAt) - Date.parse(right.observedAt);
+  if (observed) return observed;
+  return compareCodeUnits(left.subjectKey, right.subjectKey) || compareCodeUnits(left.id, right.id);
 }
 
-function hashGapParts(parts: readonly string[]): string {
-  let value = 0x811c9dc5;
-  for (const character of parts.join('\u001f')) {
-    value ^= character.codePointAt(0) ?? 0;
-    value = Math.imul(value, 0x01000193);
+type RetainedReviewItems<T extends AnalystReviewItem> = Readonly<{
+  items: readonly T[];
+  candidateCounts: Readonly<Record<AnalystReviewEvidenceFamily, number>>;
+  retainedCounts: Readonly<Record<AnalystReviewEvidenceFamily, number>>;
+}>;
+
+function emptyFamilyCounts(): Record<AnalystReviewEvidenceFamily, number> {
+  return Object.fromEntries(ANALYST_REVIEW_EVIDENCE_FAMILIES.map((family) => [family, 0])) as Record<AnalystReviewEvidenceFamily, number>;
+}
+
+function heapSiftUp<T extends AnalystReviewItem>(
+  heap: Array<Readonly<{ item: T; comparable: AdmissionComparableItem }>>,
+  start: number,
+  nowMs: number,
+): void {
+  let index = start;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (compareAnalystReviewAdmissionAt(heap[parent]!.comparable, heap[index]!.comparable, nowMs) >= 0) break;
+    [heap[parent], heap[index]] = [heap[index]!, heap[parent]!];
+    index = parent;
   }
-  return (value >>> 0).toString(16).padStart(8, '0');
+}
+
+function heapSiftDown<T extends AnalystReviewItem>(
+  heap: Array<Readonly<{ item: T; comparable: AdmissionComparableItem }>>,
+  nowMs: number,
+): void {
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) return;
+    const right = left + 1;
+    const worse = right < heap.length
+      && compareAnalystReviewAdmissionAt(heap[right]!.comparable, heap[left]!.comparable, nowMs) > 0
+      ? right
+      : left;
+    if (compareAnalystReviewAdmissionAt(heap[index]!.comparable, heap[worse]!.comparable, nowMs) >= 0) return;
+    [heap[index], heap[worse]] = [heap[worse]!, heap[index]!];
+    index = worse;
+  }
+}
+
+export function retainTopAnalystReviewItems<T extends AnalystReviewItem>(
+  candidates: Iterable<T>,
+  options: Readonly<{
+    now: unknown;
+    reviewState?: AnalystReviewStateStore;
+    limit?: number;
+  }>,
+): RetainedReviewItems<T> {
+  const nowIso = timestamp(options.now) || new Date(0).toISOString();
+  const nowMs = Date.parse(nowIso);
+  const limit = Math.max(0, Math.min(MAX_ANALYST_REVIEW_ITEMS, Math.trunc(options.limit ?? MAX_ANALYST_REVIEW_ITEMS)));
+  const candidateCounts = emptyFamilyCounts();
+  const heap: Array<Readonly<{ item: T; comparable: AdmissionComparableItem }>> = [];
+  for (const item of candidates) {
+    candidateCounts[item.evidenceFamily] += 1;
+    const comparable: AdmissionComparableItem = options.reviewState
+      ? { ...item, lifecycle: analystReviewLifecycle(item, options.reviewState, nowIso) }
+      : item;
+    const entry = { item, comparable };
+    if (heap.length < limit) {
+      heap.push(entry);
+      heapSiftUp(heap, heap.length - 1, nowMs);
+    } else if (limit > 0 && compareAnalystReviewAdmissionAt(comparable, heap[0]!.comparable, nowMs) < 0) {
+      heap[0] = entry;
+      heapSiftDown(heap, nowMs);
+    }
+  }
+  const items = heap
+    .sort((left, right) => compareAnalystReviewAdmissionAt(left.comparable, right.comparable, nowMs))
+    .map((entry) => entry.item);
+  const retainedCounts = emptyFamilyCounts();
+  for (const item of items) retainedCounts[item.evidenceFamily] += 1;
+  return { items, candidateCounts, retainedCounts };
 }
 
 function gapDismissalTarget(record: CaseRecord, gapIds: readonly string[]): string {
-  return `${DISMISSAL_PREFIX}${record.id}:${hashGapParts([...gapIds].sort())}`;
+  const canonicalGapIds = [...new Set(gapIds)].sort(compareCodeUnits);
+  const digest = analystReviewMaterialFingerprint([
+    'case-evidence-gap-dismissal-v1',
+    record.id,
+    canonicalGapIds,
+  ]).slice('material:'.length);
+  return `${DISMISSAL_PREFIX}${record.id}:${digest}`;
 }
 
 function sourceId(value: unknown): string {
@@ -438,7 +562,7 @@ function orphanedReviewItem(
   const reviewDue = decision.reviewDueAt !== null && Date.parse(decision.reviewDueAt) <= nowMs;
   const familyLabel = decision.evidenceFamily.replaceAll('_', ' ');
   return {
-    id: `orphaned:${decision.subjectKey.slice(-16)}`,
+    id: `orphaned:${decision.subjectKey.slice(-64)}`,
     kind: 'orphaned_state',
     evidenceFamily: decision.evidenceFamily,
     subjectKey: decision.subjectKey,
@@ -476,6 +600,69 @@ function orphanedReviewItem(
   };
 }
 
+function boundedAdmissionCount(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(value, Number.MAX_SAFE_INTEGER)
+    : 0;
+}
+
+function projectionAdmission(
+  admissions: readonly AnalystReviewProjectionAdmission[],
+): Readonly<{
+  omittedAtLeast: Readonly<Record<AnalystReviewEvidenceFamily, number>>;
+  lowerBoundFamilies: Set<AnalystReviewEvidenceFamily>;
+  currentSubjectKeys: Set<string>;
+}> {
+  const omittedAtLeast = emptyFamilyCounts();
+  const lowerBoundFamilies = new Set<AnalystReviewEvidenceFamily>();
+  const currentSubjectKeys = new Set<string>();
+  for (const admission of admissions) {
+    for (const family of ANALYST_REVIEW_EVIDENCE_FAMILIES) {
+      const next = boundedAdmissionCount(admission.omittedAtLeast[family]);
+      omittedAtLeast[family] = Math.min(Number.MAX_SAFE_INTEGER, omittedAtLeast[family] + next);
+    }
+    for (const family of admission.lowerBoundFamilies) {
+      if (ANALYST_REVIEW_EVIDENCE_FAMILIES.includes(family)) lowerBoundFamilies.add(family);
+    }
+    for (const subjectKey of admission.currentSubjectKeys ?? []) {
+      if (/^review:[a-z_]+:[a-f0-9]{64}$/u.test(subjectKey)) currentSubjectKeys.add(subjectKey);
+    }
+  }
+  return { omittedAtLeast, lowerBoundFamilies, currentSubjectKeys };
+}
+
+function buildAdmission(
+  candidates: readonly AnalystReviewInboxItem[],
+  displayed: readonly AnalystReviewInboxItem[],
+  projected: ReturnType<typeof projectionAdmission>,
+): AnalystReviewAdmission {
+  const candidateCounts = emptyFamilyCounts();
+  const displayedCounts = emptyFamilyCounts();
+  for (const item of candidates) candidateCounts[item.evidenceFamily] += 1;
+  for (const item of displayed) displayedCounts[item.evidenceFamily] += 1;
+  const byEvidenceFamily = Object.fromEntries(ANALYST_REVIEW_EVIDENCE_FAMILIES.map((family) => {
+    const totalAtLeast = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      candidateCounts[family] + projected.omittedAtLeast[family],
+    );
+    return [family, Object.freeze({
+      displayed: displayedCounts[family],
+      totalAtLeast,
+      omittedAtLeast: Math.max(0, totalAtLeast - displayedCounts[family]),
+      totalIsExact: !projected.lowerBoundFamilies.has(family),
+    })];
+  })) as Record<AnalystReviewEvidenceFamily, AnalystReviewAdmissionCount>;
+  const totalAtLeast = Object.values(byEvidenceFamily)
+    .reduce((sum, count) => Math.min(Number.MAX_SAFE_INTEGER, sum + count.totalAtLeast), 0);
+  return {
+    displayed: displayed.length,
+    totalAtLeast,
+    omittedAtLeast: Math.max(0, totalAtLeast - displayed.length),
+    totalIsExact: Object.values(byEvidenceFamily).every((count) => count.totalIsExact),
+    byEvidenceFamily,
+  };
+}
+
 export function buildAnalystReviewInbox(
   input: Readonly<{
     cases?: readonly CaseRecord[];
@@ -483,34 +670,37 @@ export function buildAnalystReviewInbox(
     bulkSessions?: readonly BulkSession[];
     reviewState?: AnalystReviewStateStore;
     projectedItems?: readonly AnalystReviewItem[];
-    projectedItemsTruncated?: boolean;
+    projectedAdmissions?: readonly AnalystReviewProjectionAdmission[];
   }>,
   now: unknown = new Date().toISOString(),
 ): AnalystReviewInbox {
   const nowIso = timestamp(now) || new Date(0).toISOString();
   const nowMs = Date.parse(nowIso);
-  const inputTruncated = (input.cases?.length ?? 0) > 500
-    || Object.keys(input.watchlists ?? {}).length > 100
-    || (input.bulkSessions?.length ?? 0) > 10
-    || input.projectedItemsTruncated === true;
+  const projected = projectionAdmission(input.projectedAdmissions ?? []);
+  if ((input.cases?.length ?? 0) > 500) projected.lowerBoundFamilies.add('case');
+  if (Object.keys(input.watchlists ?? {}).length > 100) projected.lowerBoundFamilies.add('comparison');
+  if ((input.bulkSessions?.length ?? 0) > 10) projected.lowerBoundFamilies.add('bulk');
   const all = [
     ...caseItems(Array.isArray(input.cases) ? input.cases : [], nowIso),
     ...watchlistItems(input.watchlists && typeof input.watchlists === 'object' ? input.watchlists : {}, nowIso),
     ...bulkItems(Array.isArray(input.bulkSessions) ? input.bulkSessions : [], nowIso),
-    ...(Array.isArray(input.projectedItems) ? input.projectedItems.slice(0, MAX_ANALYST_REVIEW_ITEMS) : []),
-  ].sort((left, right) => itemSort(left, right, nowMs));
+    ...(Array.isArray(input.projectedItems) ? input.projectedItems : []),
+  ];
   const reviewState = input.reviewState ?? emptyAnalystReviewStateStore();
   const currentItems = all.map((item) => ({
     ...item,
     lifecycle: analystReviewLifecycle(item, reviewState, nowIso),
   }));
-  const currentSubjects = new Set(currentItems.map((item) => item.subjectKey));
+  const currentSubjects = new Set([
+    ...currentItems.map((item) => item.subjectKey),
+    ...projected.currentSubjectKeys,
+  ]);
   const orphanedItems = reviewState.records
     .filter((decision) => !currentSubjects.has(decision.subjectKey))
     .map((decision) => orphanedReviewItem(decision, nowIso));
-  const combinedItems = [...currentItems, ...orphanedItems]
-    .sort((left, right) => itemSort(left, right, nowMs));
-  const items = combinedItems.slice(0, MAX_ANALYST_REVIEW_ITEMS);
+  const combinedItems = [...currentItems, ...orphanedItems];
+  const items = retainTopAnalystReviewItems(combinedItems, { now: nowIso }).items as AnalystReviewInboxItem[];
+  const admission = buildAdmission(combinedItems, items, projected);
   const counts: Record<AnalystReviewKind | 'all' | 'overdue', number> = {
     all: items.length,
     overdue: items.filter((item) => item.dueAt !== null && Date.parse(item.dueAt) <= nowMs).length,
@@ -532,14 +722,12 @@ export function buildAnalystReviewInbox(
   return {
     items,
     counts,
-    truncated: inputTruncated || combinedItems.length > items.length,
+    admission,
+    truncated: !admission.totalIsExact || admission.omittedAtLeast > 0,
     limitations: [
-      'The inbox is a browser-local projection of retained records. It does not run checks, change cases, or infer maliciousness.',
-      'Partial and inconclusive source states remain review prompts, not evidence of absence or safety.',
-      'Evidence gaps are projected from explicit incomplete pins and open unknown or contradiction assertions; the queue does not invent missing facts.',
-      'A reviewed dismissal hides only the exact current gap fingerprint and records the fixed reason in the case investigation trail. It does not resolve, delete, or rewrite the underlying evidence or assertion.',
-      'Review Item lifecycle is an analyst-authored overlay. Material evidence changes and time-bounded expiry return an item to review while retaining the earlier rationale as history.',
-      'Imported lifecycle records without matching source evidence remain explicit unavailable items; their earlier disposition is not reused as a current conclusion.',
+      'This browser-local queue makes no request and does not change its source records.',
+      'Partial, unavailable and inconclusive evidence remains open for review; it is not treated as absence or safety.',
+      'A lifecycle decision applies only to the exact retained evidence. Material change, expiry or unavailable source evidence returns it to review.',
     ],
   };
 }

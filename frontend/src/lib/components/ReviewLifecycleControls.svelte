@@ -81,6 +81,8 @@
     <p class="last-decision">
       Last decision: {lifecycle.decision.disposition} · {new Date(lifecycle.decision.reviewedAt).toLocaleString('en-AU')}
       {#if lifecycle.decision.expiresAt} · expires {new Date(lifecycle.decision.expiresAt).toLocaleString('en-AU')}{/if}
+      {#if lifecycle.decision.history.length} · {lifecycle.decision.history.length} earlier decision{lifecycle.decision.history.length === 1 ? '' : 's'} retained{/if}
+      {#if lifecycle.decision.historyOmitted} · at least {lifecycle.decision.historyOmitted} additional omitted{/if}
     </p>
     <p class="retained-rationale">{lifecycle.decision.rationale}</p>
   {/if}

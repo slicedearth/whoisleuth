@@ -9,6 +9,7 @@ import * as crypto from 'node:crypto';
 type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type CookieOptions = { secure?: boolean };
 type SigningSecret = string | Buffer;
+type SessionConfigurationEnvironment = Readonly<Record<string, string | undefined>>;
 
 const COOKIE_NAME = 'wrt_session';
 const SESSION_MAX_AGE_ENV = 'SESSION_MAX_AGE_DAYS';
@@ -16,6 +17,25 @@ const DEFAULT_SESSION_MAX_AGE_DAYS = 7;
 const MIN_SESSION_MAX_AGE_DAYS = 1;
 const MAX_SESSION_MAX_AGE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MISSING_SESSION_SECRET_WARNING = 'WHOISleuth configuration warning: SESSION_SECRET is not set in production. Session signing is being derived from SITE_PASSWORD for compatibility; configure a separate random SESSION_SECRET.';
+
+function productionSessionSecretWarning(
+  env: SessionConfigurationEnvironment = process.env,
+): string | null {
+  const production = env.NODE_ENV === 'production' || env.CONTEXT === 'production';
+  return production && Boolean(env.SITE_PASSWORD) && !env.SESSION_SECRET
+    ? MISSING_SESSION_SECRET_WARNING
+    : null;
+}
+
+let sessionSecretWarningReported = false;
+
+function reportSessionSecretConfigurationWarning(): void {
+  const warning = productionSessionSecretWarning();
+  if (!warning || sessionSecretWarningReported) return;
+  sessionSecretWarningReported = true;
+  console.warn(warning);
+}
 
 function configuredSessionTtlMs(): number | null {
   const raw = process.env[SESSION_MAX_AGE_ENV];
@@ -50,6 +70,7 @@ function getSigningSecret(): SigningSecret | null {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   const password = getSecret();
   if (!password) return null;
+  reportSessionSecretConfigurationWarning();
   if (password !== cachedPassword) {
     cachedPassword = password;
     cachedDerivedSigningKey = crypto.scryptSync(password, 'whoisleuth-session-signing-v1', 32);
@@ -219,6 +240,8 @@ export {
   parseCookies,
   buildSessionCookie,
   buildClearCookie,
+  productionSessionSecretWarning,
+  reportSessionSecretConfigurationWarning,
 };
 
-export type { CookieOptions, HeaderInput, SigningSecret };
+export type { CookieOptions, HeaderInput, SessionConfigurationEnvironment, SigningSecret };

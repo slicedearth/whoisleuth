@@ -424,8 +424,9 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
     }
     return Object.freeze({ file, lane: testLane(file), weightMs: measured, sampleCount, provenanceId: id });
   });
+  const retainedProvenanceIds = new Set(files.map((item) => item.provenanceId));
   const provenance = [
-    ...retained.provenance,
+    ...retained.provenance.filter((item) => retainedProvenanceIds.has(item.id)),
     Object.freeze({ id, lane, environmentClass, sampleBasis, sampleCount }),
   ];
   return parseProfileValue({

@@ -204,8 +204,10 @@ describe('offline artifact verifier', () => {
     });
     const report = await verifyOfflineArtifact(JSON.stringify(archive));
     assert.equal(report.artifact.kind, 'workspace_archive');
-    assert.equal(report.state, 'verified');
+    assert.equal(report.state, 'integrity_valid');
     assert.equal(report.checks.contentIntegrity, 'verified');
+    assert.equal(report.checks.contentIntegrityScope, 'embedded_projections');
+    assert.match(report.limitations.join(' '), /not root metadata/iu);
     assert.ok((report.summary.sectionCount ?? 0) > 0);
     assert.equal(report.summary.unsupportedSectionCount, 0);
     const terminal = formatOfflineArtifactVerification(report);
@@ -224,7 +226,7 @@ describe('offline artifact verifier', () => {
     cases.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
     cases.checksum = await sha256ArtifactDigest(archive.sections.cases);
     const report = await verifyOfflineArtifact(JSON.stringify(archive));
-    assert.equal(report.state, 'verified');
+    assert.equal(report.state, 'integrity_valid');
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.match(report.limitations.join(' '), /cannot be imported/iu);
   });
@@ -242,7 +244,8 @@ describe('offline artifact verifier', () => {
     profiles.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
 
     const ordinary = await verifyOfflineArtifact(JSON.stringify(archive));
-    assert.equal(ordinary.state, 'verified');
+    assert.equal(ordinary.state, 'integrity_valid');
+    assert.equal(ordinary.checks.contentIntegrityScope, 'embedded_projections');
     assert.equal(ordinary.summary.fullyImportable, false);
     assert.equal(ordinary.summary.skippedRecordCount, 1);
     assert.equal(ordinary.summary.unsupportedSectionCount, 0);
@@ -254,6 +257,28 @@ describe('offline artifact verifier', () => {
     assert.equal(decrypted.summary.fullyImportable, false);
     assert.equal(decrypted.summary.skippedRecordCount, 1);
     assert.doesNotMatch(JSON.stringify(decrypted), /must-not-appear|fixture archive passphrase/iu);
+  });
+
+  test('does not promote mutable ordinary archive metadata to whole-artifact integrity', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive({}, {
+      generatedAt: '2026-07-15T00:00:00.000Z',
+    }));
+    archive.generatedAt = '2026-07-16T00:00:00.000Z';
+    const report = await verifyOfflineArtifact(JSON.stringify(archive));
+    assert.equal(report.state, 'integrity_valid');
+    assert.equal(report.checks.contentIntegrity, 'verified');
+    assert.equal(report.checks.contentIntegrityScope, 'embedded_projections');
+
+    const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
+      stdout: { write() {} }, stderr: { write() {} },
+      readArtifactInput: async () => JSON.stringify(archive),
+    });
+    assert.equal(strictCode, EXIT_CODES.PARTIAL_FAILURE);
+
+    const encrypted = await encryptWorkspaceArchive(archive, PASSPHRASE);
+    const encryptedReport = await verifyOfflineArtifact(JSON.stringify(encrypted), { passphrase: PASSPHRASE });
+    assert.equal(encryptedReport.state, 'verified');
+    assert.equal(encryptedReport.checks.contentIntegrityScope, 'whole_artifact');
   });
 
   test('withholds workspace integrity and importability claims for undeclared ordinary or authenticated data', async () => {

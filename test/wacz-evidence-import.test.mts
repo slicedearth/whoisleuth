@@ -117,11 +117,10 @@ describe('portable WACZ evidence import', () => {
     assert.match(report.document.findings[0]?.limitations.join(' ') ?? '', /optional WACZ manifest digest was not present/iu);
   });
 
-  test('rejects missing manifests and mismatched manifest or resource fixity', async () => {
+  test('rejects missing manifests and mismatched manifest fixity', async () => {
     for (const input of [
       wacz({ includeManifest: false, manifestDigest: 'missing' }),
       wacz({ manifestDigest: 'invalid' }),
-      wacz({ resourceDigest: 'invalid' }),
       wacz({ resourceBytes: 1 }),
     ]) {
       await assert.rejects(
@@ -132,6 +131,16 @@ describe('portable WACZ evidence import', () => {
         /manifest|digest|byte length/iu,
       );
     }
+  });
+
+  test('rejects a higher-level SHA-256 mismatch after ZIP payload CRC validation succeeds', async () => {
+    await assert.rejects(
+      () => parseWaczEvidenceArchive(
+        toArrayBuffer(wacz({ resourceDigest: 'invalid' })),
+        'capture.wacz',
+      ),
+      /digest/iu,
+    );
   });
 
   test('rejects unsafe paths and excessive package bytes', async () => {

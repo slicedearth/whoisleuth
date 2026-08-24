@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { buildAnalystJourneyAssurance, parseAnalystJourneySource } from '../tools/analyst-journey-assurance.mts';
 import { selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
 import {
   buildBalancedBrowserShardPlan,
+  buildVerificationTimingUpdateCandidate,
+  MAX_TIMING_PROVENANCE,
   parseVerificationTimingProfile,
   readVerificationTestInventory,
   readVerificationTimingProfile,
@@ -54,6 +58,59 @@ describe('verification architecture contracts', () => {
       const value = rawProfile();
       mutate(value);
       assert.throws(() => parseVerificationTimingProfile(JSON.stringify(value), inventory), label);
+    }
+  });
+
+  test('replaces obsolete provenance when a bounded timing update reaches the profile limit', () => {
+    const retained = readVerificationTimingProfile();
+    assert.equal(retained.provenance.length, MAX_TIMING_PROVENANCE);
+    const provenanceUse = new Map<string, number>();
+    for (const file of retained.files) {
+      provenanceUse.set(file.provenanceId, (provenanceUse.get(file.provenanceId) ?? 0) + 1);
+    }
+    const replaceable = retained.files.find((file) => (
+      file.lane === 'unit' && provenanceUse.get(file.provenanceId) === 1
+    ));
+    assert.ok(replaceable);
+    const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
+    const report = path.join(directory, 'unit.xml');
+    const measuredFile = path.resolve(replaceable.file);
+    writeFileSync(report, [
+      '<testsuites>',
+      `  <testcase name="catalogue" time="0.012" file="${measuredFile}"/>`,
+      '  <!-- tests 1 -->',
+      '  <!-- pass 1 -->',
+      '  <!-- fail 0 -->',
+      '  <!-- cancelled 0 -->',
+      '  <!-- skipped 0 -->',
+      '  <!-- todo 0 -->',
+      '</testsuites>',
+    ].join('\n'));
+    try {
+      const profile = buildVerificationTimingUpdateCandidate([
+        '--update-candidate',
+        '--lane=unit',
+        `--report=${report}`,
+        '--provenance-id=unit-local-provenance-replacement-test',
+        '--environment=local-test-environment',
+        '--sample-basis=exact-provenance-replacement-regression',
+        '--sample-count=1',
+      ]);
+      assert.equal(profile.provenance.length, MAX_TIMING_PROVENANCE);
+      assert.ok(profile.provenance.some((item) => item.id === 'unit-local-provenance-replacement-test'));
+      assert.ok(!profile.provenance.some((item) => item.id === replaceable.provenanceId));
+      assert.deepEqual(
+        profile.files.find((item) => item.file === replaceable.file),
+        {
+          file: replaceable.file,
+          lane: 'unit',
+          weightMs: 12,
+          sampleCount: 1,
+          provenanceId: 'unit-local-provenance-replacement-test',
+        },
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 

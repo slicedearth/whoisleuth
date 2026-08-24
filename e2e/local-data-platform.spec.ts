@@ -328,16 +328,26 @@ test('initialization validates every existing collection before writing a missin
   expect(await rawLocalDataSnapshot(page)).toBe(beforeReload);
 });
 
-test('collection reads request only one record beyond the configured maximum', async ({ page }) => {
-  await page.addInitScript(() => {
+test('collection reads use a bounded cursor and stop at the configured maximum', async ({ page }) => {
+  await page.addInitScript(({ casesId }) => {
+    const originalOpenCursor = IDBIndex.prototype.openCursor;
     const originalGetAll = IDBIndex.prototype.getAll;
-    const calls: Array<{ query: string | null; count: number | null }> = [];
-    Object.defineProperty(window, '__whoisleuthGetAllCalls', { value: calls, configurable: true });
+    const originalContinue = IDBCursor.prototype.continue;
+    const calls = { openCursor: [] as Array<string | null>, getAll: [] as Array<string | null>, casesContinued: 0 };
+    Object.defineProperty(window, '__whoisleuthCursorCalls', { value: calls, configurable: true });
+    IDBIndex.prototype.openCursor = function openCursor(query?: IDBValidKey | IDBKeyRange | null, direction?: IDBCursorDirection) {
+      calls.openCursor.push(typeof query === 'string' ? query : null);
+      return originalOpenCursor.call(this, query, direction);
+    };
     IDBIndex.prototype.getAll = function getAll(query?: IDBValidKey | IDBKeyRange | null, count?: number) {
-      calls.push({ query: typeof query === 'string' ? query : null, count: count ?? null });
+      calls.getAll.push(typeof query === 'string' ? query : null);
       return originalGetAll.call(this, query, count);
     };
-  });
+    IDBCursor.prototype.continue = function continueCursor(key?: IDBValidKey) {
+      if (this.key === casesId) calls.casesContinued += 1;
+      return key === undefined ? originalContinue.call(this) : originalContinue.call(this, key);
+    };
+  }, { casesId: CASES_COLLECTION.id });
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.evaluate(async ({ collection, maximumRecords }) => {
@@ -356,8 +366,8 @@ test('collection reads request only one record beyond the configured maximum', a
     });
     if (!manifest) throw new Error('The fixture cases manifest is missing.');
     records.delete(IDBKeyRange.bound([collection], [collection, []]));
-    for (let ordinal = 0; ordinal <= maximumRecords; ordinal++) {
-      const lookupKey = `overflow-${ordinal}`;
+    for (let ordinal = 0; ordinal < maximumRecords; ordinal++) {
+      const lookupKey = `record-${String(ordinal).padStart(6, '0')}`;
       records.put({
         key: [collection, lookupKey],
         collection,
@@ -368,6 +378,16 @@ test('collection reads request only one record beyond the configured maximum', a
         payloadBytes: 2,
       } satisfies BrowserLocalStoredRecord);
     }
+    const lookupKey = 'zzzz-overflow';
+    records.put({
+      key: [collection, lookupKey],
+      collection,
+      lookupKey,
+      ordinal: maximumRecords,
+      codec: 'json-v1',
+      payload: '{}',
+      payloadBytes: 2,
+    } satisfies BrowserLocalStoredRecord);
     manifests.put({ ...manifest, recordCount: maximumRecords });
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
@@ -382,9 +402,11 @@ test('collection reads request only one record beyond the configured maximum', a
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
   await expect(page.getByText('Cases exceeds its bounded record count.')).toBeVisible();
   const calls = await page.evaluate(() => (
-    window as typeof window & { __whoisleuthGetAllCalls?: Array<{ query: string | null; count: number | null }> }
-  ).__whoisleuthGetAllCalls ?? []);
-  expect(calls.some((call) => call.query === CASES_COLLECTION.id
-    && call.count === CASES_COLLECTION.maximumRecords + 1)).toBe(true);
-  expect(calls.some((call) => call.query === CASES_COLLECTION.id && call.count === null)).toBe(false);
+    window as typeof window & {
+      __whoisleuthCursorCalls?: { openCursor: Array<string | null>; getAll: Array<string | null>; casesContinued: number };
+    }
+  ).__whoisleuthCursorCalls);
+  expect(calls?.openCursor).toContain(CASES_COLLECTION.id);
+  expect(calls?.getAll).not.toContain(CASES_COLLECTION.id);
+  expect(calls?.casesContinued).toBe(CASES_COLLECTION.maximumRecords);
 });

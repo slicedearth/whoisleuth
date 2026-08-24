@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { buildCertificateReviewInbox } from '../frontend/src/lib/analysis/certificate-review-inbox.ts';
+import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import { normalizeBrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
+import {
+  emptyAnalystReviewStateStore,
+  setAnalystReviewDecision,
+} from '../frontend/src/lib/analysis/analyst-review-state.ts';
 
 const NOW = '2026-08-23T00:00:00.000Z';
 const CERTIFICATE_DIGEST = 'a'.repeat(64);
@@ -119,6 +124,41 @@ describe('central retained certificate review inbox', () => {
     assert.equal(inbox.findings.find((finding) => finding.evidenceClass === 'caa')?.state, 'expected');
   });
 
+  test('keeps routine expected observations informational until an explicit review becomes due', () => {
+    const records = [certificateCase()];
+    const initial = buildCertificateReviewInbox([profile()], records, { now: NOW });
+    const expected = requiredValue(initial.findings.find((finding) => (
+      finding.evidenceClass === 'certificate_transparency' && finding.state === 'expected'
+    )));
+    assert.equal(initial.reviewItems.some((item) => item.subjectKey === expected.item.subjectKey), false);
+
+    const currentDecision = setAnalystReviewDecision(emptyAnalystReviewStateStore(), expected.item, {
+      disposition: 'expected',
+      rationale: 'The exact retained publication matches the reviewed posture.',
+      reviewedAt: '2026-08-22T00:00:00.000Z',
+      expiresAt: '2026-08-24T00:00:00.000Z',
+    });
+    const current = buildCertificateReviewInbox([profile()], records, { now: NOW, reviewState: currentDecision });
+    assert.equal(current.reviewItems.some((item) => item.subjectKey === expected.item.subjectKey), false);
+    assert.ok(current.reviewAdmission.currentSubjectKeys?.includes(expected.item.subjectKey));
+    const unified = buildAnalystReviewInbox({
+      reviewState: currentDecision,
+      projectedItems: current.reviewItems,
+      projectedAdmissions: [current.reviewAdmission],
+    }, NOW);
+    assert.equal(unified.items.some((item) => item.subjectKey === expected.item.subjectKey), false);
+    assert.equal(unified.items.some((item) => item.kind === 'orphaned_state'), false);
+
+    const dueDecision = setAnalystReviewDecision(emptyAnalystReviewStateStore(), expected.item, {
+      disposition: 'expected',
+      rationale: 'The exact retained publication was expected only through the reviewed window.',
+      reviewedAt: '2026-08-21T00:00:00.000Z',
+      expiresAt: '2026-08-22T00:00:00.000Z',
+    });
+    const due = buildCertificateReviewInbox([profile()], records, { now: NOW, reviewState: dueDecision });
+    assert.ok(due.reviewItems.some((item) => item.subjectKey === expected.item.subjectKey));
+  });
+
   test('keeps live TLS, CT publication, certificate digest, and SPKI comparisons independent', () => {
     const inbox = buildCertificateReviewInbox([profile()], [
       certificateCase('Different CT issuer'),
@@ -204,7 +244,9 @@ describe('central retained certificate review inbox', () => {
         observedAt: '2026-08-22T00:00:00.000Z',
       }),
     ], { now: NOW });
-    assert.equal(expected.findings.find((finding) => finding.kind === 'expected_renewal')?.state, 'expected');
+    const expectedRenewal = requiredValue(expected.findings.find((finding) => finding.kind === 'expected_renewal'));
+    assert.equal(expectedRenewal.state, 'expected');
+    assert.equal(expected.reviewItems.some((item) => item.subjectKey === expectedRenewal.item.subjectKey), false);
 
     const changedIssuer = buildCertificateReviewInbox([reviewedProfile], [
       certificateCase('Fixture issuer', '2026-12-01T00:00:00.000Z', {

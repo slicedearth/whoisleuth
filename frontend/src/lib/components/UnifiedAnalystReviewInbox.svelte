@@ -36,15 +36,15 @@
   } = $props();
 
   const now = new Date().toISOString();
-  const localProjection = $derived(buildLocalAnalystReviewProjection({ cases, profiles, detectionRules, websiteSnapshots, watchlists, bulkSessions }, now));
-  const certificateProjection = $derived(buildCertificateReviewInbox(profiles, cases, { now }));
+  const localProjection = $derived(buildLocalAnalystReviewProjection({ cases, profiles, detectionRules, websiteSnapshots, watchlists, bulkSessions, reviewState }, now));
+  const certificateProjection = $derived(buildCertificateReviewInbox(profiles, cases, { now, reviewState }));
   const inbox = $derived(buildAnalystReviewInbox({
     cases,
     watchlists,
     bulkSessions,
     reviewState,
-    projectedItems: [...localProjection.items, ...certificateProjection.findings.map((finding) => finding.item)],
-    projectedItemsTruncated: localProjection.truncated || certificateProjection.truncated,
+    projectedItems: [...localProjection.items, ...certificateProjection.reviewItems],
+    projectedAdmissions: [localProjection.admission, certificateProjection.reviewAdmission],
   }, now));
 
   $effect(() => { oncount?.(inbox.counts.all); });

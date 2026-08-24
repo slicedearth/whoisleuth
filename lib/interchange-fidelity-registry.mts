@@ -17,7 +17,7 @@ export type InterchangeFidelity =
   | 'verification_only'
   | 'unsupported'
   | 'not_verified';
-export type InterchangeAssuranceRequirement = 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
+export type InterchangeAssuranceRequirement = 'applicable_integrity' | 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
 
 export type InterchangeArtifactContract = Readonly<{
   id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'lookup_evidence' | 'workspace';
@@ -106,7 +106,7 @@ export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContrac
     browser: Object.freeze({ import: 'supported', export: 'supported' }),
     cli: Object.freeze({ read: 'verification_only', write: 'unsupported', verify: 'supported' }),
     fidelity: 'normalised_merge',
-    requiredAssurance: 'whole_integrity',
+    requiredAssurance: 'applicable_integrity',
     preservedFieldGroups: Object.freeze(['supported_workspace_sections', 'section_versions', 'section_checksums', 'merge_metadata', 'analyst_review_lifecycle']),
     excludedFieldGroups: Object.freeze(['login_sessions', 'credentials', 'hosted_monitor_keys', 'raw_upstream_payloads', 'tab_state', 'certificate_transparency_history']),
   }),

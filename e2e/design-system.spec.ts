@@ -3,6 +3,7 @@ import { boundingBox, currentBrandProfileBrowserStore, expandLookupFamilies, exp
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { readFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 
 // Coverage for the shared design system: native-sized checkbox controls with
 // correct label alignment, the Lookup result's grouped sections and local
@@ -201,6 +202,20 @@ function sectionedLookupFixture(domain: string) {
       }],
     },
   };
+}
+
+async function expectLookupTargetAligned(page: Page, selector: string): Promise<void> {
+  await expect.poll(async () => page.locator(selector).evaluate((target) => {
+    const targetTop = target.getBoundingClientRect().top;
+    const targetDocumentTop = targetTop + window.scrollY;
+    const scrollMarginTop = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+    const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const expectedScroll = Math.min(Math.max(0, targetDocumentTop - scrollMarginTop), maximumScroll);
+    return Math.abs(window.scrollY - expectedScroll);
+  }), {
+    message: `${selector} should settle at its configured scroll anchor`,
+    timeout: 5_000,
+  }).toBeLessThanOrEqual(2);
 }
 
 test('optional intelligence checkboxes stay native-sized and aligned with their labels', async ({ page }) => {
@@ -1365,6 +1380,91 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
+});
+
+test('Lookup section and mapped-evidence navigation settle at the requested anchor', async ({ page }) => {
+  test.slow();
+  const domain = 'lookup-scroll.invalid';
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(sectionedLookupFixture(domain)),
+  }));
+  await page.goto('/lookup');
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  const topology = page.getByRole('region', { name: 'Where this result came from' });
+  const sourceRail = topology.getByRole('list', { name: 'Evidence item status' });
+  const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/iu });
+  const resultNavigation = page.getByRole('navigation', { name: 'Result sections' });
+  await expect(dnsSource).toBeVisible();
+
+  const registryNode = topology.locator('.source-node[data-source-id="registry-rdap"]').locator('xpath=..');
+  await registryNode.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: 20, button: 0 });
+  await registryNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: 20, button: 0 });
+  await expect(page).toHaveURL(/#evidence-registry$/u);
+  await expectLookupTargetAligned(page, '#evidence-registry');
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await expectLookupTargetAligned(page, '#registry');
+
+  await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
+  await dnsSource.click();
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expectLookupTargetAligned(page, '#evidence-dns');
+
+  // A settled nested hash must not pull a later disclosure back to the old
+  // evidence item when its deferred content becomes ready.
+  for (const [label, selector] of [
+    ['Registration', '#registry'],
+    ['Source quality', '#source-quality'],
+    ['Case and response', '#case-response'],
+    ['Advanced', '#advanced-evidence'],
+  ] as const) {
+    await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
+    await expect(page.getByRole('button', { name: `Collapse ${label} evidence` })).toBeVisible();
+    await expectLookupTargetAligned(page, selector);
+  }
+
+  await page.getByRole('button', { name: 'Collapse Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await expect(topology).toBeVisible();
+  await expectLookupTargetAligned(page, '#relationships-history');
+
+  // Visual nodes, keyboard-operable rail links, delegated evidence links,
+  // local navigation, and direct hashes share the same destination contract.
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
+  await dnsSource.focus();
+  await dnsSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expectLookupTargetAligned(page, '#evidence-dns');
+
+  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await resultNavigation.getByRole('link', { name: 'Source quality' }).click();
+  await expect(page).toHaveURL(/#source-quality$/u);
+  await expectLookupTargetAligned(page, '#source-quality');
+
+  await page.evaluate(() => {
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    window.location.hash = '#evidence-registry';
+  });
+  await expect(page).toHaveURL(/#evidence-registry$/u);
+  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toBeVisible();
+  await expectLookupTargetAligned(page, '#evidence-registry');
+
+  const delegatedRegistryLink = page.locator('.at-a-glance .next-action[href="#registry"]').first();
+  if (await delegatedRegistryLink.count()) {
+    await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+    await delegatedRegistryLink.click();
+    await expect(page).toHaveURL(/#registry$/u);
+    await expectLookupTargetAligned(page, '#registry');
+  }
 });
 
 test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {

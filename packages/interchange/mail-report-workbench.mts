@@ -1,9 +1,10 @@
-import { Gunzip } from 'fflate';
 import { sha256ArtifactDigest } from '../evidence/artifact-integrity.mts';
 import { parseBoundedJson } from '../../lib/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
 import { extractBoundedZipEntries } from './bounded-zip-extraction.mts';
+import { decompressBoundedGzip } from './bounded-gzip.mts';
+import { neutralizeUnsafeRetainedText } from './retained-text.mts';
 
 export { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
 
@@ -88,32 +89,13 @@ export type MailReportReview = Readonly<{
 type ExpandedFile = Readonly<{ name: string; bytes: Uint8Array }>;
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
 
-function concat(chunks: readonly Uint8Array[], total: number): Uint8Array {
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return output;
-}
-
 function gunzipBounded(bytes: Uint8Array): Uint8Array {
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    const gunzip = new Gunzip((chunk) => {
-      total += chunk.byteLength;
-      if (total > MAX_MAIL_REPORT_EXPANDED_BYTES) throw new Error('Expanded mail report exceeds the decompression limit.');
-      chunks.push(chunk.slice());
-    });
-    gunzip.push(bytes, true);
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.includes('decompression limit')) throw cause;
-    throw new Error('The gzip mail report could not be safely decompressed.');
-  }
-  if (!total) throw new Error('The gzip mail report was empty.');
-  return concat(chunks, total);
+  return decompressBoundedGzip(bytes, {
+    maximumOutputBytes: MAX_MAIL_REPORT_EXPANDED_BYTES,
+    exceededMessage: 'Expanded mail report exceeds the decompression limit.',
+    invalidMessage: 'The gzip mail report could not be safely decompressed.',
+    emptyMessage: 'The gzip mail report was empty.',
+  });
 }
 
 function safeArchivePath(value: string): boolean {
@@ -205,7 +187,7 @@ function removeXmlMarkup(value: string): string {
 }
 
 function cleanText(value: unknown, maximum = 300): string | null {
-  const normalized = String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maximum);
+  const normalized = neutralizeUnsafeRetainedText(String(value ?? '')).replace(/\s+/g, ' ').trim().slice(0, maximum);
   return normalized || null;
 }
 

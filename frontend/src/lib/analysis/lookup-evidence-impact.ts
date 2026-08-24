@@ -143,10 +143,10 @@ function contributor(value: LookupEvidenceQualityContributorPresentation): Looku
 
 function validateReadiness(readiness: LookupClaimReadiness): void {
   if (readiness.version !== 2 || !Array.isArray(readiness.entries)) {
-    throw new TypeError('Lookup evidence impact requires claim-readiness version 2.');
+    throw new TypeError('Lookup evidence impact requires Evidence Readiness version 2.');
   }
   if (readiness.entries.length > MAX_READINESS_ENTRIES) {
-    throw new RangeError('Lookup evidence impact received too many claim-readiness entries.');
+    throw new RangeError('Lookup evidence impact received too many Evidence Readiness entries.');
   }
   const claimIds = new Set<string>();
   const counts: Record<LookupClaimReadinessState, number> = { ready: 0, limited: 0, not_ready: 0 };
@@ -180,7 +180,7 @@ function validateReadiness(readiness: LookupClaimReadiness): void {
   }
   for (const state of READINESS_STATES) {
     if (!Number.isSafeInteger(readiness.counts[state]) || readiness.counts[state] !== counts[state]) {
-      throw new RangeError('Lookup evidence impact claim-readiness counts did not reconcile.');
+      throw new RangeError('Lookup evidence impact Evidence Readiness counts did not reconcile.');
     }
   }
 }

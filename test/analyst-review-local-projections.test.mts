@@ -50,7 +50,9 @@ function itemByTitlePart(items: ReturnType<typeof windowItems>, summary: string)
 describe('local analyst Review Item projections', () => {
   test('projects structured change windows and suppressions with explicit due state', () => {
     const projection = buildLocalAnalystReviewProjection({ profiles: [profile()] }, NOW);
-    const window = requiredValue(projection.items.find((item) => item.kind === 'change_window'));
+    const window = requiredValue(projection.items.find((item) => (
+      item.kind === 'change_window' && item.detail.startsWith(WINDOWS.first.summary)
+    )));
     const suppression = requiredValue(projection.items.find((item) => item.kind === 'suppression'));
     assert.equal(window.dueAt, '2026-08-23T03:00:00.000Z');
     assert.equal(suppression.dueAt, '2026-08-23T03:30:00.000Z');

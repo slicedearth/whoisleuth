@@ -7,6 +7,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   buildDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { buildWorkspaceArchive } from '../frontend/src/lib/analysis/workspace-archive.ts';
 
 const NOW = '2026-08-04T00:00:00.000Z';
 
@@ -115,6 +116,21 @@ describe('CLI sharing review', () => {
     assert.equal(report.artifact.integrity, 'failed');
     assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'block');
     assert.equal(report.summary.status, 'blocked');
+  });
+
+  test('treats ordinary workspace section digests as projection integrity', async () => {
+    const archive = await buildWorkspaceArchive({}, { generatedAt: NOW });
+    const report = await buildSharingReview(JSON.stringify(archive), {
+      marking: 'amber',
+      recipientScope: 'organization',
+      purpose: 'Reviewed workspace handoff',
+      humanReviewed: true,
+      personalDataReviewed: true,
+      redactionsConfirmed: true,
+    }, NOW);
+    assert.equal(report.artifact.integrity, 'projection_integrity');
+    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
+    assert.match(report.findings.find((finding) => finding.id === 'integrity')?.detail ?? '', /do not cover the whole file/iu);
   });
 
   test('recognizes explicit extended marking keys and rejects unsafe metadata display', async () => {

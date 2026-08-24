@@ -1,5 +1,22 @@
 {
   "schema": "whoisleuth.analyst-review-state",
   "version": 1,
-  "records": []
+  "records": [
+    {
+      "subjectKey": "review:case:746d4075d63bf4c8a9bcf6f891e4a23b3c3a16263a4f2e3fe844a5872a29c1a2",
+      "evidenceFamily": "case",
+      "reviewedFingerprint": "material:77af9bd64117c9cf0f4af70ff8fa6d375f7c77094f4a2aaeeac2e26736ca1089",
+      "disposition": "resolved",
+      "rationale": "The exact bounded fixture evidence was reviewed.",
+      "reviewedAt": "2026-08-23T01:00:00.000Z",
+      "reviewDueAt": null,
+      "expiresAt": null,
+      "caseIds": [
+        "case-fixture"
+      ],
+      "campaignIds": [],
+      "history": [],
+      "historyOmitted": 0
+    }
+  ]
 }

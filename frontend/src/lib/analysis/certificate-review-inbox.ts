@@ -4,11 +4,19 @@ import type { CaseRecord } from './case-model.ts';
 import { certificateSanPatternMatches } from './certificate-policy-review.ts';
 import {
   MAX_ANALYST_REVIEW_ITEMS,
+  analystReviewLifecycle,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
   type AnalystReviewCompleteness,
+  type AnalystReviewEvidenceFamily,
   type AnalystReviewItem,
+  type AnalystReviewLifecycle,
+  type AnalystReviewStateStore,
 } from './analyst-review-state.ts';
+import {
+  retainTopAnalystReviewItems,
+  type AnalystReviewProjectionAdmission,
+} from './analyst-review-inbox.ts';
 
 export const CERTIFICATE_REVIEW_INBOX_VERSION = 1;
 export const MAX_CERTIFICATE_REVIEW_FINDINGS = MAX_ANALYST_REVIEW_ITEMS;
@@ -53,6 +61,8 @@ export type CertificateReviewFinding = Readonly<{
 export type CertificateReviewInbox = Readonly<{
   version: typeof CERTIFICATE_REVIEW_INBOX_VERSION;
   findings: readonly CertificateReviewFinding[];
+  reviewItems: readonly AnalystReviewItem[];
+  reviewAdmission: AnalystReviewProjectionAdmission;
   profileCount: number;
   domainCount: number;
   truncated: boolean;
@@ -206,7 +216,7 @@ function finding(
     : input.evidenceClass;
   const subjectKey = analystReviewSubjectKey(evidenceFamily, input.stableIdentity);
   const materialFingerprint = analystReviewMaterialFingerprint(input.materialIdentity);
-  const id = `certificate:${subjectKey.slice(-16)}`;
+  const id = `certificate:${subjectKey.slice(-64)}`;
   const priority = input.state === 'expired' || input.state === 'review'
     ? 'high' as const
     : input.state === 'partial' || input.state === 'unavailable' ? 'normal' as const : 'normal' as const;
@@ -468,23 +478,57 @@ function compareFindings(left: CertificateReviewFinding, right: CertificateRevie
     || left.id.localeCompare(right.id);
 }
 
+function lifecycleNeedsAttention(lifecycle: AnalystReviewLifecycle): boolean {
+  return !['expected', 'suppressed', 'resolved'].includes(lifecycle.state);
+}
+
+export function certificateFindingEntersReview(
+  finding: CertificateReviewFinding,
+  reviewState: AnalystReviewStateStore | undefined,
+  now: string,
+): boolean {
+  if (finding.state !== 'expected') return true;
+  if (!reviewState) return false;
+  const lifecycle = analystReviewLifecycle(finding.item, reviewState, now);
+  return lifecycle.decision !== null && lifecycleNeedsAttention(lifecycle);
+}
+
 export function buildCertificateReviewInbox(
   profilesValue: readonly BrandProfile[],
   recordsValue: readonly CaseRecord[],
-  options: Readonly<{ now?: string; profileId?: string }> = {},
+  options: Readonly<{ now?: string; profileId?: string; reviewState?: AnalystReviewStateStore }> = {},
 ): CertificateReviewInbox {
   const now = safeTime(options.now ?? new Date().toISOString(), new Date(0).toISOString());
   const profiles = profilesValue.slice(0, 100).filter((profile) => !options.profileId || profile.id === options.profileId);
   const records = recordsValue.slice(0, 500);
   const retainedFacts = buildRetainedFactIndex(records);
   const findings: CertificateReviewFinding[] = [];
+  const reviewCandidates: AnalystReviewItem[] = [];
+  const reviewCandidateCounts: Partial<Record<AnalystReviewEvidenceFamily, number>> = {};
+  const reviewStateSubjects = new Set(options.reviewState?.records.map((record) => record.subjectKey) ?? []);
+  const informationalSubjectKeys = new Set<string>();
   const domains = new Set<string>();
   let inputCount = 0;
   const addFindings = (candidates: readonly CertificateReviewFinding[]) => {
     inputCount += candidates.length;
     findings.push(...candidates);
+    for (const candidate of candidates) {
+      if (certificateFindingEntersReview(candidate, options.reviewState, now)) {
+        reviewCandidates.push(candidate.item);
+        reviewCandidateCounts[candidate.item.evidenceFamily] = (reviewCandidateCounts[candidate.item.evidenceFamily] ?? 0) + 1;
+      } else if (candidate.state === 'expected' && reviewStateSubjects.has(candidate.item.subjectKey)) {
+        informationalSubjectKeys.add(candidate.item.subjectKey);
+      }
+    }
     if (findings.length > MAX_CERTIFICATE_REVIEW_FINDINGS * 2) {
       findings.sort(compareFindings).splice(MAX_CERTIFICATE_REVIEW_FINDINGS);
+    }
+    if (reviewCandidates.length > MAX_CERTIFICATE_REVIEW_FINDINGS * 2) {
+      const retained = retainTopAnalystReviewItems(reviewCandidates, {
+        now,
+        ...(options.reviewState ? { reviewState: options.reviewState } : {}),
+      });
+      reviewCandidates.splice(0, reviewCandidates.length, ...retained.items);
     }
   };
   for (const profile of profiles) {
@@ -573,9 +617,28 @@ export function buildCertificateReviewInbox(
     }
   }
   const sorted = findings.sort(compareFindings);
+  const retainedReview = retainTopAnalystReviewItems(reviewCandidates, {
+    now,
+    ...(options.reviewState ? { reviewState: options.reviewState } : {}),
+  });
+  const omittedAtLeast: Partial<Record<AnalystReviewEvidenceFamily, number>> = {};
+  for (const family of Object.keys(reviewCandidateCounts) as AnalystReviewEvidenceFamily[]) {
+    const omitted = (reviewCandidateCounts[family] ?? 0) - retainedReview.retainedCounts[family];
+    if (omitted > 0) omittedAtLeast[family] = omitted;
+  }
+  const lowerBoundFamilies: AnalystReviewEvidenceFamily[] = [];
+  if (profilesValue.length > 100 || recordsValue.length > 500) {
+    lowerBoundFamilies.push('certificate_transparency', 'live_tls', 'caa', 'certificate_identity');
+  }
   return {
     version: CERTIFICATE_REVIEW_INBOX_VERSION,
     findings: sorted.slice(0, MAX_CERTIFICATE_REVIEW_FINDINGS),
+    reviewItems: retainedReview.items,
+    reviewAdmission: {
+      omittedAtLeast,
+      lowerBoundFamilies,
+      currentSubjectKeys: [...informationalSubjectKeys],
+    },
     profileCount: profiles.length,
     domainCount: domains.size,
     truncated: profilesValue.length > 100 || recordsValue.length > 500 || inputCount > MAX_CERTIFICATE_REVIEW_FINDINGS || sorted.length > MAX_CERTIFICATE_REVIEW_FINDINGS,

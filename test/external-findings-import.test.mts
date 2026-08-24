@@ -76,6 +76,22 @@ describe('strict external findings import', () => {
     })), /category is unsupported/u);
   });
 
+  test('rejects Unicode formatting controls across retained finding fields', () => {
+    for (const unsafe of ['\u202e', '\u2060']) {
+      for (const unsafeDocument of [
+        document({ source: { name: `Local${unsafe}source`, reference: null } }),
+        document({ findings: [{ ...document().findings[0], summary: `Reported${unsafe}claim` }] }),
+        document({ findings: [{ ...document().findings[0], limitations: [`Bounded${unsafe}limitation`] }] }),
+        document({ findings: [{ ...document().findings[0], reference: `finding${unsafe}17` }] }),
+      ]) {
+        assert.throws(
+          () => parseExternalFindingsDocument(unsafeDocument),
+          /unsafe control.*formatting/iu,
+        );
+      }
+    }
+  });
+
   test('requires complete, matching event metadata only on certificate observations', () => {
     const structuredObservation = {
       sourceSchema: 'whoisleuth.certificate-observation-rows',

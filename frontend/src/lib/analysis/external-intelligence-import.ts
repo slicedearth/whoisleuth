@@ -7,6 +7,7 @@ import {
   type CaseAssertionRecord,
 } from './case-response-model.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { hasUnsafeRetainedText } from '../../../../packages/interchange/retained-text.mts';
 
 export const MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES = 512 * 1024;
 export const MAX_EXTERNAL_INTELLIGENCE_OBJECTS = 500;
@@ -62,7 +63,6 @@ export type ExternalIntelligenceMergeResult = Readonly<{
 
 type Candidate = Omit<ExternalIntelligenceItem, 'key'>;
 
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const SHA256_RE = /^[0-9a-f]{64}$/u;
 const STIX_ID_RE = /^[a-z0-9-]{1,80}--[0-9a-f-]{8,100}$/u;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -74,8 +74,18 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 function text(value: unknown, maximum: number): string | null {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) return null;
+  if (typeof value === 'string' && hasUnsafeRetainedText(value)) {
+    throw new TypeError('External intelligence text contains unsafe control or formatting characters.');
+  }
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum) return null;
   return value.trim();
+}
+
+function mispDistribution(value: unknown, prefix: '' | 'attribute-'): string[] {
+  if (value === undefined) return [];
+  const normalized = text(String(value), 20);
+  if (!normalized) throw new TypeError('MISP distribution must be bounded text without unsafe formatting characters.');
+  return [`${prefix}distribution=${normalized}`];
 }
 
 function iso(value: unknown): string | null {
@@ -393,7 +403,7 @@ function parseMisp(
   const sourceName = text(event.info, 160) ?? 'MISP event';
   const eventLabels = tagNames(event.Tag);
   const eventMarkings = [
-    ...(event.distribution === undefined ? [] : [`distribution=${String(event.distribution).slice(0, 20)}`]),
+    ...mispDistribution(event.distribution, ''),
     ...(text(record(event.SharingGroup)?.name, 160) ? [`sharing-group=${text(record(event.SharingGroup)?.name, 160)}`] : []),
   ];
   const candidates: Candidate[] = [];
@@ -439,7 +449,7 @@ function parseMisp(
       labels: [...new Set([...eventLabels, ...tagNames(item.Tag)])].sort().slice(0, 20),
       markings: [
         ...eventMarkings,
-        ...(item.distribution === undefined ? [] : [`attribute-distribution=${String(item.distribution).slice(0, 20)}`]),
+        ...mispDistribution(item.distribution, 'attribute-'),
       ].slice(0, 12),
     });
   }

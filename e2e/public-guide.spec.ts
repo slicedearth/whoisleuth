@@ -40,12 +40,24 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('northstarr.example');
   await expect(topology).toContainText('unavailable');
-  await expect(topology).toContainText('Watch for change');
-  await expect(page.locator('.monitor-panel')).toContainText('Watch for material change');
+  await expect(topology).toContainText('Repeat certificate');
+  await expect(page.locator('.monitor-panel')).toContainText('Repeat certificate collection');
   await previewTabs.getByRole('tab', { name: 'At a glance' }).click();
   const previewOverview = page.getByRole('tabpanel', { name: 'At a glance' });
-  await expect(previewOverview.getByText('4 sources + 1 derived', { exact: true })).toBeVisible();
-  await expect(previewOverview.getByText('34/100', { exact: true })).toBeVisible();
+  await expect(previewOverview.getByText('2/4 sources complete', { exact: true })).toBeVisible();
+  const riskTriage = previewOverview.getByText('Risk triage 34/100', { exact: true });
+  await expect(riskTriage).toBeVisible();
+  const triagePresentation = await riskTriage.evaluate((node) => {
+    const primary = node.parentElement?.querySelector('strong');
+    return {
+      color: getComputedStyle(node).color,
+      fontSize: Number.parseFloat(getComputedStyle(node).fontSize),
+      primaryColor: primary ? getComputedStyle(primary).color : '',
+      primaryFontSize: primary ? Number.parseFloat(getComputedStyle(primary).fontSize) : 0,
+    };
+  });
+  expect(triagePresentation.color).not.toBe(triagePresentation.primaryColor);
+  expect(triagePresentation.fontSize).toBeLessThan(triagePresentation.primaryFontSize);
   await expect(previewOverview.getByText('Character edit', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Parked page pattern', { exact: true })).toBeVisible();
   await expect(topology).toHaveCount(0);

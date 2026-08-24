@@ -40,6 +40,8 @@ import {
   WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY,
 } from './workspace-portability.mts';
 import {
+  ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION,
+  ANALYST_REVIEW_STATE_SCHEMA_VERSION,
   MAX_ANALYST_REVIEW_STATE_BYTES,
   MAX_ANALYST_REVIEW_STATE_RECORDS,
 } from './analyst-review-state-contract.mts';
@@ -58,13 +60,22 @@ export type BrowserLocalCollectionStaticDefinition = Readonly<{
 
 function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaVersion' | 'minimumReadableVersion' | 'acceptsUnversionedLegacy'> & {
   compatibility: SchemaCompatibilityDescriptor;
+  schemaVersion?: number;
+  minimumReadableVersion?: number;
+  acceptsUnversionedLegacy?: boolean;
 }): BrowserLocalCollectionStaticDefinition {
-  const { compatibility, ...fields } = value;
+  const {
+    compatibility,
+    schemaVersion = compatibility.currentVersion,
+    minimumReadableVersion = compatibility.supportedVersions[0]!,
+    acceptsUnversionedLegacy = compatibility.acceptsUnversionedLegacy,
+    ...fields
+  } = value;
   return Object.freeze({
     ...fields,
-    schemaVersion: compatibility.currentVersion,
-    minimumReadableVersion: compatibility.supportedVersions[0]!,
-    acceptsUnversionedLegacy: compatibility.acceptsUnversionedLegacy,
+    schemaVersion,
+    minimumReadableVersion,
+    acceptsUnversionedLegacy,
   });
 }
 
@@ -81,7 +92,17 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
   website_snapshots: definition({ id: 'website_snapshots', label: 'Website profile snapshots', compatibility: WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY, maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES, maximumRecords: MAX_WEBSITE_SNAPSHOTS }),
   investigation_templates: definition({ id: 'investigation_templates', label: 'Investigation templates', compatibility: INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY, maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES, maximumRecords: MAX_INVESTIGATION_TEMPLATES }),
   bulk_review: definition({ id: 'bulk_review', label: 'Bulk review views and queue state', compatibility: BULK_REVIEW_BROWSER_COMPATIBILITY, maximumBytes: MAX_BULK_REVIEW_STORE_BYTES, maximumRecords: MAX_BULK_REVIEW_PRESETS + MAX_BULK_REVIEW_ROWS }),
-  analyst_review_state: definition({ id: 'analyst_review_state', label: 'Analyst Review Item lifecycle', compatibility: ANALYST_REVIEW_STATE_COMPATIBILITY, maximumBytes: MAX_ANALYST_REVIEW_STATE_BYTES, maximumRecords: MAX_ANALYST_REVIEW_STATE_RECORDS }),
+  // The IndexedDB revision is independent of the portable document version:
+  // revision 1 was unreleased, while public review-state documents remain v1.
+  analyst_review_state: definition({
+    id: 'analyst_review_state',
+    label: 'Analyst Review Item lifecycle',
+    compatibility: ANALYST_REVIEW_STATE_COMPATIBILITY,
+    schemaVersion: ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION,
+    minimumReadableVersion: ANALYST_REVIEW_STATE_SCHEMA_VERSION,
+    maximumBytes: MAX_ANALYST_REVIEW_STATE_BYTES,
+    maximumRecords: MAX_ANALYST_REVIEW_STATE_RECORDS,
+  }),
 } as const);
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([

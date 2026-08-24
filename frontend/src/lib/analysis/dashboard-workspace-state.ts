@@ -1,11 +1,8 @@
 import type { CaseRecord } from './case-model.ts';
 import type { AnalystReviewInboxItem } from './analyst-review-inbox.ts';
-import type { CertificateReviewFinding } from './certificate-review-inbox.ts';
 import type {
   AnalystReviewLifecycle,
-  AnalystReviewStateStore,
 } from './analyst-review-state.ts';
-import { analystReviewLifecycle } from './analyst-review-state.ts';
 import type {
   BrowserLocalCollectionDocumentMap,
   BrowserLocalCollectionId,
@@ -46,7 +43,6 @@ export type DashboardAttentionSummary = Readonly<{
   changedSinceReview: number;
   expired: number;
   dueFollowUps: number;
-  certificateDifferences: number;
   openCases: number;
   watchlists: number;
   truncated: boolean;
@@ -91,8 +87,6 @@ function safeTime(value: string | null): number {
 
 export function buildDashboardAttentionSummary(input: Readonly<{
   reviewItems: readonly AnalystReviewInboxItem[];
-  certificateFindings: readonly CertificateReviewFinding[];
-  reviewState: AnalystReviewStateStore;
   cases: readonly CaseRecord[];
   watchlistCount: number;
   now?: string;
@@ -113,19 +107,6 @@ export function buildDashboardAttentionSummary(input: Readonly<{
       source: item.source,
     });
   }
-  for (const finding of input.certificateFindings) {
-    const lifecycle = analystReviewLifecycle(finding.item, input.reviewState, now);
-    if (!needsAttention(lifecycle)) continue;
-    bySubject.set(finding.item.subjectKey, {
-      subjectKey: finding.item.subjectKey,
-      title: finding.item.title,
-      detail: finding.item.detail,
-      href: finding.item.href,
-      lifecycle,
-      dueAt: finding.item.dueAt,
-      source: finding.item.source,
-    });
-  }
   const all = [...bySubject.values()].sort((left, right) => (
     safeTime(left.dueAt) - safeTime(right.dueAt)
     || left.title.localeCompare(right.title, 'en')
@@ -139,7 +120,6 @@ export function buildDashboardAttentionSummary(input: Readonly<{
     changedSinceReview: all.filter((item) => item.lifecycle.invalidated || item.lifecycle.recurred).length,
     expired: all.filter((item) => item.lifecycle.expired).length,
     dueFollowUps: all.filter((item) => item.lifecycle.reviewDue || (item.dueAt !== null && Date.parse(item.dueAt) <= nowMs)).length,
-    certificateDifferences: all.filter((item) => item.href.includes('view=certificates')).length,
     openCases: input.cases.filter((record) => record.status !== 'resolved').length,
     watchlists: Math.max(0, Math.trunc(input.watchlistCount)),
     truncated: all.length > 20,

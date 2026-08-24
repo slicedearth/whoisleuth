@@ -64,8 +64,6 @@ describe('Dashboard workspace and attention states', () => {
     const lifecycle = analystReviewLifecycle(changed, reviewed, NOW);
     const summary = buildDashboardAttentionSummary({
       reviewItems: [{ ...changed, lifecycle }],
-      certificateFindings: [],
-      reviewState: reviewed,
       cases: [],
       watchlistCount: 0,
       now: NOW,
@@ -79,8 +77,6 @@ describe('Dashboard workspace and attention states', () => {
     const neverReviewed = item(analystReviewMaterialFingerprint(['unreviewed']));
     const unreviewedSummary = buildDashboardAttentionSummary({
       reviewItems: [{ ...neverReviewed, lifecycle: analystReviewLifecycle(neverReviewed, emptyAnalystReviewStateStore(), NOW) }],
-      certificateFindings: [],
-      reviewState: emptyAnalystReviewStateStore(),
       cases: [],
       watchlistCount: 0,
       now: NOW,

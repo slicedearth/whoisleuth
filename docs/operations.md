@@ -27,7 +27,8 @@ rejects tokens whose remaining lifetime exceeds the new maximum. Signing out
 clears the cookie in that browser but cannot revoke a copied token. Rotate
 `SESSION_SECRET` to invalidate all outstanding sessions. If an older deployment
 omits it, the application derives a slower signing key from `SITE_PASSWORD`,
-but an independent secret is recommended.
+but an independent secret is recommended. Production logs report that fallback
+without exposing either secret.
 
 Deployments upgrading from the previous fixed 30-day session lifetime move to
 the 7-day default unless `SESSION_MAX_AGE_DAYS` is set explicitly. Existing

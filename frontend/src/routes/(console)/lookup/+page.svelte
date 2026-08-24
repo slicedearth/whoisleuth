@@ -115,6 +115,12 @@
   let urlReconciliationReady=$state(false);
   let lastReconciledUrl=$state('');
   let lookupRevision=0;
+  let lookupScrollHref='';
+  let lookupScrollFrame=0;
+  let lookupScrollObserver:ResizeObserver|null=null;
+  let lookupScrollRoot:HTMLElement|null=null;
+  let lookupScrollSettleTimer=0;
+  let lookupScrollDeadline=0;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -407,18 +413,90 @@
     }
     if(loads.length)preloadBestEffort(()=>Promise.all(loads));
   }
+  const lookupScrollCancelEvents=['pointerdown','wheel','touchstart','keydown'] as const;
+  function stopLookupScrollAlignment(){
+    lookupScrollObserver?.disconnect();
+    lookupScrollObserver=null;
+    if(lookupScrollFrame&&typeof window!=='undefined')window.cancelAnimationFrame(lookupScrollFrame);
+    if(lookupScrollSettleTimer&&typeof window!=='undefined')window.clearTimeout(lookupScrollSettleTimer);
+    lookupScrollRoot?.classList.remove('lookup-scroll-aligning');
+    lookupScrollRoot=null;
+    lookupScrollFrame=0;
+    lookupScrollSettleTimer=0;
+    lookupScrollDeadline=0;
+    lookupScrollHref='';
+    if(typeof window==='undefined')return;
+    for(const eventName of lookupScrollCancelEvents)window.removeEventListener(eventName,cancelLookupScrollAlignment,true);
+    window.removeEventListener('scrollend',settleLookupScrollAlignment);
+  }
+  function cancelLookupScrollAlignment(){
+    stopLookupScrollAlignment();
+  }
+  function scheduleLookupScrollRelease(delayMs:number){
+    if(lookupScrollSettleTimer)window.clearTimeout(lookupScrollSettleTimer);
+    lookupScrollSettleTimer=window.setTimeout(()=>{
+      lookupScrollSettleTimer=0;
+      const activeHref=lookupScrollHref;
+      const loading=lookupScrollRoot?.querySelector('[data-deferred-state="loading"]');
+      if(activeHref&&loading&&performance.now()<lookupScrollDeadline){
+        scheduleLookupScrollRelease(100);
+        return;
+      }
+      if(activeHref&&window.location.hash===activeHref)scrollToLookupTarget(activeHref,'auto');
+      stopLookupScrollAlignment();
+    },delayMs);
+  }
+  function settleLookupScrollAlignment(){
+    const activeHref=lookupScrollHref;
+    if(!activeHref||window.location.hash!==activeHref){stopLookupScrollAlignment();return;}
+    scrollToLookupTarget(activeHref,'auto');
+    scheduleLookupScrollRelease(250);
+  }
+  function scheduleLookupScrollAlignment(){
+    if(lookupScrollFrame)return;
+    lookupScrollFrame=requestAnimationFrame(()=>{
+      lookupScrollFrame=0;
+      settleLookupScrollAlignment();
+    });
+  }
+  function keepLookupTargetAligned(href:string){
+    stopLookupScrollAlignment();
+    const resultRoot=document.getElementById('result');
+    if(!resultRoot)return;
+    lookupScrollHref=href;
+    lookupScrollRoot=resultRoot;
+    lookupScrollDeadline=performance.now()+5_000;
+    resultRoot.classList.add('lookup-scroll-aligning');
+    let resultHeight=resultRoot.getBoundingClientRect().height;
+    lookupScrollObserver=new ResizeObserver(()=>{
+      const nextHeight=resultRoot.getBoundingClientRect().height;
+      if(Math.abs(nextHeight-resultHeight)<0.5)return;
+      resultHeight=nextHeight;
+      scheduleLookupScrollAlignment();
+    });
+    lookupScrollObserver.observe(resultRoot);
+    for(const eventName of lookupScrollCancelEvents)window.addEventListener(eventName,cancelLookupScrollAlignment,{capture:true,passive:true});
+    window.addEventListener('scrollend',settleLookupScrollAlignment,{passive:true});
+    scheduleLookupScrollRelease(600);
+  }
   async function showSectionDetail(sectionId:string){
+    const href=`#${sectionId}`;
+    window.history.replaceState(window.history.state,'',href);
     preloadLookupSection(sectionId);
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
       : [...expandedResultSections,sectionId];
     await tick();
-    document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    scrollToLookupTarget(href);
+    keepLookupTargetAligned(href);
   }
   async function hideSectionDetail(sectionId:string){
+    const href=`#${sectionId}`;
+    window.history.replaceState(window.history.state,'',href);
     expandedResultSections=expandedResultSections.filter((id)=>id!==sectionId);
     await tick();
-    document.getElementById(sectionId)?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    scrollToLookupTarget(href);
+    keepLookupTargetAligned(href);
   }
   function expandableResultSectionIds():string[]{
     return resultSectionLinks()
@@ -443,30 +521,27 @@
   async function navigateToResultSection(href:string){
     const sectionId=href.startsWith('#')?href.slice(1):'';
     if(!sectionId)return;
+    window.history.replaceState(window.history.state,'',href);
     preloadLookupSection(sectionId);
     if(sectionId!=='overview'&&!expandedResultSections.includes(sectionId)){
       expandedResultSections=[...expandedResultSections,sectionId];
     }
     await tick();
-    const target=document.getElementById(sectionId);
-    if(!target)return;
-    window.history.replaceState(window.history.state,'',href);
-    target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    scrollToLookupTarget(href);
+    keepLookupTargetAligned(href);
   }
   async function navigateToLookupEvidence(href:string){
     const familyId=lookupEvidenceFamilyForHref(href);
     if(!familyId)return;
+    const normalizedHref=lookupEvidenceTargetForHref(href);
+    window.history.replaceState(window.history.state,'',normalizedHref);
     preloadLookupSection(familyId);
     expandedResultSections=familyId==='overview'||expandedResultSections.includes(familyId)
       ? expandedResultSections
       : [...expandedResultSections,familyId];
     await tick();
-    const normalizedHref=lookupEvidenceTargetForHref(href);
-    const targetId=normalizedHref.slice(1);
-    const target=document.getElementById(targetId);
-    if(!target)return;
-    window.history.replaceState(window.history.state,'',normalizedHref);
-    target.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    if(!scrollToLookupTarget(normalizedHref))scrollToLookupTarget(`#${familyId}`);
+    keepLookupTargetAligned(normalizedHref);
   }
   function handleLookupEvidenceLink(event:MouseEvent){
     if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
@@ -490,12 +565,24 @@
   function sectionDetailVisible(sectionId:string):boolean{
     return expandedResultSections.includes(sectionId);
   }
+  function scrollToLookupTarget(href:string,behavior:ScrollBehavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'):boolean{
+    const targetId=href.startsWith('#')?href.slice(1):'';
+    if(!targetId)return false;
+    const target=document.getElementById(targetId);
+    if(!target)return false;
+    if(behavior==='auto'){
+      const targetTop=target.getBoundingClientRect().top+window.scrollY;
+      const scrollMarginTop=Number.parseFloat(getComputedStyle(target).scrollMarginTop)||0;
+      const maximumScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+      window.scrollTo(window.scrollX,Math.min(Math.max(0,targetTop-scrollMarginTop),maximumScroll));
+    }else target.scrollIntoView({block:'start',behavior});
+    return true;
+  }
   async function restoreDeferredLookupTarget(){
     await tick();
-    const href=window.location.hash;
-    if(!lookupEvidenceFamilyForHref(href))return;
-    const target=document.getElementById(lookupEvidenceTargetForHref(href).slice(1));
-    target?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    const href=lookupScrollHref;
+    if(!href||window.location.hash!==href||!lookupEvidenceFamilyForHref(href))return;
+    scrollToLookupTarget(lookupEvidenceTargetForHref(href),'auto');
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -526,6 +613,7 @@
     return()=>{
       pageActive=false;
       invalidateCaseActions();
+      stopLookupScrollAlignment();
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
       writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
@@ -610,6 +698,7 @@
     }
 
     invalidateCaseActions();
+    stopLookupScrollAlignment();
     loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
@@ -718,7 +807,7 @@
 
       <details class="detailed-assessment card" bind:open={detailedAssessmentOpen}>
         <summary>
-          <span><strong>Detailed assessment</strong><small>Decision support, claim readiness, and portable hand-off{taskView==='acquisition'?', with acquisition review':''}</small></span>
+          <span><strong>Detailed assessment</strong><small>Decision support, Evidence Readiness, and portable hand-off{taskView==='acquisition'?', with acquisition review':''}</small></span>
           <span>{detailedAssessmentOpen?'Close assessment':'Open assessment'}</span>
         </summary>
         <div class="detailed-assessment-body">
@@ -730,8 +819,8 @@
         />
         <DeferredSurface
           load={()=>import('$lib/components/LookupClaimReadiness.svelte')}
-          loadingLabel="Loading claim-readiness review…"
-          unavailableLabel="Claim-readiness review could not be loaded."
+          loadingLabel="Loading Evidence Readiness review…"
+          unavailableLabel="Evidence Readiness review could not be loaded."
           props={{readiness:lookupClaimReadiness,reviewActions:lookupReviewActionModel,onpassport:downloadClaimPassport}}
         />
 
@@ -1172,6 +1261,7 @@
   .detailed-assessment[open]>summary span:last-child::before{content:'−'}
   .detailed-assessment-body{padding:0 14px 14px}
   .portable-evidence-status{margin:12px 0 0;padding:10px 12px;border:1px dotted var(--amber);border-radius:var(--radius-sm);color:var(--text);background:color-mix(in srgb,var(--amber) 7%,var(--surface));font-size:var(--text-xs);line-height:1.55}
+  :global(.result-root.lookup-scroll-aligning){overflow-anchor:none}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--evidence-web)}
   .result-section.family-registry{--section-accent:var(--evidence-registry)}

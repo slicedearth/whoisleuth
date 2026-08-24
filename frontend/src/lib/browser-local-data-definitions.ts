@@ -80,11 +80,12 @@ import {
 import type { BulkReviewRecord, BulkReviewStore } from './analysis/bulk-review-model.ts';
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
+  ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION,
   analystReviewStateRecords,
   analystReviewStateStoreFromRecords,
   analystReviewStateStoreVersion,
   emptyAnalystReviewStateStore,
-  normalizeAnalystReviewStateStore,
+  migrateDevelopmentAnalystReviewStateStore,
   serializeAnalystReviewStateStore,
 } from './analysis/analyst-review-state.ts';
 import type { AnalystReviewStateRecord, AnalystReviewStateStore } from './analysis/analyst-review-state.ts';
@@ -374,11 +375,17 @@ export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<Anal
     && positiveVersion(record(raw)?.version)
     && Array.isArray(record(raw)?.records)
   ),
-  normalize: normalizeAnalystReviewStateStore,
+  normalize: migrateDevelopmentAnalystReviewStateStore,
   version: analystReviewStateStoreVersion,
   serialize: serializeAnalystReviewStateStore,
   split: (store) => analystReviewStateRecords(store).map((value) => ({ id: value.subjectKey, value })),
-  join: (records) => analystReviewStateStoreFromRecords(records.map((record) => record.value)),
+  join: (records, storageRevision) => storageRevision < ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION
+    ? migrateDevelopmentAnalystReviewStateStore({
+      schema: ANALYST_REVIEW_STATE_SCHEMA,
+      version: 1,
+      records: records.map((record) => record.value),
+    })
+    : analystReviewStateStoreFromRecords(records.map((record) => record.value)),
 });
 
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([

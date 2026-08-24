@@ -129,6 +129,7 @@
           import('$lib/analysis/analyst-review-local-projections.ts'),
         ]);
         const reviewState = documents.get('analyst_review_state') as BrowserLocalCollectionDocumentMap['analyst_review_state'];
+        const reviewNow = new Date().toISOString();
         const localProjection = buildLocalAnalystReviewProjection({
           cases: caseRecords,
           profiles,
@@ -136,23 +137,22 @@
           websiteSnapshots: documents.get('website_snapshots') as BrowserLocalCollectionDocumentMap['website_snapshots'],
           watchlists,
           bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
-        });
+          reviewState,
+        }, reviewNow);
+        const certificateInbox = buildCertificateReviewInbox(profiles, caseRecords, { now: reviewNow, reviewState });
         const inbox = buildAnalystReviewInbox({
           cases: caseRecords,
           watchlists,
           bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
           reviewState,
-          projectedItems: localProjection.items,
-          projectedItemsTruncated: localProjection.truncated,
-        });
-        const certificateInbox = buildCertificateReviewInbox(profiles, caseRecords);
+          projectedItems: [...localProjection.items, ...certificateInbox.reviewItems],
+          projectedAdmissions: [localProjection.admission, certificateInbox.reviewAdmission],
+        }, reviewNow);
         attentionSummary = buildDashboardAttentionSummary({
           reviewItems: inbox.items,
-          certificateFindings: certificateInbox.findings,
-          reviewState,
           cases: caseRecords,
           watchlistCount: Object.keys(watchlists).length,
-          now: new Date().toISOString(),
+          now: reviewNow,
         });
       }
     }

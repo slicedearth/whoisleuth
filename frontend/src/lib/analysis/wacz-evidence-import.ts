@@ -1,6 +1,7 @@
-import { Gunzip, UnzipInflate } from 'fflate';
+import { UnzipInflate } from 'fflate';
 import { parseBoundedJson } from '../bounded-json.ts';
 import { extractBoundedZipEntries } from '../../../../packages/interchange/bounded-zip-extraction.mts';
+import { decompressBoundedGzip } from '../../../../packages/interchange/bounded-gzip.mts';
 
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -184,23 +185,12 @@ function concatBytes(chunks: readonly Uint8Array[], total: number): Uint8Array {
 }
 
 function gunzipBounded(input: Uint8Array, remainingBytes: number): Uint8Array {
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    const gunzip = new Gunzip((chunk) => {
-      total += chunk.byteLength;
-      if (total > remainingBytes) {
-        throw new Error(`Expanded WARC data exceeds the ${MAX_WARC_IMPORT_BYTES}-byte import bound.`);
-      }
-      chunks.push(chunk.slice());
-    });
-    gunzip.push(input, true);
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.includes('import bound')) throw cause;
-    throw new Error('A compressed WACZ WARC resource could not be safely decompressed.');
-  }
-  if (!total) throw new Error('A compressed WACZ WARC resource was empty.');
-  return concatBytes(chunks, total);
+  return decompressBoundedGzip(input, {
+    maximumOutputBytes: remainingBytes,
+    exceededMessage: `Expanded WARC data exceeds the ${MAX_WARC_IMPORT_BYTES}-byte import bound.`,
+    invalidMessage: 'A compressed WACZ WARC resource could not be safely decompressed.',
+    emptyMessage: 'A compressed WACZ WARC resource was empty.',
+  });
 }
 
 function unpackSelectedEntries(bytes: Uint8Array): Readonly<{

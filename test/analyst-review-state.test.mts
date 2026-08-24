@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
 import {
@@ -7,8 +8,10 @@ import {
   analystReviewLifecycle,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
+  canonicalAnalystReviewIdentityJson,
   emptyAnalystReviewStateStore,
   mergeAnalystReviewStateStores,
+  migrateDevelopmentAnalystReviewStateStore,
   normalizeAnalystReviewStateStore,
   orphanedAnalystReviewStates,
   serializeAnalystReviewStateStore,
@@ -58,6 +61,45 @@ describe('canonical analyst Review Item lifecycle', () => {
       analystReviewMaterialFingerprint(['pin-one', 'partial']),
       analystReviewMaterialFingerprint(['pin-one', 'complete']),
     );
+    assert.match(analystReviewSubjectKey('case', ['evidence-gap']), /^review:case:[a-f0-9]{64}$/u);
+    assert.match(analystReviewMaterialFingerprint(['evidence']), /^material:[a-f0-9]{64}$/u);
+  });
+
+  test('hashes the complete typed identity without collapsing order, suffixes, or nullish values', () => {
+    assert.notEqual(
+      analystReviewMaterialFingerprint(['a'.repeat(500) + 'X']),
+      analystReviewMaterialFingerprint(['a'.repeat(500) + 'Y']),
+    );
+    const left = Array.from({ length: 101 }, (_, index) => index);
+    const right = [...left];
+    right[100] = 10_000;
+    assert.notEqual(analystReviewMaterialFingerprint(left), analystReviewMaterialFingerprint(right));
+    assert.notEqual(analystReviewMaterialFingerprint(['first', 'second']), analystReviewMaterialFingerprint(['second', 'first']));
+    assert.notEqual(analystReviewMaterialFingerprint([null]), analystReviewMaterialFingerprint([undefined]));
+    assert.equal(
+      analystReviewMaterialFingerprint([{ second: 2, first: 1 }]),
+      analystReviewMaterialFingerprint([{ first: 1, second: 2 }]),
+    );
+    for (const parts of [
+      [] as unknown[],
+      ['fixture', { ordered: ['first', 'second'] }],
+      ['Unicode — 🔎'.repeat(80)],
+    ]) {
+      const canonical = canonicalAnalystReviewIdentityJson(parts);
+      assert.equal(
+        analystReviewMaterialFingerprint(parts),
+        `material:${createHash('sha256').update(canonical).digest('hex')}`,
+      );
+    }
+    const reviewed = item({
+      materialFingerprint: analystReviewMaterialFingerprint(['a'.repeat(500) + 'X']),
+      completeness: 'complete',
+    });
+    const retained = setAnalystReviewDecision(emptyAnalystReviewStateStore(), reviewed, {
+      disposition: 'resolved', rationale: 'The exact complete evidence was reviewed.', reviewedAt: NOW,
+    });
+    const changed = { ...reviewed, materialFingerprint: analystReviewMaterialFingerprint(['a'.repeat(500) + 'Y']) };
+    assert.equal(analystReviewLifecycle(changed, retained, NOW).state, 'invalidated');
   });
 
   test('fails closed before hashing cyclic, accessor-backed, or over-broad identity input', () => {
@@ -132,8 +174,24 @@ describe('canonical analyst Review Item lifecycle', () => {
       reviewedAt: '2026-08-23T13:00:00.000Z',
     });
     assert.equal(second.records[0]?.history.length, 1);
+    assert.equal(second.records[0]?.historyOmitted, 0);
     assert.equal(second.records[0]?.history[0]?.rationale, 'A bounded duplicate source is temporarily suppressed.');
     assert.equal(second.records[0]?.reviewedFingerprint, changed.materialFingerprint);
+  });
+
+  test('reports bounded history omissions instead of silently dropping them', () => {
+    let store = emptyAnalystReviewStateStore();
+    for (let index = 0; index < 12; index += 1) {
+      store = setAnalystReviewDecision(store, item({
+        materialFingerprint: analystReviewMaterialFingerprint(['revision', index]),
+      }), {
+        disposition: 'open',
+        rationale: `Review revision ${index}.`,
+        reviewedAt: new Date(Date.parse(NOW) + index * 60_000).toISOString(),
+      });
+    }
+    assert.equal(store.records[0]?.history.length, 8);
+    assert.equal(store.records[0]?.historyOmitted, 3);
   });
 
   test('merges non-destructively by review time and preserves orphaned imported states', () => {
@@ -212,5 +270,42 @@ describe('canonical analyst Review Item lifecycle', () => {
       }),
       /require an expiry/,
     );
+    const current = setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
+      disposition: 'open', rationale: 'Current review.', reviewedAt: NOW,
+    });
+    assert.throws(
+      () => normalizeAnalystReviewStateStore({
+        ...current,
+        records: [{ ...current.records[0], reviewDueAt: NOW }],
+      }),
+      /reviewDueAt must be later than reviewedAt/,
+    );
+  });
+
+  test('reopens the retired local development identity without accepting it as the public contract', () => {
+    const development = {
+      schema: ANALYST_REVIEW_STATE_SCHEMA,
+      version: 1,
+      records: [{
+        subjectKey: 'review:case:0123456789abcdef',
+        reviewedFingerprint: 'material:fedcba9876543210',
+        evidenceFamily: 'case',
+        disposition: 'resolved',
+        rationale: 'Earlier local rationale.',
+        reviewedAt: NOW,
+        reviewDueAt: null,
+        expiresAt: null,
+        caseIds: ['case-one'],
+        campaignIds: ['campaign-one'],
+        history: [],
+      }],
+    };
+    assert.throws(() => normalizeAnalystReviewStateStore(development), /missing or undeclared fields/);
+    const migrated = migrateDevelopmentAnalystReviewStateStore(development);
+    assert.match(migrated.records[0]?.subjectKey ?? '', /^review:case:[a-f0-9]{64}$/u);
+    assert.equal(migrated.records[0]?.disposition, 'open');
+    assert.equal(migrated.records[0]?.history[0]?.rationale, 'Earlier local rationale.');
+    assert.deepEqual(migrated.records[0]?.caseIds, ['case-one']);
+    assert.deepEqual(migrated.records[0]?.campaignIds, ['campaign-one']);
   });
 });

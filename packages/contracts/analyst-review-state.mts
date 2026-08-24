@@ -51,8 +51,8 @@ export const ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily
     fixtures: [{
       id: 'analyst-review-state-v1',
       path: 'test/fixtures/extracted-domain-lifecycle/analyst-review-state-v1.json',
-      bytes: 83,
-      sha256: '4c2215a69dcb2b3108e37a71061edae57c74946fbed5856f63330358cbb5a830',
+      bytes: 663,
+      sha256: 'af0b191a79a50ef28f82975d181bdd3f7ba0bf7245cf4fc2b3adb84603d8dae6',
       version: ANALYST_REVIEW_STATE_SCHEMA_VERSION,
     }],
   }],

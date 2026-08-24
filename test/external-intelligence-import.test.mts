@@ -186,6 +186,31 @@ describe('bounded STIX and MISP import preview', () => {
     for (let index = 0; index <= MAX_EXTERNAL_INTELLIGENCE_TREE_DEPTH; index += 1) nested = { child: nested };
     assert.throws(() => assertExternalIntelligenceTreeBounds(nested), /nested too deeply/u);
   });
+
+  test('rejects retained Unicode formatting controls in STIX and MISP provenance', () => {
+    for (const unsafe of ['\u202e', '\u2060']) {
+      const stixPublisher = structuredClone(stixObjects());
+      (stixPublisher[0] as Record<string, unknown>).name = `External${unsafe}publisher`;
+      assert.throws(
+        () => parseExternalIntelligenceDocument(stixBundle(stixPublisher), DIGEST),
+        /unsafe control or formatting/iu,
+      );
+
+      const mispSource = structuredClone(mispEvent());
+      mispSource.Event.info = `Imported${unsafe}review`;
+      assert.throws(
+        () => parseExternalIntelligenceDocument(mispSource, DIGEST),
+        /unsafe control or formatting/iu,
+      );
+
+      const mispDistribution = structuredClone(mispEvent());
+      mispDistribution.Event.Attribute[0]!.distribution = `5${unsafe}`;
+      assert.throws(
+        () => parseExternalIntelligenceDocument(mispDistribution, DIGEST),
+        /unsafe control or formatting/iu,
+      );
+    }
+  });
 });
 
 describe('external intelligence case merge', () => {

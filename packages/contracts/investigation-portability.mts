@@ -80,7 +80,7 @@ export const LOOKUP_CLAIM_PASSPORT_COMPATIBILITY = defineSchemaCompatibility({
   currentVersion: LOOKUP_CLAIM_PASSPORT_VERSION, supportedVersions: [LOOKUP_CLAIM_PASSPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: MAX_LOOKUP_CLAIM_PASSPORT_BYTES, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
-  note: 'Explicit local export of one typed claim-readiness projection with exact evidence requirement IDs, retained source states, bounded limitations, and deterministic sorted-json-v2 integrity; raw source payloads and browser-local records are excluded.',
+  note: 'Explicit local export of one typed Evidence Readiness projection with exact evidence requirement IDs, retained source states, bounded limitations, and deterministic sorted-json-v2 integrity; raw source payloads and browser-local records are excluded.',
 });
 
 export const BULK_DOMAIN_COMPARISON_COMPATIBILITY = defineSchemaCompatibility({

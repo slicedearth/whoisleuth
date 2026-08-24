@@ -132,7 +132,8 @@ describe('transient Brand review inbox', () => {
     assert.deepEqual(gap.sourceIds, ['whois']);
     assert.equal(gap.completeness, 'partial');
     assert.match(gap.detail, /limited evidence pin/iu);
-    assert.match(inbox.limitations.join(' '), /Partial and inconclusive source states remain review prompts/iu);
+    assert.match(inbox.limitations.join(' '), /Partial, unavailable and inconclusive evidence remains open for review/iu);
+    assert.match(inbox.limitations.join(' '), /not treated as absence or safety/iu);
   });
 
   test('retains and reports unresolved references after a profile disappears without changing the case', () => {

@@ -29,7 +29,7 @@
   let stateFilter = $state<CertificateReviewFindingState | ''>('');
   let selectedProfile = $state('');
   let page = $state(1);
-  const inbox = $derived(buildCertificateReviewInbox(profiles, cases, { now, ...(selectedProfile ? { profileId: selectedProfile } : {}) }));
+  const inbox = $derived(buildCertificateReviewInbox(profiles, cases, { now, reviewState, ...(selectedProfile ? { profileId: selectedProfile } : {}) }));
   const filtered = $derived(inbox.findings.filter((finding) =>
     (!evidenceFilter || finding.evidenceClass === evidenceFilter)
     && (!stateFilter || finding.state === stateFilter)

@@ -187,12 +187,14 @@ export async function buildInterchangeFidelityReport(
         verificationState = verification.state;
         assuranceSatisfied = contract.requiredAssurance === 'whole_integrity'
           ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
-          : contract.requiredAssurance === 'structure'
-            ? offlineArtifactSatisfiesAssurance(verification, 'structure')
-            : contract.requiredAssurance === 'authenticated_whole_integrity'
-              ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
-                && verification.checks.authenticatedEncryption === 'verified'
-              : false;
+          : contract.requiredAssurance === 'applicable_integrity'
+            ? offlineArtifactSatisfiesAssurance(verification, 'applicable_integrity')
+            : contract.requiredAssurance === 'structure'
+              ? offlineArtifactSatisfiesAssurance(verification, 'structure')
+              : contract.requiredAssurance === 'authenticated_whole_integrity'
+                ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
+                  && verification.checks.authenticatedEncryption === 'verified'
+                : false;
         recordCount = verification.summary.recordCount;
         sectionCount = verification.summary.sectionCount;
         const unsupportedSections = verification.summary.unsupportedSectionCount ?? 0;

@@ -2,6 +2,7 @@
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import {
+    ANALYST_REVIEW_EVIDENCE_FAMILIES,
     ANALYST_REVIEW_DISMISSAL_REASONS,
     filterAnalystReviewItems,
     type AnalystReviewAge,
@@ -78,6 +79,9 @@
   const pageCount = $derived(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visible = $derived(filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const admissionRows = $derived(ANALYST_REVIEW_EVIDENCE_FAMILIES
+    .map((family) => ({ family, ...inbox.admission.byEvidenceFamily[family] }))
+    .filter((row) => row.totalAtLeast > 0));
 
   function setFilter(value: Filter) {
     filter = value;
@@ -101,6 +105,11 @@
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
   }
 
+  function omissionText(row: { omittedAtLeast: number; totalIsExact: boolean }): string {
+    if (row.totalIsExact) return `${row.omittedAtLeast} omitted`;
+    return row.omittedAtLeast > 0 ? `at least ${row.omittedAtLeast} omitted` : 'additional items may be omitted';
+  }
+
   async function dismiss(item: AnalystReviewItem) {
     const reason = dismissalReasons[item.id];
     if (!ondismiss || !reason || !item.dismissalTarget || !item.caseId) return;
@@ -120,7 +129,7 @@
       <h2 id="review-inbox-title">Review inbox</h2>
       <p>One queue for retained case decisions, evidence gaps, reviewed follow-ups, watchlist changes, and incomplete Bulk sessions.</p>
     </div>
-    <strong>{inbox.counts.all}</strong>
+    <strong>{inbox.admission.displayed}</strong>
   </div>
 
   <div class="filters" role="group" aria-label="Review inbox filters">
@@ -239,7 +248,22 @@
     <p class="empty">No retained items match this review filter.</p>
   {/if}
 
-  {#if inbox.truncated}<p class="warning">The queue reached its {inbox.items.length}-item display bound. Narrow the underlying saved work before relying on this view.</p>{/if}
+  {#if inbox.truncated}
+    <div class="admission-warning">
+      <p class="warning">
+        Showing {inbox.admission.displayed} of {inbox.admission.totalIsExact ? '' : 'at least '}{inbox.admission.totalAtLeast} Review Items.
+        {#if inbox.admission.omittedAtLeast > 0} At least {inbox.admission.omittedAtLeast} lower-ranked {inbox.admission.omittedAtLeast === 1 ? 'item is' : 'items are'} omitted.{:else} One or more sources reached an earlier bound, so additional items may be omitted.{/if}
+      </p>
+      <details>
+        <summary>Admission by evidence family</summary>
+        <ul>
+          {#each admissionRows as row}
+            <li><span>{row.family.replaceAll('_', ' ')}</span><span>{row.displayed} shown · {omissionText(row)}</span></li>
+          {/each}
+        </ul>
+      </details>
+    </div>
+  {/if}
   <ul class="limitations">{#each inbox.limitations as limitation}<li>{limitation}</li>{/each}</ul>
 </section>
 
@@ -260,6 +284,7 @@
   .detail-filters select,.detail-filters input{width:100%;padding:0 9px}
   .detail-filters .reset{padding:0 11px;cursor:pointer}
   .detail-filters select:focus-visible,.detail-filters input:focus-visible,.detail-filters .reset:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .admission-warning{display:grid;gap:7px;margin-top:14px}.admission-warning .warning{margin:0}.admission-warning details{font-size:var(--text-xs)}.admission-warning summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}.admission-warning ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.admission-warning li{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.admission-warning li span:first-child{color:var(--text);text-transform:capitalize}
   .items{display:grid;gap:8px;margin:0;padding:0;list-style:none}
   .items li{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .items li.high{border-left-color:var(--amber)}

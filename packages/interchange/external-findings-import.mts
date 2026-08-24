@@ -13,6 +13,7 @@ import {
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
 } from '../contracts/external-observation-interchange.mts';
+import { hasUnsafeRetainedText } from './retained-text.mts';
 
 export {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -85,7 +86,6 @@ export type ExternalFindingsMergeResult = Readonly<{
 
 const CATEGORIES = new Set<string>(EXTERNAL_FINDING_CATEGORIES);
 const COMPLETENESS = new Set(['complete', 'inconclusive', 'partial', 'unknown']);
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'findings']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const FINDING_KEYS = new Set([
@@ -134,9 +134,9 @@ function requiredText(value: unknown, maximum: number, label: string): string {
     typeof value !== 'string'
     || !value.trim()
     || value.length > maximum
-    || CONTROL_RE.test(value)
+    || hasUnsafeRetainedText(value)
   ) {
-    throw new Error(`${label} must be non-empty, bounded text without control characters.`);
+    throw new Error(`${label} must be non-empty, bounded text without unsafe control characters or formatting controls.`);
   }
   return value.trim();
 }
