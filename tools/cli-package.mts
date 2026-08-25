@@ -9,8 +9,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
-import ts from 'typescript';
-
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
@@ -472,6 +470,7 @@ async function assertInstalledCompatibilityFacade(
   } catch {
     throw new TypeError(`Installed compatibility facade ${contract.path} is not valid UTF-8.`);
   }
+  const ts = (await import('typescript')).default;
   const sourceFile = ts.createSourceFile(contract.path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const statement = sourceFile.statements.length === 1 ? sourceFile.statements[0] : null;
   if (!statement

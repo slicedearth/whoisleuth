@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const WORKFLOW = readFileSync(new URL('../.github/workflows/cli-published-check.yml', import.meta.url), 'utf8');
+const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const BLOCK_COMPILER_LOADER = `data:text/javascript,${encodeURIComponent(`
+  import { registerHooks } from 'node:module';
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier === 'typescript') throw new Error('The compiler was loaded by the post-publication verifier.');
+      return nextResolve(specifier, context);
+    },
+  });
+`)}`;
 
 describe('published CLI verification workflow', () => {
   test('is explicit, read-only, secret-free, and does not install the repository dependency tree', () => {
@@ -23,5 +35,16 @@ describe('published CLI verification workflow', () => {
     assert.match(WORKFLOW, /^\s{8}run: node tools\/published-cli-check\.mts "\$RELEASE_VERSION" --candidate-report "\$RELEASE_DIRECTORY\/cli-package-report\.json" --candidate-archive "\$RELEASE_DIRECTORY\/whoisleuth-cli-\$RELEASE_VERSION\.tgz" --json$/mu);
     assert.doesNotMatch(WORKFLOW, /run:[^\n]*\$\{\{ inputs\.version \}\}/u);
     assert.doesNotMatch(WORKFLOW, /(?:npm exec|npx|whoisleuth --version|whoisleuth doctor)/u);
+  });
+
+  test('loads its verifier without resolving the compiler dependency', () => {
+    const result = spawnSync(process.execPath, [
+      '--import',
+      BLOCK_COMPILER_LOADER,
+      '--input-type=module',
+      '--eval',
+      'await import("./tools/published-cli-check.mts");',
+    ], { cwd: REPOSITORY_ROOT, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
   });
 });
