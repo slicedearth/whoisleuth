@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type { Locator, Page, Request, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import { ALLOWED_ORIGIN, expect, test } from './fixtures';
+import { ALLOWED_ORIGIN, enforcesMachineTimingBudgets, expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -365,6 +365,7 @@ async function measureDeferredInteraction(options: Readonly<{
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Residual layout shift includes every entry during a short post-readiness stability window.',
         'Ceilings are reviewed regression limits derived from repeated clean local production-build runs with documented headroom.',
+        'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
     const body = Buffer.from(`${JSON.stringify(measurement, null, 2)}\n`, 'utf8');
@@ -384,12 +385,16 @@ async function measureDeferredInteraction(options: Readonly<{
     }
     expect(measurement.assetEncodedTransferBytes).toBeLessThanOrEqual(budget.assetEncodedTransferBytes);
     expect(measurement.usableMs).toBeGreaterThan(0);
-    expect(measurement.usableMs).toBeLessThanOrEqual(budget.usableMs);
     expect(measurement.longTaskSupported).toBe(true);
     expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(budget.longTaskTotalMs);
     expect(measurement.layoutShiftScore).toBeLessThanOrEqual(budget.layoutShiftScore);
     expect(measurement.residualLayoutShiftScore).toBeLessThanOrEqual(budget.residualLayoutShiftScore);
+    // Shared hosted runners cannot provide a stable CPU scheduling authority.
+    // Transfer, request, and layout gates remain blocking in every project.
+    if (enforcesMachineTimingBudgets(options.testInfo.project.name)) {
+      expect(measurement.usableMs).toBeLessThanOrEqual(budget.usableMs);
+      expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(budget.longTaskTotalMs);
+    }
     expect(captured.investigationRequests, 'module loading must not start an investigation or collection request').toEqual([]);
     return measurement;
   } catch (cause) {

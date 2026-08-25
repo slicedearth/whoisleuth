@@ -7,6 +7,11 @@ import { BASE_URL } from './constants';
 // logic itself can be exercised directly - see origin-guard.spec.ts - rather
 // than only ever being proven correct by the absence of a failure.
 export const ALLOWED_ORIGIN = new URL(BASE_URL).origin;
+export const PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';
+
+export function enforcesMachineTimingBudgets(projectName: string): boolean {
+  return projectName === PERFORMANCE_AUTHORITY_PROJECT;
+}
 
 export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
