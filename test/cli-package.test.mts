@@ -49,7 +49,7 @@ const templateManifest = {
   contentPolicy: { class: 'dual-use' },
   bin: { whoisleuth: 'bin/whoisleuth.mjs' },
   repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
-  homepage: 'https://whoisleuth.com/',
+  homepage: 'https://www.whoisleuth.com/',
   bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
 };
 

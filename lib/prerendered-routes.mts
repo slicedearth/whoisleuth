@@ -71,6 +71,17 @@ function renderPublicSitemap(): string {
   ].join('\n')}\n`;
 }
 
+function renderPublicRobots(): string {
+  return `${[
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /.netlify/functions/',
+    '',
+    `Sitemap: ${WHOISLEUTH_SITE_ORIGIN}/sitemap.xml`,
+  ].join('\n')}\n`;
+}
+
 export {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   NON_INDEXED_PRERENDERED_ROUTES,
@@ -79,5 +90,6 @@ export {
   PRERENDERED_HTML_FILE_OVERRIDES,
   PRERENDERED_ROUTES,
   PUBLIC_PRERENDERED_ROUTES,
+  renderPublicRobots,
   renderPublicSitemap,
 };

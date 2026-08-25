@@ -22,7 +22,7 @@ import {
   renderPublicExamplesModule,
   renderPublicMethodologyModule,
 } from './public-product-catalogue-renderer.mts';
-import { renderPublicSitemap } from '../lib/prerendered-routes.mts';
+import { renderPublicRobots, renderPublicSitemap } from '../lib/prerendered-routes.mts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT_DIRECTORY = resolve(ROOT, 'frontend', 'src', 'lib', 'generated');
@@ -38,6 +38,7 @@ const OUTPUTS = Object.freeze([
   Object.freeze({ name: 'public-examples.ts', directory: OUTPUT_DIRECTORY, render: renderPublicExamplesModule }),
   Object.freeze({ name: 'public-examples-index.ts', directory: OUTPUT_DIRECTORY, render: renderPublicExamplesIndexModule }),
   Object.freeze({ name: 'public-methodology.ts', directory: OUTPUT_DIRECTORY, render: renderPublicMethodologyModule }),
+  Object.freeze({ name: 'robots.txt', directory: STATIC_DIRECTORY, render: renderPublicRobots }),
   Object.freeze({ name: 'sitemap.xml', directory: STATIC_DIRECTORY, render: renderPublicSitemap }),
 ]);
 

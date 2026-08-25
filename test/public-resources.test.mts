@@ -9,6 +9,7 @@ import {
   publicResource,
 } from '../frontend/src/lib/public-resources.ts';
 import { PUBLIC_RESOURCE_ROUTES } from '../lib/public-resource-routes.mts';
+import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 
 function allStrings(value: unknown): string[] {
   if (typeof value === 'string') return [value];
@@ -74,7 +75,7 @@ test('the sitemap and social preview remain aligned with the public resource con
   const repositoryRoot = join(import.meta.dirname, '..');
   const sitemap = readFileSync(join(repositoryRoot, 'frontend', 'static', 'sitemap.xml'), 'utf8');
   for (const route of PUBLIC_RESOURCE_ROUTES) {
-    assert.match(sitemap, new RegExp(`<loc>https://whoisleuth\\.com${route}</loc>`, 'u'));
+    assert.ok(sitemap.includes(`<loc>${WHOISLEUTH_SITE_ORIGIN}${route}</loc>`));
   }
 
   const previewSource = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.svg'), 'utf8');

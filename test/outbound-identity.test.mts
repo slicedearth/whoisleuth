@@ -16,7 +16,7 @@ const root = process.cwd();
 
 test('outbound identity matches the package version and public request policy', () => {
   assert.equal(WHOISLEUTH_USER_AGENT_VERSION, packageDocument.version);
-  assert.equal(WHOISLEUTH_REQUEST_POLICY_URL, 'https://whoisleuth.com/request-policy');
+  assert.equal(WHOISLEUTH_REQUEST_POLICY_URL, 'https://www.whoisleuth.com/request-policy');
   assert.equal(WHOISLEUTH_USER_AGENT, `WHOISleuth/${packageDocument.version} (+${WHOISLEUTH_REQUEST_POLICY_URL})`);
   assert.deepEqual(whoisleuthRequestHeaders({ Accept: 'application/json' }), {
     Accept: 'application/json',

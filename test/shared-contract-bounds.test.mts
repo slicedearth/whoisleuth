@@ -108,7 +108,7 @@ test('shared record coercion keeps null and empty-object failure modes explicit'
 });
 
 test('public project URLs derive from one canonical origin', () => {
-  assert.equal(WHOISLEUTH_SITE_ORIGIN, 'https://whoisleuth.com');
+  assert.equal(WHOISLEUTH_SITE_ORIGIN, 'https://www.whoisleuth.com');
   assert.equal(WHOISLEUTH_PROJECT_URL, `${WHOISLEUTH_SITE_ORIGIN}/`);
   assert.equal(WHOISLEUTH_REQUEST_POLICY_URL, `${WHOISLEUTH_SITE_ORIGIN}/request-policy`);
   assert.equal(WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL, `git+${WHOISLEUTH_SOURCE_REPOSITORY_URL}.git`);
