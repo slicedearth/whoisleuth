@@ -143,7 +143,7 @@ options override profile defaults.
 Run `whoisleuth <command> --help` for exact arguments, input ceilings, network
 effects and output formats. The packaged [CLI reference](cli-reference.md) gives
 the longer-lived compatibility and evidence contracts, while the generated
-[online command reference](https://whoisleuth.com/cli#commands) provides a searchable index.
+[online command reference](https://www.whoisleuth.com/cli#commands) provides a searchable index.
 
 ## Safety and limitations
 

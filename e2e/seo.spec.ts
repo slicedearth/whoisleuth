@@ -40,11 +40,11 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     expect(html).toContain('<meta name="robots" content="index, follow,');
     expect(html).toContain('<meta property="og:site_name" content="WHOISleuth"');
     expect(html).toContain('<meta property="og:url"');
-    expect(html).toContain('<meta property="og:image" content="https://whoisleuth.com/social-preview.png"');
+    expect(html).toContain(`<meta property="og:image" content="${WHOISLEUTH_SITE_ORIGIN}/social-preview.png"`);
     expect(html).toContain('<meta property="og:image:width" content="1280"');
     expect(html).toContain('<meta property="og:image:height" content="640"');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image"');
-    expect(html).toContain('<meta name="twitter:image" content="https://whoisleuth.com/social-preview.png"');
+    expect(html).toContain(`<meta name="twitter:image" content="${WHOISLEUTH_SITE_ORIGIN}/social-preview.png"`);
     expect(html).toMatch(/WHOISleuth \d+\.\d+\.\d+ · build (?:[a-f0-9]{7}|local)/u);
     expect(html).toMatch(/href="https:\/\/github\.com\/slicedearth\/whoisleuth(?:\/tree\/[a-f0-9]{7,64})?"/u);
     const schemas = structuredDataDocuments(html);
@@ -54,7 +54,7 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
         '@context': 'https://schema.org',
         '@type': 'WebSite',
         name: 'WHOISleuth',
-        url: 'https://whoisleuth.com/',
+        url: `${WHOISLEUTH_SITE_ORIGIN}/`,
       });
     }
 
@@ -102,7 +102,7 @@ test('crawler files expose only public pages', async ({ request }) => {
   const robots = await (await request.get('/robots.txt')).text();
   expect(robots).toContain('Disallow: /api/');
   expect(robots).toContain('Disallow: /.netlify/functions/');
-  expect(robots).toContain('Sitemap: https://whoisleuth.com/sitemap.xml');
+  expect(robots).toContain(`Sitemap: ${WHOISLEUTH_SITE_ORIGIN}/sitemap.xml`);
   expect(robots).not.toContain('Disallow: /login');
 
   const sitemap = await (await request.get('/sitemap.xml')).text();
@@ -112,6 +112,7 @@ test('crawler files expose only public pages', async ({ request }) => {
   }
   expect(sitemap.match(/<loc>/gu)).toHaveLength(PUBLIC_PRERENDERED_ROUTES.length);
   for (const path of NON_INDEXED_PRERENDERED_ROUTES) {
-    expect(sitemap).not.toContain(`https://whoisleuth.com${path}`);
+    expect(sitemap).not.toContain(`${WHOISLEUTH_SITE_ORIGIN}${path}`);
   }
+  expect(sitemap).not.toContain('https://whoisleuth.com/');
 });

@@ -31,7 +31,10 @@ import {
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PRERENDERED_ROUTES,
+  renderPublicRobots,
+  renderPublicSitemap,
 } from '../lib/prerendered-routes.mts';
+import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { FRONTEND_ROUTE_GZIP_BUDGETS } from '../tools/frontend-loading-report.mts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
@@ -131,13 +134,16 @@ describe('public product catalogue', () => {
   test('registers every new public route, canonical redirect, sitemap URL and SEO path', () => {
     const routes = ['/cli', '/methodology', '/coverage', '/examples'] as const;
     const redirects = new Map(CANONICAL_TRAILING_SLASH_REDIRECTS);
+    const robots = readFileSync(new URL('../frontend/static/robots.txt', import.meta.url), 'utf8');
     const sitemap = readFileSync(new URL('../frontend/static/sitemap.xml', import.meta.url), 'utf8');
+    assert.equal(robots, renderPublicRobots());
+    assert.equal(sitemap, renderPublicSitemap());
     for (const route of routes) {
       assert.ok(PRERENDERED_ROUTES.includes(route));
       assert.equal(redirects.get(`${route}/`), route);
       assert.equal(typeof FRONTEND_ROUTE_GZIP_BUDGETS[route], 'number');
       assert.ok(FRONTEND_ROUTE_GZIP_BUDGETS[route]! > 0);
-      assert.match(sitemap, new RegExp(`<loc>https://whoisleuth\\.com${route}</loc>`, 'u'));
+      assert.ok(sitemap.includes(`<loc>${WHOISLEUTH_SITE_ORIGIN}${route}</loc>`));
       const source = readFileSync(new URL(`.${route}/+page.svelte`, ROUTES_DIRECTORY), 'utf8');
       assert.match(source, new RegExp(`path="${route}"`, 'u'));
     }

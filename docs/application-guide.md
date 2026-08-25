@@ -242,7 +242,7 @@ performs enforcement or acquisition.
 
 Offline Risk calibration uses deliberately reviewed local data. Its summary
 contains aggregate model performance only and does not train or change
-the running model. See the [CLI risk-calibrate command](https://whoisleuth.com/cli#command-risk-calibrate).
+the running model. See the [CLI risk-calibrate command](https://www.whoisleuth.com/cli#command-risk-calibrate).
 
 ## Browser-local storage and archives
 
@@ -286,8 +286,8 @@ before partial interpretation.
 
 The CLI can verify supported envelopes, compare saved observations, inspect
 workspace archives and prepare sharing reviews offline. See
-[offline artefact verification](https://whoisleuth.com/cli#command-verify-artifact)
-and the [interchange fidelity report](https://whoisleuth.com/cli#command-interchange-report).
+[offline artefact verification](https://www.whoisleuth.com/cli#command-verify-artifact)
+and the [interchange fidelity report](https://www.whoisleuth.com/cli#command-interchange-report).
 
 ## Limits of the product
 

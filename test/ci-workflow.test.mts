@@ -22,6 +22,18 @@ const PLAYWRIGHT_CONFIG = fs.readFileSync(
   path.join(__dirname, '..', 'playwright.config.ts'),
   'utf8',
 );
+const E2E_FIXTURES_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'e2e', 'fixtures.ts'),
+  'utf8',
+);
+const CONSOLE_LOADING_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'e2e', 'console-loading.spec.ts'),
+  'utf8',
+);
+const DEFERRED_INTERACTIONS_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'e2e', 'deferred-interactions.spec.ts'),
+  'utf8',
+);
 const E2E_DIRECTORY = path.join(__dirname, '..', 'e2e');
 const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
   .filter((entry) => entry.endsWith('.ts'))
@@ -148,15 +160,47 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
   });
 
-  test('runs local performance authorities once after the parallel browser project', () => {
+  test('keeps hosted checks deterministic and reserves runtime ceilings for the local performance authority', () => {
+    assert.match(E2E_FIXTURES_SOURCE, /export const PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';/u);
+    assert.match(
+      E2E_FIXTURES_SOURCE,
+      /export function enforcesMachineTimingBudgets\(projectName: string\): boolean \{\s+return projectName === PERFORMANCE_AUTHORITY_PROJECT;\s+\}/u,
+    );
     assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
     assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
+    assert.doesNotMatch(WORKFLOW, /frontend:authenticated-loading-report/u);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
       'playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
     );
+
+    const consoleAuthorityBlock = requiredValue(
+      /if \(enforcesMachineTimingBudgets\(testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(CONSOLE_LOADING_SOURCE)?.[1],
+    );
+    for (const metric of ['usableMs', 'longTaskTotalMs']) {
+      assert.match(consoleAuthorityBlock, new RegExp(`expect\\(measurement\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
+    }
+    const consoleOutsideAuthority = CONSOLE_LOADING_SOURCE.replace(consoleAuthorityBlock, '');
+    assert.doesNotMatch(consoleOutsideAuthority, /expect\(measurement\.(?:usableMs|longTaskTotalMs)\)\.toBeLessThanOrEqual/u);
+    assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
+    assert.match(consoleOutsideAuthority, /expect\(measurement\.encodedTransferBytes\)\.toBeLessThanOrEqual/u);
+    assert.match(consoleOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
+
+    const deferredAuthorityBlock = requiredValue(
+      /if \(enforcesMachineTimingBudgets\(options\.testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(DEFERRED_INTERACTIONS_SOURCE)?.[1],
+    );
+    for (const metric of ['usableMs', 'longTaskTotalMs']) {
+      assert.match(deferredAuthorityBlock, new RegExp(`expect\\(measurement\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
+    }
+    const deferredOutsideAuthority = DEFERRED_INTERACTIONS_SOURCE.replace(deferredAuthorityBlock, '');
+    assert.doesNotMatch(deferredOutsideAuthority, /expect\(measurement\.(?:usableMs|longTaskTotalMs)\)\.toBeLessThanOrEqual/u);
+    assert.match(deferredOutsideAuthority, /expect\(measurement\.completedAssetRequestCount[^\n]+\)\.toBeGreaterThan/u);
+    assert.match(deferredOutsideAuthority, /expect\(measurement\.assetEncodedTransferBytes\)\.toBeLessThanOrEqual/u);
+    assert.match(deferredOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
+    assert.match(deferredOutsideAuthority, /expect\(measurement\.residualLayoutShiftScore\)\.toBeLessThanOrEqual/u);
+    assert.match(deferredOutsideAuthority, /expect\(captured\.investigationRequests[^\n]+\)\.toEqual\(\[\]\)/u);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {

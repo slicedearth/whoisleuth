@@ -65,7 +65,7 @@ function publishedManifest(overrides: Record<string, unknown> = {}, archive = AR
     contentPolicy: { class: 'dual-use' },
     publishConfig: { access: 'public', provenance: true },
     repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
-    homepage: 'https://whoisleuth.com/',
+    homepage: 'https://www.whoisleuth.com/',
     bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
     dependencies: candidateReport().runtimeDependencies,
     dist: {

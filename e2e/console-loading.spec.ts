@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
 import type { CDPSession, Page, TestInfo } from '@playwright/test';
 
 type ConsoleRoute = Readonly<{
@@ -212,6 +212,7 @@ async function measureConsoleRoute(
         'The desktop Chromium result does not represent mobile hardware or visitor network conditions.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Ceilings are reviewed regression limits derived from repeated clean local production-build runs with documented headroom.',
+        'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
     await testInfo.attach(`console-loading-${route.path.slice(1)}.json`, {
@@ -226,16 +227,20 @@ async function measureConsoleRoute(
 }
 
 for (const route of routes) {
-  test(`authenticated cold load for ${route.path} stays inside its measured regression budget`, async ({ page }, testInfo) => {
+  test(`authenticated cold load for ${route.path} preserves deterministic loading contracts`, async ({ page }, testInfo) => {
     const measurement = await measureConsoleRoute(page, route, testInfo);
     expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
     expect(measurement.encodedTransferBytes).toBeGreaterThan(100_000);
     expect(measurement.encodedTransferBytes).toBeLessThanOrEqual(route.budget.encodedTransferBytes);
     expect(measurement.usableMs).toBeGreaterThan(0);
-    expect(measurement.usableMs).toBeLessThanOrEqual(route.budget.usableMs);
     expect(measurement.longTaskSupported).toBe(true);
     expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
     expect(measurement.layoutShiftScore).toBeLessThanOrEqual(route.budget.layoutShiftScore);
+    // Shared hosted runners cannot provide a stable CPU scheduling authority.
+    // Transfer and layout gates above remain blocking in every project.
+    if (enforcesMachineTimingBudgets(testInfo.project.name)) {
+      expect(measurement.usableMs).toBeLessThanOrEqual(route.budget.usableMs);
+      expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
+    }
   });
 }

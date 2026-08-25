@@ -20,15 +20,15 @@ material; and compare later observations. Scores are explainable prioritisation
 aids rather than automated verdicts.
 
 <p align="center">
-  <a href="https://whoisleuth.com"><strong>View WHOISleuth</strong></a>
+  <a href="https://www.whoisleuth.com"><strong>View WHOISleuth</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
+  <a href="https://www.whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
+  <a href="https://www.whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation" /></a>
+  <a href="https://www.whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation" /></a>
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. It makes no live
@@ -47,7 +47,7 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Brands** | Record official scope, reviewed baselines and owned-domain controls. |
 | **Monitor** | Review Cases, changes, response preparation, watchlists and local rules. |
 
-The public [Resources hub](https://whoisleuth.com/resources) is the shortest
+The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.
 

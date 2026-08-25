@@ -11,18 +11,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     note: 'The iCalendar output carries a schema marker on events but no application-version marker or local import contract.',
   }),
   Object.freeze({
-    identifier: 'whoisleuth.com',
-    kind: 'non_schema',
-    reason: 'public_site_hostname',
-    owner: 'lib/project-metadata.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'lib/project-metadata.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-      Object.freeze({ file: 'packages/cli/package.template.json', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
-    note: 'Public project hostname found inside URLs and infrastructure metadata.',
-  }),
-  Object.freeze({
     identifier: 'whoisleuth.desired-posture-baseline',
     kind: 'exempt',
     reason: 'legacy_unsupported',

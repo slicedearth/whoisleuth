@@ -3,7 +3,7 @@
 The WHOISleuth CLI runs locally. Installed `whoisleuth <command> --help`,
 `whoisleuth commands` and `whoisleuth manual` are the exact grammar, option and
 command authorities for that installed version. The public
-[CLI reference](https://whoisleuth.com/cli) provides a searchable view generated
+[CLI reference](https://www.whoisleuth.com/cli) provides a searchable view generated
 from the same registry.
 
 This page records the common interfaces and the boundaries that matter across
