@@ -3,14 +3,16 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
+import { cliMetaActionForInvocation } from './command-reference.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 export const CLI_CONFIG_SCHEMA = 'whoisleuth.cli.config';
 export const CLI_CONFIG_VERSION = 1;
 export const MAX_CLI_CONFIG_BYTES = 64 * 1024;
 
 const SAFE_BOOLEAN_DEFAULTS = new Set(['--no-color', '--summary', '--verbose', '--fast']);
-const SAFE_VALUE_DEFAULTS = new Set(['--concurrency', '--observer', '--vantage']);
+const SAFE_VALUE_DEFAULTS = new Set(['--concurrency', '--observer', '--palette', '--vantage']);
 const OPTION_GROUPS = Object.freeze({
   '--no-color': 'colour',
   '--summary': 'detail',
@@ -18,6 +20,7 @@ const OPTION_GROUPS = Object.freeze({
   '--fast': 'scan',
   '--concurrency': 'concurrency',
   '--observer': 'observer',
+  '--palette': 'colour',
   '--vantage': 'vantage',
 } as const);
 
@@ -63,6 +66,9 @@ function validateProfileArguments(value: unknown): string[] {
     if (argument === '--concurrency' && (!/^\d+$/u.test(next) || Number(next) < 1 || Number(next) > 8)) {
       throw new CliUsageError('CLI profile concurrency must be an integer from 1 to 8.');
     }
+    if (argument === '--palette' && !['auto', 'light', 'dark'].includes(next)) {
+      throw new CliUsageError('CLI profile palette must be auto, light, or dark.');
+    }
     groups.add(group);
     validated.push(argument, next);
   }
@@ -71,8 +77,12 @@ function validateProfileArguments(value: unknown): string[] {
 
 function parseProfileDocument(input: string): ProfileDocument {
   if (Buffer.byteLength(input, 'utf8') > MAX_CLI_CONFIG_BYTES) throw new CliUsageError('CLI configuration is limited to 64 KiB.');
+  const normalized = input.replace(/^\uFEFF/u, '');
   let parsed: unknown;
-  try { parsed = JSON.parse(input.replace(/^\uFEFF/u, '')); } catch { throw new CliUsageError('CLI configuration must be valid JSON.'); }
+  try {
+    scanBoundedJson(normalized);
+    parsed = JSON.parse(normalized);
+  } catch { throw new CliUsageError('CLI configuration must be valid bounded JSON without duplicate keys.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (root.schema !== CLI_CONFIG_SCHEMA || root.version !== CLI_CONFIG_VERSION || !root.profiles || typeof root.profiles !== 'object' || Array.isArray(root.profiles)) {
     throw new CliUsageError(`CLI configuration must use ${CLI_CONFIG_SCHEMA} version ${CLI_CONFIG_VERSION}.`);
@@ -116,6 +126,7 @@ export async function resolveCliProfileArguments(
     readConfig?: (path: string) => Promise<string>;
   }> = {},
 ): Promise<string[]> {
+  if (cliMetaActionForInvocation(argv)) return [...argv];
   // registry-scaffold owns --profile as the capability template to generate.
   // Do not reinterpret it as a global CLI-default profile.
   if (argv[0] === 'registry-scaffold') {

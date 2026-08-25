@@ -8,6 +8,7 @@ import { buildCliHttpDocument } from '../cli/formatters/json.mts';
 import { formatTerminalHttp } from '../cli/formatters/terminal.mts';
 import { MAX_HTTP_CLI_DETAIL_LENGTH, buildHttpProbeResult } from '../cli/http.mts';
 import { runCli } from '../cli/runner.mts';
+import { httpDeliveryMetadataFixture } from './homepage-metadata-fixtures.mts';
 
 function capture() {
   let value = '';
@@ -60,6 +61,7 @@ function httpObservation(overrides = {}) {
         xContentTypeOptions: 'nosniff',
         referrerPolicy: null,
       },
+      deliveryMetadata: httpDeliveryMetadataFixture(),
     },
     ...overrides,
   };
@@ -151,7 +153,7 @@ describe('HTTP CLI output', () => {
     const before = structuredClone(result);
     const document = buildCliHttpDocument('EXAMPLE.test', result, '2026-07-14T04:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.http');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.generatedAt, '2026-07-14T04:00:00.000Z');
     assert.equal(document.requestedDomain, 'EXAMPLE.test');
     assert.deepEqual(result, before);
@@ -167,6 +169,9 @@ describe('HTTP CLI output', () => {
     assert.match(output, /strictTransportSecurity, contentSecurityPolicy, xContentTypeOptions/);
     assert.match(output, /sha256:a{64} \(complete-body\)/);
     assert.match(output, /Attempt\s+https:\/\/example\.test\/: HTTP 200/);
+    assert.match(output, /Delivery\s+Complete · encoding Observed · cache Observed/);
+    assert.match(output, /Content coding\s+br, gzip/);
+    assert.match(output, /Cache timing\s+max-age 3600s · s-maxage 120s · Age 45s/);
     assert.match(output, /Limitation\s+URL query strings were omitted/);
   });
 

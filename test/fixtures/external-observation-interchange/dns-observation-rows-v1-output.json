@@ -1,0 +1,36 @@
+{
+  "schema": "whoisleuth.external-findings",
+  "schemaVersion": 4,
+  "source": {
+    "name": "Reserved DNS observations",
+    "reference": null,
+    "collectedAt": null
+  },
+  "findings": [
+    {
+      "domain": "dns.example.test",
+      "category": "dns",
+      "evidenceClass": "provider_report",
+      "summary": "External MX observation: 10 mail.example.test.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "partial",
+      "limitations": [
+        "Imported DNS data was not queried or independently verified by WHOISleuth."
+      ],
+      "reference": null,
+      "structuredObservation": {
+        "sourceSchema": "whoisleuth.dns-observation-rows",
+        "sourceVersion": 1,
+        "field": "MX",
+        "value": "10 mail.example.test.",
+        "issuer": null,
+        "notAfter": null,
+        "eventId": null,
+        "logId": null,
+        "certificateSha256": null,
+        "dnsNameCount": null,
+        "namesComplete": null
+      }
+    }
+  ]
+}

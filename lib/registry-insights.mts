@@ -109,6 +109,13 @@ function disclosure(
     };
   }
   const parsed = record(parsedValue);
+  if (parsed.contactsExcluded === true) {
+    return {
+      source,
+      state: 'unavailable',
+      detail: 'Contact fields are deliberately excluded from this portable projection, so publication disclosure remains unavailable.',
+    };
+  }
   const partial = source === 'whois'
     ? parsed.chainStatus === 'partial' || strings(parsed.fieldsTruncated, 20).length > 0
     : parsed.serverTruncated === true

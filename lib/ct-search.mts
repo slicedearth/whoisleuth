@@ -12,8 +12,9 @@ import { parse } from 'tldts';
 import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { isValidAsciiHostname } from './hostname.mts';
+import { normalizeCtTimestamp } from '../packages/evidence/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
   MAX_CT_RESPONSE_DOMAINS_PER_GROUP,
@@ -154,7 +155,7 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
       );
     }
 
-    const { text, truncated } = await readTextCapped(res, CRT_SH_MAX_BYTES);
+    const { text, truncated } = await readTextCapped(res, CRT_SH_MAX_BYTES, { fatalUtf8: true });
     if (truncated) {
       throw new Error(
         `crt.sh returned more than ${CRT_SH_MAX_BYTES / (1024 * 1024)}MB of results for "${keyword}" - try a narrower/more specific keyword.`
@@ -207,6 +208,16 @@ function resolveCertId(row: CtRow, index: number): string {
   }
 
   return `row:${index}`;
+}
+
+function suppliedCertificateIdentityMalformed(row: CtRow): boolean {
+  const hasId = Object.hasOwn(row, 'id') && row.id !== null && row.id !== undefined;
+  if (hasId) return canonicalCertId(row.id) === null;
+  const hasIssuer = Object.hasOwn(row, 'issuer_ca_id') && row.issuer_ca_id !== null && row.issuer_ca_id !== undefined;
+  const hasSerial = Object.hasOwn(row, 'serial_number') && row.serial_number !== null && row.serial_number !== undefined;
+  return hasIssuer || hasSerial
+    ? canonicalCertId(row.issuer_ca_id) === null || normalizeSerial(row.serial_number) === null
+    : false;
 }
 
 /**
@@ -278,15 +289,9 @@ function normalizeSerial(value: unknown): string | null {
  * @returns {string | null}
  */
 function validateEntryTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  if (value.length === 0 || value.length > MAX_TIMESTAMP_LENGTH) return null;
-  // Reject control characters and overlong strings before any parsing.
-  if (/[\x00-\x1f\x7f]/.test(value)) return null;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
+  return typeof value === 'string' && value.length <= MAX_TIMESTAMP_LENGTH
+    ? normalizeCtTimestamp(value)
+    : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +319,7 @@ function validateEntryTimestamp(value: unknown): string | null {
  *   truncated: boolean
  * }}
  */
-function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; certificateGroups: CtCertificateGroup[]; certificateGroupsTruncated: boolean; namesExamined: number; workTruncated: boolean; truncated: boolean } {
+function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatch[]; certificateGroups: CtCertificateGroup[]; certificateGroupsTruncated: boolean; namesExamined: number; workTruncated: boolean; rejectedRows: number; truncated: boolean } {
   if (!Array.isArray(rows)) {
     throw new Error('crt.sh returned an unexpected response format (expected a JSON array).');
   }
@@ -341,10 +346,28 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
   }>();
   let namesExamined = 0;
   let workTruncated = false;
+  let rejectedRows = 0;
 
   rowLoop: for (let i = 0; i < rows.length; i++) {
     const row = rows[i] as CtRow;
-    if (!row || typeof row !== 'object') continue;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      rejectedRows += 1;
+      continue;
+    }
+
+    const missingNameFields = ![row.name_value, row.common_name]
+      .some((value) => typeof value === 'string'
+        && /[^\p{White_Space}\p{Default_Ignorable_Code_Point}\u0000-\u001f\u007f-\u009f]/u.test(value));
+    const malformedNameField = ['name_value', 'common_name'].some((field) => (
+      Object.hasOwn(row, field) && typeof row[field] !== 'string'
+    ));
+    const malformedTimestamp = Object.hasOwn(row, 'entry_timestamp')
+      && row.entry_timestamp !== null
+      && row.entry_timestamp !== undefined
+      && validateEntryTimestamp(row.entry_timestamp) === null;
+    if (missingNameFields || malformedNameField || malformedTimestamp || suppliedCertificateIdentityMalformed(row)) {
+      rejectedRows += 1;
+    }
 
     const certId = resolveCertId(row, i);
 
@@ -507,7 +530,8 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     certificateGroupsTruncated,
     namesExamined,
     workTruncated,
-    truncated: workTruncated || legacyTruncated || matchTruncated || perMatchTruncated,
+    rejectedRows,
+    truncated: rejectedRows > 0 || workTruncated || legacyTruncated || matchTruncated || perMatchTruncated,
   };
 }
 
@@ -521,12 +545,12 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
   if (!trimmed) {
     return {
       domains: [], certCount: 0, truncated: false, matches: [], certificateGroups: [], certificateGroupsTruncated: false,
-      namesExamined: 0, workTruncated: false,
+      namesExamined: 0, workTruncated: false, rejectedRows: 0,
       observation: createObservation({
         status: 'success', observedAt: new Date().toISOString(), source: 'certificate_transparency',
         durationMs: Date.now() - startedAt, complete: true, truncated: false,
         limitations: ['Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.'],
-        diagnostics: { certificateRows: 0, namesExamined: 0, workTruncated: false, matches: 0, certificateGroups: 0 },
+        diagnostics: { certificateRows: 0, rejectedRows: 0, namesExamined: 0, workTruncated: false, matches: 0, certificateGroups: 0 },
       }),
     };
   }
@@ -545,10 +569,11 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
       truncated: summary.truncated || summary.certificateGroupsTruncated,
       limitations: [
         'Certificate Transparency observations indicate public certificate logging, not current site activity or maliciousness.',
+        ...(summary.rejectedRows ? [`${summary.rejectedRows} certificate row${summary.rejectedRows === 1 ? '' : 's'} contained rejected content; unusable rows or malformed fields were excluded, so retained results are partial.`] : []),
         ...(summary.workTruncated ? ['The response contained more hostname entries than the bounded local analysis could examine; retained results are partial.'] : []),
         ...(summary.certificateGroupsTruncated ? ['The optional certificate-group projection was capped independently of the registrable-domain result set.'] : []),
       ],
-      diagnostics: { certificateRows: data.length, namesExamined: summary.namesExamined, workTruncated: summary.workTruncated, matches: summary.matches.length, certificateGroups: summary.certificateGroups.length, certificateGroupsTruncated: summary.certificateGroupsTruncated },
+      diagnostics: { certificateRows: data.length, rejectedRows: summary.rejectedRows, namesExamined: summary.namesExamined, workTruncated: summary.workTruncated, matches: summary.matches.length, certificateGroups: summary.certificateGroups.length, certificateGroupsTruncated: summary.certificateGroupsTruncated },
     }),
   };
 }

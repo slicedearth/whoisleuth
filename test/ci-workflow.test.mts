@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
 const WORKFLOW = fs.readFileSync(WORKFLOW_PATH, 'utf8');
@@ -66,7 +68,9 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 3);
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
+    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
+    assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/gmu), 3);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
@@ -88,6 +92,13 @@ describe('continuous integration workflow', () => {
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
       'npm run release:check',
+      'npm run verification:timing:check',
+      'npm run verification:ownership:check',
+      'npm run verification:journeys:check',
+      'npm run capabilities:check',
+      'npm run privacy:check',
+      'npm run schema:inventory',
+      'npm run test:mutation',
       'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
       'npm run licenses:check',
       'npm run providers:policy-check',
@@ -102,8 +113,10 @@ describe('continuous integration workflow', () => {
       'npm run frontend:loading-report',
       'npm run security:retire',
       'npm run test:e2e:install',
-      'npm run test:e2e -- --shard=${{ matrix.shard }}',
+      'npm run test:e2e:shard -- --run=${{ matrix.shard }}',
       'npm run test:e2e:summary',
+      'npm run verification:artifacts -- --cleanup=unit',
+      'npm run verification:artifacts -- --cleanup=browser',
     ]) {
       assert.match(WORKFLOW, new RegExp(`^\\s+run: ${escapeRegExp(command)}$`, 'mu'));
     }
@@ -114,9 +127,16 @@ describe('continuous integration workflow', () => {
       'node tools/production-dependency-audit.mts',
     );
     assert.match(WORKFLOW, /^\s{10}- shard: 1\/2\s*\n\s{12}label: 1-of-2\s*\n\s{10}- shard: 2\/2\s*\n\s{12}label: 2-of-2$/mu);
+    assert.match(WORKFLOW, /^\s{10}WHOISLEUTH_PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}path: playwright-results\.json$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
+    assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
+    const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
+    const assigned = shardPlan.shards.flatMap((shard) => shard.files);
+    assert.equal(shardPlan.shards.length, 2);
+    assert.equal(new Set(assigned).size, assigned.length);
+    assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => item.lane === 'browser').map((item) => item.file).sort());
   });
 
   test('fails CI when a browser test passes only on retry and retains bounded diagnostics', () => {
@@ -126,6 +146,17 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /\['json', \{ outputFile: 'playwright-results\.json' \}\]/u);
     assert.match(PLAYWRIGHT_CONFIG, /trace: 'retain-on-failure'/u);
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
+  });
+
+  test('runs local performance authorities once after the parallel browser project', () => {
+    assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
+    assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
+    assert.equal(
+      PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
+      'playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
+    );
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
@@ -163,6 +194,7 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee test-duration-report\.txt/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report\.txt$/mu);
     assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
@@ -173,5 +205,6 @@ describe('continuous integration workflow', () => {
       'actions/upload-artifact',
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
+    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties'] ?? '', /verification-state-machines\.test\.mts/u);
   });
 });

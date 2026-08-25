@@ -5,6 +5,30 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as scoring from '../frontend/src/lib/analysis/scoring.ts';
 import { requiredValue } from './value-assertions.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
+
+const SCORING_DOMAIN = 'example.test';
+
+function threatProvider(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    schema: THREAT_INTELLIGENCE_SCHEMA,
+    version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+    provider: { id },
+    target: { type: 'domain', value: SCORING_DOMAIN, exposure: 'registrable_domain' },
+    state: 'success',
+    findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
+    observation: { observedAt: '2026-07-15T00:00:00.000Z' },
+    ...overrides,
+  };
+}
+
+function threatEnvelope(providers: unknown[]) {
+  return { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers };
+}
 
 function opportunityExplanation(value: unknown): scoring.OpportunityExplanation {
   return requiredValue(scoring.explainOpportunityScore(value));
@@ -310,30 +334,23 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('a lone external publisher and two same-publisher datasets add no Risk points', () => {
-    const finding = { category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' };
-    const provider = (id: string) => ({
-      provider: { id }, state: 'success', findings: [finding],
-      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
-    });
     assert.equal(scoring.computeRiskScore({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
-      threatIntelligence: { providers: [provider('urlscan_search')] },
+      threatIntelligence: threatEnvelope([threatProvider('urlscan_search')]),
     }), 6);
     assert.equal(scoring.computeRiskScore({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
-      threatIntelligence: { providers: [provider('urlhaus_host'), provider('threatfox_domain_ioc')] },
+      threatIntelligence: threatEnvelope([threatProvider('urlhaus_host'), threatProvider('threatfox_domain_ioc')]),
     }), 6);
   });
 
   test('two independent recent publisher families add one explainable bounded factor', () => {
-    const provider = (id: string) => ({
-      provider: { id }, state: 'success',
-      findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
-      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
-    });
     const explained = riskExplanation({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
-      threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
+      threatIntelligence: threatEnvelope([threatProvider('urlscan_search'), threatProvider('urlhaus_host')]),
     });
     assert.equal(explained.score, 24);
     assert.equal(explained.factors.find((factor) => factor.family === 'external-intelligence')?.delta, 18);
@@ -341,8 +358,10 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('unknown providers and malformed external records cannot affect Risk', () => {
     const explained = riskExplanation({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
       threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
         providers: [
           { provider: { id: 'invented' }, state: 'success', findings: [{ category: 'malware' }] },
           { provider: { id: 'urlscan_search' }, state: 'not_found', findings: [{ category: 'malware' }] },
@@ -363,6 +382,7 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('malformed truthy values cannot create impersonation or operational factors', () => {
     const explained = riskExplanation({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
       faviconMatch: 'true',
       faviconNearMatch: 1,
@@ -386,6 +406,7 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('the total is clamped to 100 and missing evidence cannot add points', () => {
     const explained = riskExplanation({
+      domain: SCORING_DOMAIN,
       availability: 'registered',
       mutationTypes: ['dictionary'],
       idnReferenceMatch: true,
@@ -395,10 +416,10 @@ describe('explainRiskScore / computeRiskScore', () => {
       phishingLanguageMatch: 'verify your account',
       hasPasswordField: true,
       hasExternalFormAction: true,
-      threatIntelligence: { providers: [
-        { provider: { id: 'urlscan_search' }, state: 'success', findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }], observation: { observedAt: '2026-07-15T00:00:00.000Z' } },
-        { provider: { id: 'urlhaus_host' }, state: 'success', findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }], observation: { observedAt: '2026-07-15T00:00:00.000Z' } },
-      ] },
+      threatIntelligence: threatEnvelope([
+        threatProvider('urlscan_search', { findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }] }),
+        threatProvider('urlhaus_host'),
+      ]),
       activityStatus: 'active',
       hasMx: true,
       hasSpf: true,
@@ -428,6 +449,20 @@ describe('explainRiskScore / computeRiskScore', () => {
       'operational-support',
     ]);
     assert.equal(explained.evidenceQuality.state, 'limited');
+  });
+
+  test('missing source coverage remains unknown and never contributes score', () => {
+    const withoutCoverage = riskExplanation({
+      availability: 'registered',
+      scanDepth: 'deep',
+    });
+    const unknownDepth = riskExplanation({
+      availability: 'registered',
+      scanDepth: 'unknown',
+    });
+    assert.equal(withoutCoverage.evidenceQuality.state, 'unknown');
+    assert.match(withoutCoverage.evidenceQuality.limitations.join(' '), /Source-level coverage was not supplied/u);
+    assert.equal(withoutCoverage.score, unknownDepth.score);
   });
 });
 

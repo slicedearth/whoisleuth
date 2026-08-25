@@ -15,7 +15,7 @@ type CollectionPreflightOptions = Readonly<{
 
 export function buildCollectionPreflight(options: CollectionPreflightOptions) {
   const sourceFamilies = options.deep
-    ? ['RDAP', 'WHOIS', 'DNS', 'HTTP and static page identity', 'TLS', 'network allocation and routing context', 'configured optional threat sources']
+    ? ['RDAP', 'WHOIS', 'DNS', 'HTTP and static page identity', 'TLS']
     : ['RDAP', 'conditional DNS authority evidence'];
   return Object.freeze({
     schema: CLI_COLLECTION_PREFLIGHT_SCHEMA,
@@ -34,7 +34,7 @@ export function buildCollectionPreflight(options: CollectionPreflightOptions) {
     disclosure: Object.freeze([
       'Targets are sent only to the source families required by the selected mode and permitted by registry/provider policy.',
       ...(options.customResolvers ? ['Selected public DNS resolvers receive the DNS questions needed for collection.'] : ['The runtime DNS resolver receives DNS questions when DNS collection is required.']),
-      ...(options.deep ? ['Target web infrastructure receives bounded homepage, favicon and TLS requests; configured optional providers can receive the documented target representation.'] : []),
+      ...(options.deep ? ['Target web infrastructure receives bounded homepage, favicon and TLS requests.'] : []),
     ]),
     persistence: Object.freeze({
       output: options.output,

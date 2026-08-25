@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   buildRegistryCohortReport,
   formatRegistryCohortReport,
-  LEGACY_REGISTRY_COHORT_VERSION,
   MAX_REGISTRY_COHORT_INPUT_POINTS,
   MAX_REGISTRY_COHORT_SAMPLES,
   MAX_REGISTRY_COHORT_TIMELINE_POINTS,
@@ -14,10 +13,34 @@ import {
 
 const NOW = '2026-08-05T00:00:00.000Z';
 
-function lookup(index: number, options: { domain?: string; selfLink?: boolean; generatedAt?: string } = {}) {
+test('requires explicit zones for current and public saved Lookup instants', () => {
+  const inputs = Array.from({ length: MIN_REGISTRY_COHORT_SAMPLE }, (_, index) => lookup(index, { version: 2 }));
+  assert.throws(
+    () => buildRegistryCohortReport(inputs.map((item) => JSON.stringify(item)).join('\n'), '2026-08-05T00:00:00'),
+    /invalid/u,
+  );
+  const zoneLessInputs = inputs.map((item) => ({ ...item, generatedAt: '2026-08-05T00:00:00' }));
+  assert.throws(
+    () => buildRegistryCohortReport(zoneLessInputs.map((item) => JSON.stringify(item)).join('\n'), NOW),
+    /explicit timezone/u,
+  );
+  const legacyZoneLessInputs = Array.from(
+    { length: MIN_REGISTRY_COHORT_SAMPLE },
+    (_, index) => lookup(index, { generatedAt: '2026-08-05T12:00:00' }),
+  );
+  assert.throws(
+    () => buildRegistryCohortReport(
+      legacyZoneLessInputs.map((item) => JSON.stringify(item)).join('\n'),
+      NOW,
+    ),
+    /explicit timezone/u,
+  );
+});
+
+function lookup(index: number, options: { domain?: string; selfLink?: boolean; generatedAt?: string; version?: 1 | 2 } = {}) {
   const domain = options.domain ?? `sample-${index}.dev`;
   return {
-    schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: options.generatedAt ?? NOW, mode: 'deep', type: 'domain', query: domain, registrableDomain: domain,
+    schema: 'whoisleuth.cli.lookup', version: options.version ?? 1, generatedAt: options.generatedAt ?? NOW, mode: 'deep', type: 'domain', query: domain, registrableDomain: domain,
     diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
     rdap: { parsed: {
       domain: domain.toUpperCase(), handle: `D-${index}`, objectClassName: 'domain', conformance: ['rdap_level_0'],
@@ -80,14 +103,14 @@ test('merges retained v2 reports without summing overlapping samples into consis
   assert.doesNotMatch(JSON.stringify(merged), /sample-\d/u);
 });
 
-test('migrates a retained v1 report as one target-free timeline point', () => {
+test('rejects a reader-only retained v1 report without interpreting a timeline', () => {
   const current = buildRegistryCohortReport(JSON.stringify(Array.from(
     { length: MIN_REGISTRY_COHORT_SAMPLE },
     (_, index) => lookup(index),
   )), NOW);
   const legacy = {
     schema: current.schema,
-    version: LEGACY_REGISTRY_COHORT_VERSION,
+    version: 1,
     generatedAt: current.generatedAt,
     sampleCount: current.sampleCount,
     minimumCohortSample: current.minimumCohortSample,
@@ -98,11 +121,10 @@ test('migrates a retained v1 report as one target-free timeline point', () => {
       'Repeated observations from one environment are not representative by themselves. Review fixture provenance and source health before changing a parser or access profile.',
     ],
   };
-  const migrated = buildRegistryCohortReport(JSON.stringify([legacy]), '2026-08-06T00:00:00.000Z');
-  assert.equal(migrated.reportsMerged, 1);
-  assert.equal(migrated.cohorts[0]?.timeline.length, 1);
-  assert.deepEqual(migrated.cohorts[0]?.timeline[0]?.sampleWindow, { from: NOW, to: NOW });
-  assert.equal(migrated.cohorts[0]?.latestState, 'consistent');
+  assert.throws(
+    () => buildRegistryCohortReport(JSON.stringify([legacy]), '2026-08-06T00:00:00.000Z'),
+    /version is unsupported/u,
+  );
 });
 
 test('retains the conservative state when an older review point leaves the visible timeline', () => {

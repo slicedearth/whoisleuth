@@ -110,6 +110,22 @@ function buildCaseRows(
     });
   }
   for (const reason of reasons) {
+    if (reason === 'observation-context') {
+      output.add({
+        comparisonId,
+        ownerId,
+        entityId,
+        mode: 'temporal',
+        state: 'not_compared',
+        field: 'Submitted hostname context',
+        family: 'collection',
+        earlier: caseSide(earlier, earlier.inputHostname, 'retained'),
+        later: caseSide(later, later.inputHostname, 'retained'),
+        completeness: 'partial',
+        limitations: ['The exact submitted hostname differs. It identifies observation context only and is not evidence that domain or infrastructure state changed.'],
+      });
+      continue;
+    }
     if (reason === 'scan-depth') {
       output.add({
         comparisonId,

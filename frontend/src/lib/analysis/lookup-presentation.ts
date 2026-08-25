@@ -1,3 +1,5 @@
+import { parseBoundedJson } from '../bounded-json.ts';
+
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
 export type LookupDepth = 'fast' | 'deep';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
@@ -114,7 +116,10 @@ export function readLookupPresentation(
       || new TextEncoder().encode(serialized).byteLength > MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES) {
       return { task: 'general' };
     }
-    const stored = JSON.parse(serialized) as {
+    const stored = parseBoundedJson(serialized, {
+      label: 'Lookup presentation state',
+      maximumBytes: MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES,
+    }) as {
       version?: unknown;
       task?: unknown;
     } | null;

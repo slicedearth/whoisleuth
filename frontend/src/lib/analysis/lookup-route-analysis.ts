@@ -14,7 +14,9 @@ import { compactHttpObservation } from './http-summary.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
+import { buildLookupDecisionFacts } from './lookup-decision-facts.ts';
 import { buildLookupEvidenceImpactPlan } from './lookup-evidence-impact.ts';
+import { buildLookupReviewActionModel } from './lookup-review-action-model.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
@@ -130,6 +132,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     httpEvidence,
     httpResponse,
     httpSecurityHeaders,
+    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
     tlsSubject,
@@ -142,6 +145,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     tlsValidity,
     tlsDiagnostics,
     pageIdentity,
+    pagePublicationMetadata,
     pageCanonical,
     pageMetaRefresh,
     pageOpenGraph,
@@ -267,6 +271,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     httpEvidence,
     httpResponse,
     httpSecurityHeaders,
+    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
     tlsSubject,
@@ -317,7 +322,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const profileSignals = profileContextReady
     ? matchProfileSignals(String(availability.domain || result?.registrableDomain || ''), availability, profile)
     : { trusted: null, faviconMatch: null, faviconNearMatch: null, reusesOfficialAssets: null };
-  const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence);
+  const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
+  const externalRiskContext = calibrateExternalIntelligenceRisk(threatIntelligence, caseDomain);
   const outreach = outreachAction(
     String(availability.domain || result?.registrableDomain || ''),
     (availability.registrant || null) as Contact | null,
@@ -334,11 +340,11 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_unavailable
     + comparison.counts.rdap_incomplete
     + comparison.counts.whois_incomplete;
-  const caseDomain = String(availability.domain || result?.registrableDomain || '').trim().toLowerCase();
   const observedPageBaseline = createPageBaseline(caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
     pageIdentity,
+    pagePublicationMetadata,
     pageCanonical,
     pageMetaRefresh,
     pageOpenGraph,
@@ -529,6 +535,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const scoredAvailability = {
     ...availability,
     ...profileSignals,
+    domain: caseDomain,
     threatIntelligence,
     mutationTypes: [],
     idnReferenceMatch,
@@ -597,9 +604,20 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     observedAt: lookupObservedAt,
     observedAtByEvidence: evidenceObservedAtById,
   });
+  const lookupDecisionFacts = buildLookupDecisionFacts({
+    decisionSupport: lookupDecisionSupport,
+    coverage: evidenceCoverage,
+    quality: evidenceQualityMatrix,
+  });
   const lookupEvidenceImpactPlan = buildLookupEvidenceImpactPlan({
     readiness: lookupClaimReadiness,
     quality: evidenceQualityMatrix,
+    facts: lookupDecisionFacts,
+  });
+  const lookupReviewActionModel = buildLookupReviewActionModel({
+    support: lookupDecisionSupport,
+    facts: lookupDecisionFacts,
+    evidenceImpact: lookupEvidenceImpactPlan,
   });
   const lookupSummary = buildLookupSummaryModel({
     availability,
@@ -620,8 +638,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     target: result?.registrableDomain || result?.query,
     targetType: result?.type,
     task,
-    summary: lookupSummary,
     decisionSupport: lookupDecisionSupport,
+    decisionFacts: lookupDecisionFacts,
     quality: evidenceQualityMatrix,
     graph: lookupAssetGraph,
   });
@@ -631,6 +649,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     status: show(availability.state),
   };
   const caseEvidence = {
+    inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,
@@ -710,8 +729,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     evidenceCoverage,
     lookupSourceRefreshPlan,
     lookupDecisionSupport,
+    lookupDecisionFacts,
     lookupClaimReadiness,
     lookupEvidenceImpactPlan,
+    lookupReviewActionModel,
     evidenceQualityMatrix,
     lookupSummary,
     lookupInvestigationBrief,

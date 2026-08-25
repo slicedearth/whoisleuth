@@ -1,0 +1,36 @@
+{
+  "schema": "whoisleuth.external-findings",
+  "schemaVersion": 4,
+  "source": {
+    "name": "Reserved domain observations",
+    "reference": null,
+    "collectedAt": null
+  },
+  "findings": [
+    {
+      "domain": "domain.example.test",
+      "category": "registration",
+      "evidenceClass": "provider_report",
+      "summary": "Reserved registry feed reported domain state: registered.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "partial",
+      "limitations": [
+        "Imported state is an external observation and was not independently verified by WHOISleuth."
+      ],
+      "reference": null,
+      "structuredObservation": {
+        "sourceSchema": "whoisleuth.domain-observation-rows",
+        "sourceVersion": 1,
+        "field": "status",
+        "value": "registered",
+        "issuer": null,
+        "notAfter": null,
+        "eventId": null,
+        "logId": null,
+        "certificateSha256": null,
+        "dnsNameCount": null,
+        "namesComplete": null
+      }
+    }
+  ]
+}

@@ -151,16 +151,14 @@ function sourceIdentity(options: ExampleReviewOptions): Readonly<{
     return Object.freeze({ kind: 'container', reference, revision, integrity });
   }
   if (DEMONSTRATION_REFERENCE_RE.test(reference)) {
-    if (!Number.isFinite(Date.parse(revision))) {
-      throw new TypeError('Official demonstration revisions must be observation timestamps.');
-    }
+    const observedRevision = timestamp(revision, 'Official demonstration revision');
     if (options.sourceIntegrity !== null) {
       throw new TypeError('Official demonstration provenance uses artefact digests and must not declare source integrity.');
     }
     return Object.freeze({
       kind: 'demonstration',
       reference,
-      revision: new Date(Date.parse(revision)).toISOString(),
+      revision: observedRevision,
       integrity: null,
     });
   }

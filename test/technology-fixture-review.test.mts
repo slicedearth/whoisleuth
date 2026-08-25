@@ -23,6 +23,19 @@ function input(overrides: Record<string, unknown> = {}) {
 }
 
 describe('reviewed technology-fixture contribution tool', () => {
+  test('requires explicit timestamp zones and canonicalizes explicit offsets', () => {
+    assert.throws(
+      () => buildReviewedTechnologyFixture(input({ observedAt: '2026-07-28T10:00:00' })),
+      /explicit timezone/u,
+    );
+    const fixture = buildReviewedTechnologyFixture(input({
+      reviewedAt: '2026-07-29T10:00:00+11:00',
+      observedAt: '2026-07-28T10:00:00+11:00',
+    }));
+    assert.equal(fixture.reviewedAt, '2026-07-28T23:00:00.000Z');
+    assert.equal(fixture.observedAt, '2026-07-27T23:00:00.000Z');
+  });
+
   test('retains only minimised factual evidence and explicit privacy metadata', () => {
     const fixture = buildReviewedTechnologyFixture(input());
     assert.equal(fixture.schema, 'whoisleuth.technology-reviewed-fixture');

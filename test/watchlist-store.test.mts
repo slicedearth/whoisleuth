@@ -6,6 +6,7 @@ import {
   buildWatchlistExport,
   MAX_WATCHLIST_INPUTS,
   MAX_WATCHLIST_NAME_LENGTH,
+  MAX_WATCHLISTS,
   MAX_WATCHLIST_STORE_BYTES,
   mergeWatchlistStores,
   normalizeWatchlistName,
@@ -15,6 +16,7 @@ import {
   WATCHLIST_SCHEMA_VERSION,
   watchlistStoreVersion,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
+import { mergeHostedWatchlist } from '../frontend/src/lib/watchlists.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -50,6 +52,31 @@ test('versioned stores retain only bounded known evidence fields', () => {
   assert.equal(parsed.version, WATCHLIST_SCHEMA_VERSION);
   assert.equal(parsed.schema, WATCHLIST_SCHEMA);
   assert.equal(parsed.watchlists.Priority.results[0].private, undefined);
+});
+
+test('current envelopes and internal maps require explicit timestamp zones', () => {
+  const zoneLess = entry({
+    updatedAt: '2026-01-15T12:00:00.000',
+    history: [{
+      checkedAt: '2026-01-15T12:00:00.000',
+      mode: 'fast',
+      resultCount: 1,
+      conclusiveCount: 1,
+      changeCount: 0,
+      omittedChanges: 0,
+      changes: [],
+    }],
+  });
+  const current = normalizeWatchlistStore({
+    schema: WATCHLIST_SCHEMA,
+    version: WATCHLIST_SCHEMA_VERSION,
+    watchlists: { Priority: zoneLess },
+  }).watchlists.Priority;
+  assert.equal(current?.updatedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(current?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
+  const internal = normalizeWatchlistStore({ Priority: zoneLess }).watchlists.Priority;
+  assert.equal(internal?.updatedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(internal?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
 });
 
 test('store recovery caps input collection work and retained watchlists', () => {
@@ -108,4 +135,62 @@ test('portable exports carry schema identity and normalized watchlists', () => {
   assert.equal(result.exportedAt, NOW);
   const priority = requiredValue(result.watchlists.Priority);
   assert.equal(requiredValue(priority.results[0]).domain, 'example.invalid');
+  assert.throws(
+    () => buildWatchlistExport({ Priority: entry() }, '2026-07-14T08:00:00'),
+    /explicit timezone/u,
+  );
+});
+
+test('hosted restore merges against the transaction-current collection', () => {
+  const staleSnapshot = { Alpha: entry() };
+  const transactionCurrent = normalizeWatchlistStore({
+    ...staleSnapshot,
+    Beta: entry({ results: [{ domain: 'beta.invalid' }] }),
+  }).watchlists;
+  const hostedEntry = requiredValue(normalizeWatchlistStore({
+    hosted: entry({ results: [{ domain: 'hosted.invalid' }] }),
+  }).watchlists.hosted);
+  const restored = mergeHostedWatchlist(
+    transactionCurrent,
+    'hosted',
+    hostedEntry,
+  );
+
+  assert.deepEqual(Object.keys(restored).sort(), ['Alpha', 'Beta', 'hosted']);
+  assert.equal(requiredValue(requiredValue(restored.Beta).results[0]).domain, 'beta.invalid');
+  assert.equal(requiredValue(requiredValue(restored.hosted).results[0]).domain, 'hosted.invalid');
+
+  const replacement = requiredValue(normalizeWatchlistStore({ Hosted: entry() }).watchlists.Hosted);
+  const replaced = mergeHostedWatchlist(restored, 'Hosted', replacement);
+  assert.equal(Object.hasOwn(replaced, 'hosted'), false);
+  assert.equal(Object.hasOwn(replaced, 'Hosted'), true);
+  assert.equal(Object.hasOwn(replaced, 'Beta'), true);
+});
+
+test('hosted restore preserves capacity errors while allowing additions and replacements at the boundary', () => {
+  const hostedEntry = requiredValue(normalizeWatchlistStore({ Hosted: entry() }).watchlists.Hosted);
+  const collection = (count: number) => normalizeWatchlistStore(Object.fromEntries(
+    Array.from({ length: count }, (_, index) => [`List ${index + 1}`, entry()]),
+  )).watchlists;
+
+  const withRoom = mergeHostedWatchlist(collection(MAX_WATCHLISTS - 1), 'Hosted', hostedEntry);
+  assert.equal(Object.keys(withRoom).length, MAX_WATCHLISTS);
+  assert.ok(withRoom.Hosted);
+
+  assert.throws(
+    () => mergeHostedWatchlist(collection(MAX_WATCHLISTS), 'Hosted', hostedEntry),
+    /Watchlist storage is full/iu,
+  );
+
+  const existingEntry = requiredValue(normalizeWatchlistStore({
+    hosted: entry({ results: [{ domain: 'old.invalid' }] }),
+  }).watchlists.hosted);
+  const fullWithExisting = {
+    ...collection(MAX_WATCHLISTS - 1),
+    hosted: existingEntry,
+  };
+  const replaced = mergeHostedWatchlist(fullWithExisting, 'Hosted', hostedEntry);
+  assert.equal(Object.keys(replaced).length, MAX_WATCHLISTS);
+  assert.equal(Object.hasOwn(replaced, 'hosted'), false);
+  assert.ok(replaced.Hosted);
 });

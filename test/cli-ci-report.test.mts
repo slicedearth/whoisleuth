@@ -36,7 +36,11 @@ describe('redacted CLI CI formats', () => {
     let junit = '';
     const lookupCode = await runCli(['lookup', 'example.test', '--junit'], {
       stdout: { write(value) { junit += value; } }, stderr: { write() {} },
-      runUnifiedLookup: async () => ({ diagnostics: { rdap: { status: 'success' } }, availability: { state: 'registered' } }),
+      runUnifiedLookup: async () => ({
+        rdap: { parsed: {} },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+        availability: { state: 'registered' },
+      }),
     });
     assert.equal(lookupCode, EXIT_CODES.SUCCESS);
     assert.match(junit, /^<\?xml/u);

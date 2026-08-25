@@ -63,6 +63,22 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('requires an explicit timezone in WARC-Date', async () => {
+    const block = responseBlock();
+    await assert.rejects(
+      () => parseWarcEvidenceArchive(archive(record('response', block, {
+        target: 'https://example.test/',
+        date: '2026-07-31T12:00:00.000',
+      })), 'capture.warc'),
+      /no importable HTML response evidence/u,
+    );
+    const offset = await parseWarcEvidenceArchive(archive(record('response', block, {
+      target: 'https://example.test/',
+      date: '2026-07-31T12:00:00.000+01:00',
+    })), 'capture.warc');
+    assert.equal(offset.document.findings[0]?.observedAt, '2026-07-31T11:00:00.000Z');
+  });
+
   test('verifies a bounded response and retains normalized page evidence only', async () => {
     const block = responseBlock({ title: 'Reviewed fixture' });
     const report = await parseWarcEvidenceArchive(
@@ -75,6 +91,19 @@ describe('portable WARC evidence import', () => {
     assert.equal(report.document.findings[0]?.completeness, 'complete');
     assert.match(report.document.findings[0]?.summary ?? '', /Reviewed fixture.*HTTP status 200.*SHA-256/isu);
     assert.doesNotMatch(JSON.stringify(report), /private|token=secret|Ignored content/u);
+  });
+
+  test('rejects terminal controls in titles and treats non-ASCII digest text as unsupported', async () => {
+    const report = await parseWarcEvidenceArchive(archive(record('response', responseBlock({
+      title: 'Account\u009b\u202e centre',
+    }), {
+      target: 'https://example.test/',
+      digest: 'sha256:\u212a',
+    })), 'capture.warc');
+    assert.equal(report.accepted, 1);
+    assert.equal(report.document.findings[0]?.completeness, 'partial');
+    assert.match(report.document.findings[0]?.limitations.join(' ') ?? '', /unsupported/u);
+    assert.doesNotMatch(JSON.stringify(report), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
   test('excludes request records and keeps digest-free responses partial', async () => {

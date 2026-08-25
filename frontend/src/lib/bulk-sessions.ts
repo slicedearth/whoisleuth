@@ -9,8 +9,8 @@ import {
   type BulkSession,
   type BulkSessionComparison,
 } from './analysis/bulk-session-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { BULK_SESSIONS_COLLECTION } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { serialiseWorkspacePortableJsonLine } from '../../../packages/contracts/workspace-portability.mts';
 
 export type {
   BulkSession,
@@ -22,7 +22,7 @@ export type {
 } from './analysis/bulk-session-model.ts';
 
 export async function loadBulkSessions(): Promise<BulkSession[]> {
-  return await (await browserLocalDataProvider()).read(BULK_SESSIONS_COLLECTION) as BulkSession[];
+  return readBrowserLocalData('bulk_sessions');
 }
 
 function boundedSessions(value: unknown): BulkSession[] {
@@ -34,7 +34,7 @@ export async function saveBulkSession(
 ): Promise<{ session: BulkSession; added: boolean; pruned: number }> {
   const session = normalizeBulkSession(input);
   if (!session) throw new Error('The Bulk session is incomplete or invalid.');
-  return (await browserLocalDataProvider()).update(BULK_SESSIONS_COLLECTION, (current) => {
+  return updateBrowserLocalData('bulk_sessions', (current) => {
     const result = upsertBulkSession(current, session);
     return {
       document: boundedSessions(result.sessions),
@@ -44,14 +44,14 @@ export async function saveBulkSession(
 }
 
 export async function deleteBulkSession(id: string): Promise<BulkSession[]> {
-  return (await browserLocalDataProvider()).update(BULK_SESSIONS_COLLECTION, (current) => {
+  return updateBrowserLocalData('bulk_sessions', (current) => {
     const sessions = boundedSessions(removeBulkSession(current, id));
     return { document: sessions, result: sessions };
   });
 }
 
 export async function importBulkSessions(value: unknown) {
-  return (await browserLocalDataProvider()).update(BULK_SESSIONS_COLLECTION, (current) => {
+  return updateBrowserLocalData('bulk_sessions', (current) => {
     const result = mergeBulkSessions(current, value);
     return {
       document: boundedSessions(result.sessions),
@@ -67,7 +67,7 @@ export async function importBulkSessions(value: unknown) {
 
 export async function exportBulkSessions(generatedAt = new Date().toISOString()) {
   const archive = buildBulkSessionExport(await loadBulkSessions(), generatedAt);
-  const blob = new Blob([`${JSON.stringify(archive, null, 2)}\n`], { type: 'application/json;charset=utf-8' });
+  const blob = new Blob([serialiseWorkspacePortableJsonLine(archive)], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

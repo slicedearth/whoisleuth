@@ -69,7 +69,7 @@ test('exports a bounded manual CACAO 2.0 profile and round-trips allowlisted sta
   assert.equal(imported.stages[1]?.workspace, 'monitor');
 });
 
-test('accepts the frozen profile v1 pairing only for original recipes', () => {
+test('rejects the reader-only profile v1 pairing', () => {
   const legacy = clonedPlaybook();
   const profileId = Object.keys(legacy.playbook_extensions as Record<string, unknown>)[0] as string;
   const definition = (legacy.extension_definitions as Record<string, Record<string, unknown>>)[profileId];
@@ -77,8 +77,6 @@ test('accepts the frozen profile v1 pairing only for original recipes', () => {
   assert.ok(definition && metadata);
   definition.version = '1.0.0';
   metadata.profile_version = 1;
-  assert.equal(parseCacaoInvestigationPlaybook(legacy).recipeId, 'new_domain_triage');
-  metadata.recipe_id = 'mail_abuse_response';
   assert.throws(() => parseCacaoInvestigationPlaybook(legacy), /profile metadata/u);
 });
 

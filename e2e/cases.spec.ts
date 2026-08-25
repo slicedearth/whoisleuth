@@ -1,31 +1,167 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import {
+  currentBrowserLocalDocument,
+  currentBulkSessionBrowserStore,
+  expectNoHorizontalOverflow,
+  failBrowserLocalCollectionReads,
+  failNextBrowserLocalCollectionRead,
+  failNextBrowserLocalCollectionReadAfterWrite,
+  holdBrowserLocalReads,
+  migrateLegacyBrowserData,
+  readBrowserLocalCollection,
+  requiredValue,
+  runBulkScan,
+} from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
 // entirely browser-local: creating and editing a case never reaches an
 // upstream service, and the shared fixture's network guard enforces that.
 
-import { caseRecord, createCase, openCasesView, snapshot } from './case-test-fixtures';
+import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
+
+type CurrentActionTargetState = 'ready_for_review' | 'acknowledged' | 'terminal';
+
+function currentActionFixture(input: {
+  id: string;
+  type: string;
+  recipient: string;
+  contactSource: string;
+  contactLimitations: string[];
+  dueAt: string | null;
+  targetState: CurrentActionTargetState;
+  reference: string | null;
+  followUpAt: string | null;
+  outcome: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  const { targetState, ...material } = input;
+  const states = targetState === 'ready_for_review'
+    ? ['drafting', 'ready_for_review'] as const
+    : targetState === 'acknowledged'
+      ? ['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'acknowledged'] as const
+      : ['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'terminal'] as const;
+  const start = Date.parse(input.createdAt);
+  const end = Date.parse(input.updatedAt);
+  const providerOutcome = targetState === 'acknowledged'
+    ? 'accepted_for_review'
+    : targetState === 'terminal' ? 'provider_reports_resolved' : null;
+  const history = states.map((nextState, index) => {
+    const final = index === states.length - 1;
+    const sourceClass = index === 0
+      ? 'browser_local'
+      : nextState === 'acknowledged' || nextState === 'terminal' ? 'provider' : 'analyst';
+    return {
+      id: `${input.id}-event-${index + 1}`,
+      previousState: index === 0 ? null : states[index - 1]!,
+      nextState,
+      occurredAt: new Date(start + Math.floor((end - start) * index / (states.length - 1))).toISOString(),
+      sourceClass,
+      provenance: index === 0
+        ? 'browser_local_fixture_action'
+        : sourceClass === 'provider' ? 'provider_fixture_update' : 'analyst_fixture_transition',
+      reference: final ? input.reference : null,
+      evidencePinId: null,
+      limitations: [],
+      providerOutcome: final ? providerOutcome : null,
+      outcomeDetail: final ? input.outcome : null,
+      originActionId: null,
+      applied: true,
+    };
+  });
+  return {
+    ...material,
+    state: targetState,
+    providerOutcome,
+    originActionId: null,
+    history,
+    historyOmitted: 0,
+    historyLimitations: [],
+    metadataUpdatedAt: input.updatedAt,
+  };
+}
+
+async function addFixtureCasePin(page: Page, label: string): Promise<void> {
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill(label);
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A bounded fixture fact for branch recovery testing.');
+  await pin.getByRole('button', { name: 'Pin evidence' }).click();
+  await expect(workspace).toContainText(label);
+}
+
+async function openPacketWizardStep(
+  packet: import('@playwright/test').Locator,
+  name: string,
+): Promise<void> {
+  const button = packet.getByRole('navigation', { name: 'Response-packet handoff steps' })
+    .getByRole('button', { name: new RegExp(name, 'iu') });
+  await button.click();
+  await expect(button).toHaveAttribute('aria-current', 'step');
+}
 
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await page.goto('/monitor');
   const tabs = page.getByRole('tablist', { name: 'Monitor views' });
+  await expect(page.locator('.view-group', { hasText: 'Respond' })).toBeVisible();
+  await expect(page.locator('.view-group', { hasText: 'Assure' })).toBeVisible();
   const inbox = tabs.getByRole('tab', { name: /^Inbox/ });
   await inbox.focus();
   await inbox.press('ArrowRight');
-  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
-  await expect(tabs.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL('/monitor?view=timeline');
-  await tabs.getByRole('tab', { name: /^Timeline/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await tabs.getByRole('tab', { name: /^Cases/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Custom rules/ })).toBeFocused();
+  await expect(page).toHaveURL('/monitor?view=rules');
+  const timeline = tabs.getByRole('tab', { name: /^Timeline/ });
+  await timeline.focus();
+  await timeline.press('ArrowRight');
+  await expect(tabs.getByRole('tab', { name: /^Certificates/ })).toBeFocused();
+  await tabs.getByRole('tab', { name: /^Certificates/ }).press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page).toHaveURL('/monitor?view=watchlists');
   await page.reload();
   await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('Monitor workflow destinations preserve active state and browser back and forward history', async ({ page }) => {
+  await page.goto('/monitor');
+  const navigation = page.getByRole('navigation', { name: 'Console' });
+  const respondLink = navigation.getByRole('link', { name: /^Monitor/u });
+  const assureLink = navigation.getByRole('link', { name: /^Watchlists & controls/u });
+  await expect(respondLink).toHaveAttribute('aria-current', 'page');
+  await expect(assureLink).not.toHaveAttribute('aria-current', 'page');
+
+  await page.getByRole('tab', { name: /^Cases/u }).click();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(respondLink).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('tab', { name: /^Watchlists/u }).click();
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await expect(assureLink).toHaveAttribute('aria-current', 'page');
+  await expect(respondLink).not.toHaveAttribute('aria-current', 'page');
+
+  await page.goBack();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(page.getByRole('tab', { name: /^Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await page.goBack();
+  await expect(page).toHaveURL('/monitor');
+  await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
+  await page.goForward();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await page.goForward();
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('Monitor keeps its URL, default view, and guided-route cleanup consistent', async ({ page }) => {
@@ -94,27 +230,27 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 12,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord({
           id: 'case-operations-prepared',
           domain: 'prepared.invalid',
-          actions: [{
+          actions: [currentActionFixture({
             id: 'action-prepared', type: 'registrar_report', recipient: 'Reviewed registrar route',
             contactSource: 'Published registrar policy', contactLimitations: ['Reachability was not tested.'],
-            dueAt: overdueAt, state: 'ready_for_review', reference: null,
+            dueAt: overdueAt, targetState: 'ready_for_review', reference: null,
             followUpAt: null, outcome: null, createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
-          }],
+          })],
         }),
         caseRecord({
           id: 'case-operations-resolved',
           domain: 'resolved.invalid',
-          actions: [{
+          actions: [currentActionFixture({
             id: 'action-resolved', type: 'security_contact_report', recipient: 'Private response route',
-            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, state: 'resolved',
+            contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, targetState: 'terminal',
             reference: 'PRIVATE-CASE-7', followUpAt: null, outcome: 'Private analyst outcome text.',
             createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
-          }],
+          })],
         }),
         caseRecord({ id: 'case-packet-only', domain: 'packet-only.invalid', actions: [] }),
       ],
@@ -123,8 +259,8 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
 
   const report = page.locator('.operations-report');
   await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
-  await expect(report.getByText('Prepared', { exact: true })).toBeVisible();
-  await expect(report).toContainText('State recorded as ready for review');
+  await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();
+  await expect(report).toContainText('Readiness is distinct from review or authorisation');
   await report.getByLabel('Audience').selectOption('executive');
   await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
   await expect(report).toContainText('Denominator: 3 inspected Cases');
@@ -139,15 +275,15 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   const exported = JSON.parse(body);
   expect(exported).toMatchObject({
     schema: 'whoisleuth.brand-protection-operations-report',
-    version: 1,
+    version: 2,
     sourceState: 'ready',
-    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, prepared: 1, submitted: 0, resolved: 1 },
+    counts: { casesInspected: 3, casesWithActions: 2, actions: 2, readyForReview: 1, submitted: 0, terminal: 1 },
   });
   expect(Object.keys(exported).sort()).toEqual([
-    'actionTypes', 'counts', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
+    'actionTypes', 'counts', 'durations', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window',
   ]);
   expect(Object.keys(exported.window).sort()).toEqual(['basis', 'endAt', 'id', 'startAt']);
-  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit']);
+  expect(Object.keys(exported.omissions).sort()).toEqual(['actionsBeyondLimit', 'actionsOutsideWindow', 'actionsWithInvalidTime', 'casesBeyondLimit', 'observedEffectReviewsOmitted', 'transitionEventsOmitted']);
   for (const sentinel of [
     'case-operations-prepared', 'case-operations-resolved', 'prepared.invalid', 'resolved.invalid',
     'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
@@ -155,6 +291,61 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   ]) expect(body).not.toContain(sentinel);
   await expect(page.getByRole('status')).toContainText('No response was submitted');
   await expectNoHorizontalOverflow(page);
+});
+
+test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 in light and dark themes', async ({ page }) => {
+  test.slow();
+  const now = new Date().toISOString();
+  const createdAt = new Date(Date.parse(now) - 5_000).toISOString();
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: CASE_SCHEMA_VERSION,
+      cases: [caseRecord({
+        id: 'response-layout-case',
+        domain: 'response-layout.invalid',
+        actions: [currentActionFixture({
+          id: 'response-layout-action', type: 'registrar_report', recipient: 'Reserved review route',
+          contactSource: 'Reserved fixture source', contactLimitations: ['Reachability was not tested.'],
+          dueAt: null, targetState: 'acknowledged', reference: 'CASE-EXAMPLE-LAYOUT', followUpAt: null,
+          outcome: 'Acknowledged for bounded review.', createdAt, updatedAt: now,
+        })],
+      })],
+    },
+  });
+
+  for (const surface of [
+    { width: 1440, height: 1000, theme: 'light' },
+    { width: 1440, height: 1000, theme: 'dark' },
+    { width: 390, height: 844, theme: 'light' },
+    { width: 390, height: 844, theme: 'dark' },
+  ] as const) {
+    await page.setViewportSize({ width: surface.width, height: surface.height });
+    await page.evaluate((theme) => localStorage.setItem('whoisleuth:theme:v1', theme), surface.theme);
+    await page.reload();
+    await page.getByRole('tab', { name: /Cases/ }).click();
+    const head = page.locator('.case-head', { hasText: 'response-layout.invalid' });
+    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
+    const workspace = await openCaseResponseWorkspace(page);
+    const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
+    await actions.getByText('Track append-only response actions', { exact: true }).click();
+    const actionTimelines = actions.getByRole('list', { name: 'Response action transition timelines' });
+    await expect(actionTimelines).toContainText('submitted → acknowledged');
+    await expect(actionTimelines).toContainText('Provider outcome: accepted for review · Acknowledged for bounded review.');
+    await actions.getByRole('button', { name: 'Review or append event' }).focus();
+    await expect(actions.getByRole('button', { name: 'Review or append event' })).toBeFocused();
+    const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+    await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+    await expect(remediation).toContainText('Provider outcome time');
+    await expect(remediation).toContainText('Independently observed change time');
+    const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+    await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+    await openPacketWizardStep(packet, 'Readiness limitations');
+    await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
+    await expect(packet).toContainText('Partial and stale states remain visible and require deliberate freshness and limitation confirmation');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', surface.theme);
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 
@@ -177,7 +368,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 8,
+      version: CASE_SCHEMA_VERSION,
       cases: [{
         ...caseRecord({
           id: 'case-gap-mobile',
@@ -212,19 +403,28 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
     },
   });
 
-  await page.getByLabel('Review inbox detail filters').getByLabel('Source').selectOption('whois');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Age').selectOption('stale');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Case').fill('gap-mobile');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Severity').selectOption('high');
-  await page.getByLabel('Review inbox detail filters').getByLabel('Next action').selectOption('refresh');
+  const detailFilters = page.getByRole('group', { name: 'Review inbox detail filters' });
+  await detailFilters.getByRole('combobox', { name: 'Source', exact: true }).selectOption('whois');
+  await detailFilters.getByRole('combobox', { name: 'Age', exact: true }).selectOption('stale');
+  await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');
+  await detailFilters.getByRole('combobox', { name: 'Severity', exact: true }).selectOption('high');
+  await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
   const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
   await expect(item).toBeVisible();
   await expect(item).toContainText('stale');
   await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep');
   await item.getByRole('combobox').selectOption('accepted_limitation');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Recorded the reviewed evidence-gap dismissal');
+  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The dismissed evidence-gap Case is missing.').value.manualTrail).toHaveLength(1);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -232,10 +432,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 3,
-      sessions: [{
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{
         id: 'inbox-partial-session',
         name: 'Incomplete review',
         mode: 'fast',
@@ -246,8 +443,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
         startedAt: '2026-08-07T00:00:00.000Z',
         updatedAt: '2026-08-07T00:00:00.000Z',
         completedAt: null,
-      }],
-    },
+      }]),
   });
 
   const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
@@ -283,7 +479,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [
         caseRecord({
           id: 'reviewed-calibration',
@@ -376,13 +572,13 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
   await expect(tags).toHaveValue('');
 });
 
-test('projects retained evidence into a filterable source-aware timeline', async ({ page }) => {
+test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
-  const observedAt = '2026-07-20T00:00:00.000Z';
-  const storedAt = '2026-07-21T00:00:00.000Z';
+  const observedAt = new Date(Date.now() - 9 * 86_400_000).toISOString();
+  const storedAt = new Date(Date.parse(observedAt) + 86_400_000).toISOString();
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({
         id: 'timeline-case',
         domain: 'timeline-case.invalid',
@@ -396,9 +592,7 @@ test('projects retained evidence into a filterable source-aware timeline', async
         }],
       })],
     },
-    'whois-rdap-watchlist-v1': {
-      schema: 'whoisleuth.watchlists',
-      version: 2,
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {
       watchlists: {
         'Timeline watchlist': {
           updatedAt: storedAt,
@@ -415,10 +609,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
           }],
         },
       },
-    },
-    'whoisleuth-relationship-observations-v1': {
-      schema: 'whoisleuth.relationship-observations',
-      version: 1,
+    }),
+    'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
       observations: [{
         id: 'relationship-timeline-fixture',
         type: 'ip_address',
@@ -437,10 +629,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
         truncated: false,
         limitations: ['Shared infrastructure is not proof of common control.'],
       }],
-    },
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 1,
+    }),
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [{
         id: 'timeline-website-snapshot',
         domain: 'timeline-case.invalid',
@@ -453,11 +643,8 @@ test('projects retained evidence into a filterable source-aware timeline', async
         identity: {},
         sources: [{ source: 'page', state: 'partial' }],
       }],
-    },
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 1,
-      sessions: [{
+    }),
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{
         id: 'timeline-bulk-session',
         name: 'Timeline Bulk review',
         mode: 'deep',
@@ -468,8 +655,7 @@ test('projects retained evidence into a filterable source-aware timeline', async
         startedAt: observedAt,
         updatedAt: storedAt,
         completedAt: observedAt,
-      }],
-    },
+      }]),
   });
 
   await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
@@ -532,14 +718,12 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
   await page.goto('/monitor?view=relationships');
   await migrateLegacyBrowserData(page, {
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 1,
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [
         snapshotRecord('first.invalid', 'profile-first'),
         snapshotRecord('second.invalid', 'profile-second'),
       ],
-    },
+    }),
   });
 
   const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
@@ -559,7 +743,7 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })],
     },
   });
@@ -683,13 +867,372 @@ test('rapid repeated note submission persists one note and is shown in the recor
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
 
-test('reviewed response records persist and produce a local non-submitted packet', {
+test('a Case response save preserves unrelated analyst drafts and keyboard focus', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'draft-retention.invalid');
+
+  const workspace = await openCaseResponseWorkspace(page);
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await packet.getByLabel('Abuse category').fill('Fixture abuse review');
+  await packet.getByLabel('Affected party').fill('Fixture affected party');
+  await packet.getByLabel('Exact abusive HTTP(S) URLs').fill('https://draft-retention.invalid/review');
+  await packet.getByLabel('Observed harm').fill('A bounded draft that must survive an unrelated Case mutation.');
+
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill('Draft-retention pin');
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A separately reviewed fixture fact.');
+  const submit = pin.getByRole('button', { name: 'Pin evidence' });
+  await submit.click();
+
+  await expect(workspace).toContainText('Draft-retention pin');
+  await expect(packet.getByLabel('Abuse category')).toHaveValue('Fixture abuse review');
+  await expect(packet.getByLabel('Affected party')).toHaveValue('Fixture affected party');
+  await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue('https://draft-retention.invalid/review');
+  await expect(packet.getByLabel('Observed harm')).toHaveValue('A bounded draft that must survive an unrelated Case mutation.');
+  await expect(submit).toBeFocused();
+});
+
+test('Quick and Advanced Case Response presentations keep one record and restore stage focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openCasesView(page);
+  await createCase(page, 'quick-response.invalid');
+
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
+  await expect(workspace.getByRole('status')).toContainText('Next incomplete requirement');
+  await expect(workspace.locator('.stages > li')).toHaveCount(5);
+  await expect(workspace.locator('details')).toHaveCount(0);
+  await workspace.getByRole('button', { name: 'Continue observation' }).click();
+  const observation = workspace.locator('details[id^="case-response-observation-"]').first();
+  await expect(observation).toHaveAttribute('open', '');
+  await expect(observation.getByText('Pin an observed fact', { exact: true })).toBeFocused();
+  await expect(workspace.getByRole('button', { name: 'Advanced', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
+  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Case mutation focus recovery respects deliberate movement and restores a displaced branch control', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'focus-recovery.invalid');
+
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill('Focus fixture pin');
+  await pin.getByLabel('Source').fill('Fixture evidence');
+  await pin.getByLabel('Fact').fill('A bounded fact used to exercise focus recovery.');
+  const pinSubmit = pin.getByRole('button', { name: 'Pin evidence' });
+
+  await holdBrowserLocalReads(page, 750);
+  await pinSubmit.click();
+  const caseSearch = page.locator('.case-filters input[placeholder="Domain or tag"]');
+  await caseSearch.focus();
+  await expect(workspace).toContainText('Focus fixture pin');
+  await expect(caseSearch).toBeFocused();
+
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Focus recovery branch');
+  await branch.getByRole('checkbox', { name: 'Focus fixture pin' }).check();
+  const branchSubmit = branch.getByRole('button', { name: 'Create branch' });
+  await holdBrowserLocalReads(page, 750);
+  await branchSubmit.click();
+  await expect(branch).toContainText('Focus recovery branch');
+  await expect(branch.getByLabel('Branch name')).toBeFocused();
+
+  const assertions = workspace.locator('details', { hasText: 'Structure facts, hypotheses, unknowns, and next steps' });
+  await assertions.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
+  await assertions.getByLabel('Statement').fill('Focus fallback assertion');
+  await assertions.getByRole('button', { name: 'Record assertion' }).click();
+  const assertionItem = assertions.locator('ol.records > li', { hasText: 'Focus fallback assertion' });
+  await expect(assertionItem).toBeVisible();
+  const resolveAssertion = assertionItem.getByRole('button', { name: 'Mark resolved' });
+  await holdBrowserLocalReads(page, 750);
+  await resolveAssertion.click();
+  await expect(assertionItem).toContainText('resolved');
+  await expect(resolveAssertion).toHaveCount(0);
+  await expect(assertionItem).toBeFocused();
+});
+
+test('a committed note remains singular when its immediate reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'note-neighbour.invalid');
+  await createCase(page, 'note-committed.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+
+  const note = page.locator('.case-body .note-edit');
+  await note.getByLabel('Add note').fill('One committed fixture note.');
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await note.getByRole('button', { name: 'Add note' }).click();
+
+  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  await expect(note.getByLabel('Add note')).toHaveValue('');
+  await expect(page.locator('.case-head', { hasText: 'note-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 2,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'note-committed.invalid'),
+    'The post-write note Case is missing.',
+  ).value;
+  expect(stored.notes).toHaveLength(1);
+  expect(stored.notes[0]?.body).toBe('One committed fixture note.');
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await expect(page.locator('.case-head', { hasText: 'note-committed.invalid' })).toBeVisible();
+  const reloaded = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    reloaded.records.find((item) => item.value.domain === 'note-committed.invalid'),
+    'The reloaded note Case is missing.',
+  ).value.notes).toHaveLength(1);
+});
+
+test('committed Case status, tags and deletion reconcile when immediate rereads fail', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'reconcile-neighbour.invalid');
+  await createCase(page, 'reconcile-target.invalid');
+  const openCaseRecord = page.locator('article.case.open');
+  const status = openCaseRecord.getByRole('combobox', { name: /^Status/u });
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await status.selectOption('reviewing');
+  await expect(page.getByRole('status').filter({
+    hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
+  await expect(status).toHaveValue('reviewing');
+  await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
+  let committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
+    'The reconciled status Case is missing.',
+  ).value.status).toBe('reviewing');
+
+  await page.getByLabel('Tags').fill('reviewed, retained');
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await page.getByRole('button', { name: 'Save tags' }).click();
+  await expect(page.getByRole('status').filter({
+    hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
+  await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
+  await expect(page.locator('.tag-row')).toContainText('reviewed');
+  committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(requiredValue(
+    committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
+    'The reconciled tag Case is missing.',
+  ).value.tags).toEqual(['reviewed', 'retained']);
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete case' }).click();
+  await expect(page.getByRole('status').filter({
+    hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+  })).toBeVisible();
+  await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
+  await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
+  committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(committed.records.map((item) => item.value.domain)).toEqual(['reconcile-neighbour.invalid']);
+});
+
+test('rapid repeated action submission persists one drafting action', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-single.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Track append-only response actions' });
+  await details.getByText('Track append-only response actions', { exact: true }).click();
+  await details.getByLabel('Recipient or internal owner').fill('Fixture review owner');
+  await details.getByLabel('Contact source').fill('Fixture source');
+  await details.locator('form').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+    (form as HTMLFormElement).requestSubmit();
+  });
+
+  await expect(details).toContainText('internal review · drafting');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(committed.records[0], 'The rapid action Case is missing.').value;
+  expect(stored.actions).toHaveLength(1);
+  expect(stored.actions[0]).toMatchObject({ recipient: 'Fixture review owner', contactSource: 'Fixture source' });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+});
+
+test('rapid repeated branch submission persists one investigation branch', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-single.invalid');
+  await addFixtureCasePin(page, 'Single branch pin');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await details.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await details.getByLabel('Branch name').fill('Single branch');
+  await details.getByRole('checkbox', { name: 'Single branch pin' }).check();
+  await details.locator('form').evaluate((form) => {
+    (form as HTMLFormElement).requestSubmit();
+    (form as HTMLFormElement).requestSubmit();
+  });
+
+  await expect(details.locator('.branches li')).toHaveCount(1);
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  const stored = requiredValue(committed.records[0], 'The rapid branch Case is missing.').value;
+  expect(stored.branches ?? []).toHaveLength(1);
+  expect(stored.branches?.[0]).toMatchObject({ name: 'Single branch', state: 'active' });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+});
+
+test('keeps a drafting action form when the Case update fails before commit', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-draft.invalid');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
+  await action.getByLabel('Action type').selectOption('registrar_report');
+  await action.getByLabel('Recipient or internal owner').fill('Fixture review desk');
+  await action.getByLabel('Contact source').fill('Fixture registry role');
+  await action.getByLabel('Due at').fill('2026-08-18T10:00');
+  await action.getByLabel('Follow-up at').fill('2026-08-19T11:30');
+  await action.getByLabel(/Contact limitations/).fill('Fixture contact route; no delivery attempted');
+
+  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(action.getByLabel('Action type')).toHaveValue('registrar_report');
+  await expect(action.getByLabel('Recipient or internal owner')).toHaveValue('Fixture review desk');
+  await expect(action.getByLabel('Contact source')).toHaveValue('Fixture registry role');
+  await expect(action.getByLabel('Due at')).toHaveValue('2026-08-18T10:00');
+  await expect(action.getByLabel('Follow-up at')).toHaveValue('2026-08-19T11:30');
+  await expect(action.getByLabel(/Contact limitations/)).toHaveValue('Fixture contact route; no delivery attempted');
+
+  const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(unchanged.manifest.revision).toBe(before.manifest.revision);
+  expect(requiredValue(unchanged.records[0], 'The action-draft Case is missing.').value.actions).toEqual([]);
+
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(workspace).toContainText('registrar report · drafting');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The committed action Case is missing.').value.actions).toHaveLength(1);
+});
+
+test('shows the complete committed Case snapshot when the immediate action reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'action-neighbour.invalid');
+  await createCase(page, 'action-committed.invalid');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
+  await action.getByLabel('Action type').selectOption('registry_report');
+  await action.getByLabel('Recipient or internal owner').fill('Fixture registry desk');
+  await action.getByLabel('Contact source').fill('Fixture registry evidence');
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(workspace).toContainText('registry report · drafting');
+  await expect(page.locator('.case-head', { hasText: 'action-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(committed.records).toHaveLength(2);
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'action-committed.invalid'),
+    'The post-write action Case is missing.',
+  ).value;
+  expect(stored.actions).toHaveLength(1);
+  expect(stored.actions[0]).toMatchObject({
+    type: 'registry_report',
+    recipient: 'Fixture registry desk',
+    contactSource: 'Fixture registry evidence',
+  });
+});
+
+test('keeps an investigation-branch draft when the Case update fails before commit', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-draft.invalid');
+  await addFixtureCasePin(page, 'Branch fixture pin');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Draft branch');
+  await branch.getByRole('checkbox', { name: 'Branch fixture pin' }).check();
+
+  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(branch.getByLabel('Branch name')).toHaveValue('Draft branch');
+  await expect(branch.getByRole('checkbox', { name: 'Branch fixture pin' })).toBeChecked();
+  const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(unchanged.manifest.revision).toBe(before.manifest.revision);
+  expect(requiredValue(unchanged.records[0], 'The branch-draft Case is missing.').value.branches).toEqual([]);
+
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+  await expect(workspace).toContainText('Draft branch');
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(requiredValue(committed.records[0], 'The committed branch Case is missing.').value.branches).toHaveLength(1);
+});
+
+test('shows the complete committed Case snapshot when an investigation-branch reread fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'branch-neighbour.invalid');
+  await createCase(page, 'branch-committed.invalid');
+  await addFixtureCasePin(page, 'Committed branch pin');
+
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
+  await branch.getByLabel('Branch name').fill('Committed branch');
+  await branch.getByRole('checkbox', { name: 'Committed branch pin' }).check();
+
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await branch.getByRole('button', { name: 'Create branch' }).click();
+
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(workspace).toContainText('Committed branch');
+  await expect(page.locator('.case-head', { hasText: 'branch-neighbour.invalid' })).toBeVisible();
+  const committed = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 2,
+    minimumRevision: before.manifest.revision + 1,
+  });
+  expect(committed.records).toHaveLength(2);
+  const stored = requiredValue(
+    committed.records.find((item) => item.value.domain === 'branch-committed.invalid'),
+    'The post-write branch Case is missing.',
+  ).value;
+  expect(stored.branches ?? []).toHaveLength(1);
+  expect(stored.branches?.[0]).toMatchObject({ name: 'Committed branch', state: 'active' });
+});
+
+test('append-only response review, exact authorisation, independent verification, and closure persist locally', {
   tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
 }, async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'response.invalid');
 
-  const workspace = page.locator('.response-workspace');
+  const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Observed credential form');
@@ -708,13 +1251,13 @@ test('reviewed response records persist and produce a local non-submitted packet
   await decision.getByRole('button', { name: 'Record decision' }).click();
   await expect(workspace).toContainText('Escalate for reviewed reporting');
 
-  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
-  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
+  await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registrar_report');
   await action.getByLabel('Recipient or internal owner').fill('Registrar abuse desk');
   await action.getByLabel('Contact source').fill('RDAP entity role');
-  await action.getByRole('button', { name: 'Record action' }).click();
-  await expect(workspace).toContainText('registrar report · planned');
+  await action.getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(workspace).toContainText('registrar report · drafting');
 
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
@@ -724,6 +1267,23 @@ test('reviewed response records persist and produce a local non-submitted packet
   await branch.getByRole('button', { name: 'Create branch' }).click();
   await expect(branch).toContainText('Registrar response path');
   await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
+
+  await action.getByRole('button', { name: 'Review or append event' }).click();
+  for (const state of ['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const) {
+    await action.getByLabel('Next state').selectOption(state);
+    await action.getByRole('button', { name: 'Append transition' }).click();
+    await expect(action).toContainText(`Current projection: ${state.replaceAll('_', ' ')}`);
+  }
+  await action.getByLabel('Event source').selectOption('provider');
+  await action.getByLabel('Next state').selectOption('acknowledged');
+  await action.getByLabel('Bounded reference').fill('CASE-EXAMPLE-101');
+  await action.getByLabel('Typed provider outcome').selectOption('accepted_for_review');
+  await action.getByLabel('Provider outcome detail').fill('The provider acknowledged the bounded report for review.');
+  await action.getByLabel('Event limitations').fill('Acknowledgement is not independent remediation evidence.');
+  await action.getByRole('button', { name: 'Append transition' }).click();
+  await expect(action).toContainText('registrar report · acknowledged');
+  await expect(action).toContainText('Latest typed provider outcome: accepted for review');
+  await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
@@ -737,12 +1297,59 @@ test('reviewed response records persist and produce a local non-submitted packet
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
+  await openPacketWizardStep(packet, 'Readiness limitations');
   await expect(packet).toContainText('review cautions');
+  await openPacketWizardStep(packet, 'Source and contact provenance');
   await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
   await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
+  await openPacketWizardStep(packet, 'Evidence selection');
+  await packet.getByRole('checkbox', { name: /Observed credential form/ }).check();
+  await openPacketWizardStep(packet, 'Readiness limitations');
+  const infrastructure = packet.locator('.readiness-editor section', { hasText: 'Infrastructure responsibility' });
+  await infrastructure.getByLabel('State').selectOption('complete');
+  await infrastructure.getByLabel('Detail').fill('The selected registration evidence supports this bounded registrar route.');
+  const authority = packet.locator('.readiness-editor section', { hasText: 'Analyst authority' });
+  await authority.getByLabel('State').selectOption('complete');
+  await authority.getByLabel('Detail').fill('The analyst confirmed authority for this exact recipient and scope.');
+  const contradictionReview = packet.locator('.readiness-editor section', { hasText: 'Contradiction review' });
+  await contradictionReview.getByLabel('State').selectOption('complete');
+  await contradictionReview.getByLabel('Detail').fill('The exact selected inputs were reviewed for contradictions.');
+  const sourceLimitations = packet.locator('.readiness-editor section', { hasText: 'Source limitations review' });
+  await sourceLimitations.getByLabel('State').selectOption('partial');
+  await sourceLimitations.getByLabel('Detail').fill('Known static-capture limitations remain explicit.');
+  await sourceLimitations.getByLabel('Limitations').fill('No delivery or provider monitoring check was performed.');
+  await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
+  await expect(packet).toContainText('Profile-specific readiness matrix');
+  await openPacketWizardStep(packet, 'Privacy and redaction');
+  await packet.getByLabel('Label', { exact: true }).last().fill('Reviewed static capture metadata');
+  await packet.getByLabel('Captured at').fill('2026-07-28T10:00');
+  await packet.getByLabel('SHA-256 digest').fill('a'.repeat(64));
+  await packet.getByLabel('Byte length').fill('1024');
+
+  await openPacketWizardStep(packet, 'Exact-input digest');
+  await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
+  await expect(packet).toContainText('draft · authorisation incomplete');
+  await openPacketWizardStep(packet, 'Recipient and scope');
+  await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name and logo.');
+  await openPacketWizardStep(packet, 'Exact-input digest');
+  await expect(packet).toContainText('Material inputs changed after review');
+  await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
+  for (const confirmation of [
+    'I reviewed the exact selected evidence.',
+    'I reviewed the recipient and scope.',
+    'I reviewed privacy and redactions.',
+    'I confirm analyst authority for this scope.',
+    'I reviewed evidence freshness and retained cautions.',
+  ]) await packet.getByRole('checkbox', { name: confirmation }).check();
+  await expect(packet.getByLabel('Confirmation time')).toBeEnabled();
+  await packet.getByRole('button', { name: 'Authorise exact bound inputs' }).click();
+  await expect(packet).toContainText('The current exact inputs are authorised for deliberate local export.');
+  await openPacketWizardStep(packet, 'Explicit authorisation');
+  await expect(packet.getByLabel('Confirmation time')).not.toHaveValue('');
+  await openPacketWizardStep(packet, 'Local export');
 
   const downloadPromise = page.waitForEvent('download');
-  await packet.getByRole('button', { name: 'Export JSON' }).click();
+  await packet.getByRole('button', { name: 'Export JSON draft or authorised packet' }).click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -751,7 +1358,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 6,
+    schemaVersion: 7,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',
@@ -765,8 +1372,18 @@ test('reviewed response records persist and produce a local non-submitted packet
     escalationHistory: [{
       type: 'registrar_report',
       recipient: 'Registrar abuse desk',
-      state: 'planned',
+      state: 'acknowledged',
+      providerOutcome: 'accepted_for_review',
+      reference: 'CASE-EXAMPLE-101',
     }],
+    readiness: { profileId: 'registrar' },
+    artefactReferences: [{ label: 'Reviewed static capture metadata', byteLength: 1024 }],
+    authorisation: { status: 'authorised', digestMatches: true, missingConfirmations: [] },
+    responseLifecycle: {
+      latestProviderOutcome: { outcome: 'accepted_for_review' },
+      latestObservedEffect: null,
+      latestObservedChangeAt: null,
+    },
     preflight: {
       status: 'review_cautions',
       canExport: true,
@@ -781,14 +1398,49 @@ test('reviewed response records persist and produce a local non-submitted packet
       scope: 'packet excluding integrity',
     },
   });
+  expect(exported.escalationHistory[0].transitions).toHaveLength(6);
+  expect(exported.readiness.rows).toHaveLength(10);
   expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(page.getByRole('status')).toContainText('Nothing was submitted');
+
+  const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+  await expect(remediation).toContainText('accepted for review');
+  await expect(remediation).toContainText('Withheld — missing');
+  await remediation.getByLabel('Observed effect').selectOption('changed');
+  await remediation.getByLabel('Separately attributed source').fill('Independent fixture review');
+  await remediation.getByLabel('Completeness').selectOption('complete');
+  await remediation.getByLabel('Evidence pin').selectOption({ index: 1 });
+  await remediation.getByLabel('Limitations').first().fill('The independent check covers only the retained exact URL.');
+  await remediation.getByRole('button', { name: 'Record independent review' }).click();
+  await expect(remediation.getByRole('list', { name: 'Independent observed-effect reviews' })).toContainText('changed');
+  await expect(remediation).not.toContainText('Withheld — no independent changed review');
+  await remediation.getByLabel('Closure reason').selectOption('infrastructure_changed');
+  await remediation.getByLabel('Independent review').selectOption({ index: 1 });
+  await remediation.getByLabel('Provider action').selectOption({ index: 1 });
+  await remediation.getByLabel('Closure summary').fill('Independent review recorded a bounded infrastructure change.');
+  await remediation.getByLabel('Closure limitations').fill('Closure is not a safety or provider-performance conclusion.');
+  await remediation.getByRole('button', { name: 'Close case with reason' }).click();
+  await expect(remediation.getByRole('list', { name: 'Deliberate case closures' })).toContainText('infrastructure changed');
+
+  const persisted = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const stored = requiredValue(persisted.records.find((item) => item.value.domain === 'response.invalid'), 'The response-lifecycle Case is missing.').value;
+  const storedAction = requiredValue(stored.actions[0], 'The response action is missing.');
+  expect(stored.status).toBe('resolved');
+  expect(storedAction).toMatchObject({ state: 'acknowledged', providerOutcome: 'accepted_for_review', reference: 'CASE-EXAMPLE-101' });
+  expect(storedAction.history).toHaveLength(6);
+  expect(stored.observedEffects.reviews).toHaveLength(1);
+  expect(stored.observedEffects.reviews[0]).toMatchObject({ state: 'changed', source: 'Independent fixture review' });
+  expect(stored.closures.records).toHaveLength(1);
+  expect(stored.closures.records[0]).toMatchObject({ reason: 'infrastructure_changed' });
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
-  await expect(page.locator('.response-workspace')).toContainText('Registrar response path');
+  const restoredWorkspace=await openCaseResponseWorkspace(page);
+  await expect(restoredWorkspace).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
+  await expect(restoredWorkspace).toContainText('Registrar response path');
+  await expect(restoredWorkspace).toContainText('registrar report · acknowledged');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
@@ -797,7 +1449,7 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
-    schemaVersion: 2,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: 'Local analyst export', reference: 'offline review' },
     findings: [{
       domain: 'external-review.invalid',
@@ -821,15 +1473,16 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toBeVisible();
   await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('External page finding');
-  await expect(page.locator('.response-workspace')).toContainText('Provider report: Local analyst export');
-  await expect(page.locator('.response-workspace')).toContainText('reported by provider · website');
-  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this provider finding');
+  const externalWorkspace=await openCaseResponseWorkspace(page);
+  await expect(externalWorkspace).toContainText('External page finding');
+  await expect(externalWorkspace).toContainText('Provider report: Local analyst export');
+  await expect(externalWorkspace).toContainText('reported by provider · website');
+  await expect(externalWorkspace).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 sighting · 0 decisions');
+  await expect(externalWorkspace).toContainText('1 pin · 1 sighting · 0 decisions');
 });
 
 test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
@@ -851,7 +1504,7 @@ test('external findings serialize file parsing before exposing import actions', 
   });
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
-    schemaVersion: 2,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: 'Serialized local review', reference: 'offline fixture' },
     findings: [{
       domain: 'serialized-review.invalid',
@@ -917,6 +1570,8 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(externalImport).not.toContainText('private body');
   await expect(externalImport).not.toContainText('token=secret');
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
+  await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
 });
 
@@ -1014,12 +1669,11 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
   await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
   await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
-  await expect(page.locator('#monitor-view-panel > p.message[role="status"]'))
-    .toContainText('Merged 1 external assertion');
+  await expect(page.getByRole('status').filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
 
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
-  const response = page.locator('.response-workspace');
+  const response = await openCaseResponseWorkspace(page);
   await expect(response).toContainText('0 pins · 0 sightings · 0 decisions · 1 assertion');
   await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
   await expect(response).toContainText('external import · open');
@@ -1043,7 +1697,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
   await createCase(page, 'local.invalid');
 
   const importPayload = {
-    version: 3,
+    version: CASE_SCHEMA_VERSION,
     exportedAt: '2026-07-01T00:00:00.000Z',
     cases: [
       {
@@ -1070,7 +1724,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
     buffer: Buffer.from(JSON.stringify(importPayload)),
   });
 
-  await expect(page.locator('#monitor-view-panel > p.message[role="status"]')).toHaveText(/Imported 1 new/);
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 new' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'local.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'imported.invalid' })).toBeVisible();
 });

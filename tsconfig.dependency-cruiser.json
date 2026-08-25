@@ -24,6 +24,8 @@
     "lib/**/*.mts",
     "netlify/functions/**/*.ts",
     "netlify/functions/**/*.mts",
+    "packages/**/*.ts",
+    "packages/**/*.mts",
     "tools/**/*.ts",
     "tools/**/*.mts",
     "server.mts"

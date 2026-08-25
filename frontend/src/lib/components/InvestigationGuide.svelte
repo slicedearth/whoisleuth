@@ -685,7 +685,7 @@
       <article class="guide-complete" tabindex="-1" bind:this={actionPanel}>
         <p class="step-number">Guide reviewed</p>
         <h2>All {stages.length} steps have an outcome</h2>
-        <p>Review the full plan or export the compact progress summary. The guide outcomes remain analyst workflow markers, not findings about the target.</p>
+        <p>Review the full plan or export the compact progress summary. Guide outcomes record progress; they are not target findings.</p>
         {#if handoffContextAvailable}
           <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
             <div>

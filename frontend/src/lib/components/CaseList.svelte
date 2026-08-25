@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
+  import DeferredCaseResponseWorkspace from '$lib/components/DeferredCaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -37,6 +38,7 @@
     addNote,
     removeCase,
     refreshCases,
+    installCommittedCaseSnapshot,
     setMessage,
     formatDate,
     currentPage,
@@ -44,6 +46,7 @@
     setPage,
     brandProfiles,
     brandProfilesUnavailable,
+    responseCaseId = '',
   }: {
     records: CaseRecord[];
     allRecords: CaseRecord[];
@@ -63,8 +66,9 @@
     removeBrandProfileAssociation: (record: CaseRecord, id: string) => boolean | Promise<boolean>;
     saveTags: (record: CaseRecord) => void;
     addNote: (record: CaseRecord) => void;
-    removeCase: (record: CaseRecord) => void;
+    removeCase: (record: CaseRecord) => void | Promise<void>;
     refreshCases: () => void | Promise<void>;
+    installCommittedCaseSnapshot: (cases: CaseRecord[]) => void;
     setMessage: (value: string) => void;
     formatDate: (value: string) => string;
     currentPage: number;
@@ -72,7 +76,42 @@
     setPage: (value: number) => void;
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
+    responseCaseId?: string;
   } = $props();
+
+  function focusMovedAway(origin: Element | null): boolean {
+    const active = document.activeElement;
+    return active instanceof HTMLElement
+      && active !== origin
+      && active !== document.body
+      && active.isConnected;
+  }
+
+  async function removeAndFocus(record: CaseRecord) {
+    const origin = document.activeElement;
+    const owner = origin instanceof HTMLElement
+      ? origin.closest<HTMLElement>('#monitor-view-panel')
+      : null;
+    const previousIndex = records.findIndex((item) => item.id === record.id);
+    const previousPage = currentPage;
+    await removeCase(record);
+    await tick();
+    if (!owner?.isConnected || focusMovedAway(origin)) return;
+    if (origin instanceof HTMLElement && origin.isConnected) {
+      origin.focus();
+      return;
+    }
+    const next = currentPage < previousPage
+      ? records.at(-1)
+      : records[Math.min(Math.max(0, previousIndex), records.length - 1)];
+    const candidates = [
+      next ? document.getElementById(`case-head-${next.id}`) : null,
+      document.getElementById('new-case'),
+      document.getElementById('tab-cases'),
+    ];
+    const target = candidates.find((candidate) => candidate instanceof HTMLElement);
+    if (target instanceof HTMLElement) target.focus();
+  }
 </script>
 
 <section class="case-list">
@@ -96,7 +135,7 @@
       {#if expandedId === record.id}
         <div class="case-body" id={`case-body-${record.id}`}>
           <div class="field-grid">
-            <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+            <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each CASE_STATUSES.filter((option) => option.value !== 'resolved' || record.status === 'resolved') as option}<option value={option.value}>{option.label}</option>{/each}</select><small>Use the independent-remediation section for a new deliberate closure.</small></label>
             <label class="field">Disposition<select value={record.disposition} onchange={(event) => setDisposition(record, event.currentTarget.value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             <label class="field">Review reason<select value={record.reviewReasonCode ?? ''} onchange={(event) => setReviewReason(record, event.currentTarget.value)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>
@@ -113,10 +152,10 @@
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
           <CaseRelationships {record} records={allRecords} onselect={expand} />
           {#key record.id}<EvidenceTimeline {record} />{/key}
-          {#key `${record.id}-${record.updatedAt}`}<CaseResponseWorkspace {record} onsaved={refreshCases} onmessage={setMessage} />{/key}
+          {#key record.id}<DeferredCaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} openInitially={responseCaseId===record.id} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
-          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="btn danger" onclick={() => removeCase(record)}>Delete case</button></div>
+          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
         </div>
       {/if}
     </article>

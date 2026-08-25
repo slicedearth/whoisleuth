@@ -2,7 +2,7 @@
 // Lookup adapter. This validates one bounded response; it does not enable a
 // route or treat partial events as persistable evidence.
 
-import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import {
   createLookupProgressNdjsonDecoder,
   createLookupProgressReducer,

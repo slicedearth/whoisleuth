@@ -21,9 +21,9 @@
 <section class="card certificate-replay" aria-labelledby="certificate-event-replay-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Retained evidence</p>
-      <h2 id="certificate-event-replay-title">Certificate expectation replay</h2>
-      <p>Compare deliberately imported certificate events with the reviewed issuer and certificate-name expectations for official domains.</p>
+      <p class="eyebrow">Saved evidence</p>
+      <h2 id="certificate-event-replay-title">Certificate event review</h2>
+      <p>Compare imported certificate events with the reviewed issuer and certificate-name expectations for official domains.</p>
     </div>
     <span class="count">{replay.retainedEventCount} retained event{replay.retainedEventCount === 1 ? '' : 's'}</span>
   </header>

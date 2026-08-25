@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export type MaintainerJsonRecord = Record<string, unknown>;
 
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const UNSAFE_TEXT_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const UNSAFE_TEXT_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
+
+export function hasMaintainerUnsafeCharacters(value: unknown): boolean {
+  return typeof value === 'string' && UNSAFE_TEXT_RE.test(value);
+}
 
 export function optionalJsonRecord(value: unknown): MaintainerJsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -30,21 +36,21 @@ export function exactObjectKeys(value: MaintainerJsonRecord, allowed: ReadonlySe
 }
 
 export function boundedControlFreeText(value: unknown, label: string, maximum: number): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || hasMaintainerUnsafeCharacters(value)) {
     throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
   }
   return value.trim();
 }
 
 export function canonicalControlFreeTimestamp(value: unknown, label: string): string {
-  const parsed = Date.parse(boundedControlFreeText(value, label, 64));
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(boundedControlFreeText(value, label, 64));
+  if (!normalized) throw new TypeError(`${label} must be a valid timestamp with an explicit timezone.`);
+  return normalized;
 }
 
 export function sanitizedMaintainerText(value: unknown, fallback: string, maximum: number): string {
   const text = typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
+    ? value.replace(UNSAFE_TEXT_GLOBAL_RE, ' ').replace(/\s+/gu, ' ').trim()
     : '';
   return (text || fallback).slice(0, maximum);
 }
@@ -78,7 +84,7 @@ export function boundedSafeRelativePath(value: unknown, label: string, maximum =
     || value.length > maximum
     || value.trim() !== value
     || value.includes('\\')
-    || CONTROL_RE.test(value)
+    || hasMaintainerUnsafeCharacters(value)
     || path.posix.isAbsolute(value)
     || path.posix.normalize(value) !== value
     || value.split('/').some((part) => !part || part === '.' || part === '..')) {

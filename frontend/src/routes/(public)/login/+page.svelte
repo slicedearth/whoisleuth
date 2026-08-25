@@ -52,7 +52,7 @@
 />
 
 <section class="login-view" aria-labelledby="login-title">
-  <div class="login-copy"><p class="eyebrow">Protected console</p><h1 id="login-title">Continue to WHOISleuth.</h1><p>The public overview and synthetic demo make no live investigation request. Sign in to use registry, DNS, certificate, website, monitoring, and brand-analysis tools.</p><a href="/demo">Explore the synthetic demo first <span aria-hidden="true">→</span></a></div>
+  <div class="login-copy"><p class="eyebrow">Protected console</p><h1 id="login-title">Continue to WHOISleuth</h1><p>Sign in to investigate domains and manage browser-local work.</p><a href="/demo">Explore the synthetic demo first <span aria-hidden="true">→</span></a></div>
   <form class="login card" onsubmit={login}>
     <div class="mark"><BrandMark /></div>
     <h2>Console sign-in</h2>

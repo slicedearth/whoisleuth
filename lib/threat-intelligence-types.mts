@@ -1,7 +1,11 @@
 // Provider-neutral types shared by threat-intelligence and curated connector
 // manifests, fixture harnesses, normalizers, and result builders.
 
-import type { Observation } from './observation.mts';
+import type { Observation } from '../packages/evidence/observation.mts';
+
+export const THREAT_INTELLIGENCE_SCHEMA = 'whoisleuth.threat-intelligence-result';
+export const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
+export const THREAT_INTELLIGENCE_ENVELOPE_VERSION = 1;
 
 export type ThreatIntelligenceTargetType = 'domain' | 'url';
 export type ThreatIntelligenceTargetExposure =
@@ -125,8 +129,8 @@ export type ThreatIntelligenceFinding = {
 };
 
 export type ThreatIntelligenceResult = {
-  schema: string;
-  version: number;
+  schema: typeof THREAT_INTELLIGENCE_SCHEMA;
+  version: typeof THREAT_INTELLIGENCE_CONTRACT_VERSION;
   provider: { id: string; label: string };
   target: ThreatIntelligenceTarget;
   state: ThreatIntelligenceResultState;
@@ -136,6 +140,11 @@ export type ThreatIntelligenceResult = {
   findings: ThreatIntelligenceFinding[];
   observation: Observation;
 };
+
+export type ThreatIntelligenceEnvelope = Readonly<{
+  version: typeof THREAT_INTELLIGENCE_ENVELOPE_VERSION;
+  providers: readonly ThreatIntelligenceResult[];
+}>;
 
 export type ThreatIntelligenceProviderMatrixEntry = {
   id: string;

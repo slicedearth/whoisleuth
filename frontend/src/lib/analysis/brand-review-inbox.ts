@@ -54,7 +54,7 @@ export function brandProfileDeletionImpact(
 }
 
 /**
- * Builds a disposable active-profile view over the existing source-aware
+ * Builds a disposable active-profile view over the existing source-attributed
  * analyst inbox. Associations come only from the Case owner field; no profile
  * text, domain, tag, certificate, or evidence value is matched or inferred.
  */

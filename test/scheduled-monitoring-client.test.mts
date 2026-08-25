@@ -129,6 +129,15 @@ test('rejects future schemas, malformed records, count mismatches, and forged ca
   assert.equal(normalizeScheduledMonitoringResponse(responseFixture({ action: 'forged' })), null);
   assert.equal(normalizeScheduledMonitoringResponse(responseFixture({ id: 'watchlist-00000001' })), null);
   assert.equal(normalizeScheduledMonitoringResponse(responseFixture({ action: 'updated' })), null);
+  for (const field of ['updatedAt', 'nextRunAt', 'lastRunAt'] as const) {
+    assert.equal(normalizeScheduledMonitoringResponse(responseFixture({
+      state: {
+        schema: 'whoisleuth.scheduled-monitor',
+        version: 1,
+        watchlists: [publicWatchlist({ [field]: '2026-07-16T12:00:00' })],
+      },
+    })), null);
+  }
 });
 
 test('deduplicates bounded watchlists by id and case-insensitive name', () => {

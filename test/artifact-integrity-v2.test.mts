@@ -9,8 +9,9 @@ import {
   sha256ArtifactDigest,
   sha256ArtifactDigestV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import * as artifactIntegrityContract from '../packages/evidence/artifact-integrity.mts';
+import * as artifactIntegrityFacade from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
-import { verifyEvidencePackageSignature } from '../cli/evidence-signing.mts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import { ACQUISITION_DECISION_PACKET_VERSION } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import {
@@ -42,11 +43,6 @@ import {
 type Fixture = Readonly<{
   fixtureVersion: number;
   golden: Readonly<{ value: unknown; canonical: string; digestSha256: string }>;
-  artifacts: Readonly<Record<string, Record<string, unknown>>>;
-  signedPackage: Record<string, unknown>;
-  publicKeyPem: string;
-  malformedSignedPackage: Record<string, unknown>;
-  malformedPublicKeyPem: string;
 }>;
 
 const fixtureRaw = readFileSync(new URL('./fixtures/artifact-integrity-v1.json', import.meta.url), 'utf8');
@@ -65,6 +61,16 @@ function currentManifest() {
 }
 
 describe('sorted JSON artifact compatibility', () => {
+  test('keeps the historical frontend facade bound to the pure evidence contract', () => {
+    assert.deepEqual(
+      Object.keys(artifactIntegrityFacade).sort(),
+      Object.keys(artifactIntegrityContract).sort(),
+    );
+    for (const name of Object.keys(artifactIntegrityContract) as Array<keyof typeof artifactIntegrityContract>) {
+      assert.equal(artifactIntegrityFacade[name], artifactIntegrityContract[name], name);
+    }
+  });
+
   test('keeps current envelope versions separate from unchanged nested and input contracts', () => {
     assert.equal(ACQUISITION_DECISION_PACKET_VERSION, 2);
     assert.deepEqual([BULK_DOMAIN_COMPARISON_EXPORT_VERSION, BULK_DOMAIN_COMPARISON_VERSION], [4, 3]);
@@ -73,9 +79,9 @@ describe('sorted JSON artifact compatibility', () => {
     assert.deepEqual([DOMAIN_CONTROL_MANIFEST_VERSION, DOMAIN_CONTROL_PASSPORT_VERSION], [2, 1]);
     assert.deepEqual([DOMAIN_CHANGE_PACKET_VERSION, DOMAIN_CHANGE_PACKET_INPUT_VERSION], [2, 1]);
     assert.equal(INVESTIGATION_MANIFEST_VERSION, 2);
-    assert.equal(CASE_RESPONSE_PACKET_VERSION, 6);
-    assert.equal(INVESTIGATION_CAPSULE_VERSION, 2);
-    assert.deepEqual([CLI_CASE_PACK_VERSION, CASE_SCHEMA_VERSION], [2, 12]);
+    assert.equal(CASE_RESPONSE_PACKET_VERSION, 7);
+    assert.equal(INVESTIGATION_CAPSULE_VERSION, 3);
+    assert.deepEqual([CLI_CASE_PACK_VERSION, CASE_SCHEMA_VERSION], [2, 13]);
     assert.equal(SIGNED_EVIDENCE_PACKAGE_VERSION, 2);
   });
 
@@ -86,15 +92,14 @@ describe('sorted JSON artifact compatibility', () => {
     assert.doesNotMatch(fixtureRaw, /PRIVATE KEY/u);
   });
 
-  test('keeps every supported legacy fixture key vocabulary locale-stable', () => {
+  test('keeps the frozen ASCII v1 vocabulary locale-stable', () => {
     const moduleUrl = new URL('../frontend/src/lib/analysis/artifact-integrity.ts', import.meta.url).href;
     const fixtureUrl = new URL('./fixtures/artifact-integrity-v1.json', import.meta.url).href;
     const source = `
       import { readFileSync } from 'node:fs';
       import { canonicalArtifactJson, canonicalArtifactJsonV2 } from ${JSON.stringify(moduleUrl)};
       const fixture = JSON.parse(readFileSync(new URL(${JSON.stringify(fixtureUrl)}), 'utf8'));
-      const values = [...Object.values(fixture.artifacts), fixture.signedPackage, fixture.malformedSignedPackage];
-      if (values.some((value) => canonicalArtifactJson(value) !== canonicalArtifactJsonV2(value))) process.exit(1);
+      if (canonicalArtifactJson(fixture.golden.value) !== canonicalArtifactJsonV2(fixture.golden.value)) process.exit(1);
     `;
     for (const locale of ['C', 'en_US.UTF-8', 'sv_SE.UTF-8', 'tr_TR.UTF-8']) {
       const child = spawnSync(process.execPath, ['--input-type=module', '-e', source], {
@@ -139,47 +144,6 @@ describe('sorted JSON artifact compatibility', () => {
     assert.equal(new Set(outputs).size, 1);
   });
 
-  test('verifies every frozen legacy artifact and preserves capsule v1 projection scope', async () => {
-    assert.deepEqual(Object.keys(fixture.artifacts), [
-      'acquisition',
-      'domainComparison',
-      'bulkMail',
-      'bulkReview',
-      'domainControl',
-      'domainChange',
-      'investigationManifest',
-      'caseResponse',
-      'capsule',
-      'casePack',
-    ]);
-    const expected = new Map<string, 'integrity_valid' | 'verified'>([['capsule', 'integrity_valid']]);
-    for (const [name, artifact] of Object.entries(fixture.artifacts)) {
-      const report = await verifyOfflineArtifact(JSON.stringify(artifact));
-      assert.equal(report.state, expected.get(name) ?? 'verified', name);
-    }
-    const legacyCapsuleFixture = fixture.artifacts.capsule;
-    assert.ok(legacyCapsuleFixture);
-    const legacyCapsule = structuredClone(legacyCapsuleFixture);
-    legacyCapsule.generatedAt = '2026-08-06T01:00:00.000Z';
-    const changedMetadata = await verifyOfflineArtifact(JSON.stringify(legacyCapsule));
-    assert.equal(changedMetadata.state, 'integrity_valid');
-    assert.equal(changedMetadata.checks.contentIntegrityScope, 'embedded_projections');
-  });
-
-  test('verifies frozen v1 signatures without upgrading malformed embedded-artifact assurance', async () => {
-    const complete = await verifyEvidencePackageSignature(JSON.stringify(fixture.signedPackage), fixture.publicKeyPem);
-    assert.equal(complete.signature.state, 'valid');
-    assert.equal(complete.artifact.assurance.state, 'verified');
-
-    const malformed = await verifyEvidencePackageSignature(
-      JSON.stringify(fixture.malformedSignedPackage),
-      fixture.malformedPublicKeyPem,
-    );
-    assert.equal(malformed.signature.state, 'valid');
-    assert.equal(malformed.artifact.assurance.state, 'not_verified');
-    assert.equal(malformed.artifact.assurance.structure, 'not_checked');
-  });
-
   test('rejects mixed, missing, and unknown version-canonicalization pairs', async () => {
     const current = structuredClone((await currentManifest()).document) as unknown as Record<string, unknown>;
     const currentIntegrity = current.integrity as Record<string, unknown>;
@@ -190,12 +154,6 @@ describe('sorted JSON artifact compatibility', () => {
       else integrity.canonicalization = canonicalization;
       await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /unsupported or malformed structure/iu);
     }
-
-    const legacyFixture = fixture.artifacts.bulkReview;
-    assert.ok(legacyFixture);
-    const legacy = structuredClone(legacyFixture);
-    (legacy.integrity as Record<string, unknown>).canonicalization = 'sorted-json-v2';
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify(legacy)), /unsupported or malformed structure/iu);
 
     current.version = 999;
     currentIntegrity.canonicalization = 'sorted-json-v2';

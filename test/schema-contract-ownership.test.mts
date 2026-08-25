@@ -1,0 +1,157 @@
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+
+import {
+  CLI_LOOKUP_SCHEMA as FORMATTER_LOOKUP_SCHEMA,
+  CLI_LOOKUP_SCHEMA_VERSION as FORMATTER_LOOKUP_VERSION,
+} from '../cli/formatters/json.mts';
+import {
+  MAX_SAVED_LOOKUP_INPUT_BYTES,
+  SAVED_LOOKUP_SCHEMA,
+  SAVED_LOOKUP_SCHEMA_VERSION,
+  SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
+} from '../cli/saved-lookup.mts';
+import {
+  CLI_LOOKUP_COMPATIBILITY,
+  CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS,
+  CLI_LOOKUP_OPTIONAL_ROOT_KEYS,
+  CLI_LOOKUP_QUERY_TYPES,
+  CLI_LOOKUP_REQUIRED_ROOT_KEYS,
+  CLI_LOOKUP_SCHEMA,
+  CLI_LOOKUP_SCHEMA_LIFECYCLE,
+  CLI_LOOKUP_VERSION,
+  MAX_CLI_LOOKUP_BYTES,
+  MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS,
+  MAX_CLI_LOOKUP_JSON_DEPTH,
+  MAX_CLI_LOOKUP_JSON_KEYS,
+  MAX_CLI_LOOKUP_JSON_VALUES,
+  MAX_CLI_LOOKUP_STRING_LENGTH,
+  SUPPORTED_CLI_LOOKUP_VERSIONS,
+} from '../packages/contracts/cli-lookup.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_COMPATIBILITY,
+  DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY,
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+  DOMAIN_CONTROL_MANIFEST_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION,
+  DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
+  MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
+} from '../packages/contracts/domain-control-manifest.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA as LIB_DOMAIN_CONTROL_INPUT_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_SCHEMA as LIB_DOMAIN_CONTROL_SCHEMA,
+  DOMAIN_CONTROL_MANIFEST_VERSION as LIB_DOMAIN_CONTROL_VERSION,
+} from '../lib/domain-control-manifest.mts';
+import {
+  DOMAIN_CONTROL_MANIFEST_VERSION as FRONTEND_DOMAIN_CONTROL_VERSION,
+  DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
+  DOMAIN_CONTROL_PASSPORT_SCHEMA,
+  MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
+} from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_COMPATIBILITY,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+} from '../packages/contracts/rdap-nameserver-search.mts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS as BACKEND_RDAP_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA as BACKEND_RDAP_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION as BACKEND_RDAP_VERSION,
+} from '../lib/rdap-nameserver-search.mts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS as FRONTEND_RDAP_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA as FRONTEND_RDAP_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION as FRONTEND_RDAP_VERSION,
+} from '../frontend/src/lib/analysis/rdap-nameserver-search.ts';
+import {
+  SSLBL_SNAPSHOT_COMPATIBILITY,
+  SSLBL_SNAPSHOT_SCHEMA,
+  SSLBL_SNAPSHOT_VERSION,
+} from '../packages/contracts/sslbl-snapshot.mts';
+import {
+  SSLBL_SNAPSHOT_SCHEMA as TOOL_SSLBL_SCHEMA,
+  SSLBL_SNAPSHOT_VERSION as TOOL_SSLBL_VERSION,
+} from '../tools/sslbl-snapshot.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION as RUNTIME_THREAT_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA as RUNTIME_THREAT_SCHEMA,
+} from '../lib/threat-intelligence-runtime.mts';
+
+describe('canonical schema contract ownership', () => {
+  test('keeps the saved Lookup writer and reader behind one immutable contract', () => {
+    assert.equal(CLI_LOOKUP_SCHEMA, 'whoisleuth.cli.lookup');
+    assert.equal(CLI_LOOKUP_SCHEMA, SAVED_LOOKUP_SCHEMA);
+    assert.equal(CLI_LOOKUP_SCHEMA, FORMATTER_LOOKUP_SCHEMA);
+    assert.equal(CLI_LOOKUP_VERSION, SAVED_LOOKUP_SCHEMA_VERSION);
+    assert.equal(CLI_LOOKUP_VERSION, FORMATTER_LOOKUP_VERSION);
+    assert.equal(MAX_CLI_LOOKUP_BYTES, MAX_SAVED_LOOKUP_INPUT_BYTES);
+    assert.deepEqual(SUPPORTED_CLI_LOOKUP_VERSIONS, [1, 2]);
+    assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
+    assert.ok(Object.isFrozen(CLI_LOOKUP_COMPATIBILITY));
+    assert.ok(Object.isFrozen(CLI_LOOKUP_SCHEMA_LIFECYCLE));
+    assert.deepEqual(CLI_LOOKUP_QUERY_TYPES, ['domain', 'ipv4', 'ipv6', 'asn']);
+    assert.deepEqual(CLI_LOOKUP_REQUIRED_ROOT_KEYS, [
+      'schema', 'version', 'generatedAt', 'mode', 'query', 'type', 'diagnostics',
+    ]);
+    assert.deepEqual(CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS, ['rdap', 'whois']);
+    assert.equal(CLI_LOOKUP_OPTIONAL_ROOT_KEYS.includes('collectionContext'), true);
+    assert.deepEqual(
+      [
+        MAX_CLI_LOOKUP_STRING_LENGTH,
+        MAX_CLI_LOOKUP_JSON_DEPTH,
+        MAX_CLI_LOOKUP_JSON_KEYS,
+        MAX_CLI_LOOKUP_JSON_VALUES,
+        MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS,
+      ],
+      [1_024, 48, 50_000, 100_000, 10_000],
+    );
+  });
+
+  test('keeps domain-control input and manifest identities behind stable facades', () => {
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, LIB_DOMAIN_CONTROL_INPUT_SCHEMA);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_SCHEMA, DOMAIN_CONTROL_PASSPORT_SCHEMA);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_SCHEMA, LIB_DOMAIN_CONTROL_SCHEMA);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_VERSION, FRONTEND_DOMAIN_CONTROL_VERSION);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_VERSION, LIB_DOMAIN_CONTROL_VERSION);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, 1);
+    assert.equal(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_DOMAIN_CONTROL_PASSPORT_BYTES);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.byteBudget, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.byteBudget, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.writeSemantics, 'non_destructive_merge');
+    assert.ok(Object.isFrozen(DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY));
+    assert.ok(Object.isFrozen(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY));
+    assert.ok(Object.isFrozen(DOMAIN_CONTROL_SCHEMA_LIFECYCLE));
+    assert.deepEqual(
+      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.map((contract) => contract.compatibilityId),
+      [
+        DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.id,
+        DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
+      ],
+    );
+  });
+
+  test('keeps RDAP nameserver-search identity and bounds equal across runtimes', () => {
+    assert.equal(RDAP_NAMESERVER_SEARCH_SCHEMA, BACKEND_RDAP_SCHEMA);
+    assert.equal(RDAP_NAMESERVER_SEARCH_SCHEMA, FRONTEND_RDAP_SCHEMA);
+    assert.equal(RDAP_NAMESERVER_SEARCH_VERSION, BACKEND_RDAP_VERSION);
+    assert.equal(RDAP_NAMESERVER_SEARCH_VERSION, FRONTEND_RDAP_VERSION);
+    assert.equal(MAX_RDAP_NAMESERVER_SEARCH_RESULTS, BACKEND_RDAP_RESULTS);
+    assert.equal(MAX_RDAP_NAMESERVER_SEARCH_RESULTS, FRONTEND_RDAP_RESULTS);
+    assert.ok(Object.isFrozen(RDAP_NAMESERVER_SEARCH_COMPATIBILITY));
+  });
+
+  test('keeps the generated certificate snapshot and threat-result markers canonical', () => {
+    assert.equal(SSLBL_SNAPSHOT_SCHEMA, TOOL_SSLBL_SCHEMA);
+    assert.equal(SSLBL_SNAPSHOT_VERSION, TOOL_SSLBL_VERSION);
+    assert.ok(Object.isFrozen(SSLBL_SNAPSHOT_COMPATIBILITY));
+    assert.equal(THREAT_INTELLIGENCE_SCHEMA, RUNTIME_THREAT_SCHEMA);
+    assert.equal(THREAT_INTELLIGENCE_CONTRACT_VERSION, RUNTIME_THREAT_VERSION);
+  });
+});

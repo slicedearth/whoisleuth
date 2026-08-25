@@ -18,6 +18,7 @@ import {
   ACQUIRE_SCRIPT,
   ACQUIRE_WITH_USAGE_SCRIPT,
   DAY_WINDOW_MS,
+  MAX_RESPONSE_BYTES,
   RELEASE_SCRIPT,
   STATUS_SCRIPT,
   THIRTY_DAY_WINDOW_MS,
@@ -208,6 +209,24 @@ describe('bounded REST command client', () => {
         return true;
       });
     }
+  });
+
+  test('fails closed on one over-bound provider response without retrying', async () => {
+    let attempts = 0;
+    let observedMaximum = 0;
+    const command = createRestCommandClient({ url: 'https://test-budget.upstash.io', token: 'token' }, {
+      safeFetch: async () => {
+        attempts += 1;
+        return new Response('{}', { status: 200 });
+      },
+      readTextCapped: async (_response, maximum) => {
+        observedMaximum = maximum;
+        return { text: '{}', truncated: true };
+      },
+    });
+    await assert.rejects(command(['PING']), /response exceeded its size limit/u);
+    assert.equal(attempts, 1);
+    assert.equal(observedMaximum, MAX_RESPONSE_BYTES);
   });
 });
 

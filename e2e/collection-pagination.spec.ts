@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBulkShortlist } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const NOW = '2026-07-17T00:00:00.000Z';
 
@@ -76,7 +77,7 @@ test('case pagination keeps deep-linked cases visible and expanded', async ({ pa
   const cases = Array.from({ length: 27 }, (_, index) => caseRecord(index + 1));
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases },
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
   });
   await page.goto('/monitor?case=case-26');
 
@@ -94,7 +95,7 @@ test('watchlist pagination preserves table actions on mobile', async ({ page }) 
   await page.setViewportSize({ width: 390, height: 700 });
   await page.goto('/monitor?view=watchlists');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-watchlist-v1': { schema: 'whoisleuth.watchlists', version: 2, watchlists },
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { watchlists }),
   });
 
   const pagination = page.getByRole('navigation', { name: 'Watchlist pages' });
@@ -110,8 +111,9 @@ test('shortlist pagination displays every retained entry without changing collec
   const entries = Array.from({ length: 101 }, (_, index) => shortlistRecord(index + 1));
   await page.goto('/bulk');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-shortlist-v1': { schema: 'whoisleuth.shortlist', version: 2, entries },
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', { entries }),
   });
+  await openBulkShortlist(page);
 
   const pagination = page.getByRole('navigation', { name: 'Shortlist pages' });
   await expect(page.getByRole('heading', { name: 'Shortlist · 101' })).toBeVisible();
@@ -125,7 +127,7 @@ test('brand profile pagination opens on the active profile page', async ({ page 
   const profiles = Array.from({ length: 13 }, (_, index) => profile(index + 1));
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': profiles,
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore(profiles),
     'whois-rdap-active-brand-profile-v1': 'profile-13',
   });
 
@@ -140,8 +142,8 @@ test('campaign and member pagination preserve expansion and case controls', asyn
   const campaigns = Array.from({ length: 11 }, (_, index) => campaign(index + 1, index === 10 ? members : []));
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [] },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns },
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [] },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns }),
   });
   await page.getByRole('tab', { name: /Campaigns/ }).click();
 

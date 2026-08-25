@@ -372,11 +372,9 @@ describe('production dependency audit policy', () => {
     }
   });
 
-  test('documents the remediated chain, retired exception, and fresh online audit boundary', () => {
+  test('documents the current exception state and fresh online audit boundary', () => {
     const guide = fs.readFileSync(path.join(REPOSITORY_ROOT, 'docs/dependency-maintenance.md'), 'utf8');
-    assert.match(guide, /currently relies on no production-audit exception/u);
-    assert.match(guide, /`@netlify\/blobs` 10\.7\.13/u);
-    assert.match(guide, new RegExp(`${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.name}@${PRODUCTION_DEPENDENCY_AUDIT_REVIEWED_FIX.version}`, 'u'));
+    assert.match(guide, /currently has no production-audit exception/u);
     assert.match(guide, /isolated temporary npm cache/u);
     assert.match(guide, /offline=false/u);
     assert.doesNotMatch(guide, /currently reports no fix/u);

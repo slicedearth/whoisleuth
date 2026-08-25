@@ -152,6 +152,47 @@ test('deep availability names a registry permission requirement', async () => {
   assert.match(stringValue(result.detail), /registry permission or source authorisation is required/u);
 });
 
+test('later WHOIS hops cannot decide availability after an inconclusive registry response', async () => {
+  const root = {
+    server: 'whois.iana.org',
+    response: 'domain: TEST\nrefer: whois.registry.example\n',
+  };
+  const registry = { server: 'whois.registry.example', response: '% Registry terms only.\n' };
+  const dnsDelegation = { delegated: false, nameservers: [], nameserversTruncated: false, error: null };
+  for (const registrarResponse of [
+    'No match for EXAMPLE.TEST.\n',
+    'Domain Name: EXAMPLE.TEST\nRegistrar: Example Registrar\nName Server: NS1.EXAMPLE.TEST\n',
+  ]) {
+    const result = await availability('example.test', {
+      rdapRecord: null,
+      whoisChain: [root, registry, { server: 'whois.registrar.example', response: registrarResponse }],
+      dnsDelegation,
+    });
+    assert.equal(result.state, 'unknown');
+    assert.equal(result.confidence, 'low');
+    assert.notEqual(result.state, 'available');
+  }
+
+  const delegated = await availability('example.test', {
+    rdapRecord: null,
+    whoisChain: [root, registry, {
+      server: 'whois.registrar.example',
+      response: 'Domain Name: EXAMPLE.TEST\nRegistrar: Example Registrar\nName Server: NS1.REGISTRAR.EXAMPLE\n',
+    }],
+    dnsDelegation: {
+      delegated: true,
+      nameservers: ['ns1.dns.example'],
+      nameserversTruncated: false,
+      error: null,
+    },
+  });
+  assert.equal(delegated.state, 'registered');
+  assert.equal(delegated.source, 'dns');
+  assert.deepEqual(delegated.nameservers, ['ns1.dns.example']);
+  assert.equal(delegated.registrar, null);
+  assert.deepEqual(delegated.statuses, []);
+});
+
 test('RDAP registration remains authoritative and does not invoke the DNS fallback', async () => {
   let dnsCalls = 0;
   const result = await availability('example.test', {
@@ -168,4 +209,17 @@ test('RDAP registration remains authoritative and does not invoke the DNS fallba
   assert.equal(result.confidence, 'high');
   assert.equal(result.source, 'rdap');
   assert.equal(dnsCalls, 0);
+});
+
+test('RDAP lifecycle spelling is normalized before availability classification', async () => {
+  for (const status of ['redemption period', 'Redemption-Period', 'redemptionPeriod', 'pending delete']) {
+    const result = await availability('example.test', {
+      fast: true,
+      rdapRecord: {
+        upstreamStatus: 200,
+        parsed: { statuses: [status], nameservers: ['ns1.example.test'] },
+      },
+    });
+    assert.equal(result.state, 'expiring', status);
+  }
 });

@@ -36,6 +36,20 @@ describe('DNS delegation health', () => {
     ]);
   });
 
+  test('does not report an empty authority inventory as a complete collection', async () => {
+    const result = await collectDnsDelegationHealth('example.test', {
+      status: 'not_found', records: [], error: null, truncated: false, discarded: 0,
+    }, {
+      registryEvidence: {},
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.deepEqual(result.authorities, []);
+    assert.match(result.limitations.join(' '), /no eligible authority/iu);
+  });
+
   test('keeps registry, parent, and direct authority evidence separately attributed', async () => {
     const calls: Array<{ nameserver: string; address: string }> = [];
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
@@ -272,6 +286,28 @@ describe('DNS delegation health', () => {
     assert.deepEqual(result.authorities[0]?.nameservers, ['ns1.example.test']);
     assert.equal(result.diagnostics.partialAuthorityCount, 1);
     assert.equal(result.diagnostics.unreachableAuthorityCount, 0);
+  });
+
+  test('rejects non-ASCII case-folding aliases before authority queries', async () => {
+    const calls: string[] = [];
+    const nameservers = ['ns1.example.test', 'n\u212a.example.test', 'n\u017f.example.test'];
+    const result = await collectDnsDelegationHealth('example.test', {
+      ...PARENT,
+      records: nameservers,
+    }, {
+      registryEvidence: {
+        nameservers,
+        nameserverDetails: nameservers.map((name) => ({ name, addresses: ['8.8.8.8'] })),
+      },
+      queryAuthority: async ({ nameserver }) => {
+        calls.push(nameserver);
+        return { nameservers: ['ns1.example.test'], soaPrimary: 'ns1.example.test', errorCode: null, error: null };
+      },
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.deepEqual(calls, ['ns1.example.test']);
+    assert.deepEqual(result.authorities.map((item) => item.nameserver), ['ns1.example.test']);
   });
 
   test('keeps resolver failure inconclusive and exposes no source payload', async () => {

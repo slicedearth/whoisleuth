@@ -27,6 +27,23 @@ function fixture() {
 }
 
 describe('offline DNSSEC evidence validation', () => {
+  test('interprets accepted version-1 zone-less ISO evidence as UTC only', () => {
+    const result = validateDnssecEvidence({
+      ownerName: 'example.test',
+      observedAt: '2026-08-03T12:00:00.000',
+      rrSigRecords: [{ inception: '2026-08-03T11:00:00.000', expiration: '2026-08-03T13:00:00.000' }],
+    });
+    assert.equal(result.rrsigRecordCount, 1);
+    assert.equal(result.signatureTimeState, 'within_window');
+    const invalid = validateDnssecEvidence({
+      ownerName: 'example.test',
+      observedAt: 'August 3, 2026 12:00',
+      rrSigRecords: [{ inception: 'August 3, 2026 11:00', expiration: 'August 3, 2026 13:00' }],
+    });
+    assert.equal(invalid.rrsigRecordCount, 0);
+    assert.equal(invalid.signatureTimeState, 'unavailable');
+  });
+
   test('verifies a supplied DS and DNSKEY digest relationship', () => {
     const value = fixture();
     const result = validateDnssecEvidence({

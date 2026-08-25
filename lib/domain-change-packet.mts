@@ -13,7 +13,7 @@ import {
   DOMAIN_CHANGE_INPUT_SCHEMA,
   reviewDomainChange,
 } from './domain-change-review.mts';
-import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.mts';
 
 export const DOMAIN_CHANGE_PACKET_INPUT_SCHEMA = 'whoisleuth.domain-change-packet.input';
 export const DOMAIN_CHANGE_PACKET_SCHEMA = 'whoisleuth.domain-change-packet';

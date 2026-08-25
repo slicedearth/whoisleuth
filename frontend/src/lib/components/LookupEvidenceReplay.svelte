@@ -7,6 +7,7 @@
     type LookupEvidenceReplay,
   } from '$lib/analysis/lookup-evidence-replay.ts';
   import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
+  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
   import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
@@ -90,7 +91,7 @@
   <summary>
     <span>
       <strong>Replay exported evidence</strong>
-      <small>Review a supported WHOISleuth Lookup evidence schema 25 or 26 JSON file without contacting a source.</small>
+      <small>Review a supported WHOISleuth Lookup evidence JSON file without contacting a source.</small>
     </span>
   </summary>
   <div class="body">
@@ -138,6 +139,15 @@
               <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source} · {fact.sourceState}{fact.sourceComplete === false ? ' · incomplete' : ''}</small></dd></div>
             {/each}
           </dl>
+        {/if}
+
+        {#if replay.pagePublicationMetadata || replay.httpDeliveryMetadata}
+          <section class="retained-homepage-metadata" aria-labelledby="replay-homepage-metadata-title">
+            <h3 id="replay-homepage-metadata-title">Retained homepage metadata</h3>
+            <p class="note">These bounded values came from the exported observation. No source was contacted during replay.</p>
+            {#if replay.pagePublicationMetadata}<LookupMetadataDisclosure label="Publication metadata" metadata={replay.pagePublicationMetadata} />{/if}
+            {#if replay.httpDeliveryMetadata}<LookupMetadataDisclosure label="Delivery and cache metadata" metadata={replay.httpDeliveryMetadata} />{/if}
+          </section>
         {/if}
 
         {#if replay.contradictions.length}
@@ -225,6 +235,7 @@
   aside{padding:10px;border:1px solid color-mix(in srgb,var(--danger) 52%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--danger-rgb) / .08)}
   aside ul,.limits ul{margin:7px 0 0;padding-left:18px;font-size:var(--text-xs);line-height:1.5}
   .brief{display:grid;gap:8px}
+  .retained-homepage-metadata{display:grid;gap:8px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .brief>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   .brief article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .brief strong{font-size:var(--text-xs)}

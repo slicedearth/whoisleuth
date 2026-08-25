@@ -514,5 +514,6 @@ describe('isolated cryptographic DNSSEC validation', () => {
     assert.equal((await validateDnssecChain({ target: 'outside.test', resolver: RESOLVER, trustAnchor: { ...fixture.anchor, zone: 'example.test' }, observedAt: OBSERVED_AT, ownedOrAuthorized: true })).state, 'invalid');
     assert.equal((await validateDnssecChain({ target: 'example.test', resolver: RESOLVER, trustAnchor: fixture.anchor, observedAt: OBSERVED_AT, ownedOrAuthorized: false })).failure?.stage, 'authorization');
     assert.equal((await validateDnssecChain({ target: 'example.test', resolver: RESOLVER, trustAnchor: fixture.anchor, observedAt: 'not-a-time', ownedOrAuthorized: true })).failure?.stage, 'observed_at');
+    assert.equal((await validateDnssecChain({ target: 'example.test', resolver: RESOLVER, trustAnchor: fixture.anchor, observedAt: '2026-08-15T12:00:00', ownedOrAuthorized: true })).failure?.stage, 'observed_at');
   });
 });

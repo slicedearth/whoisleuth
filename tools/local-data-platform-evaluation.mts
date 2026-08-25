@@ -2,7 +2,7 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { BROWSER_LOCAL_COLLECTIONS } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{
@@ -36,7 +36,7 @@ export const MAX_LOCAL_DATA_EVALUATION_STORES = 16;
 export const MAX_LOCAL_DATA_EVALUATION_CANDIDATES = 8;
 export const MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH = 320;
 
-const CURRENT_STORES = Object.freeze<StoreAssessment[]>(BROWSER_LOCAL_COLLECTIONS.map((definition) => Object.freeze({
+const CURRENT_STORES = Object.freeze<StoreAssessment[]>(BROWSER_LOCAL_COLLECTION_MANIFEST.map((definition) => Object.freeze({
   id: definition.id,
   label: definition.label,
   maximumBytes: definition.maximumBytes,

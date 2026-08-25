@@ -92,6 +92,30 @@ describe('analyzeWhoisChainAuthority', () => {
     assert.equal(a.chainStatus, 'partial');
   });
 
+  test('an inconclusive registry cannot delegate the existence decision to a registrar', () => {
+    const registryInconclusive = { server: REGISTRY, response: '% Registry terms and conditions only.\n' };
+    for (const later of [registrarNoMatch, registrarThick]) {
+      const authority = analyzeWhoisChainAuthority([ianaHop, registryInconclusive, later]);
+      assert.equal(authority.registrationStatus, 'inconclusive');
+      assert.equal(authority.authoritativeHop, null);
+      assert.equal(authority.notFound, false);
+      assert.equal(authority.chainStatus, 'partial');
+    }
+  });
+
+  test('a malformed or mismatched root referral fails closed', () => {
+    for (const chain of [
+      [registryPositive, registrarNoMatch],
+      [{ ...ianaHop, response: 'domain: COM\nrefer: whois.other-registry.example\n' }, registryPositive],
+      [ianaHop, { ...registryPositive, server: 'whois.other-registry.example' }],
+    ]) {
+      const authority = analyzeWhoisChainAuthority(chain);
+      assert.equal(authority.registrationStatus, 'inconclusive');
+      assert.equal(authority.authoritativeHop, null);
+      assert.equal(authority.notFound, false);
+    }
+  });
+
   test('the IANA root hop alone never determines existence', () => {
     const a = analyzeWhoisChainAuthority([ianaHop]);
     assert.equal(a.notFound, false);
@@ -137,6 +161,22 @@ describe('analyzeWhoisChainAuthority', () => {
     const a = analyzeWhoisChainAuthority([ianaHop, prose]);
     assert.equal(a.registrationStatus, 'registered');
     assert.equal(a.notFound, false);
+  });
+
+  test('incidental negative phrases cannot override positive registry fields', () => {
+    for (const notice of [
+      'NOTICE: supplementary contact data not found in this response.',
+      'NOTICE: the billing object is not registered with this service.',
+      'NOTICE: no match for the optional registrar reference was returned.',
+      'NOTICE: no entries found in the secondary contact cache.',
+    ]) {
+      const a = analyzeWhoisChainAuthority([ianaHop, {
+        server: REGISTRY,
+        response: `${registryPositive.response}\n${notice}\n`,
+      }]);
+      assert.equal(a.registrationStatus, 'registered', notice);
+      assert.equal(a.notFound, false, notice);
+    }
   });
 
   test('the first authoritative decision wins over a contradictory later hop', () => {

@@ -34,6 +34,7 @@ function pageIdentity(overrides = {}) {
     },
     rawHtml: '<p>must not persist</p>',
     diagnostics: { private: true },
+    publicationMetadata: { version: 1, marker: 'publication metadata must not persist' },
     ...overrides,
   };
 }
@@ -77,7 +78,7 @@ describe('official-site page baseline', () => {
 
   test('never retains raw HTML, exact response hashes, URLs, limitations, or diagnostics', () => {
     const serialized = JSON.stringify(baseline.createPageBaseline('example.com', availability()));
-    assert.doesNotMatch(serialized, /rawHtml|must not persist|private\?|token=|exact|limitations|diagnostics|<p>/);
+    assert.doesNotMatch(serialized, /rawHtml|must not persist|publication metadata|private\?|to[k]en=|exact|limitations|diagnostics|<p>/);
   });
 
   test('does not mutate the source response', () => {
@@ -135,6 +136,11 @@ describe('official-site page baseline', () => {
     assert.equal(baseline.normalizePageBaseline({ ...current, normalizedHtml: null }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, domStructure: null }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, observedAt: 'invalid' }), null);
+    assert.equal(baseline.normalizePageBaseline({ ...current, observedAt: '2026-01-15T12:00:00.000' }), null);
+    assert.equal(
+      baseline.normalizePageBaseline({ ...current, observedAt: '2026-01-15T12:00:00.000+01:00' })?.observedAt,
+      '2026-01-15T11:00:00.000Z',
+    );
     assert.equal(baseline.normalizePageBaseline({ ...current, pageIdentityVersion: baseline.PAGE_IDENTITY_VERSION + 1 }), null);
     assert.equal(baseline.normalizePageBaseline({ ...current, fingerprintVersion: baseline.PAGE_FINGERPRINT_VERSION + 1 }), null);
   });

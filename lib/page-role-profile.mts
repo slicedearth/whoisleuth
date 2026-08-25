@@ -3,7 +3,7 @@
 // descriptions only; it does not retain page text, arbitrary attributes, URLs,
 // or matched markup, and it never treats a role as proof of intent or safety.
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,

@@ -25,7 +25,7 @@ import {
 
 function snapshot(overrides = {}) {
   return {
-    id: 'evidence-1', fingerprint: 'fp-1', firstCapturedAt: '2026-07-14T00:00:00.000Z', capturedAt: '2026-07-14T00:00:00.000Z', source: 'lookup', scanDepth: 'deep',
+    id: 'evidence-1', fingerprint: 'fp-1', firstCapturedAt: '2026-07-14T00:00:00.000Z', capturedAt: '2026-07-14T00:00:00.000Z', source: 'lookup', inputHostname: null, scanDepth: 'deep',
     availability: 'registered', confidence: 'high', riskModelVersion: 4, riskScore: 65, opportunityScore: null, riskFactors: [], opportunityFactors: [], registrar: 'Example Registrar', createdDate: null, expiryDate: null, nameservers: ['ns1.host.invalid'], hasMx: true, hasSpf: null, hasDmarc: false, activityStatus: 'active', websiteProbeDetail: null, pageTitle: 'Secure account login', httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpFinalOrigin: null, httpResponseStatus: 200, httpTransportSecurity: 'https', httpRedirectCount: 0, httpCrossOriginRedirect: false, httpHttpsDowngrade: false, httpContentType: 'text/html', httpSecurityHeaders: ['strict-transport-security'], faviconMatch: true, faviconNearMatch: false, reusesOfficialAssets: true, hasPasswordField: true, hasExternalFormAction: true, phishingLanguageMatch: 'verify account', mutationTypes: ['unicode_homoglyph'],
     ...overrides,
   };
@@ -169,7 +169,7 @@ test('store recovery drops invalid, duplicate and excess records', () => {
 
 test('import validates schema and version and merges by stable id', () => {
   assert.throws(() => mergeDetectionRules([], { schema: 'other', rules: [] }), /not a WHOISleuth/);
-  assert.throws(() => mergeDetectionRules([], { version: 2, rules: [] }), /newer schema/);
+  assert.throws(() => mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 2, rules: [] }), /newer schema/);
   const result = mergeDetectionRules([rule()], { schema: 'whoisleuth.detection-rules', version: 1, rules: [rule({ name: 'Replacement' }), rule({ id: 'rule-2' }), { name: 'invalid' }] });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 1 });
   const replacement = result.rules.find((item) => item.id === 'rule-1');

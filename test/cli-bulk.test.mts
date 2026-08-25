@@ -130,8 +130,13 @@ describe('bounded bulk input', () => {
   test('rejects empty, controlled, overlong, and oversized inputs', () => {
     assert.throws(() => parseBulkQueries('\n \n'), /did not contain/);
     assert.throws(() => parseBulkQueries('example.com\u0000'), /control character/);
+    assert.throws(() => parseBulkQueries('exa\u00admple.com'), /control character/);
+    assert.throws(() => parseBulkQueries('exa\u034fmple.com'), /control character/);
     assert.throws(() => parseBulkQueries(`${'x'.repeat(1025)}.test`), /overlong query/);
     assert.throws(() => parseBulkQueries('x'.repeat(MAX_BULK_INPUT_BYTES + 1)), /limited to/);
+    assert.deepEqual(parseBulkQueries('bücher.example'), {
+      queries: ['bücher.example'], duplicates: 0, limit: MAX_FAST_BULK_QUERIES,
+    });
   });
 
   test('stream reader enforces the byte limit and does not wait on a TTY', async () => {

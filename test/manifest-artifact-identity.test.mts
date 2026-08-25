@@ -109,14 +109,13 @@ describe('investigation manifest artifact identity', () => {
     assert.match(formatOfflineArtifactVerification(mismatch), /Manifest identity: mismatch/u);
   });
 
-  test('supports integrity-valid legacy manifests without changing their canonicalization contract', async () => {
+  test('rejects a reader-only legacy manifest without interpreting its canonicalization', async () => {
     const raw = JSON.stringify(savedLookup());
     const manifest = await legacyManifest(raw);
-    const report = await verifyOfflineArtifact(raw, {
-      manifest: { raw: JSON.stringify(manifest), entryId: 'artifact-1' },
-    });
-    assert.equal(report.manifestIdentity?.manifest.version, 1);
-    assert.equal(report.manifestIdentity?.state, 'identity_verified');
+    await assert.rejects(
+      verifyOfflineArtifact(raw, { manifest: { raw: JSON.stringify(manifest), entryId: 'artifact-1' } }),
+      /schema or version is not supported/u,
+    );
   });
 
   test('rejects absent entries and tampered manifests before reporting identity', async () => {

@@ -1,10 +1,11 @@
 import type { CaseRecord } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;
 
-export type CaseLifecycleCalendarKind = 'action_due' | 'action_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
-export type CaseLifecycleCalendarSource = 'case_action' | 'evidence_history' | 'evidence_pin';
+export type CaseLifecycleCalendarKind = 'action_due' | 'action_follow_up' | 'observed_effect_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
+export type CaseLifecycleCalendarSource = 'case_action' | 'observed_effect_review' | 'evidence_history' | 'evidence_pin';
 
 export type CaseLifecycleCalendarEvent = Readonly<{
   uid: string;
@@ -18,10 +19,12 @@ export type CaseLifecycleCalendarEvent = Readonly<{
   description: string;
 }>;
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function addDays(value: string, days: number): string {
@@ -85,6 +88,21 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         });
       }
     }
+    for (const review of (record.observedEffects?.reviews ?? []).slice(-40)) {
+      const followUpAt = timestamp(review.followUpAt);
+      if (!followUpAt) continue;
+      events.push({
+        uid: `${record.id}-${review.id}-effect-follow-up`,
+        caseId: record.id,
+        domain: record.domain,
+        kind: 'observed_effect_follow_up',
+        source: 'observed_effect_review',
+        sourceLabel: 'Independent observed-effect review',
+        startsAt: followUpAt,
+        summary: `Review independently observed effect for ${record.domain}`,
+        description: `The prior independent review state was ${review.state}. Open the browser-local case and deliberately decide whether to collect or attach new evidence; this calendar event performs no request.`,
+      });
+    }
     const expiry = timestamp(record.evidenceHistory.at(-1)?.expiryDate);
     if (expiry) {
       events.push({
@@ -135,7 +153,7 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
     }
   }
   return events
-    .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || left.uid.localeCompare(right.uid))
+    .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid))
     .slice(0, MAX_CASE_LIFECYCLE_EVENTS);
 }
 
@@ -147,6 +165,7 @@ export function filterCaseLifecycleEvents(
   const kinds = new Set<CaseLifecycleCalendarKind>([
     'action_due',
     'action_follow_up',
+    'observed_effect_follow_up',
     'certificate_expiry_review',
     'disclosure_expiry_review',
     'domain_expiry_review',

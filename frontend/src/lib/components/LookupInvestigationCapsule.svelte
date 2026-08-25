@@ -58,7 +58,7 @@
 <details class="card capsule">
   <summary>Portable investigation capsule</summary>
   <div class="capsule-body">
-    <p>Export one deterministic manifest that embeds the bounded investigation brief and relationship graph, and links the current Lookup evidence JSON by SHA-256 digest.</p>
+    <p>Export one deterministic manifest that embeds the bounded canonical Decision Fact brief and relationship graph, and links the current Lookup evidence JSON by SHA-256 digest.</p>
     <ul>
       <li>The evidence file itself is not embedded. Download and retain that exact file separately.</li>
       <li>Checksums detect changes but do not identify or authenticate the person who created the capsule.</li>

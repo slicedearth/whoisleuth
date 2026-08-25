@@ -11,6 +11,8 @@ import { safeFetch, readTextCapped } from './safe-fetch.mts';
 
 const DEFAULT_NAMESPACE = 'whoisleuth:operation-budget:v1';
 const DEFAULT_LEASE_TTL_MS = 5 * 60 * 1000;
+const MIN_LEASE_TTL_MS = 30_000;
+const MAX_LEASE_TTL_MS = 15 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 4_000;
 const MAX_RESPONSE_BYTES = 16 * 1024;
 const PROVIDER_RETRY_AFTER_SECONDS = 5;
@@ -191,7 +193,7 @@ function normalizedNamespace(value: unknown = DEFAULT_NAMESPACE): string {
 
 function normalizedLeaseTtl(value: unknown = DEFAULT_LEASE_TTL_MS): number {
   const ttl = Number(value);
-  if (!Number.isSafeInteger(ttl) || ttl < 30_000 || ttl > 15 * 60 * 1000) {
+  if (!Number.isSafeInteger(ttl) || ttl < MIN_LEASE_TTL_MS || ttl > MAX_LEASE_TTL_MS) {
     throw new Error('The distributed-budget lease TTL must be between 30 seconds and 15 minutes');
   }
   return ttl;
@@ -503,7 +505,12 @@ function createDistributedOperationBudget(config: DistributedConfig, dependencie
 export {
   DEFAULT_NAMESPACE,
   DEFAULT_LEASE_TTL_MS,
+  MIN_LEASE_TTL_MS,
+  MAX_LEASE_TTL_MS,
+  REQUEST_TIMEOUT_MS,
+  MAX_RESPONSE_BYTES,
   PROVIDER_RETRY_AFTER_SECONDS,
+  MAX_USAGE_LIMIT,
   DAY_WINDOW_MS,
   THIRTY_DAY_WINDOW_MS,
   ACQUIRE_SCRIPT,

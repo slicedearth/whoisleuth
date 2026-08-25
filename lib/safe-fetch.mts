@@ -49,7 +49,7 @@ type SafeFetchDetailedResult = {
   durationMs: number;
   status?: number;
 };
-type CappedTextOptions = { includeSha256?: boolean };
+type CappedTextOptions = { includeSha256?: boolean; fatalUtf8?: boolean };
 
 const MAX_REDIRECTS = MAX_OUTBOUND_REDIRECTS;
 const MAX_SAFE_FETCH_URL_LENGTH = 4096;
@@ -459,32 +459,39 @@ async function readTextCapped(res: Response, maxBytes: number, options: CappedTe
   }
   const reader = res.body.getReader();
 
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder('utf-8', { fatal: options.fatalUtf8 === true });
   let text = '';
   let received = 0;
   let truncated = false;
-  while (received < maxBytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const remaining = maxBytes - received;
-    const captured = value.subarray(0, remaining);
-    hasher?.update(captured);
-    received += captured.byteLength;
-    text += decoder.decode(captured, { stream: true });
-    if (captured.byteLength < value.byteLength) {
-      truncated = true;
-      break;
+  try {
+    while (received < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = maxBytes - received;
+      const captured = value.subarray(0, remaining);
+      hasher?.update(captured);
+      received += captured.byteLength;
+      text += decoder.decode(captured, { stream: true });
+      if (captured.byteLength < value.byteLength) {
+        truncated = true;
+        break;
+      }
+    }
+    // If the cap was hit, one more read() tells us whether there was actually
+    // more data left (truncated) or the body just happened to end right there.
+    if (!truncated && received >= maxBytes) {
+      const { done } = await reader.read();
+      if (!done) truncated = true;
+    }
+    text += decoder.decode();
+    return result(text, truncated, received);
+  } finally {
+    try {
+      reader.cancel().catch(() => {});
+    } finally {
+      reader.releaseLock();
     }
   }
-  // If the cap was hit, one more read() tells us whether there was actually
-  // more data left (truncated) or the body just happened to end right there.
-  if (!truncated && received >= maxBytes) {
-    const { done } = await reader.read();
-    if (!done) truncated = true;
-  }
-  reader.cancel().catch(() => {});
-  text += decoder.decode();
-  return result(text, truncated, received);
 }
 
 // Binary-safe counterpart to readTextCapped, for a response body that isn't
@@ -500,25 +507,36 @@ async function readBytesCapped(res: Response, maxBytes: number) {
   const chunks: Buffer[] = [];
   let received = 0;
   let truncated = false;
-  while (received < maxBytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const remaining = maxBytes - received;
-    const captured = value.subarray(0, remaining);
-    received += captured.byteLength;
-    chunks.push(Buffer.from(captured));
-    if (captured.byteLength < value.byteLength) {
-      truncated = true;
-      break;
+  // Cancel unread body data and release the exclusive reader lock on every
+  // exit path, exactly as readTextCapped does. A mid-stream read failure (an
+  // upstream reset while fetching an untrusted favicon) must not leave the
+  // response locked to this reader.
+  try {
+    while (received < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = maxBytes - received;
+      const captured = value.subarray(0, remaining);
+      received += captured.byteLength;
+      chunks.push(Buffer.from(captured));
+      if (captured.byteLength < value.byteLength) {
+        truncated = true;
+        break;
+      }
+    }
+    // Same "one more read() to check for leftover data" trick as readTextCapped.
+    if (!truncated && received >= maxBytes) {
+      const { done } = await reader.read();
+      if (!done) truncated = true;
+    }
+    return { bytes: Buffer.concat(chunks), truncated, bytesRead: received };
+  } finally {
+    try {
+      reader.cancel().catch(() => {});
+    } finally {
+      reader.releaseLock();
     }
   }
-  // Same "one more read() to check for leftover data" trick as readTextCapped.
-  if (!truncated && received >= maxBytes) {
-    const { done } = await reader.read();
-    if (!done) truncated = true;
-  }
-  reader.cancel().catch(() => {});
-  return { bytes: Buffer.concat(chunks), truncated, bytesRead: received };
 }
 
 export {

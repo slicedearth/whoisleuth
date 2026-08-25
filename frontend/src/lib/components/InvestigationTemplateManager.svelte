@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseBoundedJson } from '$lib/bounded-json';
   import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
   import {
     deleteInvestigationTemplate,
@@ -155,7 +156,10 @@
       if (file.size > MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES) {
         throw new Error('Investigation-template imports are limited to 384 KiB.');
       }
-      const result = await importInvestigationTemplates(JSON.parse(await file.text()));
+      const result = await importInvestigationTemplates(parseBoundedJson(await file.text(), {
+        label: 'Investigation-template import',
+        maximumBytes: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
+      }));
       onchange(result.templates);
       message = `Imported ${result.added} new and ${result.updated} matching template${result.added + result.updated === 1 ? '' : 's'}.`;
     } catch (cause) {
@@ -169,7 +173,7 @@
 <section class="template-manager card" aria-labelledby="template-manager-title" aria-busy={loadState === 'loading'}>
   <header>
     <div>
-      <p class="eyebrow">Reusable local workflow</p>
+      <p class="eyebrow">Saved templates</p>
       <h2 id="template-manager-title">Investigation templates</h2>
       <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate. A restricted CACAO export contains manual steps only.</p>
     </div>

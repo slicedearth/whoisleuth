@@ -10,80 +10,72 @@ import {
 } from './artifact-structure.mts';
 
 import {
-  CASE_RESPONSE_PACKET_SCHEMA,
-  CASE_RESPONSE_PACKET_VERSION,
-  LEGACY_CASE_RESPONSE_PACKET_VERSION,
   verifyCaseResponsePacketIntegrity,
   type CaseResponsePacket,
-} from '../frontend/src/lib/analysis/case-response-packet.ts';
+} from '../packages/cases/case-response-packet.mts';
+import {
+  CASE_PORTABILITY_VERIFIER_DISPATCH,
+  CASE_RESPONSE_PACKET_VERSION,
+  CASE_RESPONSE_PACKET_SCHEMA,
+  CLI_CASE_PACK_VERSION,
+  CLI_CASE_PACK_SCHEMA,
+} from '../packages/contracts/case-portability.mts';
 import {
   ACQUISITION_DECISION_PACKET_SCHEMA,
-  ACQUISITION_DECISION_PACKET_VERSION,
-} from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
-import {
+  BULK_DOMAIN_COMPARISON_SCHEMA,
+  BULK_MAIL_EXPOSURE_SCHEMA,
+  BULK_REVIEW_MANIFEST_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_VERSION,
-} from '../frontend/src/lib/analysis/lookup-claim-passport.ts';
-import {
-  BULK_DOMAIN_COMPARISON_SCHEMA,
-  BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/bulk-domain-comparison.ts';
-import {
-  BULK_MAIL_EXPOSURE_SCHEMA,
-  BULK_MAIL_EXPOSURE_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
-import {
-  BULK_REVIEW_MANIFEST_SCHEMA,
-  BULK_REVIEW_MANIFEST_VERSION,
-} from '../frontend/src/lib/analysis/bulk-review-export.ts';
+  SUPPORTED_ACQUISITION_DECISION_PACKET_VERSIONS,
+  SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS,
+  SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS,
+  SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
+} from '../packages/contracts/investigation-portability.mts';
 import {
   decryptWorkspaceArchive,
   inspectEncryptedWorkspaceArchive,
   isEncryptedWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+} from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
   previewWorkspaceArchive,
   readWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive.ts';
+} from '../packages/workspace/workspace-archive.mts';
 import {
   canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
   sha256ArtifactDigestFor,
-  SORTED_JSON_V1,
   SORTED_JSON_V2,
   type ArtifactCanonicalizationRoute,
-} from '../frontend/src/lib/analysis/artifact-integrity.ts';
+} from '../packages/evidence/artifact-integrity.mts';
 import {
   SAVED_LOOKUP_SCHEMA,
-  SAVED_LOOKUP_SCHEMA_VERSION,
-  parseSavedLookupDocument,
+  SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS,
+  parseCliLookupDocument,
 } from './saved-lookup.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_SCHEMA,
-  DOMAIN_CONTROL_MANIFEST_VERSION,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
-import { DOMAIN_CONTROL_PASSPORT_VERSION } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
+import {
+  DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
+} from '../packages/contracts/domain-control-manifest.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
   DOMAIN_CHANGE_PACKET_VERSION,
 } from '../lib/domain-change-packet.mts';
 import {
   INVESTIGATION_CAPSULE_SCHEMA,
-  INVESTIGATION_CAPSULE_VERSION,
-  LEGACY_INVESTIGATION_CAPSULE_VERSION,
+  SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   verifyInvestigationCapsule,
-  type InvestigationCapsule,
-} from '../frontend/src/lib/analysis/investigation-capsule.ts';
+  type SupportedInvestigationCapsule,
+} from '../packages/investigation/investigation-capsule.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
   INVESTIGATION_MANIFEST_VERSION,
 } from './investigation-manifest.mts';
-import {
-  CLI_CASE_PACK_SCHEMA,
-  verifyCliCasePack,
-} from './case-pack.mts';
+import { verifyCliCasePack } from './case-pack.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
   LOOKUP_EVIDENCE_SCHEMA,
@@ -172,32 +164,79 @@ export type OfflineArtifactVerificationReport = Readonly<{
 
 type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, 'manifestIdentity'>;
 
-const SIGNED_ARTIFACT_VERSIONS: Readonly<Record<string, ReadonlySet<number>>> = Object.freeze({
-  [ACQUISITION_DECISION_PACKET_SCHEMA]: new Set([1, ACQUISITION_DECISION_PACKET_VERSION]),
-  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: new Set([LOOKUP_CLAIM_PASSPORT_VERSION]),
-  [BULK_DOMAIN_COMPARISON_SCHEMA]: new Set([3, BULK_DOMAIN_COMPARISON_EXPORT_VERSION]),
-  [BULK_MAIL_EXPOSURE_SCHEMA]: new Set([1, BULK_MAIL_EXPOSURE_EXPORT_VERSION]),
-  [BULK_REVIEW_MANIFEST_SCHEMA]: new Set([1, BULK_REVIEW_MANIFEST_VERSION]),
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: new Set([DOMAIN_CONTROL_PASSPORT_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION]),
-  [DOMAIN_CHANGE_PACKET_SCHEMA]: new Set([1, DOMAIN_CHANGE_PACKET_VERSION]),
-  [INVESTIGATION_MANIFEST_SCHEMA]: new Set([1, INVESTIGATION_MANIFEST_VERSION]),
-});
+function currentCanonicalizationRoutes(versions: readonly number[]): readonly ArtifactCanonicalizationRoute[] {
+  return Object.freeze(versions.map((version) => Object.freeze({
+    version,
+    canonicalization: SORTED_JSON_V2,
+    explicit: true,
+  })));
+}
 
-const SIGNED_ARTIFACT_CANONICALIZATION: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
-  [ACQUISITION_DECISION_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: ACQUISITION_DECISION_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: [{ version: LOOKUP_CLAIM_PASSPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_DOMAIN_COMPARISON_SCHEMA]: [{ version: 3, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_DOMAIN_COMPARISON_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_MAIL_EXPOSURE_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [BULK_REVIEW_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: BULK_REVIEW_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: [{ version: DOMAIN_CONTROL_PASSPORT_VERSION, canonicalization: SORTED_JSON_V1, explicit: true }, { version: DOMAIN_CONTROL_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [DOMAIN_CHANGE_PACKET_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: DOMAIN_CHANGE_PACKET_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
-  [INVESTIGATION_MANIFEST_SCHEMA]: [{ version: 1, canonicalization: SORTED_JSON_V1, explicit: false }, { version: INVESTIGATION_MANIFEST_VERSION, canonicalization: SORTED_JSON_V2, explicit: true }],
+const SIGNED_ARTIFACT_ROUTES: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
+  [ACQUISITION_DECISION_PACKET_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_ACQUISITION_DECISION_PACKET_VERSIONS),
+  [LOOKUP_CLAIM_PASSPORT_SCHEMA]: currentCanonicalizationRoutes([LOOKUP_CLAIM_PASSPORT_VERSION]),
+  [BULK_DOMAIN_COMPARISON_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS),
+  [BULK_MAIL_EXPOSURE_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS),
+  [BULK_REVIEW_MANIFEST_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS),
+  [DOMAIN_CONTROL_MANIFEST_SCHEMA]: DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
+  [DOMAIN_CHANGE_PACKET_SCHEMA]: currentCanonicalizationRoutes([DOMAIN_CHANGE_PACKET_VERSION]),
+  [INVESTIGATION_MANIFEST_SCHEMA]: currentCanonicalizationRoutes([INVESTIGATION_MANIFEST_VERSION]),
 });
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : null;
+}
+
+type CasePortabilityVerifierDescriptor = typeof CASE_PORTABILITY_VERIFIER_DISPATCH[number];
+
+function selectCasePortabilityVerifier(value: UnknownRecord): CasePortabilityVerifierDescriptor | null {
+  const packet = record(value.packet);
+  for (const descriptor of CASE_PORTABILITY_VERIFIER_DISPATCH) {
+    if (descriptor.id === 'case-response-packet'
+      && descriptor.discriminator === 'root_schema'
+      && value.schema === CASE_RESPONSE_PACKET_SCHEMA) return descriptor;
+    if (descriptor.id === 'cli-case-pack'
+      && descriptor.discriminator === 'packet_schema'
+      && packet?.schema === CLI_CASE_PACK_SCHEMA) return descriptor;
+  }
+  return null;
+}
+
+function casePortabilityVersion(
+  descriptor: CasePortabilityVerifierDescriptor,
+  value: UnknownRecord,
+): number {
+  if (descriptor.versionField === 'schemaVersion') return artifactVersion(value);
+  const packet = record(value.packet);
+  if (!packet) throw new TypeError('The Case portability verifier discriminator is missing.');
+  return artifactVersion(packet);
+}
+
+function supportsCasePortabilityVersion(
+  descriptor: CasePortabilityVerifierDescriptor,
+  version: number,
+): boolean {
+  return descriptor.supportedVersions.some((candidate) => candidate === version);
+}
+
+function rejectUnsupportedCasePortabilityVersion(
+  label: string,
+  version: number,
+  currentVersion: number,
+): never {
+  if (Number.isSafeInteger(version) && version >= 1 && version < currentVersion) {
+    throw new UnsupportedOfflineArtifactError(
+      `${label} version ${String(version)} is retired. Export it again as version ${String(currentVersion)} with the last broad-reader release; no data was changed.`,
+    );
+  }
+  if (Number.isSafeInteger(version) && version > currentVersion) {
+    throw new UnsupportedOfflineArtifactError(
+      `${label} version ${String(version)} is newer than the supported version ${String(currentVersion)}; no data was changed.`,
+    );
+  }
+  throw new UnsupportedOfflineArtifactError(`This ${label} version is malformed or unsupported; no data was changed.`);
 }
 
 function parseJson(raw: string): UnknownRecord {
@@ -274,11 +313,11 @@ async function archiveReport(
       schema: WORKSPACE_ARCHIVE_SCHEMA,
       version: archive.sourceVersion,
     }),
-    state: 'verified',
+    state: encrypted ? 'verified' : 'integrity_valid',
     checks: Object.freeze({
       structure: 'verified',
       contentIntegrity: 'verified',
-      contentIntegrityScope: 'whole_artifact',
+      contentIntegrityScope: encrypted ? 'whole_artifact' : 'embedded_projections',
       authenticatedEncryption: encrypted ? 'verified' : 'not_applicable',
     }),
     summary: Object.freeze({
@@ -294,7 +333,9 @@ async function archiveReport(
       fullyImportable,
     }),
     limitations: Object.freeze([
-      'Verification checks the retained file against its declared versioned integrity contract; it does not establish that the original observations were accurate or remain current.',
+      ...(encrypted
+        ? ['Authenticated decryption and archive validation cover the complete encrypted workspace content; they do not establish that the original observations were accurate or remain current.']
+        : ['Section digest verification covers the archive projections, not root metadata such as generation time or archive limitations. It does not establish that the original observations were accurate or remain current.']),
       ...(!fullyImportable
         ? ['One or more integrity-valid archive sections cannot be imported completely by this version. Inspect the archive before selecting data to restore.']
         : []),
@@ -308,8 +349,8 @@ async function verifySignedArtifact(
   schema: string,
   version: number,
 ): Promise<OfflineArtifactVerificationCore> {
-  const supported = SIGNED_ARTIFACT_VERSIONS[schema];
-  if (!supported?.has(version)) {
+  const routes = SIGNED_ARTIFACT_ROUTES[schema] ?? [];
+  if (!routes.some((route) => route.version === version)) {
     throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
   }
   validateSignedDigestArtifactStructure(schema, value);
@@ -323,7 +364,7 @@ async function verifySignedArtifact(
   const canonicalization = resolveArtifactCanonicalization(
     version,
     integrity.canonicalization,
-    SIGNED_ARTIFACT_CANONICALIZATION[schema] ?? [],
+    routes,
     'Signed review artefact',
   );
   const { integrity: _integrity, ...unsigned } = value;
@@ -359,9 +400,13 @@ async function verifyOfflineArtifactCore(
   options: Readonly<{ passphrase?: string | null }> = {},
 ): Promise<OfflineArtifactVerificationCore> {
   const value = parseJson(raw);
+  const casePortabilityVerifier = selectCasePortabilityVerifier(value);
 
-  const casePackPacket = record(value.packet);
-  if (casePackPacket?.schema === CLI_CASE_PACK_SCHEMA) {
+  if (casePortabilityVerifier?.id === 'cli-case-pack') {
+    const casePackVersion = casePortabilityVersion(casePortabilityVerifier, value);
+    if (!supportsCasePortabilityVersion(casePortabilityVerifier, casePackVersion)) {
+      rejectUnsupportedCasePortabilityVersion('CLI Case-pack', casePackVersion, CLI_CASE_PACK_VERSION);
+    }
     const verified = verifyCliCasePack(value);
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
@@ -369,7 +414,7 @@ async function verifyOfflineArtifactCore(
       artifact: Object.freeze({
         kind: 'cli_case_pack',
         schema: CLI_CASE_PACK_SCHEMA,
-        version: Number(casePackPacket.version),
+        version: casePackVersion,
       }),
       state: 'verified',
       checks: Object.freeze({
@@ -431,11 +476,11 @@ async function verifyOfflineArtifactCore(
     return archiveReport(raw, value, await readWorkspaceArchive(value), false, null);
   }
 
-  if (schema === CASE_RESPONSE_PACKET_SCHEMA) {
-    if (version !== LEGACY_CASE_RESPONSE_PACKET_VERSION && version !== CASE_RESPONSE_PACKET_VERSION) {
-      throw new UnsupportedOfflineArtifactError('This case-response packet version is not supported.');
+  if (casePortabilityVerifier?.id === 'case-response-packet') {
+    if (!supportsCasePortabilityVersion(casePortabilityVerifier, version)) {
+      rejectUnsupportedCasePortabilityVersion('case-response packet', version, CASE_RESPONSE_PACKET_VERSION);
     }
-    validateOfflineArtifactStructure(schema, value);
+    validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, value);
     const integrity = record(value.integrity);
     if (!integrity || !await verifyCaseResponsePacketIntegrity(value as CaseResponsePacket)) {
       throw new TypeError('The case-response packet failed its manifest integrity check.');
@@ -443,7 +488,7 @@ async function verifyOfflineArtifactCore(
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
-      artifact: Object.freeze({ kind: 'case_response_packet', schema, version }),
+      artifact: Object.freeze({ kind: 'case_response_packet', schema: CASE_RESPONSE_PACKET_SCHEMA, version }),
       state: 'verified',
       checks: Object.freeze({
         structure: 'verified',
@@ -464,22 +509,21 @@ async function verifyOfflineArtifactCore(
   }
 
   if (schema === INVESTIGATION_CAPSULE_SCHEMA) {
-    if (version !== LEGACY_INVESTIGATION_CAPSULE_VERSION && version !== INVESTIGATION_CAPSULE_VERSION) {
+    if (!SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS.some((candidate) => candidate === version)) {
       throw new UnsupportedOfflineArtifactError('This investigation-capsule version is not supported.');
     }
     validateInvestigationCapsuleStructure(value);
-    const verification = await verifyInvestigationCapsule(value as InvestigationCapsule);
+    const verification = await verifyInvestigationCapsule(value as SupportedInvestigationCapsule);
     if (!verification.valid) throw new TypeError('The investigation capsule failed its embedded projection integrity checks.');
-    const current = version === INVESTIGATION_CAPSULE_VERSION;
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
       artifact: Object.freeze({ kind: 'investigation_capsule', schema, version }),
-      state: current ? 'verified' : 'integrity_valid',
+      state: 'verified',
       checks: Object.freeze({
         structure: 'verified',
         contentIntegrity: 'verified',
-        contentIntegrityScope: current ? 'whole_artifact' : 'embedded_projections',
+        contentIntegrityScope: 'whole_artifact',
         authenticatedEncryption: 'not_applicable',
       }),
       summary: Object.freeze({
@@ -489,9 +533,7 @@ async function verifyOfflineArtifactCore(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        ...(current
-          ? ['The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.']
-          : ['The embedded brief, graph, and optional analyst-record projections match their declared digests. Capsule metadata and the linked Lookup evidence are outside those projection digests and must not be treated as whole-file integrity verified.']),
+        'The whole capsule matches its declared digest, including metadata and the linked source-contract projection digests. The non-embedded Lookup evidence remains linked by digest and must be retained separately.',
         'Digest verification detects changed content but does not authenticate the analyst, signer, collection source, or truth of retained observations and assertions.',
       ]),
     });
@@ -531,10 +573,10 @@ async function verifyOfflineArtifactCore(
   }
 
   if (schema === SAVED_LOOKUP_SCHEMA) {
-    if (version !== SAVED_LOOKUP_SCHEMA_VERSION) {
+    if (!SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS.some((supported) => supported === version)) {
       throw new UnsupportedOfflineArtifactError('This saved Lookup document version is not supported.');
     }
-    const document = parseSavedLookupDocument(raw, { label: 'Saved Lookup artefact' });
+    parseCliLookupDocument(raw, { label: 'Saved Lookup artefact' });
     return Object.freeze({
       schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
       version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -553,7 +595,7 @@ async function verifyOfflineArtifactCore(
         ciphertextBytes: null,
       }),
       limitations: Object.freeze([
-        `The saved ${document.mode} Lookup matches its versioned structural contract, but this document format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.`,
+        'The saved Lookup matches its versioned structural contract, but this document format has no embedded checksum or signature. Structural validity does not prove that its evidence is accurate, current, or unchanged since collection.',
       ]),
     });
   }
@@ -596,15 +638,13 @@ async function verifyManifestIdentity(
 
   const artifactValue = parseJson(artifactRaw);
   const metadata = artifactMetadata(artifactValue);
-  const manifestVersion = artifactVersion(manifest);
-  const canonicalization = manifestVersion === 1 ? SORTED_JSON_V1 : SORTED_JSON_V2;
   const actualByteLength = inputBytes(artifactRaw);
   const expectedByteLength = Number(item.byteLength);
   const checks = Object.freeze({
     manifestIntegrity: 'verified' as const,
     byteLength: actualByteLength === expectedByteLength ? 'verified' as const : 'mismatch' as const,
     rawContentDigest: rawContentDigest(artifactRaw) === item.contentDigestSha256 ? 'verified' as const : 'mismatch' as const,
-    canonicalDigest: rawContentDigest(canonicalArtifactJsonFor(artifactValue, canonicalization)) === item.canonicalDigestSha256 ? 'verified' as const : 'mismatch' as const,
+    canonicalDigest: rawContentDigest(canonicalArtifactJsonFor(artifactValue, SORTED_JSON_V2)) === item.canonicalDigestSha256 ? 'verified' as const : 'mismatch' as const,
     schema: metadata.schema === item.schema ? 'verified' as const : 'mismatch' as const,
     version: metadata.version === item.version ? 'verified' as const : 'mismatch' as const,
   });
@@ -624,7 +664,7 @@ async function verifyManifestIdentity(
       : 'mismatch';
   return Object.freeze({
     state,
-    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: manifestVersion, entryId }),
+    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: INVESTIGATION_MANIFEST_VERSION, entryId }),
     checks,
     expectedByteLength,
     actualByteLength,

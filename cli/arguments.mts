@@ -6,86 +6,46 @@ import {
   type SignArtifactArguments,
   type VerifySignatureArguments,
 } from './evidence-command-arguments.mts';
-import { CliUsageError } from './errors.mts';
+import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
+  RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   type InvestigationPlanRecipe,
+  type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { parseCliFailPolicies, type CliFailPolicy } from './fail-policy.mts';
+import { isDirectLookupTarget } from '../lib/classify.mts';
+import {
+  CLI_COMMANDS,
+  cliMetaActionForInvocation,
+  isCliCommand,
+  type CliCommand,
+  type CliHelpGroup,
+  type CompletionShell,
+} from './command-reference.mts';
 
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
-const CLI_COMMANDS = [
-  'completion',
-  'doctor',
-  'commands',
-  'manual',
-  'manifest',
-  'map-observations',
-  'oam-export',
-  'lookup',
-  'bulk',
-  'ct-search',
-  'ct-intake',
-  'discover',
-  'discover-scan',
-  'posture',
-  'http',
-  'tls',
-  'dnssec-validate',
-  'mail-transport',
-  'registry-support',
-  'registry-doctor',
-  'registry-cohort',
-  'registry-scaffold',
-  'risk-calibrate',
-  'lookalike-calibrate',
-  'verify-artifact',
-  'interchange-report',
-  'inspect-archive',
-  'sign-artifact',
-  'verify-signature',
-  'source-report',
-  'compare',
-  'page-compare',
-  'mail-review',
-  'review-evidence',
-  'brief',
-  'case-pack',
-  'domain-control',
-  'monitor-once',
-  'assurance',
-  'change-packet',
-  'sharing-review',
-  'workflow-plan',
-  'workflow-run',
-  'diff',
-  'reconcile',
-  'timeline',
-  'export',
-] as const;
-type CliCommand = typeof CLI_COMMANDS[number];
-
 type TerminalOptions = {
   quiet: boolean;
   color: boolean;
 };
 
 type LookupDetail = 'summary' | 'standard' | 'verbose';
-type CompletionShell = 'bash' | 'zsh' | 'fish' | 'powershell';
-type FileOutputOptions = { destination?: string; force?: true };
+type CliPalette = 'auto' | 'light' | 'dark';
+type FileOutputOptions = { destination?: string; force?: true; palette?: CliPalette };
 
 type CliAction =
   | { action: 'help'; command?: CliCommand }
   | { action: 'version' }
   | ({ action: 'completion'; shell: CompletionShell })
-  | ({ action: 'commands'; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | ({ action: 'manual' })
   | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -113,14 +73,16 @@ type CliAction =
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: boolean } & TerminalOptions)
+  | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: true } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'change-packet'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'sharing-review'; source: string | null; output: 'terminal' | 'json'; marking: 'clear' | 'green' | 'amber' | 'amber-strict' | 'red'; recipientScope: 'public' | 'community' | 'organization' | 'named-recipients'; purpose: string; humanReviewed: boolean; personalDataReviewed: boolean; redactionsConfirmed: boolean } & TerminalOptions)
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: InvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -131,23 +93,21 @@ type ExtractedFileOutput = {
   argv: string[];
   destination: string | null;
   force: boolean;
+  palette: CliPalette | null;
 };
 
 function boundedArgument(value: unknown): string {
-  if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
+  if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || hasUnsafeCliText(value)) {
     throw new CliUsageError('Arguments must be bounded text without control characters.');
   }
   return value;
-}
-
-function isCliCommand(value: string): value is CliCommand {
-  return (CLI_COMMANDS as readonly string[]).includes(value);
 }
 
 function extractFileOutputArguments(argv: string[]): ExtractedFileOutput {
   const retained: string[] = [];
   let destination: string | null = null;
   let force = false;
+  let palette: CliPalette | null = null;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
@@ -159,19 +119,29 @@ function extractFileOutputArguments(argv: string[]): ExtractedFileOutput {
     } else if (index > 0 && argument === '--force') {
       if (force) throw new CliUsageError('--force may be supplied only once.');
       force = true;
+    } else if (index > 0 && argument === '--palette') {
+      if (palette !== null) throw new CliUsageError('--palette may be supplied only once.');
+      const value = argv[++index];
+      if (value !== 'auto' && value !== 'light' && value !== 'dark') {
+        throw new CliUsageError('--palette requires auto, light, or dark.');
+      }
+      palette = value;
     } else {
       retained.push(argument);
     }
   }
   if (force && destination === null) throw new CliUsageError('--force requires --output.');
-  return { argv: retained, destination, force };
+  return { argv: retained, destination, force, palette };
 }
 
 function parseCliArguments(rawArgv: unknown): CliArguments {
   if (!Array.isArray(rawArgv) || rawArgv.length > MAX_CLI_ARGUMENTS) {
     throw new CliUsageError(`At most ${MAX_CLI_ARGUMENTS} command arguments are supported.`);
   }
-  const extracted = extractFileOutputArguments(rawArgv.map(boundedArgument));
+  const boundedArguments = rawArgv.map(boundedArgument);
+  const metaAction = cliMetaActionForInvocation(boundedArguments);
+  if (metaAction) return parseCliArgumentsCore(boundedArguments);
+  const extracted = extractFileOutputArguments(boundedArguments);
   const parsed = parseCliArgumentsCore(extracted.argv);
   if ('quiet' in parsed && parsed.quiet && extracted.destination !== null) {
     throw new CliUsageError('--quiet cannot be combined with --output.');
@@ -179,76 +149,53 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   if ('events' in parsed && parsed.events && extracted.destination !== null) {
     throw new CliUsageError('--events cannot be combined with --output because completion must describe the final output delivery.');
   }
-  return extracted.destination === null
-    ? parsed
-    : { ...parsed, destination: extracted.destination, ...(extracted.force ? { force: true as const } : {}) };
+  if ('browse' in parsed && parsed.browse === true && extracted.destination !== null) {
+    throw new CliUsageError('--browse cannot be combined with --output because it requires an interactive terminal.');
+  }
+  return {
+    ...parsed,
+    ...(extracted.destination !== null ? { destination: extracted.destination } : {}),
+    ...(extracted.force ? { force: true as const } : {}),
+    ...(extracted.palette ? { palette: extracted.palette } : {}),
+  };
 }
 
 function parseCliArgumentsCore(argv: string[]): CliAction {
   if (!argv.length) return { action: 'help' };
   const firstArgument = argv[0] ?? '';
-  const helpRequested = argv.includes('--help') || argv.includes('-h');
-  if (helpRequested) {
+  const metaAction = cliMetaActionForInvocation(argv);
+  if (metaAction?.id === 'help') {
     if (argv.length === 1) return { action: 'help' };
-    if (argv.length === 2 && isCliCommand(firstArgument)) return { action: 'help', command: firstArgument };
+    if (argv.length === 2 && (isCliCommand(firstArgument) || isDirectLookupTarget(firstArgument))) {
+      return { action: 'help', command: isCliCommand(firstArgument) ? firstArgument : 'lookup' };
+    }
     throw new CliUsageError('Help accepts only an optional command name.');
   }
-  if (firstArgument === '--version' || firstArgument === '-V') {
+  if (metaAction?.id === 'version') {
     if (argv.length !== 1) throw new CliUsageError('--version does not accept other arguments.');
     return { action: 'version' };
   }
 
-  const command = firstArgument;
-  if (!isCliCommand(command)) {
-    const displayedCommand = command.length > 80 ? `${command.slice(0, 79)}…` : command;
+  let command: CliCommand;
+  let directLookup = false;
+  if (isCliCommand(firstArgument)) command = firstArgument;
+  else if (isDirectLookupTarget(firstArgument)) {
+    command = 'lookup';
+    directLookup = true;
+  } else {
+    const displayedCommand = firstArgument.length > 80 ? `${firstArgument.slice(0, 79)}…` : firstArgument;
     throw new CliUsageError(`Unknown command "${displayedCommand}". Run "whoisleuth commands" to list supported commands.`);
   }
-  if (command === 'bulk') return parseBulkArguments(argv.slice(1));
-  if (command === 'completion') return parseCompletionArguments(argv.slice(1));
-  if (command === 'doctor') return parseDoctorArguments(argv.slice(1));
-  if (command === 'commands') return parseCommandsArguments(argv.slice(1));
-  if (command === 'manual') return parseManualArguments(argv.slice(1));
-  if (command === 'manifest') return parseManifestArguments(argv.slice(1));
-  if (command === 'map-observations') return parseOfflineImportArguments('map-observations', argv.slice(1));
-  if (command === 'oam-export') return parseOfflineImportArguments('oam-export', argv.slice(1));
-  if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
-  if (command === 'ct-intake') return parseCtIntakeArguments(argv.slice(1));
-  if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
-  if (command === 'discover-scan') return parseDiscoverScanArguments(argv.slice(1));
-  if (command === 'posture') return parsePostureArguments(argv.slice(1));
-  if (command === 'http') return parseHttpArguments(argv.slice(1));
-  if (command === 'tls') return parseTlsArguments(argv.slice(1));
-  if (command === 'dnssec-validate') return parseDnssecValidateArguments(argv.slice(1));
-  if (command === 'mail-transport') return parseMailTransportArguments(argv.slice(1));
-  if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
-  if (command === 'registry-doctor') return parseRegistryDoctorArguments(argv.slice(1));
-  if (command === 'registry-cohort') return parseRegistryCohortArguments(argv.slice(1));
-  if (command === 'registry-scaffold') return parseRegistryScaffoldArguments(argv.slice(1));
-  if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
-  if (command === 'lookalike-calibrate') return parseLookalikeCalibrateArguments(argv.slice(1));
-  if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
-  if (command === 'interchange-report') return parseInterchangeReportArguments(argv.slice(1));
-  if (command === 'inspect-archive') return parseInspectArchiveArguments(argv.slice(1));
-  if (command === 'sign-artifact') return parseSignArtifactArguments(argv.slice(1));
-  if (command === 'verify-signature') return parseVerifySignatureArguments(argv.slice(1));
-  if (command === 'source-report') return parseSourceReportArguments(argv.slice(1));
-  if (command === 'compare') return parseCompareArguments(argv.slice(1));
-  if (command === 'page-compare') return parsePageCompareArguments(argv.slice(1));
-  if (command === 'mail-review') return parseMailReviewArguments(argv.slice(1));
-  if (command === 'review-evidence') return parseReviewEvidenceArguments(argv.slice(1));
-  if (command === 'brief') return parseBriefArguments(argv.slice(1));
-  if (command === 'case-pack') return parseCasePackArguments(argv.slice(1));
-  if (command === 'domain-control') return parseDomainControlArguments(argv.slice(1));
-  if (command === 'monitor-once') return parseMonitorOnceArguments(argv.slice(1));
-  if (command === 'assurance') return parseAssuranceArguments(argv.slice(1));
-  if (command === 'change-packet') return parseChangePacketArguments(argv.slice(1));
-  if (command === 'sharing-review') return parseSharingReviewArguments(argv.slice(1));
-  if (command === 'workflow-plan') return parseWorkflowPlanArguments(argv.slice(1));
-  if (command === 'workflow-run') return parseWorkflowRunArguments(argv.slice(1));
-  if (command === 'diff') return parseDiffArguments(argv.slice(1));
-  if (command === 'reconcile') return parseReconcileArguments(argv.slice(1));
-  if (command === 'timeline') return parseTimelineArguments(argv.slice(1));
-  if (command === 'export') return parseExportArguments(argv.slice(1));
+  const parsed = CLI_PARSERS[command](directLookup ? argv : argv.slice(1));
+  if (parsed.action !== command) {
+    throw new Error(`CLI parser contract mismatch for ${command}.`);
+  }
+  return parsed;
+}
+
+function parseLookupArguments(
+  lookupArguments: string[],
+): Extract<CliArguments, { action: 'lookup' }> {
   let query: string | null = null;
   let output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit' = 'terminal';
   let deep = false;
@@ -260,11 +207,12 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   let strictExit = false;
   let events = false;
   let plan = false;
+  let browse = false;
   let includeAttribution = true;
   let failOn: CliFailPolicy[] | null = null;
   let observerLabel: string | null = null;
   let vantageLabel: string | null = null;
-  const lookupArguments = argv.slice(1);
+  let saveLookup: string | null = null;
   for (let index = 0; index < lookupArguments.length; index++) {
     const argument = lookupArguments[index];
     if (argument === undefined) break;
@@ -298,6 +246,14 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
     } else if (argument === '--plan') {
       if (plan) throw new CliUsageError('--plan may be supplied only once.');
       plan = true;
+    } else if (argument === '--browse') {
+      if (browse) throw new CliUsageError('--browse may be supplied only once.');
+      browse = true;
+    } else if (argument === '--save-lookup') {
+      if (saveLookup !== null) throw new CliUsageError('--save-lookup may be supplied only once.');
+      const value = lookupArguments[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--save-lookup requires one bounded file path.');
+      saveLookup = value;
     } else if (argument === '--no-attribution') {
       if (!includeAttribution) throw new CliUsageError('--no-attribution may be supplied only once.');
       includeAttribution = false;
@@ -323,6 +279,16 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   if (detailSet && output !== 'terminal') throw new CliUsageError('--summary and --verbose apply only to terminal output.');
+  if (browse && output !== 'terminal') throw new CliUsageError('--browse applies only to terminal output.');
+  if (browse && (detailSet || events || plan || quiet)) {
+    throw new CliUsageError('--browse cannot be combined with detail, event, plan, or quiet options.');
+  }
+  if (browse && query === null) {
+    throw new CliUsageError('--browse requires a positional target because interactive stdin is reserved for navigation.');
+  }
+  if (saveLookup !== null && !browse) {
+    throw new CliUsageError('--save-lookup requires --browse so the exact completed Lookup document is saved after the browser closes.');
+  }
   if (!includeAttribution && output !== 'markdown' && output !== 'html') {
     throw new CliUsageError('--no-attribution applies only to Markdown or HTML reports.');
   }
@@ -330,7 +296,7 @@ function parseCliArgumentsCore(argv: string[]): CliAction {
   if (plan && (detailSet || strictExit || events || quiet || failOn !== null)) {
     throw new CliUsageError('--plan cannot be combined with detail, strict-exit, event, or quiet options.');
   }
-  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, includeAttribution, observerLabel, vantageLabel, quiet, color, ...(failOn ? { failOn } : {}) };
+  return { action: 'lookup', query, output, deep, detail, strictExit, events, plan, includeAttribution, observerLabel, vantageLabel, quiet, color, ...(browse ? { browse: true as const } : {}), ...(saveLookup ? { saveLookup } : {}), ...(failOn ? { failOn } : {}) };
 }
 
 function parseCompletionArguments(argv: string[]): Extract<CliArguments, { action: 'completion' }> {
@@ -415,18 +381,39 @@ function parseOfflineImportArguments<T extends 'map-observations' | 'oam-export'
 
 function parseCommandsArguments(argv: string[]): Extract<CliArguments, { action: 'commands' }> {
   let output: 'terminal' | 'json' = 'terminal';
+  let common = false;
+  let group: CliHelpGroup | null = null;
+  let mode: 'offline' | 'network' | null = null;
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--common') {
+      if (common) throw new CliUsageError('--common may be supplied only once.');
+      common = true;
+    } else if (argument === '--group') {
+      if (group !== null) throw new CliUsageError('--group may be supplied only once.');
+      const value = argv[++index];
+      if (!['investigate', 'respond', 'assure', 'utilities'].includes(value ?? '')) {
+        throw new CliUsageError('--group requires investigate, respond, assure, or utilities.');
+      }
+      group = value as CliHelpGroup;
+    } else if (argument === '--mode') {
+      if (mode !== null) throw new CliUsageError('--mode may be supplied only once.');
+      const value = argv[++index];
+      if (value !== 'offline' && value !== 'network') {
+        throw new CliUsageError('--mode requires offline or network.');
+      }
+      mode = value;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else throw new CliUsageError(`Unknown option "${argument}".`);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'commands', output, quiet, color };
+  return { action: 'commands', output, common, group, mode, quiet, color };
 }
 
 function parseDoctorArguments(argv: string[]): Extract<CliArguments, { action: 'doctor' }> {
@@ -1008,8 +995,9 @@ function parseCasePackArguments(argv: string[]): Extract<CliArguments, { action:
     else throw new CliUsageError('case-pack accepts one optional case-export file.');
   }
   if (audience === null) throw new CliUsageError('case-pack requires --audience internal, trusted, or public.');
+  if (!reviewed) throw new CliUsageError('case-pack requires --reviewed to confirm deliberate analyst review.');
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'case-pack', source, output, audience, reviewed, quiet, color };
+  return { action: 'case-pack', source, output, audience, reviewed: true, quiet, color };
 }
 
 function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { action: 'monitor-once' }> {
@@ -1018,6 +1006,8 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
   let output: 'terminal' | 'json' | 'junit' = 'terminal';
   let limit = 20;
   let concurrency = 2;
+  let limitSupplied = false;
+  let concurrencySupplied = false;
   let failOn: CliFailPolicy[] | null = null;
   let quiet = false;
   let color = true;
@@ -1036,11 +1026,19 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
       if (!value || value.startsWith('-')) throw new CliUsageError('--previous requires one prior monitor snapshot file.');
       previousSource = value;
     } else if (argument === '--limit' || argument === '--concurrency') {
+      if (argument === '--limit' ? limitSupplied : concurrencySupplied) {
+        throw new CliUsageError(`${argument} may be supplied only once.`);
+      }
       const value = Number(argv[++index]);
       const maximum = argument === '--limit' ? 20 : 3;
       if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new CliUsageError(`${argument} requires an integer from 1 to ${maximum}.`);
-      if (argument === '--limit') limit = value;
-      else concurrency = value;
+      if (argument === '--limit') {
+        limit = value;
+        limitSupplied = true;
+      } else {
+        concurrency = value;
+        concurrencySupplied = true;
+      }
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
       failOn = parseCliFailPolicies(argv[++index]);
@@ -1128,24 +1126,43 @@ function parseSharingReviewArguments(argv: string[]): Extract<CliArguments, { ac
 
 function parseWorkflowPlanArguments(argv: string[]): Extract<CliArguments, { action: 'workflow-plan' }> {
   const positional: string[] = [];
+  let discovery: 'list' | 'explain' | null = null;
+  let explainedRecipe: InvestigationPlanRecipe | null = null;
   let output: 'terminal' | 'json' = 'terminal';
   let quiet = false;
   let color = true;
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]!;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--list') {
+      if (discovery !== null) throw new CliUsageError('--list and --explain are mutually exclusive and may be supplied only once.');
+      discovery = 'list';
+    } else if (argument === '--explain') {
+      if (discovery !== null) throw new CliUsageError('--list and --explain are mutually exclusive and may be supplied only once.');
+      const value = argv[++index];
+      if (!INVESTIGATION_PLAN_RECIPES.includes(value as InvestigationPlanRecipe)) {
+        throw new CliUsageError(`--explain recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
+      }
+      discovery = 'explain';
+      explainedRecipe = value as InvestigationPlanRecipe;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else positional.push(argument);
   }
-  if (positional.length !== 2) throw new CliUsageError('workflow-plan requires one fixed recipe and one subject.');
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  if (discovery !== null) {
+    if (positional.length !== 0) throw new CliUsageError('workflow-plan discovery options do not accept a subject.');
+    if (discovery === 'list') return { action: 'workflow-plan', discovery, output, quiet, color };
+    return { action: 'workflow-plan', discovery, recipe: explainedRecipe!, output, quiet, color };
+  }
+  if (positional.length !== 2) throw new CliUsageError('workflow-plan requires one fixed recipe and one subject, --list, or --explain <recipe>.');
   const recipe = positional[0];
   if (!INVESTIGATION_PLAN_RECIPES.includes(recipe as InvestigationPlanRecipe)) {
     throw new CliUsageError(`workflow-plan recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
   }
-  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'workflow-plan', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, output, quiet, color };
 }
 
@@ -1177,11 +1194,11 @@ function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { acti
   }
   if (positional.length !== 2) throw new CliUsageError('workflow-run requires one fixed recipe and one subject.');
   const recipe = positional[0];
-  if (!INVESTIGATION_PLAN_RECIPES.includes(recipe as InvestigationPlanRecipe)) {
-    throw new CliUsageError(`workflow-run recipe must be one of: ${INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
+  if (!RUNNABLE_INVESTIGATION_PLAN_RECIPES.includes(recipe as RunnableInvestigationPlanRecipe)) {
+    throw new CliUsageError(`workflow-run recipe must be one of: ${RUNNABLE_INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'workflow-run', recipe: recipe as InvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
+  return { action: 'workflow-run', recipe: recipe as RunnableInvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {
@@ -1433,5 +1450,57 @@ function parseExportArguments(argv: string[]): Extract<CliArguments, { action: '
   return { action: 'export', source, format, compact, includeAttribution };
 }
 
-export { CLI_COMMANDS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
-export type { CliArguments, CliCommand, CompletionShell, LookupDetail };
+type CliParser = (argv: string[]) => CliAction;
+
+const CLI_PARSERS = Object.freeze({
+  completion: parseCompletionArguments,
+  doctor: parseDoctorArguments,
+  commands: parseCommandsArguments,
+  manual: parseManualArguments,
+  manifest: parseManifestArguments,
+  'map-observations': (argv: string[]) => parseOfflineImportArguments('map-observations', argv),
+  'oam-export': (argv: string[]) => parseOfflineImportArguments('oam-export', argv),
+  lookup: parseLookupArguments,
+  bulk: parseBulkArguments,
+  'ct-search': parseCtSearchArguments,
+  'ct-intake': parseCtIntakeArguments,
+  discover: parseDiscoverArguments,
+  'discover-scan': parseDiscoverScanArguments,
+  posture: parsePostureArguments,
+  http: parseHttpArguments,
+  tls: parseTlsArguments,
+  'dnssec-validate': parseDnssecValidateArguments,
+  'mail-transport': parseMailTransportArguments,
+  'registry-support': parseRegistrySupportArguments,
+  'registry-doctor': parseRegistryDoctorArguments,
+  'registry-cohort': parseRegistryCohortArguments,
+  'registry-scaffold': parseRegistryScaffoldArguments,
+  'risk-calibrate': parseRiskCalibrateArguments,
+  'lookalike-calibrate': parseLookalikeCalibrateArguments,
+  'verify-artifact': parseVerifyArtifactArguments,
+  'interchange-report': parseInterchangeReportArguments,
+  'inspect-archive': parseInspectArchiveArguments,
+  'sign-artifact': parseSignArtifactArguments,
+  'verify-signature': parseVerifySignatureArguments,
+  'source-report': parseSourceReportArguments,
+  compare: parseCompareArguments,
+  'page-compare': parsePageCompareArguments,
+  'mail-review': parseMailReviewArguments,
+  'review-evidence': parseReviewEvidenceArguments,
+  brief: parseBriefArguments,
+  'case-pack': parseCasePackArguments,
+  'domain-control': parseDomainControlArguments,
+  'monitor-once': parseMonitorOnceArguments,
+  assurance: parseAssuranceArguments,
+  'change-packet': parseChangePacketArguments,
+  'sharing-review': parseSharingReviewArguments,
+  'workflow-plan': parseWorkflowPlanArguments,
+  'workflow-run': parseWorkflowRunArguments,
+  diff: parseDiffArguments,
+  reconcile: parseReconcileArguments,
+  timeline: parseTimelineArguments,
+  export: parseExportArguments,
+} satisfies Record<CliCommand, CliParser>);
+
+export { CLI_COMMANDS, CLI_PARSERS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
+export type { CliArguments, CliCommand, CliPalette, CompletionShell, LookupDetail };

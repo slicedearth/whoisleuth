@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "status": "partial",
+  "observedAt": "2026-07-13T01:02:03.000Z",
+  "scanMode": "deep",
+  "source": "dns",
+  "durationMs": 13,
+  "complete": false,
+  "truncated": true,
+  "limitations": [
+    "Point-in-time data."
+  ],
+  "diagnostics": {
+    "a": {
+      "status": "success",
+      "truncated": false,
+      "discarded": 0,
+      "count": 2
+    },
+    "caa_policy": {
+      "status": "partial",
+      "detail": "Bounded inherited policy context.",
+      "truncated": true,
+      "count": 3
+    },
+    "discardedUrls": 1
+  }
+}

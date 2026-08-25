@@ -8,6 +8,7 @@ export interface SnapshotOverrides {
   firstCapturedAt?: string;
   capturedAt?: string;
   source?: string;
+  inputHostname?: string | null;
   scanDepth?: 'fast' | 'deep';
   availability?: string | null;
   riskModelVersion?: number | null;
@@ -43,6 +44,7 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
       overrides.firstCapturedAt ?? '2026-06-01T00:00:00.000Z',
     capturedAt: overrides.capturedAt ?? '2026-06-01T00:00:00.000Z',
     source: overrides.source ?? 'lookup',
+    inputHostname: overrides.inputHostname ?? null,
     scanDepth: overrides.scanDepth ?? 'deep',
     availability: overrides.availability ?? 'registered',
     confidence: null,
@@ -129,7 +131,7 @@ export async function openSeededTimelineCase(
   page: Page,
   domain: string,
   records: ReturnType<typeof caseRecord>[],
-  schemaVersion = 2,
+  schemaVersion = 13,
 ) {
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: schemaVersion, cases: records },
@@ -149,4 +151,27 @@ export async function createCase(page: Page, domain: string) {
   const heading = page.locator('.case-head', { hasText: domain });
   await expect(heading).toBeVisible();
   await expect(heading).toHaveAttribute('aria-expanded', 'true');
+}
+
+export async function openCaseResponseWorkspace(
+  page: Page,
+  caseId = '',
+  presentation: 'quick' | 'advanced' = 'advanced',
+) {
+  const disclosure = caseId
+    ? page.locator(`#case-response-${caseId}`)
+    : page.locator('.response-disclosure:visible').last();
+  await expect(disclosure).toBeVisible();
+  if (await disclosure.getAttribute('open') === null) {
+    await disclosure.locator(':scope > summary').click();
+  }
+  const workspace = disclosure.locator('.response-workspace');
+  await expect(workspace).toBeVisible();
+  const presentationControl = workspace
+    .getByRole('group', { name: 'Case response presentation' })
+    .getByRole('button', { name: presentation === 'quick' ? 'Quick' : 'Advanced', exact: true });
+  await expect(presentationControl).toBeVisible();
+  if (await presentationControl.getAttribute('aria-pressed') !== 'true') await presentationControl.click();
+  await expect(presentationControl).toHaveAttribute('aria-pressed', 'true');
+  return workspace;
 }

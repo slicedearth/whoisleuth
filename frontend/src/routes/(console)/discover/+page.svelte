@@ -521,7 +521,7 @@
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
       if (token !== searchToken) return;
-      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
+      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (results partial or capped)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI
       // state now; do nothing so we neither clear its results nor its loading flag.
@@ -630,7 +630,7 @@
 
   function deleteHistoryQuery(query:string) {
     const entry = ctHistory.entries.find((candidate) => candidate.query === query);
-    if (entry) deleteHistoryEntry(entry);
+    if (entry) return deleteHistoryEntry(entry);
   }
 
   function toggle(domain: string) {
@@ -727,7 +727,7 @@
 </script>
 
 <svelte:head><title>Discover · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Find candidates" title="Discover" description="Generate explainable lookalikes, search certificate logs, or pivot through one registry's nameserver results." />
+<PageHeading eyebrow="Investigate" title="Discover" description="Generate explainable lookalikes, search certificate logs, or pivot through one registry's nameserver results." />
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}

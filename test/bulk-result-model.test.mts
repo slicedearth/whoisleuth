@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  boundedText,
   boundedStrings,
   bulkSessionInputDigest,
   compactContact,
@@ -91,6 +92,8 @@ describe('Bulk result model', () => {
       boundedStrings(['kept', 'bad\nvalue', 'x'.repeat(501)]),
       ['kept'],
     );
+    assert.equal(boundedText('unsafe\u009b\u202evalue'), null);
+    assert.equal(boundedText('ordinary value'), 'ordinary value');
     assert.deepEqual(compactContact({
       name: 'Registrant',
       org: 'Example Org',

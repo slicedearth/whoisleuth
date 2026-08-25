@@ -18,8 +18,8 @@ import type {
   CasePatch,
   CaseRecord,
 } from './analysis/case-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import {
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
@@ -29,7 +29,10 @@ import {
   mergeExternalIntelligenceIntoCase,
   type ExternalIntelligencePreview,
 } from './analysis/external-intelligence-import.ts';
-import { buildRiskCalibrationDatasetExport } from './analysis/risk-calibration-export.ts';
+import {
+  buildRiskCalibrationDatasetExport,
+  serializeRiskCalibrationDatasetExport,
+} from './analysis/risk-calibration-export.ts';
 
 export type RiskCalibrationExportPreview = Readonly<{
   selected: number;
@@ -57,11 +60,16 @@ export {
 export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
+  CASE_ACTION_EVENT_SOURCE_CLASSES,
   CASE_ASSERTION_KINDS,
   CASE_ASSERTION_STATES,
   CASE_EVIDENCE_RELATION_STANCES,
   CASE_MANUAL_TRAIL_KINDS,
+  CASE_CLOSURE_REASONS,
+  CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
+  CASE_OBSERVED_EFFECT_STATES,
   CASE_PIN_COMPLETENESS,
+  CASE_PROVIDER_OUTCOMES,
   CASE_SIGHTING_CATEGORIES,
   CASE_SIGHTING_STATES,
 } from './analysis/case-response-model.ts';
@@ -83,12 +91,18 @@ export {
 } from './analysis/external-intelligence-import.ts';
 export type {
   CaseActionRecord,
+  CaseActionState,
+  CaseActionTransitionEvent,
   CaseAssertionExternalProvenance,
   CaseAssertionRecord,
   CaseEvidenceRelationStance,
   CaseDecisionRecord,
   CaseEvidencePin,
+  CaseClosureHistory,
+  CaseClosureRecord,
   CaseManualTrailEvent,
+  CaseObservedEffectHistory,
+  CaseObservedEffectReview,
   CaseSightingRecord,
   CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';
@@ -116,9 +130,10 @@ export type {
 } from './analysis/external-intelligence-import.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
+export const MAX_CASE_BATCH_MUTATIONS = 100;
 
 export async function loadCases(): Promise<CaseRecord[]> {
-  return (await browserLocalDataProvider()).read(CASES_COLLECTION);
+  return readBrowserLocalData('cases');
 }
 
 // Persists a clean, bounded, budget-checked store. Enforces the serialized-size
@@ -143,22 +158,50 @@ export async function getCaseByDomain(domain: string): Promise<CaseRecord | null
 // Mutations return the record as it exists in the persisted, budget-bounded
 // store (never a pre-persist copy that might still hold evidence pruned to fit),
 // plus how many snapshots were pruned so the UI can warn.
-export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; created: boolean; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
     const result = openOrCreateCase(current, input);
-    if (!result.created) return { document: current, result: { record: result.record, created: false as boolean, pruned: 0 } };
+    if (!result.created) return {
+      document: current,
+      result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
+    };
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === result.record.id) ?? result.record;
-    return { document: cases, result: { record, created: true as boolean, pruned } };
+    return { document: cases, result: { record, cases, created: true as boolean, pruned } };
   });
 }
 
-export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
     const result = updateCase(current, id, patch);
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, pruned } };
+    return { document: cases, result: { record, cases, pruned } };
+  });
+}
+
+export async function setCaseDispositions(
+  ids: readonly string[],
+  disposition: string,
+): Promise<{ cases: CaseRecord[]; changed: number; pruned: number }> {
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_CASE_BATCH_MUTATIONS) {
+    throw new Error(`A Case disposition batch must contain between 1 and ${MAX_CASE_BATCH_MUTATIONS} records.`);
+  }
+  if (ids.some((id) => typeof id !== 'string' || !id || id.length > 160 || /[\u0000-\u001f\u007f]/u.test(id))) {
+    throw new Error('A Case disposition batch contains an invalid record identifier.');
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('A Case disposition batch must use unique record identifiers.');
+  }
+
+  return updateBrowserLocalData('cases', (current) => {
+    let next = current;
+    for (const id of ids) next = updateCase(next, id, { disposition }).cases;
+    const { cases, pruned } = boundedCases(next);
+    return {
+      document: cases,
+      result: { cases, changed: ids.length, pruned },
+    };
   });
 }
 
@@ -167,7 +210,7 @@ async function updateCaseBrandProfileAssociation(
   profileId: string,
   operation: 'add' | 'remove',
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const record = current.find((item) => item.id === id);
     if (!record) throw new Error('Case not found.');
     const brandProfileIds = operation === 'add'
@@ -200,24 +243,28 @@ export function removeCaseBrandProfileAssociation(
   return updateCaseBrandProfileAssociation(id, profileId, 'remove');
 }
 
-export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; pruned: number }> {
+export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return editCase(id, { note: body });
 }
 
-export async function deleteCase(id: string): Promise<void> {
-  await (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => ({
-    document: current.filter((item) => item.id !== id),
-    result: undefined,
-  }));
+export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; deleted: boolean }> {
+  return updateBrowserLocalData('cases', (current) => {
+    const cases = current.filter((item) => item.id !== id);
+    return {
+      document: cases,
+      result: { cases, deleted: cases.length !== current.length },
+    };
+  });
 }
 
-export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: {
+        cases,
         added: result.added,
         updated: result.updated,
         skipped: result.skipped,
@@ -235,15 +282,17 @@ export async function importExternalFindings(
   casesUpdated: number;
   findingsAdded: number;
   duplicatesSkipped: number;
+  cases: CaseRecord[];
   pruned: number;
 }> {
   const document: ExternalFindingsDocument = parseExternalFindingsDocument(value);
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalFindingsIntoCases(current, document);
     const { cases, pruned } = boundedCases(merged.cases);
     return {
       document: cases,
       result: {
+        cases,
         casesCreated: merged.casesCreated,
         casesUpdated: merged.casesUpdated,
         findingsAdded: merged.findingsAdded,
@@ -262,9 +311,10 @@ export async function importExternalIntelligence(
   assertionsAdded: number;
   duplicatesSkipped: number;
   capacitySkipped: number;
+  cases: CaseRecord[];
   pruned: number;
 }> {
-  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+  return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalIntelligenceIntoCase(current, caseId, preview);
     const { cases, pruned } = boundedCases(merged.cases);
     const record = cases.find((item) => item.id === merged.record.id) ?? merged.record;
@@ -272,6 +322,7 @@ export async function importExternalIntelligence(
       document: cases,
       result: {
         record,
+        cases,
         assertionsAdded: merged.assertionsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
         capacitySkipped: merged.capacitySkipped,
@@ -300,7 +351,9 @@ export async function exportRiskCalibrationDataset(
   if (!payload.records.length) {
     throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
   }
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const blob = new Blob([serializeRiskCalibrationDatasetExport(payload)], {
+    type: 'application/json;charset=utf-8',
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

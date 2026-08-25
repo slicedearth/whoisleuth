@@ -33,19 +33,12 @@ import {
 import {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
-  EARLIEST_INVESTIGATION_GUIDE_KEY,
-  LEGACY_INVESTIGATION_GUIDE_KEY,
-  ORIGINAL_INVESTIGATION_GUIDE_KEY,
-  PREVIOUS_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
+import { parseBoundedJson } from './bounded-json.ts';
 
 export {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
-  EARLIEST_INVESTIGATION_GUIDE_KEY,
-  LEGACY_INVESTIGATION_GUIDE_KEY,
-  ORIGINAL_INVESTIGATION_GUIDE_KEY,
-  PREVIOUS_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 
 export type {
@@ -71,18 +64,20 @@ function serializedBytes(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function readStoredGuide(key: string): { state: 'absent' | 'invalid' | 'valid'; guide: InvestigationGuide | null } {
+function readStoredGuide(key: string): InvestigationGuide | null {
   try {
     const serialized = sessionStorage.getItem(key);
-    if (serialized === null) return { state: 'absent', guide: null };
+    if (serialized === null) return null;
     if (serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES
       || serializedBytes(serialized) > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES) {
-      return { state: 'invalid', guide: null };
+      return null;
     }
-    const guide = parseInvestigationGuide(JSON.parse(serialized));
-    return { state: guide ? 'valid' : 'invalid', guide };
+    return parseInvestigationGuide(parseBoundedJson(serialized, {
+      label: 'Guided investigation state',
+      maximumBytes: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
+    }));
   } catch {
-    return { state: 'invalid', guide: null };
+    return null;
   }
 }
 
@@ -112,20 +107,7 @@ function updateStoredGuide(next: InvestigationGuide | null, fallback: Investigat
 }
 
 export function loadInvestigationGuide(): InvestigationGuide | null {
-  const current = readStoredGuide(INVESTIGATION_GUIDE_KEY);
-  if (current.state !== 'absent') return current.guide;
-
-  const previous = readStoredGuide(PREVIOUS_INVESTIGATION_GUIDE_KEY);
-  const legacy = previous.guide ? previous : readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
-  const original = legacy.guide ? legacy : readStoredGuide(ORIGINAL_INVESTIGATION_GUIDE_KEY);
-  const earliest = original.guide ? original : readStoredGuide(EARLIEST_INVESTIGATION_GUIDE_KEY);
-  if (!earliest.guide) return null;
-  try {
-    storeGuide(earliest.guide);
-  } catch {
-    // The normalized legacy record remains usable in memory when storage is unavailable.
-  }
-  return earliest.guide;
+  return readStoredGuide(INVESTIGATION_GUIDE_KEY);
 }
 
 export function startInvestigationGuide(
@@ -200,10 +182,6 @@ export function downloadInvestigationGuideSummary(): void {
 export function clearInvestigationGuide() {
   try {
     sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
-    sessionStorage.removeItem(PREVIOUS_INVESTIGATION_GUIDE_KEY);
-    sessionStorage.removeItem(LEGACY_INVESTIGATION_GUIDE_KEY);
-    sessionStorage.removeItem(ORIGINAL_INVESTIGATION_GUIDE_KEY);
-    sessionStorage.removeItem(EARLIEST_INVESTIGATION_GUIDE_KEY);
   } catch {
     // Unavailable storage is already effectively clear.
   }

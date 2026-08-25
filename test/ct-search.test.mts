@@ -172,6 +172,39 @@ describe('empty and invalid input', () => {
       row({ name_value: 'other.com' }),
     ]);
     assert.deepStrictEqual(result.domains, ['example.com', 'other.com']);
+    assert.equal(result.rejectedRows, 3);
+    assert.equal(result.truncated, true);
+  });
+
+  test('treats object rows without either documented name field as rejected content', () => {
+    for (const missing of [
+      {},
+      { id: 1 },
+      { id: 1, name_value: '', common_name: '' },
+      { id: 1, name_value: '  ', common_name: '\n' },
+      { id: 1, name_value: '\u0085', common_name: '\u0085' },
+    ]) {
+      const result = summarizeCtResults([missing]);
+      assert.deepEqual(result.domains, []);
+      assert.equal(result.rejectedRows, 1);
+      assert.equal(result.truncated, true);
+    }
+
+    const mixed = summarizeCtResults([
+      { id: 1 },
+      row({ id: 2, name_value: 'retained.example.com', common_name: '' }),
+    ]);
+    assert.deepEqual(mixed.domains, ['retained.example.com']);
+    assert.equal(mixed.rejectedRows, 1);
+    assert.equal(mixed.truncated, true);
+
+    const validNoCandidate = summarizeCtResults([{ name_value: 'co.uk', common_name: '' }]);
+    assert.equal(validNoCandidate.rejectedRows, 0);
+    assert.equal(validNoCandidate.truncated, false);
+
+    const oneValidSibling = summarizeCtResults([{ name_value: 'a.example.com', common_name: '' }]);
+    assert.equal(oneValidSibling.rejectedRows, 0);
+    assert.equal(oneValidSibling.truncated, false);
   });
 });
 
@@ -213,6 +246,68 @@ describe('searchCertificateTransparency', () => {
     assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
     assert.equal(result.observation.complete, true);
     assert.equal(result.observation.diagnostics.certificateRows, 2);
+  });
+
+  test('marks a retained result partial when malformed source rows were excluded', async () => {
+    const result = await searchCertificateTransparency('example', {
+      fetcher: async () => new Response(JSON.stringify([
+        row({ id: 1, name_value: 'a.example.com', common_name: '' }),
+        null,
+      ]), { status: 200, headers: { 'content-type': 'application/json' } }),
+    });
+    assert.equal(result.rejectedRows, 1);
+    assert.equal(result.truncated, true);
+    assert.equal(result.observation.status, 'partial');
+    assert.equal(result.observation.complete, false);
+    assert.equal(result.observation.diagnostics.rejectedRows, 1);
+    assert.match(result.observation.limitations.join(' '), /malformed fields were excluded/iu);
+  });
+
+  test('rejects malformed UTF-8 at the CT response boundary', async () => {
+    for (const body of [
+      '[{"id":1,"name_value":"a.example.com~","common_name":""}]',
+      '[{"id":1,"name_value~":"a.example.com","common_name":""}]',
+      '[{"id":1,"name_value":"a.example.com","entry_timestamp":"2026-01-01T00:00:00Z~"}]',
+    ]) {
+      const bytes = Buffer.from(body, 'utf8');
+      const marker = bytes.indexOf('~'.charCodeAt(0));
+      assert.notEqual(marker, -1);
+      bytes[marker] = 0xff;
+      let cancelled = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(bytes); },
+        cancel() { cancelled += 1; },
+      });
+      await assert.rejects(
+        searchCertificateTransparency('example', {
+          fetcher: async () => new Response(stream, { status: 200 }),
+        }),
+        /utf-?8|encoded data/iu,
+      );
+      assert.equal(cancelled, 1);
+    }
+  });
+
+  test('preserves valid split multibyte CT input and literal replacement characters', async () => {
+    const body = JSON.stringify([
+      row({ id: 1, name_value: 'a.example.com', common_name: '', issuer_name: 'Bücher � CA' }),
+    ]);
+    const bytes = new TextEncoder().encode(body);
+    const splitAt = bytes.indexOf(0xc3) + 1;
+    assert.ok(splitAt > 0);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, splitAt));
+        controller.enqueue(bytes.slice(splitAt));
+        controller.close();
+      },
+    });
+    const result = await searchCertificateTransparency('example', {
+      fetcher: async () => new Response(stream, { status: 200 }),
+    });
+    assert.equal(result.rejectedRows, 0);
+    assert.equal(result.truncated, false);
+    assert.deepEqual(result.domains, ['a.example.com']);
   });
 
   test('rejects an invalid query before invoking the safe request boundary', async () => {
@@ -614,7 +709,7 @@ describe('timestamps', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: '2026-01-15T12:00:00.000' }),
     ]);
-    assert.notEqual(requiredValue(result.matches[0]).firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, '2026-01-15T12:00:00.000Z');
   });
 });
 

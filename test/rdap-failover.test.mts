@@ -47,6 +47,155 @@ describe('RDAP endpoint failover', () => {
     assert.equal(record.transportSecurity, 'https');
   });
 
+  test('attributes successful and not-found responses to the admitted redirect destination', async () => {
+    const redirected = await fetchFixture('domain', 'example.com', [
+      'https://bootstrap.example/rdap',
+    ], async () => ({
+      status: 200,
+      ok: true,
+      text: JSON.stringify({ ldhName: 'EXAMPLE.COM' }),
+      finalUrl: 'http://final.example/domain/example.com',
+    }));
+    assert.equal(redirected.rdapServer, 'http://final.example/domain/example.com');
+    assert.equal(redirected.transportSecurity, 'http');
+    assert.equal(requiredValue(redirected.attempts[0]).endpoint, redirected.rdapServer);
+
+    const upgraded = await fetchFixture('domain', 'free.example', [
+      'http://bootstrap.example/rdap',
+    ], async () => ({
+      status: 404,
+      ok: false,
+      text: JSON.stringify({ errorCode: 404 }),
+      finalUrl: 'https://final.example/domain/free.example',
+    }));
+    assert.equal(upgraded.rdapServer, 'https://final.example/domain/free.example');
+    assert.equal(upgraded.transportSecurity, 'https');
+    assert.equal(requiredValue(upgraded.attempts[0]).endpoint, upgraded.rdapServer);
+  });
+
+  test('fails over before treating a redirected response for another RDAP object as authoritative', async () => {
+    for (const finalUrl of [
+      'https://redirect.example/domain/other.example',
+      'https://redirect.example/ip/192.0.2.1',
+      'https://redirect.example/autnum/64496',
+      'https://redirect.example/domain/example.com/related',
+    ]) {
+      let calls = 0;
+      const record = await fetchFixture('domain', 'example.com', [
+        'https://first.example/rdap',
+        'https://second.example/rdap',
+      ], async () => {
+        calls += 1;
+        return calls === 1
+          ? { status: 404, ok: false, text: '{}', finalUrl }
+          : {
+              status: 404,
+              ok: false,
+              text: '{}',
+              finalUrl: 'https://second.example/rdap/domain/example.com',
+            };
+      });
+      assert.equal(calls, 2, finalUrl);
+      assert.equal(record.rdapServer, 'https://second.example/rdap/domain/example.com', finalUrl);
+      assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'not_found']);
+      assert.equal(JSON.stringify(record.attempts).includes(finalUrl), false, finalUrl);
+    }
+  });
+
+  test('binds final domain, IP, and ASN paths by canonical object identity', async () => {
+    const unicode = await fetchFixture('domain', 'bücher.example', [
+      'https://bootstrap.example/rdap',
+    ], async () => ({
+      status: 404,
+      ok: false,
+      text: '{}',
+      finalUrl: 'https://redirect.example/domain/b%C3%BCcher.example',
+    }));
+    assert.equal(unicode.rdapServer, 'https://redirect.example/domain/b%C3%BCcher.example');
+
+    for (const [type, value, wrongFinalUrl] of [
+      ['ipv4', '192.0.2.1', 'https://redirect.example/ip/192.0.2.2'],
+      ['ipv6', '2001:db8::1', 'https://redirect.example/ip/2001%3Adb8%3A%3A2'],
+      ['asn', 'AS64496', 'https://redirect.example/autnum/64497'],
+    ] as const) {
+      let calls = 0;
+      const record = await fetchFixture(type, value, [
+        'https://first.example/rdap',
+        'https://second.example/rdap',
+      ], async () => {
+        calls += 1;
+        return calls === 1
+          ? { status: 404, ok: false, text: '{}', finalUrl: wrongFinalUrl }
+          : { status: 404, ok: false, text: '{}' };
+      });
+      assert.equal(calls, 2, type);
+      assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'not_found'], type);
+    }
+  });
+
+  test('fails over without retaining invalid redirect provenance', async () => {
+    const invalidFinalUrls = [
+      'https://redirect.example/domain/example.com?session=private',
+      'https://redirect.example/domain/example.com#private',
+      'https://user:password@redirect.example/domain/example.com',
+      'https://redirect.example:8443/domain/example.com',
+      'ftp://redirect.example/domain/example.com',
+      'https://redirect.example/domain/example.com\nforged',
+      `https://redirect.example/${'x'.repeat(2_048)}`,
+    ];
+
+    for (const finalUrl of invalidFinalUrls) {
+      let calls = 0;
+      const record = await fetchFixture('domain', 'example.com', [
+        'https://bad.example/rdap',
+        'https://good.example/rdap',
+      ], async () => {
+        calls += 1;
+        return calls === 1
+          ? {
+              status: 200,
+              ok: true,
+              text: JSON.stringify({ ldhName: 'EXAMPLE.COM' }),
+              finalUrl,
+            }
+          : {
+              status: 200,
+              ok: true,
+              text: JSON.stringify({ ldhName: 'EXAMPLE.COM' }),
+              finalUrl: 'https://good.example/rdap/domain/example.com',
+            };
+      });
+      assert.equal(calls, 2, finalUrl);
+      assert.equal(record.rdapServer, 'https://good.example/rdap/domain/example.com', finalUrl);
+      assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'success']);
+      assert.equal(JSON.stringify(record.attempts).includes(finalUrl), false, finalUrl);
+    }
+  });
+
+  test('attributes non-object attempts to a valid final destination and preserves no-redirect compatibility', async () => {
+    let calls = 0;
+    const record = await fetchFixture('domain', 'example.com', [
+      'https://first.example/rdap',
+      'https://second.example/rdap',
+    ], async () => {
+      calls += 1;
+      return calls === 1
+        ? {
+            status: 200,
+            ok: true,
+            text: '<html>not JSON</html>',
+            finalUrl: 'https://redirect.example/domain/example.com',
+          }
+        : {
+            status: 200,
+            ok: true,
+            text: JSON.stringify({ ldhName: 'EXAMPLE.COM' }),
+          };
+    });
+    assert.equal(requiredValue(record.attempts[0]).endpoint, 'https://redirect.example/domain/example.com');
+    assert.equal(record.rdapServer, 'https://second.example/rdap/domain/example.com');
+  });
+
   test('falls through a rate-limited endpoint to the next service', async () => {
     const calls = [];
     const record = await fetchFixture('domain', 'example.com', [

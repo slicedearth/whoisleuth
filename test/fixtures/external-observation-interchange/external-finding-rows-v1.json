@@ -1,0 +1,18 @@
+{
+  "schema": "whoisleuth.external-finding-rows",
+  "schemaVersion": 1,
+  "source": {
+    "name": "Reserved row fixture"
+  },
+  "rows": [
+    {
+      "domain": "rows.example.test",
+      "category": "dns",
+      "summary": "External DNS row requires review.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "unknown",
+      "limitation": "No independent DNS query was made.",
+      "reference": null
+    }
+  ]
+}

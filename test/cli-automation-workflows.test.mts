@@ -14,7 +14,7 @@ import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
-import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION } from '../cli/progress-events.mts';
+import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
 import type { BulkLookupResult } from '../cli/bulk.mts';
@@ -163,7 +163,7 @@ describe('offline domain assurance', () => {
       now: () => NOW,
       readArtifactInput: async () => JSON.stringify({
         schema: 'whoisleuth.domain-assurance.input',
-        version: 1,
+        version: 2,
         kind: 'retirement',
         domain: 'retired.example',
         checks: { autoRenewDisabled: true, registrarLockMaintained: true },
@@ -209,7 +209,7 @@ describe('offline domain assurance', () => {
         schema: 'whoisleuth.domain-change-packet.input', version: 1, domain: 'example.test', reference: 'CHG-42',
         preChange: change('192.0.2.10'), postChange: change('192.0.2.20'),
         assurance: {
-          schema: 'whoisleuth.domain-assurance.input', version: 1, kind: 'planned-change', domain: 'example.test',
+          schema: 'whoisleuth.domain-assurance.input', version: 2, kind: 'planned-change', domain: 'example.test',
           change: {
             reference: 'CHG-42', startsAt: '2026-08-05T00:00:00Z', endsAt: '2026-08-05T02:00:00Z',
             milestones: [{ id: 'dns', label: 'DNS published', expectedBy: NOW, evidenceSource: 'fixture', state: 'observed', observedAt: NOW, evidenceReference: 'post:dns' }],
@@ -358,6 +358,105 @@ describe('safe local output', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  test('saves one exact completed browser document privately and never overwrites it', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-browser-save-'));
+    const destination = join(directory, 'lookup.json');
+    try {
+      const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+        stdout: capture().stream,
+        stderr: capture().stream,
+        canBrowseLookup: () => true,
+        classifyQuery: () => classifiedDomain('example.test'),
+        runUnifiedLookup: async () => lookupResult('example.test'),
+        browseLookupOperation: async (options) => options.collect!({
+          signal: new AbortController().signal,
+          onSourceSettled: () => undefined,
+        }),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      const saved = JSON.parse(await readFile(destination, 'utf8'));
+      assert.equal(saved.schema, 'whoisleuth.cli.lookup');
+      assert.equal(saved.query, 'example.test');
+      assert.equal((await stat(destination)).mode & 0o777, 0o600);
+
+      const refused = capture();
+      assert.equal(await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+        stdout: capture().stream,
+        stderr: refused.stream,
+        canBrowseLookup: () => true,
+        classifyQuery: () => classifiedDomain('example.test'),
+        runUnifiedLookup: async () => lookupResult('example.test'),
+        browseLookupOperation: async (options) => options.collect!({
+          signal: new AbortController().signal,
+          onSourceSettled: () => undefined,
+        }),
+      }), EXIT_CODES.USAGE);
+      assert.match(refused.value(), /already exists/u);
+      assert.equal(JSON.parse(await readFile(destination, 'utf8')).generatedAt, saved.generatedAt);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('does not save a partial document when collection or browser review fails', async () => {
+    for (const failure of ['collection', 'browser'] as const) {
+      const directory = await mkdtemp(join(tmpdir(), `whoisleuth-cli-browser-${failure}-`));
+      const destination = join(directory, 'lookup.json');
+      try {
+        const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+          stdout: capture().stream,
+          stderr: capture().stream,
+          canBrowseLookup: () => true,
+          classifyQuery: () => classifiedDomain('example.test'),
+          runUnifiedLookup: async () => {
+            if (failure === 'collection') throw new Error('fixture collection failure');
+            return lookupResult('example.test');
+          },
+          browseLookupOperation: async (options) => {
+            await options.collect!({
+              signal: new AbortController().signal,
+              onSourceSettled: () => undefined,
+            });
+            throw new Error('fixture browser failure');
+          },
+        });
+        assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
+        await assert.rejects(readFile(destination, 'utf8'), (error: unknown) => (
+          Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+        ));
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test('does not begin a local save after cancellation wins the post-browser boundary', async () => {
+    const controller = new AbortController();
+    let saveCalls = 0;
+    const code = await runCli(['lookup', 'example.test', '--browse', '--save-lookup', 'fixture-review.json'], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      signal: controller.signal,
+      canBrowseLookup: () => true,
+      classifyQuery: () => classifiedDomain('example.test'),
+      runUnifiedLookup: async () => lookupResult('example.test'),
+      browseLookupOperation: async (options) => {
+        const document = await options.collect!({
+          signal: controller.signal,
+          onSourceSettled: () => undefined,
+        });
+        controller.abort(new DOMException('Aborted', 'AbortError'));
+        return document;
+      },
+      writePrivateFile: async () => {
+        saveCalls += 1;
+        return 'fixture-review.json';
+      },
+    });
+    assert.equal(code, EXIT_CODES.CANCELLED);
+    assert.equal(saveCalls, 0);
+  });
 });
 
 describe('strict exit and machine progress events', () => {
@@ -420,6 +519,25 @@ describe('strict exit and machine progress events', () => {
       reason: 'missing_input',
       exitCode: EXIT_CODES.USAGE,
     });
+  });
+
+  test('escapes terminal-unsafe Unicode in machine progress events without changing parsed values', () => {
+    const stderr = capture();
+    const events = createCliProgressEvents(stderr.stream, {
+      command: 'lookup', enabled: true, now: () => NOW,
+    });
+    events.emit({
+      event: 'warning',
+      source: 'fixture\u009bsource',
+      state: 'partial\u202e',
+      reason: 'line\u2028break\u00admarker',
+    });
+
+    assert.doesNotMatch(stderr.value(), /[\u007f-\u009f\u2028\u2029]|\p{Default_Ignorable_Code_Point}/u);
+    const parsed = JSON.parse(stderr.value());
+    assert.equal(parsed.source, 'fixture\u009bsource');
+    assert.equal(parsed.state, 'partial\u202e');
+    assert.equal(parsed.reason, 'line break\u00admarker');
   });
 });
 
@@ -551,6 +669,24 @@ describe('direct reports and saved Lookup diff', () => {
       /exactly one domain/u,
     );
     assert.throws(() => buildCliLookupTimeline([oldest, oldest], NOW), /observation times must be unique/u);
+
+    const legacyZoneLess = JSON.parse(savedLookup('history.example')) as Record<string, unknown>;
+    legacyZoneLess.version = 1;
+    legacyZoneLess.generatedAt = '2026-01-15T12:00:00';
+    const legacyExplicit = JSON.parse(savedLookup('history.example')) as Record<string, unknown>;
+    legacyExplicit.version = 1;
+    legacyExplicit.generatedAt = '2026-01-15T01:30:00.000Z';
+    const before = structuredClone(legacyZoneLess);
+    assert.throws(
+      () => buildCliLookupTimeline([JSON.stringify(legacyZoneLess), JSON.stringify(legacyExplicit)], NOW),
+      /explicit timezone/u,
+    );
+    assert.deepEqual(legacyZoneLess, before);
+    assert.deepEqual(
+      buildCliLookupTimeline([JSON.stringify(legacyExplicit), oldest], NOW)
+        .observations.map((item) => item.generatedAt),
+      ['2026-01-15T01:30:00.000Z', '2026-06-01T00:00:00.000Z'],
+    );
   });
 
   test('reconciles labelled same-domain observations without retaining filenames or voting on truth', async () => {
@@ -612,6 +748,13 @@ describe('resumable Bulk checkpoints', () => {
       assert.equal(checkpoint.version, 2);
       assert.equal(checkpoint.results[0]?.observedAt, NOW);
 
+      const zoneLess = JSON.parse(checkpointText);
+      zoneLess.startedAt = '2026-08-01T00:00:00';
+      assert.throws(
+        () => parseBulkCheckpoint(JSON.stringify(zoneLess), { queries, deep: false, classifyQuery: classifiedDomain }),
+        /metadata is invalid/u,
+      );
+
       const fullResponse = JSON.parse(checkpointText);
       fullResponse.results[0].result.rdap = { raw: 'not compact evidence' };
       assert.throws(
@@ -660,7 +803,7 @@ describe('resumable Bulk checkpoints', () => {
     }
   });
 
-  test('migrates legacy checkpoint rows without inventing observation time', () => {
+  test('rejects a reader-only checkpoint without inventing observation time', () => {
     const queries = ['legacy.example'];
     const legacy = {
       schema: 'whoisleuth.cli.bulk-checkpoint',
@@ -668,8 +811,8 @@ describe('resumable Bulk checkpoints', () => {
       mode: 'fast',
       inputDigestSha256: createHash('sha256').update('fast\n').update(queries.join('\n')).digest('hex'),
       queryCount: 1,
-      startedAt: '2026-08-01T00:00:00.000Z',
-      updatedAt: '2026-08-01T00:01:00.000Z',
+      startedAt: '2026-08-01T00:00:00.000',
+      updatedAt: '2026-08-01T00:01:00.000',
       results: [{
         index: 0,
         query: queries[0],
@@ -681,13 +824,13 @@ describe('resumable Bulk checkpoints', () => {
         },
       }],
     };
-    const parsed = parseBulkCheckpoint(JSON.stringify(legacy), {
+    const before = structuredClone(legacy);
+    assert.throws(() => parseBulkCheckpoint(JSON.stringify(legacy), {
       queries,
       deep: false,
       classifyQuery: classifiedDomain,
-    });
-    assert.equal(parsed.results[0]?.observedAt, null);
-    assert.equal(parsed.results[0]?.collectionOrigin, 'resumed_checkpoint');
+    }), /version 2/u);
+    assert.deepEqual(legacy, before);
   });
 
   test('coalesces settlement bursts into one active write and one follow-up', async () => {

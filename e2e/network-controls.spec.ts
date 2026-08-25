@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { readBrowserLocalCollection, useTheme } from './helpers';
+import { openBulkFilters, readBrowserLocalCollection, useTheme } from './helpers';
 
 test.use({ allowExpectedLookup429Noise: true });
 
@@ -148,6 +148,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.getByRole('status').first()).toHaveText('Completed 1 of 1 lookups.');
+  await openBulkFilters(page);
   await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
 

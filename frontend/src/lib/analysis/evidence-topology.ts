@@ -83,7 +83,7 @@ const horizontalLink = linkHorizontal<{ source: Point; target: Point }, Point>()
 
 function boundedText(value: unknown, maxLength: number) {
   const normalized = String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]/gu, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
   return normalized.slice(0, maxLength);

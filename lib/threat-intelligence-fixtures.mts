@@ -8,6 +8,7 @@ import type {
   CuratedConnectorResult,
   CuratedConnectorTarget,
 } from './threat-intelligence-runtime.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_CONNECTOR_KEY_LENGTH = 80;
 const MAX_CONNECTOR_FIXTURE_BYTES = 512 * 1024;
@@ -50,9 +51,7 @@ function fixtureId(value: unknown): string | null {
 }
 
 function fixtureTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 50) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeLegacyIsoTimestamp(value);
 }
 
 export function runCuratedConnectorFixture(

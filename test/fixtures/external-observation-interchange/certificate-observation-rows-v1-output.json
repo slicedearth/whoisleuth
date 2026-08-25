@@ -1,0 +1,36 @@
+{
+  "schema": "whoisleuth.external-findings",
+  "schemaVersion": 4,
+  "source": {
+    "name": "Reserved certificate observations",
+    "reference": null,
+    "collectedAt": null
+  },
+  "findings": [
+    {
+      "domain": "certificate.example.test",
+      "category": "certificate",
+      "evidenceClass": "provider_report",
+      "summary": "External certificate SHA-256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef; issuer Reserved test issuer; not after 2027-01-02T03:04:05.000Z.",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "complete",
+      "limitations": [
+        "Imported certificate metadata was not fetched or independently verified by WHOISleuth."
+      ],
+      "reference": null,
+      "structuredObservation": {
+        "sourceSchema": "whoisleuth.certificate-observation-rows",
+        "sourceVersion": 1,
+        "field": "fingerprintSha256",
+        "value": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "issuer": "Reserved test issuer",
+        "notAfter": "2027-01-02T03:04:05.000Z",
+        "eventId": null,
+        "logId": null,
+        "certificateSha256": null,
+        "dnsNameCount": null,
+        "namesComplete": null
+      }
+    }
+  ]
+}

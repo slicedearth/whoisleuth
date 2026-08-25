@@ -7,16 +7,17 @@ import {
   serializeShortlistStore,
   type ShortlistRecord,
 } from './analysis/shortlist-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_SHORTLIST_KEY } from './browser-local-data-contract.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
+export { MAX_SHORTLIST_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
 export const SHORTLIST_KEY = LEGACY_SHORTLIST_KEY;
-export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
 export type { ShortlistRecord };
 
 export async function loadShortlist(): Promise<ShortlistRecord[]> {
-  return (await browserLocalDataProvider()).read(SHORTLIST_COLLECTION) as Promise<ShortlistRecord[]>;
+  return readBrowserLocalData('shortlist');
 }
 
 function boundedShortlist(records: ShortlistRecord[]): ShortlistRecord[] {
@@ -26,7 +27,7 @@ function boundedShortlist(records: ShortlistRecord[]): ShortlistRecord[] {
 export async function toggleShortlist(raw: unknown): Promise<boolean> {
   const record = normalizeShortlistRecord(raw, { fallbackTimestamp: new Date().toISOString() });
   if (!record) throw new Error('Invalid shortlist record.');
-  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+  return updateBrowserLocalData('shortlist', (current) => {
     const records = [...current] as ShortlistRecord[];
     const index = records.findIndex((item) => item.domain === record.domain);
     if (index >= 0) records.splice(index, 1);
@@ -39,7 +40,7 @@ export async function toggleShortlist(raw: unknown): Promise<boolean> {
 }
 
 export async function setShortlistSelection(raw: unknown[], selected: boolean) {
-  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+  return updateBrowserLocalData('shortlist', (current) => {
     const result = applyShortlistSelection(current, raw, selected);
     return {
       document: boundedShortlist(result.entries),
@@ -54,11 +55,11 @@ export async function setShortlistSelection(raw: unknown[], selected: boolean) {
 }
 
 export async function clearShortlist(): Promise<void> {
-  await (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, () => ({ document: [], result: undefined }));
+  await updateBrowserLocalData('shortlist', () => ({ document: [], result: undefined }));
 }
 
 export async function importShortlist(value: unknown) {
-  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+  return updateBrowserLocalData('shortlist', (current) => {
     const result = mergeShortlistStores(current, value);
     return {
       document: boundedShortlist(result.entries),
@@ -68,7 +69,7 @@ export async function importShortlist(value: unknown) {
 }
 
 export async function exportShortlist() {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(buildShortlistExport(await loadShortlist()), null, 2)], { type: 'application/json' }));
+  const url = URL.createObjectURL(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`;

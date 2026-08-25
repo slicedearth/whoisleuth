@@ -188,19 +188,18 @@ describe('retained artifact diff', () => {
     assert.throws(() => buildCliRetainedArtifactDiff(JSON.stringify(malformed), right, { leftSessionId: 'left' }), /silently omitted/u);
   });
 
-  test('accepts supported legacy Bulk exports but quarantines unauthenticated profile-derived claims', () => {
+  test('rejects a reader-only Bulk export without interpreting profile-derived claims', () => {
     const current = JSON.parse(bulkExport([bulkSession('left', EARLIER, [bulkResult('legacy.example')])], EARLIER)) as Record<string, unknown>;
     current.version = 3;
     const sessions = current.sessions as Array<Record<string, unknown>>;
     delete sessions[0]?.profileContext;
     for (const row of sessions[0]?.results as Array<Record<string, unknown>>) delete row.profileContext;
-    const right = bulkExport([bulkSession('right', LATER, [bulkResult('legacy.example', { risk: 90 })])], LATER);
-    const result = buildCliRetainedArtifactDiff(JSON.stringify(current), right, {}, LATER);
-    assert.equal(result.schema, CLI_COMPARISON_LEDGER_SCHEMA);
-    if (result.schema !== CLI_COMPARISON_LEDGER_SCHEMA) throw new Error('Expected comparison ledger.');
-    assert.equal(result.left.version, 3);
-    assert.equal(result.details.rows.some((row) => row.field === 'Risk score'), false);
-    assert.match(result.limitations.join(' '), /unauthenticated imports/iu);
+    const before = structuredClone(current);
+    assert.throws(
+      () => buildCliRetainedArtifactDiff(JSON.stringify(current), bulkExport([bulkSession('right', LATER, [])], LATER), {}, LATER),
+      /supported whoisleuth\.bulk-sessions version/u,
+    );
+    assert.deepEqual(current, before);
   });
 
   test('compares exact retained portfolio assertions without turning omission into removal', () => {

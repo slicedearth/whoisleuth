@@ -5,32 +5,12 @@ import {
   formatLookupInvestigationBriefMarkdown,
   lookupInvestigationBriefFilename,
 } from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
+import { buildDecisionFacts } from '../packages/evidence/decision-fact.mts';
 import type { LookupAssetGraph } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
 import type {
   LookupDecisionSupport,
   LookupEvidenceQualityMatrix,
 } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
-import type { LookupSummaryModel } from '../frontend/src/lib/analysis/lookup-summary-model.ts';
-
-const summary: LookupSummaryModel = {
-  signals: [],
-  diagnostics: [],
-  facts: [{
-    label: 'Registrar',
-    value: 'Example Registrar',
-    detail: 'Normalized registration source value',
-    provenance: {
-      sources: ['Registry RDAP'],
-      observedAt: '2026-07-31T00:00:00.000Z',
-      fieldFamilies: ['registrar'],
-      normalization: 'Normalized entity name',
-      completeness: 'complete',
-      limitations: [],
-      conflicts: [],
-      decisionImpact: 'Review the sponsoring registrar.',
-    },
-  }],
-};
 
 const support: LookupDecisionSupport = {
   version: 1,
@@ -87,6 +67,7 @@ const quality: LookupEvidenceQualityMatrix = {
     durationMs: 100,
     timingOutcome: 'fulfilled',
     refreshAvailable: false,
+    requestDisclosure: null,
     limitations: ['The response was truncated.'],
     supports: ['Website state'],
   }],
@@ -107,22 +88,78 @@ const graph: LookupAssetGraph = {
   limitations: ['Relationship evidence is point in time.'],
 };
 
-test('investigation brief separates facts, contradictions, unknowns, and actions', () => {
+const decisionFacts = buildDecisionFacts([{
+  id: 'lookup-decision:registry-status',
+  question: 'What do the registration publications establish?',
+  conclusion: 'Statuses differ. Registry publications differ.',
+  importance: 'high',
+  evidenceState: 'partial',
+  freshness: 'current',
+  consistency: 'contradictory',
+  contributors: [{
+    id: 'evidence:rdap',
+    label: 'Registry RDAP',
+    provenance: 'provider_reported',
+    evidenceState: 'observed',
+    references: ['#registry', 'lookup-evidence:rdap'],
+    observedAt: '2026-07-31T00:00:00.000Z',
+    limitations: [],
+  }],
+  references: ['#registry', 'lookup-evidence:rdap'],
+  contradictions: ['The separately attributed publications differ.'],
+  limitations: ['Source order does not decide authority.'],
+  nextActions: [{
+    id: 'review',
+    label: 'Review registry evidence',
+    reason: 'Resolve the status difference.',
+    expectedOutcome: 'Record which publication can support the current status.',
+    href: '#registry',
+    importance: 'high',
+  }],
+}, {
+  id: 'lookup-decision:http-limited',
+  question: 'What did HTTP establish?',
+  conclusion: 'HTTP is incomplete. The request did not settle.',
+  importance: 'medium',
+  evidenceState: 'partial',
+  freshness: 'unknown',
+  consistency: 'unknown',
+  contributors: [{
+    id: 'evidence:http',
+    label: 'HTTP',
+    provenance: 'direct_observation',
+    evidenceState: 'partial',
+    references: ['#evidence-http', 'lookup-evidence:http'],
+    observedAt: '2026-07-31T00:00:00.000Z',
+    limitations: ['The response was truncated.'],
+  }],
+  references: ['#evidence-http', 'lookup-evidence:http'],
+  contradictions: [],
+  limitations: ['The response was truncated.'],
+  nextActions: [],
+}]);
+
+test('investigation brief carries the bounded canonical Decision Fact projection', () => {
   const brief = buildLookupInvestigationBrief({
     generatedAt: '2026-07-31T01:00:00.000Z',
     target: 'example.test',
     targetType: 'domain',
     task: 'incident',
-    summary,
     decisionSupport: support,
+    decisionFacts,
     quality,
     graph,
   });
-  assert.equal(brief.schemaVersion, 1);
-  assert.equal(brief.verifiedFacts.length, 1);
-  assert.equal(brief.contradictions.length, 1);
-  assert.equal(brief.unknowns.length, 1);
-  assert.equal(brief.nextActions.length, 1);
+  assert.equal(brief.schemaVersion, 2);
+  assert.equal(brief.decisionFacts.total, 2);
+  assert.equal(brief.decisionFacts.displayed, 2);
+  assert.equal(brief.decisionFacts.omitted, 0);
+  assert.equal(brief.decisionFacts.contradictory, 1);
+  assert.equal(brief.decisionFacts.unresolved, 1);
+  assert.equal(brief.decisionFacts.facts[0]?.id, 'lookup-decision:http-limited');
+  assert.equal(brief.decisionFacts.facts[1]?.sources.items[0]?.observedAt, '2026-07-31T00:00:00.000Z');
+  assert.equal(Object.hasOwn(brief, 'verifiedFacts'), false);
+  assert.equal(Object.hasOwn(brief, 'unknowns'), false);
   assert.match(brief.limitations.join(' '), /HTTP: Partial/u);
 });
 
@@ -132,14 +169,18 @@ test('investigation brief Markdown escapes untrusted labels and has a stable fil
     target: '<example.test>',
     targetType: 'domain',
     task: 'incident',
-    summary,
     decisionSupport: support,
+    decisionFacts,
     quality,
     graph,
   });
   const markdown = formatLookupInvestigationBriefMarkdown(brief);
   assert.match(markdown, /&lt;example\\.test&gt;/u);
-  assert.match(markdown, /Contradictory evidence/u);
+  assert.match(markdown, /Canonical Decision Facts/u);
+  assert.match(markdown, /Displaying 2 of 2 canonical Decision Facts; 0 omitted/u);
+  assert.match(markdown, /Fact ID/u);
+  assert.match(markdown, /Source references/u);
+  assert.match(markdown, /Safe next actions/u);
   assert.equal(
     lookupInvestigationBriefFilename(brief),
     'whoisleuth-investigation-brief-example.test-2026-07-31.md',

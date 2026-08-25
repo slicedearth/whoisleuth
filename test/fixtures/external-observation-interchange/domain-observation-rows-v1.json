@@ -1,0 +1,17 @@
+{
+  "schema": "whoisleuth.domain-observation-rows",
+  "schemaVersion": 1,
+  "source": {
+    "name": "Reserved domain observations"
+  },
+  "observations": [
+    {
+      "domain": "domain.example.test",
+      "source": "Reserved registry feed",
+      "status": "registered",
+      "observedAt": "2026-01-02T03:04:05.000Z",
+      "completeness": "partial",
+      "reference": null
+    }
+  ]
+}

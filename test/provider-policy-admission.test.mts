@@ -28,6 +28,16 @@ test('provider policy admission requires a deliberate deployment purpose', () =>
   assert.equal(providerPolicyAdmission(terms, { WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal' }, now).allowed, true);
 });
 
+test('version-1 policy review dates assign UTC instead of using the host timezone', () => {
+  const result = providerPolicyAdmission(
+    { ...terms, reviewedAt: '2026-07-15T00:00:00.000' },
+    { WHOISLEUTH_DEPLOYMENT_PURPOSE: 'personal' },
+    now,
+  );
+  assert.equal(result.allowed, true);
+  assert.equal(result.reviewAgeDays, 20);
+});
+
 test('provider policy admission fails closed for stale and restricted use', () => {
   assert.match(providerPolicyAdmission(terms, { WHOISLEUTH_DEPLOYMENT_PURPOSE: 'commercial' }, now).reason ?? '', /restricted/u);
   assert.match(providerPolicyAdmission(terms, { WHOISLEUTH_DEPLOYMENT_PURPOSE: 'internal' }, now).reason ?? '', /restricted/u);

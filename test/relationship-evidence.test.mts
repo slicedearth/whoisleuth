@@ -22,7 +22,7 @@ function availability(overrides: Record<string, unknown> = {}): Record<string, u
       },
     },
     tls: {
-      source: 'tls', profileVersion: 1, status: 'success',
+      source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success',
       certificate: { fingerprintSha256: 'b'.repeat(64) },
     },
     ...overrides,
@@ -78,10 +78,10 @@ describe('relationshipObservation', () => {
     assert.equal(result.certificateFingerprint, null);
   });
 
-  it('accepts current and legacy native TLS leaf-certificate observations', () => {
+  it('accepts only the public current native TLS leaf-certificate profile', () => {
     const valid = { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'partial', certificate: { fingerprintSha256: 'A'.repeat(64) } };
     assert.equal(evidence.relationshipObservation({ tls: valid }).certificateFingerprint, 'a'.repeat(64));
-    assert.equal(evidence.relationshipObservation({ tls: { ...valid, profileVersion: 1 } }).certificateFingerprint, 'a'.repeat(64));
+    assert.equal(evidence.relationshipObservation({ tls: { ...valid, profileVersion: 1 } }).certificateFingerprint, null);
     for (const tls of [
       { ...valid, source: 'certificate_transparency' },
       { ...valid, profileVersion: 3 },
@@ -139,7 +139,7 @@ describe('buildScanRelationships', () => {
 
   it('rejects stale and future relationship observation versions at the grouping boundary', () => {
     const current = evidence.relationshipObservation({
-      tls: { source: 'tls', profileVersion: 1, status: 'success', certificate: { fingerprintSha256: 'c'.repeat(64) } },
+      tls: { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success', certificate: { fingerprintSha256: 'c'.repeat(64) } },
     });
     const result = evidence.buildScanRelationships([
       row('old-one.example', { ...current, version: evidence.RELATIONSHIP_EVIDENCE_VERSION - 1 }),
@@ -157,7 +157,7 @@ describe('buildScanRelationships', () => {
     ]);
     assert.deepEqual(result.groups, [{
       type: 'official_asset',
-      label: 'Official asset relationship',
+      label: 'Official asset host match',
       method: 'Configured-domain host match',
       value: 'static.official.example',
       normalizedValue: 'static.official.example',
@@ -186,7 +186,7 @@ describe('buildScanRelationships', () => {
 
   it('groups exact native leaf-certificate fingerprints across distinct domains', () => {
     const shared = evidence.relationshipObservation({
-      tls: { source: 'tls', profileVersion: 1, status: 'success', certificate: { fingerprintSha256: 'c'.repeat(64) } },
+      tls: { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success', certificate: { fingerprintSha256: 'c'.repeat(64) } },
     });
     const result = evidence.buildScanRelationships([
       row('two.example', shared),
@@ -206,7 +206,7 @@ describe('buildScanRelationships', () => {
 
   it('does not group different certificates or a certificate observed only on a trusted row', () => {
     const observation = (fingerprint: string) => evidence.relationshipObservation({
-      tls: { source: 'tls', profileVersion: 1, status: 'success', certificate: { fingerprintSha256: fingerprint } },
+      tls: { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success', certificate: { fingerprintSha256: fingerprint } },
     });
     const result = evidence.buildScanRelationships([
       row('one.example', observation('a'.repeat(64))),

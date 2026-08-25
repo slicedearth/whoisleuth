@@ -45,7 +45,7 @@ function packetInput() {
     postChange: changeInput('192.0.2.20'),
     assurance: {
       schema: 'whoisleuth.domain-assurance.input',
-      version: 1,
+      version: 2,
       kind: 'planned-change',
       domain: 'example.test',
       change: {

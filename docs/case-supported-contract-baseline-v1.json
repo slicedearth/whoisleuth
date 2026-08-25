@@ -1,0 +1,1771 @@
+{
+  "schema": "whoisleuth.case-supported-contract-baseline",
+  "version": 1,
+  "establishedAt": "2026-08-23",
+  "startingRevision": "9cfba099b950162f3b4b3467a0d8338470bb9c70",
+  "decision": "retain_atomic_record_storage",
+  "source": {
+    "family": "case-portability",
+    "owner": "packages/contracts/case-portability.mts",
+    "metadataVersion": 4
+  },
+  "startingCurrentProtection": {
+    "browserCase": {
+      "version": 13,
+      "path": "read-write-exact-current"
+    },
+    "portableCase": {
+      "version": 13,
+      "path": "export-import-non-destructive-merge"
+    },
+    "caseReport": {
+      "version": 9,
+      "path": "current-writer"
+    },
+    "responsePacket": {
+      "version": 7,
+      "path": "current-writer-and-offline-verifier"
+    },
+    "cliCasePack": {
+      "version": 2,
+      "caseVersion": 13,
+      "path": "current-writer-browser-import-and-offline-verifier"
+    },
+    "workspaceArchive": {
+      "version": 6,
+      "path": "current-writer-preview-and-non-destructive-merge"
+    },
+    "encryptedWorkspaceArchive": {
+      "version": 1,
+      "workspaceVersion": 6,
+      "path": "current-encrypt-decrypt-and-verify"
+    }
+  },
+  "commitments": {
+    "compatibility": [
+      {
+        "id": "browser.cases",
+        "kind": "browser_store",
+        "schema": null,
+        "currentVersion": 13,
+        "supportedVersions": [
+          12,
+          13
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "preserve_without_write",
+        "migration": "normalize_to_current",
+        "writeSemantics": "normalized_rewrite",
+        "byteBudget": 4194304,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "derived.case-response-review-inputs",
+        "kind": "derived",
+        "schema": "whoisleuth.case-response-review-inputs",
+        "currentVersion": 1,
+        "supportedVersions": [
+          1
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "exact_current_only",
+        "writeSemantics": "read_only",
+        "byteBudget": null,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.case-report",
+        "kind": "export",
+        "schema": "whoisleuth.case-report",
+        "currentVersion": 9,
+        "supportedVersions": [
+          9
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "not_applicable",
+        "migration": "read_only",
+        "writeSemantics": "read_only",
+        "byteBudget": null,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.case-response-packet",
+        "kind": "export",
+        "schema": "whoisleuth.case-response-packet",
+        "currentVersion": 7,
+        "supportedVersions": [
+          6,
+          7
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "read_only",
+        "writeSemantics": "read_only",
+        "byteBudget": null,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.cases",
+        "kind": "export",
+        "schema": null,
+        "currentVersion": 13,
+        "supportedVersions": [
+          12,
+          13
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "normalize_to_current",
+        "writeSemantics": "non_destructive_merge",
+        "byteBudget": 2097152,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.cli-case-pack",
+        "kind": "export",
+        "schema": "whoisleuth.cli.case-pack",
+        "currentVersion": 2,
+        "supportedVersions": [
+          2
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "read_only",
+        "writeSemantics": "read_only",
+        "byteBudget": 2097152,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.encrypted-workspace-archive",
+        "kind": "export",
+        "schema": "whoisleuth.encrypted-workspace-archive",
+        "currentVersion": 1,
+        "supportedVersions": [
+          1
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "exact_current_only",
+        "writeSemantics": "non_destructive_merge",
+        "byteBudget": 13985110,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.workspace-archive",
+        "kind": "export",
+        "schema": "whoisleuth.workspace-archive",
+        "currentVersion": 6,
+        "supportedVersions": [
+          5,
+          6
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "normalize_to_current",
+        "writeSemantics": "non_destructive_merge",
+        "byteBudget": 10485760,
+        "owner": "packages/contracts/case-portability.mts"
+      },
+      {
+        "id": "export.workspace-settings-section",
+        "kind": "export",
+        "schema": "whoisleuth.workspace-settings",
+        "currentVersion": 1,
+        "supportedVersions": [
+          1
+        ],
+        "acceptsUnversionedLegacy": false,
+        "futureVersionBehavior": "reject",
+        "migration": "exact_current_only",
+        "writeSemantics": "non_destructive_merge",
+        "byteBudget": null,
+        "owner": "packages/contracts/case-portability.mts"
+      }
+    ],
+    "contracts": [
+      {
+        "key": "browser.cases@12",
+        "compatibilityId": "browser.cases",
+        "version": 12,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": false,
+        "extensionPolicy": "discard_bounded",
+        "futureVersionBehaviour": "preserve_without_write",
+        "migrationTarget": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 13
+        },
+        "canonicalisation": null,
+        "byteBudget": 4194304,
+        "fixtureIds": [
+          "browser-case-v12-public"
+        ]
+      },
+      {
+        "key": "browser.cases@13",
+        "compatibilityId": "browser.cases",
+        "version": 13,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": false,
+        "extensionPolicy": "discard_bounded",
+        "futureVersionBehaviour": "preserve_without_write",
+        "migrationTarget": null,
+        "canonicalisation": null,
+        "byteBudget": 4194304,
+        "fixtureIds": [
+          "browser-case-v13"
+        ]
+      },
+      {
+        "key": "derived.case-response-review-inputs@1",
+        "compatibilityId": "derived.case-response-review-inputs",
+        "version": 1,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-response-review-inputs-v1"
+        ]
+      },
+      {
+        "key": "export.case-report@9",
+        "compatibilityId": "export.case-report",
+        "version": 9,
+        "lifecycle": "current",
+        "readable": false,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "not_applicable",
+        "migrationTarget": null,
+        "canonicalisation": null,
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-report-v9"
+        ]
+      },
+      {
+        "key": "export.case-response-packet@6",
+        "compatibilityId": "export.case-response-packet",
+        "version": 6,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-response-packet-v6-public"
+        ]
+      },
+      {
+        "key": "export.case-response-packet@7",
+        "compatibilityId": "export.case-response-packet",
+        "version": 7,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-response-packet-v7"
+        ]
+      },
+      {
+        "key": "export.cases@12",
+        "compatibilityId": "export.cases",
+        "version": 12,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.case-export",
+          "version": 13
+        },
+        "canonicalisation": null,
+        "byteBudget": 2097152,
+        "fixtureIds": [
+          "case-export-v12-public"
+        ]
+      },
+      {
+        "key": "export.cases@13",
+        "compatibilityId": "export.cases",
+        "version": 13,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": null,
+        "byteBudget": 2097152,
+        "fixtureIds": [
+          "case-export-v13"
+        ]
+      },
+      {
+        "key": "export.cli-case-pack@2",
+        "compatibilityId": "export.cli-case-pack",
+        "version": 2,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": 2097152,
+        "fixtureIds": [
+          "cli-case-pack-v2-case-v12-public",
+          "cli-case-pack-v2-case-v13"
+        ]
+      },
+      {
+        "key": "export.encrypted-workspace-archive@1",
+        "compatibilityId": "export.encrypted-workspace-archive",
+        "version": 1,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "aes-gcm-v1",
+        "byteBudget": 13985110,
+        "fixtureIds": [
+          "encrypted-workspace-archive-v1"
+        ]
+      },
+      {
+        "key": "export.workspace-archive@5",
+        "compatibilityId": "export.workspace-archive",
+        "version": 5,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 6
+        },
+        "canonicalisation": "workspace-section-sorted-json-v1",
+        "byteBudget": 10485760,
+        "fixtureIds": [
+          "workspace-archive-v5-public"
+        ]
+      },
+      {
+        "key": "export.workspace-archive@6",
+        "compatibilityId": "export.workspace-archive",
+        "version": 6,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "workspace-section-sorted-json-v1",
+        "byteBudget": 10485760,
+        "fixtureIds": [
+          "workspace-archive-v6-empty-current"
+        ]
+      },
+      {
+        "key": "export.workspace-settings-section@1",
+        "compatibilityId": "export.workspace-settings-section",
+        "version": 1,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": null,
+        "byteBudget": null,
+        "fixtureIds": [
+          "workspace-settings-v1"
+        ]
+      }
+    ],
+    "migrations": [
+      {
+        "key": "browser.cases@12",
+        "target": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 13
+        }
+      },
+      {
+        "key": "export.cases@12",
+        "target": {
+          "schema": "whoisleuth.case-export",
+          "version": 13
+        }
+      },
+      {
+        "key": "export.workspace-archive@5",
+        "target": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 6
+        }
+      }
+    ],
+    "fixtures": [
+      {
+        "id": "browser-case-v12-public",
+        "path": "test/fixtures/case-lifecycle/browser-case-v12.json",
+        "bytes": 1286,
+        "sha256": "86d4f3be343034ff05f1214229294d9c6424ccc13fc63e884358fb691b2e0d4e",
+        "contentDigestSha256": null,
+        "version": 12,
+        "expectation": "normalises_to_current_output",
+        "shapeId": "case.browser-store.public"
+      },
+      {
+        "id": "browser-case-v13",
+        "path": "test/fixtures/case-lifecycle/browser-case-v13.json",
+        "bytes": 3096,
+        "sha256": "d679030e52340ecc7795ac88de15316d88c8c07b94b34da60fd52589a0375712",
+        "contentDigestSha256": null,
+        "version": 13,
+        "expectation": "accepted_exact",
+        "shapeId": "case.browser-store.current"
+      },
+      {
+        "id": "case-export-v12-public",
+        "path": "test/fixtures/case-v12-response-lifecycle.json",
+        "bytes": 1290,
+        "sha256": "c5182bc1d413a1e1940e06e158d8dde47971d3fb034090934fe600753ffd7f0b",
+        "contentDigestSha256": null,
+        "version": 12,
+        "expectation": "normalises_to_current_output",
+        "shapeId": "case.export.public"
+      },
+      {
+        "id": "case-export-v13",
+        "path": "test/fixtures/case-lifecycle/case-export-v13.json",
+        "bytes": 3140,
+        "sha256": "fd2aa7623c2aaea385b952727ad74cf5af0f1ee21dc478c0e5c820a332376a0d",
+        "contentDigestSha256": null,
+        "version": 13,
+        "expectation": "accepted_exact",
+        "shapeId": "case.export.current"
+      },
+      {
+        "id": "case-report-v9",
+        "path": "test/fixtures/case-lifecycle/case-report-v9.json",
+        "bytes": 2761,
+        "sha256": "d9903318123c63ae7a385f153286a5596585a401771c8def8149792b9b7b9326",
+        "contentDigestSha256": null,
+        "version": 9,
+        "expectation": "accepted_exact",
+        "shapeId": "case.report.v9"
+      },
+      {
+        "id": "case-response-packet-v6-public",
+        "path": "test/fixtures/case-lifecycle/case-response-packet-v6.json",
+        "bytes": 5100,
+        "sha256": "32030d3941119dce378dc03f6b3f5d710ce3883e7253cd43fa322c989ff529cb",
+        "contentDigestSha256": "sha256:29a5185a3d944af38c9656706fe89d96e60f949e8684646a55c8bcd10de54746",
+        "version": 6,
+        "expectation": "accepted_exact",
+        "shapeId": "case.response-packet.v6"
+      },
+      {
+        "id": "case-response-packet-v7",
+        "path": "test/fixtures/case-lifecycle/case-response-packet-v7.json",
+        "bytes": 10000,
+        "sha256": "0ea150d920710b331839be0a0f995d4597a133ecb930ef850de1eecfca4d94e3",
+        "contentDigestSha256": "sha256:fa5b7f079882dd72b15365d844937ae99e47f81465e79b3911c25e70c157e562",
+        "version": 7,
+        "expectation": "accepted_exact",
+        "shapeId": "case.response-packet.v7"
+      },
+      {
+        "id": "case-response-review-inputs-v1",
+        "path": "test/fixtures/case-lifecycle/case-response-review-inputs-v1.json",
+        "bytes": 5555,
+        "sha256": "67d3d36f316cf17898e04c39f2ba0ba7599abdc4b4e387baef5f5866a73c7b9c",
+        "contentDigestSha256": null,
+        "version": 1,
+        "expectation": "accepted_exact",
+        "shapeId": "case.response-review-inputs.v1"
+      },
+      {
+        "id": "cli-case-pack-v2-case-v12-public",
+        "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v12-public.json",
+        "bytes": 4947,
+        "sha256": "4c8117dfb73c1eed5bd3f4cf78bf350459cdcc8f406120f089b34e6a6fcbfc7c",
+        "contentDigestSha256": "sha256:93cc725c03052aa0232fb6965154c58810d8d1aef3ea0203e451a94bf9d091cf",
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.cli-pack.current"
+      },
+      {
+        "id": "cli-case-pack-v2-case-v13",
+        "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v13.json",
+        "bytes": 9288,
+        "sha256": "77b7bce093a967d04a2cf0ead3b715625c00903c4c194227c5b74886f2b847c6",
+        "contentDigestSha256": "sha256:2cda7f529ec9b5ec5234180c80286274dc0545b9ba360015b073ae3eb3e97f3d",
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.cli-pack.current"
+      },
+      {
+        "id": "encrypted-workspace-archive-v1",
+        "path": "test/fixtures/case-lifecycle/encrypted-workspace-archive-v1.json",
+        "bytes": 7502,
+        "sha256": "d7279ba0afb548d3ce41bdfc56acebffd05dc9b0b5b1451cb57a1164be881733",
+        "contentDigestSha256": null,
+        "version": 1,
+        "expectation": "accepted_exact",
+        "shapeId": "case.encrypted-workspace-archive.v1"
+      },
+      {
+        "id": "workspace-archive-v5-public",
+        "path": "test/fixtures/case-lifecycle/workspace-archive-v5-public.json",
+        "bytes": 5271,
+        "sha256": "27fd5f590b493be1ce57708be8b5c11d95eb600ae54e1ed3a530e78db433ec0d",
+        "contentDigestSha256": null,
+        "version": 5,
+        "expectation": "normalises_to_current_output",
+        "shapeId": "case.workspace-archive.v5"
+      },
+      {
+        "id": "workspace-archive-v6-empty-current",
+        "path": "test/fixtures/case-lifecycle/workspace-archive-v6-empty-current.json",
+        "bytes": 5557,
+        "sha256": "7a0701c7b0401de76df132fe7b2332fd1e2f1fade007a8af0103c8cec5a1b2f9",
+        "contentDigestSha256": null,
+        "version": 6,
+        "expectation": "accepted_exact",
+        "shapeId": "case.workspace-archive.v6"
+      },
+      {
+        "id": "workspace-settings-v1",
+        "path": "test/fixtures/case-lifecycle/workspace-settings-v1.json",
+        "bytes": 110,
+        "sha256": "75675baf68765da5d36e9911d106dd8b72a8fd3c859136b651411d8041a4e184",
+        "contentDigestSha256": null,
+        "version": 1,
+        "expectation": "accepted_exact",
+        "shapeId": "case.workspace-settings.v1"
+      }
+    ],
+    "shapes": [
+      {
+        "id": "case.browser-store.public",
+        "versions": [
+          12
+        ],
+        "normalisation": "project_known_fields",
+        "target": null
+      },
+      {
+        "id": "case.browser-store.current",
+        "versions": [
+          13
+        ],
+        "normalisation": "project_known_fields",
+        "target": null
+      },
+      {
+        "id": "case.export.public",
+        "versions": [
+          12
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
+        "id": "case.response-packet.v6",
+        "versions": [
+          6
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.export.current",
+        "versions": [
+          13
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
+        "id": "case.report.v9",
+        "versions": [
+          9
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
+        "id": "case.response-packet.v7",
+        "versions": [
+          7
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.response-review-inputs.v1",
+        "versions": [
+          1
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.cli-pack.current",
+        "versions": [
+          2
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.workspace-archive.v5",
+        "versions": [
+          5
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.workspace-archive.v6",
+        "versions": [
+          6
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.workspace-settings.v1",
+        "versions": [
+          1
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
+        "id": "case.encrypted-workspace-archive.v1",
+        "versions": [
+          1
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      }
+    ],
+    "bounds": [
+      {
+        "id": "case.browser-store.bounds",
+        "bounds": [
+          {
+            "id": "raw-bytes",
+            "path": "$",
+            "phase": "raw_intake",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 4194304,
+            "handling": "reject"
+          },
+          {
+            "id": "serialised-bytes",
+            "path": "$",
+            "phase": "serialised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 4194304,
+            "handling": "reject"
+          }
+        ]
+      },
+      {
+        "id": "case.portable.bounds",
+        "bounds": [
+          {
+            "id": "raw-bytes",
+            "path": "$",
+            "phase": "raw_intake",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 2097152,
+            "handling": "reject"
+          },
+          {
+            "id": "serialised-bytes",
+            "path": "$",
+            "phase": "serialised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 2097152,
+            "handling": "reject"
+          }
+        ]
+      },
+      {
+        "id": "case.domain.bounds",
+        "bounds": [
+          {
+            "id": "cases",
+            "path": "cases",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 500,
+            "handling": "truncate"
+          },
+          {
+            "id": "notes",
+            "path": "cases[].notes",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 50,
+            "handling": "truncate"
+          },
+          {
+            "id": "evidence-history",
+            "path": "cases[].evidenceHistory",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 25,
+            "handling": "truncate"
+          },
+          {
+            "id": "actions",
+            "path": "cases[].actions",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 50,
+            "handling": "truncate"
+          },
+          {
+            "id": "action-events",
+            "path": "cases[].actions[].history",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 40,
+            "handling": "truncate"
+          }
+        ]
+      },
+      {
+        "id": "case.packet.bounds",
+        "bounds": [
+          {
+            "id": "contacts",
+            "path": "contacts",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 12,
+            "handling": "truncate"
+          },
+          {
+            "id": "urls",
+            "path": "incident.abusiveUrls",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 20,
+            "handling": "truncate"
+          },
+          {
+            "id": "selected-evidence",
+            "path": "selectedEvidence",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 20,
+            "handling": "truncate"
+          },
+          {
+            "id": "contradictions",
+            "path": "contradictions",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 20,
+            "handling": "truncate"
+          },
+          {
+            "id": "artefact-references",
+            "path": "artefactReferences",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 12,
+            "handling": "truncate"
+          },
+          {
+            "id": "escalation-history",
+            "path": "escalationHistory",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 0,
+            "maximum": 20,
+            "handling": "truncate"
+          }
+        ]
+      },
+      {
+        "id": "case.cli-pack.bounds",
+        "bounds": [
+          {
+            "id": "cases",
+            "path": "cases",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 1,
+            "maximum": 25,
+            "handling": "reject"
+          },
+          {
+            "id": "reports",
+            "path": "packet.reports",
+            "phase": "normalised",
+            "unit": "items",
+            "minimum": 1,
+            "maximum": 25,
+            "handling": "reject"
+          }
+        ]
+      },
+      {
+        "id": "case.workspace.bounds",
+        "bounds": [
+          {
+            "id": "raw-bytes",
+            "path": "$",
+            "phase": "raw_intake",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 10485760,
+            "handling": "reject"
+          },
+          {
+            "id": "serialised-bytes",
+            "path": "$",
+            "phase": "serialised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 10485760,
+            "handling": "reject"
+          },
+          {
+            "id": "sections",
+            "path": "manifest.sections",
+            "phase": "pre_accumulation",
+            "unit": "items",
+            "minimum": 1,
+            "maximum": 13,
+            "handling": "reject"
+          },
+          {
+            "id": "section-bytes",
+            "path": "manifest.sections[].bytes",
+            "phase": "pre_accumulation",
+            "unit": "bytes",
+            "minimum": 0,
+            "maximum": 5242880,
+            "handling": "reject"
+          }
+        ]
+      },
+      {
+        "id": "case.encrypted-workspace.bounds",
+        "bounds": [
+          {
+            "id": "raw-bytes",
+            "path": "$",
+            "phase": "raw_intake",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 13985110,
+            "handling": "reject"
+          },
+          {
+            "id": "serialised-bytes",
+            "path": "$",
+            "phase": "serialised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 13985110,
+            "handling": "reject"
+          },
+          {
+            "id": "passphrase-characters",
+            "path": "$.passphrase",
+            "phase": "action",
+            "unit": "characters",
+            "minimum": 12,
+            "maximum": 1024,
+            "handling": "reject"
+          },
+          {
+            "id": "passphrase-bytes",
+            "path": "$.passphrase",
+            "phase": "action",
+            "unit": "bytes",
+            "minimum": 12,
+            "maximum": 1024,
+            "handling": "reject"
+          }
+        ]
+      }
+    ],
+    "privacyProjections": [
+      {
+        "id": "case.privacy.browser-state",
+        "classification": "analyst_authored_sensitive",
+        "projection": "browser_import",
+        "includedCategories": [
+          "case-identifiers",
+          "analyst-notes",
+          "bounded-evidence-summaries",
+          "exact-submitted-hostnames",
+          "response-history"
+        ],
+        "excludedCategories": [
+          "raw-upstream-payloads",
+          "credentials",
+          "cookies",
+          "session-data"
+        ],
+        "notePolicy": "allowed_bounded",
+        "retention": "browser_indexeddb",
+        "network": "none",
+        "sharingReview": "not_applicable"
+      },
+      {
+        "id": "case.privacy.portable-input",
+        "classification": "analyst_authored_sensitive",
+        "projection": "browser_import",
+        "includedCategories": [
+          "case-identifiers",
+          "bounded-case-records",
+          "exact-submitted-hostnames",
+          "declared-integrity"
+        ],
+        "excludedCategories": [
+          "raw-upstream-payloads",
+          "credentials",
+          "cookies",
+          "session-data"
+        ],
+        "notePolicy": "allowed_bounded",
+        "retention": "deliberate_local_file",
+        "network": "none",
+        "sharingReview": "required"
+      },
+      {
+        "id": "case.privacy.portable-output",
+        "classification": "analyst_authored_sensitive",
+        "projection": "browser_export",
+        "includedCategories": [
+          "case-identifiers",
+          "bounded-case-records",
+          "exact-submitted-hostnames",
+          "declared-integrity"
+        ],
+        "excludedCategories": [
+          "raw-upstream-payloads",
+          "credentials",
+          "cookies",
+          "session-data"
+        ],
+        "notePolicy": "allowed_bounded",
+        "retention": "operator_controlled_output",
+        "network": "none",
+        "sharingReview": "required"
+      }
+    ],
+    "serialisation": [
+      {
+        "id": "case.browser-store.json.v13",
+        "versions": [
+          13
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "none",
+        "serializerHookId": "case.browser.serialise",
+        "verifierHookIds": []
+      },
+      {
+        "id": "case.export.json.v13",
+        "versions": [
+          13
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "none",
+        "serializerHookId": "case.portable.serialise",
+        "verifierHookIds": []
+      },
+      {
+        "id": "case.report.json.v9",
+        "versions": [
+          9
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "none",
+        "serializerHookId": "case.portable.serialise",
+        "verifierHookIds": []
+      },
+      {
+        "id": "case.packet.json.v7",
+        "versions": [
+          6,
+          7
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "structural_only_requires_separate_verification",
+        "serializerHookId": "case.portable.serialise",
+        "verifierHookIds": [
+          "case.packet.verify"
+        ]
+      },
+      {
+        "id": "case.workspace.json.v6",
+        "versions": [
+          6
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "structural_only_requires_separate_verification",
+        "serializerHookId": "case.portable.serialise",
+        "verifierHookIds": [
+          "case.workspace.verify"
+        ]
+      },
+      {
+        "id": "case.encrypted-workspace.json.v1",
+        "versions": [
+          1
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "structural_only_requires_separate_verification",
+        "serializerHookId": "case.portable.serialise",
+        "verifierHookIds": [
+          "case.encrypted-workspace.verify"
+        ]
+      },
+      {
+        "id": "case.cli-pack.json.v2",
+        "versions": [
+          2
+        ],
+        "mediaType": "application/json",
+        "encoding": "utf-8",
+        "bom": false,
+        "indentSpaces": 2,
+        "terminalLf": true,
+        "propertyOrder": "normalised_fixed",
+        "canonicalisation": null,
+        "integrity": "structural_only_requires_separate_verification",
+        "serializerHookId": "case.cli-pack.serialise",
+        "verifierHookIds": [
+          "case.cli-pack.verify"
+        ]
+      }
+    ],
+    "consumers": [
+      {
+        "id": "case.browser.read-write",
+        "plane": "browser",
+        "operation": "normalise-and-store",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "browser.cases",
+            "versions": [
+              12,
+              13
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": {
+          "compatibilityId": "browser.cases",
+          "version": 13,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.browser-store.public",
+          "case.browser-store.current"
+        ],
+        "boundProfileIds": [
+          "case.browser-store.bounds",
+          "case.domain.bounds"
+        ],
+        "hookIds": [
+          "case.browser.normalise",
+          "case.browser.serialise"
+        ],
+        "serialisationProfileId": "case.browser-store.json.v13",
+        "privacyProfileId": "case.privacy.browser-state",
+        "retentionEffect": "browser_indexeddb",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.export.import",
+        "plane": "shared",
+        "operation": "non-destructive-merge",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.cases",
+            "versions": [
+              12,
+              13
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.export.public",
+          "case.export.current"
+        ],
+        "boundProfileIds": [
+          "case.portable.bounds",
+          "case.domain.bounds"
+        ],
+        "hookIds": [
+          "case.export.merge"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.export-build",
+        "plane": "shared",
+        "operation": "build-portable-export",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "export.cases",
+          "version": 13,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.export.current"
+        ],
+        "boundProfileIds": [
+          "case.portable.bounds",
+          "case.domain.bounds"
+        ],
+        "hookIds": [
+          "case.export.build",
+          "case.portable.serialise"
+        ],
+        "serialisationProfileId": "case.export.json.v13",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.report-build",
+        "plane": "shared",
+        "operation": "build-report",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "export.case-report",
+          "version": 9,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.report.v9"
+        ],
+        "boundProfileIds": [
+          "case.domain.bounds"
+        ],
+        "hookIds": [
+          "case.report.build",
+          "case.portable.serialise"
+        ],
+        "serialisationProfileId": "case.report.json.v9",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.packet-verify",
+        "plane": "shared",
+        "operation": "verify-integrity",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.case-response-packet",
+            "versions": [
+              6,
+              7
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.response-packet.v6",
+          "case.response-packet.v7"
+        ],
+        "boundProfileIds": [
+          "case.packet.bounds"
+        ],
+        "hookIds": [
+          "case.packet.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.packet-offline-verify",
+        "plane": "cli",
+        "operation": "validate-structure-and-integrity",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.case-response-packet",
+            "versions": [
+              6,
+              7
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.response-packet.v6",
+          "case.response-packet.v7"
+        ],
+        "boundProfileIds": [
+          "case.packet.bounds"
+        ],
+        "hookIds": [
+          "case.packet.structure",
+          "case.packet.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.packet-build",
+        "plane": "shared",
+        "operation": "build-packet",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "export.case-response-packet",
+          "version": 7,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.response-packet.v7"
+        ],
+        "boundProfileIds": [
+          "case.packet.bounds"
+        ],
+        "hookIds": [
+          "case.packet.build",
+          "case.portable.serialise"
+        ],
+        "serialisationProfileId": "case.packet.json.v7",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.review-inputs-validate",
+        "plane": "shared",
+        "operation": "validate-review-inputs",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "derived.case-response-review-inputs",
+            "versions": [
+              1
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.response-review-inputs.v1"
+        ],
+        "boundProfileIds": [
+          "case.packet.bounds"
+        ],
+        "hookIds": [
+          "case.review-inputs.validate"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.review-inputs-build",
+        "plane": "shared",
+        "operation": "build-review-inputs",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "derived.case-response-review-inputs",
+          "version": 1,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.response-review-inputs.v1"
+        ],
+        "boundProfileIds": [
+          "case.packet.bounds"
+        ],
+        "hookIds": [
+          "case.review-inputs.build"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.cli-pack-verify",
+        "plane": "cli",
+        "operation": "verify-case-pack",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.cli-case-pack",
+            "versions": [
+              2
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.cli-pack.current"
+        ],
+        "boundProfileIds": [
+          "case.portable.bounds",
+          "case.cli-pack.bounds"
+        ],
+        "hookIds": [
+          "case.cli-pack.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.cli-pack-build",
+        "plane": "cli",
+        "operation": "build-case-pack",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.cases",
+            "versions": [
+              13
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": {
+          "compatibilityId": "export.cli-case-pack",
+          "version": 2,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.export.current",
+          "case.cli-pack.current"
+        ],
+        "boundProfileIds": [
+          "case.portable.bounds",
+          "case.domain.bounds",
+          "case.cli-pack.bounds"
+        ],
+        "hookIds": [
+          "case.cli-pack.build",
+          "case.cli-pack.serialise"
+        ],
+        "serialisationProfileId": "case.cli-pack.json.v2",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.workspace-verify",
+        "plane": "browser",
+        "operation": "verify-and-preview-workspace",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.workspace-archive",
+            "versions": [
+              5,
+              6
+            ],
+            "mode": "direct",
+            "discriminator": null
+          },
+          {
+            "compatibilityId": "export.workspace-settings-section",
+            "versions": [
+              1
+            ],
+            "mode": "embedded",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.workspace-archive.v5",
+          "case.workspace-archive.v6",
+          "case.workspace-settings.v1"
+        ],
+        "boundProfileIds": [
+          "case.workspace.bounds"
+        ],
+        "hookIds": [
+          "case.workspace.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.workspace-build",
+        "plane": "browser",
+        "operation": "build-workspace",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "export.workspace-archive",
+          "version": 6,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.workspace-archive.v6"
+        ],
+        "boundProfileIds": [
+          "case.workspace.bounds"
+        ],
+        "hookIds": [
+          "case.workspace.build",
+          "case.portable.serialise"
+        ],
+        "serialisationProfileId": "case.workspace.json.v6",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.workspace-settings-build",
+        "plane": "browser",
+        "operation": "build-workspace-settings-section",
+        "acceptedContracts": [],
+        "emittedContract": {
+          "compatibilityId": "export.workspace-settings-section",
+          "version": 1,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.workspace-settings.v1"
+        ],
+        "boundProfileIds": [
+          "case.workspace.bounds"
+        ],
+        "hookIds": [
+          "case.workspace.build"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.encrypted-workspace-verify",
+        "plane": "browser",
+        "operation": "decrypt-and-verify-workspace",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.encrypted-workspace-archive",
+            "versions": [
+              1
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.encrypted-workspace-archive.v1"
+        ],
+        "boundProfileIds": [
+          "case.encrypted-workspace.bounds"
+        ],
+        "hookIds": [
+          "case.encrypted-workspace.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.encrypted-workspace-build",
+        "plane": "browser",
+        "operation": "encrypt-workspace",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.workspace-archive",
+            "versions": [
+              5,
+              6
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": {
+          "compatibilityId": "export.encrypted-workspace-archive",
+          "version": 1,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.workspace-archive.v5",
+          "case.workspace-archive.v6",
+          "case.encrypted-workspace-archive.v1"
+        ],
+        "boundProfileIds": [
+          "case.workspace.bounds",
+          "case.encrypted-workspace.bounds"
+        ],
+        "hookIds": [
+          "case.encrypted-workspace.build",
+          "case.portable.serialise"
+        ],
+        "serialisationProfileId": "case.encrypted-workspace.json.v1",
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      }
+    ],
+    "publicContracts": {
+      "identityConstants": [
+        "CASE_BROWSER_STORE_LIFECYCLE_SCHEMA",
+        "CASE_EXPORT_LIFECYCLE_SCHEMA",
+        "CASE_SCHEMA_VERSION",
+        "CASE_BROWSER_SUPPORTED_VERSIONS",
+        "CASE_IMPORT_VERSIONS",
+        "CASE_REPORT_SCHEMA",
+        "CASE_REPORT_SCHEMA_VERSION",
+        "CASE_REPORT_OUTPUT_VERSIONS",
+        "CASE_RESPONSE_PACKET_SCHEMA",
+        "CASE_RESPONSE_PACKET_VERSION",
+        "CASE_RESPONSE_PACKET_OUTPUT_VERSIONS",
+        "SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS",
+        "CASE_RESPONSE_REVIEW_INPUTS_SCHEMA",
+        "CASE_RESPONSE_REVIEW_INPUTS_VERSION",
+        "CLI_CASE_PACK_SCHEMA",
+        "CLI_CASE_PACK_VERSION",
+        "SUPPORTED_CLI_CASE_PACK_VERSIONS",
+        "CLI_CASE_PACK_CASE_REPORT_EPOCHS",
+        "WORKSPACE_ARCHIVE_SCHEMA",
+        "PUBLIC_WORKSPACE_ARCHIVE_VERSION",
+        "WORKSPACE_ARCHIVE_VERSION",
+        "SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS",
+        "PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS",
+        "WORKSPACE_ARCHIVE_SECTION_IDS",
+        "WORKSPACE_ARCHIVE_CASE_SECTION",
+        "WORKSPACE_SETTINGS_SCHEMA",
+        "WORKSPACE_SETTINGS_VERSION",
+        "ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA",
+        "ENCRYPTED_WORKSPACE_ARCHIVE_VERSION"
+      ],
+      "compatibilityFacades": [
+        {
+          "facade": "frontend/src/lib/analysis/case-brand-profile-references.ts",
+          "owner": "packages/cases/case-brand-profile-references.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-evidence-model.ts",
+          "owner": "packages/cases/case-evidence-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-investigation-branch-model.ts",
+          "owner": "packages/cases/case-investigation-branch-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-migration-model.ts",
+          "owner": "packages/cases/case-migration-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-model.ts",
+          "owner": "packages/cases/case-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-record-contracts.ts",
+          "owner": "packages/cases/case-record-contracts.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-record-core.ts",
+          "owner": "packages/cases/case-record-core.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-record-model.ts",
+          "owner": "packages/cases/case-record-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-record-operations.ts",
+          "owner": "packages/cases/case-record-operations.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-report.ts",
+          "owner": "packages/cases/case-report.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-response-model.ts",
+          "owner": "packages/cases/case-response-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-response-packet.ts",
+          "owner": "packages/cases/case-response-packet.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/case-storage-model.ts",
+          "owner": "packages/cases/case-storage-model.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/http-summary.ts",
+          "owner": "packages/cases/http-summary.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/opaque-reference-id.ts",
+          "owner": "packages/cases/opaque-reference-id.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/workspace-archive.ts",
+          "owner": "packages/workspace/workspace-archive.mts"
+        },
+        {
+          "facade": "frontend/src/lib/analysis/workspace-archive-crypto.ts",
+          "owner": "packages/workspace/workspace-archive-crypto.mts"
+        }
+      ],
+      "runtimeAdapters": [
+        "frontend/src/lib/cases.ts",
+        "frontend/src/lib/workspace-archive.ts"
+      ],
+      "verifierDispatch": [
+        {
+          "id": "case-response-packet",
+          "artifactKind": "case_response_packet",
+          "schema": "whoisleuth.case-response-packet",
+          "discriminator": "root_schema",
+          "versionField": "schemaVersion",
+          "supportedVersions": [
+            6,
+            7
+          ],
+          "structureHookId": "case.packet.structure",
+          "integrityHookId": "case.packet.verify"
+        },
+        {
+          "id": "cli-case-pack",
+          "artifactKind": "cli_case_pack",
+          "schema": "whoisleuth.cli.case-pack",
+          "discriminator": "packet_schema",
+          "versionField": "packet.version",
+          "supportedVersions": [
+            2
+          ],
+          "structureHookId": "case.cli-pack.verify",
+          "integrityHookId": "case.cli-pack.verify"
+        }
+      ]
+    },
+    "rejectionBehaviour": {
+      "retired": "reject_with_explicit_export_or_user_controlled_reset_guidance_without_mutation",
+      "future": "reject_or_preserve_without_write_as_declared_by_the_owning_compatibility_descriptor",
+      "malformed": "reject_without_mutation",
+      "oversized": "reject_before_unbounded_copy_parse_or_accumulation",
+      "partial": "report_blocked_or_partial_without_reinterpreting_missing_data_as_absence",
+      "integrityFailed": "reject_without_import_or_merge"
+    }
+  },
+  "removalRecords": []
+}

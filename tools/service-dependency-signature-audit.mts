@@ -9,7 +9,7 @@ import {
   SERVICE_DEPENDENCY_SIGNATURE_CATALOG_DIGEST_SHA256,
   SERVICE_DEPENDENCY_SIGNATURE_MAX_AGE_DAYS,
   type ServiceDependencySignature,
-} from '../frontend/src/lib/analysis/service-dependency-review.ts';
+} from '../packages/investigation/service-dependency-review.mts';
 
 export const SERVICE_DEPENDENCY_SIGNATURE_AUDIT_SCHEMA = 'whoisleuth.service-dependency-signature-audit';
 export const SERVICE_DEPENDENCY_SIGNATURE_AUDIT_VERSION = 1;

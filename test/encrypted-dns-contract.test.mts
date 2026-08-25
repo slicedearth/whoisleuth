@@ -32,6 +32,7 @@ describe('provider-neutral encrypted DNS contract', () => {
 
   test('requires HTTPS policy metadata and bounded known record types', () => {
     assert.throws(() => normalizeEncryptedDnsAdapter({ ...MANIFEST, endpoint: 'http://resolver.example' }), /bounded privacy/u);
+    assert.throws(() => normalizeEncryptedDnsAdapter({ ...MANIFEST, reviewedAt: '2026-08-03T00:00:00' }), /bounded privacy/u);
     const adapter = normalizeEncryptedDnsAdapter(MANIFEST);
     assert.throws(() => planEncryptedDnsQuery(adapter, { name: 'example.test', type: 'AXFR' }), /invalid or unsupported/u);
   });

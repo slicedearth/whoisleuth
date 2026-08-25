@@ -4,6 +4,11 @@
 
 import { SSLBL_CERTIFICATE_SNAPSHOT } from './sslbl-certificates.generated.mts';
 import { createHash } from 'node:crypto';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import {
+  SSLBL_SNAPSHOT_SCHEMA,
+  SSLBL_SNAPSHOT_VERSION,
+} from '../packages/contracts/sslbl-snapshot.mts';
 
 export const SSLBL_INTELLIGENCE_VERSION = 1;
 export const SSLBL_SNAPSHOT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -61,7 +66,6 @@ export type SslblCertificateIntelligence = Readonly<{
 
 const SHA1_RE = /^[a-f0-9]{40}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
-const SNAPSHOT_SCHEMA = 'whoisleuth.sslbl-certificate-snapshot';
 const SNAPSHOT_SOURCE = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
 
 function record(value: unknown): UnknownRecord {
@@ -71,9 +75,7 @@ function record(value: unknown): UnknownRecord {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizedFingerprint(value: unknown): string | null {
@@ -92,8 +94,8 @@ function validateSnapshot(value: unknown): ValidatedSslblSnapshot | null {
   const candidate = record(value);
   const sourceUpdatedAt = timestamp(candidate.sourceUpdatedAt);
   const generatedAt = timestamp(candidate.generatedAt);
-  if (candidate.schema !== SNAPSHOT_SCHEMA
-    || candidate.version !== 1
+  if (candidate.schema !== SSLBL_SNAPSHOT_SCHEMA
+    || candidate.version !== SSLBL_SNAPSHOT_VERSION
     || candidate.source !== SNAPSHOT_SOURCE
     || !sourceUpdatedAt
     || !generatedAt
@@ -146,7 +148,7 @@ function effectiveNow(value: string | number | Date | undefined): number {
     : typeof value === 'number'
       ? value
       : typeof value === 'string'
-        ? Date.parse(value)
+        ? Date.parse(normalizeExplicitIsoTimestamp(value) ?? '')
         : Date.now();
   return Number.isFinite(candidate) ? candidate : Date.now();
 }

@@ -49,8 +49,8 @@ The current projection is eligible for runtime use because:
 - the largest seed grows 61.9%, below the 75% per-seed gate.
 
 These figures describe this small fixture corpus, not real-world accuracy,
-maliciousness, or prevalence. Future updates must extend the labelled corpus
-when they introduce a new script or mapping class.
+maliciousness, or prevalence. Any update that introduces a new script or
+mapping class must extend the labelled corpus.
 
 ## Runtime generation boundary
 

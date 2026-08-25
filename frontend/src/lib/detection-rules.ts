@@ -11,13 +11,14 @@ import {
   serializeDetectionRuleStore,
   updateDetectionRule as updateRule,
 } from './analysis/detection-rule-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { DETECTION_RULES_COLLECTION, LEGACY_DETECTION_RULES_KEY } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_DETECTION_RULES_KEY } from './browser-local-data-contract.ts';
 import type { CaseRecord } from './cases.ts';
 import type {
   DetectionRule,
   DetectionRuleEvaluation,
 } from './analysis/detection-rule-model.ts';
+import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 
 export {
   MAX_RULE_IMPORT_BYTES,
@@ -40,7 +41,7 @@ export type {
 } from './analysis/detection-rule-model.ts';
 
 export async function loadDetectionRules(): Promise<DetectionRule[]> {
-  return (await browserLocalDataProvider()).read(DETECTION_RULES_COLLECTION) as Promise<DetectionRule[]>;
+  return readBrowserLocalData('detection_rules');
 }
 
 function boundedRules(rules: DetectionRule[]): DetectionRule[] {
@@ -48,28 +49,28 @@ function boundedRules(rules: DetectionRule[]): DetectionRule[] {
 }
 
 export async function createDetectionRule(input: Omit<DetectionRule, 'id'>): Promise<DetectionRule[]> {
-  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+  return updateBrowserLocalData('detection_rules', (current) => {
     const rules = boundedRules(createRule(current, input).rules);
     return { document: rules, result: rules };
   });
 }
 
 export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): Promise<DetectionRule[]> {
-  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+  return updateBrowserLocalData('detection_rules', (current) => {
     const rules = boundedRules(updateRule(current, id, patch));
     return { document: rules, result: rules };
   });
 }
 
 export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> {
-  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+  return updateBrowserLocalData('detection_rules', (current) => {
     const rules = boundedRules(current.filter((rule) => rule.id !== id));
     return { document: rules, result: rules };
   });
 }
 
 export async function importDetectionRules(raw: unknown): Promise<{ rules: DetectionRule[]; added: number; updated: number; skipped: number }> {
-  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+  return updateBrowserLocalData('detection_rules', (current) => {
     const result = mergeDetectionRules(current, raw);
     const rules = boundedRules(result.rules);
     return { document: rules, result: { rules, added: result.added, updated: result.updated, skipped: result.skipped } };
@@ -77,7 +78,7 @@ export async function importDetectionRules(raw: unknown): Promise<{ rules: Detec
 }
 
 export async function exportDetectionRules(): Promise<void> {
-  const blob = new Blob([JSON.stringify(buildDetectionRuleExport(await loadDetectionRules()), null, 2)], { type: 'application/json' });
+  const blob = new Blob([serialiseWorkspacePortableJson(buildDetectionRuleExport(await loadDetectionRules()))], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

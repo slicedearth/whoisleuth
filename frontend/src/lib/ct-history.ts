@@ -4,8 +4,8 @@ import {
   enforceCtHistoryBudget,
   recordCtHistorySearch,
 } from './analysis/ct-history.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
-import { CT_HISTORY_COLLECTION, LEGACY_CT_HISTORY_KEY } from './browser-local-data-definitions.ts';
+import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { LEGACY_CT_HISTORY_KEY } from './browser-local-data-contract.ts';
 
 export const CT_HISTORY_KEY = LEGACY_CT_HISTORY_KEY;
 
@@ -60,7 +60,7 @@ export interface CtHistoryComparison {
 }
 
 export async function loadCtHistory(): Promise<CtHistoryStore> {
-  return (await browserLocalDataProvider()).read(CT_HISTORY_COLLECTION) as Promise<CtHistoryStore>;
+  return readBrowserLocalData('ct_history') as Promise<CtHistoryStore>;
 }
 
 function boundedCtHistory(store: CtHistoryStore): CtHistoryStore {
@@ -68,7 +68,7 @@ function boundedCtHistory(store: CtHistoryStore): CtHistoryStore {
 }
 
 export async function saveCtHistorySearch(query: string, domains: string[], options: { certificateCount: number; truncated: boolean; checkedAt?: string }): Promise<{ store: CtHistoryStore; comparison: CtHistoryComparison }> {
-  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, (current) => {
+  return updateBrowserLocalData('ct_history', (current) => {
     const result = recordCtHistorySearch(current, query, domains, options) as { store: CtHistoryStore; comparison: CtHistoryComparison };
     const store = boundedCtHistory(result.store);
     return { document: store, result: { ...result, store } };
@@ -76,7 +76,7 @@ export async function saveCtHistorySearch(query: string, domains: string[], opti
 }
 
 export async function removeCtHistory(query: string): Promise<CtHistoryStore> {
-  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, (current) => {
+  return updateBrowserLocalData('ct_history', (current) => {
     const store = boundedCtHistory(deleteCtHistoryEntry(current, query) as CtHistoryStore);
     return { document: store, result: store };
   });
@@ -84,5 +84,5 @@ export async function removeCtHistory(query: string): Promise<CtHistoryStore> {
 
 export async function clearCtHistory(): Promise<CtHistoryStore> {
   const store = emptyCtHistoryStore() as CtHistoryStore;
-  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, () => ({ document: store, result: store }));
+  return updateBrowserLocalData('ct_history', () => ({ document: store, result: store }));
 }

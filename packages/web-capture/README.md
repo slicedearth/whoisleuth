@@ -18,12 +18,13 @@ The destination must not already exist. The package writes a fixed-size PNG,
 a sanitised DOM digest containing hashes and element counts rather than page
 text or HTML, and a version 2 `whoisleuth.web-capture-manifest` that can be
 reviewed before import into Cases. The manifest also retains one
-control-sanitised page title of up to 300 characters. File permissions are private where the
-platform supports POSIX modes.
+control-sanitised page title of up to 300 characters. File permissions are
+private where the platform supports POSIX modes.
 The structured manifest and DOM-digest fields exclude resource paths, queries,
-raw DOM, and body text. The screenshot necessarily preserves visible rendered
-content and may include page text or a page-reflected path or query until the
-operator deletes the output directory.
+raw DOM, and body text as dedicated fields, but the page-controlled title may
+itself reproduce a path or query. The screenshot necessarily preserves visible
+rendered content and may include page text or a page-reflected path or query
+until the operator deletes the output directory.
 Rendered DOM counts are capped at 20,000 and the body text-node sequence is
 hashed only through a valid UTF-8 boundary within 256 KiB. Reaching either bound marks the
 capture partial so the resulting version-2 artefact remains accepted by the
@@ -32,20 +33,28 @@ offline comparator without implying that the omitted page content was absent.
 The offline `compare` command accepts two selected version-2 manifests. Before
 comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact
-equality for the bounded preorder element-tag sequence and body text-node
-sequence, screenshot dHash distance, bounded count changes, page identity,
+equality for complete bounded preorder element-tag sequences and body text-node
+sequences, screenshot dHash distance, bounded count changes, page identity,
 and request-domain overlap as separate components. The tag sequence does not
 encode nesting or attributes, and the legacy `visibleText` field includes body
 text nodes that CSS or non-rendered containers may hide; neither field proves
-exact DOM or visual equality. The comparator makes no request, prints no input
-paths, reports only the page-title equality state rather than either title in
-version 2 output, and produces no combined similarity or maliciousness score.
+exact DOM or visual equality. Equal truncated prefixes are reported as
+unavailable rather than equal. If either capture is partial, request-domain and
+technology set relationships are also unavailable because omitted activity can
+change them; retained counts and shared observations remain visible for review.
+The comparator makes no request, prints no input
+paths, reports only the page-title equality state rather than either title,
+emits `whoisleuth.web-capture-comparison` version 3, and produces no combined
+similarity or maliciousness score. Version-2 comparison documents remain
+listed as historical read-only output in the schema inventory.
 
 Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted
 request headers. Structured manifest and digest fields keep only the target
 hostname, final HTTP(S) origin, one control-sanitised page title of up to 300
-characters, and admitted public resource hostnames, never those paths or queries. It accepts at most 100 HTTP(S)
+characters, and admitted public resource hostnames. They contain no dedicated
+request-path or query fields, but the title may itself reproduce a path or query.
+It accepts at most 100 HTTP(S)
 requests and 30 request hostnames, blocks credentials, non-default ports,
 service workers, dedicated and shared workers, downloads, WebSockets, WebRTC, WebTransport, non-HTTP
 protocols, and hosts resolving to private or reserved addresses. The hostname

@@ -298,9 +298,9 @@ describe('comparison input boundary', () => {
   test('rejects malformed JSON, arrays, and unsupported schemas or lookup types', () => {
     assert.throws(() => parseCliLookupDocument('{'), /valid JSON/);
     assert.throws(() => parseCliLookupDocument('[]'), /one JSON object/);
-    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ schema: 'other' }))), /whoisleuth\.cli\.lookup version 1/);
-    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ version: 2 }))), /version 1/);
-    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ type: 'ip' }))), /domain lookup documents only/);
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ schema: 'other' }))), /whoisleuth\.cli\.lookup version 1 or 2/);
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ version: 3 }))), /version 1 or 2/);
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ type: 'ip' }))), /unsupported lookup type/);
     assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ mode: 'custom' }))), /lookup mode/);
   });
 

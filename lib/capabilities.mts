@@ -8,6 +8,7 @@ import { urlscanConfiguration } from './urlscan-intelligence.mts';
 import { urlhausConfiguration } from './urlhaus-intelligence.mts';
 import { threatfoxConfiguration } from './threatfox-intelligence.mts';
 import { scheduledMonitorRuntimeConfiguration } from './scheduled-monitor-configuration.mts';
+import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.mts';
 
 type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
 type CapabilityExecution = 'hosted' | 'browser' | 'worker';
@@ -26,26 +27,17 @@ type OperationBudgetProvider = Parameters<typeof operationBudgetReport>[1];
 const CAPABILITIES_VERSION = 1;
 const CAPABILITY_STATUSES = new Set<CapabilityStatus>(['supported', 'disabled', 'unavailable', 'local_only']);
 
-const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze([
-  { id: 'lookup', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
-  { id: 'rdap', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
-  { id: 'rdap_nameserver_search', status: 'supported', execution: 'hosted', scanModes: [] },
-  { id: 'whois', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
-  { id: 'availability', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
-  { id: 'dns_intelligence', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
-  { id: 'website_probe', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
-  { id: 'tls_intelligence', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
-  { id: 'certificate_transparency', status: 'supported', execution: 'hosted', scanModes: [] },
-  { id: 'urlscan_search', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Archived URLscan verdict search is not configured.' },
-  { id: 'urlhaus_host', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Malware-host intelligence is not configured.' },
-  { id: 'threatfox_domain_ioc', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Malware-IOC intelligence is not configured.' },
-  { id: 'domain_posture', status: 'supported', execution: 'hosted', scanModes: [] },
-  { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
-  { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },
-  { id: 'watchlists', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
-  { id: 'scheduled_monitoring', status: 'unavailable', execution: 'worker', scanModes: ['fast'], reason: 'Scheduled monitoring is not configured.' },
-  { id: 'distributed_budgets', status: 'unavailable', execution: 'hosted', scanModes: [], reason: 'Distributed counters are not configured.' },
-]);
+const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze(
+  CAPABILITY_MANIFEST.capabilities.flatMap((item) => item.legacyCapability
+    ? [Object.freeze({
+        id: item.id,
+        status: item.legacyCapability.status,
+        execution: item.legacyCapability.execution,
+        scanModes: Object.freeze([...item.legacyCapability.scanModes]),
+        ...(item.legacyCapability.reason ? { reason: item.legacyCapability.reason } : {}),
+      })]
+    : []),
+);
 
 function capabilityReport(
   runtime: unknown = 'unknown',

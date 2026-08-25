@@ -1,7 +1,9 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
+import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { readFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 
 // Coverage for the shared design system: native-sized checkbox controls with
 // correct label alignment, the Lookup result's grouped sections and local
@@ -92,6 +94,34 @@ test('the theme-aware WHOISleuth mark stays consistent and contained across them
   await expectNoHorizontalOverflow(page);
 });
 
+test('the active console navigation marker never overlaps its label', async ({ page }) => {
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await page.goto('/dashboard');
+    if (size.width < 800) await page.getByRole('button', { name: 'Toggle navigation' }).click();
+    const active = page.locator('#console-navigation a[aria-current="page"]').filter({ hasText: 'Dashboard' });
+    await expect(active).toBeVisible();
+    const geometry = await active.evaluate((element) => {
+      const link = element.getBoundingClientRect();
+      const label = element.querySelector('strong')!.getBoundingClientRect();
+      return {
+        marker: getComputedStyle(element, '::before').content,
+        labelInside: label.left >= link.left && label.right <= link.right,
+      };
+    });
+    expect(geometry.marker).toBe('""');
+    expect(geometry.labelInside).toBe(true);
+    if (size.width < 800) await page.getByRole('button', { name: 'Close navigation' }).click();
+  }
+});
+
+test('certificate monitoring highlights the Assure navigation destination', async ({ page }) => {
+  await page.goto('/monitor?view=certificates');
+  const navigation = page.locator('#console-navigation');
+  await expect(navigation.getByRole('link', { name: /^Watchlists & controls/u })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Monitor/u })).not.toHaveAttribute('aria-current', 'page');
+});
+
 // A deep-ish result with enough evidence groups to exercise the section
 // navigation: assessment + DNS + HTTP evidence plus the always-present
 // registry sources and raw response.
@@ -174,6 +204,20 @@ function sectionedLookupFixture(domain: string) {
   };
 }
 
+async function expectLookupTargetAligned(page: Page, selector: string): Promise<void> {
+  await expect.poll(async () => page.locator(selector).evaluate((target) => {
+    const targetTop = target.getBoundingClientRect().top;
+    const targetDocumentTop = targetTop + window.scrollY;
+    const scrollMarginTop = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+    const maximumScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const expectedScroll = Math.min(Math.max(0, targetDocumentTop - scrollMarginTop), maximumScroll);
+    return Math.abs(window.scrollY - expectedScroll);
+  }), {
+    message: `${selector} should settle at its configured scroll anchor`,
+    timeout: 5_000,
+  }).toBeLessThanOrEqual(2);
+}
+
 test('optional intelligence checkboxes stay native-sized and aligned with their labels', async ({ page }) => {
   await page.route('**/api/capabilities', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(INTELLIGENCE_CAPABILITIES),
@@ -247,20 +291,22 @@ test('the protected Console opens through an intentional responsive loading stat
   await expectNoHorizontalOverflow(page);
 
   releaseSession?.();
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });
 
 test('the console command palette filters destinations and remains keyboard operable', async ({ page }) => {
+  const commandCount = consoleCommandNavigation.length;
   await page.goto('/dashboard');
-  const trigger = page.getByRole('button', { name: 'Open command palette' });
+  const trigger = page.getByRole('button', { name: 'Open console navigation' });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
+  await expect(trigger.locator('.command-icon')).toHaveCount(1);
   await expect(trigger.locator('.command-icon')).toBeHidden();
 
   await page.keyboard.press('Control+K');
   const dialog = page.getByRole('dialog', { name: 'Go to' });
-  const search = dialog.getByRole('combobox', { name: 'Search pages' });
+  const search = dialog.getByRole('combobox', { name: 'Search pages and tools' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
   const searchFrame = dialog.locator('.command-search');
@@ -283,19 +329,13 @@ test('the console command palette filters destinations and remains keyboard oper
     options.every((option) => option.getAttribute('tabindex') === '-1')
   )).toBe(true);
   const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
-  await expect(destinationIcons).toHaveCount(14);
-  await expect(dialog.locator('[data-command-group]')).toHaveText([
-    'Start',
-    'Investigate', 'Investigate', 'Investigate',
-    'Protect & review', 'Protect & review',
-    'Reference', 'Reference', 'Public',
-    'Public', 'Public', 'Public', 'Public', 'Public',
-  ]);
+  await expect(destinationIcons).toHaveCount(commandCount);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(consoleCommandNavigation.map((command) => command.group));
   await expect(dialog.locator('[data-command-group]', { hasText: 'Console' })).toHaveCount(0);
   await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
   await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
   await search.press('End');
-  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-13');
+  await expect(search).toHaveAttribute('aria-activedescendant', `command-option-${commandCount - 1}`);
   await search.press('Home');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
@@ -307,11 +347,13 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(2);
+  await expect(dialog.getByRole('option', { name: /Domain investigation evidence/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /RDAP versus WHOIS/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /Local-first investigation/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(4);
   await search.fill('dns whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
-  await expect(dialog.getByRole('option', { name: /Resources/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /Domain investigation evidence/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(2);
   await search.fill('tld');
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
@@ -325,22 +367,20 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('Investigate');
   await expect(dialog.getByRole('option')).toHaveCount(3);
   await expect(dialog.locator('[data-command-group]')).toHaveText(['Investigate', 'Investigate', 'Investigate']);
-  await search.fill('Protect & review');
+  await search.fill('Respond');
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Respond']);
+  await search.fill('Assure');
   await expect(dialog.getByRole('option')).toHaveCount(2);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Protect & review', 'Protect & review']);
+  await expect(dialog.locator('[data-command-group]')).toHaveText(['Assure', 'Assure']);
   await search.fill('Public');
-  await expect(dialog.getByRole('option')).toHaveCount(6);
-  await expect(dialog.getByRole('option')).toHaveText([
-    /Public homepage/u,
-    /Synthetic demo/u,
-    /Privacy/u,
-    /Terms/u,
-    /Request policy/u,
-    /Contact/u,
-  ]);
-  await expect(dialog.locator('[data-command-group]')).toHaveText([
-    'Public', 'Public', 'Public', 'Public', 'Public', 'Public',
-  ]);
+  const publicMatches = consoleCommandNavigation.filter((command) => (
+    `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`.toLowerCase().includes('public')
+  ));
+  await expect(dialog.getByRole('option')).toHaveCount(publicMatches.length);
+  await expect(dialog.locator('.command-copy strong')).toHaveText(publicMatches.map((command) => command.label));
+  await expect(dialog.locator('[data-command-group]')).toHaveText(publicMatches.map((command) => command.group));
+  await expect(dialog.getByRole('option', { name: /Overview/u })).toBeVisible();
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
@@ -377,6 +417,7 @@ test('the console command palette filters destinations and remains keyboard oper
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toHaveCount(1);
   await expect(trigger.locator('.shortcut-wide')).toBeHidden();
   const compactIcon = trigger.locator('.command-icon');
   await expect(compactIcon).toBeVisible();
@@ -397,10 +438,10 @@ test('the console command palette filters destinations and remains keyboard oper
     fitsViewport: true,
     listIsKeyboardScrollable: true,
   });
-  const mobileSearch = dialog.getByRole('combobox', { name: 'Search pages' });
+  const mobileSearch = dialog.getByRole('combobox', { name: 'Search pages and tools' });
   await mobileSearch.press('End');
-  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', 'command-option-13');
-  const lastMobileOption = dialog.getByRole('option').nth(13);
+  await expect(mobileSearch).toHaveAttribute('aria-activedescendant', `command-option-${commandCount - 1}`);
+  const lastMobileOption = dialog.getByRole('option').nth(commandCount - 1);
   await expect(lastMobileOption).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => lastMobileOption.evaluate((option) => {
     const list = option.closest('#command-results');
@@ -428,40 +469,44 @@ test('the console command palette keeps every destination heading readable on mo
   for (const width of [400, 430, 489, 500]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Open command palette' }).click();
+    await page.getByRole('button', { name: 'Open console navigation' }).click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog).toBeVisible();
-    expect(await dialog.locator('.command-copy strong').evaluateAll((headings) => headings.every((heading) =>
+    const options = dialog.getByRole('option');
+    const headings = dialog.locator('.command-copy strong');
+    expect(await options.count()).toBeGreaterThan(0);
+    expect(await headings.count()).toBe(await options.count());
+    expect(await headings.evaluateAll((items) => items.every((heading) =>
       heading.scrollWidth <= heading.clientWidth + 1
     ))).toBe(true);
     await page.keyboard.press('Escape');
   }
 });
 
-test('console footer opens public guidance separately while the public footer stays in-tab', async ({ page, context }) => {
+test('console footer opens policy pages separately while the public footer stays in-tab', async ({ page, context }) => {
   await page.goto('/lookup');
-  const consoleResources = page.locator('footer.site-footer').getByRole('link', { name: /Resources/ });
-  await expect(consoleResources).toHaveAttribute('target', '_blank');
-  await expect(consoleResources).toHaveAttribute('rel', /noopener/u);
-  await expect(consoleResources).not.toContainText('↗');
-  await expect(consoleResources).toHaveAccessibleName(/Resources.*opens in a new tab/u);
+  const consolePrivacy = page.locator('footer.site-footer').getByRole('link', { name: /Privacy/ });
+  await expect(consolePrivacy).toHaveAttribute('target', '_blank');
+  await expect(consolePrivacy).toHaveAttribute('rel', /noopener/u);
+  await expect(consolePrivacy).not.toContainText('↗');
+  await expect(consolePrivacy).toHaveAccessibleName(/Privacy.*opens in a new tab/u);
   const [publicPage] = await Promise.all([
     context.waitForEvent('page'),
-    consoleResources.click(),
+    consolePrivacy.click(),
   ]);
   await publicPage.waitForLoadState('domcontentloaded');
-  await expect(publicPage).toHaveURL(/\/resources$/u);
+  await expect(publicPage).toHaveURL(/\/privacy$/u);
   await expect(page).toHaveURL(/\/lookup$/u);
   await publicPage.close();
 
   await page.goto('/');
-  const publicResources = page.locator('footer.site-footer').getByRole('link', { name: 'Resources', exact: true });
-  await expect(publicResources).not.toHaveAttribute('target', '_blank');
-  await publicResources.click();
-  await expect(page).toHaveURL(/\/resources$/u);
+  const publicPrivacy = page.locator('footer.site-footer').getByRole('link', { name: 'Privacy', exact: true });
+  await expect(publicPrivacy).not.toHaveAttribute('target', '_blank');
+  await publicPrivacy.click();
+  await expect(page).toHaveURL(/\/privacy$/u);
 });
 
-test('console reference navigation keeps new-tab behavior without decorative arrows', async ({ page }) => {
+test('console reference navigation keeps public Resources separate without decorative arrows', async ({ page }) => {
   await page.goto('/dashboard');
   const resources = page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: /Resources/ });
   await expect(resources).toHaveAttribute('target', '_blank');
@@ -504,9 +549,25 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   ],
 }, async ({ page }) => {
   test.slow();
+  const reviewedAt = new Date('2026-08-21T12:00:00.000Z');
+  await page.clock.setFixedTime(reviewedAt);
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  const sectionedResult = {
+    ...sectionedLookupFixture('sectioned-result.invalid'),
+    observedAt: reviewedAt.toISOString(),
+  };
+  Object.assign(sectionedResult.whois.parsed, {
+    domainName: 'different.invalid',
+  });
+  Object.assign(sectionedResult.availability.dns, {
+    limitations: ['The DNS collection is incomplete for this bounded comparison.'],
+  });
+  const lookupRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify(sectionedLookupFixture('sectioned-result.invalid')),
+    status: 200, contentType: 'application/json', body: JSON.stringify(sectionedResult),
   }));
   await page.goto('/lookup');
   await page.locator('#query').fill('sectioned-result.invalid');
@@ -518,7 +579,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await visibility.getByRole('button', { name: 'Expand all' }).click();
   await expect(visibility.getByRole('button', { name: 'Expand all' })).toBeDisabled();
 
-  const localNav = page.getByRole('navigation', { name: 'Result sections' });
+  const localNav = page.getByRole('navigation', { name: 'Result sections', includeHidden: true });
   await expect(localNav).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Overview' })).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Web & DNS' })).toBeVisible();
@@ -526,6 +587,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(localNav.getByRole('link', { name: 'Relationships & history' })).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Source quality' })).toBeVisible();
   await expect(localNav.getByRole('link', { name: 'Advanced' })).toBeVisible();
+  const activeNavigation = localNav.locator('a.active');
+  await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
+  expect(await activeNavigation.evaluate((link) => getComputedStyle(link).boxShadow)).toContain('inset');
 
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
@@ -728,9 +792,211 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activationContext).toContainText('Mail state inconclusive');
   await expect(activationContext).toContainText('Cross-layer timing inconclusive');
 
+  const atAGlance = page.locator('.at-a-glance');
+  const nextReviewQueue = atAGlance.locator('.next-actions');
+  await expect(nextReviewQueue).toHaveCount(1);
+  const nextReviewCounts = await nextReviewQueue.evaluate((queue) => ({
+    total: Number(queue.getAttribute('data-total')),
+    displayed: Number(queue.getAttribute('data-displayed-count')),
+    omitted: Number(queue.getAttribute('data-omitted-count')),
+    rendered: queue.querySelectorAll('.next-action').length,
+  }));
+  expect(nextReviewCounts.total).toBe(nextReviewCounts.displayed + nextReviewCounts.omitted);
+  expect(nextReviewCounts.displayed).toBe(nextReviewCounts.rendered);
+  expect(nextReviewCounts.displayed).toBeLessThanOrEqual(3);
+  const factBackedReviews = nextReviewQueue.locator('.next-action[data-basis="decision_fact"]');
+  expect(await factBackedReviews.count()).toBeGreaterThan(0);
+  for (const action of await factBackedReviews.all()) {
+    const contributingFactIds = (await action.getAttribute('data-contributing-fact-ids'))
+      ?.split(',').filter(Boolean) ?? [];
+    expect(contributingFactIds.length).toBeGreaterThan(0);
+    expect(contributingFactIds.every((id) => /^lookup-(?:decision|evidence):[a-z0-9._:-]+$/u.test(id))).toBe(true);
+    await expect(action.locator('.action-facts')).toContainText(contributingFactIds.join(' · '));
+  }
+  expect(await nextReviewQueue.locator('.next-action').evaluateAll((actions) => actions.every((action) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(action.getAttribute('href') ?? '')
+  )))).toBe(true);
+
+  const taskFocus = controls.getByLabel('Focus');
+  await taskFocus.selectOption('acquisition');
+  const acquisitionAction = nextReviewQueue.locator('[data-action-id="review-acquisition-dependencies"]');
+  await expect(acquisitionAction).toHaveCount(1);
+  await expect(acquisitionAction).toHaveAttribute('data-basis', 'task_context');
+  await expect(acquisitionAction).toHaveAttribute('data-contributing-fact-ids', '');
+  await expect(acquisitionAction.locator('.contextual-note')).toContainText('no evidence fact or provenance is claimed');
+  expect(lookupRequests).toHaveLength(1);
+
+  await taskFocus.selectOption('brand');
+  expect(lookupRequests).toHaveLength(1);
   const detailedAssessment = page.locator('details.detailed-assessment');
   await detailedAssessment.locator(':scope > summary').click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
+  const impactPlan = detailedAssessment.locator('details.impact-plan');
+  await expect(impactPlan).toHaveCount(1);
+  const impactStateBefore = await page.evaluate(() => {
+    const state = window as typeof window & { __reviewDisclosureWrites?: number };
+    state.__reviewDisclosureWrites = 0;
+    const count = () => { state.__reviewDisclosureWrites = (state.__reviewDisclosureWrites ?? 0) + 1; };
+    const originalPut = IDBObjectStore.prototype.put;
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalDelete = IDBObjectStore.prototype.delete;
+    const originalClear = IDBObjectStore.prototype.clear;
+    const originalSetItem = Storage.prototype.setItem;
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const originalStorageClear = Storage.prototype.clear;
+    IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key); };
+    IDBObjectStore.prototype.add = function add(value: unknown, key?: IDBValidKey) { count(); return key === undefined ? originalAdd.call(this, value) : originalAdd.call(this, value, key); };
+    IDBObjectStore.prototype.delete = function deleteRecord(query: IDBValidKey | IDBKeyRange) { count(); return originalDelete.call(this, query); };
+    IDBObjectStore.prototype.clear = function clear() { count(); return originalClear.call(this); };
+    Storage.prototype.setItem = function setItem(key: string, value: string) { count(); return originalSetItem.call(this, key, value); };
+    Storage.prototype.removeItem = function removeItem(key: string) { count(); return originalRemoveItem.call(this, key); };
+    Storage.prototype.clear = function clear() { count(); return originalStorageClear.call(this); };
+    return {
+      hash: window.location.hash,
+      localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+      sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+    };
+  });
+  const impactSummary = impactPlan.locator(':scope > summary');
+  await impactSummary.focus();
+  await impactSummary.press('Enter');
+  await expect(impactPlan).toHaveAttribute('open', '');
+  const impactCounts = await impactPlan.evaluate((plan) => ({
+    total: Number(plan.getAttribute('data-total')),
+    displayed: Number(plan.getAttribute('data-displayed-count')),
+    omitted: Number(plan.getAttribute('data-omitted-count')),
+    rendered: plan.querySelectorAll('.impacts > li').length,
+  }));
+  expect(impactCounts.total).toBe(impactCounts.displayed + impactCounts.omitted);
+  expect(impactCounts.displayed).toBe(impactCounts.rendered);
+  const factBackedImpacts = impactPlan.locator('.impacts > li[data-basis="decision_fact"]');
+  const localImpacts = impactPlan.locator('.impacts > li[data-mode="local_review"]');
+  const networkImpacts = impactPlan.locator('.impacts > li[data-mode="network_collection"]');
+  expect(await factBackedImpacts.count()).toBeGreaterThan(0);
+  expect(await localImpacts.count()).toBeGreaterThan(0);
+  expect(await networkImpacts.count()).toBeGreaterThan(0);
+  const tlsImpact = impactPlan.locator('[data-fact-id="lookup-evidence:tls"]');
+  const pageIdentityImpact = impactPlan.locator('[data-fact-id="lookup-evidence:page-identity"]');
+  await expect(tlsImpact).toHaveAttribute('data-evidence-state', 'unknown');
+  await expect(tlsImpact).toHaveAttribute('data-freshness', 'current');
+  await expect(tlsImpact.locator('.fact-id')).toContainText('lookup-evidence:tls');
+  await expect(tlsImpact.locator('[data-provenance="direct_observation"]')).toContainText('Direct observation');
+  await expect(tlsImpact.locator('[data-freshness="current"]')).toHaveAttribute('data-tone', 'neutral');
+  await expect(pageIdentityImpact).toHaveAttribute('data-evidence-state', 'unknown');
+  await expect(pageIdentityImpact).toHaveAttribute('data-freshness', 'stale');
+  const localImpact = localImpacts.first();
+  await expect(localImpact).toHaveAttribute('data-basis', 'task_context');
+  await expect(localImpact).toHaveAttribute('data-fact-id', '');
+  await expect(localImpact.locator('.context-note')).toContainText('No Decision Fact or collected-evidence provenance');
+  await expect(localImpact.locator('[data-provenance]')).toHaveCount(0);
+  await expect(localImpact.locator('.limitation')).toContainText('No reviewed Brand Profile is active');
+  await expect(localImpact).toContainText('does not start a network request');
+  expect(await impactPlan.locator('.impacts a').evaluateAll((links) => links.every((link) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(link.getAttribute('href') ?? '')
+  )))).toBe(true);
+  expect(await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+    writes: (window as typeof window & { __reviewDisclosureWrites?: number }).__reviewDisclosureWrites ?? 0,
+  }))).toEqual({ ...impactStateBefore, writes: 0 });
+  expect(lookupRequests).toHaveLength(1);
+
+  await taskFocus.selectOption('general');
+  expect(lookupRequests).toHaveLength(1);
+  const decisionSupport = detailedAssessment.locator('.decision-support');
+  await expect(decisionSupport.getByRole('heading', { name: 'General investigation' })).toBeVisible();
+  const presentationStateBefore = await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+  }));
+  await expect(decisionSupport.getByRole('button', { name: 'Copy current brief' })).toBeVisible();
+  await expect(decisionSupport.locator('[data-review-group-summary="disagreements"]')).toHaveText('1 disagreement');
+  await expect(decisionSupport.locator('[data-review-group-summary="unresolved"]')).toHaveText('1 unresolved comparison');
+  const decisionRecords = decisionSupport.locator('details.decision-records');
+  const decisionSummary = decisionRecords.locator(':scope > summary');
+  await decisionSummary.focus();
+  await decisionSummary.press('Enter');
+  await expect(decisionRecords).toHaveAttribute('open', '');
+  await decisionSummary.press('Space');
+  await expect(decisionRecords).not.toHaveAttribute('open', '');
+  await decisionSummary.press('Enter');
+  await expect(decisionRecords).toHaveAttribute('open', '');
+
+  const expectedDecisionGroups = [{
+    id: 'disagreements',
+    consistency: 'contradictory',
+    factIds: ['lookup-decision:registry-whois-domain'],
+  }, {
+    id: 'unresolved',
+    consistency: 'unknown',
+    factIds: ['lookup-decision:certificate-policy-caa'],
+  }] as const;
+  for (const expectedGroup of expectedDecisionGroups) {
+    const reviewGroup = decisionSupport.locator(`[data-review-group="${expectedGroup.id}"]`);
+    await expect(reviewGroup).toHaveCount(1);
+    await expect(reviewGroup).toHaveAttribute('data-consistency', expectedGroup.consistency);
+    await expect(reviewGroup).toHaveAttribute('data-total', String(expectedGroup.factIds.length));
+    await expect(reviewGroup).toHaveAttribute('data-displayed-count', String(expectedGroup.factIds.length));
+    await expect(reviewGroup).toHaveAttribute('data-omitted-count', '0');
+    await expect(reviewGroup).toHaveAttribute('data-contributing-fact-ids', expectedGroup.factIds.join(','));
+    expect(await reviewGroup.locator('.decision-entry').evaluateAll((entries) => (
+      entries.map((entry) => entry.getAttribute('data-fact-id'))
+    ))).toEqual(expectedGroup.factIds);
+  }
+
+  const disagreement = decisionSupport.locator('[data-review-group="disagreements"] .decision-entry');
+  const unresolved = decisionSupport.locator('[data-review-group="unresolved"] .decision-entry');
+  await expect(disagreement.locator('.consistency[data-consistency="contradictory"]')).toContainText('Contradictory');
+  await expect(disagreement.locator('.consistency')).toHaveAttribute('data-tone', 'conflict');
+  await expect(disagreement.locator('.consistency')).toHaveAttribute('aria-label', /Source ordering does not decide/iu);
+  await expect(unresolved.locator('.consistency[data-consistency="unknown"]')).toContainText('Consistency unknown');
+  await expect(unresolved.locator('.consistency')).toHaveAttribute('data-tone', 'caution');
+  await expect(disagreement.locator('.fact-state [data-evidence-state="observed"]')).toContainText('Observed');
+  await expect(disagreement.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
+  await expect(unresolved.locator('.fact-state [data-evidence-state="partial"]')).toContainText('Partial');
+  await expect(unresolved.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
+  const presentationIcons = decisionSupport.locator('.presentation-icon');
+  expect(await presentationIcons.count()).toBeGreaterThan(0);
+  expect(await presentationIcons.evaluateAll((icons) => (
+    icons.every((icon) => icon.getAttribute('aria-hidden') === 'true')
+  ))).toBe(true);
+
+  const registryContributor = disagreement.locator('[data-contributor-id="evidence:rdap"]');
+  const whoisContributor = disagreement.locator('[data-contributor-id="evidence:whois"]');
+  for (const contributor of [registryContributor, whoisContributor]) {
+    await expect(contributor).toHaveCount(1);
+    await expect(contributor).toHaveAttribute('data-provenance', 'provider_reported');
+  }
+  const dnsContributor = unresolved.locator('[data-contributor-id="evidence:dns"]');
+  const tlsContributor = unresolved.locator('[data-contributor-id="evidence:tls"]');
+  await expect(dnsContributor).toHaveAttribute('data-provenance', 'direct_observation');
+  await expect(tlsContributor).toHaveAttribute('data-provenance', 'direct_observation');
+  await expect(registryContributor).toContainText('Provider reported');
+  await expect(registryContributor).toContainText('Observed');
+  await expect(dnsContributor).toContainText('Direct observation');
+  await expect(dnsContributor).toContainText('Partial');
+  await expect(tlsContributor).toContainText('Direct observation');
+  await expect(tlsContributor).toContainText('Unknown');
+  await expect(disagreement.getByRole('region', { name: /Contradictions for/ })).toContainText('differs between registration sources');
+  await expect(unresolved.getByRole('region', { name: 'Limitations from DNS' })).toContainText('DNS collection is incomplete');
+
+  const reviewLinks = decisionSupport.locator('a.fact-action, a.evidence-link');
+  expect(await reviewLinks.count()).toBeGreaterThan(0);
+  expect(await reviewLinks.evaluateAll((links) => links.every((link) => (
+    /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(link.getAttribute('href') ?? '')
+  )))).toBe(true);
+  expect(lookupRequests).toHaveLength(1);
+  expect(await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
+  }))).toEqual(presentationStateBefore);
+
+  const assessmentFocus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  await assessmentFocus.selectOption('acquisition');
+  await expect(assessmentFocus).toHaveValue('acquisition');
   const acquisitionReview = page.locator('details.acquisition');
   await expect(acquisitionReview).toContainText('Acquisition due diligence');
   await expect(acquisitionReview).not.toHaveAttribute('open', '');
@@ -751,9 +1017,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
   const coverageSummary = coverage.getByRole('group', { name: 'Evidence coverage summary' });
-  await expect(coverageSummary.getByText(/complete$/u)).toBeVisible();
-  await expect(coverageSummary.getByText(/limited$/u)).toBeVisible();
-  await coverage.getByText(/Review \d+ source and analysis records/u).click();
+  const recordsDisclosure = coverage.locator('details.records-disclosure');
+  await expect(recordsDisclosure).not.toHaveAttribute('open', '');
+  await recordsDisclosure.locator(':scope > summary').click();
+  await expect(recordsDisclosure).toHaveAttribute('open', '');
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
@@ -761,30 +1028,80 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
   await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
+  const qualityRows = sourceQualityTable.locator('.quality-record');
+  const qualityRowCount = await qualityRows.count();
+  expect(qualityRowCount).toBeGreaterThan(0);
+  await expect(sourceQualityTable).toHaveAttribute('data-displayed-row-count', String(qualityRowCount));
+  await expect(sourceQualityTable).toHaveAttribute('data-canonical-fact-count', String(qualityRowCount));
+  const canonicalStateLabels = qualityRows.locator('.state[data-evidence-state]');
+  await expect(canonicalStateLabels).toHaveCount(qualityRowCount);
+  const completeRows = await sourceQualityTable.locator('.quality-record[data-counts-as-complete="true"]').count();
+  const limitedRows = await sourceQualityTable.locator('.quality-record[data-counts-as-limited="true"]').count();
+  expect(completeRows).toBeGreaterThan(0);
+  expect(limitedRows).toBeGreaterThan(0);
+  await expect(coverageSummary.locator('[data-summary="complete"] strong')).toHaveText(String(completeRows));
+  await expect(coverageSummary.locator('[data-summary="limited"] strong')).toHaveText(String(limitedRows));
+
+  const rdapQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="rdap"]');
+  const dnsQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="dns"]');
+  const httpQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="http"]');
+  const availabilityQualityRow = sourceQualityTable.locator('.quality-record[data-evidence-id="availability"]');
+  for (const row of [rdapQualityRow, dnsQualityRow, httpQualityRow, availabilityQualityRow]) {
+    await expect(row).toHaveCount(1);
+  }
+  await expect(rdapQualityRow.locator('.state[data-evidence-state="observed"]')).toContainText('Observed');
+  await expect(dnsQualityRow.locator('.state[data-evidence-state="partial"]')).toContainText('Partial');
+  await expect(rdapQualityRow.locator('[data-provenance="provider_reported"]')).toContainText('Provider reported');
+  await expect(dnsQualityRow.locator('[data-provenance="direct_observation"]')).toContainText('Direct observation');
+  await expect(availabilityQualityRow.locator('[data-provenance="derived"]')).toContainText('Derived');
+  const currentFreshness = rdapQualityRow.locator('.observed > .freshness[data-freshness="current"]');
+  const staleFreshness = httpQualityRow.locator('.observed > .freshness[data-freshness="stale"]');
+  await expect(currentFreshness).toContainText('Current');
+  await expect(staleFreshness).toContainText('Stale');
+  const freshnessPlacement = await rdapQualityRow.locator('.observed').evaluate((cell) => {
+    const observed = cell.querySelector<HTMLElement>(':scope > span:first-child')!;
+    const freshness = cell.querySelector<HTMLElement>(':scope > .freshness')!;
+    return {
+      observedBottom: observed.getBoundingClientRect().bottom,
+      freshnessTop: freshness.getBoundingClientRect().top,
+    };
+  });
+  expect(freshnessPlacement.freshnessTop).toBeGreaterThanOrEqual(freshnessPlacement.observedBottom);
+  const neutralPresentation = await rdapQualityRow.evaluate((row) => {
+    const reference = row.querySelector<HTMLElement>('.source strong')!;
+    const state = row.querySelector<HTMLElement>('.state[data-evidence-state="observed"]')!;
+    const freshness = row.querySelector<HTMLElement>('.freshness[data-freshness="current"]')!;
+    return {
+      reference: getComputedStyle(reference).color,
+      state: getComputedStyle(state).color,
+      stateTone: state.dataset.tone,
+      freshness: getComputedStyle(freshness).color,
+      freshnessTone: freshness.dataset.tone,
+    };
+  });
+  expect(neutralPresentation).toEqual({
+    reference: neutralPresentation.reference,
+    state: neutralPresentation.reference,
+    stateTone: 'neutral',
+    freshness: neutralPresentation.reference,
+    freshnessTone: 'neutral',
+  });
+  await expect(rdapQualityRow.locator('.state .presentation-icon')).toHaveAttribute('aria-hidden', 'true');
+  await expect(currentFreshness.locator('.presentation-icon')).toHaveAttribute('aria-hidden', 'true');
+
   const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
   await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
   await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
-  for (const label of ['Registry RDAP', 'WHOIS', 'Availability decision', 'Registrar RDAP']) {
-    const state = coverage.locator('.source strong')
-      .filter({ hasText: new RegExp(`^${label}$`, 'u') })
-      .locator('xpath=../..')
-      .locator('.state-complete');
-    const colours = await state.evaluate((element) => ({
-      actual: getComputedStyle(element).color,
-      expected: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
-    }));
-    expect(colours.actual).toBe(colours.expected.startsWith('#')
-      ? `rgb(${Number.parseInt(colours.expected.slice(1, 3), 16)}, ${Number.parseInt(colours.expected.slice(3, 5), 16)}, ${Number.parseInt(colours.expected.slice(5, 7), 16)})`
-      : colours.expected);
-  }
-  expect(await sourceQualityTable.locator('.state-complete').evaluateAll((states) => {
-    const reference = document.querySelector<HTMLElement>('.summaries article strong');
-    if (!reference) return false;
-    const referenceColour = getComputedStyle(reference).color;
-    return states.every((state) => getComputedStyle(state).color === referenceColour);
-  })).toBe(true);
-  await coverage.getByText(/Freshness policy/u).click();
-  await coverage.getByLabel('Policy').selectOption('analyst-custom');
+  const reverseDnsLimitations = limitationCell.locator('section[aria-label="Limitations from Reverse DNS"]');
+  await expect(reverseDnsLimitations).toHaveCount(1);
+  await expect(reverseDnsLimitations).toContainText('Reverse DNS');
+  await expect(reverseDnsLimitations).toContainText('PTR context does not prove hosting control.');
+
+  const freshnessDisclosure = coverage.locator('details.freshness-policy');
+  await expect(freshnessDisclosure).not.toHaveAttribute('open', '');
+  await freshnessDisclosure.locator(':scope > summary').click();
+  await expect(freshnessDisclosure).toHaveAttribute('open', '');
+  await coverage.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('analyst-custom');
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
@@ -792,9 +1109,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
   await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
-  await coverage.getByText(/Review \d+ source and analysis records/u).click();
-  await coverage.getByText(/Freshness policy/u).click();
-  await expect(coverage.getByLabel('Policy')).toHaveValue('analyst-custom');
+  await recordsDisclosure.locator(':scope > summary').click();
+  await freshnessDisclosure.locator(':scope > summary').click();
+  await expect(coverage.getByRole('combobox', { name: 'Policy', exact: true })).toHaveValue('analyst-custom');
   await expect(coverage.getByLabel('Registration days')).toHaveValue('10');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
@@ -804,7 +1121,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registrationFact).toContainText('does not recalculate or override');
 
   const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
-  expect(await page.locator('.diagnostics article > strong').evaluateAll((states) => {
+  const diagnosticArticles = page.locator('.diagnostics article');
+  const diagnosticStates = page.locator('.diagnostics article > strong');
+  expect(await diagnosticArticles.count()).toBeGreaterThan(0);
+  expect(await diagnosticStates.count()).toBe(await diagnosticArticles.count());
+  expect(await diagnosticStates.evaluateAll((states) => {
     const reference = document.querySelector<HTMLElement>('.summaries article strong');
     if (!reference) return false;
     const referenceColour = getComputedStyle(reference).color;
@@ -827,7 +1148,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(registryLink).toHaveAttribute('aria-current', 'location');
 
   // The DNS status stays visible while its detailed warning is disclosed on demand.
-  const dnsCard = page.getByLabel('DNS intelligence');
+  const dnsCard = page.getByLabel('DNS evidence');
   await expect(dnsCard.locator(':scope > summary .evidence-status')).toHaveText('partial');
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeHidden();
   await dnsCard.locator(':scope > summary').click();
@@ -854,6 +1175,33 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   ]) {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
+    const decisionGeometry = await decisionSupport.evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+      entriesContained: [...section.querySelectorAll<HTMLElement>('.decision-entry')].every((entry) => {
+        const entryBox = entry.getBoundingClientRect();
+        const sectionBox = section.getBoundingClientRect();
+        return entryBox.left >= sectionBox.left - 1 && entryBox.right <= sectionBox.right + 1;
+      }),
+    }));
+    expect(decisionGeometry.scrollWidth).toBeLessThanOrEqual(decisionGeometry.clientWidth + 1);
+    expect(decisionGeometry.entriesContained).toBe(true);
+    const reviewActionGeometry = await atAGlance.evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+      actionsContained: [...section.querySelectorAll<HTMLElement>('.next-action')].every((action) => {
+        const actionBox = action.getBoundingClientRect();
+        const sectionBox = section.getBoundingClientRect();
+        return actionBox.left >= sectionBox.left - 1 && actionBox.right <= sectionBox.right + 1;
+      }),
+    }));
+    expect(reviewActionGeometry.scrollWidth).toBeLessThanOrEqual(reviewActionGeometry.clientWidth + 1);
+    expect(reviewActionGeometry.actionsContained).toBe(true);
+    const readinessGeometry = await detailedAssessment.locator('.claim-readiness').evaluate((section) => ({
+      clientWidth: section.clientWidth,
+      scrollWidth: section.scrollWidth,
+    }));
+    expect(readinessGeometry.scrollWidth).toBeLessThanOrEqual(readinessGeometry.clientWidth + 1);
 
     const redirectPath = httpCard.locator('.redirect-path');
     if (size.width <= 720) {
@@ -864,7 +1212,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       await expect(mobileRedirects).toContainText('https://sectioned-result.invalid/');
       await expect(mobileRedirects).toContainText('https://www.sectioned-result.invalid/home');
       await expect(mobileRedirects).toContainText('Query omitted from retained provenance');
-      await expect(httpCard.locator('.disclosure > ol')).toBeHidden();
+      const desktopRedirects = httpCard.locator('.disclosure > ol');
+      await expect(desktopRedirects).toHaveCount(1);
+      await expect(desktopRedirects).toBeHidden();
       const redirectWidth = await redirectPath.evaluate((element) => ({
         client: element.clientWidth,
         scroll: element.scrollWidth,
@@ -873,7 +1223,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     }
 
     await page.getByRole('tab', { name: /^Evidence/ }).click();
-    const topologyGraphic = topology.getByRole('img', { name: 'Where this result came from visual overview' });
+    const topologyGraphic = topology.getByRole('img', {
+      name: 'Where this result came from visual overview',
+      includeHidden: true,
+    });
     if (size.width > 700) {
       await expect(topologyGraphic).toBeVisible();
       const graphicBox = await boundingBox(topologyGraphic);
@@ -883,6 +1236,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.height).toBeGreaterThan(150);
       expect(graphicBox.height).toBeLessThan(560);
     } else {
+      await expect(topologyGraphic).toHaveCount(1);
       await expect(topologyGraphic).toBeHidden();
       await expect(topology.locator('.mobile-target')).toBeVisible();
     }
@@ -930,7 +1284,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     }
 
     await page.getByRole('tab', { name: /^Timeline/ }).click();
-    const lifecycleGraphic = lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' });
+    const lifecycleGraphic = lifecycle.getByRole('img', {
+      name: 'Chronological lookup lifecycle overview',
+      includeHidden: true,
+    });
     if (size.width > 620) {
       await expect(lifecycleGraphic).toBeVisible();
       const graphicBox = await boundingBox(lifecycleGraphic);
@@ -940,6 +1297,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.height).toBeGreaterThan(130);
       expect(graphicBox.height).toBeLessThan(520);
     } else {
+      await expect(lifecycleGraphic).toHaveCount(1);
       await expect(lifecycleGraphic).toBeHidden();
       await expect(lifecycle.locator('ol[aria-label="Lookup lifecycle events"]')).toBeVisible();
     }
@@ -948,7 +1306,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   // The desktop source graph becomes a connected, full-width source map on
   // narrow screens instead of shrinking every label into the wide SVG.
   await page.getByRole('tab', { name: /^Evidence/ }).click();
-  await expect(topology.getByRole('img', { name: 'Where this result came from visual overview' })).toBeHidden();
+  const mobileTopologyGraphic = topology.getByRole('img', {
+    name: 'Where this result came from visual overview',
+    includeHidden: true,
+  });
+  await expect(mobileTopologyGraphic).toHaveCount(1);
+  await expect(mobileTopologyGraphic).toBeHidden();
   await expect(topology.locator('.mobile-target')).toBeVisible();
   await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
   const mobileSourceIcons = sourceRail.locator('.source-glyph .source-icon');
@@ -983,7 +1346,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   // The wide chronological plot becomes a connected vertical timeline on
   // narrow screens rather than requiring a nested horizontal scrollbar.
   await page.getByRole('tab', { name: /^Timeline/ }).click();
-  await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
+  const mobileLifecycleGraphic = lifecycle.getByRole('img', {
+    name: 'Chronological lookup lifecycle overview',
+    includeHidden: true,
+  });
+  await expect(mobileLifecycleGraphic).toHaveCount(1);
+  await expect(mobileLifecycleGraphic).toBeHidden();
   const mobileTimeline = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
   await expect(mobileTimeline).toBeVisible();
   expect(await mobileTimeline.locator('li').evaluateAll((items) => items.every((item) => {
@@ -994,6 +1362,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   // Mobile uses one compact native section picker instead of a horizontally
   // scrolling trace strip. The chosen destination clears the sticky toolbar.
+  await expect(localNav).toHaveCount(1);
   await expect(localNav).toBeHidden();
   const sectionPicker = page.getByLabel('Jump to section');
   await expect(sectionPicker).toBeVisible();
@@ -1011,6 +1380,91 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
+});
+
+test('Lookup section and mapped-evidence navigation settle at the requested anchor', async ({ page }) => {
+  test.slow();
+  const domain = 'lookup-scroll.invalid';
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(sectionedLookupFixture(domain)),
+  }));
+  await page.goto('/lookup');
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  const topology = page.getByRole('region', { name: 'Where this result came from' });
+  const sourceRail = topology.getByRole('list', { name: 'Evidence item status' });
+  const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/iu });
+  const resultNavigation = page.getByRole('navigation', { name: 'Result sections' });
+  await expect(dnsSource).toBeVisible();
+
+  const registryNode = topology.locator('.source-node[data-source-id="registry-rdap"]').locator('xpath=..');
+  await registryNode.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: 20, button: 0 });
+  await registryNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: 20, button: 0 });
+  await expect(page).toHaveURL(/#evidence-registry$/u);
+  await expectLookupTargetAligned(page, '#evidence-registry');
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await expectLookupTargetAligned(page, '#registry');
+
+  await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
+  await dnsSource.click();
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expectLookupTargetAligned(page, '#evidence-dns');
+
+  // A settled nested hash must not pull a later disclosure back to the old
+  // evidence item when its deferred content becomes ready.
+  for (const [label, selector] of [
+    ['Registration', '#registry'],
+    ['Source quality', '#source-quality'],
+    ['Case and response', '#case-response'],
+    ['Advanced', '#advanced-evidence'],
+  ] as const) {
+    await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
+    await expect(page.getByRole('button', { name: `Collapse ${label} evidence` })).toBeVisible();
+    await expectLookupTargetAligned(page, selector);
+  }
+
+  await page.getByRole('button', { name: 'Collapse Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await expect(topology).toBeVisible();
+  await expectLookupTargetAligned(page, '#relationships-history');
+
+  // Visual nodes, keyboard-operable rail links, delegated evidence links,
+  // local navigation, and direct hashes share the same destination contract.
+  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
+  await dnsSource.focus();
+  await dnsSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expectLookupTargetAligned(page, '#evidence-dns');
+
+  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await resultNavigation.getByRole('link', { name: 'Source quality' }).click();
+  await expect(page).toHaveURL(/#source-quality$/u);
+  await expectLookupTargetAligned(page, '#source-quality');
+
+  await page.evaluate(() => {
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    window.location.hash = '#evidence-registry';
+  });
+  await expect(page).toHaveURL(/#evidence-registry$/u);
+  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toBeVisible();
+  await expectLookupTargetAligned(page, '#evidence-registry');
+
+  const delegatedRegistryLink = page.locator('.at-a-glance .next-action[href="#registry"]').first();
+  if (await delegatedRegistryLink.count()) {
+    await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+    await delegatedRegistryLink.click();
+    await expect(page).toHaveURL(/#registry$/u);
+    await expectLookupTargetAligned(page, '#registry');
+  }
 });
 
 test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {
@@ -1060,22 +1514,28 @@ test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound succes
 });
 
 test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
+  test.slow();
   const domain = 'presentation-options.invalid';
   const presentationFixture = sectionedLookupFixture(domain);
   presentationFixture.diagnostics.whois.status = 'unsupported';
   await page.setViewportSize({ width: 1440, height: 900 });
   const lookupRequests: string[] = [];
-  page.on('request', (request) => {
-    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  let fixtureResponses = 0;
+  await page.route('**/api/lookup?*', (route) => {
+    lookupRequests.push(route.request().url());
+    fixtureResponses += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(presentationFixture),
+    });
   });
-  await page.route('**/api/lookup?*', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(presentationFixture),
-  }));
   await page.goto('/lookup');
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.locator('#result')).toBeVisible();
+  expect(lookupRequests).toHaveLength(1);
+  expect(fixtureResponses).toBe(1);
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
   const task = controls.getByLabel('Focus');
@@ -1103,27 +1563,80 @@ test('Lookup focus and disclosure controls change presentation without changing 
   expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
   const glanceMetrics = atAGlance.locator('.metrics > details');
   await expect(glanceMetrics).toHaveCount(4);
-  const metricSummaries = glanceMetrics.locator('summary');
-  await expect(metricSummaries).toHaveText([
-    /^\d+ complete checks?$/u,
-    /^\d+ limited checks?$/u,
-    /^\d+ disagreements?$/u,
-    /^\d+ unresolved items?$/u,
+  expect(await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => metric.getAttribute('data-metric-id')))).toEqual([
+    'complete',
+    'limited',
+    'disagreements',
+    'unresolved',
   ]);
+  const metricSummaries = glanceMetrics.locator('summary');
+  await expect(glanceMetrics.locator('.metric-label')).toHaveText([
+    /complete checks?/u,
+    /limited checks?/u,
+    /disagreements?/u,
+    /unresolved items?/u,
+  ]);
+  await expect(glanceMetrics.locator('.metric-icon')).toHaveCount(4);
+  const metricPresentation = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
+    const summary = metric.querySelector('summary');
+    const label = metric.querySelector('.metric-label');
+    const icon = metric.querySelector('.metric-icon');
+    return {
+      tone: metric.getAttribute('data-tone'),
+      label: label?.textContent?.trim() ?? '',
+      icon: icon?.getAttribute('data-icon') ?? '',
+      iconHidden: icon?.getAttribute('aria-hidden'),
+      accessibleExplanation: summary?.getAttribute('aria-label') ?? '',
+    };
+  }));
+  expect(metricPresentation.every((metric) => (
+    ['neutral', 'caution', 'conflict'].includes(metric.tone ?? '')
+      && metric.label.length > 0
+      && metric.icon.length > 0
+      && metric.iconHidden === 'true'
+      && metric.accessibleExplanation.length > metric.label.length
+  ))).toBe(true);
   await expect(atAGlance.getByText('Show what this count includes')).toHaveCount(0);
   expect(await metricSummaries.evaluateAll((summaries) => summaries.every((summary) => {
     const box = summary.getBoundingClientRect();
     return summary.scrollWidth <= summary.clientWidth + 1 && box.height <= 48;
   }))).toBe(true);
+  const nextActionsBeforeDisclosure = await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
+    actions.map((action) => ({
+      href: action.getAttribute('href'),
+      text: action.textContent?.replace(/\s+/gu, ' ').trim(),
+    }))
+  ));
+  expect(nextActionsBeforeDisclosure.length).toBeGreaterThan(0);
+  expect(nextActionsBeforeDisclosure.length).toBeLessThanOrEqual(3);
   for (const metric of await glanceMetrics.all()) {
-    const count = Number(await metric.locator('summary strong').textContent());
-    await metric.locator('summary').click();
+    const count = Number(await metric.getAttribute('data-count'));
+    const displayedCount = Number(await metric.getAttribute('data-displayed-count'));
+    const omittedCount = Number(await metric.getAttribute('data-omitted-count'));
+    expect(count).toBe(displayedCount + omittedCount);
+    expect(await metric.locator('.metric-items > .metric-item').count()).toBe(displayedCount);
+    const summary = metric.locator('summary');
+    await summary.focus();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(metric).toHaveAttribute('open', '');
     await expect(metric.locator('.metric-detail > p').first()).toBeVisible();
-    const listedItems = await metric.locator('.metric-detail li').count();
-    if (count > 0) expect(listedItems).toBe(count);
-    else expect(listedItems).toBe(0);
-    await metric.locator('summary').click();
+    if (omittedCount > 0) {
+      await expect(metric.locator('.metric-omitted')).toContainText(`${omittedCount} additional contributing`);
+    } else {
+      await expect(metric.locator('.metric-omitted')).toHaveCount(0);
+    }
+    await page.keyboard.press('Space');
+    await expect(metric).not.toHaveAttribute('open', '');
   }
+  expect(await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
+    actions.map((action) => ({
+      href: action.getAttribute('href'),
+      text: action.textContent?.replace(/\s+/gu, ' ').trim(),
+    }))
+  ))).toEqual(nextActionsBeforeDisclosure);
+  expect(lookupRequests).toHaveLength(1);
+  expect(fixtureResponses).toBe(1);
   await expect(atAGlance.locator('.metric-note')).toContainText('neither state establishes safety');
   const detailedAssessment = page.locator('details.detailed-assessment');
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
@@ -1206,9 +1719,12 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toBeVisible();
 
-  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
+  await expect(page.locator('#evidence-dns .dns-card')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
-  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
+  await expect(page.locator('#evidence-dns .dns-card')).toHaveJSProperty('open', false);
+  const acquisitionActions = await atAGlance.locator('.next-actions .next-action').allTextContents();
+  expect(acquisitionActions.length).toBeLessThanOrEqual(3);
+  expect(acquisitionActions.join(' ')).toMatch(/Review transfer dependencies/u);
   await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
     'Overview',
     'Registration',
@@ -1242,6 +1758,8 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
+  expect(lookupRequests).toHaveLength(2);
+  expect(fixtureResponses).toBe(2);
 });
 
 test('Lookup task query context is bounded, transient, and changes only result presentation', async ({ page }) => {
@@ -1270,23 +1788,47 @@ test('Lookup task query context is bounded, transient, and changes only result p
   expect(new URL(lookupRequests[0]!).searchParams.has('task')).toBe(false);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:lookup-presentation:v1') || '{}').task)).toBe('brand');
 
-  const acquisitionScores = page.locator('.availability .scores .score');
-  await expect(acquisitionScores).toHaveCount(2);
-  await expect(acquisitionScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(acquisitionScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Opportunity score/u);
-  await expect(acquisitionScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(acquisitionScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Risk score/u);
-  const acquisitionDetails = page.locator('.availability .score-details .score-detail');
-  await expect(acquisitionDetails.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(acquisitionDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Opportunity score explanation');
-  await expect(acquisitionDetails.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(acquisitionDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Risk score explanation');
+  const acquisitionAssessment = page.locator('.availability');
+  const acquisitionRisk = acquisitionAssessment.locator('.risk-band');
+  const acquisitionOpportunity = acquisitionAssessment.locator('.opportunity-band');
+  await expect(acquisitionRisk).toHaveCount(1);
+  await expect(acquisitionRisk).toContainText('Secondary triage');
+  await expect(acquisitionRisk).toContainText(/Risk model v7/u);
+  await expect(acquisitionRisk).toContainText(/Evidence coverage:/u);
+  await expect(acquisitionOpportunity).toHaveCount(1);
+  await expect(acquisitionOpportunity).toContainText('Acquisition task only');
+  await expect(acquisitionOpportunity).toContainText(/not availability, value, eligibility, price, or likely purchase success/u);
+  await expect(acquisitionAssessment.locator('.exact-score')).toHaveCount(2);
+  await expect(acquisitionAssessment.locator('.exact-score').first()).toBeHidden();
+  await expect(acquisitionAssessment.locator('.exact-score').last()).toBeHidden();
+  expect(await page.evaluate(() => {
+    const glance = document.querySelector('.at-a-glance');
+    const assessment = document.querySelector('.availability');
+    return Boolean(glance && assessment
+      && (glance.compareDocumentPosition(assessment) & Node.DOCUMENT_POSITION_FOLLOWING));
+  })).toBe(true);
+  const acquisitionDetails = acquisitionAssessment.locator('.score-detail');
+  await expect(acquisitionDetails).toHaveCount(2);
+  await acquisitionRisk.locator('summary').click();
+  await acquisitionOpportunity.locator('summary').click();
+  await expect(acquisitionDetails.locator('.exact-score')).toHaveCount(2);
+  await expect(acquisitionDetails.locator('.factor-list')).toHaveCount(2);
+  await expect(acquisitionDetails.locator('.factor-list').first()).toBeVisible();
   const nextActions = page.locator('.at-a-glance .next-action');
   expect(await nextActions.count()).toBeLessThanOrEqual(3);
   await expect(nextActions.filter({ hasText: 'Review transfer dependencies' })).toHaveCount(1);
   await page.locator('details.detailed-assessment > summary').click();
   await expect(page.getByRole('heading', { name: 'Useful next actions' })).toHaveCount(0);
   const focus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  for (const nonAcquisitionTask of ['general', 'brand', 'incident', 'owned']) {
+    await focus.selectOption(nonAcquisitionTask);
+    await expect(page.locator('.availability .opportunity-band')).toHaveCount(0);
+    await expect(page.locator('.availability .risk-band')).toHaveCount(1);
+    await expect(page.locator('.detailed-assessment details.acquisition')).toHaveCount(0);
+  }
+  await focus.selectOption('acquisition');
+  await expect(page.locator('.availability .opportunity-band')).toHaveCount(1);
+  await expect(page.locator('.detailed-assessment details.acquisition')).toBeVisible();
   await focus.selectOption('brand');
   await page.evaluate(() => { window.location.hash = 'registry'; });
   await expect(page).toHaveURL(/task=acquisition#registry$/u);
@@ -1296,73 +1838,29 @@ test('Lookup task query context is bounded, transient, and changes only result p
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
-  const brandScores = page.locator('.availability .scores .score');
-  await expect(brandScores.nth(0)).toHaveAttribute('data-score-hierarchy', 'primary');
-  await expect(brandScores.nth(0)).toHaveAttribute('aria-label', /Primary assessment: Risk score/u);
-  await expect(brandScores.nth(1)).toHaveAttribute('data-score-hierarchy', 'secondary');
-  await expect(brandScores.nth(1)).toHaveAttribute('aria-label', /Secondary assessment: Opportunity score/u);
-  const brandDetails = page.locator('.availability .score-details .score-detail');
-  await expect(brandDetails.nth(0)).toHaveAttribute('aria-label', 'Primary Risk score explanation');
-  await expect(brandDetails.nth(1)).toHaveAttribute('aria-label', 'Secondary Opportunity score explanation');
-  const primaryScoreColours = await brandScores.nth(0).evaluate((score) => {
+  const brandAssessment = page.locator('.availability');
+  const brandRisk = brandAssessment.locator('.risk-band');
+  await expect(brandRisk).toHaveCount(1);
+  await expect(brandAssessment.locator('.opportunity-band')).toHaveCount(0);
+  await expect(brandRisk).toContainText('Secondary triage');
+  await expect(brandRisk).toHaveAttribute('data-risk-band', 'lower');
+  await expect(brandRisk).toContainText('A lower Risk band is neutral; review the evidence before deciding.');
+  await expect(brandRisk).toContainText(/does not determine maliciousness, safety, ownership, or intent/u);
+  expect(await brandRisk.evaluate((element) => {
     const probe = document.createElement('span');
-    probe.style.cssText = 'position:absolute;border:1px solid var(--accent2)';
+    probe.style.borderColor = 'var(--accent2)';
     document.body.append(probe);
-    const successBorder = getComputedStyle(probe).borderTopColor;
-    probe.style.borderColor = 'var(--accent)';
-    const primaryBorder = getComputedStyle(probe).borderTopColor;
+    const success = getComputedStyle(probe).borderTopColor;
     probe.remove();
-    return {
-      actual: getComputedStyle(score).borderTopColor,
-      secondary: getComputedStyle(score.nextElementSibling!).borderTopColor,
-      background: getComputedStyle(score).backgroundColor,
-      secondaryBackground: getComputedStyle(score.nextElementSibling!).backgroundColor,
-      detailActual: getComputedStyle(document.querySelector('.score-detail-primary')!).borderLeftColor,
-      secondaryDetail: getComputedStyle(document.querySelector('.score-detail-secondary')!).borderLeftColor,
-      primaryBorder,
-      successBorder,
-    };
-  });
-  expect(primaryScoreColours.actual).toBe(primaryScoreColours.secondary);
-  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.background).toBe(primaryScoreColours.secondaryBackground);
-  expect(primaryScoreColours.detailActual).toBe(primaryScoreColours.secondaryDetail);
-  expect(primaryScoreColours.detailActual).not.toBe(primaryScoreColours.primaryBorder);
-  expect(primaryScoreColours.actual).not.toBe(primaryScoreColours.successBorder);
-
-  const scoreBarVisuals = await brandScores.evaluateAll((scores) => {
-    const probe = document.createElement('span');
-    document.body.append(probe);
-    const resolveFill = (token: string) => {
-      probe.style.backgroundColor = `var(${token})`;
-      return getComputedStyle(probe).backgroundColor;
-    };
-    const fills = {
-      neutral: resolveFill('--accent'),
-      good: resolveFill('--accent2'),
-      warn: resolveFill('--amber'),
-      danger: resolveFill('--danger'),
-    };
-    probe.remove();
-    return scores.map((score) => {
-      const track = score.querySelector<HTMLElement>('i')!;
-      const fill = track.querySelector<HTMLElement>('b')!;
-      const tone = ([...score.classList].find((name) => ['good', 'warn', 'danger'].includes(name)) || 'neutral') as keyof typeof fills;
-      return {
-        height: Number.parseFloat(getComputedStyle(track).height),
-        track: getComputedStyle(track).backgroundColor,
-        fill: getComputedStyle(fill).backgroundColor,
-        expectedFill: fills[tone],
-      };
-    });
-  });
-  expect(scoreBarVisuals.every((bar) => bar.height >= 10 && bar.track !== bar.fill)).toBe(true);
-  expect(scoreBarVisuals.every((bar) => bar.fill === bar.expectedFill)).toBe(true);
-
-  await brandDetails.nth(0).locator('summary').click();
-  await brandDetails.nth(1).locator('summary').click();
+    return getComputedStyle(element).borderLeftColor !== success;
+  })).toBe(true);
+  await brandRisk.locator('summary').click();
+  const brandDetails = brandAssessment.locator('.score-detail');
+  await expect(brandDetails).toHaveCount(1);
+  await expect(brandDetails.locator('.exact-score')).toContainText(/\/100/u);
+  await expect(brandDetails.locator('.factor-list')).toBeVisible();
   const scoreCharts = brandDetails.locator('.factor-chart');
-  await expect(scoreCharts).toHaveCount(2);
+  await expect(scoreCharts).toHaveCount(1);
   expect(await scoreCharts.evaluateAll((charts) => charts.every((chart) => {
     const chartRect = chart.getBoundingClientRect();
     const labels = [...chart.querySelectorAll<HTMLElement>('.factor-label')];
@@ -1375,6 +1873,13 @@ test('Lookup task query context is bounded, transient, and changes only result p
           && label.scrollWidth <= label.clientWidth + 1;
       });
   }))).toBe(true);
+  for (const theme of ['Dark', 'Light'] as const) {
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByRole('option', { name: `${theme} theme` }).click();
+    await expect(brandRisk).toBeVisible();
+    await expect(brandDetails.locator('.factor-list')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
   expect(lookupRequests).toHaveLength(2);
   expect(lookupRequests.every((url) => !new URL(url).searchParams.has('task'))).toBe(true);
 
@@ -1398,6 +1903,7 @@ test('a task-only Lookup navigation preserves the existing in-memory depth choic
 });
 
 test('same-route Lookup URL changes reconcile retained evidence, depth, and transient task context', async ({ page }) => {
+  test.slow();
   const retainedDomain = 'retained-fast.invalid';
   await page.addInitScript(() => {
     localStorage.setItem('whoisleuth:lookup-presentation:v1', JSON.stringify({ version: 1, task: 'brand' }));
@@ -1531,7 +2037,7 @@ test('primary, secondary, and destructive actions are visually distinct', async 
       createdAt: now, updatedAt: now, pageBaseline: null,
   };
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
     'whois-rdap-active-brand-profile-v1': 'design-profile',
   });
 
@@ -1585,10 +2091,10 @@ test('console and policy pages expose one consistent primary heading', async ({ 
   for (const [path, title, eyebrow] of [
     ['/dashboard', 'Dashboard', 'Console'],
     ['/lookup', 'Lookup', 'Investigate'],
-    ['/discover', 'Discover', 'Find candidates'],
-    ['/bulk', 'Bulk', 'Assess domains'],
-    ['/monitor', 'Monitor', 'Track findings'],
-    ['/brands', 'Brands', 'Protect'],
+    ['/discover', 'Discover', 'Investigate'],
+    ['/bulk', 'Bulk', 'Investigate'],
+    ['/monitor', 'Monitor', 'Respond'],
+    ['/brands', 'Brands', 'Assure'],
     ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],
   ] as const) {

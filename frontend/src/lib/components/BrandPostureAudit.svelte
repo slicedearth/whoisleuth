@@ -16,12 +16,12 @@
 <section class="audit card">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Prevention</p>
-      <h2>Official-domain security posture</h2>
-      <p>Audit registration controls, delegation, SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC, and supplied DKIM selectors.</p>
+      <p class="eyebrow">Current settings</p>
+      <h2>Official-domain settings review</h2>
+      <p>Review registration controls, delegation, SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC and supplied DKIM selectors.</p>
     </div>
     <button class="primary" onclick={audit} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
-      {auditing ? 'Auditing…' : 'Audit official domains'}
+      {auditing ? 'Reviewing…' : 'Review official domains'}
     </button>
   </header>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
@@ -36,10 +36,10 @@
             {@const review = buildOwnedDomainPostureReview(active, item.report)}
             {@const retainedHistory = buildDesiredPostureHistory(review.baseline?.observationHistory || (review.baseline?.previousObservation ? [review.baseline.previousObservation] : []))}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
-            <section class="desired-state" aria-label={`Desired posture for ${item.domain}`}>
+            <section class="desired-state" aria-label={`Expected settings for ${item.domain}`}>
               <header>
-                <div><strong>{review.profileLabel}</strong><span>Desired-state review</span></div>
-                <small>{review.attestationCounts.current} current private control attestation{review.attestationCounts.current === 1 ? '' : 's'} · {review.attestationCounts.expired} expired</small>
+                <div><strong>{review.profileLabel}</strong><span>Expected settings</span></div>
+                <small>{review.attestationCounts.current} current reviewed account control{review.attestationCounts.current === 1 ? '' : 's'} · {review.attestationCounts.expired} expired</small>
               </header>
               <div class="desired-groups">
                 {#each review.desiredGroups as group}
@@ -52,10 +52,10 @@
               </div>
               <p class="limitation">{review.limitations[0]}</p>
             </section>
-            <section class="baseline-review" aria-label={`Baseline comparison for ${item.domain}`}>
+            <section class="baseline-review" aria-label={`Expected and observed settings for ${item.domain}`}>
               <header>
                 <div>
-                  <strong>Reviewed baseline comparison</strong>
+                  <strong>Expected and observed settings</strong>
                   <span>{review.baseline ? `${review.baselineComparisons.filter((entry) => entry.state === 'drift').length} drift · ${review.baselineComparisons.filter((entry) => entry.state === 'unknown' || entry.state === 'unsupported').length} incomplete` : 'Not configured'}</span>
                 </div>
                 {#if review.baseline}<button class="btn compact" onclick={() => retainObservation(item.report!)}>Retain this observation</button>{/if}
@@ -87,12 +87,12 @@
                     <summary>Domain control history <strong>{review.baseline.observationHistory.length} retained</strong></summary>
                     {#if retainedHistory.length}
                       <ol>{#each [...retainedHistory].reverse() as transition}<li><span>{transition.previousObservedAt} → {transition.observedAt}</span><strong>{transition.changedChecks.length ? `${transition.changedChecks.length} changed` : 'unchanged'}</strong>{#if transition.changedChecks.length}<small>{transition.changedChecks.join(' · ')}</small>{/if}</li>{/each}</ol>
-                    {:else}<p>Retain another completed audit to compare source-attributed posture over time.</p>{/if}
+                    {:else}<p>Save another completed review to compare source-attributed settings over time.</p>{/if}
                   </details>
                 {/if}
-                <p class="limitation">Retaining an observation is explicit and local. Incomplete evidence remains unknown and does not replace the desired baseline.</p>
+                <p class="limitation">Saving an observation is explicit and local. Incomplete evidence remains unknown and does not replace expected settings.</p>
               {:else}
-                <p>No desired posture has been configured for this domain. Use the baseline editor below to record reviewed expectations.</p>
+                <p>No expected settings are configured for this domain. Use the editor below to record reviewed expectations.</p>
               {/if}
             </section>
             <div class="checks">
@@ -160,7 +160,7 @@
               </details>
             {/if}
           {:else}
-            <p class="error">Official-domain audit returned an invalid response.</p>
+            <p class="error">Official-domain review returned an invalid response.</p>
           {/if}
         </article>
       {/each}

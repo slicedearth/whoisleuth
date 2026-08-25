@@ -6,6 +6,7 @@ import {
   clearRdapBootstrapCache,
   fetchBootstrap,
 } from '../lib/rdap.mts';
+import { findRdapBases, ipv6ToBigInt } from '../lib/rdap-bootstrap.mts';
 
 const FIXTURE = {
   version: '1.0',
@@ -83,5 +84,40 @@ describe('IANA RDAP bootstrap cache', () => {
     await assert.rejects(fetchBootstrap('dns', { fetchUpstream }), /unexpected format/i);
     assert.deepEqual(await fetchBootstrap('dns', { fetchUpstream }), FIXTURE);
     assert.equal(calls, 2);
+  });
+
+  test('rejects bootstrap redirects away from the fixed IANA source endpoint', async () => {
+    await assert.rejects(fetchBootstrap('dns', {
+      fetchUpstream: async () => ({
+        ok: true,
+        status: 200,
+        text: JSON.stringify(FIXTURE),
+        finalUrl: 'https://redirect.example/rdap/dns.json',
+      }),
+    }), /redirected outside its fixed source endpoint/iu);
+    assert.deepEqual(await fetchBootstrap('dns', {
+      fetchUpstream: async (url) => ({
+        ok: true,
+        status: 200,
+        text: JSON.stringify(FIXTURE),
+        finalUrl: url,
+      }),
+    }), FIXTURE);
+  });
+
+  test('routes IPv4-embedded IPv6 through the matching bootstrap prefix', async () => {
+    const fixture = {
+      services: [
+        [['::/0'], ['https://default.example/']],
+        [['::ffff:0:0/96'], ['https://embedded.example/']],
+        [['::ffff:0:0/97junk'], ['https://malformed-prefix.example/']],
+      ],
+    };
+    await fetchBootstrap('ipv6', {
+      fetchUpstream: async () => ({ ok: true, status: 200, text: JSON.stringify(fixture) }),
+    });
+
+    assert.equal(ipv6ToBigInt('::ffff:127.0.0.1'), (0xffffn << 32n) + 0x7f000001n);
+    assert.deepEqual(await findRdapBases('ipv6', '::ffff:127.0.0.1'), ['https://embedded.example/']);
   });
 });

@@ -186,6 +186,15 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
     assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, source: 'nope', candidates: [] }), null);
     assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, source: 'manual', candidates: 'x' }), null);
     assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, createdAt: 'not-a-date', source: 'manual', candidates: [] }), null);
+    assert.equal(core.parseHandoff({ version: 2, token: HANDOFF_ID, createdAt: '2026-07-12T00:00:00', source: 'manual', candidates: [] }), null);
+    assert.equal(
+      core.parseHandoff({ version: 2, token: HANDOFF_ID, createdAt: '2026-07-12T12:00:00+01:00', source: 'manual', candidates: [] })?.createdAt,
+      '2026-07-12T11:00:00.000Z',
+    );
+    assert.throws(
+      () => core.buildHandoff('manual', [], undefined, '2026-07-12T00:00:00', HANDOFF_ID),
+      /explicit timezone/u,
+    );
   });
 
   test('rejects malformed and oversized serialized tab values before normalization', () => {

@@ -53,5 +53,9 @@ describe('reviewed page-language signal packs', () => {
     const html = '<main>Account help</main>';
     assert.equal(analyzeStaticHtml(html).visibleText, '');
     assert.equal(analyzeStaticHtml(html, { includeVisibleText: true }).visibleText, 'Account help');
+    assert.equal(
+      analyzeStaticHtml('<main>Account\u009b\u202e help\u00ad centre</main>', { includeVisibleText: true }).visibleText,
+      'Account help centre',
+    );
   });
 });

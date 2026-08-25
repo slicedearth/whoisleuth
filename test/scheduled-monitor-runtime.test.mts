@@ -49,9 +49,9 @@ class FakeBlobStore implements NetlifyBlobStore {
   reads = 0;
   writes = 0;
 
-  async getWithMetadata(_key: string, _options: { consistency: 'strong'; type: 'text' }) {
+  async getWithMetadata(_key: string, _options: { consistency: 'strong'; type: 'stream' }) {
     this.reads += 1;
-    return this.entry;
+    return this.entry ? { ...this.entry, data: new Blob([this.entry.data]).stream() } : null;
   }
 
   async set(

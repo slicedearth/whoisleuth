@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { runBulkScan, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -21,6 +21,7 @@ const REVIEWED_INCOMPLETE_RULES_BY_STATE: Readonly<Record<string, readonly strin
   'public-request-policy-dark-mobile': ['color-contrast'],
   'console-initial-light-desktop': ['color-contrast'],
   'console-brands-initial-light-desktop': ['color-contrast'],
+  'console-brand-assets-dark-mobile': ['color-contrast'],
   'console-discover-initial-light-desktop': ['color-contrast'],
   'console-monitor-initial-light-desktop': ['color-contrast'],
   'console-drawer-dark-mobile': ['color-contrast', 'skip-link'],
@@ -100,6 +101,7 @@ async function installLookupFixture(page: Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
+    const identity = lookupDomainIdentity(domain);
     const diagnostics = {
       version: 7,
       rdap: { status: 'complete' },
@@ -110,7 +112,7 @@ async function installLookupFixture(page: Page) {
       applicable: true,
       state: 'registered',
       confidence: 'high',
-      domain,
+      domain: identity.registrableDomain,
       deepScanComplete: url.searchParams.get('fast') !== '1',
       registrar: { name: 'Example Registrar' },
       nameservers: ['ns1.example.net', 'ns2.example.net'],
@@ -125,11 +127,7 @@ async function installLookupFixture(page: Page) {
     const body = url.searchParams.get('compact') === '1'
       ? { availability, diagnostics }
       : {
-          query: domain,
-          type: 'domain',
-          inputHostname: domain,
-          registrableDomain: domain,
-          isSubdomain: false,
+          ...identity,
           availability,
           rdap: {
             upstreamStatus: 200,
@@ -168,6 +166,7 @@ test('public and dashboard support content exposes semantic labels and link cues
   await expect(attribution).toHaveAccessibleName(/opens in a new tab/);
 
   await page.goto('/dashboard');
+  await page.getByRole('button', { name: /Start a guided investigation/u }).click();
   await expect(
     page.getByRole('navigation', { name: 'Investigation help' }),
   ).toBeVisible();
@@ -207,7 +206,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
-  await expect(page.getByRole('heading', { name: 'Case evidence, not a live watchlist' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
 
@@ -256,6 +255,35 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
 
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{
+        id: 'accessibility-asset-profile',
+        name: 'Accessibility asset profile',
+        officialDomains: ['official.example'],
+        productNames: [],
+        tlds: ['example'],
+        approvedPartnerDomains: [],
+        allowlistedDomains: [],
+        allowlistedRegistrars: [],
+        dkimSelectors: [],
+        retiredDkimSelectors: [],
+        mailProtectionProfile: 'standard',
+        protectionAttestations: [],
+        desiredPostureBaselines: [],
+        trademarkOwner: '',
+        trademarkRegistration: '',
+        officialFaviconHash: '',
+        officialFaviconPHash: '',
+        pageBaseline: null,
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      }]),
+    'whois-rdap-active-brand-profile-v1': 'accessibility-asset-profile',
+  }, { destination: '/brands?view=assets' });
+  await expect(page.getByRole('region', { name: 'Brand asset register' })).toBeVisible();
+  await expectNoAccessibilityViolations(page, testInfo, 'console-brand-assets-dark-mobile');
+  await expectSequentialHeadingOrder(page, 'console brand assets');
+
   await page.goto('/lookup');
   await expect(page.getByRole('heading', { name: 'Lookup', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
@@ -298,12 +326,13 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await useTheme(page, 'light');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/bulk');
-  await runBulkScan(page, ['portal.example.test', 'peer.example.test', 'mail.example.test']);
+  await runBulkScan(page, ['portal.test', 'peer.test', 'mail.test']);
   await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
   await expectNoAccessibilityViolations(page, testInfo, 'console-bulk-populated-light-mobile');
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');
+  await page.getByRole('button', { name: /Start a guided investigation/u }).click();
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await page.getByRole('button', { name: 'Start guide' }).click();
   const currentAction = page.locator('.guide .current-action');

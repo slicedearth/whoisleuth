@@ -75,13 +75,19 @@ export class LookupCaseController {
         source: 'lookup',
         evidence: { ...evidence, scanDepth },
       });
+      if (!created) {
+        const refreshed = await this.#api.edit(record.id, {
+          source: 'lookup',
+          evidence: { ...evidence, scanDepth },
+        });
+        return {
+          record: refreshed.record,
+          status: `Refreshed the retained Case evidence for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+        };
+      }
       return {
         record,
-        status: `${
-          created
-            ? `Opened a new case for ${record.domain}.`
-            : `Opened the existing case for ${record.domain}.`
-        }${pruneSuffix(pruned)}`,
+        status: `Opened a new case for ${record.domain}.${pruneSuffix(pruned)}`,
       };
     } catch (cause) {
       return {

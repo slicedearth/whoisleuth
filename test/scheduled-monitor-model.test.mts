@@ -110,6 +110,7 @@ test('validates creation names, identifiers, intervals, timestamps, and domain l
   assert.throws(() => watchlist({ id: 'short' }), /identifier is invalid/i);
   assert.throws(() => watchlist({ intervalHours: 48 }), /unsupported scheduled scan interval/i);
   assert.throws(() => watchlist({ now: 'not-a-date' }), /timestamp is invalid/i);
+  assert.throws(() => watchlist({ now: '2026-07-16T08:00:00' }), /timestamp is invalid/i);
   assert.throws(() => watchlist({ entry: { results: [] } }), /no valid domains/i);
   assert.throws(() => watchlist({
     entry: entry({

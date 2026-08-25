@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
   import {
@@ -40,15 +41,16 @@
     message: string;
     downloadWatchlists: () => void;
     importFile: (event: Event) => void | Promise<void>;
-    clearAll: () => void;
+    clearAll: () => void | Promise<void>;
     rescan: (name: string) => void | Promise<void>;
-    remove: (name: string) => void;
+    remove: (name: string) => void | Promise<void>;
     openCase: (domain: string) => void;
     formatDate: (value: string) => string;
   } = $props();
 
   const PAGE_SIZE=25;
   let page=$state(1);
+  let componentRoot=$state<HTMLElement>();
   const pageCount=$derived(Math.max(1,Math.ceil(names.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
   const pagedNames=$derived(names.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
@@ -56,16 +58,47 @@
   const domainOptions=$derived(watchlistHistoryDomains(entry));
   const domainHistory=$derived(focusedDomain?projectWatchlistDomainHistory(entry,focusedDomain):null);
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
+  async function removeAndFocus(name:string){
+    const origin=document.activeElement;
+    const owner=componentRoot;
+    const previousIndex=names.indexOf(name);
+    await remove(name);
+    await tick();
+    const active=document.activeElement;
+    if(!owner?.isConnected||(active instanceof HTMLElement&&active!==origin&&active!==document.body&&active.isConnected))return;
+    if(names.includes(name)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
+    const next=names[Math.min(Math.max(0,previousIndex),names.length-1)];
+    if(next)page=Math.floor(names.indexOf(next)/PAGE_SIZE)+1;
+    await tick();
+    const activeAfterPageChange=document.activeElement;
+    if(!owner.isConnected||(activeAfterPageChange instanceof HTMLElement&&activeAfterPageChange!==origin&&activeAfterPageChange!==document.body&&activeAfterPageChange.isConnected))return;
+    const target=(next?document.getElementById(`watchlist-delete-${next}`):null)
+      ??document.getElementById('empty-watchlist-open-bulk')
+      ??document.getElementById('watchlist-import');
+    if(target instanceof HTMLElement)target.focus();
+  }
+  async function clearAllAndFocus(){
+    const origin=document.activeElement;
+    const owner=componentRoot;
+    const previousCount=names.length;
+    await clearAll();
+    await tick();
+    const active=document.activeElement;
+    if(!owner?.isConnected||(active instanceof HTMLElement&&active!==origin&&active!==document.body&&active.isConnected))return;
+    if(names.length===previousCount){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
+    const target=document.getElementById('empty-watchlist-open-bulk')??document.getElementById('watchlist-import');
+    if(target instanceof HTMLElement)target.focus();
+  }
   $effect(()=>{if(page>pageCount)page=pageCount;});
 </script>
 
-<section class="wl-toolbar card"><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
+<section class="wl-toolbar card" bind:this={componentRoot}><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input id="watchlist-import" type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={() => void clearAllAndFocus()} disabled={!names.length}>Clear all</button></div></section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 {#if names.length}
-  <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button><button class="btn small danger" onclick={() => remove(name)}>Delete</button></div></td></tr>{/if}{/each}</tbody></table></div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" /></section>
+  <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button><button id={`watchlist-delete-${name}`} class="btn small danger" onclick={() => void removeAndFocus(name)}>Delete</button></div></td></tr>{/if}{/each}</tbody></table></div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" /></section>
 {:else}
-  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a href="/bulk">Open Bulk →</a></section>
+  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
 {/if}
 
 {#if entry}

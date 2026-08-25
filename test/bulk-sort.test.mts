@@ -54,6 +54,15 @@ test('sorts numeric and ranked values while keeping missing evidence last', () =
   ]);
 });
 
+test('sorts only transiently comparable Risk values and keeps incompatible scores last', () => {
+  const sorted = sortBulkResults(rows, 'risk', -1, (row) => (
+    row.domain === 'alpha.example' ? null : row.risk
+  ));
+  assert.deepEqual(sorted.map((row) => row.domain), [
+    'zulu.example', 'alpha.example', 'missing.example',
+  ]);
+});
+
 test('sorts text evidence case-insensitively and does not mutate source rows', () => {
   const original = structuredClone(rows);
   assert.deepEqual(sortBulkResults(rows, 'registrar', 1).map((row) => row.domain), [

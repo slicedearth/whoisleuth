@@ -1,11 +1,22 @@
 import { Buffer } from 'node:buffer';
 
 import {
-  MAX_BOUNDED_JSON_DEPTH,
-  MAX_BOUNDED_JSON_KEYS,
-  MAX_BOUNDED_JSON_VALUES,
   scanBoundedJson,
 } from '../lib/bounded-json.mts';
+import {
+  CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS,
+  CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
+  CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+  DOMAIN_CONTROL_REVIEW_VERSION,
+  MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
+  MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS,
+  MIN_DOMAIN_CONTROL_REVIEW_LOOKUPS,
+} from '../packages/contracts/domain-control-review.mts';
 import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
   type DomainControlFlightRecorderField,
@@ -21,14 +32,18 @@ import {
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
-export const CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.cli.domain-control-review-input';
-export const CLI_DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.cli.domain-control-review';
-export const CLI_DOMAIN_CONTROL_REVIEW_VERSION = 1;
-export const MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES = 32 * 1024 * 1024;
-export const MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS = 100;
-export const MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH = MAX_BOUNDED_JSON_DEPTH + 2;
-export const MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS = MAX_BOUNDED_JSON_KEYS * (MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS + 1);
-export const MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES = MAX_BOUNDED_JSON_VALUES * (MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS + 1);
+export {
+  CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+  MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_KEYS,
+  MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
+  MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS,
+};
+
+const CLI_REVIEW_INPUT_KEY_SET = new Set<string>(CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS);
 
 type Field = DomainControlFlightRecorderObservation['fields'][number];
 
@@ -194,14 +209,17 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     throw new CliUsageError('Domain-control review input must be valid JSON.');
   }
   const input = record(parsed);
-  if (input.schema !== CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA || input.version !== 1 || !Array.isArray(input.lookups)) {
-    throw new CliUsageError(`Domain-control review input must use ${CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA} version 1.`);
+  if (input.schema !== CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
+    || input.version !== CLI_DOMAIN_CONTROL_REVIEW_VERSION
+    || !Array.isArray(input.lookups)) {
+    throw new CliUsageError(`Domain-control review input must use ${CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA} version ${CLI_DOMAIN_CONTROL_REVIEW_VERSION}.`);
   }
-  if (Object.keys(input).some((key) => !new Set(['schema', 'version', 'manifest', 'lookups']).has(key))) {
+  if (Object.keys(input).some((key) => !CLI_REVIEW_INPUT_KEY_SET.has(key))) {
     throw new CliUsageError('Domain-control review input contains an unsupported field.');
   }
-  if (input.lookups.length < 1 || input.lookups.length > MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS) {
-    throw new CliUsageError('Domain-control review requires from 1 to 100 saved Lookup documents.');
+  if (input.lookups.length < MIN_DOMAIN_CONTROL_REVIEW_LOOKUPS
+    || input.lookups.length > MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS) {
+    throw new CliUsageError(`Domain-control review requires from ${MIN_DOMAIN_CONTROL_REVIEW_LOOKUPS} to ${MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS} saved Lookup documents.`);
   }
   const manifest = verifyDomainControlManifest(input.manifest);
   const lookups = input.lookups.map((item, index) => parseSavedLookupDocument(JSON.stringify(item), { label: `Lookup ${index + 1}` }));
@@ -213,7 +231,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   const observations = [...latest.values()].map(domainControlObservationFromSavedLookup);
   const review = reviewDomainControlManifest({
     schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-    version: 1,
+    version: DOMAIN_CONTROL_REVIEW_VERSION,
     manifest,
     observations: observations.map((item) => ({
       domain: item.domain,
@@ -252,18 +270,14 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
       latestDomainObservations: observations.length,
       ignoredHistoricalLookups: lookups.length - observations.length,
     }),
-    limitations: Object.freeze([
-      'The review uses only supplied saved Lookup documents and performs no request.',
-      'The newest supplied observation per domain is used for desired-state comparison; all supplied observations remain available to a separate flight-recorder review.',
-      'Raw RDAP, WHOIS, HTTP, TLS, and page payloads are not copied into this output.',
-    ]),
+    limitations: CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   });
 }
 
 export function buildControlReviewInput(manifest: DomainControlManifest, lookupDocuments: readonly SavedLookupDocument[]) {
   return Object.freeze({
     schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-    version: 1,
+    version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
     manifest,
     lookups: Object.freeze(lookupDocuments),
   });

@@ -5,7 +5,7 @@
 
 import { domainToASCII } from 'node:url';
 
-import { findRdapBases, uniqueRdapBases } from './rdap-bootstrap.mts';
+import { admitRdapEndpoint, findRdapBases, uniqueRdapBases } from './rdap-bootstrap.mts';
 import { cached } from './lookup-cache.mts';
 import {
   parseRdap,
@@ -13,31 +13,31 @@ import {
   summarizeRdapTextBlocks,
 } from './rdap-normalization.mts';
 import { rdapAttempt } from './rdap-attempts.mts';
-import { fetchRdapWithTimeout, type RdapFetch } from './rdap-transport.mts';
+import { fetchRdapDetailedWithTimeout, type RdapFetch } from './rdap-transport.mts';
 import { registryServiceAdmissionFor } from './registry-capabilities.mts';
 import type {
   LooseRdapRecord,
   NormalizedRdapTextBlock,
   RdapAttempt,
 } from './rdap-types.mts';
+import {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+  type RdapNameserverSearchState as SearchState,
+} from '../packages/contracts/rdap-nameserver-search.mts';
 
-export const RDAP_NAMESERVER_SEARCH_SCHEMA = 'whoisleuth.rdap-nameserver-search';
-export const RDAP_NAMESERVER_SEARCH_VERSION = 1;
-export const MAX_RDAP_NAMESERVER_SEARCH_RESULTS = 200;
+export {
+  MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
+  RDAP_NAMESERVER_SEARCH_SCHEMA,
+  RDAP_NAMESERVER_SEARCH_VERSION,
+};
 
 const MAX_RDAP_SEARCH_ENDPOINTS = 3;
 const MAX_RDAP_SEARCH_INSPECTED_RESULTS = MAX_RDAP_NAMESERVER_SEARCH_RESULTS * 4;
 const RDAP_SEARCH_TIMEOUT_MS = 7_000;
 const RDAP_SEARCH_TOTAL_DEADLINE_MS = 12_000;
 const UNSUPPORTED_STATUSES = new Set([400, 405, 501]);
-
-type SearchState =
-  | 'success'
-  | 'partial'
-  | 'no_results'
-  | 'unsupported'
-  | 'rate_limited'
-  | 'unavailable';
 
 type NameserverSearchMatch = {
   domain: string;
@@ -142,11 +142,20 @@ function domainWithinScope(domain: string, scope: string): boolean {
   return domain.endsWith(`.${scope}`);
 }
 
+function normalizedObjectClass(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 80 || !/^[\x20-\x7e]+$/u.test(value)) return null;
+  return value.replace(/ +/gu, ' ').trim().toLowerCase() || null;
+}
+
 function normalizeMatch(
   value: unknown,
   nameserver: string,
   registryScope: string,
 ): NameserverSearchMatch | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value as LooseRdapRecord;
+  if (Object.hasOwn(source, 'objectClassName')
+    && normalizedObjectClass(source.objectClassName) !== 'domain') return null;
   const parsed = parseRdap('domain', value);
   if (!parsed) return null;
   const domain = canonicalDomain(parsed.domain);
@@ -155,6 +164,17 @@ function normalizeMatch(
     .map(canonicalDomain)
     .filter((entry): entry is string => entry !== null)
     .slice(0, 12);
+  const localNameserverPartial = publishedNameservers.length < Math.min(parsed.nameservers.length, 12)
+    || parsed.nameservers.length > 12;
+  const suppliedKnownFieldRejected = [
+    ['ldhName', 253],
+    ['unicodeName', 253],
+    ['handle', 300],
+  ].some(([field, maximum]) => Object.hasOwn(source, field as string)
+    && (typeof source[field as string] !== 'string'
+      || (source[field as string] as string).length > (maximum as number)
+      || /[\u0000-\u001f\u007f]/u.test(source[field as string] as string)
+      || !(source[field as string] as string).replace(/\s+/gu, ' ').trim()));
   return {
     domain,
     unicodeDomain: typeof parsed.unicodeDomain === 'string'
@@ -170,9 +190,21 @@ function normalizeMatch(
     expiryDate: parsed.lifecycle.expiryDateIso,
     updatedDate: parsed.lifecycle.updatedDateIso,
     partial: parsed.nameserversTruncated
+      || parsed.nameserverAddressesTruncated
       || parsed.statusesTruncated
+      || parsed.statuses.length > 12
       || parsed.eventsTruncated
-      || parsed.serverTruncated,
+      || parsed.dsDataTruncated
+      || parsed.entitiesTruncated
+      || parsed.conformanceTruncated
+      || parsed.redactionsTruncated
+      || parsed.variantsTruncated
+      || parsed.linksTruncated
+      || parsed.noticesTruncated
+      || parsed.remarksTruncated
+      || parsed.serverTruncated
+      || suppliedKnownFieldRejected
+      || localNameserverPartial,
   };
 }
 
@@ -184,7 +216,7 @@ export function normalizeRdapNameserverSearchPayload(
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as LooseRdapRecord;
   if (record.objectClassName !== undefined
-    && String(record.objectClassName).toLowerCase() !== 'domainsearchresults') return null;
+    && normalizedObjectClass(record.objectClassName) !== 'domainsearchresults') return null;
   if (!Array.isArray(record.domainSearchResults)) return null;
 
   const source = record.domainSearchResults;
@@ -225,6 +257,23 @@ function limitations(scope: string): string[] {
     'A shared nameserver is an infrastructure pivot, not proof of common ownership, control, intent, activity, or maliciousness.',
     'No result does not establish that the nameserver is unused outside the selected registry or absent from unreturned records.',
   ];
+}
+
+function admitNameserverSearchEndpoint(value: unknown, nameserver: string): string | null {
+  const admitted = admitRdapEndpoint(value, { allowQuery: true });
+  if (!admitted) return null;
+  try {
+    const parsed = new URL(admitted);
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+    const parameters = [...parsed.searchParams.entries()];
+    if (pathParts.at(-1) !== 'domains'
+      || parameters.length !== 1
+      || parameters[0]?.[0] !== 'nsLdhName'
+      || parameters[0]?.[1] !== nameserver) return null;
+    return admitted;
+  } catch {
+    return null;
+  }
 }
 
 function result(
@@ -270,7 +319,7 @@ export async function searchRdapNameserverFromBases(
   bases: unknown,
   options: SearchOptions = {},
 ): Promise<NameserverSearchResult> {
-  const fetchUpstream = options.fetchUpstream ?? fetchRdapWithTimeout;
+  const fetchUpstream = options.fetchUpstream ?? fetchRdapDetailedWithTimeout;
   const now = options.now ?? Date.now;
   const candidates = uniqueRdapBases(bases).slice(0, MAX_RDAP_SEARCH_ENDPOINTS);
   const startedAt = now();
@@ -286,28 +335,36 @@ export async function searchRdapNameserverFromBases(
         Math.min(RDAP_SEARCH_TIMEOUT_MS, remaining),
       );
       const observedAt = new Date(now()).toISOString();
+      const selectedEndpoint = admitNameserverSearchEndpoint(upstream.finalUrl ?? endpoint, nameserver);
+      if (!selectedEndpoint) {
+        attempts.push(rdapAttempt(endpoint, 'invalid_response', {
+          status: upstream.status,
+          detail: 'The endpoint returned final URL provenance for a different nameserver search.',
+        }));
+        continue;
+      }
       if (upstream.status === 404) {
-        attempts.push(rdapAttempt(endpoint, 'no_results', {
+        attempts.push(rdapAttempt(selectedEndpoint, 'no_results', {
           status: upstream.status,
           detail: `The .${registryScope} registry returned no matching domain search results.`,
           selected: true,
         }));
         return result('no_results', nameserver, registryScope, observedAt, {
-          endpoint,
-          transportSecurity: /^https:/iu.test(endpoint) ? 'https' : 'http',
+          endpoint: selectedEndpoint,
+          transportSecurity: /^https:/iu.test(selectedEndpoint) ? 'https' : 'http',
           status: upstream.status,
           attempts,
         });
       }
       if (UNSUPPORTED_STATUSES.has(upstream.status)) {
-        attempts.push(rdapAttempt(endpoint, 'unsupported', {
+        attempts.push(rdapAttempt(selectedEndpoint, 'unsupported', {
           status: upstream.status,
           detail: `The .${registryScope} registry did not accept RFC 9082 nameserver search.`,
         }));
         continue;
       }
       if (!upstream.ok) {
-        attempts.push(rdapAttempt(endpoint, upstream.status === 429 ? 'rate_limited' : 'server_error', {
+        attempts.push(rdapAttempt(selectedEndpoint, upstream.status === 429 ? 'rate_limited' : 'server_error', {
           status: upstream.status,
           detail: `The endpoint returned HTTP ${upstream.status}.`,
         }));
@@ -317,7 +374,7 @@ export async function searchRdapNameserverFromBases(
       try {
         data = JSON.parse(upstream.text);
       } catch {
-        attempts.push(rdapAttempt(endpoint, 'invalid_json', {
+        attempts.push(rdapAttempt(selectedEndpoint, 'invalid_json', {
           status: upstream.status,
           detail: 'The endpoint returned invalid JSON.',
         }));
@@ -325,7 +382,7 @@ export async function searchRdapNameserverFromBases(
       }
       const payload = normalizeRdapNameserverSearchPayload(data, nameserver, registryScope);
       if (!payload) {
-        attempts.push(rdapAttempt(endpoint, 'invalid_response', {
+        attempts.push(rdapAttempt(selectedEndpoint, 'invalid_response', {
           status: upstream.status,
           detail: 'The endpoint did not return a bounded RDAP domain-search result.',
         }));
@@ -341,7 +398,7 @@ export async function searchRdapNameserverFromBases(
         : payload.domains.length === 0
           ? 'no_results'
           : 'success';
-      attempts.push(rdapAttempt(endpoint, state, {
+      attempts.push(rdapAttempt(selectedEndpoint, state, {
         status: upstream.status,
         detail: state === 'partial'
           ? 'The registry returned usable nameserver-search results with explicit limitations.'
@@ -349,8 +406,8 @@ export async function searchRdapNameserverFromBases(
         selected: true,
       }));
       return result(state, nameserver, registryScope, observedAt, {
-        endpoint,
-        transportSecurity: /^https:/iu.test(endpoint) ? 'https' : 'http',
+        endpoint: selectedEndpoint,
+        transportSecurity: /^https:/iu.test(selectedEndpoint) ? 'https' : 'http',
         status: upstream.status,
         attempts,
       }, payload);

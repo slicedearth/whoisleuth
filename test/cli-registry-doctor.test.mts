@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { buildRegistryDoctorReport } from '../cli/registry-doctor.mts';
+import { REGISTRY_DOCTOR_VERSION, buildRegistryDoctorReport } from '../cli/registry-doctor.mts';
 
 const NOW = '2026-08-04T00:00:00.000Z';
 
@@ -74,5 +74,80 @@ describe('registry doctor', () => {
     assert.equal(report.publication.selfLink.state, 'not_observed');
     assert.equal(report.publication.events.state, 'inconsistent');
     assert.equal(report.publication.reviewItems, 4);
+  });
+
+  test('normalizes registry event dates deterministically before lifecycle comparison', () => {
+    const base = JSON.parse(lookup('dates.dev'));
+    base.rdap.parsed.events = [{ action: 'registration', date: '2020-01-01T12:00:00' }];
+    base.rdap.parsed.lifecycle = { createdDateIso: '2020-01-01T12:00:00.000Z' };
+    const publication = buildRegistryDoctorReport(JSON.stringify(base), NOW).publication;
+    assert.equal(publication.events.state, 'observed');
+    assert.deepEqual(publication.events.conflictingActions, []);
+
+    base.rdap.parsed.events = [{ action: 'registration', date: 'not a registry date' }];
+    const malformed = buildRegistryDoctorReport(JSON.stringify(base), NOW).publication;
+    assert.equal(malformed.events.state, 'inconsistent');
+    assert.deepEqual(malformed.events.conflictingActions, ['registration']);
+
+    base.rdap.parsed.events = [
+      { action: 'registration', date: '2020-01-01T12:00:00.000Z' },
+      { action: 'last changed', date: '2021-01-01T12:00:00.000Z' },
+    ];
+    base.rdap.parsed.lifecycle = {
+      createdDateIso: 'not a registry date',
+      updatedDateIso: '2021-01-01T12:00:00.000Z',
+    };
+    const malformedLifecycle = buildRegistryDoctorReport(JSON.stringify(base), NOW).publication;
+    assert.equal(malformedLifecycle.events.state, 'unavailable');
+    assert.deepEqual(malformedLifecycle.events.conflictingActions, []);
+    assert.equal(malformedLifecycle.reviewItems, 1);
+  });
+
+  test('withholds conclusions when bounded RDAP publication families are incomplete', () => {
+    const base = JSON.parse(lookup('bounded.dev'));
+    base.rdap.parsed = {
+      ...base.rdap.parsed,
+      conformance: Array.from({ length: 101 }, (_, index) => `extension_${index}`),
+      redactions: [],
+      links: Array.from({ length: 101 }, (_, index) => ({ rel: index === 100 ? 'self' : 'alternate' })),
+      events: Array.from({ length: 100 }, (_, index) => ({
+        action: 'last changed',
+        date: `2020-01-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+      })),
+      lifecycle: { createdDateIso: '2020-01-01T00:00:00.000Z' },
+    };
+    base.rdap.parsed.events.push({ action: 'registration', date: '2020-01-01T00:00:00.000Z' });
+    base.rdap.parsed.redactionsTruncated = true;
+    const report = buildRegistryDoctorReport(JSON.stringify(base), NOW);
+    assert.equal(report.version, REGISTRY_DOCTOR_VERSION);
+    assert.equal(report.publication.baseConformance.state, 'unavailable');
+    assert.equal(report.publication.baseConformance.truncated, true);
+    assert.equal(report.publication.redactionMetadata.state, 'unavailable');
+    assert.equal(report.publication.redactionMetadata.truncated, true);
+    assert.equal(report.publication.selfLink.state, 'unavailable');
+    assert.equal(report.publication.selfLink.truncated, true);
+    assert.equal(report.publication.events.state, 'unavailable');
+    assert.equal(report.publication.events.truncated, true);
+    assert.deepEqual(report.publication.events.conflictingActions, []);
+    assert.match(report.limitations.join(' '), /omitted values remain unavailable/iu);
+  });
+
+  test('propagates producer truncation flags even when retained arrays are short', () => {
+    const base = JSON.parse(lookup('flags.dev'));
+    Object.assign(base.rdap.parsed, {
+      conformance: [],
+      conformanceTruncated: true,
+      links: [],
+      linksTruncated: true,
+      events: [],
+      eventsTruncated: true,
+      redactions: [],
+      redactionsTruncated: true,
+    });
+    const publication = buildRegistryDoctorReport(JSON.stringify(base), NOW).publication;
+    assert.equal(publication.baseConformance.state, 'unavailable');
+    assert.equal(publication.selfLink.state, 'unavailable');
+    assert.equal(publication.events.state, 'unavailable');
+    assert.equal(publication.redactionMetadata.state, 'unavailable');
   });
 });

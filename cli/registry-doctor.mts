@@ -1,10 +1,11 @@
 import { registryCapabilityFor, REGISTRY_CAPABILITIES_VERSION } from '../lib/registry-capabilities.mts';
 import { recordOrEmpty } from '../lib/bounded-contract-normalizers.mts';
+import { registryDateIso } from '../lib/registry-dates.mts';
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 
 const REGISTRY_DOCTOR_SCHEMA = 'whoisleuth.cli.registry-doctor';
-const REGISTRY_DOCTOR_VERSION = 2;
+const REGISTRY_DOCTOR_VERSION = 3;
 
 type ExpectedState = 'allowed' | 'permission_required' | 'unsupported';
 type Alignment = 'expected_constraint' | 'investigate' | 'observed' | 'unexpected_observation';
@@ -26,10 +27,10 @@ type RegistryDoctorReport = Readonly<{
     objectClass: Readonly<{ state: PublicationState; value: string | null }>;
     objectIdentifier: Readonly<{ state: PublicationState; value: string | null }>;
     mediaType: Readonly<{ state: 'unavailable'; value: null }>;
-    baseConformance: Readonly<{ state: PublicationState; declarations: readonly string[] }>;
+    baseConformance: Readonly<{ state: PublicationState; declarations: readonly string[]; truncated: boolean }>;
     redactionMetadata: Readonly<{ state: PublicationState; count: number; truncated: boolean }>;
-    selfLink: Readonly<{ state: PublicationState; observedRelations: readonly string[] }>;
-    events: Readonly<{ state: PublicationState; count: number; conflictingActions: readonly string[] }>;
+    selfLink: Readonly<{ state: PublicationState; observedRelations: readonly string[]; truncated: boolean }>;
+    events: Readonly<{ state: PublicationState; count: number; conflictingActions: readonly string[]; truncated: boolean }>;
     reviewItems: number;
   }>;
   sources: readonly Readonly<{
@@ -84,27 +85,37 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
       objectClass: unavailable,
       objectIdentifier: unavailable,
       mediaType: unavailable,
-      baseConformance: { state: 'unavailable', declarations: [] },
+      baseConformance: { state: 'unavailable', declarations: [], truncated: false },
       redactionMetadata: { state: 'unavailable', count: 0, truncated: false },
-      selfLink: { state: 'unavailable', observedRelations: [] },
-      events: { state: 'unavailable', count: 0, conflictingActions: [] },
+      selfLink: { state: 'unavailable', observedRelations: [], truncated: false },
+      events: { state: 'unavailable', count: 0, conflictingActions: [], truncated: false },
       reviewItems: 0,
     };
   }
   const objectClassName = typeof parsed.objectClassName === 'string' ? parsed.objectClassName.trim().toLowerCase() : '';
   const identifier = [parsed.handle, parsed.objectIdentifier, parsed.registryObjectId, parsed.id]
     .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.trim() ?? null;
-  const declarations = stringArray(parsed.conformance);
+  const conformanceValues = Array.isArray(parsed.conformance) ? parsed.conformance : [];
+  const conformanceTruncated = parsed.conformanceTruncated === true || conformanceValues.length > 100;
+  const declarations = stringArray(conformanceValues);
   const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, 100) : [];
-  const links = Array.isArray(parsed.links) ? parsed.links.slice(0, 100).map(recordOrEmpty) : [];
+  const redactionsTruncated = parsed.redactionsTruncated === true
+    || (Array.isArray(parsed.redactions) && parsed.redactions.length > 100);
+  const linkValues = Array.isArray(parsed.links) ? parsed.links : [];
+  const links = linkValues.slice(0, 100).map(recordOrEmpty);
+  const linksTruncated = parsed.linksTruncated === true
+    || linkValues.length > 100
+    || links.some((link) => Array.isArray(link.rel) && link.rel.length > 10);
   const relations = [...new Set(links.flatMap((link) => stringArray(link.rel, 10).length
     ? stringArray(link.rel, 10)
     : typeof link.rel === 'string' ? [link.rel.trim().toLowerCase()] : []).filter(Boolean))];
-  const events = Array.isArray(parsed.events) ? parsed.events.slice(0, 100).map(recordOrEmpty) : [];
+  const eventValues = Array.isArray(parsed.events) ? parsed.events : [];
+  const events = eventValues.slice(0, 100).map(recordOrEmpty);
+  const eventsTruncated = parsed.eventsTruncated === true || eventValues.length > 100;
   const actionDates = new Map<string, string[]>();
   for (const event of events) {
     const action = typeof event.action === 'string' ? event.action.trim().toLowerCase() : '';
-    const date = typeof event.date === 'string' ? event.date.trim() : '';
+    const date = registryDateIso(event.date);
     if (!action || !date) continue;
     const dates = actionDates.get(action) ?? [];
     dates.push(date);
@@ -121,8 +132,18 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
     ['reinstantiation', 'reinstantiationDateIso', true],
     ['last update of rdap database', 'databaseUpdatedDateIso', true],
   ] as const;
+  const lifecycleDates = new Map<(typeof lifecycleMappings)[number][1], string>();
+  let lifecycleMalformed = false;
+  for (const [, field] of lifecycleMappings) {
+    const supplied = lifecycle[field];
+    if (supplied === undefined || supplied === null) continue;
+    const normalized = registryDateIso(supplied);
+    if (normalized) lifecycleDates.set(field, normalized);
+    else lifecycleMalformed = true;
+  }
   const conflictingActions = lifecycleMappings.flatMap(([action, field, newest]) => {
-    const published = typeof lifecycle[field] === 'string' ? Date.parse(lifecycle[field]) : Number.NaN;
+    const publishedDate = lifecycleDates.get(field);
+    const published = publishedDate ? Date.parse(publishedDate) : Number.NaN;
     if (!Number.isFinite(published)) return [];
     const dates = (actionDates.get(action) ?? []).map(Date.parse).filter(Number.isFinite);
     if (!dates.length) return [action];
@@ -130,10 +151,16 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
     return selected === published ? [] : [action];
   }).sort();
   const objectClassState: PublicationState = !objectClassName ? 'not_observed' : objectClassName === 'domain' ? 'observed' : 'inconsistent';
-  const baseConformanceState: PublicationState = declarations.includes('rdap_level_0') ? 'observed' : 'not_observed';
-  const selfLinkState: PublicationState = relations.includes('self') ? 'observed' : 'not_observed';
-  const hasLifecycle = lifecycleMappings.some(([, field]) => typeof lifecycle[field] === 'string');
-  const eventsState: PublicationState = conflictingActions.length
+  const baseConformanceState: PublicationState = declarations.includes('rdap_level_0')
+    ? 'observed'
+    : conformanceTruncated ? 'unavailable' : 'not_observed';
+  const selfLinkState: PublicationState = relations.includes('self')
+    ? 'observed'
+    : linksTruncated ? 'unavailable' : 'not_observed';
+  const hasLifecycle = lifecycleDates.size > 0;
+  const eventsState: PublicationState = eventsTruncated || lifecycleMalformed
+    ? 'unavailable'
+    : conflictingActions.length
     ? 'inconsistent'
     : events.length && hasLifecycle
       ? 'observed'
@@ -144,16 +171,21 @@ function publicationQuality(parsed: UnknownRecord, rdapStatus: string): Registry
     objectClass: { state: objectClassState, value: objectClassName || null },
     objectIdentifier: { state: identifier ? 'observed' : 'not_observed', value: identifier },
     mediaType: { state: 'unavailable', value: null },
-    baseConformance: { state: baseConformanceState, declarations },
+    baseConformance: { state: baseConformanceState, declarations, truncated: conformanceTruncated },
     redactionMetadata: {
-      state: redactions.length ? 'observed' : 'not_observed',
+      state: redactions.length ? 'observed' : redactionsTruncated ? 'unavailable' : 'not_observed',
       count: redactions.length,
-      truncated: parsed.redactionsTruncated === true,
+      truncated: redactionsTruncated,
     },
-    selfLink: { state: selfLinkState, observedRelations: relations.sort() },
-    events: { state: eventsState, count: events.length, conflictingActions },
+    selfLink: { state: selfLinkState, observedRelations: relations.sort(), truncated: linksTruncated },
+    events: {
+      state: eventsState,
+      count: events.length,
+      conflictingActions: eventsTruncated || lifecycleMalformed ? [] : conflictingActions,
+      truncated: eventsTruncated,
+    },
     reviewItems: [objectClassState, baseConformanceState, selfLinkState, eventsState]
-      .filter((state) => state === 'inconsistent' || state === 'not_observed').length,
+      .filter((state) => state !== 'observed').length,
   };
 }
 
@@ -228,6 +260,10 @@ function buildRegistryDoctorReport(raw: string, generatedAt = new Date().toISOSt
       'A catalogue alignment does not prove live reachability, parser completeness, current registry policy, registration, availability, ownership, safety, or maliciousness.',
       'A missing registry object identifier can be a publication characteristic. It remains not observed and is not converted into a collection failure.',
       'Publication-quality observations describe the saved normalised RDAP object. The saved Lookup format does not retain the response media type, so that field remains unavailable.',
+      ...(publication.baseConformance.truncated || publication.redactionMetadata.truncated
+        || publication.selfLink.truncated || publication.events.truncated
+        ? ['One or more bounded RDAP publication families were truncated; omitted values remain unavailable and cannot support absence or consistency conclusions.']
+        : []),
       'Use fixture-based maintenance checks before changing a registry parser or access profile; automated tests must not contact live registries.',
     ],
   };
@@ -250,9 +286,9 @@ function formatRegistryDoctorReport(report: RegistryDoctorReport): string {
   output.push('', 'RDAP publication quality');
   output.push(`  Object class: ${report.publication.objectClass.state.replaceAll('_', ' ')}`);
   output.push(`  Object identifier: ${report.publication.objectIdentifier.state.replaceAll('_', ' ')}`);
-  output.push(`  Base conformance: ${report.publication.baseConformance.state.replaceAll('_', ' ')}`);
-  output.push(`  Self link: ${report.publication.selfLink.state.replaceAll('_', ' ')}`);
-  output.push(`  Events: ${report.publication.events.state.replaceAll('_', ' ')}`);
+  output.push(`  Base conformance: ${report.publication.baseConformance.state.replaceAll('_', ' ')}${report.publication.baseConformance.truncated ? ' (partial)' : ''}`);
+  output.push(`  Self link: ${report.publication.selfLink.state.replaceAll('_', ' ')}${report.publication.selfLink.truncated ? ' (partial)' : ''}`);
+  output.push(`  Events: ${report.publication.events.state.replaceAll('_', ' ')}${report.publication.events.truncated ? ' (partial)' : ''}`);
   output.push('  Media type: unavailable in the saved Lookup contract');
   if (report.recommendations.length) {
     output.push('', 'Recommendations:');

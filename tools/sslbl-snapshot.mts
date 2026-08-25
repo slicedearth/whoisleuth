@@ -13,11 +13,15 @@ import { fileURLToPath } from 'node:url';
 
 import { SSLBL_CERTIFICATE_SNAPSHOT } from '../lib/sslbl-certificates.generated.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import {
+  SSLBL_SNAPSHOT_SCHEMA,
+  SSLBL_SNAPSHOT_VERSION,
+} from '../packages/contracts/sslbl-snapshot.mts';
 import { sha256Text as sha256 } from './maintainer-tool-helpers.mts';
 
 export const SSLBL_SOURCE_URL = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
-export const SSLBL_SNAPSHOT_SCHEMA = 'whoisleuth.sslbl-certificate-snapshot';
-export const SSLBL_SNAPSHOT_VERSION = 1;
+export { SSLBL_SNAPSHOT_SCHEMA, SSLBL_SNAPSHOT_VERSION };
 export const MAX_SSLBL_SOURCE_BYTES = 2 * 1024 * 1024;
 export const MAX_SSLBL_CERTIFICATES = 50_000;
 export const MAX_SSLBL_SNAPSHOT_SHRINK_RATIO = 0.25;
@@ -53,9 +57,9 @@ const SOURCE_UPDATED_RE = /^# Last updated:\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{
 const CSV_ROW_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),([a-fA-F0-9]{40}),(.{1,300})$/u;
 
 function isoTimestamp(value: string, label: string): string {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw new TypeError(`${label} must be a valid timestamp with an explicit timezone.`);
+  return normalized;
 }
 
 function option(args: readonly string[], name: string): string | null {
@@ -103,7 +107,7 @@ export function parseSslblCertificateCsv(raw: string): SslblSnapshotBuild {
   }
   const updatedMatch = raw.match(SOURCE_UPDATED_RE);
   if (!updatedMatch?.[1]) throw new TypeError('SSLBL source is missing its Last updated header.');
-  const sourceUpdatedAt = isoTimestamp(`${updatedMatch[1]}Z`, 'SSLBL Last updated header');
+  const sourceUpdatedAt = isoTimestamp(`${updatedMatch[1].replace(' ', 'T')}Z`, 'SSLBL Last updated header');
   const fingerprints = new Set<string>();
   let dataRows = 0;
   for (const line of raw.split(/\r?\n/u)) {

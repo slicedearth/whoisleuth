@@ -6,6 +6,9 @@ import { describe, test } from 'node:test';
 
 import {
   BROWSER_LOCAL_CHUNK_NAME,
+  FRONTEND_ROUTE_BUDGET_BASIS,
+  FRONTEND_ROUTE_GZIP_BUDGETS,
+  FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES,
   MAX_FRONTEND_ASSET_BYTES,
   buildFrontendLoadingReport,
   formatFrontendLoadingReport,
@@ -31,7 +34,7 @@ function fixtureManifest(publicImports: readonly string[] = ['_shared.js']) {
     },
     '.svelte-kit/generated/client-optimized/nodes/2.js': {
       file: 'console-layout.js',
-      imports: ['_workspace.js'],
+      imports: ['_shared.js'],
     },
     '.svelte-kit/generated/client-optimized/nodes/3.js': {
       file: 'public-layout.js',
@@ -43,7 +46,7 @@ function fixtureManifest(publicImports: readonly string[] = ['_shared.js']) {
     },
     '.svelte-kit/generated/client-optimized/nodes/5.js': {
       file: 'dashboard.js',
-      imports: ['_workspace.js'],
+      imports: ['_shared.js'],
     },
     '_shared.js': { file: 'shared.js', name: 'shared' },
     '_workspace.js': { file: 'workspace.js', name: BROWSER_LOCAL_CHUNK_NAME },
@@ -62,16 +65,29 @@ function report(publicImports?: readonly string[]) {
 }
 
 describe('frontend loading report', () => {
+  test('records how route ceilings were calibrated', () => {
+    assert.deepEqual(FRONTEND_ROUTE_BUDGET_BASIS, {
+      measuredBuilds: 3,
+      reviewedOn: '2026-08-24',
+      headroomPercent: 15,
+      roundingKibibytes: 5,
+    });
+    assert.deepEqual(Object.keys(FRONTEND_ROUTE_GZIP_BUDGETS), Object.keys(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES));
+    for (const [route, observed] of Object.entries(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES)) {
+      const expectedKibibytes = Math.ceil((observed * 1.15) / 5) * 5;
+      assert.equal(FRONTEND_ROUTE_GZIP_BUDGETS[route], expectedKibibytes * 1024, route);
+    }
+  });
+
   test('parses route groups and keeps the browser-local workspace outside public routes', () => {
     const result = report();
     assert.equal(result.ready, true);
     assert.equal(result.summary.publicRouteLeak, false);
     assert.equal(result.routes.find((route) => route.path === '/')?.access, 'public');
     assert.equal(result.routes.find((route) => route.path === '/')?.includesBrowserLocalWorkspace, false);
-    assert.equal(
-      result.routes.find((route) => route.path === '/dashboard')?.includesBrowserLocalWorkspace,
-      true,
-    );
+    assert.equal(result.routes.find((route) => route.path === '/dashboard')?.includesBrowserLocalWorkspace, false);
+    assert.equal(result.browserLocalWorkspace.file, 'workspace.js');
+    assert.equal(result.browserLocalWorkspace.assetCount, 1);
     assert.match(formatFrontendLoadingReport(result), /Public-route exposure: none/);
     assert.match(formatFrontendLoadingReport(result), /Route budgets: within reviewed ceilings/);
   });
@@ -125,6 +141,36 @@ describe('frontend loading report', () => {
       measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
       routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
     }), /safe relative path/iu);
+
+    for (const unsafe of ['\u0085', '\u00ad', '\u034f']) {
+      const ambiguous = structuredClone(fixtureManifest());
+      ambiguous['_workspace.js'].file = `assets/workspace${unsafe}.js`;
+      assert.throws(() => buildFrontendLoadingReport({
+        manifest: ambiguous,
+        routeNodes: routes,
+        measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
+        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
+      }), /safe relative path/iu);
+
+      const ambiguousKey: Record<string, { file: string; name?: string; imports?: readonly string[]; css?: readonly string[] }> = structuredClone(fixtureManifest());
+      ambiguousKey[`_workspace${unsafe}.js`] = ambiguousKey['_workspace.js']!;
+      delete ambiguousKey['_workspace.js'];
+      assert.throws(() => buildFrontendLoadingReport({
+        manifest: ambiguousKey,
+        routeNodes: routes,
+        measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
+        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
+      }), /control-free text/iu);
+
+      const ambiguousName = structuredClone(fixtureManifest());
+      ambiguousName['_workspace.js'].name = `workspace${unsafe}`;
+      assert.throws(() => buildFrontendLoadingReport({
+        manifest: ambiguousName,
+        routeNodes: routes,
+        measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
+        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
+      }), /control-free text/iu);
+    }
 
     assert.throws(() => buildFrontendLoadingReport({
       manifest: fixtureManifest(),

@@ -1,0 +1,1 @@
+export const BULK_REVIEW_STALE_AFTER_DAYS = 7;

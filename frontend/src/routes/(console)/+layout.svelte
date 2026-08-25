@@ -4,15 +4,15 @@
   import { onMount, setContext, tick, type Component } from 'svelte';
   import {
     consoleNavigationGroups,
-    protectedDestinations,
-    publicCommandNavigation,
+    isNavigationItemActive,
+    isProtectedDestination,
     referenceNavigation,
-    type NavigationItem,
   } from '$lib/workspaces';
+  import { consoleCommandNavigation } from '$lib/console-command-navigation';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
@@ -42,17 +42,6 @@
   let InvestigationGuideView = $state<Component | null>(null);
   let revealInvestigationGuideOnMount = $state(false);
   let investigationGuideLoad: Promise<void> | null = null;
-  type ConsoleCommand = NavigationItem & {
-    group: string;
-  };
-  const consoleCommands: ConsoleCommand[] = [
-    ...consoleNavigationGroups.flatMap((navigationGroup) => (
-      navigationGroup.items.map((item) => ({ ...item, group: navigationGroup.label }))
-    )),
-    ...referenceNavigation.map((item) => ({ ...item, group: 'Reference' })),
-    ...publicCommandNavigation.map((item) => ({ ...item, group: 'Public' })),
-  ];
-
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
     void checkSession();
@@ -91,8 +80,10 @@
   }
 
   function signInTarget(){
-    const path = protectedDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
-    return `/login?next=${encodeURIComponent(path)}`;
+    const destination = isProtectedDestination(page.url)
+      ? `${page.url.pathname}${page.url.search}${page.url.hash}`
+      : '/dashboard';
+    return `/login?next=${encodeURIComponent(destination)}`;
   }
 
   async function loadCapabilityReport(){
@@ -175,7 +166,9 @@
 
   async function openCommandPalette(){
     if(commandOpen)return;
-    const focusedElement=document.activeElement instanceof HTMLElement?document.activeElement:undefined;
+    const focusedElement=document.activeElement instanceof HTMLElement&&document.activeElement!==document.body
+      ?document.activeElement
+      :undefined;
     commandReturnFocus=navOpen?commandTrigger:(focusedElement??commandTrigger);
     if(navOpen)await closeNavigation(false);
     commandOpen=true;
@@ -252,7 +245,7 @@
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Open command palette" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Commands</strong></button>
+        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Navigate</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
@@ -268,7 +261,7 @@
         {#each consoleNavigationGroups as navigationGroup}
           <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
             <p class="eyebrow" id={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>{navigationGroup.label}</p>
-            {#each navigationGroup.items as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
+            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
           </div>
         {/each}
       </nav>
@@ -278,7 +271,9 @@
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<SiteFooter console /></main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
-    {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={closeCommandPalette} />{/if}
+    {#if commandOpen}
+      <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />
+    {/if}
   </div>
 {/if}
 

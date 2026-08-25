@@ -18,7 +18,7 @@ import {
 
 const MAX_COMPACT_TEXT_LENGTH = 500;
 const MAX_COMPACT_DNS_RECORDS = 100;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 
 type IdnAnalysis = ReturnType<typeof analyzeDomainIdn>;
 

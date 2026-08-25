@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { parseBoundedJson } from '$lib/bounded-json';
   import {
-    applyDomainControlPassport,
+    applyVerifiedDomainControlPassport,
     buildBrandProfilePassportInput,
     buildDomainControlPassport,
     DOMAIN_CONTROL_PASSPORT_FIELDS,
     MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
     passportConfiguredFields,
+    serializeDomainControlManifest,
     verifyDomainControlPassport,
     type DomainControlPassportField,
   } from '$lib/analysis/domain-control-passport.ts';
@@ -79,7 +81,7 @@
       const expiresAt = new Date(generatedAt.getTime() + Number(expiryDays) * 86_400_000).toISOString();
       const input = buildBrandProfilePassportInput(active, selectedExports, expiresAt);
       const passport = await buildDomainControlPassport(input, generatedAt.toISOString());
-      const url = URL.createObjectURL(new Blob([`${JSON.stringify(passport, null, 2)}\n`], { type: 'application/json' }));
+      const url = URL.createObjectURL(new Blob([serializeDomainControlManifest(passport)], { type: 'application/json' }));
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = `whoisleuth-domain-control-passport-${generatedAt.toISOString().slice(0, 10)}.json`;
@@ -100,8 +102,11 @@
     busy = true;
     message = '';
     try {
-      if (file.size > MAX_DOMAIN_CONTROL_PASSPORT_BYTES) throw new Error('Domain-control passports are limited to 256 KB.');
-      const verified = await verifyDomainControlPassport(JSON.parse(await file.text()));
+      if (file.size > MAX_DOMAIN_CONTROL_PASSPORT_BYTES) throw new Error('Domain-control passports are limited to 16 MB.');
+      const verified = await verifyDomainControlPassport(parseBoundedJson(await file.text(), {
+        label: 'Domain-control passport',
+        maximumBytes: MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
+      }));
       imported = verified;
       selectedImports = verified.entries
         .filter((entry) => active.officialDomains.includes(entry.domain))
@@ -137,7 +142,8 @@
       if (!choices.length || choices.every((choice) => !choice.fields.length)) {
         throw new Error('Select at least one configured field to import.');
       }
-      const result = await saveProfile(applyDomainControlPassport(active, imported, choices));
+      const nextProfile = await applyVerifiedDomainControlPassport(active, imported, choices);
+      const result = await saveProfile(nextProfile);
       if (!result.committed) {
         message = result.message;
         return;
@@ -164,9 +170,9 @@
 <section class="passport card" aria-labelledby="domain-passport-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Portable control state</p>
-      <h2 id="domain-passport-title">Domain-control passport</h2>
-      <p>Move a deliberately selected subset of official-domain expectations between the browser Console and CLI. Integrity is verified locally before import.</p>
+      <p class="eyebrow">Import and export</p>
+      <h2 id="domain-passport-title">Portable domain settings</h2>
+      <p>Move selected official-domain expectations between the browser Console and CLI. Integrity is verified locally before import.</p>
     </div>
     <label class="btn file-btn" class:disabled={busy}>Review passport<input type="file" accept="application/json,.json" onchange={choosePassport} disabled={busy}></label>
   </header>

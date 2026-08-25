@@ -1,0 +1,174 @@
+{
+  "rdap": {
+    "parsed": {
+      "domain": "EXAMPLE.TEST",
+      "registrar": {
+        "name": "Example Registrar"
+      },
+      "nameservers": [
+        "ns1.example.test"
+      ],
+      "statuses": [
+        "active"
+      ]
+    }
+  },
+  "whois": {
+    "parsed": {
+      "domainName": "EXAMPLE.TEST",
+      "registrar": "Example Registrar",
+      "nameservers": [
+        "ns1.example.test"
+      ],
+      "statuses": [
+        "active"
+      ]
+    }
+  },
+  "availability": {
+    "applicable": true,
+    "domain": "example.test",
+    "state": "registered",
+    "confidence": "high",
+    "pageIdentity": {
+      "status": "success",
+      "publicationMetadata": {
+        "version": 1,
+        "status": "success",
+        "complete": true,
+        "truncated": false,
+        "limitations": [
+          "Counts and declarations describe only the captured static homepage HTML; they are not a full accessibility, indexing, or performance audit."
+        ],
+        "robots": {
+          "status": "observed",
+          "complete": true,
+          "truncated": false,
+          "directives": [
+            "follow",
+            "index"
+          ],
+          "recognizedDirectiveCount": 2,
+          "unknownDirectiveCount": 0,
+          "conflicting": false
+        },
+        "twitterCard": {
+          "status": "observed",
+          "complete": true,
+          "truncated": false,
+          "cardType": "summary_large_image",
+          "declarationCount": 3,
+          "titlePresent": true,
+          "descriptionPresent": false,
+          "imagePresent": true,
+          "imageAltPresent": false,
+          "sitePresent": false,
+          "creatorPresent": false,
+          "playerPresent": false,
+          "appPresent": false
+        },
+        "headings": {
+          "complete": true,
+          "truncated": false,
+          "total": 2,
+          "h1": 1,
+          "h2": 1,
+          "h3": 0,
+          "h4": 0,
+          "h5": 0,
+          "h6": 0
+        },
+        "images": {
+          "totalComplete": true,
+          "classificationComplete": true,
+          "truncated": false,
+          "total": 2,
+          "altMissing": 1,
+          "altEmpty": 0,
+          "altNonEmpty": 1,
+          "altUnclassified": 0
+        },
+        "renderBlockingCandidates": {
+          "complete": true,
+          "truncated": false,
+          "script": 1,
+          "stylesheet": 1,
+          "total": 2,
+          "scope": "explicit-head-static-v1"
+        }
+      }
+    },
+    "http": {
+      "status": "success",
+      "response": {
+        "deliveryMetadata": {
+          "version": 1,
+          "status": "success",
+          "complete": true,
+          "truncated": false,
+          "limitations": [
+            "Selected-response headers are point-in-time declarations and do not prove intermediary caching, compression effectiveness, or page performance."
+          ],
+          "contentEncoding": {
+            "status": "observed",
+            "codings": [
+              "br",
+              "gzip"
+            ],
+            "encoded": true,
+            "unknownCodingCount": 0
+          },
+          "cachePolicy": {
+            "status": "observed",
+            "noStore": false,
+            "noCache": false,
+            "mustRevalidate": false,
+            "public": true,
+            "private": false,
+            "immutable": true,
+            "maxAgeSeconds": 3600,
+            "sMaxAgeSeconds": 120,
+            "ageSeconds": 45,
+            "maxAgePresent": true,
+            "sMaxAgePresent": true,
+            "agePresent": true,
+            "unknownDirectiveCount": 0,
+            "etag": {
+              "present": true,
+              "valid": true
+            },
+            "lastModified": {
+              "present": true,
+              "valid": true
+            },
+            "expires": {
+              "present": false,
+              "valid": null
+            }
+          }
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "rdap": {
+      "status": "success"
+    },
+    "whois": {
+      "status": "complete"
+    },
+    "availability": {
+      "status": "complete",
+      "resultState": "registered"
+    }
+  },
+  "schema": "whoisleuth.cli.lookup",
+  "version": 2,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "mode": "deep",
+  "query": "example.test",
+  "type": "domain",
+  "inputHostname": "example.test",
+  "registrableDomain": "example.test",
+  "isSubdomain": false
+}

@@ -6,15 +6,19 @@ import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
-import { CLI_COMMANDS, parseCliArguments } from './arguments.mts';
+import { parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
-import { buildCliCommandCatalogue, formatCliCommandCatalogue } from './command-catalogue.mts';
+import { buildCliCommandCatalogue, formatCliCommandCatalogue, selectCliCommands } from './command-catalogue.mts';
 import {
   COMMAND_COLLECTION,
   COMMAND_DETAILS,
   COMMAND_USAGE,
   HELP,
+  CLI_COMMANDS,
+  CLI_COMMAND_REGISTRY,
+  commandDefinition,
   commandHelp,
+  type CliCommand,
 } from './command-reference.mts';
 import { buildShellCompletion } from './completion.mts';
 import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
@@ -82,10 +86,13 @@ import {
   formatDomainControlResult,
   reviewDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { serializeDomainControlManifest } from '../packages/evidence/domain-control-runtime.mts';
+import { MAX_DOMAIN_CONTROL_REVIEW_COMMAND_BYTES } from '../packages/contracts/domain-control-review.mts';
 import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   buildDomainControlFlightRecorder,
   formatDomainControlFlightRecorder,
+  serializeDomainControlFlightRecorder,
 } from '../lib/domain-control-flight-recorder.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
@@ -129,12 +136,23 @@ import {
   buildCtEventFindings,
   formatCtEventFindings,
 } from './ct-event-intake.mts';
-import { buildInvestigationPlan, formatInvestigationPlan } from './investigation-plan.mts';
+import {
+  buildInvestigationPlan,
+  buildWorkflowRecipeCatalogue,
+  formatInvestigationPlan,
+  formatWorkflowRecipeCatalogue,
+} from './investigation-plan.mts';
 import { MAX_INVESTIGATION_RUN_BYTES, formatInvestigationRun, runInvestigationRecipe } from './investigation-run.mts';
 import { readCliTextInput } from './input.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
-import { createBufferedOutput, writePrivateFile } from './output-file.mts';
+import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile } from './output-file.mts';
+import {
+  canLaunchInteractiveCli,
+  launchInteractiveCli,
+  type InteractiveLauncherInput,
+  type InteractiveLauncherOutput,
+} from './interactive-launcher.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
@@ -165,6 +183,7 @@ import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   buildRiskCalibrationReport,
   parseRiskCalibrationDataset,
+  serializeRiskCalibrationReport,
 } from './risk-calibration.mts';
 import {
   MAX_LOOKALIKE_CALIBRATION_BYTES,
@@ -176,6 +195,7 @@ import {
   presentTerminalOutput,
   terminalPresentation,
   type TerminalEnvironment,
+  type TerminalPalette,
 } from './terminal-presentation.mts';
 import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
 
@@ -207,11 +227,15 @@ function formatForTerminal(
   stream: WritableLike,
   color: boolean,
   environment: TerminalEnvironment,
+  palette: TerminalPalette,
 ): string {
-  return presentTerminalOutput(value, terminalPresentation(stream, color, environment));
+  return presentTerminalOutput(value, terminalPresentation(stream, color, environment, palette));
 }
 
 function isCancellation(error: unknown, signal?: AbortSignal): boolean {
+  if (error instanceof AggregateError) {
+    return error.errors.length > 0 && error.errors.every((item) => isCancellation(item));
+  }
   return signal?.aborted === true
     || Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 }
@@ -224,6 +248,17 @@ function usageEventReason(error: unknown): string {
   return 'invalid_input';
 }
 
+const INLINE_CLI_COMMANDS: readonly CliCommand[] = Object.freeze([
+  'completion', 'doctor', 'commands', 'manual', 'manifest', 'map-observations',
+  'oam-export', 'ct-intake', 'registry-support', 'registry-doctor',
+  'registry-cohort', 'registry-scaffold', 'risk-calibrate', 'lookalike-calibrate',
+  'verify-artifact', 'interchange-report', 'source-report', 'compare',
+  'page-compare', 'mail-review', 'review-evidence', 'brief', 'case-pack',
+  'domain-control', 'monitor-once', 'assurance', 'change-packet',
+  'sharing-review', 'workflow-plan', 'workflow-run', 'diff', 'reconcile',
+  'timeline', 'export',
+]);
+
 async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
@@ -232,7 +267,8 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
   const eventProgress: { current: CliProgressEvents | null } = { current: null };
   let failureLabel = 'Lookup';
   try {
-    const terminal = (value: string, color = true) => formatForTerminal(value, stdout, color, environment);
+    const palette = args.palette || 'auto';
+    const terminal = (value: string, color = true) => formatForTerminal(value, stdout, color, environment, palette);
     const beginProgress = (message: string): TerminalProgress => {
       const terminalOutput = 'output' in args
         && args.output === 'terminal'
@@ -244,6 +280,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         enabled,
         color: terminalOutput ? args.color : false,
         environment,
+        palette,
         ...(dependencies.nowMs ? { now: dependencies.nowMs } : {}),
       });
       progress.start(message);
@@ -311,14 +348,87 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
     }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
 
+    const handlerOwner = commandDefinition(args.action).execution.handlerOwner;
+    if (handlerOwner === 'bulk') {
+      if (args.action !== 'bulk') throw new Error('Bulk command registry ownership is inconsistent.');
+      failureLabel = 'Bulk lookup';
+      const { runBulkCommand } = await import('./bulk-command-runner.mts');
+      return await runBulkCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'discovery') {
+      if (args.action !== 'discover') throw new Error('Discovery command registry ownership is inconsistent.');
+      failureLabel = 'Candidate generation';
+      const { runDiscoveryCommand } = await import('./discovery-command-runner.mts');
+      return await runDiscoveryCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'discovery_scan') {
+      if (args.action !== 'discover-scan') throw new Error('Discovery-scan command registry ownership is inconsistent.');
+      failureLabel = 'Candidate scan';
+      const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
+      return await runDiscoveryScanCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'evidence') {
+      if (!isEvidenceCommand(args)) throw new Error('Evidence command registry ownership is inconsistent.');
+      failureLabel = evidenceCommandFailureLabel(args.action);
+      const evidenceStdout = args.action !== 'sign-artifact' && args.output === 'terminal'
+        ? { write: (value: string) => write(stdout, terminal(value, args.color)) }
+        : stdout;
+      return await runEvidenceCommand(args, {
+        stdout: evidenceStdout,
+        stdin: dependencies.stdin || process.stdin,
+        readArtifactInput: dependencies.readArtifactInput,
+        readPassphraseFile: dependencies.readPassphraseFile,
+        readPrivateKeyFile: dependencies.readPrivateKeyFile,
+        readPublicKeyFile: dependencies.readPublicKeyFile,
+        now: dependencies.now,
+        signal: dependencies.signal,
+      });
+    }
+    if (handlerOwner === 'network') {
+      if (args.action !== 'ct-search'
+        && args.action !== 'posture'
+        && args.action !== 'http'
+        && args.action !== 'tls'
+        && args.action !== 'dnssec-validate'
+        && args.action !== 'mail-transport') {
+        throw new Error('Network command registry ownership is inconsistent.');
+      }
+      failureLabel = args.action === 'ct-search'
+        ? 'Certificate Transparency search'
+        : args.action === 'posture'
+          ? 'Domain posture audit'
+          : args.action === 'http'
+            ? 'HTTP probe'
+            : args.action === 'tls'
+              ? 'TLS evidence collection'
+              : args.action === 'dnssec-validate'
+                ? 'DNSSEC chain validation'
+                : 'Mail transport review';
+      const { runNetworkCommand } = await import('./network-command-runner.mts');
+      return await runNetworkCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner === 'lookup') {
+      if (args.action !== 'lookup') throw new Error('Lookup command registry ownership is inconsistent.');
+      const { runLookupCommand } = await import('./lookup-command-runner.mts');
+      return await runLookupCommand(args, dependencies, commandContext);
+    }
+    if (handlerOwner !== 'inline' || !INLINE_CLI_COMMANDS.includes(args.action)) {
+      throw new Error('No CLI execution route is registered for the parsed command.');
+    }
+
     if (args.action === 'completion') {
       write(stdout, buildShellCompletion(args.shell));
       return EXIT_CODES.SUCCESS;
     }
 
     if (args.action === 'commands') {
+      const selectedCommands = selectCliCommands(CLI_COMMAND_REGISTRY, {
+        common: args.common,
+        group: args.group,
+        mode: args.mode,
+      });
       const catalogue = buildCliCommandCatalogue({
-        commands: CLI_COMMANDS,
+        commands: selectedCommands,
         collections: COMMAND_COLLECTION,
         details: COMMAND_DETAILS,
         usage: COMMAND_USAGE,
@@ -395,9 +505,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError(`${args.action} requires one versioned JSON file or a document on stdin.`);
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError(`${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is not valid JSON.`);
+        throw new CliUsageError(`${mapping ? 'External observation mapping' : 'Open Asset Model bridge'} input is not valid bounded JSON without duplicate keys.`);
       }
       let document;
       try {
@@ -421,7 +532,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         version: VERSION,
         generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString(),
         network: args.network,
-        presentation: terminalPresentation(stdout, args.color, environment),
+        presentation: terminalPresentation(stdout, args.color, environment, palette),
         ...(dependencies.resolvePublicAddresses ? { resolveAddresses: dependencies.resolvePublicAddresses } : {}),
         ...(dependencies.safeFetch ? { fetchHttps: dependencies.safeFetch } : {}),
         ...(dependencies.whoisQuery ? { queryWhois: dependencies.whoisQuery } : {}),
@@ -528,9 +639,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         } : {}),
       });
       if (!args.quiet) write(stdout, args.output === 'summary_json'
-        ? formatJsonDocument(buildRiskCalibrationSummaryReport(report))
+        ? serializeRiskCalibrationReport(buildRiskCalibrationSummaryReport(report))
         : args.output === 'json'
-          ? formatJsonDocument(report)
+          ? serializeRiskCalibrationReport(report)
           : terminal(formatTerminalRiskCalibration(report), args.color));
       return EXIT_CODES.SUCCESS;
     }
@@ -620,23 +731,6 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ? formatJsonDocument(report)
         : terminal(formatInterchangeFidelityReport(report), args.color));
       return EXIT_CODES.SUCCESS;
-    }
-
-    if (isEvidenceCommand(args)) {
-      failureLabel = evidenceCommandFailureLabel(args.action);
-      const evidenceStdout = args.action !== 'sign-artifact' && args.output === 'terminal'
-        ? { write: (value: string) => write(stdout, terminal(value, args.color)) }
-        : stdout;
-      return await runEvidenceCommand(args, {
-        stdout: evidenceStdout,
-        stdin: dependencies.stdin || process.stdin,
-        readArtifactInput: dependencies.readArtifactInput,
-        readPassphraseFile: dependencies.readPassphraseFile,
-        readPrivateKeyFile: dependencies.readPrivateKeyFile,
-        readPublicKeyFile: dependencies.readPublicKeyFile,
-        now: dependencies.now,
-        signal: dependencies.signal,
-      });
     }
 
     if (args.action === 'source-report') {
@@ -801,7 +895,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       try {
         input = dependencies.readArtifactInput
           ? await dependencies.readArtifactInput(args.source)
-          : await readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Domain control input');
+          : await readInput(args.source, MAX_DOMAIN_CONTROL_REVIEW_COMMAND_BYTES, 'Domain control input');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
         throw new CliUsageError(`Could not read domain control input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -844,7 +938,11 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           ? formatDomainControlFlightRecorder(document as ReturnType<typeof buildDomainControlFlightRecorder>)
           : formatDomainControlResult(document as ReturnType<typeof buildDomainControlManifest> | ReturnType<typeof reviewDomainControlManifest>);
       if (!args.quiet) write(stdout, args.output === 'json'
-        ? formatJsonDocument(document)
+        ? schema === DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA
+          ? serializeDomainControlManifest(document)
+          : schema === DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA
+            ? serializeDomainControlFlightRecorder(document as ReturnType<typeof buildDomainControlFlightRecorder>)
+            : formatJsonDocument(document)
         : terminal(terminalDocument, args.color));
       return EXIT_CODES.SUCCESS;
     }
@@ -906,9 +1004,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('assurance requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Domain assurance input is not valid JSON.');
+        throw new CliUsageError('Domain assurance input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -936,9 +1035,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('change-packet requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Domain change packet input is not valid JSON.');
+        throw new CliUsageError('Domain change packet input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -985,6 +1085,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
 
     if (args.action === 'workflow-plan') {
       failureLabel = 'Investigation plan';
+      if ('discovery' in args) {
+        const catalogue = buildWorkflowRecipeCatalogue(args.discovery === 'explain' ? args.recipe : null);
+        if (!args.quiet) write(stdout, args.output === 'json'
+          ? formatJsonDocument(catalogue)
+          : terminal(formatWorkflowRecipeCatalogue(catalogue), args.color));
+        return EXIT_CODES.SUCCESS;
+      }
       const document = buildInvestigationPlan(args.recipe, args.subject, commandContext.now());
       if (!args.quiet) write(stdout, args.output === 'json'
         ? formatJsonDocument(document)
@@ -1009,6 +1116,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         approveNetwork: args.approveNetwork,
         resumeInput,
         generatedAt: commandContext.now(),
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
         execute: async (command, stepArguments) => {
           const stepStdout = createBufferedOutput();
           const stepStderr = createBufferedOutput();
@@ -1130,24 +1238,6 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
-    if (args.action === 'bulk') {
-      failureLabel = 'Bulk lookup';
-      const { runBulkCommand } = await import('./bulk-command-runner.mts');
-      return await runBulkCommand(args, dependencies, commandContext);
-    }
-
-    if (args.action === 'discover') {
-      failureLabel = 'Candidate generation';
-      const { runDiscoveryCommand } = await import('./discovery-command-runner.mts');
-      return await runDiscoveryCommand(args, dependencies, commandContext);
-    }
-
-    if (args.action === 'discover-scan') {
-      failureLabel = 'Candidate scan';
-      const { runDiscoveryScanCommand } = await import('./discovery-scan-command-runner.mts');
-      return await runDiscoveryScanCommand(args, dependencies, commandContext);
-    }
-
     if (args.action === 'ct-intake') {
       failureLabel = 'Certificate event intake';
       let input: string;
@@ -1162,9 +1252,10 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       if (!input.trim()) throw new CliUsageError('ct-intake requires one versioned JSON file or a document on stdin.');
       let parsed: unknown;
       try {
+        scanBoundedJson(input);
         parsed = JSON.parse(input);
       } catch {
-        throw new CliUsageError('Certificate event input is not valid JSON.');
+        throw new CliUsageError('Certificate event input is not valid bounded JSON without duplicate keys.');
       }
       let document;
       try {
@@ -1178,29 +1269,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       return EXIT_CODES.SUCCESS;
     }
 
-    if (args.action === 'ct-search'
-      || args.action === 'posture'
-      || args.action === 'http'
-      || args.action === 'tls'
-      || args.action === 'dnssec-validate'
-      || args.action === 'mail-transport') {
-      failureLabel = args.action === 'ct-search'
-        ? 'Certificate Transparency search'
-        : args.action === 'posture'
-          ? 'Domain posture audit'
-          : args.action === 'http'
-            ? 'HTTP probe'
-            : args.action === 'tls'
-              ? 'TLS intelligence'
-              : args.action === 'dnssec-validate'
-                ? 'DNSSEC chain validation'
-                : 'Mail transport review';
-      const { runNetworkCommand } = await import('./network-command-runner.mts');
-      return await runNetworkCommand(args, dependencies, commandContext);
-    }
-
-    const { runLookupCommand } = await import('./lookup-command-runner.mts');
-    return await runLookupCommand(args, dependencies, commandContext);
+    throw new Error('No CLI execution route is registered for the parsed command.');
   } catch (error) {
     (progress as TerminalProgress | null)?.stop();
     progress = null;
@@ -1225,8 +1294,39 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
   }
 }
 
-async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+  const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
+  const environment = dependencies.environment || process.env;
+  if (Array.isArray(argv) && argv.length === 0) {
+    const input = (dependencies.stdin || process.stdin) as InteractiveLauncherInput;
+    const output = stdout as InteractiveLauncherOutput;
+    const supportsInteractiveLaunch = dependencies.canLaunchInteractiveCli || canLaunchInteractiveCli;
+    if (supportsInteractiveLaunch(input, output, environment)) {
+      const launch = dependencies.launchInteractiveCli || launchInteractiveCli;
+      try {
+        const launchedArgv = await launch({
+          input,
+          output,
+          environment,
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        });
+        if (launchedArgv === null) return EXIT_CODES.SUCCESS;
+        argv = launchedArgv;
+      } catch (error) {
+        if (isCancellation(error, dependencies.signal)) {
+          write(stderr, 'Cancelled by analyst.\n');
+          return EXIT_CODES.CANCELLED;
+        }
+        if (error instanceof CliUsageError) {
+          write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid interactive selection')}\n`);
+          return EXIT_CODES.USAGE;
+        }
+        write(stderr, `CLI startup failed: ${boundedCliErrorMessage(error, 'Interactive launch failed')}\n`);
+        return EXIT_CODES.INTERNAL_ERROR;
+      }
+    }
+  }
   let args: CliArguments;
   try {
     args = parseCliArguments(argv);
@@ -1255,5 +1355,25 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
   }
 }
 
-export { HELP, MAX_STDIN_BYTES, VERSION, readStdinBounded, runCli };
+async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promise<number> {
+  const stderr = dependencies.stderr || process.stderr;
+  try {
+    return await runCliCommand(argv, dependencies);
+  } finally {
+    const cleanup = dependencies.cleanupPendingOutputFiles || cleanupPendingOutputFiles;
+    try {
+      const report = await cleanup();
+      if (report.retainedPublished > 0) {
+        write(stderr, `Output cleanup warning: Published output is intact, but ${report.retainedPublished} linked temporary output ${report.retainedPublished === 1 ? 'file remains' : 'files remain'} in the selected output directory.\n`);
+      }
+      if (report.retainedUnpublished > 0) {
+        write(stderr, `Output cleanup warning: ${report.retainedUnpublished} unpublished temporary output ${report.retainedUnpublished === 1 ? 'file remains' : 'files remain'} in the selected output directory.\n`);
+      }
+    } catch {
+      write(stderr, 'Output cleanup warning: Temporary output cleanup could not be verified.\n');
+    }
+  }
+}
+
+export { HELP, INLINE_CLI_COMMANDS, MAX_STDIN_BYTES, VERSION, readStdinBounded, runCli };
 export type { CliDependencies, WritableLike };

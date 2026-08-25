@@ -17,7 +17,7 @@
     <article class:featured={index === 0} id={linkSteps ? goal.id : undefined}>
       <h3>{goal.title}</h3>
       <p>{goal.summary}</p>
-      <ol aria-label={`${goal.title} workflow`}>
+      <ol aria-label={`${goal.title} steps`}>
         {#each goal.steps as step}
           <li>
             {#if linkSteps}
@@ -30,7 +30,7 @@
       </ol>
       {#if !linkSteps}
         <a class="path-link" href={`/resources#${goal.id}`}>
-          Follow this path <span aria-hidden="true">→</span>
+          {goal.title} guide <span aria-hidden="true">→</span>
         </a>
       {/if}
     </article>

@@ -6,7 +6,8 @@
 
 import { domainToASCII } from 'node:url';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
+import { isUriShapedLabel } from './portable-generator.mts';
 import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
@@ -19,6 +20,7 @@ type StructuredDataEntity = {
   declaredOrigin: string | null;
   sameAsHosts: string[];
 };
+type BoundedProjection<T> = { value: T; truncated: boolean };
 type StructuredDataIdentityInput = {
   html?: unknown;
   htmlAnalysis?: StaticHtmlAnalysis;
@@ -40,8 +42,8 @@ const MAX_STRUCTURED_DATA_TYPES = 8;
 const MAX_STRUCTURED_DATA_NAME_LENGTH = 160;
 const MAX_STRUCTURED_DATA_URL_LENGTH = 2_048;
 const MAX_STRUCTURED_DATA_SAME_AS_HOSTS = 12;
-const CONTROL_AND_DIRECTIONAL_RE = /[\u0000-\u001f\u007f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/u;
-const CONTROL_AND_DIRECTIONAL_GLOBAL_RE = /[\u0000-\u001f\u007f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu;
+const CONTROL_AND_DIRECTIONAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const CONTROL_AND_DIRECTIONAL_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;
 const CURATED_TYPES = new Map<string, string>([
   ['brand', 'Brand'],
@@ -66,16 +68,18 @@ function record(value: unknown): UnknownRecord | null {
     : null;
 }
 
-function boundedName(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > MAX_STRUCTURED_DATA_URL_LENGTH) return null;
+function boundedName(value: unknown): BoundedProjection<string | null> {
+  if (typeof value !== 'string') return { value: null, truncated: false };
+  if (value.length > MAX_STRUCTURED_DATA_URL_LENGTH) return { value: null, truncated: true };
+  if (isUriShapedLabel(value)) return { value: null, truncated: false };
   const normalized = value
     .replace(CONTROL_AND_DIRECTIONAL_GLOBAL_RE, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
-  if (!normalized) return null;
+  if (!normalized) return { value: null, truncated: false };
   return normalized.length <= MAX_STRUCTURED_DATA_NAME_LENGTH
-    ? normalized
-    : `${normalized.slice(0, MAX_STRUCTURED_DATA_NAME_LENGTH)}…`;
+    ? { value: normalized, truncated: false }
+    : { value: `${normalized.slice(0, MAX_STRUCTURED_DATA_NAME_LENGTH - 1)}…`, truncated: true };
 }
 
 function safeBaseUrl(value: unknown): string | null {
@@ -126,24 +130,24 @@ function curatedType(value: unknown): string | null {
   return CURATED_TYPES.get(suffix) || null;
 }
 
-function curatedTypes(value: unknown): string[] {
+function curatedTypes(value: unknown): BoundedProjection<string[]> {
   const values = Array.isArray(value) ? value : [value];
   const types = new Set<string>();
   for (const candidate of values.slice(0, MAX_STRUCTURED_DATA_TYPES)) {
     const normalized = curatedType(candidate);
     if (normalized) types.add(normalized);
   }
-  return [...types].sort();
+  return { value: [...types].sort(), truncated: values.length > MAX_STRUCTURED_DATA_TYPES };
 }
 
-function sameAsHosts(value: unknown): string[] {
+function sameAsHosts(value: unknown): BoundedProjection<string[]> {
   const values = Array.isArray(value) ? value : [value];
   const hosts = new Set<string>();
   for (const candidate of values.slice(0, MAX_STRUCTURED_DATA_SAME_AS_HOSTS)) {
     const host = normalizedSameAsHost(candidate);
     if (host) hosts.add(host);
   }
-  return [...hosts].sort();
+  return { value: [...hosts].sort(), truncated: values.length > MAX_STRUCTURED_DATA_SAME_AS_HOSTS };
 }
 
 function jsonStructureWithinBounds(value: string): boolean {
@@ -172,14 +176,28 @@ function jsonStructureWithinBounds(value: string): boolean {
   return !inString && depth === 0;
 }
 
-function entityFromObject(value: UnknownRecord, baseUrl: string | null): StructuredDataEntity | null {
+function entityFromObject(value: UnknownRecord, baseUrl: string | null): {
+  entity: StructuredDataEntity | null;
+  nameTruncated: boolean;
+  typesTruncated: boolean;
+  sameAsTruncated: boolean;
+} {
   const types = curatedTypes(value['@type']);
-  if (!types.length) return null;
   const name = boundedName(value.name);
   const declaredOrigin = normalizedOrigin(value.url, baseUrl);
   const hosts = sameAsHosts(value.sameAs);
-  if (!name && !declaredOrigin && !hosts.length) return null;
-  return { types, name, declaredOrigin, sameAsHosts: hosts };
+  const projection = {
+    nameTruncated: name.truncated,
+    typesTruncated: types.truncated,
+    sameAsTruncated: hosts.truncated,
+  };
+  if (!types.value.length || (!name.value && !declaredOrigin && !hosts.value.length)) {
+    return { entity: null, ...projection };
+  }
+  return {
+    entity: { types: types.value, name: name.value, declaredOrigin, sameAsHosts: hosts.value },
+    ...projection,
+  };
 }
 
 function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) {
@@ -195,6 +213,9 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
   let objectsExamined = 0;
   let arrayItemsExamined = 0;
   let discardedProperties = 0;
+  let truncatedNames = 0;
+  let truncatedTypeLists = 0;
+  let truncatedSameAsLists = 0;
   let entityLimitReached = false;
   let limitReached = scripts.length > MAX_STRUCTURED_DATA_SCRIPTS;
 
@@ -254,11 +275,15 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
         continue;
       }
       objectsExamined += 1;
-      const entity = entityFromObject(object, baseUrl);
-      if (entity) {
-        const key = JSON.stringify(entity);
+      const projection = entityFromObject(object, baseUrl);
+      if (projection.nameTruncated) truncatedNames += 1;
+      if (projection.typesTruncated) truncatedTypeLists += 1;
+      if (projection.sameAsTruncated) truncatedSameAsLists += 1;
+      if (projection.nameTruncated || projection.typesTruncated || projection.sameAsTruncated) limitReached = true;
+      if (projection.entity) {
+        const key = JSON.stringify(projection.entity);
         if (!entities.has(key)) {
-          if (entities.size < MAX_STRUCTURED_DATA_ENTITIES) entities.set(key, entity);
+          if (entities.size < MAX_STRUCTURED_DATA_ENTITIES) entities.set(key, projection.entity);
           else {
             entityLimitReached = true;
             limitReached = true;
@@ -305,6 +330,9 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
   if (entityLimitReached) {
     limitations.push(`Only the first ${MAX_STRUCTURED_DATA_ENTITIES} structured identity entities were retained.`);
   }
+  if (truncatedNames > 0) limitations.push(`${truncatedNames} structured identity label${truncatedNames === 1 ? ' was' : 's were'} shortened to the ${MAX_STRUCTURED_DATA_NAME_LENGTH}-character retention limit.`);
+  if (truncatedTypeLists > 0) limitations.push(`${truncatedTypeLists} structured identity type list${truncatedTypeLists === 1 ? ' exceeded' : 's exceeded'} the ${MAX_STRUCTURED_DATA_TYPES}-item inspection limit.`);
+  if (truncatedSameAsLists > 0) limitations.push(`${truncatedSameAsLists} structured identity sameAs list${truncatedSameAsLists === 1 ? ' exceeded' : 's exceeded'} the ${MAX_STRUCTURED_DATA_SAME_AS_HOSTS}-item inspection limit.`);
 
   return {
     structuredDataVersion: STRUCTURED_DATA_IDENTITY_VERSION,
@@ -326,6 +354,9 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
         objectsExamined,
         arrayItemsExamined,
         discardedProperties,
+        truncatedNames,
+        truncatedTypeLists,
+        truncatedSameAsLists,
         entities: entities.size,
       },
     }),

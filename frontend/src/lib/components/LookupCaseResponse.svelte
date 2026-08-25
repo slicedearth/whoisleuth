@@ -40,7 +40,7 @@
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
           <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…" disabled={actionBusy}></textarea>
-          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
+          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><button class="btn" type="button" onclick={createCase} disabled={actionBusy} aria-label={`Refresh retained Case evidence for ${domain}`}>Refresh case evidence</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
         </form>
         <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · manage status, disposition, and tags in Monitor. Cases are stored only in this browser.</p>
       </div>
@@ -54,7 +54,7 @@
 {#if outreach || recipientResolution.recipients.length}
   <section class="response evidence-card card">
     <div class="section-head"><div><p class="eyebrow">Respond</p><h4>Published routes and reviewed drafts</h4></div></div>
-    <p class="card-note">Nothing is sent automatically. A published contact does not prove responsibility or that a report should be sent. Record the selected route in a case, then review the exact evidence and message.</p>
+    <p class="card-note">Nothing is sent automatically. Verify the recipient, evidence and message before recording a route in the case.</p>
     <div class="response-actions">
       {#if outreach}<article><strong>Acquisition outreach</strong><span>{outreach.email}</span><div><a class="btn small" href={outreach.mailto}>Open email draft</a><button class="btn small" onclick={() => copyDraft(outreach.body, 'outreach draft')}>Copy text</button></div></article>{/if}
       {#each recipientResolution.recipients as route}

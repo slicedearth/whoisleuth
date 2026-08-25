@@ -30,6 +30,7 @@ function snapshot(overrides: Record<string, unknown> = {}): Record<string, unkno
   return {
     capturedAt: CAPTURED,
     scanDepth: 'deep',
+    inputHostname: null,
     availability: 'registered',
     nameservers: [],
     ...overrides,

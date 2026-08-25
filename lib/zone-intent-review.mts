@@ -192,7 +192,7 @@ export function normaliseRdata(
     };
   }
   if (type === 'CDNSKEY') {
-    if (tokens.length !== 4 || !/^[a-z0-9+/=]{1,4096}$/iu.test(tokens[3] ?? '')) throw new TypeError('CDNSKEY data is invalid.');
+    if (tokens.length !== 4 || !/^[A-Za-z0-9+/=]{1,4096}$/u.test(tokens[3] ?? '')) throw new TypeError('CDNSKEY data is invalid.');
     return {
       value: `${integerToken(tokens[0] as string, 0, 65_535, 'CDNSKEY flags')} ${integerToken(tokens[1] as string, 0, 255, 'CDNSKEY protocol')} ${integerToken(tokens[2] as string, 0, 255, 'CDNSKEY algorithm')} ${tokens[3]}`,
       valueTreatment: 'normalised',

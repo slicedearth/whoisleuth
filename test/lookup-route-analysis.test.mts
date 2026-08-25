@@ -9,6 +9,11 @@ import {
   buildLookupRouteAnalysis,
   latestLookupTimestamp,
 } from '../frontend/src/lib/analysis/lookup-route-analysis.ts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -81,6 +86,7 @@ describe('Lookup route analysis', () => {
     });
 
     assert.equal(analysis.caseDomain, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, 'portal.example.test');
     assert.equal(analysis.lookupEvidenceDepth, 'fast');
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:05:00.000Z');
     assert.equal(analysis.comparison.counts.conflict, 0);
@@ -93,6 +99,50 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.risk?.evidenceQuality.state, 'partial');
     assert.equal(analysis.caseEvidence.opportunityModelVersion, 2);
     assert.ok(analysis.evidenceCoverage.entries.length > 0);
+    assert.ok(analysis.lookupDecisionFacts.length > 0);
+    assert.equal(analysis.lookupDecisionFacts[0]?.version, 1);
+    assert.equal(
+      analysis.lookupDecisionFacts.find((fact) => fact.id === 'lookup-evidence:rdap')?.evidenceState,
+      'observed',
+    );
+    assert.equal(Object.isFrozen(analysis.lookupDecisionFacts), true);
+    assert.equal(analysis.lookupDecisionSupport.version, 1);
+    assert.equal(analysis.lookupReviewActionModel.version, 1);
+    assert.equal(
+      analysis.lookupReviewActionModel.recommendedNextReviews.total,
+      analysis.lookupDecisionSupport.actions.length,
+    );
+    assert.equal(
+      analysis.lookupReviewActionModel.recommendedNextReviews.total,
+      analysis.lookupReviewActionModel.recommendedNextReviews.displayedCount
+        + analysis.lookupReviewActionModel.recommendedNextReviews.omittedCount,
+    );
+    assert.equal(analysis.lookupClaimReadiness.version, 2);
+    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, 2);
+    assert.equal(
+      analysis.lookupInvestigationBrief.decisionFacts.total,
+      analysis.lookupDecisionFacts.length,
+    );
+    assert.equal(
+      analysis.lookupInvestigationBrief.decisionFacts.total,
+      analysis.lookupInvestigationBrief.decisionFacts.displayed
+        + analysis.lookupInvestigationBrief.decisionFacts.omitted,
+    );
+    assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
+  });
+
+  test('does not infer Case hostname context from registrable or availability domains', () => {
+    const { inputHostname: _inputHostname, ...withoutInputHostname } = response();
+    const result = withoutInputHostname as LookupHttpResponse;
+    const analysis = buildLookupRouteAnalysis({
+      result,
+      lookupView: createLookupViewModel(result),
+      profile: null,
+      task: 'general',
+      completedLookupDepth: 'fast',
+    });
+    assert.equal(analysis.caseDomain, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, null);
   });
 
   test('keeps non-domain registry comparisons neutral and bounded', () => {
@@ -162,8 +212,12 @@ describe('Lookup route analysis', () => {
     const result = response({
       observedAt: '2026-07-01T01:00:00.000Z',
       threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
         providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
           provider: { id: 'urlscan_search', label: 'Archived provider' },
+          target: { type: 'domain', value: 'example.test', exposure: 'registrable_domain' },
           state: 'not_found',
           findings: [],
           observation: { observedAt: '2026-07-01T01:06:00.000Z', limitations: [] },
@@ -180,6 +234,43 @@ describe('Lookup route analysis', () => {
 
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:06:00.000Z');
     assert.equal(analysis.evidenceObservedAtById['external-urlscan_search'], '2026-07-01T01:06:00.000Z');
+  });
+
+  test('excludes unbound or unsupported provider records from evidence and Risk', () => {
+    const baseProvider = {
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlscan_search', label: 'Archived provider' },
+      target: { type: 'domain', value: 'other.example', exposure: 'registrable_domain' },
+      state: 'success',
+      findings: [{ category: 'phishing', lastObservedAt: '2026-07-01T01:05:00.000Z' }],
+      observation: { observedAt: '2026-07-01T01:06:00.000Z', limitations: [] },
+    };
+    const { target: _target, ...providerWithoutTarget } = baseProvider;
+    const result = response({
+      threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION + 1,
+        providers: [
+          baseProvider,
+          { ...providerWithoutTarget, provider: { id: 'urlhaus_host' } },
+        ],
+      },
+    });
+    const lookupView = createLookupViewModel(result);
+    const analysis = buildLookupRouteAnalysis({
+      result,
+      lookupView,
+      profile: null,
+      task: 'general',
+      completedLookupDepth: 'deep',
+    });
+
+    assert.deepEqual(lookupView.threatIntelligence, {});
+    assert.deepEqual(lookupView.threatIntelligenceProviders, []);
+    assert.equal(analysis.externalRiskContext.eligibleProviderCount, 0);
+    assert.equal(analysis.risk?.factors.some((factor) => factor.family === 'external-intelligence'), false);
+    assert.equal(analysis.lookupObservedAt, '2026-07-01T01:05:00.000Z');
+    assert.equal(analysis.evidenceObservedAtById['external-urlscan_search'], undefined);
   });
 
   test('requires an explicit observed source state before presenting task actions', () => {

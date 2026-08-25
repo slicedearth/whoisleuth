@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "families": [
+    {
+      "family": "dns",
+      "keys": [
+        "a",
+        "aaaa",
+        "caa",
+        "caa_policy",
+        "cname",
+        "delegation",
+        "dmarc",
+        "https",
+        "mx",
+        "ns",
+        "ptr",
+        "soa",
+        "spf",
+        "tree"
+      ]
+    },
+    {
+      "family": "dns_delegation",
+      "keys": [
+        "authorityCount",
+        "discardedAuthorityRecordValueCount",
+        "lameAuthorityCount",
+        "partialAuthorityCount",
+        "queriedAddressCount",
+        "successfulAuthorityCount",
+        "truncatedAuthorityRecordSetCount",
+        "unreachableAuthorityCount"
+      ]
+    },
+    {
+      "family": "network_context",
+      "keys": [
+        "addressSource",
+        "cidrCount",
+        "httpStatus",
+        "requestCount"
+      ]
+    },
+    {
+      "family": "browser_library",
+      "keys": [
+        "advisoryMatches",
+        "catalogComponents",
+        "inlineCharactersExamined",
+        "inlineScriptsExamined",
+        "inlineSignatureCharactersExamined",
+        "inlineSignatureTimedOut",
+        "inlineSignatureUnavailable",
+        "knownExploitedMatches",
+        "referencesExamined",
+        "scriptsExamined"
+      ]
+    },
+    {
+      "family": "client_behaviour",
+      "keys": [
+        "indicatorsObserved",
+        "scriptElementsExamined"
+      ]
+    },
+    {
+      "family": "credential_surface",
+      "keys": [
+        "classifiedInputs",
+        "formsObserved",
+        "inputsObserved",
+        "unclassifiedActions"
+      ]
+    },
+    {
+      "family": "certificate_transparency",
+      "keys": [
+        "certificateGroups",
+        "certificateGroupsTruncated",
+        "certificateRows",
+        "matches",
+        "namesExamined",
+        "rejectedRows",
+        "workTruncated"
+      ]
+    },
+    {
+      "family": "page_identity",
+      "keys": [
+        "discardedUrls",
+        "relationshipTagsExamined",
+        "relationshipUrlsDiscarded",
+        "tagsExamined",
+        "trackingIdentifiersTruncated"
+      ]
+    },
+    {
+      "family": "page_role",
+      "keys": [
+        "rolesObserved"
+      ]
+    },
+    {
+      "family": "http",
+      "keys": [
+        "attemptCount",
+        "redirectCount"
+      ]
+    },
+    {
+      "family": "security_text",
+      "keys": [
+        "ignoredCount",
+        "malformedCount"
+      ]
+    },
+    {
+      "family": "structured_identity",
+      "keys": [
+        "arrayItemsExamined",
+        "charactersExamined",
+        "discardedProperties",
+        "documentsParsed",
+        "entities",
+        "externalScriptsSkipped",
+        "malformedScripts",
+        "objectsExamined",
+        "scriptsObserved",
+        "truncatedNames",
+        "truncatedSameAsLists",
+        "truncatedTypeLists"
+      ]
+    },
+    {
+      "family": "threat_intelligence",
+      "keys": [
+        "discarded",
+        "discarded_attributes",
+        "discarded_entities",
+        "discarded_metadata",
+        "discarded_relationships",
+        "relationships"
+      ]
+    },
+    {
+      "family": "tls",
+      "keys": [
+        "connectionAttempts",
+        "discardedFields",
+        "error",
+        "resolvedAddressCount"
+      ]
+    },
+    {
+      "family": "website_security_posture",
+      "keys": [
+        "findings",
+        "observed",
+        "observedAbsence",
+        "potentialExposure",
+        "unavailable"
+      ]
+    },
+    {
+      "family": "website_technology",
+      "keys": [
+        "generatorEvaluated",
+        "htmlEvaluated",
+        "passiveHeadersEvaluated",
+        "resourceOriginsEvaluated",
+        "serverEvaluated",
+        "tagLimitReached"
+      ]
+    }
+  ]
+}

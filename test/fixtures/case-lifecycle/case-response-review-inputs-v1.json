@@ -1,0 +1,173 @@
+{
+  "contract": "whoisleuth.case-response-review-inputs",
+  "version": 1,
+  "profile": {
+    "id": "registrar",
+    "label": "Registrar review",
+    "audience": "Domain registrar abuse or compliance team",
+    "subject": "Reviewed domain abuse report: current.example.test (Reserved fixture review)",
+    "checklist": [
+      "Confirm registrar of record",
+      "Include exact URLs and observation time",
+      "Review registrant-data necessity before sharing"
+    ],
+    "includedEvidence": [
+      "Exact URLs",
+      "Observation time",
+      "Case disposition",
+      "Selected evidence pins",
+      "Registrar contact provenance"
+    ],
+    "excludedEvidence": [
+      "Raw WHOIS or RDAP payloads",
+      "Unselected contacts",
+      "Provider secrets",
+      "Unrelated analyst notes"
+    ],
+    "redactions": [
+      "Remove unnecessary personal registration data",
+      "Remove credentials, tokens, and URL fragments"
+    ]
+  },
+  "case": {
+    "id": "21936849-ddac-4c03-80e4-cafc4d770ed5",
+    "domain": "current.example.test",
+    "status": "new",
+    "disposition": "unreviewed",
+    "updatedAt": "2026-08-22T00:00:00.000Z"
+  },
+  "incident": {
+    "category": "Reserved fixture review",
+    "affectedParty": "Example service",
+    "abusiveUrls": [
+      "https://history.example.test/review"
+    ],
+    "observedHarm": "A reserved fixture condition was retained for review.",
+    "observedAt": "2026-08-22T00:00:00.000Z"
+  },
+  "contacts": [
+    {
+      "kind": "registrar",
+      "contact": "abuse@example.test",
+      "source": "reserved fixture",
+      "observedAt": "2026-08-22T00:00:00.000Z",
+      "freshness": "current",
+      "limitations": []
+    }
+  ],
+  "selectedEvidence": [],
+  "contradictions": [],
+  "readiness": {
+    "profileId": "registrar",
+    "rows": [
+      {
+        "id": "observed_behaviour",
+        "label": "Observed behaviour",
+        "state": "complete",
+        "detail": "A bounded observed-behaviour description is present.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "exact_url",
+        "label": "Exact URL",
+        "state": "complete",
+        "detail": "1 exact HTTP(S) URL is selected.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "observation_time",
+        "label": "Observation time",
+        "state": "complete",
+        "detail": "The observation is under 24 hours.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "capture_provenance",
+        "label": "Capture provenance",
+        "state": "unavailable",
+        "detail": "No selected evidence is available for capture-provenance review.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "infrastructure_responsibility",
+        "label": "Infrastructure-responsibility evidence",
+        "state": "complete",
+        "detail": "Reserved fixture responsibility was reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "recipient_route",
+        "label": "Recipient-route provenance and freshness",
+        "state": "complete",
+        "detail": "The selected route provenance is reserved fixture; freshness is current.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "authority_review",
+        "label": "Authority review",
+        "state": "complete",
+        "detail": "Reserved fixture authority was reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "selected_evidence",
+        "label": "Selected evidence",
+        "state": "not_provided",
+        "detail": "No evidence pin is explicitly selected.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "contradictions",
+        "label": "Contradictions",
+        "state": "complete",
+        "detail": "Reserved fixture contradictions were reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "source_limitations",
+        "label": "Source limitations",
+        "state": "complete",
+        "detail": "Reserved fixture source limits were reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      }
+    ],
+    "counts": {
+      "complete": 8,
+      "partial": 0,
+      "stale": 0,
+      "unavailable": 1,
+      "not_provided": 1
+    },
+    "limitations": [
+      "Readiness describes the exact local draft inputs. It does not authorise or submit a response and does not promise a provider outcome.",
+      "Partial, stale, unavailable, and not-provided rows remain explicit and never become completeness by inference."
+    ]
+  },
+  "artefactReferences": [],
+  "escalationHistory": [],
+  "escalationHistoryOmitted": 0,
+  "escalationHistoryLimitations": [],
+  "responseLifecycle": {
+    "providerOutcomeState": "missing",
+    "latestProviderOutcome": null,
+    "observedChangeState": "missing",
+    "latestObservedEffect": null,
+    "latestObservedChangeAt": null,
+    "closure": null,
+    "limitations": [
+      "Provider workflow outcomes and independently observed technical effects are separate point-in-time records.",
+      "A provider acknowledgement, terminal state, or reported resolution never becomes independently observed remediation, absence, or safety.",
+      "Times are withheld when the corresponding typed event is missing or ambiguous."
+    ]
+  }
+}

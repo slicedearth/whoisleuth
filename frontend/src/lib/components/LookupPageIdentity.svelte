@@ -1,5 +1,7 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
+  import type { HomepageMetadataDisplay } from '$lib/analysis/lookup-homepage-metadata-display.ts';
   type Row = { label: string; value: string; danger?: boolean };
   type FingerprintRow = Row & { detail?: string | null };
 
@@ -16,6 +18,7 @@
     downloadSummary,
     trackingIdentifiers,
     fingerprints,
+    publicationMetadata = null,
     limitations,
     initiallyExpanded = false,
   }: {
@@ -31,6 +34,7 @@
     downloadSummary: Row[];
     trackingIdentifiers: Row[];
     fingerprints: FingerprintRow[];
+    publicationMetadata?: HomepageMetadataDisplay | null;
     limitations: string[];
     initiallyExpanded?: boolean;
   } = $props();
@@ -68,6 +72,7 @@
     {#if fingerprints.length}
       <details class="page-detail page-fingerprints disclosure"><summary>Page fingerprints · {fingerprints.length}</summary><dl>{#each fingerprints as row}<dt>{row.label}</dt><dd><code>{row.value}</code>{#if row.detail}<small>{row.detail}</small>{/if}</dd>{/each}</dl><p>SHA-256 components support exact equality checks. Visible-text SimHash is fuzzy comparison data, not a cryptographic digest or proof of common ownership.</p></details>
     {/if}
+    {#if publicationMetadata}<LookupMetadataDisclosure label="Publisher-declared publication metadata" metadata={publicationMetadata} />{/if}
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
     <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalised markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
   </div>

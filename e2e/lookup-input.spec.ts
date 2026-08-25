@@ -1,8 +1,9 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants';
+import { readFile } from 'node:fs/promises';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
-import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
+import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -13,26 +14,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 function replayEvidence(target: string, registrar: string) {
-  return JSON.stringify({
-    schema: LOOKUP_EVIDENCE_SCHEMA,
-    schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    generatedAt: '2026-08-10T00:00:00.000Z',
-    application: { name: 'WHOISleuth', version: 'fixture' },
-    query: { submitted: target, registrableDomain: target, type: 'domain' },
+  return JSON.stringify(buildLookupEvidence({
+    query: target,
+    registrableDomain: target,
+    type: 'domain',
+    availability: { state: 'registered', confidence: 'high', domain: target },
+    rdap: { parsed: { domain: target, registrar: { name: registrar } } },
     diagnostics: {
       rdap: { status: 'success', fetchedAt: '2026-08-10T00:00:00.000Z' },
       whois: { status: 'skipped' },
+      availability: { status: 'complete' },
     },
-    sources: {
-      rdap: { status: 'success', parsed: { domain: target, registrar: { name: registrar } } },
-      whois: { status: 'skipped', parsed: null },
-    },
-    analysis: {
-      availability: { state: 'registered', confidence: 'high' },
-      registryComparison: null,
-      registrarPublicationComparison: null,
-    },
-  });
+  }, {
+    generatedAt: '2026-08-10T00:00:00.000Z',
+    applicationVersion: '1.47.4',
+  }));
 }
 
 test('a single domain can be entered normally', async ({ page }) => {
@@ -45,6 +41,46 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
   await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+});
+
+test('task guidance recommends depth and retained review without submitting a lookup', async ({ page }) => {
+  const lookupRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
+  const guidance = page.locator('.task-guidance');
+  const question = guidance.getByLabel('Analyst question');
+  await expect(question).toHaveValue('registration_authority');
+  await expect(guidance).toContainText('Fast recommended');
+  await guidance.getByRole('button', { name: 'Use Fast recommendation' }).click();
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+
+  await question.selectOption('brand_impersonation');
+  await expect(guidance).toContainText('Deep recommended');
+  await expect(guidance).toContainText('Deep is broader, not complete or authoritative for every question');
+  await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+
+  await question.selectOption('retained_comparison');
+  await expect(guidance).toContainText('Review retained evidence first');
+  await expect(guidance).toContainText('Retained evidence can be stale, partial, or unavailable');
+  await expect(guidance.getByRole('link', { name: 'Open retained change review' })).toHaveAttribute('href', '/monitor?view=timeline');
+  await expect(guidance.getByRole('listitem')).toHaveCount(0);
+  expect(lookupRequests).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('acquisition deep-link guidance preserves the route and permits deliberate override', async ({ page }) => {
+  await page.goto('/lookup?task=acquisition&depth=fast#query');
+  const guidance = page.locator('.task-guidance');
+  await expect(guidance.getByLabel('Analyst question')).toHaveValue('acquisition');
+  await expect(guidance).toContainText('Deep recommended');
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+  await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page).toHaveURL('/lookup?task=acquisition&depth=fast#query');
 });
 
 test('the query keyboard shortcut uses the validated lookup submission', async ({ page }) => {
@@ -215,6 +251,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(timingSummary).toContainText('Request errors');
   await expect(timingSummary).toContainText('1 branch');
   await page.setViewportSize({ width: 320, height: 720 });
+  await expect(diagnostics.locator('svg')).toHaveCount(1);
   await expect(diagnostics.locator('svg')).toBeHidden();
   await expect(diagnostics.locator('.mobile-timing')).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -262,10 +299,8 @@ test('browser-local profile failure does not block collected lookup evidence', a
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('a result beyond portable evidence depth remains reviewable with explicit export limits', async ({ page }) => {
-  let downloadCount = 0;
-  page.on('download', () => { downloadCount += 1; });
-  let nested: unknown = 'leaf';
+test('raw RDAP depth is omitted while the projected result remains portable', async ({ page }) => {
+  let nested: unknown = 'must-not-export-depth-marker';
   for (let index = 0; index <= 24; index += 1) nested = { value: nested };
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200,
@@ -297,16 +332,21 @@ test('a result beyond portable evidence depth remains reviewable with explicit e
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   await expect(page.locator('#result')).toBeVisible();
-  const limitation = page.getByText(/Portable evidence and readable report exports are unavailable/u);
-  await expect(limitation).toBeVisible();
-  await expect(limitation).toContainText('The separately attributed Lookup result remains available.');
+  await expect(page.getByText(/Portable evidence and readable report exports are unavailable/u)).toHaveCount(0);
+  const evidenceDownloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
-  await expect(page.locator('.portable-evidence-status')).toContainText('Evidence JSON was not created.');
+  const evidenceDownload = await evidenceDownloadPromise;
+  const evidencePath = await evidenceDownload.path();
+  expect(evidencePath).not.toBeNull();
+  expect(await readFile(evidencePath!, 'utf8')).not.toContain('must-not-export-depth-marker');
+  const reportDownloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
   await page.getByRole('button', { name: 'Download report' }).click();
-  await expect(page.locator('.portable-evidence-status')).toContainText('Readable report was not created.');
-  await expect.poll(() => downloadCount).toBe(0);
+  const reportDownload = await reportDownloadPromise;
+  const reportPath = await reportDownload.path();
+  expect(reportPath).not.toBeNull();
+  expect(await readFile(reportPath!, 'utf8')).not.toContain('must-not-export-depth-marker');
   await expect(page.locator('#result')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -420,15 +460,14 @@ test('effective same-route URL changes invalidate held work while task and hash 
   gateFor('stale-route.example.test');
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await gates.get(target);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -501,6 +540,7 @@ test(`query ${action} invalidates a response while browser-local case context is
   });
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await page.evaluate(() => {
       const state = window as typeof window & {
         __delayNextCaseRead?: boolean;
@@ -513,10 +553,8 @@ test(`query ${action} invalidates a response while browser-local case context is
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -555,14 +593,13 @@ test(`query ${action} invalidates a response while browser-local case context is
 test('a completed Case action cannot publish beneath a replacement Lookup', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('q') || '';
+    const identity = lookupDomainIdentity(target);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        query: target,
-        type: 'domain',
-        registrableDomain: target,
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain: target, deepScanComplete: true },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain, deepScanComplete: true },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
@@ -571,23 +608,24 @@ test('a completed Case action cannot publish beneath a replacement Lookup', asyn
   });
 
   const query = page.locator('#query');
-  await query.fill('case-action-a.example.test');
+  await query.fill('case-action-a.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('heading', { name: 'case-action-a.example.test' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'case-action-a.test' })).toBeVisible();
   await expandLookupFamilies(page);
+  await expect(page.locator('.case-body > button.primary')).toBeEnabled();
   await holdBrowserLocalReads(page, 2_500, '.case-body > button.primary');
 
-  await query.fill('case-action-b.example.test');
+  await query.fill('case-action-b.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('heading', { name: 'case-action-b.example.test' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'case-action-b.test' })).toBeVisible({ timeout: 10_000 });
   await expandLookupFamilies(page);
   await expect.poll(async () => (
     await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })
   ).records.map((entry) => String((entry.value as { domain?: unknown }).domain ?? '')), {
     timeout: 10_000,
-  }).toContain('case-action-a.example.test');
-  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.example.test yet.');
-  await expect(page.locator('.case-card')).not.toContainText('case-action-a.example.test');
+  }).toContain('case-action-a.test');
+  await expect(page.locator('.case-card')).toContainText('No case for case-action-b.test yet.');
+  await expect(page.locator('.case-card')).not.toContainText('case-action-a.test');
   await expect(page.getByRole('button', { name: 'Create case' })).toBeEnabled();
 });
 
@@ -708,10 +746,10 @@ test('a malformed public session response does not clear the current Lookup form
     });
   };
   await context.route('**/api/session', unavailableSession);
-  await page.getByRole('button', { name: 'Open command palette' }).click();
-  await page.getByLabel('Search pages').fill('Public homepage');
+  await page.getByRole('button', { name: 'Open console navigation' }).click();
+  await page.getByLabel('Search pages and tools').fill('Overview');
   const publicPagePromise = page.waitForEvent('popup');
-  await page.getByRole('option', { name: /Public homepage/u }).click();
+  await page.getByRole('option', { name: /Overview/u }).click();
   const publicPage = await publicPagePromise;
   await expect(publicPage).toHaveURL('/');
   await expect.poll(() => unavailableChecks).toBeGreaterThan(0);
@@ -778,19 +816,18 @@ test('clears transient Lookup state without an unhandled error when Console logo
 test('does not show a saved Fast result after a same-domain Deep handoff', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
-    const domain = url.searchParams.get('q') || 'same-depth.example.test';
+    const domain = url.searchParams.get('q') || 'same-depth.test';
+    const identity = lookupDomainIdentity(domain);
     const compact = url.searchParams.get('compact') === '1';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(compact ? {
-        availability: { applicable: true, state: 'registered', confidence: 'high', domain, deepScanComplete: true },
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain, deepScanComplete: true },
         diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
       } : {
-        query: domain,
-        type: 'domain',
-        registrableDomain: domain,
-        availability: { applicable: true, state: 'registered', confidence: 'medium', domain, deepScanComplete: false },
+        ...identity,
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain: identity.registrableDomain, deepScanComplete: false },
         rdap: { parsed: {}, data: {} },
         whois: { skipped: true, detail: 'WHOIS is omitted in fast mode.' },
         diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
@@ -798,7 +835,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
     });
   });
 
-  const domain = 'same-depth.example.test';
+  const domain = 'same-depth.test';
   await page.locator('#query').fill(domain);
   await page.getByRole('radio', { name: /Fast/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();

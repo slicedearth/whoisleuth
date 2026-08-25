@@ -92,6 +92,10 @@ function errorRecord(value: unknown): UnknownRecord {
     : {};
 }
 
+function registryStatusToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/gu, '');
+}
+
 function rdapEventDate(events: UnknownRecord[], action: string): string | null {
   const date = events.find((event) => event.action === action)?.date;
   return typeof date === 'string' ? date : null;
@@ -102,6 +106,8 @@ type AvailabilityOptions = {
   includeExtendedDnsContext?: boolean;
   includeInheritedCaa?: boolean;
   includeCredentialSurfaceProfile?: boolean;
+  includePublicationMetadata?: boolean;
+  includeDeliveryMetadata?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
@@ -122,6 +128,17 @@ type WebsiteActivity = 'parked' | 'active' | 'unreachable';
 type RegistrationSource = 'rdap' | 'whois' | 'dns' | null;
 type RegistrationConfidence = 'high' | 'medium';
 type HtmlSignals = ReturnType<typeof extractHtmlSignals>;
+
+function withoutHttpDeliveryMetadata(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const output = { ...(value as Record<string, unknown>) };
+  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
+    const response = { ...(output.response as Record<string, unknown>) };
+    delete response.deliveryMetadata;
+    output.response = response;
+  }
+  return output;
+}
 
 // No marketplace (Afternic/Sedo/Dan.com/GoDaddy Auctions/etc.) offers a
 // free, no-auth API to check "is this specific domain listed for sale" -
@@ -541,37 +558,36 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
           source: 'whois',
         };
       }
-      if (parsed.nameservers.length) nameservers = parsed.nameservers;
-      if (parsed.statuses.length) statuses = parsed.statuses.map((status: string) => status.toLowerCase());
-      if (parsed.registrar) {
-        registrar = {
-          handle: null,
-          ianaId: parsed.registrarIanaId || null,
-          name: parsed.registrar,
-          org: null,
-          email: parsed.abuseEmail || null,
-          phone: parsed.abusePhone || null,
-        };
-      }
-      if (parsed.registrantName || parsed.registrantOrg || parsed.registrantEmail || parsed.registrantPhone) {
-        registrant = {
-          handle: null,
-          name: parsed.registrantName || null,
-          org: parsed.registrantOrg || null,
-          email: parsed.registrantEmail || null,
-          phone: parsed.registrantPhone || null,
-        };
-      }
-      if (parsed.abuseEmail || parsed.abusePhone) {
-        abuse = { handle: null, name: null, org: parsed.registrar || null, email: parsed.abuseEmail || null, phone: parsed.abusePhone || null };
-      }
-      createdDate = parsed.createdDate || null;
-      expiryDate = parsed.expiryDate || null;
-      createdDateIso = parsed.createdDateIso || parsed.lifecycle?.createdDateIso || registryDateIso(createdDate);
-      expiryDateIso = parsed.expiryDateIso || parsed.lifecycle?.expiryDateIso || registryDateIso(expiryDate);
-      if (!dnssec) dnssec = parsed.dnssec || null;
-      if (parsed.registrationStatus === 'registered'
-        || registrar || createdDate || expiryDate || nameservers.length > 0 || statuses.length > 0) {
+      if (parsed.registrationStatus === 'registered') {
+        if (parsed.nameservers.length) nameservers = parsed.nameservers;
+        if (parsed.statuses.length) statuses = parsed.statuses.map((status: string) => status.toLowerCase());
+        if (parsed.registrar) {
+          registrar = {
+            handle: null,
+            ianaId: parsed.registrarIanaId || null,
+            name: parsed.registrar,
+            org: null,
+            email: parsed.abuseEmail || null,
+            phone: parsed.abusePhone || null,
+          };
+        }
+        if (parsed.registrantName || parsed.registrantOrg || parsed.registrantEmail || parsed.registrantPhone) {
+          registrant = {
+            handle: null,
+            name: parsed.registrantName || null,
+            org: parsed.registrantOrg || null,
+            email: parsed.registrantEmail || null,
+            phone: parsed.registrantPhone || null,
+          };
+        }
+        if (parsed.abuseEmail || parsed.abusePhone) {
+          abuse = { handle: null, name: null, org: parsed.registrar || null, email: parsed.abuseEmail || null, phone: parsed.abusePhone || null };
+        }
+        createdDate = parsed.createdDate || null;
+        expiryDate = parsed.expiryDate || null;
+        createdDateIso = parsed.createdDateIso || parsed.lifecycle?.createdDateIso || registryDateIso(createdDate);
+        expiryDateIso = parsed.expiryDateIso || parsed.lifecycle?.expiryDateIso || registryDateIso(expiryDate);
+        if (!dnssec) dnssec = parsed.dnssec || null;
         registrationSource = 'whois';
       }
     } catch {
@@ -583,9 +599,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   // registration evidence either - e.g. the registry answered inconclusively
   // or every referral hop failed/rate-limited. Report "unknown" rather than
   // fabricating "registered" from an empty record.
-  const hasWhoisRegistrationData = whoisParsed?.registrationStatus === 'registered'
-    || Boolean(registrar) || Boolean(createdDate) || Boolean(expiryDate)
-    || nameservers.length > 0 || statuses.length > 0;
+  const hasWhoisRegistrationData = whoisParsed?.registrationStatus === 'registered';
   let dnsDelegated = false;
   if (!rdapFound && !hasWhoisRegistrationData && dnsDelegationPromise) {
     const delegation = await dnsDelegationPromise;
@@ -643,7 +657,10 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     source: registrationSource,
   };
 
-  if (statuses.some((s) => s.includes('pendingdelete') || s.includes('redemptionperiod'))) {
+  if (statuses.some((status) => {
+    const normalizedStatus = registryStatusToken(status);
+    return normalizedStatus.includes('pendingdelete') || normalizedStatus.includes('redemptionperiod');
+  })) {
     return {
       state: 'expiring',
       confidence: 'medium',
@@ -750,6 +767,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         responseHeaders: homepage.technologyHeaders,
         activityStatus,
         includePageIdentity: pageIdentityEligible,
+        includePublicationMetadata: options.includePublicationMetadata !== false,
         ...(options.includeCredentialSurfaceProfile !== undefined
           ? { includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile }
           : {}),
@@ -764,6 +782,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   }
 
   const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);
+  const retainedHttp = options.includeDeliveryMetadata === false
+    ? withoutHttpDeliveryMetadata(homepage.http)
+    : homepage.http;
   const { cspMetaPolicy: _cspMetaPolicy, ...retainedHtmlSignals } = htmlSignals;
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
@@ -800,7 +821,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       activityStatus,
       websiteProbeStatus,
       websiteProbeDetail,
-      http: homepage.http,
+      http: retainedHttp,
       deepScanComplete,
       faviconHash,
       faviconPHash,
@@ -825,7 +846,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     activityStatus,
     websiteProbeStatus,
     websiteProbeDetail,
-    http: homepage.http,
+    http: retainedHttp,
     deepScanComplete,
     faviconHash,
     faviconPHash,

@@ -34,6 +34,7 @@ import type {
   ThreatIntelligenceProviderTerms,
   ThreatIntelligenceTargetExposure,
 } from './threat-intelligence-runtime.mts';
+import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_PROVIDER_ID_LENGTH = 40;
 const MAX_PROVIDER_LABEL_LENGTH = 100;
@@ -192,15 +193,7 @@ function strictBoundedString(value: unknown, maximum: number): string | null {
 }
 
 function isoTimestamp(value: unknown): string | null {
-  if (
-    typeof value !== 'string' ||
-    value.length > 64 ||
-    /[\u0000-\u001f\u007f]/u.test(value)
-  ) {
-    return null;
-  }
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeLegacyIsoTimestamp(value);
 }
 
 function httpsUrl(value: unknown): string | null {

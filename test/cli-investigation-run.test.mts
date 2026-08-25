@@ -16,6 +16,12 @@ function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], sub
 }
 
 describe('fixed investigation execution', () => {
+  test('keeps plan-only recipes outside workflow-run execution', () => {
+    assert.throws(
+      () => parseCliArguments(['workflow-run', 'campaign-review', 'Example Organisation']),
+      /workflow-run recipe must be one of/iu,
+    );
+  });
   test('pauses before network collection without approval', async () => {
     let executed = 0;
     const result = await runInvestigationRecipe('domain-triage', 'example.test', {
@@ -62,7 +68,10 @@ describe('fixed investigation execution', () => {
     let calls = 0;
     const code = await runCli(['workflow-run', 'domain-triage', 'example.test', '--approve-network', '--json'], {
       stdout: { write(value) { stdout += value; } }, stderr: { write() {} }, now: () => NOW,
-      runUnifiedLookup: async () => { calls += 1; return { diagnostics: {}, availability: {} }; },
+      runUnifiedLookup: async () => {
+        calls += 1;
+        return { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} };
+      },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(calls, 1);
@@ -134,6 +143,38 @@ describe('fixed investigation execution', () => {
       approveNetwork: false, resumeInput: null, generatedAt: NOW,
       execute: async () => ({ exitCode: 0, stdout: JSON.stringify({ schema: 'whoisleuth.unexpected' }) }),
     }), /unexpected command contract/iu);
+  });
+
+  test('propagates cancellation instead of retaining it as a failed workflow step', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const running = runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: true,
+      resumeInput: null,
+      generatedAt: NOW,
+      signal: controller.signal,
+      execute: async () => {
+        calls += 1;
+        controller.abort(new DOMException('Cancelled', 'AbortError'));
+        return { exitCode: EXIT_CODES.CANCELLED, stdout: '' };
+      },
+    });
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(calls, 1);
+
+    const preAborted = new AbortController();
+    preAborted.abort(new DOMException('Cancelled', 'AbortError'));
+    await assert.rejects(
+      () => runInvestigationRecipe('domain-triage', 'example.test', {
+        approveNetwork: false,
+        resumeInput: null,
+        generatedAt: NOW,
+        signal: preAborted.signal,
+        execute: async () => { calls += 1; return { exitCode: 0, stdout: '{}' }; },
+      }),
+      { name: 'AbortError' },
+    );
+    assert.equal(calls, 1);
   });
 
   test('rejects structurally over-bound resume and step JSON before retaining it', async () => {

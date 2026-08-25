@@ -6,7 +6,8 @@
 import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
+import { isValidAsciiHostname } from './hostname.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
 type UnknownRecord = Record<string, unknown>;
@@ -79,11 +80,8 @@ function boundedText(value: unknown, maximum: number): string | null {
 }
 
 function hostname(value: unknown): string | null {
-  const normalized = boundedText(value, 253)?.toLowerCase().replace(/\.+$/u, '') ?? '';
-  if (!normalized || !normalized.includes('.')) return null;
-  return normalized.split('.').every((label) => (
-    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label)
-  )) ? normalized : null;
+  const candidate = boundedText(value, 253)?.replace(/\.+$/u, '') ?? '';
+  return isValidAsciiHostname(candidate) ? candidate.toLowerCase() : null;
 }
 
 function hostnames(value: unknown, maximum = MAX_NAMESERVERS): string[] {
@@ -683,7 +681,8 @@ async function collectDnsDelegationHealth(
         'Review propagation timing and the intended zone values before relying on a DNS change.',
       )] : []),
   ];
-  const collectionIncomplete = parentStatus === 'error'
+  const collectionIncomplete = parentStatus !== 'success'
+    || candidates.length === 0
     || parentQuery.truncated === true
     || registry.truncated
     || authorities.some((authority) => authority.state !== 'success')
@@ -711,6 +710,9 @@ async function collectDnsDelegationHealth(
         'A direct answer does not prove global reachability, and a failed query is not evidence that the record is absent.',
         'DNS health does not decide registration availability, ownership, control, intent, safety, or maliciousness.',
         'The DNSSEC check compares bounded registry publication fields; it does not validate the full cryptographic chain.',
+        ...(!candidates.length
+          ? ['No eligible authority was identified, so the delegation-health observation is incomplete.']
+          : []),
       ],
       diagnostics: {
         authorityCount: authorities.length,

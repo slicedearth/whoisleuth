@@ -54,6 +54,17 @@ describe('evidence topology projection', () => {
     assert.ok(graph.nodes.every((node) => node.family === 'registry'));
   });
 
+  test('sanitises terminal controls and bidi formatting in displayed evidence text', () => {
+    const graph = projectEvidenceTopology(
+      { label: 'Target\u009b\u202e label', detail: 'Target\u00ad detail' },
+      [{ id: 'page', label: 'Page\u202e identity', detail: 'Account\u009b centre\u00ad' }],
+    );
+    assert.equal(graph.target.label, 'Target label');
+    assert.equal(graph.nodes[0]?.label, 'Page identity');
+    assert.equal(graph.nodes[0]?.detail, 'Account centre');
+    assert.doesNotMatch(JSON.stringify(graph), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  });
+
   test('does not describe wholly invalid bounded candidates as hidden evidence', () => {
     const graph = projectEvidenceTopology(
       { label: 'example.test' },

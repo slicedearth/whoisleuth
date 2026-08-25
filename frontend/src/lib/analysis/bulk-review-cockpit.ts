@@ -1,9 +1,12 @@
+import type { BulkRiskPresentation } from './bulk-route-model.ts';
+
 export type BulkReviewCockpitRow = Readonly<{
   resultIndex: number;
   domain: string;
   availability: string;
   confidence: string;
   risk: number | null;
+  riskPresentation: BulkRiskPresentation;
   opportunity: number | null;
   activity: string;
   registrar: string;

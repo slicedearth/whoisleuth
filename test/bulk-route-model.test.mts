@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
 import {
+  buildBulkRiskComparison,
+  buildBulkRiskPresentation,
   buildBulkResultDisplayRows,
+  comparableBulkRiskScore,
   countBulkRouteFilters,
   matchesBulkRouteFilter,
   toBulkRouteTriageRow,
@@ -31,7 +34,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
       nameservers: ['ns1.example'],
       faviconHash: null,
       faviconPHash: null,
-      riskModelVersion: 6,
+      riskModelVersion: 7,
       riskScore: 75,
       riskFactors: [{ label: 'Observed review signal', points: 12 }],
       mutationTypes: ['dictionary'],
@@ -128,6 +131,32 @@ test('distinguishes profile-unevaluated rows from false trust and high Risk', ()
   }), true);
 });
 
+test('derives one transient comparable cohort and keeps incompatible Risk evidence inconclusive', () => {
+  const comparable = result({ domain: 'comparable.example', risk: 12 });
+  const peer = result({ domain: 'peer.example', risk: 84 });
+  const partial = result({
+    domain: 'partial.example',
+    risk: 4,
+    sourceCoverage: [{ source: 'lookup', state: 'partial' }],
+  });
+  const legacy = result({
+    domain: 'legacy.example',
+    risk: 92,
+    saved: { riskModelVersion: 6 } as ScanResult['saved'],
+  });
+  const comparison = buildBulkRiskComparison([comparable, peer, partial, legacy]);
+  assert.equal(comparison.comparableCount, 2);
+  assert.equal(comparison.inconclusiveCount, 2);
+  assert.equal(comparableBulkRiskScore(comparable, comparison), 12);
+  assert.equal(comparableBulkRiskScore(partial, comparison), null);
+  assert.equal(buildBulkRiskPresentation(comparable, comparison).band, 'lower');
+  assert.match(buildBulkRiskPresentation(comparable, comparison).summary, /does not establish safety/u);
+  assert.equal(buildBulkRiskPresentation(partial, comparison).label, 'Inconclusive');
+  assert.match(buildBulkRiskPresentation(partial, comparison).summary, /partial or unavailable/u);
+  assert.equal(buildBulkRiskPresentation(legacy, comparison).exactScore, 92);
+  assert.match(buildBulkRiskPresentation(legacy, comparison).summary, /model v6 is not comparable/u);
+});
+
 test('builds triage and table rows without route-owned transformation logic', () => {
   const row = result({
     faviconNearMatch: true,
@@ -153,6 +182,8 @@ test('builds triage and table rows without route-owned transformation logic', ()
   assert.equal(display.shortlisted, true);
   assert.equal(display.mutationLabel, 'Dictionary term');
   assert.equal(display.reviewState, 'reviewing');
-  assert.match(display.riskTitle ?? '', /Risk model v6/u);
+  assert.equal(display.risk.modelLabel, 'Risk model v7');
+  assert.equal(display.risk.exactScore, 75);
+  assert.match(display.risk.factors[0]?.label ?? '', /Observed review signal/u);
   assert.match(display.responseHref, /monitor\?case=/u);
 });

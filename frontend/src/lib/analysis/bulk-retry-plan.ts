@@ -5,7 +5,8 @@ import {
 import { limitedBulkSources } from './bulk-source-coverage.ts';
 
 export const MAX_BULK_RETRY_ROWS = 200;
-export const BULK_REVIEW_STALE_AFTER_DAYS = 7;
+export { BULK_REVIEW_STALE_AFTER_DAYS } from '../../../../packages/investigation/bulk-review-policy.mts';
+import { BULK_REVIEW_STALE_AFTER_DAYS } from '../../../../packages/investigation/bulk-review-policy.mts';
 
 export type BulkRetryReason = 'error' | 'limited_source' | 'stale';
 export type BulkRetryPlanRow = Readonly<{

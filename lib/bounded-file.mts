@@ -1,5 +1,6 @@
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { lstat, open, realpath } from 'node:fs/promises';
+import path from 'node:path';
 
 const MAX_BOUNDED_FILE_BYTES = 64 * 1024 * 1024;
 
@@ -15,6 +16,11 @@ type BoundedFileOptions = Readonly<{
 type BoundedFileDependencies = Readonly<{
   openFile?: typeof open;
 }>;
+type BoundedFileIdentity = Readonly<{
+  bytes: Buffer;
+  device: number;
+  inode: number;
+}>;
 
 function boundedSize(value: unknown, fallback: number): number {
   return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_BOUNDED_FILE_BYTES
@@ -29,11 +35,11 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
     : new DOMException('The operation was aborted.', 'AbortError');
 }
 
-export async function readBoundedRegularFile(
+async function readBoundedRegularFileIdentity(
   filePath: string,
   options: BoundedFileOptions,
   dependencies: BoundedFileDependencies = {},
-): Promise<Buffer> {
+): Promise<BoundedFileIdentity> {
   const label = options.label?.trim().slice(0, 120) || 'Input file';
   const maximumBytes = boundedSize(options.maximumBytes, 0);
   const minimumBytes = boundedSize(options.minimumBytes, 0);
@@ -90,9 +96,34 @@ export async function readBoundedRegularFile(
     ) {
       throw new TypeError(`${label} changed while it was being read.`);
     }
-    return Buffer.from(storage.subarray(0, offset));
+    return {
+      bytes: Buffer.from(storage.subarray(0, offset)),
+      device: before.dev,
+      inode: before.ino,
+    };
   } finally {
     await handle.close();
+  }
+}
+
+export async function readBoundedRegularFile(
+  filePath: string,
+  options: BoundedFileOptions,
+  dependencies: BoundedFileDependencies = {},
+): Promise<Buffer> {
+  return (await readBoundedRegularFileIdentity(filePath, options, dependencies)).bytes;
+}
+
+/**
+ * Decode admitted bytes without replacement-character normalisation.  The BOM
+ * is deliberately retained so re-encoding the returned string preserves the
+ * exact bytes used by artefact identity and manifest checks.
+ */
+export function decodeBoundedUtf8(bytes: Uint8Array, label = 'Input'): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new TypeError(`${label.trim().slice(0, 120) || 'Input'} must contain valid UTF-8 text.`);
   }
 }
 
@@ -101,7 +132,68 @@ export async function readBoundedRegularTextFile(
   options: BoundedFileOptions,
   dependencies: BoundedFileDependencies = {},
 ): Promise<string> {
-  return (await readBoundedRegularFile(filePath, options, dependencies)).toString('utf8');
+  return decodeBoundedUtf8(
+    await readBoundedRegularFile(filePath, options, dependencies),
+    options.label,
+  );
+}
+
+function safeRelativeFilePath(value: string, label: string): string {
+  if (!value || path.isAbsolute(value) || value.includes('\\')
+    || value.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new TypeError(`${label} must be a safe relative file path.`);
+  }
+  return value;
+}
+
+/**
+ * Reads one regular file beneath a canonical root while rejecting final and
+ * intermediate symbolic links. The ordinary descriptor-level size/change
+ * checks still apply after path confinement is established.
+ */
+export async function readBoundedRegularFileWithin(
+  rootDirectory: string,
+  relativeFilePath: string,
+  options: BoundedFileOptions,
+  dependencies: BoundedFileDependencies = {},
+): Promise<Buffer> {
+  const label = options.label?.trim().slice(0, 120) || 'Input file';
+  const relativePath = safeRelativeFilePath(relativeFilePath, label);
+  const canonicalRoot = await realpath(rootDirectory);
+  const targetPath = path.resolve(canonicalRoot, relativePath);
+  const confined = path.relative(canonicalRoot, targetPath);
+  if (!confined || confined.startsWith(`..${path.sep}`) || confined === '..' || path.isAbsolute(confined)) {
+    throw new TypeError(`${label} escapes its configured root.`);
+  }
+  let cursor = canonicalRoot;
+  const components = relativePath.split('/');
+  let admittedDevice = -1;
+  let admittedInode = -1;
+  for (const [index, component] of components.entries()) {
+    cursor = path.join(cursor, component);
+    const metadata = await lstat(cursor);
+    if (metadata.isSymbolicLink()) throw new TypeError(`${label} must not traverse a symbolic link.`);
+    if (index === components.length - 1) {
+      admittedDevice = metadata.dev;
+      admittedInode = metadata.ino;
+    }
+  }
+  const canonicalTarget = await realpath(targetPath);
+  if (canonicalTarget !== targetPath) throw new TypeError(`${label} must not traverse a symbolic link.`);
+  const identity = await readBoundedRegularFileIdentity(targetPath, {
+    ...options,
+    allowSymbolicLink: false,
+  }, dependencies);
+  const finalMetadata = await lstat(targetPath);
+  if (finalMetadata.isSymbolicLink()
+    || identity.device !== admittedDevice
+    || identity.inode !== admittedInode
+    || identity.device !== finalMetadata.dev
+    || identity.inode !== finalMetadata.ino
+    || await realpath(targetPath) !== canonicalTarget) {
+    throw new TypeError(`${label} changed while it was being read.`);
+  }
+  return identity.bytes;
 }
 
 export { MAX_BOUNDED_FILE_BYTES };

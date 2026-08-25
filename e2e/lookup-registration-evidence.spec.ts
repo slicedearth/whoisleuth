@@ -1,7 +1,13 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
+import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -70,9 +76,12 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expandLookupFamilies(page);
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
-  await expect(rdapSection.getByText('Published contacts · 2 roles')).toBeHidden();
+  const publishedContacts = rdapSection.getByText('Published contacts · 2 roles', { exact: true });
+  await expect(publishedContacts).toHaveCount(1);
+  await expect(publishedContacts).toBeHidden();
   await rdapSection.locator(':scope > summary').click();
   await expect(rdapSection).toHaveAttribute('open', '');
+  await expect(publishedContacts).toBeVisible();
   const contactInventory = rdapSection.locator('details.contact-inventory');
   const contactSummary = contactInventory.locator(':scope > summary');
   await expect(contactSummary).toBeVisible();
@@ -96,6 +105,20 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await capsule.locator(':scope > summary').click();
   await expect(capsule.getByRole('button', { name: 'Download capsule' })).toBeEnabled();
   await expect(capsule.getByRole('checkbox')).toBeDisabled();
+  const capsuleDownloadPromise = page.waitForEvent('download');
+  await capsule.getByRole('button', { name: 'Download capsule' }).click();
+  const capsuleDownload = await capsuleDownloadPromise;
+  const capsulePath = await capsuleDownload.path();
+  expect(capsulePath).not.toBeNull();
+  const capsuleArtifact = JSON.parse(await readFile(capsulePath!, 'utf8'));
+  expect(capsuleArtifact.schemaVersion).toBe(3);
+  expect(capsuleArtifact.investigationBrief.schemaVersion).toBe(2);
+  expect(capsuleArtifact.sourceContracts.find((item: { id: string }) => item.id === 'investigation-brief')?.version).toBe(2);
+  const capsuleFacts = capsuleArtifact.investigationBrief.decisionFacts;
+  expect(capsuleFacts.total).toBe(capsuleFacts.displayed + capsuleFacts.omitted);
+  expect(capsuleFacts.facts).toHaveLength(capsuleFacts.displayed);
+  expect(capsuleFacts.total).toBeGreaterThan(0);
+  expect(capsuleArtifact.investigationBrief).not.toHaveProperty('verifiedFacts');
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();
@@ -125,6 +148,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
 });
 
 test('deep Lookup presents registrar and observed network RDAP as separate sources', async ({ page }) => {
+  test.slow();
   const lookupOrigin = new URL(page.url()).origin;
   const thirdPartyRequests: string[] = [];
   page.on('request', (request) => {
@@ -301,7 +325,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(network.getByText('TLS connection', { exact: true })).toBeVisible();
   await expect(network.getByText('Example network holder', { exact: true })).toBeVisible();
   await expect(network.getByText('93.184.216.0/24', { exact: true })).toBeVisible();
-  await expect(network.getByText(/does not prove hosting control, ownership, intent, or maliciousness/i)).toBeVisible();
+  await expect(network.getByText(/Shared services and location-dependent DNS mean the address may not be the origin/i)).toBeVisible();
   await network.getByText('IP RDAP source', { exact: true }).click();
   await expect(network.getByText(/deliberately-long-provenance-segment-for-wrapping/)).toBeVisible();
   const responseRoutes = page.locator('.response');
@@ -317,14 +341,14 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(26);
+  expect(exported.schemaVersion).toBe(LOOKUP_EVIDENCE_SCHEMA_VERSION);
   expect(exported.application).toEqual({
     name: 'WHOISleuth',
     version: packageVersion,
     projectUrl: 'https://github.com/slicedearth/whoisleuth',
   });
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
-  expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
+  expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(6);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
   expect(exported.sources.network.network.holder).toBe('Example network holder');
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
@@ -348,7 +372,21 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(report).toContain('## Registry / registrar RDAP comparison');
   expect(report).toContain('Example network holder');
   expect(report).toContain('Risk score:');
+  expect(report).toContain('## Canonical Decision Facts');
+  expect(report).toContain('whoisleuth\\.lookup\\-readable\\-report v3');
+  expect(report).toMatch(/\*\*Fact counts:\*\* \d+ of \d+ included; \d+ omitted\./u);
   expect(report).toContain(`Generated with WHOISleuth ${packageVersion}`);
+
+  const briefDownloadPromise = page.waitForEvent('download');
+  await page.locator('.export-menu > summary').click();
+  await page.getByRole('button', { name: 'Download brief' }).click();
+  const briefDownload = await briefDownloadPromise;
+  const briefPath = await briefDownload.path();
+  expect(briefPath).not.toBeNull();
+  const brief = await readFile(briefPath!, 'utf8');
+  expect(brief).toContain('## Canonical Decision Facts');
+  expect(brief).toMatch(/Displaying \d+ of \d+ canonical Decision Facts; \d+ omitted/u);
+  expect(brief).toContain('**Fact ID:**');
 
   const reportWithoutFooterPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();
@@ -360,6 +398,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const reportWithoutFooterText = await readFile(reportWithoutFooterPath!, 'utf8');
   expect(reportWithoutFooterText).toContain(`**Generator:** WHOISleuth ${packageVersion.replaceAll('.', '\\.')}`);
   expect(reportWithoutFooterText).not.toContain('Generated with WHOISleuth');
+  expect(reportWithoutFooterText).toContain('## Canonical Decision Facts');
   expect(report).toContain('heuristic review priority');
   expect(report).not.toContain('registrar-object-handle');
   expect(report).not.toContain('abuse@registrar.example');
@@ -456,6 +495,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 });
 
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
+  test.slow();
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
     const suffix = query === 'mismatch.dev'
@@ -478,7 +518,9 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
       body: JSON.stringify({
         query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
         availability: { state: 'unknown', confidence: 'low', domain: `example.${suffix}`, detail: 'Registry sources were inconclusive.' },
-        rdap: { error: 'No RDAP registry found for this query via IANA bootstrap' },
+        rdap: isDev
+          ? { parsed: { domain: `example.${suffix}` } }
+          : { error: 'No RDAP registry found for this query via IANA bootstrap' },
         whois: { parsed: {}, chain: [] },
         diagnostics: {
           version: 5,
@@ -612,6 +654,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
         threatIntelligence: {
           version: 1,
           providers: [{
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'urlscan_search', label: 'Fixture archived verdicts' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'success', detail: 'Found one archived malicious-verdict match.',
@@ -626,6 +670,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               limitations: ['No matching provider record is not evidence that the target is safe.'],
             },
           }, {
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'urlhaus_host', label: 'Fixture malware-host records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'partial', detail: 'Found one bounded malware-distribution record before the provider result limit.',
@@ -641,6 +687,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               limitations: ['A listed host may have been compromised or cleaned.'],
             },
           }, {
+            schema: THREAT_INTELLIGENCE_SCHEMA,
+            version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
             provider: { id: 'threatfox_domain_ioc', label: 'Fixture malware-IOC records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'skipped', detail: 'The optional source was not queried for this fixture.',
@@ -661,9 +709,9 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(option).toBeVisible();
   await expect(malwareOption).toBeVisible();
   await expect(iocOption).toBeVisible();
-  await expect(page.getByText(/does not submit the domain for scanning/i)).toBeVisible();
-  await expect(page.getByText(/does not submit a URL or sample/i)).toBeVisible();
-  await expect(page.getByText(/does not submit an IOC, URL, or sample/i)).toBeVisible();
+  await expect(page.getByText(/Nothing is submitted for scanning or reporting/i)).toBeVisible();
+  await expect(page.getByText(/no URL or sample is provided/i)).toBeVisible();
+  await expect(page.getByText(/no IOC or sample is provided/i)).toBeVisible();
   await option.check();
   await malwareOption.check();
   await iocOption.check();
@@ -679,24 +727,28 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.locator('article').filter({ hasText: 'URLscan archived verdicts' }).locator('.chip')).toHaveClass(/\bgood\b/);
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
-  await expect(section.getByText(/never affect availability/i)).toBeVisible();
+  await expect(section.getByText(/do not decide availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v7/i)).toBeVisible();
-  const riskExplanation = page.getByText('Why the risk score is 24', { exact: true });
+  const riskExplanation = page.locator('.risk-band details.score-detail > summary');
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
+  await expect(page.locator('.risk-band .exact-score')).toContainText('24/100');
   await expect(page.locator('.factor-chart .factor-label').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
-  const exactRiskFactors = page.locator('.score-details details').first().locator('.factor-list');
-  await expect(exactRiskFactors).toHaveCSS('clip-path', 'inset(50%)');
+  const exactRiskFactors = page.locator('.risk-band .factor-list');
+  await expect(exactRiskFactors).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(1);
-  for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
+  const attributedRecords = section.getByRole('link', { name: 'View attributed provider record' });
+  await expect(attributedRecords).toHaveCount(2);
+  for (const link of await attributedRecords.all()) {
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   }
 
   await page.setViewportSize({ width: 360, height: 780 });
-  await expect(page.locator('.score-details details').first().locator('.factor-chart')).toBeHidden();
-  await expect(exactRiskFactors).toHaveCSS('position', 'static');
+  await expect(page.locator('.risk-band .factor-chart')).toHaveCount(1);
+  await expect(page.locator('.risk-band .factor-chart')).toBeHidden();
+  await expect(exactRiskFactors).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -725,6 +777,86 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
 
   const registrar = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value?.evidenceHistory?.[0]?.registrar;
   expect(registrar).toBe('Example Registrar LLC');
+});
+
+test('only deliberate Case creation and refresh retain the exact submitted hostname', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const query = new URL(route.request().url()).searchParams.get('q') ?? '';
+    const identity = lookupDomainIdentity(query);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...identity,
+        availability: {
+          applicable: true,
+          state: 'registered',
+          confidence: 'high',
+          domain: identity.registrableDomain,
+          deepScanComplete: true,
+        },
+        rdap: { parsed: { domain: identity.registrableDomain } },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: {
+          rdap: { status: 'success' },
+          whois: { status: 'complete' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  const runLookup = async (hostname: string) => {
+    await page.locator('#query').fill(hostname);
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    await expect(page.getByRole('heading', { name: 'scope.test', exact: true })).toBeVisible();
+    await expandLookupFamilies(page);
+  };
+  const retainedCase = async (minimumRevision = 1) => {
+    const collection = await readBrowserLocalCollection(page, 'cases', {
+      minimumRecords: 1,
+      minimumRevision,
+    });
+    const record = collection.records[0]?.value as {
+      domain?: unknown;
+      evidenceHistory?: Array<{ inputHostname?: unknown }>;
+    } | undefined;
+    expect(collection.records).toHaveLength(1);
+    expect(record?.domain).toBe('scope.test');
+    return { collection, record };
+  };
+
+  await runLookup('login.scope.test');
+  await page.getByRole('button', { name: 'Create case' }).click();
+  const created = await retainedCase();
+  expect(created.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname)).toEqual([
+    'login.scope.test',
+  ]);
+
+  await runLookup('account.scope.test');
+  const refresh = page.getByRole('button', {
+    name: 'Refresh retained Case evidence for scope.test',
+  });
+  await expect(refresh).toBeVisible();
+  const beforeRefresh = await retainedCase(created.collection.manifest.revision);
+  expect(beforeRefresh.collection.manifest.revision).toBe(created.collection.manifest.revision);
+  expect(beforeRefresh.record?.evidenceHistory).toHaveLength(1);
+
+  await refresh.click();
+  const refreshed = await retainedCase(beforeRefresh.collection.manifest.revision + 1);
+  expect(refreshed.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname).sort()).toEqual([
+    'account.scope.test',
+    'login.scope.test',
+  ]);
+
+  await runLookup('transient.scope.test');
+  await expect(refresh).toBeVisible();
+  const afterTransientLookup = await retainedCase(refreshed.collection.manifest.revision);
+  expect(afterTransientLookup.collection.manifest.revision).toBe(refreshed.collection.manifest.revision);
+  expect(afterTransientLookup.record?.evidenceHistory?.map((snapshot) => snapshot.inputHostname).sort()).toEqual([
+    'account.scope.test',
+    'login.scope.test',
+  ]);
 });
 
 test('published response routes can be recorded in a local case with their provenance', async ({ page }) => {
@@ -779,7 +911,7 @@ test('published response routes can be recorded in a local case with their prove
       type: 'registrar_report',
       recipient: 'abuse@example.test',
       contactSource: 'registrar RDAP entity',
-      state: 'planned',
+      state: 'drafting',
     }),
   ]);
 
@@ -856,16 +988,16 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
 });
 
 test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }) => {
-  await page.evaluate(() => {
+  await page.evaluate((profileVersion) => {
     const profile = {
       id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
       approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
       createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
     };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify({ version: profileVersion, profiles: [profile] }));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
-  });
+  }, BRAND_PROFILE_SCHEMA_VERSION);
   await migrateLegacyBrowserData(page, {});
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

@@ -1,0 +1,26 @@
+{
+  "caseId": "case-fixture",
+  "status": "reviewing",
+  "disposition": "unreviewed",
+  "decisions": [
+    {
+      "id": "decision-fixture",
+      "summary": "Retain the bounded evidence.",
+      "rationale": "",
+      "evidencePinIds": [],
+      "createdAt": "2026-08-22T00:00:00.000Z"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "assertion-fixture",
+      "kind": "hypothesis",
+      "statement": "The evidence requires analyst review.",
+      "rationale": null,
+      "evidencePinIds": [],
+      "state": "open",
+      "createdAt": "2026-08-22T00:00:00.000Z",
+      "updatedAt": "2026-08-22T00:00:00.000Z"
+    }
+  ]
+}

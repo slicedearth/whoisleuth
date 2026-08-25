@@ -5,12 +5,18 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 type LookupResult = Awaited<ReturnType<typeof runUnifiedLookup>>;
 type FullLookupResult = Extract<LookupResult, { rdap: unknown }>;
 type AvailabilityFixtureOptions = {
   featurePolicy?: unknown;
   includeCredentialSurfaceProfile?: boolean;
+  includePublicationMetadata?: boolean;
+  includeDeliveryMetadata?: boolean;
   includeExtendedDnsContext?: boolean;
   includeInheritedCaa?: boolean;
   includeSecurityPosture?: boolean;
@@ -186,6 +192,8 @@ describe('runUnifiedLookup', () => {
         assert.equal(domain, 'example.com');
         assert.equal(options.includeExtendedDnsContext, true);
         assert.equal(options.includeCredentialSurfaceProfile, true);
+        assert.equal(options.includePublicationMetadata, true);
+        assert.equal(options.includeDeliveryMetadata, true);
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, whoisChain);
         return { state: 'registered', confidence: 'high' };
@@ -337,6 +345,8 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeCredentialSurfaceProfile, false);
+        assert.equal(options.includePublicationMetadata, false);
+        assert.equal(options.includeDeliveryMetadata, false);
         assert.equal(options.includeStructuredDataIdentity, false);
         assert.equal(options.includeTechnologyProfile, true);
         assert.equal(options.includeSecurityPosture, false);
@@ -360,6 +370,8 @@ describe('runUnifiedLookup', () => {
             },
           },
           pageRoleProfile: { source: 'derived', primaryRole: 'authentication' },
+          pageIdentity: { source: 'html', publicationMetadata: pagePublicationMetadataFixture() },
+          http: { source: 'http', response: { status: 200, deliveryMetadata: httpDeliveryMetadataFixture() } },
           clientBehaviorProfile: { source: 'derived', indicators: [{ id: 'browser_storage' }] },
           securityPosture: { source: 'derived', findings: [{ label: 'must be omitted' }] },
         };
@@ -377,6 +389,8 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'pageRoleProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'clientBehaviorProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
+    assert.equal(Object.hasOwn(recordValue(result.availability.pageIdentity), 'publicationMetadata'), false);
+    assert.equal(Object.hasOwn(recordValue(recordValue(result.availability.http).response), 'deliveryMetadata'), false);
     assert.deepEqual(compactAvailability.bulkComparison, {
       version: 1,
       technology: { state: 'success', ids: ['shop-platform'], truncated: false },
@@ -396,6 +410,8 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeTechnologyProfile, false);
+        assert.equal(options.includePublicationMetadata, false);
+        assert.equal(options.includeDeliveryMetadata, false);
         return {
           state: 'unknown',
           confidence: 'low',

@@ -1,0 +1,60 @@
+{
+  "schema": "whoisleuth.case-report",
+  "schemaVersion": 9,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": null,
+    "projectUrl": "https://github.com/slicedearth/whoisleuth"
+  },
+  "case": {
+    "id": "21936849-ddac-4c03-80e4-cafc4d770ed5",
+    "domain": "current.example.test",
+    "status": "new",
+    "disposition": "unreviewed",
+    "reviewReasonCode": null,
+    "brandProfileIds": [],
+    "interoperabilityTags": [],
+    "tags": [],
+    "source": "manual",
+    "openedAt": "2026-08-22T00:00:00.000Z",
+    "updatedAt": "2026-08-22T00:00:00.000Z",
+    "notesIncluded": false
+  },
+  "currentAssessment": null,
+  "evidenceTimeline": [],
+  "analystResponse": {
+    "evidencePins": [],
+    "decisions": [],
+    "actions": [],
+    "assertions": [],
+    "manualTrail": [],
+    "sightings": [],
+    "observedEffects": {
+      "reviews": [],
+      "omitted": 0,
+      "preV13HistoryUnavailable": false,
+      "limitations": [
+        "Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them."
+      ]
+    },
+    "closures": {
+      "records": [],
+      "omitted": 0,
+      "preV13HistoryUnavailable": false,
+      "limitations": [
+        "Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency."
+      ]
+    },
+    "branches": []
+  },
+  "responseLifecycle": {
+    "providerOutcomeState": "missing",
+    "latestProviderOutcome": null,
+    "observedChangeState": "missing",
+    "latestObservedEffect": null,
+    "latestObservedChangeAt": null,
+    "latestClosure": null
+  },
+  "limitations": "This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; \"incomparable\" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance. Generated locally in the browser. Review the package before sharing it."
+}

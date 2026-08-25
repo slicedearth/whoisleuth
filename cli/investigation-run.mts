@@ -2,10 +2,13 @@ import { Buffer } from 'node:buffer';
 
 import {
   buildInvestigationPlan,
-  type InvestigationPlanRecipe,
+  isRunnableInvestigationRecipe,
+  type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { CliUsageError } from './errors.mts';
+import EXIT_CODES from './exit-codes.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import type { CliCommand } from './command-reference.mts';
 
 export const CLI_INVESTIGATION_RUN_SCHEMA = 'whoisleuth.cli.investigation-run';
 export const CLI_INVESTIGATION_RUN_VERSION = 1;
@@ -14,7 +17,7 @@ export const MAX_INVESTIGATION_RUN_BYTES = 24 * 1024 * 1024;
 type ExecutionResult = Readonly<{ exitCode: number; stdout: string }>;
 type CompletedStep = Readonly<{
   id: string;
-  command: string;
+  command: CliCommand;
   arguments: readonly string[];
   mode: 'offline' | 'network';
   exitCode: number;
@@ -110,15 +113,19 @@ function parseResumeState(
 }
 
 export async function runInvestigationRecipe(
-  recipe: InvestigationPlanRecipe,
+  recipe: RunnableInvestigationPlanRecipe,
   subjectValue: string,
   options: Readonly<{
     approveNetwork: boolean;
     resumeInput: string | null;
     generatedAt: string;
-    execute: (command: string, args: readonly string[]) => Promise<ExecutionResult>;
+    signal?: AbortSignal;
+    execute: (command: CliCommand, args: readonly string[]) => Promise<ExecutionResult>;
   }>,
 ) {
+  if (!isRunnableInvestigationRecipe(recipe)) {
+    throw new CliUsageError('workflow-run supports only installed recipes whose exact steps satisfy the execution contract.');
+  }
   const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
   const prior = parseResumeState(options.resumeInput, plan);
   const completed = [...prior];
@@ -126,6 +133,7 @@ export async function runInvestigationRecipe(
   let currentStep: typeof plan.steps[number] | null = null;
 
   for (const step of plan.steps) {
+    options.signal?.throwIfAborted();
     if (completed.some((item) => item.id === step.id)) continue;
     currentStep = step;
     if (step.arguments.some((argument) => /^<[^>]+>$/u.test(argument))) {
@@ -137,6 +145,9 @@ export async function runInvestigationRecipe(
       break;
     }
     const result = await options.execute(step.command, step.arguments);
+    if (result.exitCode === EXIT_CODES.CANCELLED) {
+      throw options.signal?.reason || new DOMException('Cancelled', 'AbortError');
+    }
     const parsedResult = boundedResult(result.stdout);
     if ((result.exitCode === 0 || result.exitCode === 2) && resultSchema(parsedResult) !== step.produces) {
       throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract.`);

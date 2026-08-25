@@ -1,15 +1,10 @@
 # Engineering Case Study
 
-WHOISleuth is an engineering project built around a sustained interest
-in domain infrastructure, registration data, brand impersonation, and defensive
-investigation workflows. The project began with the narrow problem of making
-WHOIS and RDAP evidence easier to inspect and grew into a bounded analyst
-workbench for discovering, triaging, comparing, documenting, and monitoring
-domain findings.
+WHOISleuth began as a way to inspect WHOIS and RDAP evidence and grew into a
+local-first tool for domain investigation and brand protection.
 
-The goal is to build specialist-grade domain-intelligence workflows while
-retaining a focused, explainable, testable, and privacy-conscious system that
-can run on modest infrastructure.
+The engineering goal is a focused, explainable, testable and privacy-conscious
+system that can run on modest infrastructure.
 
 ## Problem and constraints
 
@@ -37,7 +32,7 @@ Those constraints shape the architecture more than the choice of framework.
 
 ## Representative engineering decisions
 
-### One intelligence core, two deployment adapters
+### One core, two deployment adapters
 
 Express and Netlify use thin HTTP adapters around the same native TypeScript
 modules in `lib/`. Query classification, RDAP/WHOIS collection, availability, source
@@ -179,30 +174,13 @@ query targets and evidence do not.
 
 ## Verification approach
 
-The project treats repeatable verification as part of feature design rather
-than a final release activity.
-
-- The Node suite has grown beyond 2,800 tests covering parsers, normalisation,
-  malformed input, bounds, deterministic ordering, migrations, scoring,
-  security controls, injected transports, and compatibility behaviour.
-- More than 230 Chromium Playwright tests cover authentication, responsive and
-  accessible workflows, browser storage, downloads, isolation, and the public
-  synthetic demo against a production-style local server.
-- Browser tests actively block off-origin requests and use fixtures, reserved
-  domains, or locally rejected input instead of depending on public registry,
-  DNS, CT, or website services.
-- Strict TypeScript checks cover native backend contracts, maintenance tools,
-  the CLI, the complete Node test suite, framework-neutral frontend analysis,
-  browser specifications, and the pre-render theme bootstrap. Svelte checks
-  and a production build cover the component and generated-asset boundaries.
-- CI runs the locked install, production dependency audit, and complete
-  verification pyramid on every push and pull request. It retains production
-  source coverage, bounded Playwright result summaries, and failure-only browser
-  artefacts for diagnosis. A scheduled lane expands property checks and records
-  duration profiles without contacting live sources.
-
-The CI badge and latest workflow run are authoritative as the suite continues
-to grow.
+The repository tests parsers, bounds, migrations, scoring, security controls,
+compatibility and deterministic ordering with local fixtures. Browser tests
+cover authentication, responsive and accessible interaction, storage,
+downloads, isolation and the fictional public demo while blocking off-origin
+requests. TypeScript, Svelte, production-build, architecture, dependency and
+licence checks cover the remaining delivery boundaries. Current CI results are
+the authority for the exact revision under review.
 
 ## Useful code-review entry points
 

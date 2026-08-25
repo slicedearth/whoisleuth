@@ -6,6 +6,11 @@ import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
+import {
+  DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
+  DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE,
+} from '../packages/contracts/domain-control-flight-recorder.mts';
+import { MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES } from '../packages/contracts/domain-control-monitor.mts';
 
 const NOW = '2026-08-05T04:00:00.000Z';
 
@@ -53,7 +58,38 @@ describe('CLI one-shot domain control monitor', () => {
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(calls, 1);
-    assert.equal(JSON.parse(stdout).schema, 'whoisleuth.cli.domain-control-monitor');
+    const document = JSON.parse(stdout);
+    assert.equal(document.schema, 'whoisleuth.cli.domain-control-monitor');
+    assert.equal(document.flightRecorder.schema, DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA);
+    const edge = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges
+      .find((candidate) => candidate.id === 'domain-control-flight-recorder.cli-monitor-embedding');
+    assert.equal(edge?.hookIds.includes('domain-control-flight-recorder.cli.monitor'), true);
+    assert.equal(edge?.requestMode, 'explicit_bounded_passive_deep');
+    assert.equal(edge?.retentionEffect, 'operator_controlled_output');
+    const privacy = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.privacyProfiles
+      .find((profile) => profile.id === edge?.privacyProfileId);
+    assert.equal(privacy?.sharingReview, 'required');
+    assert.equal(privacy?.excludedCategories.includes('raw-upstream-payloads'), true);
+  });
+
+  test('propagates cancellation and stops admitting monitor lookups', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), null, {
+        executeLookup: async () => {
+          calls += 1;
+          controller.abort(new DOMException('Cancelled', 'AbortError'));
+          return result('example.test');
+        },
+        now: () => NOW,
+        limit: 3,
+        concurrency: 1,
+        signal: controller.signal,
+      }),
+      { name: 'AbortError' },
+    );
+    assert.equal(calls, 1);
   });
 
   test('rejects structurally unsafe manifest and previous JSON before collection', async () => {
@@ -78,6 +114,57 @@ describe('CLI one-shot domain control monitor', () => {
     await assert.rejects(
       () => runDomainControlMonitor('{"__proto__":{"state":"forged"}}', null, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
       /Domain-control manifest.*unsafe object key/u,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), '', { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Previous monitor snapshot must be valid JSON/u,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor(' '.repeat(MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES + 1), null, { executeLookup, now: () => NOW, limit: 1, concurrency: 1 }),
+      /Domain-control manifest exceeds the .*byte limit/u,
+    );
+    assert.equal(calls, 0);
+  });
+
+  test('rejects invalid direct action bounds and expired manifests before collection', async () => {
+    let calls = 0;
+    const executeLookup = async () => {
+      calls += 1;
+      return result('example.test');
+    };
+    for (const options of [
+      { limit: 0, concurrency: 1 },
+      { limit: 21, concurrency: 1 },
+      { limit: 1, concurrency: 0 },
+      { limit: 1, concurrency: 4 },
+    ]) {
+      await assert.rejects(
+        () => runDomainControlMonitor(JSON.stringify(manifest()), null, {
+          executeLookup,
+          now: () => NOW,
+          ...options,
+        }),
+        /monitor (?:limit|concurrency) must be from/iu,
+      );
+    }
+
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), null, {
+        executeLookup,
+        now: () => '2026-09-05T04:00:00.000Z',
+        limit: 1,
+        concurrency: 1,
+      }),
+      /unexpired manifest/iu,
+    );
+    await assert.rejects(
+      () => runDomainControlMonitor(JSON.stringify(manifest()), null, {
+        executeLookup,
+        now: () => 'not-a-timestamp',
+        limit: 1,
+        concurrency: 1,
+      }),
+      /valid ISO 8601 timestamp/iu,
     );
     assert.equal(calls, 0);
   });

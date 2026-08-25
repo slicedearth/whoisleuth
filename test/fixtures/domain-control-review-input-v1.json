@@ -1,0 +1,65 @@
+{
+  "schema": "whoisleuth.domain-control-review-input",
+  "version": 1,
+  "manifest": {
+    "schema": "whoisleuth.domain-control-manifest",
+    "version": 2,
+    "generatedAt": "2026-08-03T00:00:00.000Z",
+    "expiresAt": "2026-09-03T00:00:00.000Z",
+    "entries": [
+      {
+        "domain": "example.test",
+        "nameservers": [
+          "ns1.example.test",
+          "ns2.example.test"
+        ],
+        "ds": [
+          "12345 13 2 abcdef"
+        ],
+        "mx": [
+          "0 .",
+          "10 mail.example.test"
+        ],
+        "caa": [
+          "0 issue ca.example"
+        ],
+        "tlsIssuer": "example issuer",
+        "tlsSpkiSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "registrarLock": "required",
+        "renewalReviewAt": "2026-08-20T00:00:00.000Z",
+        "note": null
+      }
+    ],
+    "limitations": [
+      "This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.",
+      "Empty desired fields are unconfigured rather than claims that a record should be absent."
+    ],
+    "integrity": {
+      "algorithm": "SHA-256",
+      "canonicalization": "sorted-json-v2",
+      "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a"
+    }
+  },
+  "observations": [
+    {
+      "domain": "example.test",
+      "fields": {
+        "nameservers": {
+          "state": "observed",
+          "values": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ],
+          "source": "Saved DNS evidence",
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        "mx": {
+          "state": "partial",
+          "values": [],
+          "source": "Saved DNS evidence",
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        }
+      }
+    }
+  ]
+}

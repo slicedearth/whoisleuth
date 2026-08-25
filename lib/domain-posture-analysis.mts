@@ -72,9 +72,11 @@ const MAX_DMARC_DESTINATIONS = 10;
 const MAX_DEPENDENCIES = 64;
 
 function strictHostname(value: unknown): string | null {
-  const raw = String(value || '').trim().toLowerCase().replace(/\.+$/u, '');
+  const input = String(value || '').trim().replace(/\.+$/u, '');
+  if (/[^\x00-\x7f]/u.test(input)) return null;
+  const raw = input.toLowerCase();
   if (!raw || raw.length > 253 || raw.includes('%')) return null;
-  if (!raw.split('.').every((label) => /^(?:_?[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?)$/iu.test(label))) return null;
+  if (!raw.split('.').every((label) => /^(?:_?[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?)$/u.test(label))) return null;
   return raw.includes('.') ? raw : null;
 }
 

@@ -5,8 +5,13 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH,
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
-  LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  projectLookupEvidenceAvailability,
+  projectLookupEvidenceRdapPublication,
+  projectLookupEvidenceRdapSourcePublication,
+  projectLookupEvidenceRegistryInsights,
+  projectLookupEvidenceWhoisPublication,
+  projectLookupEvidenceWhoisSourcePublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
 import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
@@ -14,6 +19,16 @@ import {
   buildLookupAssetGraph,
   type LookupAssetGraph,
 } from './lookup-asset-graph.ts';
+import {
+  deliveryMetadataDisplay,
+  publicationMetadataDisplay,
+  type HomepageMetadataDisplay,
+} from './lookup-homepage-metadata-display.ts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from '../../../../lib/homepage-metadata-contract.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -53,6 +68,8 @@ export type LookupEvidenceReplay = Readonly<{
   contradictions: readonly string[];
   unknowns: readonly string[];
   recommendedSteps: readonly string[];
+  pagePublicationMetadata: HomepageMetadataDisplay | null;
+  httpDeliveryMetadata: HomepageMetadataDisplay | null;
   graph: LookupAssetGraph;
   limitations: readonly string[];
 }>;
@@ -65,20 +82,58 @@ type SourceDescriptor = Readonly<{
   fallbackObservedAt?: unknown;
 }>;
 
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const MAX_SOURCES = 16;
 const MAX_FACTS = 20;
 const MAX_LIMITATIONS = 24;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 const RDAP_STATES = new Set(['success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
 const WHOIS_STATES = new Set(['complete', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled']);
-const LEGACY_RDAP_WRAPPER_STATES = new Set(['success', 'not_found', 'error']);
-const LEGACY_WHOIS_WRAPPER_STATES = new Set(['complete', 'partial', 'unknown', 'error']);
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
     : {};
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((item, index) => sameJsonValue(item, right[index]));
+  }
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const leftRecord = left as JsonRecord;
+  const rightRecord = right as JsonRecord;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index]
+      && sameJsonValue(leftRecord[key], rightRecord[key]));
+}
+
+function validateCurrentPrivacyBoundary(
+  rdap: JsonRecord,
+  whois: JsonRecord,
+  availability: unknown,
+  registryInsights: unknown,
+): void {
+  try {
+    if (!sameJsonValue(rdap, projectLookupEvidenceRdapSourcePublication(rdap))
+      || !sameJsonValue(whois, projectLookupEvidenceWhoisSourcePublication(whois))
+      || (rdap.status !== 'error'
+        && !sameJsonValue(rdap.parsed, projectLookupEvidenceRdapPublication(rdap.parsed)))
+      || (whois.status !== 'error'
+        && !sameJsonValue(whois.parsed, projectLookupEvidenceWhoisPublication(whois.parsed)))
+      || !sameJsonValue(availability, projectLookupEvidenceAvailability(availability))
+      || !sameJsonValue(registryInsights, projectLookupEvidenceRegistryInsights(registryInsights))) {
+      throw new Error('invalid current projection');
+    }
+  } catch {
+    throw new Error(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION} violates its privacy-minimized publication boundary.`);
+  }
 }
 
 function text(value: unknown, maximum = 320): string {
@@ -90,9 +145,7 @@ function text(value: unknown, maximum = 320): string {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function stringList(value: unknown, count = 8, maximum = 300): string[] {
@@ -113,6 +166,11 @@ function unique(values: readonly string[], maximum: number): string[] {
   return [...new Set(values.filter(Boolean))].slice(0, maximum);
 }
 
+function humanList(values: readonly number[]): string {
+  if (values.length <= 1) return String(values[0] ?? '');
+  return `${values.slice(0, -1).join(', ')} or ${values.at(-1)}`;
+}
+
 function sourceState(value: JsonRecord): string {
   return text(
     value.state
@@ -126,17 +184,20 @@ function sourceState(value: JsonRecord): string {
 function source(descriptor: SourceDescriptor): LookupEvidenceReplaySource {
   const value = record(descriptor.value);
   const state = sourceState(value);
+  const rawObservedAt = value.observedAt
+    ?? value.fetchedAt
+    ?? value.queriedAt
+    ?? descriptor.fallbackObservedAt;
+  const observedAt = timestamp(rawObservedAt);
+  if (rawObservedAt !== undefined && rawObservedAt !== null && !observedAt) {
+    throw new Error(`Lookup evidence ${descriptor.label} timestamp is invalid or lacks an explicit timezone.`);
+  }
   return {
     id: descriptor.id,
     label: descriptor.label,
     state,
     complete: typeof value.complete === 'boolean' ? value.complete : null,
-    observedAt: timestamp(
-      value.observedAt
-        ?? value.fetchedAt
-        ?? value.queriedAt
-        ?? descriptor.fallbackObservedAt,
-    ),
+    observedAt,
     limitations: stringList(value.limitations),
   };
 }
@@ -253,8 +314,9 @@ export async function parseLookupEvidenceReplay(
     throw new Error('The selected file is not a WHOISleuth Lookup evidence export.');
   }
   if (!SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.some((version) => version === document.schemaVersion)) {
-    throw new Error(`Only Lookup evidence schemas ${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(' and ')} can be replayed by this build.`);
+    throw new Error(`Only Lookup evidence schemas ${humanList(SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS)} can be replayed by this build.`);
   }
+  const schemaVersion = Number(document.schemaVersion);
   const exportedAt = timestamp(document.generatedAt);
   if (!exportedAt) throw new Error('The evidence export timestamp is missing or invalid.');
   const application = record(document.application);
@@ -271,23 +333,10 @@ export async function parseLookupEvidenceReplay(
   const whoisDiagnosticState = text(record(diagnostics.whois).status, 40);
   const rdapSourceState = text(rdap.status, 40);
   const whoisSourceState = text(whois.status, 40);
-  const schemaVersion = Number(document.schemaVersion);
-  const legacySourceWrappers = schemaVersion === LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION;
   if (!RDAP_STATES.has(rdapDiagnosticState) || !WHOIS_STATES.has(whoisDiagnosticState)) {
     throw new Error('Lookup evidence source states contradict their retained diagnostics.');
   }
-  if (legacySourceWrappers) {
-    if (!LEGACY_RDAP_WRAPPER_STATES.has(rdapSourceState)
-      || !LEGACY_WHOIS_WRAPPER_STATES.has(whoisSourceState)
-      || (rdapDiagnosticState === 'success' && rdapSourceState !== 'success')
-      || (rdapDiagnosticState === 'not_found' && rdapSourceState !== 'not_found')
-      || (rdapDiagnosticState === 'error' && rdapSourceState !== 'error')
-      || (whoisDiagnosticState === 'complete' && whoisSourceState !== 'complete')
-      || (whoisDiagnosticState === 'partial' && whoisSourceState !== 'partial')
-      || (whoisDiagnosticState === 'error' && whoisSourceState !== 'error')) {
-      throw new Error('Lookup evidence source states contradict their retained diagnostics.');
-    }
-  } else if (rdapSourceState !== rdapDiagnosticState || whoisSourceState !== whoisDiagnosticState) {
+  if (rdapSourceState !== rdapDiagnosticState || whoisSourceState !== whoisDiagnosticState) {
     throw new Error('Lookup evidence source states contradict their retained diagnostics.');
   }
   const rdapPublicationAvailable = ['success', 'partial'].includes(rdapDiagnosticState);
@@ -297,29 +346,74 @@ export async function parseLookupEvidenceReplay(
   const rdapParsed = rdapPublicationAvailable ? retainedRdapParsed : {};
   const whoisParsed = whoisPublicationAvailable ? retainedWhoisParsed : {};
   if ((rdapDiagnosticState === 'success' && Object.keys(rdapParsed).length === 0)
-    || (!legacySourceWrappers && !rdapPublicationAvailable && Object.keys(retainedRdapParsed).length > 0)) {
+    || (!rdapPublicationAvailable && Object.keys(retainedRdapParsed).length > 0)) {
     throw new Error('Lookup evidence RDAP publication state is inconsistent with its retained data.');
   }
   if ((whoisDiagnosticState === 'complete' && Object.keys(whoisParsed).length === 0)
-    || (!legacySourceWrappers && !whoisPublicationAvailable && Object.keys(retainedWhoisParsed).length > 0)) {
+    || (!whoisPublicationAvailable && Object.keys(retainedWhoisParsed).length > 0)) {
     throw new Error('Lookup evidence WHOIS publication state is inconsistent with its retained data.');
   }
-  const replayRdap = {
-    ...rdap,
-    status: rdapDiagnosticState,
-    parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
-    raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
-  };
-  const replayWhois = {
-    ...whois,
-    status: whoisDiagnosticState,
-    parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
-    chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
-  };
+  const replayRdap = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? rdapSourceState === 'error'
+      ? { status: rdapDiagnosticState, error: rdap.error, attempts: rdap.attempts }
+      : {
+          status: rdapDiagnosticState,
+          endpoint: rdap.endpoint,
+          transportSecurity: rdap.transportSecurity,
+          httpStatus: rdap.httpStatus,
+          fetchedAt: rdap.fetchedAt,
+          attempts: rdap.attempts,
+          parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
+        }
+    : {
+        ...rdap,
+        status: rdapDiagnosticState,
+        parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
+        raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
+      };
+  const replayWhois = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? whoisSourceState === 'error'
+      ? { status: whoisDiagnosticState, error: whois.error }
+      : {
+          status: whoisDiagnosticState,
+          queriedAt: whois.queriedAt,
+          authoritativeHop: whois.authoritativeHop,
+          failedHop: whois.failedHop,
+          conflictingHop: whois.conflictingHop,
+          parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
+          chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
+        }
+    : {
+        ...whois,
+        status: whoisDiagnosticState,
+        parsed: whoisPublicationAvailable ? whois.parsed ?? null : null,
+        chain: whoisPublicationAvailable && Array.isArray(whois.chain) ? whois.chain : [],
+      };
   const dns = record(availability.dns);
   const http = record(availability.http);
   const tls = record(availability.tls);
   const pageIdentity = record(availability.pageIdentity);
+  const httpResponse = record(http.response);
+  const pagePublicationValue = pageIdentity.publicationMetadata;
+  const httpDeliveryValue = httpResponse.deliveryMetadata;
+  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && (pagePublicationValue !== undefined || httpDeliveryValue !== undefined)) {
+    throw new Error('Legacy Lookup evidence cannot contain homepage metadata introduced by a newer schema.');
+  }
+  if (pagePublicationValue !== undefined && !validPagePublicationMetadata(pagePublicationValue)) {
+    throw new Error('Lookup evidence publication metadata is malformed or unsupported.');
+  }
+  if (pagePublicationValue !== undefined && !['success', 'partial'].includes(String(pageIdentity.status))) {
+    throw new Error('Lookup evidence publication metadata contradicts its parent source state.');
+  }
+  if (httpDeliveryValue !== undefined && !validHttpDeliveryMetadata(httpDeliveryValue)) {
+    throw new Error('Lookup evidence delivery metadata is malformed or unsupported.');
+  }
+  if (httpDeliveryValue !== undefined && !['success', 'partial'].includes(String(http.status))) {
+    throw new Error('Lookup evidence delivery metadata contradicts its parent source state.');
+  }
+  const pagePublicationMetadata = publicationMetadataDisplay(pagePublicationValue);
+  const httpDeliveryMetadata = deliveryMetadataDisplay(httpDeliveryValue);
   const technology = record(availability.technologyProfile);
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
@@ -341,6 +435,14 @@ export async function parseLookupEvidenceReplay(
   const replaySources = sourceDescriptors
     .map((item) => source(item))
     .slice(0, MAX_SOURCES);
+  if (schemaVersion === LOOKUP_EVIDENCE_SCHEMA_VERSION) {
+    validateCurrentPrivacyBoundary(
+      rdap,
+      whois,
+      analysis.availability,
+      analysis.registryInsights,
+    );
+  }
   const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
 
   const facts: LookupEvidenceReplayFact[] = [];
@@ -395,7 +497,7 @@ export async function parseLookupEvidenceReplay(
   const networkState = text(retainedNetworkContext.status, 40);
   const networkContext = ['success', 'partial'].includes(networkState) ? retainedNetworkContext : {};
   const graph = buildLookupAssetGraph({
-    target: query.registrableDomain ?? query.inputHostname ?? query.submitted,
+    target: query.inputHostname ?? query.submitted ?? query.registrableDomain,
     observedAt: exportedAt,
     rdapEvidence: replayRdap,
     rdapParsed,
@@ -425,9 +527,6 @@ export async function parseLookupEvidenceReplay(
     'This is a local replay of a deliberate evidence export. It does not refresh any source or establish the target state at import time.',
     'Only bounded normalised facts are shown here. Raw source payloads in the export are not rendered.',
     'Missing or unsupported evidence remains unavailable and is not evidence of absence, safety, or equivalence.',
-    ...(legacySourceWrappers && (rdapSourceState !== rdapDiagnosticState || whoisSourceState !== whoisDiagnosticState)
-      ? ['Schema 25 used legacy publication wrappers; retained diagnostics are authoritative and unavailable wrapper data was suppressed during replay.']
-      : []),
   ], MAX_LIMITATIONS);
 
   return {
@@ -437,7 +536,7 @@ export async function parseLookupEvidenceReplay(
     digestVerified: Boolean(expectedSha256),
     exportedAt,
     generatorVersion,
-    target: text(query.registrableDomain ?? query.inputHostname ?? query.submitted, 253) || 'Unknown target',
+    target: text(query.inputHostname ?? query.submitted ?? query.registrableDomain, 253) || 'Unknown target',
     targetType: text(query.type, 40) || 'unknown',
     availability: text(availability.state, 64).replaceAll('_', ' ') || 'unknown',
     confidence: text(availability.confidence, 64).replaceAll('_', ' ') || 'not reported',
@@ -446,6 +545,8 @@ export async function parseLookupEvidenceReplay(
     contradictions,
     unknowns,
     recommendedSteps,
+    pagePublicationMetadata,
+    httpDeliveryMetadata,
     graph,
     limitations,
   };

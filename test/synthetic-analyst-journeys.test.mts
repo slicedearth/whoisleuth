@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { describe, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 
 import {
   SYNTHETIC_ANALYST_JOURNEYS,
@@ -16,6 +13,7 @@ import {
   buildSyntheticAnalystResultTemplate,
   main,
 } from '../tools/synthetic-analyst-journeys.mts';
+import { buildAnalystJourneyAssurance } from '../tools/analyst-journey-assurance.mts';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -157,17 +155,16 @@ describe('synthetic analyst journey contract', () => {
     assert.doesNotMatch(templateOutput.value(), /identity|target|query|notes|recording/iu);
   });
 
-  test('keeps every declared journey in the curated browser lane', async () => {
-    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-    const e2eRoot = path.join(repositoryRoot, 'e2e');
-    const specs = (await readdir(e2eRoot))
-      .filter((name) => name.endsWith('.spec.ts'))
-      .sort();
-    const source = (await Promise.all(specs.map((name) => readFile(path.join(e2eRoot, name), 'utf8'))))
-      .join('\n');
-    assert.match(source, /@analyst-journey/u);
-    for (const journey of SYNTHETIC_ANALYST_JOURNEYS) {
-      assert.match(source, new RegExp(`@journey-${journey.id}\\b`, 'u'), journey.id);
-    }
+  test('keeps every declared journey in the mandatory balanced browser plan', () => {
+    const assurance = buildAnalystJourneyAssurance();
+    assert.equal(assurance.mappedJourneys, SYNTHETIC_ANALYST_JOURNEYS.length);
+    assert.equal(assurance.skippedJourneys, 0);
+    assert.equal(assurance.retryAcceptance, false);
+    assert.ok(assurance.journeyMappings.every((journey) => (
+      journey.tests > 0
+      && journey.shards.length > 0
+      && journey.mobileOutcome
+      && journey.accessibilityOutcome
+    )));
   });
 });

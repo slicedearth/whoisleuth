@@ -4,6 +4,7 @@
     description,
     metrics = [],
     expanded = false,
+    onpreload,
     onshow,
     onhide,
   }: {
@@ -11,11 +12,19 @@
     description: string;
     metrics?: readonly string[];
     expanded?: boolean;
+    onpreload?: () => void;
     onshow: () => void;
     onhide: () => void;
   } = $props();
 
   const accessibleLabel = $derived(/evidence$/iu.test(label) ? label : `${label} evidence`);
+  let pointerIntentHandled = false;
+
+  function preloadFromPointerMovement(): void {
+    if (pointerIntentHandled) return;
+    pointerIntentHandled = true;
+    onpreload?.();
+  }
 </script>
 
 <button
@@ -24,6 +33,9 @@
   type="button"
   aria-label={`${expanded ? 'Collapse' : 'Expand'} ${accessibleLabel}`}
   aria-expanded={expanded}
+  onpointermove={preloadFromPointerMovement}
+  onpointerleave={() => pointerIntentHandled = false}
+  onfocus={onpreload}
   onclick={expanded ? onhide : onshow}
 >
   <span class="family-copy">

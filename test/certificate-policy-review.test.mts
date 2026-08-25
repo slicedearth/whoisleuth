@@ -144,3 +144,18 @@ test('certificate policy review reports missing reviewed SAN patterns without tr
   assert.equal(finding?.state, 'changed');
   assert.match(finding?.limitations.join(' ') ?? '', /do not establish compromise/u);
 });
+
+test('certificate policy review treats complete names outside reviewed patterns as review material', () => {
+  const review = buildCertificatePolicyReview({
+    dnsEvidence: { source: 'dns', status: 'success', complete: true },
+    dnsRecords: { caa: [] },
+    tlsEvidence: { source: 'tls', status: 'success', complete: true },
+    tlsIssuer: { organization: 'Example Issuer' },
+    tlsPublicKey: { fingerprintSha256: 'a'.repeat(64) },
+    tlsAltNames: { dnsNames: ['example.test', 'www.example.test', 'deep.extra.example.test'] },
+    baseline,
+  });
+  const finding = review.findings.find((item) => item.id === 'expected_san');
+  assert.equal(finding?.state, 'changed');
+  assert.match(finding?.detail ?? '', /outside the reviewed patterns/u);
+});

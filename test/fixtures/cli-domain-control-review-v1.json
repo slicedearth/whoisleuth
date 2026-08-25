@@ -1,0 +1,268 @@
+{
+  "schema": "whoisleuth.cli.domain-control-review",
+  "version": 1,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "review": {
+    "schema": "whoisleuth.domain-control-review",
+    "version": 1,
+    "generatedAt": "2026-08-20T00:00:00.000Z",
+    "state": "drift",
+    "manifest": {
+      "generatedAt": "2026-08-03T00:00:00.000Z",
+      "expiresAt": "2026-09-03T00:00:00.000Z",
+      "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a",
+      "expired": false
+    },
+    "counts": {
+      "aligned": 6,
+      "drift": 1,
+      "partial": 0,
+      "unavailable": 0,
+      "unsupported": 0,
+      "not_configured": 0,
+      "due": 1
+    },
+    "domains": [
+      {
+        "domain": "example.test",
+        "state": "drift",
+        "comparisons": [
+          {
+            "field": "nameservers",
+            "state": "aligned",
+            "desired": [
+              "ns1.example.test",
+              "ns2.example.test"
+            ],
+            "observed": [
+              "ns1.example.test",
+              "ns2.example.test"
+            ],
+            "source": "Registry RDAP",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "ds",
+            "state": "aligned",
+            "desired": [
+              "12345 13 2 abcdef"
+            ],
+            "observed": [
+              "12345 13 2 abcdef"
+            ],
+            "source": "DNS delegation",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "mx",
+            "state": "drift",
+            "desired": [
+              "0 .",
+              "10 mail.example.test"
+            ],
+            "observed": [
+              "10 mail.example.test"
+            ],
+            "source": "DNS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation differs from the desired value."
+          },
+          {
+            "field": "caa",
+            "state": "aligned",
+            "desired": [
+              "0 issue ca.example"
+            ],
+            "observed": [
+              "0 issue ca.example"
+            ],
+            "source": "DNS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "tlsIssuer",
+            "state": "aligned",
+            "desired": [
+              "example issuer"
+            ],
+            "observed": [
+              "example issuer"
+            ],
+            "source": "TLS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "tlsSpkiSha256",
+            "state": "aligned",
+            "desired": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "observed": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "source": "TLS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "registrarLock",
+            "state": "aligned",
+            "desired": [
+              "required"
+            ],
+            "observed": [
+              "required"
+            ],
+            "source": "Registry RDAP",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value."
+          },
+          {
+            "field": "renewalReviewAt",
+            "state": "due",
+            "desired": [
+              "2026-08-20T00:00:00.000Z"
+            ],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "The configured renewal review date is due."
+          }
+        ]
+      }
+    ],
+    "ignoredObservationCount": 0,
+    "limitations": [
+      "This local review compares analyst-authored desired state with separately supplied observations and performs no collection or configuration change.",
+      "Only complete observations can produce drift. Partial, unavailable, unsupported, or missing evidence remains inconclusive.",
+      "A valid manifest digest or signature establishes file integrity, not the correctness of the desired state or supplied observations."
+    ]
+  },
+  "observations": [
+    {
+      "domain": "example.test",
+      "observedAt": "2026-08-20T00:00:00.000Z",
+      "collectionDepth": "deep",
+      "fields": [
+        {
+          "id": "registrar",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "example registrar"
+          ]
+        },
+        {
+          "id": "registrar_lock",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "required"
+          ]
+        },
+        {
+          "id": "registry_dnssec",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "signed"
+          ]
+        },
+        {
+          "id": "registry_nameservers",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ]
+        },
+        {
+          "id": "whois_nameservers",
+          "source": "WHOIS",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "delegated_nameservers",
+          "source": "DNS",
+          "state": "observed",
+          "values": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ]
+        },
+        {
+          "id": "delegation_ds",
+          "source": "DNS delegation",
+          "state": "observed",
+          "values": [
+            "12345 13 2 abcdef"
+          ]
+        },
+        {
+          "id": "mail_exchangers",
+          "source": "DNS",
+          "state": "observed",
+          "values": [
+            "10 mail.example.test"
+          ]
+        },
+        {
+          "id": "caa_policy",
+          "source": "DNS",
+          "state": "observed",
+          "values": [
+            "0 issue ca.example"
+          ]
+        },
+        {
+          "id": "tls_certificate",
+          "source": "TLS",
+          "state": "observed",
+          "values": [
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ]
+        },
+        {
+          "id": "tls_public_key",
+          "source": "TLS",
+          "state": "observed",
+          "values": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        {
+          "id": "http_origin",
+          "source": "HTTP",
+          "state": "observed",
+          "values": [
+            "https://example.test/"
+          ]
+        },
+        {
+          "id": "page_identity",
+          "source": "Static page identity",
+          "state": "observed",
+          "values": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd | example account centre"
+          ]
+        }
+      ]
+    }
+  ],
+  "input": {
+    "lookupsReceived": 1,
+    "latestDomainObservations": 1,
+    "ignoredHistoricalLookups": 0
+  },
+  "limitations": [
+    "The review uses only supplied saved Lookup documents and performs no request.",
+    "The newest supplied observation per domain is used for desired-state comparison; all supplied observations remain available to a separate flight-recorder review.",
+    "Raw RDAP, WHOIS, HTTP, TLS, and page payloads are not copied into this output."
+  ]
+}

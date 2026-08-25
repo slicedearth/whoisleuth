@@ -1,6 +1,7 @@
 import type { CaseRecord } from './case-model.ts';
 import type { BulkTriageRow } from './bulk-triage.ts';
 import type { ScanResult } from './bulk-result-model.ts';
+import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
 
 export type BulkPrimaryFilter =
@@ -18,6 +19,32 @@ export type BulkRouteFilterSelection = Readonly<{
   filter: BulkPrimaryFilter;
   mutationFilter: string;
   signalFilters: ReadonlySet<string>;
+}>;
+
+export type BulkRiskBand = 'elevated' | 'review' | 'lower' | 'inconclusive';
+
+export type BulkRiskComparison = Readonly<{
+  modelVersion: number;
+  signature: string | null;
+  comparableCount: number;
+  inconclusiveCount: number;
+  totalCount: number;
+  summary: string;
+}>;
+
+export type BulkRiskPresentation = Readonly<{
+  state: 'comparable' | 'inconclusive';
+  band: BulkRiskBand;
+  label: string;
+  summary: string;
+  exactScore: number | null;
+  modelVersion: number | null;
+  modelLabel: string;
+  scanDepth: string;
+  coverageLabel: string;
+  provenanceLabel: string;
+  factors: readonly Readonly<{ label: string; points: number }>[];
+  limitations: readonly string[];
 }>;
 
 export type BulkResultDisplayRow = Readonly<{
@@ -44,9 +71,8 @@ export type BulkResultDisplayRow = Readonly<{
   error: string;
   availability: string;
   confidence: string;
-  risk: number | null;
+  risk: BulkRiskPresentation;
   highRisk: boolean;
-  riskTitle: string | undefined;
   opportunity: number | null;
   activity: string;
   registrar: string;
@@ -58,14 +84,206 @@ export type BulkResultDisplayRow = Readonly<{
 }>;
 
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
+const INCONCLUSIVE_SOURCE_STATES = new Set(['error', 'partial', 'unavailable']);
+
+type RiskEligibility = Readonly<{
+  signature: string | null;
+  reason: string;
+  coverageLabel: string;
+}>;
+
+function exactRiskScore(row: ScanResult): number | null {
+  return typeof row.risk === 'number' && Number.isFinite(row.risk) && row.risk >= 0 && row.risk <= 100
+    ? row.risk
+    : null;
+}
+
+function riskModelVersion(row: ScanResult): number | null {
+  const value = row.saved.riskModelVersion;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function coverageLabel(row: ScanResult): string {
+  return [...row.sourceCoverage]
+    .sort((left, right) => left.source.localeCompare(right.source) || left.state.localeCompare(right.state))
+    .map((item) => `${item.source} ${item.state.replaceAll('_', ' ')}`)
+    .join(' · ') || 'Source states not recorded';
+}
+
+function riskEligibility(row: ScanResult): RiskEligibility {
+  const coverage = coverageLabel(row);
+  if (row.status !== 'complete') return {
+    signature: null,
+    reason: 'The row did not settle successfully, so its Risk triage is inconclusive.',
+    coverageLabel: coverage,
+  };
+  if (exactRiskScore(row) === null) return {
+    signature: null,
+    reason: 'No bounded Risk result is available for this row.',
+    coverageLabel: coverage,
+  };
+  const modelVersion = riskModelVersion(row);
+  if (modelVersion !== RISK_MODEL_VERSION) return {
+    signature: null,
+    reason: modelVersion === null
+      ? `The retained Risk result has no compatible model version; the current model is v${RISK_MODEL_VERSION}.`
+      : `Retained Risk model v${modelVersion} is not comparable with the current model v${RISK_MODEL_VERSION}.`,
+    coverageLabel: coverage,
+  };
+  const profileContext = row.saved.profileContext;
+  if (profileContext.sourceState !== 'ready') return {
+    signature: null,
+    reason: profileContext.limitation || 'Brand Profile provenance is unavailable, so profile-dependent Risk remains inconclusive.',
+    coverageLabel: coverage,
+  };
+  if (!row.sourceCoverage.length) return {
+    signature: null,
+    reason: 'Source-level coverage was not retained, so this score cannot join a comparable Risk cohort.',
+    coverageLabel: coverage,
+  };
+  const inconclusiveSources = row.sourceCoverage.filter((item) => INCONCLUSIVE_SOURCE_STATES.has(item.state));
+  if (inconclusiveSources.length) return {
+    signature: null,
+    reason: `Risk remains inconclusive because source evidence is partial or unavailable (${inconclusiveSources.map((item) => `${item.source} ${item.state}`).join(', ')}).`,
+    coverageLabel: coverage,
+  };
+  const sourceSignature = [...row.sourceCoverage]
+    .sort((left, right) => left.source.localeCompare(right.source) || left.state.localeCompare(right.state))
+    .map((item) => `${item.source}:${item.state}`);
+  return {
+    signature: JSON.stringify([
+      modelVersion,
+      row.saved.scanDepth,
+      profileContext.activeProfileId,
+      profileContext.profileUpdatedAt,
+      sourceSignature,
+    ]),
+    reason: '',
+    coverageLabel: coverage,
+  };
+}
+
+export function buildBulkRiskComparison(results: readonly ScanResult[]): BulkRiskComparison {
+  const cohorts = new Map<string, number>();
+  for (const row of results) {
+    const signature = riskEligibility(row).signature;
+    if (signature) cohorts.set(signature, (cohorts.get(signature) ?? 0) + 1);
+  }
+  const selected = [...cohorts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0] ?? null;
+  const signature = selected?.[0] ?? null;
+  const comparableCount = selected?.[1] ?? 0;
+  const inconclusiveCount = Math.max(0, results.length - comparableCount);
+  const summary = signature
+    ? `Risk sorting compares ${comparableCount} of ${results.length} row${results.length === 1 ? '' : 's'} under model v${RISK_MODEL_VERSION}, matching ready Brand Profile provenance, scan depth, and exact source states. ${inconclusiveCount} incompatible or inconclusive row${inconclusiveCount === 1 ? ' sorts' : 's sort'} last.`
+    : `No row currently has a comparable Risk result under model v${RISK_MODEL_VERSION} with ready Brand Profile provenance and settled source states. Risk sorting keeps every row inconclusive.`;
+  return Object.freeze({
+    modelVersion: RISK_MODEL_VERSION,
+    signature,
+    comparableCount,
+    inconclusiveCount,
+    totalCount: results.length,
+    summary,
+  });
+}
+
+function riskBand(score: number): Readonly<{ band: Exclude<BulkRiskBand, 'inconclusive'>; label: string; summary: string }> {
+  if (score >= 70) return {
+    band: 'elevated',
+    label: 'Elevated',
+    summary: 'Elevated Risk triage priority. Review the attributed factors; this is not a maliciousness determination.',
+  };
+  if (score >= 40) return {
+    band: 'review',
+    label: 'Review',
+    summary: 'Risk triage indicates review priority. The band is a heuristic, not a finding.',
+  };
+  return {
+    band: 'lower',
+    label: 'Lower',
+    summary: 'Lower Risk triage is neutral. It does not establish safety, legitimacy, ownership, or absence of concern.',
+  };
+}
+
+export function buildBulkRiskPresentation(
+  row: ScanResult,
+  comparison: BulkRiskComparison,
+): BulkRiskPresentation {
+  const eligibility = riskEligibility(row);
+  const score = exactRiskScore(row);
+  const modelVersion = riskModelVersion(row);
+  const comparable = Boolean(comparison.signature && eligibility.signature === comparison.signature);
+  const factors = Object.freeze((Array.isArray(row.saved.riskFactors) ? row.saved.riskFactors : [])
+    .slice(0, 40)
+    .flatMap((factor) => {
+      const points = Number(factor.points);
+      if (!Number.isFinite(points)) return [];
+      return [Object.freeze({ label: String(factor.label).slice(0, 500), points })];
+    }));
+  const provenanceLabel = row.saved.profileContext.sourceState === 'ready'
+    ? 'Ready Brand Profile provenance'
+    : 'Brand Profile provenance unavailable';
+  const modelLabel = modelVersion === null ? 'Risk model unavailable' : `Risk model v${modelVersion}`;
+  if (!comparable || score === null) {
+    const reason = eligibility.reason || 'This row uses different Brand Profile provenance, scan depth, or source states from the current comparable cohort.';
+    return Object.freeze({
+      state: 'inconclusive' as const,
+      band: 'inconclusive' as const,
+      label: 'Inconclusive',
+      summary: reason,
+      exactScore: score,
+      modelVersion,
+      modelLabel,
+      scanDepth: row.saved.scanDepth,
+      coverageLabel: eligibility.coverageLabel,
+      provenanceLabel,
+      factors,
+      limitations: Object.freeze([
+        reason,
+        'The retained exact result remains inspectable when present, but it is excluded from the current Risk sort and high-Risk filter.',
+      ]),
+    });
+  }
+  const band = riskBand(score);
+  return Object.freeze({
+    state: 'comparable' as const,
+    band: band.band,
+    label: band.label,
+    summary: band.summary,
+    exactScore: score,
+    modelVersion,
+    modelLabel,
+    scanDepth: row.saved.scanDepth,
+    coverageLabel: eligibility.coverageLabel,
+    provenanceLabel,
+    factors,
+    limitations: Object.freeze([
+      'Comparable only within the displayed cohort that shares this model, Brand Profile provenance, scan depth, and exact source states.',
+      ...(band.band === 'lower'
+        ? ['A lower Risk band is not evidence of safety, legitimacy, ownership, or absence of concern.']
+        : ['Risk is explainable triage only and does not establish maliciousness, ownership, control, or intent.']),
+    ]),
+  });
+}
+
+export function comparableBulkRiskScore(
+  row: ScanResult,
+  comparison: BulkRiskComparison,
+): number | null {
+  const eligibility = riskEligibility(row);
+  return comparison.signature && eligibility.signature === comparison.signature
+    ? exactRiskScore(row)
+    : null;
+}
 
 export function matchesBulkRouteFilter(
   row: ScanResult,
   selection: BulkRouteFilterSelection,
+  riskComparison: BulkRiskComparison = buildBulkRiskComparison([row]),
 ): boolean {
   if (selection.filter === 'available' && row.availability !== 'available') return false;
   if (selection.filter === 'registered' && !REGISTERED_STATES.has(row.availability)) return false;
-  if (selection.filter === 'high_risk' && (row.saved.profileContext.sourceState !== 'ready' || (row.risk ?? -1) < 70 || Boolean(row.trusted))) return false;
+  if (selection.filter === 'high_risk' && ((comparableBulkRiskScore(row, riskComparison) ?? -1) < 70 || Boolean(row.trusted))) return false;
   if (selection.filter === 'trusted' && !row.trusted) return false;
   if (selection.filter === 'profile_unevaluated' && row.saved.profileContext.sourceState === 'ready') return false;
   if (selection.filter === 'errors' && row.status !== 'error') return false;
@@ -80,7 +298,10 @@ export function matchesBulkRouteFilter(
   return true;
 }
 
-export function countBulkRouteFilters(results: readonly ScanResult[]): BulkPrimaryFilterCounts {
+export function countBulkRouteFilters(
+  results: readonly ScanResult[],
+  riskComparison: BulkRiskComparison = buildBulkRiskComparison(results),
+): BulkPrimaryFilterCounts {
   const counts: Record<BulkPrimaryFilter, number> = {
     all: results.length,
     available: 0,
@@ -93,7 +314,7 @@ export function countBulkRouteFilters(results: readonly ScanResult[]): BulkPrima
   for (const row of results) {
     if (row.availability === 'available') counts.available += 1;
     if (REGISTERED_STATES.has(row.availability)) counts.registered += 1;
-    if (row.saved.profileContext.sourceState === 'ready' && (row.risk ?? -1) >= 70 && !row.trusted) counts.high_risk += 1;
+    if ((comparableBulkRiskScore(row, riskComparison) ?? -1) >= 70 && !row.trusted) counts.high_risk += 1;
     if (row.trusted) counts.trusted += 1;
     if (row.saved.profileContext.sourceState !== 'ready') counts.profile_unevaluated += 1;
     if (row.status === 'error') counts.errors += 1;
@@ -121,14 +342,6 @@ export function toBulkRouteTriageRow(
   };
 }
 
-function riskTitle(row: ScanResult): string | undefined {
-  const factors = Array.isArray(row.saved.riskFactors) ? row.saved.riskFactors : [];
-  const lines = factors.map((factor) =>
-    `${factor.label} ${Number(factor.points) >= 0 ? '+' : ''}${factor.points}`);
-  if (row.saved.riskModelVersion) lines.push(`Risk model v${row.saved.riskModelVersion}`);
-  return lines.join('\n') || undefined;
-}
-
 export function buildBulkResultDisplayRows(input: {
   visibleResults: readonly ScanResult[];
   allResults: readonly ScanResult[];
@@ -136,7 +349,9 @@ export function buildBulkResultDisplayRows(input: {
   caseByDomain: ReadonlyMap<string, CaseRecord>;
   reviewStateByDomain: ReadonlyMap<string, string>;
   mutationLabels: Readonly<Record<string, string>>;
+  riskComparison?: BulkRiskComparison;
 }): BulkResultDisplayRow[] {
+  const riskComparison = input.riskComparison ?? buildBulkRiskComparison(input.allResults);
   return input.visibleResults.map((row) => {
     const caseRecord = input.caseByDomain.get(row.domain) ?? null;
     const outreach = outreachAction(row.domain, row.registrant);
@@ -166,9 +381,8 @@ export function buildBulkResultDisplayRows(input: {
       error: row.error,
       availability: row.availability,
       confidence: row.confidence,
-      risk: row.risk,
-      highRisk: row.saved.profileContext.sourceState === 'ready' && (row.risk ?? -1) >= 70 && !row.trusted,
-      riskTitle: riskTitle(row),
+      risk: buildBulkRiskPresentation(row, riskComparison),
+      highRisk: (comparableBulkRiskScore(row, riskComparison) ?? -1) >= 70 && !row.trusted,
       opportunity: row.opportunity,
       activity: row.activity,
       registrar: row.registrar,

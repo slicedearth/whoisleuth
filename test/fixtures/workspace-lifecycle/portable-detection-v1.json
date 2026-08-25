@@ -1,0 +1,7 @@
+{
+  "schema": "whoisleuth.detection-rules",
+  "version": 1,
+  "exportedAt": "2000-01-01T00:00:00.000Z",
+  "rules": [],
+  "limitations": "Custom rules are browser-local analyst heuristics. Matches and score contributions are not proof of maliciousness and do not alter built-in risk scores."
+}

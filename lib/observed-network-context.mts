@@ -6,7 +6,7 @@
 
 import * as net from 'node:net';
 
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import { fetchRdapRecord } from './rdap.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 

@@ -75,6 +75,13 @@ _443._tcp 300 IN TLSA 3 1 1 AABB
     assert.equal(normaliseRdata('TXT', quoted, null).value, normaliseRdata('TXT', dkim, null).value);
   });
 
+  test('accepts ASCII CDNSKEY material and rejects Unicode case-folding aliases', () => {
+    assert.equal(normaliseRdata('CDNSKEY', '257 3 13 AbCdEf+/=', null).value, '257 3 13 AbCdEf+/=');
+    for (const material of ['A\u212a==', 'A\u017f==']) {
+      assert.throws(() => normaliseRdata('CDNSKEY', `257 3 13 ${material}`, null), /CDNSKEY data is invalid/u);
+    }
+  });
+
   test('applies master-file relative names only to BIND input', () => {
     const result = reviewZoneIntent({
       schema: ZONE_INTENT_INPUT_SCHEMA,

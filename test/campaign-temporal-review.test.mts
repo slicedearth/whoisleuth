@@ -6,6 +6,7 @@ import {
   buildCampaignTemporalReview,
 } from '../frontend/src/lib/analysis/campaign-temporal-review.ts';
 import { openOrCreateCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
 describe('campaign temporal review', () => {
   test('keeps exact retained source families and unavailable members explicit', async () => {
@@ -26,7 +27,7 @@ describe('campaign temporal review', () => {
           label,
           value,
           source: 'Lookup checkpoint',
-          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: 3 },
+          sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: LOOKUP_EVIDENCE_SCHEMA_VERSION },
           observedAt,
           completeness: 'complete',
         },
@@ -39,7 +40,7 @@ describe('campaign temporal review', () => {
         label: 'SPF publication',
         value: 'Not observed',
         source: 'Lookup checkpoint',
-        sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: 3 },
+        sourceSchema: { collection: 'lookup_result', schema: 'whoisleuth.lookup-evidence', version: LOOKUP_EVIDENCE_SCHEMA_VERSION },
         observedAt: '2026-07-25T00:00:00Z',
         completeness: 'complete',
       },

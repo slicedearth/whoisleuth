@@ -39,16 +39,34 @@ describe('strict external findings import', () => {
     assert.equal(parsed.findings[0]?.evidenceClass, 'provider_report');
   });
 
-  test('migrates version 1 to a provider report and preserves deployment observations', () => {
-    const { evidenceClass: _evidenceClass, ...legacyFinding } = document().findings[0]!;
-    const legacy = document({ schemaVersion: 1, findings: [legacyFinding] });
-    assert.equal(parseExternalFindingsDocument(legacy).findings[0]?.evidenceClass, 'provider_report');
+  test('rejects reader-only version 1 and preserves current deployment observations', () => {
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 1 })), /schema version 4/u);
     const deployment = document({ findings: [{ ...document().findings[0], evidenceClass: 'deployment_observation' }] });
     assert.equal(parseExternalFindingsDocument(deployment).findings[0]?.evidenceClass, 'deployment_observation');
   });
 
+  test('requires explicit zones in schema 4 and rejects reader-only timestamps', () => {
+    const zoneLess = '2026-07-27T12:00:00.000';
+    assert.throws(() => parseExternalFindingsDocument(document({
+      source: { name: 'Current import', reference: null, collectedAt: zoneLess },
+      findings: [{ ...document().findings[0], observedAt: zoneLess }],
+    })), /explicit timezone/u);
+
+    assert.throws(() => parseExternalFindingsDocument(document({
+      schemaVersion: 3,
+      source: { name: 'Legacy import', reference: null, collectedAt: zoneLess },
+      findings: [{ ...document().findings[0], observedAt: zoneLess }],
+    })), /schema version 4/u);
+
+    const offset = parseExternalFindingsDocument(document({
+      source: { name: 'Current import', reference: null, collectedAt: '2026-07-27T12:00:00.000+01:00' },
+      findings: [{ ...document().findings[0], observedAt: '2026-07-27T12:00:00.000+01:00' }],
+    }));
+    assert.equal(offset.findings[0]?.observedAt, '2026-07-27T11:00:00.000Z');
+  });
+
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 1, 2, 3, or 4/u);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 4/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -56,6 +74,22 @@ describe('strict external findings import', () => {
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], category: 'ownership' }],
     })), /category is unsupported/u);
+  });
+
+  test('rejects Unicode formatting controls across retained finding fields', () => {
+    for (const unsafe of ['\u202e', '\u2060']) {
+      for (const unsafeDocument of [
+        document({ source: { name: `Local${unsafe}source`, reference: null } }),
+        document({ findings: [{ ...document().findings[0], summary: `Reported${unsafe}claim` }] }),
+        document({ findings: [{ ...document().findings[0], limitations: [`Bounded${unsafe}limitation`] }] }),
+        document({ findings: [{ ...document().findings[0], reference: `finding${unsafe}17` }] }),
+      ]) {
+        assert.throws(
+          () => parseExternalFindingsDocument(unsafeDocument),
+          /unsafe control.*formatting/iu,
+        );
+      }
+    }
   });
 
   test('requires complete, matching event metadata only on certificate observations', () => {
@@ -82,7 +116,7 @@ describe('strict external findings import', () => {
     assert.throws(() => parseExternalFindingsDocument(document({
       schemaVersion: 3,
       findings: [certificate],
-    })), /requires external-findings schema version 4/u);
+    })), /schema version 4/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...certificate, structuredObservation: { ...structuredObservation, certificateSha256: 'c'.repeat(64) } }],
     })), /digest must match/u);
@@ -106,6 +140,11 @@ describe('strict external findings import', () => {
       status: 'resolved',
       disposition: 'false_positive',
       source: 'lookup',
+      closure: {
+        reason: 'false_positive',
+        summary: 'The analyst deliberately closed the retained false-positive case.',
+        limitations: ['This closure does not establish remediation or safety.'],
+      },
     }, NOW);
     const parsed = parseExternalFindingsDocument(document());
     const merged = mergeExternalFindingsIntoCases([current], parsed, NOW);

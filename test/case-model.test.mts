@@ -13,6 +13,7 @@ const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 // comparison and dedup suites.
 function deepEvidence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    inputHostname: null,
     scanDepth: 'deep',
     availability: 'registered',
     riskModelVersion: 1,
@@ -165,99 +166,34 @@ describe('case creation and updates', () => {
       brandProfileIds: Array.from({ length: 9 }, (_, index) => `profile-${index}`),
     }), /limited to 8 Brand Profile associations/iu);
   });
+
+  test('requires a deliberate typed closure before resolving a current Case', () => {
+    const created = model.createCase({ domain: 'closure.example' }, ISO);
+    assert.throws(
+      () => model.updateCase([created], created.id, { status: 'resolved' }, LATER),
+      /deliberate closure review/iu,
+    );
+    const closed = model.updateCase([created], created.id, {
+      closure: {
+        reason: 'risk_accepted',
+        summary: 'The analyst explicitly accepted the retained risk for this case.',
+        limitations: ['This does not establish safety or remediation.'],
+      },
+    }, LATER).record;
+    assert.equal(closed.status, 'resolved');
+    assert.equal(closed.closures.records.length, 1);
+    assert.equal(closed.closures.records[0]?.reason, 'risk_accepted');
+  });
 });
 
-describe('Case v12 Brand Profile references', () => {
-  test('forces schema 2 through 11 profile-context evidence to null before fingerprinting and merging', () => {
-    const evidence = {
-      ...deepEvidence(),
-      capturedAt: ISO,
-      profileContextState: 'ready',
-      profileContextLimitation: 'Smuggled current-only provenance.',
-    };
-    for (let version = 2; version <= 11; version += 1) {
-      const rawCase = {
-        domain: `legacy-context-${version}.example`,
-        evidenceHistory: [evidence],
-        createdAt: ISO,
-        updatedAt: ISO,
-      };
-      const withoutSmuggledContext = {
-        ...rawCase,
-        evidenceHistory: [{ ...evidence, profileContextState: undefined, profileContextLimitation: undefined }],
-      };
-      const stored = requiredValue(model.normalizeCaseStore({ version, cases: [rawCase] }).cases[0]?.evidenceHistory[0]);
-      const expected = requiredValue(model.normalizeCaseStore({ version, cases: [withoutSmuggledContext] }).cases[0]?.evidenceHistory[0]);
-      assert.equal(stored.profileContextState, null, `stored schema ${version}`);
-      assert.equal(stored.profileContextLimitation, null, `stored schema ${version}`);
-      assert.equal(stored.fingerprint, expected.fingerprint, `stored fingerprint schema ${version}`);
-
-      const imported = requiredValue(model.mergeCases([], { version, cases: [rawCase] }).cases[0]?.evidenceHistory[0]);
-      assert.equal(imported.profileContextState, null, `import schema ${version}`);
-      assert.equal(imported.profileContextLimitation, null, `import schema ${version}`);
-      assert.equal(imported.fingerprint, expected.fingerprint, `import fingerprint schema ${version}`);
-    }
-  });
-
-  test('retains bounded profile-context evidence in bare internal arrays and schema 12 only', () => {
-    const raw = {
-      domain: 'current-context.example',
-      evidenceHistory: [{
-        ...deepEvidence(),
-        capturedAt: ISO,
-        profileContextState: 'unavailable',
-        profileContextLimitation: 'Profile context could not be evaluated locally.',
-      }],
-      createdAt: ISO,
-      updatedAt: ISO,
-    };
-    for (const source of [[raw], { version: 12, cases: [raw] }]) {
-      const snapshot = requiredValue(model.normalizeCaseStore(source).cases[0]?.evidenceHistory[0]);
-      assert.equal(snapshot.profileContextState, 'unavailable');
-      assert.equal(snapshot.profileContextLimitation, 'Profile context could not be evaluated locally.');
-    }
-    const imported = requiredValue(model.mergeCases([], { version: 12, cases: [raw] }).cases[0]?.evidenceHistory[0]);
-    assert.equal(imported.profileContextState, 'unavailable');
-    assert.equal(imported.profileContextLimitation, 'Profile context could not be evaluated locally.');
-  });
-
-  test('migrates schemas 2 through 11 to an empty reference list without accepting a smuggled field', () => {
-    for (let version = 2; version <= 11; version += 1) {
-      const stored = model.normalizeCaseStore({
-        version,
-        cases: [{ domain: `legacy-${version}.example`, brandProfileIds: ['smuggled-profile'] }],
-      });
-      assert.deepEqual(stored.cases[0]?.brandProfileIds, [], `stored schema ${version}`);
-      const imported = model.mergeCases([], {
-        version,
-        cases: [{ domain: `imported-${version}.example`, brandProfileIds: ['smuggled-profile'] }],
-      });
-      assert.deepEqual(imported.cases[0]?.brandProfileIds, [], `import schema ${version}`);
-    }
-  });
-
-  test('preserves current references in bare internal arrays and schema 12 envelopes only', () => {
-    const raw = {
-      domain: 'current-reference.example',
-      brandProfileIds: ['Profile_A', ' profile-b', 'profile.with.dot', 'profile-b', 'Profile_A'],
-      futureField: 'not retained',
-    };
-    const bare = requiredValue(model.normalizeCaseStore([raw]).cases[0]);
-    const current = requiredValue(model.normalizeCaseStore({ version: 12, cases: [raw] }).cases[0]);
-    const future = requiredValue(model.normalizeCaseStore({ version: 13, cases: [raw] }).cases[0]);
-    assert.deepEqual(bare.brandProfileIds, ['Profile_A', 'profile-b']);
-    assert.deepEqual(current.brandProfileIds, ['Profile_A', 'profile-b']);
-    assert.deepEqual(future.brandProfileIds, []);
-    assert.equal(Object.hasOwn(current, 'futureField'), false);
-  });
-
+describe('current Case Brand Profile references', () => {
   test('round trips current opaque references without case-folding or resolution', () => {
     const opened = model.openOrCreateCase([], {
       domain: 'round-trip-reference.example',
       brandProfileIds: ['Profile_A', 'profile_a'],
     }, ISO);
     const exported = model.buildCaseExport(opened.cases, LATER);
-    assert.equal(exported.version, 12);
+    assert.equal(exported.version, 13);
     assert.deepEqual(exported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
     const imported = model.mergeCases([], exported);
     assert.deepEqual(imported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
@@ -347,41 +283,7 @@ describe('named investigation branches', () => {
     }, NOW), /limited to 8 investigation branches/iu);
   });
 
-  test('migrates schema 10 without accepting schema 11-only branch fields', () => {
-    const imported = model.mergeCases([], {
-      version: 10,
-      cases: [{
-        domain: 'legacy-branch.example',
-        evidencePins: [{
-          id: 'pin-legacy',
-          label: 'Legacy pin',
-          value: 'a'.repeat(64),
-          field: 'certificateSha256',
-          category: 'certificate',
-          source: 'import',
-          sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
-          certificateObservation: {
-            eventId: 'b'.repeat(64),
-            logId: 'fixture-log',
-            certificateSha256: 'a'.repeat(64),
-            issuer: 'Fixture issuer',
-            notAfter: null,
-            dnsNameCount: 1,
-            namesComplete: true,
-          },
-          createdAt: ISO,
-        }],
-        branches: [{ id: 'branch-smuggled', name: 'Should not import', evidencePinIds: ['pin-legacy'], createdAt: ISO, updatedAt: ISO }],
-        createdAt: ISO,
-        updatedAt: ISO,
-      }],
-    });
-    assert.deepEqual(imported.cases[0]?.branches, []);
-    assert.equal(imported.cases[0]?.evidencePins.length, 1);
-    assert.equal(imported.cases[0]?.evidencePins[0]?.certificateObservation, null);
-  });
-
-  test('retains valid schema 11 certificate-event metadata without accepting mismatched digests', () => {
+  test('retains valid current certificate-event metadata without accepting mismatched digests', () => {
     const certificateObservation = {
       eventId: 'b'.repeat(64),
       logId: 'fixture-log',
@@ -430,10 +332,10 @@ describe('duplicate-domain handling', () => {
   test('normalizeCaseStore keeps a single case per domain, most recent wins', () => {
     const store = model.normalizeCaseStore([
       { domain: 'dup.example', status: 'new', updatedAt: ISO },
-      { domain: 'DUP.example', status: 'resolved', updatedAt: LATER },
+      { domain: 'DUP.example', status: 'monitoring', updatedAt: LATER },
     ]);
     assert.equal(store.cases.length, 1);
-    assert.equal(requiredValue(store.cases[0]).status, 'resolved');
+    assert.equal(requiredValue(store.cases[0]).status, 'monitoring');
   });
 });
 
@@ -540,10 +442,10 @@ describe('imports cannot reset local analyst decisions', () => {
 
   test('a valid newer exported record still wins per field', () => {
     const result = model.mergeCases(localCase(), caseExport([
-      { domain: 'shared.example', status: 'resolved', disposition: 'closed_no_action', source: 'monitor', updatedAt: '2026-07-01T00:00:00.000Z' },
+      { domain: 'shared.example', status: 'monitoring', disposition: 'closed_no_action', source: 'monitor', updatedAt: '2026-07-01T00:00:00.000Z' },
     ]));
     const merged = requiredValue(result.cases[0]);
-    assert.equal(merged.status, 'resolved');
+    assert.equal(merged.status, 'monitoring');
     assert.equal(merged.disposition, 'closed_no_action');
     assert.equal(merged.source, 'monitor');
   });
@@ -925,7 +827,7 @@ describe('importing evidence history', () => {
 
   test('malformed snapshots are skipped and never create empty timeline entries', () => {
     const local = model.normalizeCaseStore([{ domain: 'shared.example', updatedAt: ISO }]).cases;
-    const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [null, 'garbage', {}, { availability: 'unknown' }, { rawWhois: 'x' }], updatedAt: LATER }]);
+    const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [null, 'garbage', {}, { availability: 'unknown', inputHostname: null }, { rawWhois: 'x', inputHostname: null }], updatedAt: LATER }]);
     const merged = requiredValue(model.mergeCases(local, imported).cases[0]);
     assert.deepEqual(merged.evidenceHistory, []);
   });
@@ -1198,7 +1100,7 @@ describe('serialized store byte budget', () => {
   });
 });
 
-describe('rejects unsupported future-schema imports', () => {
+describe('rejects unsupported Case contracts', () => {
   function localCases() {
     return model.normalizeCaseStore([{ domain: 'keep.example', status: 'escalated', disposition: 'confirmed_abuse', updatedAt: LATER }]).cases;
   }
@@ -1207,7 +1109,7 @@ describe('rejects unsupported future-schema imports', () => {
     const local = localCases();
     assert.throws(
       () => model.mergeCases(local, { version: 999, cases: [{ domain: 'new.example' }] }),
-      /newer version of WHOISleuth/i,
+      /newer than the supported schema 13.*no data was changed/iu,
     );
     // Local cases are untouched (nothing merged, nothing reset).
     assert.equal(local.length, 1);
@@ -1215,19 +1117,18 @@ describe('rejects unsupported future-schema imports', () => {
     assert.equal(requiredValue(local[0]).disposition, 'confirmed_abuse');
   });
 
-  test('imports current and supported legacy case envelopes only', () => {
+  test('imports the exact public and current Case envelopes and rejects other inputs without mutation', () => {
     const local = localCases();
-    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /schema 2 or 3 or 4/u);
-    assert.equal(model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 3, cases: [{ domain: 'v3.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 4, cases: [{ domain: 'v4.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 5, cases: [{ domain: 'v5.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 6, cases: [{ domain: 'v6.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 7, cases: [{ domain: 'v7.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 8, cases: [{ domain: 'v8.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 9, cases: [{ domain: 'v9.example', updatedAt: ISO }] }).added, 1);
-    assert.equal(model.mergeCases(local, { version: 10, cases: [{ domain: 'v10.example', updatedAt: ISO }] }).added, 1);
+    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /well-formed.*schema 13.*no data was changed/iu);
+    for (const version of [2, 7, 11]) {
+      assert.throws(
+        () => model.mergeCases(local, { version, cases: [{ domain: `v${version}.example`, updatedAt: ISO }] }),
+        new RegExp(`schema ${version} is not part of the public compatibility boundary.*no data was changed`, 'iu'),
+      );
+    }
+    assert.equal(model.mergeCases(local, { version: 12, cases: [{ domain: 'public.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(local.length, 1);
   });
 });
 
@@ -1260,25 +1161,25 @@ describe('imported note normalization is deterministic', () => {
 });
 
 describe('store loading and corruption recovery', () => {
-  test('normalization never traverses records beyond the bounded input window', () => {
+  test('rejects accessor-bearing records without invoking the accessor', () => {
     const records = Array.from({ length: model.MAX_CASE_INPUT_RECORDS + 1 }, (_, index) => ({
       domain: `bounded-${index}.example`,
       updatedAt: ISO,
     }));
+    let invoked = false;
     Object.defineProperty(records, model.MAX_CASE_INPUT_RECORDS, {
-      get() { throw new Error('the out-of-bound record was inspected'); },
+      get() { invoked = true; throw new Error('the accessor was invoked'); },
     });
-
-    assert.doesNotThrow(() => model.normalizeCaseStore(records));
+    assert.throws(() => model.normalizeCaseStore(records), /accessor property/iu);
+    assert.equal(invoked, false);
   });
 
-  test('recovers from arrays, envelopes, and junk without throwing', () => {
-    assert.deepEqual(model.normalizeCaseStore(null).cases, []);
-    assert.deepEqual(model.normalizeCaseStore('nonsense').cases, []);
-    assert.deepEqual(model.normalizeCaseStore(42).cases, []);
-    assert.deepEqual(model.normalizeCaseStore({ cases: 'not-an-array' }).cases, []);
+  test('accepts internal arrays and current envelopes while rejecting malformed or unversioned roots', () => {
+    for (const value of [null, 'nonsense', 42, { cases: 'not-an-array' }]) {
+      assert.throws(() => model.normalizeCaseStore(value), /retired|ordinary JSON|Case store/iu);
+    }
     const fromArray = model.normalizeCaseStore([{ domain: 'bad.example' }]);
-    const fromEnvelope = model.normalizeCaseStore({ version: 2, cases: [{ domain: 'bad.example' }] });
+    const fromEnvelope = model.normalizeCaseStore({ version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'bad.example' }] });
     assert.equal(fromArray.cases.length, 1);
     assert.equal(fromEnvelope.cases.length, 1);
     assert.equal(fromEnvelope.version, model.CASE_SCHEMA_VERSION);
@@ -1315,18 +1216,17 @@ describe('store loading and corruption recovery', () => {
 });
 
 describe('import merge', () => {
-  test('caps traversal before normalization and reports omitted import records', () => {
+  test('rejects accessor-bearing import records without invoking the accessor', () => {
     const records = Array.from({ length: model.MAX_CASE_INPUT_RECORDS + 1 }, (_, index) => ({
       domain: `import-bound-${index}.example`,
       updatedAt: ISO,
     }));
+    let invoked = false;
     Object.defineProperty(records, model.MAX_CASE_INPUT_RECORDS, {
-      get() { throw new Error('the out-of-bound imported record was inspected'); },
+      get() { invoked = true; throw new Error('the accessor was invoked'); },
     });
-
-    const result = model.mergeCases([], caseExport(records));
-    assert.equal(result.cases.length, model.MAX_CASES);
-    assert.equal(result.skipped, model.MAX_CASE_INPUT_RECORDS - model.MAX_CASES + 1);
+    assert.throws(() => model.mergeCases([], caseExport(records)), /accessor property/iu);
+    assert.equal(invoked, false);
   });
 
   test('adds new cases and merges existing ones by domain', () => {

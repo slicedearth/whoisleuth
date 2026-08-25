@@ -36,6 +36,7 @@
     setSortKey,
     setSortDirection,
     indicatorStatus,
+    riskComparisonSummary,
     matchedCount,
     resultCount,
     visibleCount,
@@ -71,6 +72,7 @@
     deepRescanSelected,
     createCasesSelected,
     setSelectedDisposition,
+    caseMutationBusy = false,
     caseOptions,
     profileContextState,
     shortlistAvailable = true,
@@ -103,6 +105,7 @@
     setSortKey: (value: BulkSortKey) => void;
     setSortDirection: (value: BulkSortDirection) => void;
     indicatorStatus: string;
+    riskComparisonSummary: string;
     matchedCount: number;
     resultCount: number;
     visibleCount: number;
@@ -138,6 +141,7 @@
     deepRescanSelected: () => void | Promise<void>;
     createCasesSelected: () => void | Promise<void>;
     setSelectedDisposition: (value: string) => void | Promise<void>;
+    caseMutationBusy?: boolean;
     caseOptions: ReadonlyArray<{ value: string; label: string }>;
     profileContextState: 'loading' | 'ready' | 'unavailable';
     shortlistAvailable?: boolean;
@@ -198,6 +202,7 @@
   </div>
 </div>
 {#if indicatorStatus}<p class="indicator-status" role="status" aria-live="polite">{indicatorStatus}</p>{/if}
+<p class="risk-comparability-note" role="note"><strong>Risk comparability:</strong> {riskComparisonSummary} Exact retained model and factor details remain available from each row.</p>
 <div class="results-status">
   <p>{matchedCount} of {resultCount} result{resultCount === 1 ? '' : 's'} matched · showing {visibleCount} on page {currentPage} of {pageCount}</p>
   <button class="btn" onclick={selectFiltered} disabled={!matchedCount || !shortlistAvailable}>Select matched</button>
@@ -210,7 +215,7 @@
     <button class="btn" onclick={exportSelectedCsv} disabled={!selectedCount}>Export selected CSV</button>
     <button class="btn" onclick={deepRescanSelected} disabled={!selectedCount || running || profileContextState === 'loading'}>Deep rescan selected</button>
     <button class="btn" onclick={createCasesSelected} disabled={!selectedCount || !caseAvailable}>Create cases</button>
-    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount || !caseAvailable}><option value="">Choose state</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+    <label class="field disposition">Set case state<select onchange={(event) => { const value = event.currentTarget.value; if (value) void setSelectedDisposition(value); event.currentTarget.value = ''; }} disabled={!selectedCount || !caseAvailable || caseMutationBusy}><option value="">{caseMutationBusy ? 'Updating cases…' : 'Choose state'}</option>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   </div>
 </section>
 {/if}
@@ -226,6 +231,8 @@
   .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .indicator-format select{min-width:0;min-height:32px;border:0;background:var(--panel-raised);font-size:var(--text-2xs)}
   .indicator-status{color:var(--amber)!important}
+  .risk-comparability-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--muted);background:color-mix(in srgb,var(--muted) 5%,transparent);line-height:1.5}
+  .risk-comparability-note strong{color:var(--text)}
   .review-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .05)}
   .wildcard-choice{min-height:var(--control-h);padding:0 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
   .advanced-filter-panel{margin-top:12px}

@@ -18,7 +18,7 @@ import {
   normalizeScheduledWatchlistName,
   scheduledMonitorPublicState,
   type ScheduledWatchlist,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+} from '../packages/monitoring/scheduled-monitor-model.mts';
 
 type ScheduledMonitorState = ReturnType<typeof normalizeScheduledMonitorState>;
 type ScheduledMonitorPublicState = ReturnType<typeof scheduledMonitorPublicState>;

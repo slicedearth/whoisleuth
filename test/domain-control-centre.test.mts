@@ -53,7 +53,7 @@ test('summarises baseline coverage, change windows, lifecycle and exact shared d
     baseline('one.example.invalid', {
       previousObservation: observation,
       observationHistory: [observation],
-      approvedChangeWindows: [{ startsAt: '2026-08-05T09:30:00.000Z', endsAt: '2026-08-05T10:30:00.000Z', summary: 'Reviewed migration' }],
+      approvedChangeWindows: [{ id: 'change-window-1', startsAt: '2026-08-05T09:30:00.000Z', endsAt: '2026-08-05T10:30:00.000Z', summary: 'Reviewed migration' }],
     }),
     baseline('two.example.invalid', { lifecycle: 'retiring' }),
   ]), NOW);

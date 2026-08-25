@@ -13,19 +13,19 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import {
   CASE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-model.ts';
+} from '../packages/cases/case-model.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/brand-profile-model.ts';
+} from '../packages/workspace/brand-profile-model.mts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/campaign-model.ts';
+} from '../packages/workspace/campaign-model.mts';
 import {
   evaluateRuleSet,
-} from '../frontend/src/lib/analysis/detection-rule-model.ts';
+} from '../packages/workspace/detection-rule-model.mts';
 import {
   buildInvestigationProjection,
-} from '../frontend/src/lib/analysis/investigation-projection.ts';
+} from '../packages/investigation/investigation-projection.mts';
 import {
   fixedRatio as ratio,
   sanitizedMaintainerText as boundedText,
@@ -33,20 +33,20 @@ import {
 import {
   buildCaseRelationships,
   buildInvestigationCaseRelationships,
-} from '../frontend/src/lib/analysis/case-relationships.ts';
+} from '../packages/relationships/case-relationships.mts';
 import {
   buildCaseRelationshipGraph,
   MAX_RELATIONSHIP_GRAPH_CASES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
-} from '../frontend/src/lib/analysis/case-relationship-graph.ts';
+} from '../packages/relationships/case-relationship-graph.mts';
 import {
   buildWorkspaceArchive,
   readWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
-} from '../frontend/src/lib/analysis/workspace-archive.ts';
-import { buildCaseDecisionQualityReport } from '../frontend/src/lib/analysis/case-decision-quality.ts';
-import { normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
+} from '../packages/workspace/workspace-archive.mts';
+import { buildCaseDecisionQualityReport } from '../packages/investigation/case-decision-quality.mts';
+import { normalizeCase } from '../packages/cases/case-model.mts';
 import WHOIS_FIXTURES from '../fixtures/whois-registry-fixtures.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -103,6 +103,7 @@ function snapshot(overrides: Record<string, unknown> = {}): Record<string, unkno
     firstCapturedAt: EARLIER,
     source: 'lookup',
     scanDepth: 'deep',
+    inputHostname: null,
     availability: 'registered',
     nameservers: [],
     ...overrides,

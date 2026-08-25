@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test
@@ -55,8 +55,7 @@ function ctHistoryStoreFixture(checkCount: number) {
     newDomains: index === 0 ? [] : [`history-${index}.invalid`],
     truncated: false,
   }));
-  return {
-    version: 2,
+  return currentBrowserLocalDocument('ct_history', {
     entries: [{
       query: 'retention fixture',
       baselineAt: history.at(-1)?.checkedAt || null,
@@ -67,7 +66,7 @@ function ctHistoryStoreFixture(checkCount: number) {
       discardedCheckCountKnown: true,
       discardedCheckCountCapped: false,
     }],
-  };
+  });
 }
 
 async function mockCtSearch(page: Page, body: unknown, status = 200) {
@@ -188,7 +187,7 @@ test('lookalike generation discloses its limits and paginates every retained can
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="all"]')).toHaveText('All candidates (2000)');
   await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues');
-  await expect(page.locator('.sort-guidance')).toContainText('Sorting changes presentation only');
+  await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues, then generation paths and domain.');
 
   const pagination = page.getByRole('navigation', { name: 'Discover candidate pages' });
   await expect(pagination).toContainText('Page 1 of 20');
@@ -266,7 +265,7 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   const reviewSignals = candidate.locator('.candidate-badge.review');
   await expect(reviewSignals).toHaveText(/[2-5] review cues/u);
   await expect(reviewSignals).toHaveAttribute('title', /source or profile character match/u);
-  await expect(page.getByText('Review cues count visible candidate characteristics only.')).toContainText('not a risk score');
+  await expect(page.getByText('Visual matches and review cues are leads for further review, not findings.', { exact: true })).toBeVisible();
   const reviewCueScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="review-cues"]');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
   const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
@@ -276,7 +275,6 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   expect(Number((await reviewCueScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   expect(Number((await unicodeScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   expect(Number((await referenceScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
-  await expect(page.getByText('Visual matches use a bounded character comparison.')).toContainText('not proof of impersonation');
   await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option[value="unicode_whole_label"]')).toHaveText('Whole-label Unicode confusable (1)');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most generation paths');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most review cues');
@@ -644,16 +642,15 @@ test('an allowlisted canonical domain is excluded when a profile is active', asy
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   };
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
     'whois-rdap-active-brand-profile-v1': 'p1',
-    'whoisleuth:ct-search-history:v1': {
-      version: 1,
+    'whoisleuth:ct-search-history:v1': currentBrowserLocalDocument('ct_history', {
       entries: [{
         query: 'example', baselineAt: '2026-05-01T00:00:00.000Z', updatedAt: '2026-05-01T00:00:00.000Z',
         domains: ['other.invalid'],
         history: [{ checkedAt: '2026-05-01T00:00:00.000Z', resultCount: 1, certificateCount: 1, newCount: 0, newDomains: [], truncated: false }],
       }],
-    },
+    }),
   });
   await mockCtSearch(page, structuredResponse);
   await runCtSearch(page);
@@ -784,7 +781,9 @@ test('certificate history uses a compact mobile summary without horizontal scrol
   await expect(summary).toBeVisible();
   await expect(summary.locator('dt')).toHaveText(['First', 'Latest', 'Peak', 'Newly found', 'Capped checks']);
   await expect(summary.locator('dd')).toHaveText(['1', '2', '2', '1', '0']);
-  await expect(history.locator('.ct-trend svg')).toBeHidden();
+  const desktopCertificateTrend = history.locator('.ct-trend svg');
+  await expect(desktopCertificateTrend).toHaveCount(1);
+  await expect(desktopCertificateTrend).toBeHidden();
   await expect.poll(() => history.locator('.ct-trend').evaluate((element) => (
     element.scrollWidth <= element.clientWidth
   ))).toBe(true);
@@ -794,7 +793,7 @@ test('certificate history uses a compact mobile summary without horizontal scrol
 });
 
 test('previous certificate searches can be reused and deleted', async ({ page }) => {
-  await mockCtSearch(page, initialBaselineResponse);
+  await mockCtSearch(page, { ...initialBaselineResponse, keyword: 'Example Brand' });
   await runCtSearch(page, 'Example Brand');
 
   const history = page.locator('details.ct-history');
@@ -896,16 +895,43 @@ test('a capped search does not replace the previous complete baseline', async ({
   await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);
 });
 
-test('corrupt local CT history is recovered without losing search results', async ({ page }) => {
-  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': '{broken-json' });
-  await mockCtSearch(page, initialBaselineResponse);
-  await runCtSearch(page);
+test('corrupt local CT history remains unavailable and is never replaced by a new baseline', async ({ page }) => {
+  const malformed = '{broken-json';
+  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': malformed });
 
-  await expect(page.locator('.candidate')).toHaveCount(1);
-  await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
-  const stored = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1, minimumRevision: 2 });
-  expect(stored.manifest.schemaVersion).toBe(3);
-  expect(stored.records).toHaveLength(1);
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Certificate Transparency history data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:ct-search-history:v1'))).toBe(malformed);
+  const retained = await page.evaluate(async (collectionId) => {
+    const databases = await indexedDB.databases();
+    if (!databases.some((database) => database.name === 'whoisleuth-browser-data-v1')) {
+      return { manifest: false, records: 0 };
+    }
+    const request = indexedDB.open('whoisleuth-browser-data-v1');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const transaction = database.transaction(['manifests', 'records'], 'readonly');
+      const manifestRequest = transaction.objectStore('manifests').get(collectionId);
+      const recordsRequest = transaction.objectStore('records').index('collection').count(collectionId);
+      const [manifest, records] = await Promise.all([
+        new Promise<unknown>((resolve, reject) => {
+          manifestRequest.onsuccess = () => resolve(manifestRequest.result);
+          manifestRequest.onerror = () => reject(manifestRequest.error);
+        }),
+        new Promise<number>((resolve, reject) => {
+          recordsRequest.onsuccess = () => resolve(recordsRequest.result);
+          recordsRequest.onerror = () => reject(recordsRequest.error);
+        }),
+      ]);
+      return { manifest: manifest !== undefined, records };
+    } finally {
+      database.close();
+    }
+  }, 'ct_history');
+  expect(retained).toEqual({ manifest: false, records: 0 });
 });
 
 test('a browser storage write failure does not hide valid CT search results', async ({ page }) => {

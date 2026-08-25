@@ -1,11 +1,39 @@
 import { ANALYST_REVIEW_REASON_VALUES } from './analyst-taxonomy.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { RISK_REVIEW_THRESHOLD } from './risk-scoring.mts';
+import {
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_JSON_CONTAINER_ITEMS,
+  MAX_RISK_CALIBRATION_JSON_DEPTH,
+  MAX_RISK_CALIBRATION_JSON_KEYS,
+  MAX_RISK_CALIBRATION_JSON_VALUES,
+  MAX_RISK_CALIBRATION_MODEL_VERSION,
+  MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH,
+  MAX_RISK_CALIBRATION_SUMMARY_BYTES,
+  MAX_RISK_CALIBRATION_SUMMARY_STRATA,
+  MAX_RISK_CALIBRATION_TIMESTAMP_LENGTH,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_REPORT_CONFIDENCE_KEYS,
+  RISK_CALIBRATION_REPORT_DATASET_KEYS,
+  RISK_CALIBRATION_REPORT_INTERPRETATION_KEYS,
+  RISK_CALIBRATION_REPORT_INTERVAL_KEYS,
+  RISK_CALIBRATION_REPORT_METRIC_KEYS,
+  RISK_CALIBRATION_REPORT_MODEL_COMPARISON_KEYS,
+  RISK_CALIBRATION_REPORT_PRIVACY_KEYS,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_SCORE_BAND_KEYS,
+  RISK_CALIBRATION_REPORT_STRATUM_KEYS,
+  RISK_CALIBRATION_REPORT_SUMMARY_KEYS,
+  RISK_CALIBRATION_REPORT_VERSION,
+  RISK_CALIBRATION_REPORT_V3_SUMMARY_ROOT_KEYS,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+  type RiskCalibrationDatasetVersion,
+} from '../packages/contracts/risk-calibration.mts';
 
-export const RISK_CALIBRATION_SUMMARY_SCHEMA = 'whoisleuth.cli.risk-calibration';
-export const RISK_CALIBRATION_SUMMARY_VERSION = 3;
-export const RISK_CALIBRATION_SUMMARY_MAX_BYTES = 512 * 1024;
-export const RISK_CALIBRATION_SUMMARY_MAX_RECORDS = 500;
+export const RISK_CALIBRATION_SUMMARY_SCHEMA = RISK_CALIBRATION_REPORT_SCHEMA;
+export const RISK_CALIBRATION_SUMMARY_VERSION = RISK_CALIBRATION_REPORT_VERSION;
+export const RISK_CALIBRATION_SUMMARY_MAX_BYTES = MAX_RISK_CALIBRATION_SUMMARY_BYTES;
+export const RISK_CALIBRATION_SUMMARY_MAX_RECORDS = MAX_RISK_CALIBRATION_RECORDS;
 export const RISK_CALIBRATION_SUMMARY_MIN_STRATUM_SAMPLE = 20;
 export const RISK_CALIBRATION_SUMMARY_THRESHOLDS = Object.freeze(
   [...new Set([40, 50, 60, RISK_REVIEW_THRESHOLD, 80, 90])].sort((left, right) => left - right),
@@ -40,8 +68,8 @@ export type RiskCalibrationSummaryReport = Readonly<{
   mode: 'summary';
   generatedAt: string;
   dataset: Readonly<{
-    schema: 'whoisleuth.risk-calibration-dataset';
-    version: 1 | 2;
+    schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
+    version: RiskCalibrationDatasetVersion;
     recordCount: number;
   }>;
   riskModelVersion: number;
@@ -88,28 +116,17 @@ export type RiskCalibrationSummaryReport = Readonly<{
   }>;
 }>;
 
-const ROOT_KEYS = new Set([
-  'schema', 'version', 'mode', 'generatedAt', 'dataset', 'riskModelVersion',
-  'currentReviewThreshold', 'summary', 'thresholds', 'strata',
-  'modelComparison', 'privacy', 'interpretation',
-]);
-const DATASET_KEYS = new Set(['schema', 'version', 'recordCount']);
-const SUMMARY_KEYS = new Set(['total', 'positive', 'negative', 'excluded', 'scoreBands']);
-const SCORE_BAND_KEYS = new Set(['not_scored', '0_39', '40_69', '70_100']);
-const METRIC_KEYS = new Set([
-  'threshold', 'truePositive', 'falsePositive', 'trueNegative', 'falseNegative',
-  'precision', 'recall', 'specificity', 'falsePositiveRate', 'f1',
-  'balancedAccuracy', 'confidence95',
-]);
-const CONFIDENCE_KEYS = new Set(['precision', 'recall', 'specificity']);
-const INTERVAL_KEYS = new Set(['lower', 'upper']);
-const STRATUM_KEYS = new Set(['dimension', 'value', 'sampleCount', 'insufficientSample', 'metrics']);
-const MODEL_COMPARISON_KEYS = new Set([
-  'available', 'previousModelVersion', 'currentModelVersion', 'scoresChanged',
-  'bandsChanged', 'thresholdClassificationsChanged',
-]);
-const PRIVACY_KEYS = new Set(['targetsRetained', 'identifiersRetained', 'rawEvidenceRetained']);
-const INTERPRETATION_KEYS = new Set(['authority', 'statement', 'automaticTuning', 'networkRequests', 'persisted']);
+const ROOT_KEYS = new Set(RISK_CALIBRATION_REPORT_V3_SUMMARY_ROOT_KEYS);
+const DATASET_KEYS = new Set(RISK_CALIBRATION_REPORT_DATASET_KEYS);
+const SUMMARY_KEYS = new Set(RISK_CALIBRATION_REPORT_SUMMARY_KEYS);
+const SCORE_BAND_KEYS = new Set(RISK_CALIBRATION_REPORT_SCORE_BAND_KEYS);
+const METRIC_KEYS = new Set(RISK_CALIBRATION_REPORT_METRIC_KEYS);
+const CONFIDENCE_KEYS = new Set(RISK_CALIBRATION_REPORT_CONFIDENCE_KEYS);
+const INTERVAL_KEYS = new Set(RISK_CALIBRATION_REPORT_INTERVAL_KEYS);
+const STRATUM_KEYS = new Set(RISK_CALIBRATION_REPORT_STRATUM_KEYS);
+const MODEL_COMPARISON_KEYS = new Set(RISK_CALIBRATION_REPORT_MODEL_COMPARISON_KEYS);
+const PRIVACY_KEYS = new Set(RISK_CALIBRATION_REPORT_PRIVACY_KEYS);
+const INTERPRETATION_KEYS = new Set(RISK_CALIBRATION_REPORT_INTERPRETATION_KEYS);
 const REVIEW_REASON_VALUES = new Set([...ANALYST_REVIEW_REASON_VALUES, 'not_recorded']);
 const SCAN_DEPTH_VALUES = new Set(['deep', 'fast', 'unknown']);
 const CONTROL_RE = /[\x00-\x1f\x7f]/u;
@@ -134,14 +151,16 @@ function boundedCount(value: unknown, label: string, maximum = RISK_CALIBRATION_
 }
 
 function modelVersion(value: unknown, label: string): number {
-  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 100) {
+  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > MAX_RISK_CALIBRATION_MODEL_VERSION) {
     throw new Error(`${label} must be a supported positive model version.`);
   }
   return Number(value);
 }
 
 function canonicalTimestamp(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
+  if (typeof value !== 'string'
+    || value.length > MAX_RISK_CALIBRATION_TIMESTAMP_LENGTH
+    || !Number.isFinite(Date.parse(value))) {
     throw new Error(`${label} must be a valid date and time.`);
   }
   const canonical = new Date(value).toISOString();
@@ -245,7 +264,12 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
   let parsed: unknown;
   try {
     const withoutBom = raw.replace(/^\uFEFF/u, '');
-    scanBoundedJson(withoutBom);
+    scanBoundedJson(withoutBom, {
+      maximumDepth: MAX_RISK_CALIBRATION_JSON_DEPTH,
+      maximumKeys: MAX_RISK_CALIBRATION_JSON_KEYS,
+      maximumValues: MAX_RISK_CALIBRATION_JSON_VALUES,
+      maximumContainerItems: MAX_RISK_CALIBRATION_JSON_CONTAINER_ITEMS,
+    });
     parsed = JSON.parse(withoutBom);
   } catch (reason) {
     const message = reason instanceof Error
@@ -263,7 +287,9 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
 
   const dataset = object(root.dataset, 'Risk calibration dataset metadata');
   exactKeys(dataset, DATASET_KEYS, 'Risk calibration dataset metadata');
-  if (dataset.schema !== 'whoisleuth.risk-calibration-dataset' || (dataset.version !== 1 && dataset.version !== 2)) {
+  if (dataset.schema !== RISK_CALIBRATION_DATASET_SCHEMA
+    || typeof dataset.version !== 'number'
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(dataset.version as RiskCalibrationDatasetVersion)) {
     throw new Error('Risk calibration dataset metadata has an unsupported schema or version.');
   }
   const recordCount = boundedCount(dataset.recordCount, 'Risk calibration dataset record count');
@@ -310,7 +336,7 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
     negative,
   )));
 
-  if (!Array.isArray(root.strata) || root.strata.length > 32) {
+  if (!Array.isArray(root.strata) || root.strata.length > MAX_RISK_CALIBRATION_SUMMARY_STRATA) {
     throw new Error('Risk calibration strata must be a bounded array.');
   }
   const seenStrata = new Set<string>();
@@ -321,7 +347,10 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
     if (stratum.dimension !== 'review_reason' && stratum.dimension !== 'scan_depth') {
       throw new Error(`${label} has an unsupported dimension.`);
     }
-    if (typeof stratum.value !== 'string' || !stratum.value || stratum.value.length > 64 || CONTROL_RE.test(stratum.value)) {
+    if (typeof stratum.value !== 'string'
+      || !stratum.value
+      || stratum.value.length > MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH
+      || CONTROL_RE.test(stratum.value)) {
       throw new Error(`${label} has an invalid value.`);
     }
     const allowedValues = stratum.dimension === 'review_reason' ? REVIEW_REASON_VALUES : SCAN_DEPTH_VALUES;
@@ -389,8 +418,8 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
     mode: 'summary',
     generatedAt: canonicalTimestamp(root.generatedAt, 'Risk calibration generation time'),
     dataset: Object.freeze({
-      schema: 'whoisleuth.risk-calibration-dataset',
-      version: dataset.version,
+      schema: RISK_CALIBRATION_DATASET_SCHEMA,
+      version: dataset.version as RiskCalibrationDatasetVersion,
       recordCount,
     }),
     riskModelVersion,

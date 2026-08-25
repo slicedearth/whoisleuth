@@ -140,7 +140,7 @@
     <div class="mode-options" role="radiogroup" aria-label="Lookup depth">
       <label class:active={lookupMode === 'deep'}>
         <input type="radio" name="lookup-depth" value="deep" bind:group={lookupMode}>
-        <span><strong>Deep</strong><small>Full evidence</small></span>
+        <span><strong>Deep</strong><small>Detailed evidence</small></span>
       </label>
       <label class:active={lookupMode === 'fast'}>
         <input type="radio" name="lookup-depth" value="fast" bind:group={lookupMode}>
@@ -179,15 +179,15 @@
   {#if intelligenceOptionCount}
     <fieldset class="intelligence-options">
       <legend>Optional third-party intelligence</legend>
-      <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting, and provider verdicts never affect availability.</p>
+      <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting, and provider verdicts do not decide availability.</p>
       {#if externalIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search archived URLscan verdicts</strong> Sends only the registrable domain to the optional third-party search API. It does not submit the domain for scanning.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search archived URLscan verdicts</strong> Searches archived domain verdicts.</span></label>
       {/if}
       {#if malwareHostIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware-distribution records</strong> Sends only the registrable domain to the optional URLhaus host API. It searches existing records and does not submit a URL or sample.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware-distribution records</strong> Searches existing host records; no URL or sample is provided.</span></label>
       {/if}
       {#if malwareIocIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware infrastructure records</strong> Sends only the registrable domain to the optional ThreatFox search API. It searches retained indicators and does not submit an IOC, URL, or sample.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware infrastructure records</strong> Searches retained infrastructure indicators; no IOC or sample is provided.</span></label>
       {/if}
     </fieldset>
   {/if}

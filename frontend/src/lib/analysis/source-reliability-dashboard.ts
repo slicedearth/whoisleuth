@@ -1,3 +1,6 @@
+import { parseBoundedJson } from '../bounded-json.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+
 export const SOURCE_RELIABILITY_DASHBOARD_MAX_BYTES = 512 * 1024;
 export const SOURCE_RELIABILITY_DASHBOARD_MAX_SOURCES = 64;
 export const SOURCE_RELIABILITY_DASHBOARD_MAX_TIMELINE_POINTS = 100;
@@ -97,10 +100,9 @@ function expectedRate(numerator: number, denominator: number): number | null {
 }
 
 function timestamp(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
-    throw new Error(`${label} must be a valid date and time.`);
-  }
-  return new Date(value).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw new Error(`${label} must be a valid date and time with an explicit timezone.`);
+  return normalized;
 }
 
 function optionalTimestamp(value: unknown, label: string): string | null {
@@ -169,9 +171,12 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = parseBoundedJson(raw, {
+      label: 'Source reliability report',
+      maximumBytes: SOURCE_RELIABILITY_DASHBOARD_MAX_BYTES,
+    });
   } catch {
-    throw new Error('Source reliability report is not valid JSON.');
+    throw new Error('Source reliability report is not valid bounded JSON or contains duplicate keys.');
   }
   const root = record(parsed, 'Source reliability report');
   exactKeys(root, ROOT_KEYS, 'Source reliability report');

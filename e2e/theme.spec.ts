@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces } from './helpers';
 
 const STORAGE_KEY = 'whoisleuth:theme:v1';
 
@@ -94,6 +94,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(page.locator('.topology-backdrop')).toHaveCSS('opacity', '0.16');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(231, 226, 216)');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(214, 207, 194)');
 
@@ -102,6 +103,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(23, 26, 33)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(139, 147, 167)');
+  await expect(page.locator('.topology-backdrop')).toHaveCSS('opacity', '0.22');
 
   const navFontSizes = await page.locator('.public-header').evaluate((header) => ({
     navigation: getComputedStyle(header.querySelector('a[href="/demo"]')!).fontSize,
@@ -230,7 +232,7 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
 
 test('dark chrome restores the deployed secondary accent while light chrome stays blue', async ({ page }) => {
   await clearThemePreference(page);
-  await page.goto('/dashboard');
+  await page.goto('/lookup');
 
   for (const theme of ['Dark', 'Light'] as const) {
     await chooseTheme(page, theme);
@@ -254,7 +256,7 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
       const navigation = document.querySelector<HTMLElement>('nav a.active')!;
       const prompt = document.querySelector<HTMLElement>('.terminal-strip .prompt-sigil')!;
       const eyebrow = document.querySelector<HTMLElement>('.heading .eyebrow')!;
-      const field = document.querySelector<HTMLElement>('#browser-target')!;
+      const field = document.querySelector<HTMLElement>('#query')!;
       const result = {
         interfaceAccent,
         accent,
@@ -374,6 +376,12 @@ test('theme-specific controls, nested surfaces, score visibility, and form hints
 test('dashboard fields and quiet buttons use the theme-specific boundary', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', {
+      entries: [{ domain: 'theme.invalid', availability: 'unknown', mutationTypes: [], savedAt: '2026-08-23T00:00:00.000Z' }],
+    }),
+  });
+  await openDashboardSecondaryWorkspaces(page);
 
   for (const theme of ['Dark', 'Light'] as const) {
     await chooseTheme(page, theme);
@@ -438,6 +446,34 @@ test('the theme trigger controls only a rendered option list', async ({ page }) 
   await expect(page.locator('#colour-theme-options')).toHaveCount(0);
 });
 
+test('the public theme menu uses the surrounding canvas surface', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/resources');
+  await chooseTheme(page, 'Light');
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
+    await trigger.click();
+    const options = page.getByRole('listbox', { name: 'Colour theme options' });
+    await expect(options).toBeVisible();
+
+    const colours = await page.evaluate(() => ({
+      canvas: getComputedStyle(document.body).backgroundColor,
+      trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
+      options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
+    }));
+    expect(colours.trigger).toBe(colours.canvas);
+    expect(colours.options).toBe(colours.canvas);
+
+    await trigger.click();
+    await expect(options).toHaveCount(0);
+  }
+});
+
 test('a theme still applies to the current tab when persistent storage is unavailable', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(Storage.prototype, 'getItem', { configurable: true, value: () => { throw new Error('blocked'); } });
@@ -466,35 +502,33 @@ test('theme controls fit beside authenticated public navigation across common ph
   for (const width of [320, 360, 375, 390, 412, 430]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-
-    const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
+    const mobileNavigation = page.locator('.public-navigation-mobile');
     const publicBrand = page.locator('.public-brand');
-    const demoLink = publicNavigation.locator('a[href="/demo"]');
-    const resourcesLink = publicNavigation.getByRole('link', { name: 'Resources', exact: true });
-    const theme = publicNavigation.locator('.theme-selector');
-    const trigger = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
-    const consoleLink = publicNavigation.getByRole('link', { name: 'Open console' });
-    const signOut = publicNavigation.getByRole('button', { name: 'Sign out' });
-    const [brandBox, navigationBox, demoBox, resourcesBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
+    const menu = mobileNavigation.locator('.site-menu');
+    const menuTrigger = menu.locator(':scope > summary');
+    const theme = mobileNavigation.locator('.theme-selector');
+    const themeTrigger = mobileNavigation.getByRole('button', { name: /^Colour theme,/ });
+    const consoleLink = mobileNavigation.getByRole('link', { name: 'Open console' });
+    await expect(mobileNavigation).toBeVisible();
+    await expect(menuTrigger).toBeVisible();
+    await expect(consoleLink).toBeVisible();
+    await expect(themeTrigger).toBeVisible();
+
+    const [brandBox, navigationBox, menuTriggerBox, themeBox, themeTriggerBox, consoleBox] = await Promise.all([
       publicBrand.boundingBox(),
-      publicNavigation.boundingBox(),
-      demoLink.boundingBox(),
-      resourcesLink.boundingBox(),
+      mobileNavigation.boundingBox(),
+      menuTrigger.boundingBox(),
       theme.boundingBox(),
-      trigger.boundingBox(),
+      themeTrigger.boundingBox(),
       consoleLink.boundingBox(),
-      signOut.boundingBox(),
     ]);
 
     expect(brandBox).not.toBeNull();
     expect(navigationBox).not.toBeNull();
-    expect(demoBox).toBeNull();
-    expect(resourcesBox).not.toBeNull();
+    expect(menuTriggerBox).not.toBeNull();
     expect(themeBox).not.toBeNull();
-    expect(triggerBox).not.toBeNull();
+    expect(themeTriggerBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
-    expect(signOutBox).not.toBeNull();
     const brandRight = brandBox!.x + brandBox!.width;
     const brandBottom = brandBox!.y + brandBox!.height;
     const navigationRight = navigationBox!.x + navigationBox!.width;
@@ -507,22 +541,28 @@ test('theme controls fit beside authenticated public navigation across common ph
     } else {
       expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
     }
-    expect(consoleBox!.x - (resourcesBox!.x + resourcesBox!.width)).toBeGreaterThanOrEqual(5);
-    expect(themeBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
-    expect(triggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);
-    expect(signOutBox!.x - (themeBox!.x + themeBox!.width)).toBeGreaterThanOrEqual(5);
-    expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(width);
-    const [themeFontSize, consoleFontSize, signOutFontSize] = await Promise.all([
-      trigger.evaluate((element) => getComputedStyle(element).fontSize),
-      consoleLink.evaluate((element) => getComputedStyle(element).fontSize),
-      signOut.evaluate((element) => getComputedStyle(element).fontSize),
-    ]);
-    const themeSymbolSize = await trigger.locator('.theme-symbol').evaluate(
+    expect(navigationRight).toBeLessThanOrEqual(width);
+    expect(menuTriggerBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
+    expect(consoleBox!.x).toBeGreaterThan(menuTriggerBox!.x + menuTriggerBox!.width);
+    expect(themeBox!.x).toBeGreaterThan(consoleBox!.x + consoleBox!.width);
+    expect(themeTriggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);
+    const themeSymbolSize = await themeTrigger.locator('.theme-symbol').evaluate(
       (element) => parseFloat(getComputedStyle(element).width),
     );
-    expect(themeFontSize).toBe(consoleFontSize);
-    expect(themeFontSize).toBe(signOutFontSize);
     expect(themeSymbolSize).toBeLessThanOrEqual(16);
+
+    await menuTrigger.click();
+    const publicNavigation = menu.getByRole('navigation', { name: 'Public navigation' });
+    await expect(publicNavigation.getByRole('link', { name: 'Demo', exact: true })).toBeVisible();
+    await expect(publicNavigation.getByRole('link', { name: 'Resources', exact: true })).toBeVisible();
+    await expect(publicNavigation.getByRole('link', { name: 'CLI', exact: true })).toBeVisible();
+    await expect(publicNavigation.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    const menuBox = await publicNavigation.boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(width);
+    await menuTrigger.click();
+    await expect(publicNavigation).toBeHidden();
     await expectNoHorizontalOverflow(page);
   }
 

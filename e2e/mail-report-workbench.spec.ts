@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { migrateLegacyBrowserData } from './helpers';
+import { migrateLegacyBrowserData, openBrandWorkbench } from './helpers';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -40,6 +40,7 @@ test('reviews aggregate mail reports locally, exports them deliberately, and cle
   await page.getByLabel('Brand name').fill('Example Brand');
   await page.getByLabel('Official domains').fill('example.test');
   await page.getByRole('button', { name: 'Save profile' }).click();
+  await openBrandWorkbench(page, 'mail');
 
   const workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
   await expect(workbench).toBeVisible();
@@ -70,6 +71,7 @@ test('reviews aggregate mail reports locally, exports them deliberately, and cle
   expect(overflow).toBeLessThanOrEqual(0);
 
   await page.reload();
+  await openBrandWorkbench(page, 'mail');
   await expect(page.getByRole('region', { name: 'DMARC and SMTP TLS reports' }).getByText('Choose one or more aggregate report files to begin a transient review.')).toBeVisible();
 });
 
@@ -86,6 +88,7 @@ test('does not publish an in-flight mail review under a different active profile
   await page.getByRole('radio', { name: 'Set Profile A active' }).check();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Set "Profile A" active.');
   await expect(page.getByRole('radio', { name: 'Set Profile A active' })).toBeChecked();
+  await openBrandWorkbench(page, 'mail');
 
   await page.evaluate(() => {
     const original = File.prototype.arrayBuffer;

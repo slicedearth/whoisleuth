@@ -24,7 +24,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Understand a domain.+Before you act/u })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   const publicFooter = page.locator('.public-footer');
@@ -45,16 +45,17 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
-  const publicFooterStatement = await page.locator('footer.site-footer > p').innerText();
   const publicFooterBuild = await page.locator('footer.site-footer .footer-meta > p').evaluate((element) => {
     const visibleCopy = element.cloneNode(true) as HTMLElement;
     visibleCopy.querySelectorAll('.sr-only').forEach((item) => item.remove());
     return visibleCopy.textContent?.replace(/\s+/gu, ' ').trim() ?? '';
   });
-  const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
+  const desktopPublicNavigation = page.locator('.public-navigation-desktop');
+  const mobilePublicHeader = page.locator('.public-navigation-mobile');
+  const mobileSiteMenu = page.locator('.site-menu');
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(publicNavigation).toHaveCSS('display', 'flex');
-  await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
+  await expect(desktopPublicNavigation).toBeHidden();
+  await expect(mobilePublicHeader).toHaveCSS('display', 'flex');
   const publicBrand = page.getByRole('link', { name: 'WHOISleuth overview' });
   await expect(publicBrand).toBeVisible();
   await expect(page.locator('.public-brand .brand-copy')).toBeVisible();
@@ -62,8 +63,18 @@ test('signs in through the login form and back out again', async ({ page }) => {
   expect(compactBrandBox).not.toBeNull();
   expect(compactBrandBox!.width).toBeGreaterThanOrEqual(24);
   expect(compactBrandBox!.height).toBeGreaterThanOrEqual(24);
-  await expect(publicNavigation.getByRole('link', { name: 'Overview' })).not.toBeVisible();
-  const anonymousConsoleLinkBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
+  await expect(mobileSiteMenu).not.toHaveAttribute('open', '');
+  await expect(mobilePublicHeader.getByRole('link', { name: 'Open console' })).toBeVisible();
+  await expect(mobilePublicHeader.getByRole('button', { name: /^Colour theme,/ })).toBeVisible();
+  await mobileSiteMenu.locator('summary').click();
+  const anonymousMobileNavigation = mobileSiteMenu.getByRole('navigation', { name: 'Public navigation' });
+  await expect(anonymousMobileNavigation).toBeVisible();
+  await expect(anonymousMobileNavigation.getByRole('link', { name: 'Demo' })).toBeVisible();
+  await expect(anonymousMobileNavigation.getByRole('link', { name: 'Resources' })).toBeVisible();
+  await expect(anonymousMobileNavigation.getByRole('link', { name: 'CLI' })).toBeVisible();
+  await expect(anonymousMobileNavigation.getByRole('link', { name: 'Overview' })).toHaveCount(0);
+  await mobileSiteMenu.locator('summary').click();
+  const anonymousConsoleLinkBox = await mobilePublicHeader.getByRole('link', { name: 'Open console' }).boundingBox();
   expect(anonymousConsoleLinkBox).not.toBeNull();
   expect(anonymousConsoleLinkBox!.x + anonymousConsoleLinkBox!.width).toBeLessThanOrEqual(390);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -74,7 +85,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 
   const loginForm = page.locator('form.login');
   await expect(loginForm).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Continue to WHOISleuth.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue to WHOISleuth' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Console sign-in' })).toBeVisible();
   await expect(page.getByText('Protected console', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
@@ -103,17 +114,15 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const signOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(signOutButton).toBeVisible();
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
-  await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
-  await expect(page.locator('footer.site-footer > p')).toHaveText(publicFooterStatement);
+  await expect(page.locator('footer.site-footer').getByRole('link', { name: 'Privacy' })).toHaveCount(1);
   await expect.poll(() => page.locator('footer.site-footer .footer-meta > p').evaluate((element) => {
     const visibleCopy = element.cloneNode(true) as HTMLElement;
     visibleCopy.querySelectorAll('.sr-only').forEach((item) => item.remove());
     return visibleCopy.textContent?.replace(/\s+/gu, ' ').trim() ?? '';
   })).toBe(publicFooterBuild);
-  const consoleResourcesLink = page.locator('footer.site-footer').getByRole('link', { name: /Resources/ });
-  await expect(consoleResourcesLink).toHaveAttribute('target', '_blank');
-  await expect(consoleResourcesLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(consoleResourcesLink).toHaveCSS('font-weight', '700');
+  const consoleFooterLinks = page.locator('footer.site-footer .footer-links');
+  await expect(consoleFooterLinks.getByRole('link')).toHaveCount(5);
+  await expect(consoleFooterLinks.getByRole('link', { name: 'Resources', exact: true })).toHaveCount(0);
   await expect(page.locator('footer.site-footer .new-tab')).toHaveCount(0);
 
   const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
@@ -131,27 +140,27 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const publicHomepagePage = await homepagePromise;
   await expect(page).toHaveURL('/dashboard');
   await expect(publicHomepagePage).toHaveURL('/');
-  await expect(publicHomepagePage.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
+  await expect(publicHomepagePage.getByRole('heading', { name: /Understand a domain.+Before you act/u })).toBeVisible();
   await expect(publicHomepagePage.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(publicHomepagePage.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(publicHomepagePage.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await publicHomepagePage.close();
+  await expect(page.locator('.console-header-actions').getByRole('link', { name: /Public site/u })).toHaveCount(0);
 
-  const publicResourcesLink = page.getByRole('link', { name: /Open resources/u });
+  const publicResourcesLink = page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: /^Resources/u });
   await expect(publicResourcesLink).toHaveAttribute('target', '_blank');
   await expect(publicResourcesLink).toHaveAttribute('rel', 'noopener noreferrer');
   const resourcesPromise = page.waitForEvent('popup');
   await publicResourcesLink.click();
   const publicResourcesPage = await resourcesPromise;
   await expect(page).toHaveURL('/dashboard');
-  await expect(publicResourcesPage).toHaveURL('/resources#start');
-  await expect(publicResourcesPage.getByRole('heading', { name: 'Learn the workflow. Understand the evidence.' })).toBeVisible();
+  await expect(publicResourcesPage).toHaveURL('/resources');
+  await expect(publicResourcesPage.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
   await publicResourcesPage.close();
   await page.goto('/demo');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/resources');
-  await expect(page.locator('.resource-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/');
@@ -160,27 +169,37 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');
   for (const viewportWidth of [390, 320]) {
     await page.setViewportSize({ width: viewportWidth, height: 844 });
-    await expect(publicNavigation).toHaveCSS('display', 'flex');
-    await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
-    const demoLink = publicNavigation.getByRole('link', { name: 'Demo' });
-    await expect(demoLink).not.toBeVisible();
-    const themeButton = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
+    await expect(desktopPublicNavigation).toBeHidden();
+    await expect(mobilePublicHeader).toHaveCSS('display', 'flex');
+    const menuSummary = mobileSiteMenu.locator('summary');
+    const themeButton = mobilePublicHeader.getByRole('button', { name: /^Colour theme,/ });
     const themeBox = await themeButton.boundingBox();
-    const consoleBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
-    const signOutBox = await publicSignOutButton.boundingBox();
+    const consoleBox = await mobilePublicHeader.getByRole('link', { name: 'Open console' }).boundingBox();
+    const menuBox = await menuSummary.boundingBox();
     expect(themeBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
-    expect(signOutBox).not.toBeNull();
+    expect(menuBox).not.toBeNull();
     await expect(themeButton.locator('.theme-trigger-label')).toHaveText('Theme');
     await expect(themeButton.locator('.theme-trigger-label')).toBeVisible();
-    const menuTops = [themeBox!.y, consoleBox!.y, signOutBox!.y];
-    const menuBottoms = [themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, signOutBox!.y + signOutBox!.height];
+    const menuTops = [themeBox!.y, consoleBox!.y, menuBox!.y];
+    const menuBottoms = [themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, menuBox!.y + menuBox!.height];
     expect(Math.max(...menuTops)).toBeLessThan(Math.min(...menuBottoms));
+    await menuSummary.click();
+    const mobileNavigation = mobileSiteMenu.getByRole('navigation', { name: 'Public navigation' });
+    const mobileSignOut = mobileNavigation.getByRole('button', { name: 'Sign out' });
+    await expect(mobileNavigation.getByRole('link', { name: 'Demo' })).toBeVisible();
+    await expect(mobileNavigation.getByRole('link', { name: 'Resources' })).toBeVisible();
+    await expect(mobileNavigation.getByRole('link', { name: 'CLI' })).toBeVisible();
+    await expect(mobileSignOut).toBeVisible();
+    const signOutBox = await mobileSignOut.boundingBox();
+    expect(signOutBox).not.toBeNull();
     expect(signOutBox!.x).toBeGreaterThanOrEqual(0);
     expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(viewportWidth);
     expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(viewportWidth);
+    await menuSummary.click();
   }
-  await publicSignOutButton.click();
+  await mobileSiteMenu.locator('summary').click();
+  await mobileSiteMenu.getByRole('button', { name: 'Sign out' }).click();
 
   await expect(page).toHaveURL('/login');
   await expect(loginForm).toBeVisible();
@@ -201,6 +220,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 });
 
 test('the Dashboard and every protected destination require sign-in and unsafe return targets are ignored', async ({ page }) => {
+  test.slow();
   for (const { href: path } of protectedDestinations) {
     await page.goto(path);
     await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);

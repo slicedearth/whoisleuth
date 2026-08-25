@@ -550,6 +550,15 @@ describe('discover runner', () => {
         },
         '2026-08-01T00:00:00.000Z',
       ), /invalid candidate domain/u);
+      await assert.rejects(() => updateDiscoverySnapshot(
+        path.join(directory, 'time.json'),
+        ['candidate.example'],
+        {
+          seed: 'example.test', preset: 'standard', keyboardLayout: 'qwerty',
+          tlds: ['test'], mutationFamilies: ['character_omission'], dictionaryDigestSha256: null,
+        },
+        '2026-08-01T00:00:00',
+      ), /collection time is invalid/u);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

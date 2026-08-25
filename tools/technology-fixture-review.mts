@@ -24,6 +24,7 @@ import {
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import {
+  canonicalControlFreeTimestamp,
   exactObjectKeys as assertExactKeys,
   optionalJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
@@ -150,10 +151,7 @@ function text(value: unknown, label: string, maximum: number): string {
 }
 
 function timestamp(value: unknown, label: string): string {
-  const candidate = text(value, label, 64);
-  const parsed = Date.parse(candidate);
-  if (!Number.isFinite(parsed)) throw new TypeError(`${label} must be a valid timestamp.`);
-  return new Date(parsed).toISOString();
+  return canonicalControlFreeTimestamp(value, label);
 }
 
 function normalizeHeader(

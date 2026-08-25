@@ -8,7 +8,7 @@ import {
   ScheduledMonitorDispatcher,
   scheduledMonitorTickDelivery,
   type ScheduledMonitorDelivery,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
+} from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
 
 type ScheduledMonitorCycleOptions = {
   repository: unknown;

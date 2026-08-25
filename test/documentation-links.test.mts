@@ -38,12 +38,20 @@ const REQUIRED_DELIVERY_COMMANDS = [
   'npm run check',
   'npm run build',
   'npm run architecture:check',
+  'npm run capabilities:check',
   'npm run schema:inventory',
   'npm run licenses:check',
   'npm run cli:package:check',
   'npm run test:e2e:built',
   'git diff --check',
   'npm run dependencies:audit',
+];
+const README_VERIFICATION_COMMANDS = [
+  'npm test',
+  'npm run typecheck',
+  'npm run check',
+  'npm run build',
+  'git diff --check',
 ];
 
 function sourceLinesOutsideFences(markdown: string): Array<{ line: string; lineNumber: number }> {
@@ -121,11 +129,14 @@ describe('documentation links', () => {
     assert.equal([...documented].some((file) => /^packages\/[^/]+\/README\.md$/u.test(file)), true);
   });
 
-  test('keeps the authoritative delivery sequences aligned with required gates', () => {
-    for (const file of [join(ROOT, 'README.md'), join(ROOT, 'docs/getting-started.md')]) {
+  test('keeps the layered verification guidance aligned with required gates', () => {
+    for (const [file, requiredCommands] of [
+      [join(ROOT, 'README.md'), README_VERIFICATION_COMMANDS],
+      [join(ROOT, 'docs/getting-started.md'), REQUIRED_DELIVERY_COMMANDS],
+    ] as const) {
       const source = readFileSync(file, 'utf8');
       const verification = source.match(/## Verification[\s\S]*?```bash\n([\s\S]*?)\n```/u)?.[1] ?? '';
-      for (const command of REQUIRED_DELIVERY_COMMANDS) {
+      for (const command of requiredCommands) {
         assert.equal(verification.split('\n').includes(command), true, `${relative(ROOT, file)} omits ${command}`);
       }
     }

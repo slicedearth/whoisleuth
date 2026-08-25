@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { buildSharingReview } from '../cli/sharing-review.mts';
+import { buildSharingReview, MAX_SHARING_REVIEW_BYTES } from '../cli/sharing-review.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   buildDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
+import { buildWorkspaceArchive } from '../frontend/src/lib/analysis/workspace-archive.ts';
 
 const NOW = '2026-08-04T00:00:00.000Z';
 
@@ -45,18 +46,22 @@ describe('CLI sharing review', () => {
     assert.equal(JSON.stringify(report).includes('Reviewed incident handoff'), false);
   });
 
-  test('withholds ready status for a legacy capsule with projection-only integrity', async () => {
-    const fixture = JSON.parse(readFileSync(new URL('./fixtures/artifact-integrity-v1.json', import.meta.url), 'utf8')) as {
-      artifacts: { capsule: Record<string, unknown> };
-    };
-    const capsule = fixture.artifacts.capsule;
-    const report = await buildSharingReview(JSON.stringify(capsule), {
-      marking: 'amber', recipientScope: 'organization', purpose: 'Reviewed handoff',
-      humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
-    }, NOW);
-    assert.equal(report.artifact.integrity, 'projection_integrity');
-    assert.equal(report.summary.status, 'review_cautions');
-    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
+  test('reviews a supported non-domain Lookup without emitting its query or mode', async () => {
+    const report = await buildSharingReview(
+      readFileSync(new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url), 'utf8'),
+      {
+        marking: 'amber',
+        recipientScope: 'organization',
+        purpose: 'Reviewed network handoff',
+        humanReviewed: true,
+        personalDataReviewed: true,
+        redactionsConfirmed: true,
+      },
+      NOW,
+    );
+    assert.equal(report.artifact.integrity, 'structure_only');
+    assert.notEqual(report.summary.status, 'blocked');
+    assert.doesNotMatch(JSON.stringify(report), /AS64496|\bfast\b/u);
   });
 
   test('blocks a requested downgrade from imported TLP and unreviewed sensitive fields', async () => {
@@ -113,6 +118,21 @@ describe('CLI sharing review', () => {
     assert.equal(report.summary.status, 'blocked');
   });
 
+  test('treats ordinary workspace section digests as projection integrity', async () => {
+    const archive = await buildWorkspaceArchive({}, { generatedAt: NOW });
+    const report = await buildSharingReview(JSON.stringify(archive), {
+      marking: 'amber',
+      recipientScope: 'organization',
+      purpose: 'Reviewed workspace handoff',
+      humanReviewed: true,
+      personalDataReviewed: true,
+      redactionsConfirmed: true,
+    }, NOW);
+    assert.equal(report.artifact.integrity, 'projection_integrity');
+    assert.equal(report.findings.find((finding) => finding.id === 'integrity')?.state, 'caution');
+    assert.match(report.findings.find((finding) => finding.id === 'integrity')?.detail ?? '', /do not cover the whole file/iu);
+  });
+
   test('recognizes explicit extended marking keys and rejects unsafe metadata display', async () => {
     const report = await buildSharingReview(JSON.stringify({
       schema: 'unsafe\u001b[2J-schema',
@@ -130,5 +150,19 @@ describe('CLI sharing review', () => {
     assert.equal(report.artifact.schema, null);
     assert.equal(report.privacy.artifactMetadataFieldsEmitted, 1);
     assert.equal(report.sharing.strictestImportedMarking, 'TLP:GREEN');
+  });
+
+  test('rejects an over-limit direct input before scanning or parsing it', async () => {
+    await assert.rejects(
+      () => buildSharingReview('x'.repeat(MAX_SHARING_REVIEW_BYTES + 1), {
+        marking: 'amber',
+        recipientScope: 'organization',
+        purpose: 'Bounded review',
+        humanReviewed: true,
+        personalDataReviewed: true,
+        redactionsConfirmed: true,
+      }, NOW),
+      new RegExp(`limited to ${MAX_SHARING_REVIEW_BYTES} bytes`, 'iu'),
+    );
   });
 });

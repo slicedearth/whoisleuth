@@ -2,10 +2,18 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
   DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   buildDomainControlFlightRecorder,
   formatDomainControlFlightRecorder,
+  serializeDomainControlFlightRecorder,
 } from '../lib/domain-control-flight-recorder.mts';
+import {
+  MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_BYTES,
+  MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES,
+  MAX_FLIGHT_RECORDER_INPUT_VALUES,
+  MAX_FLIGHT_RECORDER_OBSERVATIONS,
+} from '../packages/contracts/domain-control-flight-recorder.mts';
 
 const firstAt = '2026-08-01T00:00:00.000Z';
 const secondAt = '2026-08-02T00:00:00.000Z';
@@ -93,5 +101,53 @@ describe('domain-control flight recorder', () => {
       approvedWindows: [],
       rawEvidence: 'not accepted',
     }, secondAt), /unknown field/iu);
+  });
+
+  test('enforces input and output byte budgets before creating portable JSON', () => {
+    const repeatedValue = 'v'.repeat(110);
+    const values = Object.freeze(new Array(MAX_FLIGHT_RECORDER_INPUT_VALUES).fill(repeatedValue));
+    const fields = DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS.map((id) => Object.freeze({
+      id,
+      source: 'bounded fixture',
+      state: 'observed',
+      values,
+    }));
+    const oversizedInput = {
+      schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+      version: 1,
+      observations: Array.from({ length: MAX_FLIGHT_RECORDER_OBSERVATIONS }, (_, index) => ({
+        domain: `asset-${index}.example.test`,
+        observedAt: new Date(Date.parse(firstAt) + index * 1_000).toISOString(),
+        collectionDepth: 'deep',
+        fields,
+      })),
+      approvedWindows: [],
+    };
+    assert.throws(
+      () => buildDomainControlFlightRecorder(oversizedInput, secondAt),
+      new RegExp(`exceeds ${MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_BYTES} serialised bytes`, 'u'),
+    );
+
+    const report = buildDomainControlFlightRecorder({
+      schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+      version: 1,
+      observations: [observation(firstAt, [{ id: 'registry_nameservers', source: 'Registry RDAP', state: 'observed', values: ['ns1.example.test'] }])],
+      approvedWindows: [],
+    }, secondAt);
+    const event = report.events[0];
+    assert.ok(event);
+    const longValue = 'x'.repeat(500);
+    const oversizedDocument = {
+      ...report,
+      events: new Array(1_200).fill({
+        ...event,
+        before: new Array(32).fill(longValue),
+        after: new Array(32).fill(longValue),
+      }),
+    };
+    assert.throws(
+      () => serializeDomainControlFlightRecorder(oversizedDocument as typeof report),
+      new RegExp(`exceeds ${MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES} serialised bytes`, 'u'),
+    );
   });
 });

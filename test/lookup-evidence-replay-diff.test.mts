@@ -3,17 +3,27 @@ import { describe, test } from 'node:test';
 
 import { buildLookupEvidenceReplayDiff } from '../frontend/src/lib/analysis/lookup-evidence-replay-diff.ts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
+import {
+  deliveryMetadataDisplay,
+  publicationMetadataDisplay,
+} from '../frontend/src/lib/analysis/lookup-homepage-metadata-display.ts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 const OBSERVED_AT = '2026-08-01T00:00:00.000Z';
 
 function replay(overrides: Partial<LookupEvidenceReplay> = {}): LookupEvidenceReplay {
   return {
-    version: 1, schemaVersion: 6, digestSha256: 'a'.repeat(64), digestVerified: false,
+    version: 1, schemaVersion: 27, digestSha256: 'a'.repeat(64), digestVerified: false,
     exportedAt: '2026-08-01T00:00:00.000Z', generatorVersion: '1.40.0', target: 'example.test', targetType: 'domain',
     availability: 'registered', confidence: 'high',
     sources: [{ id: 'dns', label: 'DNS', state: 'success', complete: true, observedAt: '2026-08-01T00:00:00.000Z', limitations: [] }],
     facts: [{ id: 'registration.nameservers', label: 'Nameservers', value: 'ns1.example.test', sourceId: 'dns', source: 'DNS', sourceState: 'success', sourceComplete: true }],
     contradictions: [], unknowns: [], recommendedSteps: [],
+    pagePublicationMetadata: null,
+    httpDeliveryMetadata: null,
     graph: { version: 2, targetId: 'target:example.test', nodes: [], edges: [], sources: [], truncated: false, limitations: [] },
     limitations: [],
     ...overrides,
@@ -131,5 +141,36 @@ describe('offline Lookup evidence replay diff', () => {
 
   test('requires the same target', () => {
     assert.throws(() => buildLookupEvidenceReplayDiff(replay(), replay({ target: 'other.test' })), /same target/iu);
+  });
+
+  test('separates complete metadata changes from partial and legacy representation differences', () => {
+    const publication = publicationMetadataDisplay(pagePublicationMetadataFixture());
+    const delivery = deliveryMetadataDisplay(httpDeliveryMetadataFixture());
+    assert.ok(publication);
+    assert.ok(delivery);
+
+    const changedPublication = structuredClone(publication);
+    const heading = changedPublication.rows.find((item) => item.id === 'publication.headings');
+    assert.ok(heading);
+    heading.value = heading.value.replace('H1 1', 'H1 2');
+    const complete = buildLookupEvidenceReplayDiff(
+      replay({ pagePublicationMetadata: publication, httpDeliveryMetadata: delivery }),
+      replay({ pagePublicationMetadata: changedPublication, httpDeliveryMetadata: delivery }),
+    );
+    assert.equal(complete.rows.find((item) => item.id === 'metadata:publication.headings')?.kind, 'observed_change');
+
+    changedPublication.complete = false;
+    changedPublication.status = 'Partial';
+    const partial = buildLookupEvidenceReplayDiff(
+      replay({ pagePublicationMetadata: publication }),
+      replay({ pagePublicationMetadata: changedPublication }),
+    );
+    assert.equal(partial.rows.find((item) => item.id === 'metadata:publication.headings')?.kind, 'collection_quality_difference');
+
+    const legacy = buildLookupEvidenceReplayDiff(
+      replay({ schemaVersion: 26, pagePublicationMetadata: null }),
+      replay({ pagePublicationMetadata: publication }),
+    );
+    assert.equal(legacy.rows.find((item) => item.id === 'metadata:publication')?.kind, 'interpretation_difference');
   });
 });

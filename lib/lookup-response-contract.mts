@@ -8,8 +8,11 @@
 // authority for source-specific fields.
 
 import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
+  THREAT_INTELLIGENCE_SCHEMA,
   type ThreatIntelligenceResultState,
 } from './threat-intelligence-types.mts';
 import {
@@ -22,8 +25,10 @@ import {
   MAX_OBSERVATION_DIAGNOSTICS,
   MAX_OBSERVATION_LIMITATIONS,
   MAX_OBSERVATION_LIMITATION_LENGTH,
-} from './observation.mts';
+  normalizeExplicitIsoTimestamp,
+} from '../packages/evidence/observation.mts';
 import { assertBoundedJsonStructure } from './bounded-json.mts';
+import { canonicalRegistrableDomain } from './registrable-domain.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -34,6 +39,10 @@ import {
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from './lookup-network-evidence-bounds.mts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from './website-security-posture.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from './homepage-metadata-contract.mts';
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -156,6 +165,7 @@ type LookupViewModel = {
   readonly httpEvidence: JsonObject;
   readonly httpResponse: JsonObject;
   readonly httpSecurityHeaders: JsonObject;
+  readonly httpDeliveryMetadata: JsonObject;
   readonly tlsEvidence: JsonObject;
   readonly tlsCertificate: JsonObject;
   readonly tlsSubject: JsonObject;
@@ -168,6 +178,7 @@ type LookupViewModel = {
   readonly tlsValidity: JsonObject;
   readonly tlsDiagnostics: JsonObject;
   readonly pageIdentity: JsonObject;
+  readonly pagePublicationMetadata: JsonObject;
   readonly pageCanonical: JsonObject;
   readonly pageMetaRefresh: JsonObject;
   readonly pageOpenGraph: JsonObject;
@@ -203,6 +214,7 @@ const INVALID_COMPACT_LOOKUP_RESPONSE = 'INVALID_COMPACT_LOOKUP_RESPONSE';
 const INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE = 'Bulk lookup returned an invalid response.';
 const MAX_LOOKUP_RESPONSE_QUERY_LENGTH = 4096;
 const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
+const MAX_LOOKUP_RESPONSE_PAGE_TITLE_LENGTH = 200;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
 const MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS = 500;
@@ -216,7 +228,7 @@ const MAX_THREAT_INTELLIGENCE_LIMITATIONS = 10;
 const MAX_THREAT_INTELLIGENCE_TEXT_LENGTH = 500;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const MAX_LOOKUP_TIMING_SOURCES = 10;
-const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const QUERY_TYPES = new Set<LookupQueryType>(['domain', 'ipv4', 'ipv6', 'asn']);
 const COMPACT_AVAILABILITY_STATES = new Set<CompactLookupAvailabilityState>([
   'available',
@@ -274,9 +286,7 @@ function boundedThreatText(value: unknown, maximum = MAX_THREAT_INTELLIGENCE_TEX
 
 function threatTimestamp(value: unknown): string | null {
   const text = boundedThreatText(value, 40);
-  if (!text) return null;
-  const epoch = Date.parse(text);
-  return Number.isFinite(epoch) ? new Date(epoch).toISOString() : null;
+  return text ? normalizeExplicitIsoTimestamp(text) : null;
 }
 
 function attributedThreatUrl(value: unknown, providerId: string): string | null {
@@ -300,20 +310,29 @@ function normalizeThreatFinding(value: unknown, providerId: string): JsonObject 
   const tags = Array.isArray(input.tags)
     ? [...new Set(input.tags.slice(0, 40).map((tag) => boundedThreatText(tag, 80)).filter((tag): tag is string => tag !== null))].slice(0, 20)
     : [];
+  const firstObservedAt = threatTimestamp(input.firstObservedAt);
+  const lastObservedAt = threatTimestamp(input.lastObservedAt);
+  if (firstObservedAt && lastObservedAt && Date.parse(firstObservedAt) > Date.parse(lastObservedAt)) return null;
   return {
     id: boundedThreatText(input.id, 160),
     category,
     providerVerdict: boundedThreatText(input.providerVerdict, 120),
     detail: boundedThreatText(input.detail),
-    firstObservedAt: threatTimestamp(input.firstObservedAt),
-    lastObservedAt: threatTimestamp(input.lastObservedAt),
+    firstObservedAt,
+    lastObservedAt,
     referenceUrl,
     tags,
   };
 }
 
-function normalizeThreatProvider(value: unknown): JsonObject | null {
+function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonObject | null {
   const input = record(value);
+  if (input.schema !== THREAT_INTELLIGENCE_SCHEMA
+    || input.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION) return null;
+  const target = record(input.target);
+  if (target.type !== 'domain'
+    || target.exposure !== 'registrable_domain'
+    || target.value !== expectedDomain) return null;
   const identity = record(input.provider);
   const providerId = boundedThreatText(identity.id, 80);
   const providerDefinition = providerId ? THREAT_INTELLIGENCE_PROVIDERS[providerId] : null;
@@ -336,9 +355,16 @@ function normalizeThreatProvider(value: unknown): JsonObject | null {
         .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS)
     : [];
   return {
+    schema: THREAT_INTELLIGENCE_SCHEMA,
+    version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
     provider: {
       id: providerId,
       label: providerDefinition.label,
+    },
+    target: {
+      type: 'domain',
+      value: expectedDomain,
+      exposure: 'registrable_domain',
     },
     state,
     detail: boundedThreatText(input.detail),
@@ -561,7 +587,11 @@ function validNormalizedHttpEvidence(value: unknown): boolean {
   if (Array.isArray(redirects) && value.redirectCount !== undefined
     && value.redirectCount !== redirects.length) return false;
   if (value.response !== undefined && value.response !== null) {
-    if (!isJsonObject(value.response) || !validOptionalHttpStatus(value.response.status)) return false;
+    if (!isJsonObject(value.response)
+      || !validOptionalHttpStatus(value.response.status)
+      || value.response.deliveryMetadata !== undefined
+        && (!['success', 'partial'].includes(String(value.status))
+          || !validHttpDeliveryMetadata(value.response.deliveryMetadata))) return false;
   }
   return true;
 }
@@ -803,7 +833,14 @@ function validWhoisParsed(value: unknown): boolean {
 function validRegistrationEvidence(value: LookupHttpResponse): boolean {
   const rdap = value.rdap;
   const whois = value.whois;
-  if (!validSourceStatus(rdap) || !validSourceStatus(whois)) return false;
+  const rdapDiagnostics = isJsonObject(value.diagnostics.rdap) ? value.diagnostics.rdap : null;
+  const whoisDiagnostics = isJsonObject(value.diagnostics.whois) ? value.diagnostics.whois : null;
+  if (!validSourceStatus(rdap)
+    || !validSourceStatus(whois)
+    || rdapDiagnostics !== null && !validSourceStatus(rdapDiagnostics)
+    || whoisDiagnostics !== null && !validSourceStatus(whoisDiagnostics)
+    || rdapDiagnostics?.status === 'success' && !isJsonObject(rdap.parsed)
+    || whoisDiagnostics?.status === 'complete' && !isJsonObject(whois.parsed)) return false;
   if (rdap.parsed !== undefined && rdap.parsed !== null && !validRdapParsed(rdap.parsed)) return false;
   if (whois.parsed !== undefined && whois.parsed !== null && !validWhoisParsed(whois.parsed)) return false;
   const registrar = rdap.registrarRdap;
@@ -816,6 +853,9 @@ function validPageEvidence(value: LookupHttpResponse): boolean {
   const page = availability.pageIdentity;
   if (page !== undefined && page !== null) {
     if (!validObservationFields(page)
+      || page.publicationMetadata !== undefined
+        && (!['success', 'partial'].includes(String(page.status))
+          || !validPagePublicationMetadata(page.publicationMetadata))
       || !validOptionalStringArray(page.embeddedOrigins, 20, 2_048)
       || !validOptionalStringArray(page.contactDomains, 20, 253)
       || !validOptionalRecordArray(page.trackingIdentifiers, 30, (item) => isJsonObject(item)
@@ -868,6 +908,7 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && validOptionalNullableText(value.confidence, 40)
     && validOptionalNullableText(value.activityStatus, 40)
     && validOptionalNullableText(value.websiteProbeDetail, 500)
+    && validOptionalNullableText(value.pageTitle, MAX_LOOKUP_RESPONSE_PAGE_TITLE_LENGTH)
     && validOptionalNullableText(value.dnssec, 40)
     && (value.deepScanComplete === undefined || typeof value.deepScanComplete === 'boolean')
     && (value.hasMx === undefined || value.hasMx === null || typeof value.hasMx === 'boolean')
@@ -875,6 +916,27 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && (value.hasSpf === undefined || value.hasSpf === null || typeof value.hasSpf === 'boolean')
     && (value.hasDmarc === undefined || value.hasDmarc === null || typeof value.hasDmarc === 'boolean')
     && validOptionalStringArray(value.mxHosts, MAX_LOOKUP_DNS_RECORDS_PER_TYPE, 253);
+}
+
+function validLookupDomainIdentity(value: JsonObject): boolean {
+  if (value.type !== 'domain') return true;
+  const availability = record(value.availability);
+  const queryDomain = canonicalRegistrableDomain(value.query);
+  if (!queryDomain) return false;
+  if (availability.domain !== undefined && availability.domain !== null
+    && (canonicalRegistrableDomain(availability.domain) !== queryDomain
+      || normalizedDomain(availability.domain) !== queryDomain)) return false;
+
+  if (value.inputHostname !== undefined
+    && canonicalRegistrableDomain(value.inputHostname) !== queryDomain) return false;
+  if (value.registrableDomain !== undefined
+    && normalizedDomain(value.registrableDomain) !== queryDomain) return false;
+
+  if (value.isSubdomain !== undefined) {
+    const inputHostname = normalizedDomain(value.inputHostname ?? value.query);
+    if (!inputHostname || value.isSubdomain !== (inputHostname !== queryDomain)) return false;
+  }
+  return true;
 }
 
 function optionalTlsNameWithin(value: JsonValue | undefined): boolean {
@@ -1017,6 +1079,7 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
   }
   const lookupResponse = value as LookupHttpResponse;
   if (!validAvailabilityScalars(value.availability)
+    || !validLookupDomainIdentity(value)
     || !validRegistrationEvidence(lookupResponse)) return invalidLookupResponse();
   if (value.availability.http !== undefined && !validNormalizedHttpEvidence(value.availability.http)) {
     return invalidLookupResponse();
@@ -1045,6 +1108,13 @@ function parseCompactLookupHttpResponse(
 
   const availability = value.availability;
   const diagnostics = value.diagnostics;
+  const compactPageIdentity = isJsonObject(availability) && isJsonObject(availability.pageIdentity)
+    ? availability.pageIdentity
+    : null;
+  const compactHttpResponse = isJsonObject(availability) && isJsonObject(availability.http)
+    && isJsonObject(availability.http.response)
+    ? availability.http.response
+    : null;
   if (
     !isJsonObject(availability)
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
@@ -1057,6 +1127,8 @@ function parseCompactLookupHttpResponse(
     || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
     || (availability.bulkComparison !== undefined
       && !validCompactBulkComparison(availability.bulkComparison))
+    || compactPageIdentity !== null && Object.hasOwn(compactPageIdentity, 'publicationMetadata')
+    || compactHttpResponse !== null && Object.hasOwn(compactHttpResponse, 'deliveryMetadata')
     || (value.query !== undefined && !compactDomainMatches(value.query, expectedDomain))
     || (value.type !== undefined && value.type !== 'domain')
     || (value.inputHostname !== undefined && !compactDomainMatches(value.inputHostname, expectedDomain))
@@ -1084,7 +1156,7 @@ function lookupHttpErrorMessage(value: unknown, status: number): string {
   const source = record(value);
   const message = typeof source.error === 'string'
     ? source.error
-        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+        .replace(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu, ' ')
         .replace(/\s+/gu, ' ')
         .trim()
         .slice(0, MAX_LOOKUP_RESPONSE_ERROR_LENGTH)
@@ -1168,12 +1240,18 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const registryInsights = record(response?.registryInsights);
   const securityTxt = record(response?.securityTxt);
   const sslbl = record(response?.sslbl);
-  const threatIntelligence = record(response?.threatIntelligence);
+  const rawThreatIntelligence = record(response?.threatIntelligence);
+  const expectedThreatDomain = response?.type === 'domain'
+    ? canonicalRegistrableDomain(response.registrableDomain)
+      ?? canonicalRegistrableDomain(availability.domain)
+    : null;
   const seenThreatIntelligenceProviders = new Set<string>();
-  const providers = Array.isArray(threatIntelligence.providers)
-    ? threatIntelligence.providers
+  const providers = expectedThreatDomain
+    && rawThreatIntelligence.version === THREAT_INTELLIGENCE_ENVELOPE_VERSION
+    && Array.isArray(rawThreatIntelligence.providers)
+    ? rawThreatIntelligence.providers
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)
-        .map(normalizeThreatProvider)
+        .map((provider) => normalizeThreatProvider(provider, expectedThreatDomain))
         .filter((provider): provider is JsonObject => provider !== null)
         .filter((provider) => {
           const providerId = String(record(provider.provider).id || '');
@@ -1183,6 +1261,9 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
         })
         .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS)
     : [];
+  const threatIntelligence: JsonObject = providers.length
+    ? { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers }
+    : {};
   const dnsEvidence = record(availability.dns);
   const httpEvidence = record(availability.http);
   const httpResponse = record(httpEvidence.response);
@@ -1220,6 +1301,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     httpEvidence,
     httpResponse,
     httpSecurityHeaders: record(httpResponse.securityHeaders),
+    httpDeliveryMetadata: record(httpResponse.deliveryMetadata),
     tlsEvidence,
     tlsCertificate,
     tlsSubject: record(tlsCertificate.subject),
@@ -1232,6 +1314,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     tlsValidity: record(tlsEvidence.validity),
     tlsDiagnostics: record(tlsEvidence.diagnostics),
     pageIdentity,
+    pagePublicationMetadata: record(pageIdentity.publicationMetadata),
     pageCanonical: record(pageIdentity.canonical),
     pageMetaRefresh: record(pageIdentity.metaRefresh),
     pageOpenGraph,

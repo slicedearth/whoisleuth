@@ -5,7 +5,7 @@ import {
   LookupCaseController,
   type LookupCaseApi,
 } from '../frontend/src/lib/controllers/lookup-case-controller.ts';
-import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export.ts';
 
 function unused(): Promise<never> {
@@ -61,6 +61,47 @@ describe('Lookup case controller', () => {
     });
   });
 
+  test('propagates the exact Lookup hostname only through deliberate Case create and refresh actions', async () => {
+    let records = [] as ReturnType<typeof createCase>[];
+    let clock = 0;
+    const now = () => `2026-08-${String(20 + clock++).padStart(2, '0')}T00:00:00.000Z`;
+    const api: LookupCaseApi = {
+      getByDomain: async (domain) => records.find((record) => record.domain === domain) ?? null,
+      open: async (input) => {
+        const existing = records.find((record) => record.domain === input.domain);
+        if (existing) return { record: existing, cases: records, created: false, pruned: 0 };
+        const record = createCase(input, now());
+        records = [record, ...records];
+        return { record, cases: records, created: true, pruned: 0 };
+      },
+      addNote: unused,
+      edit: async (id, patch) => {
+        const updated = updateCase(records, id, patch, now());
+        records = updated.cases;
+        return { ...updated, pruned: 0 };
+      },
+    };
+    const controller = new LookupCaseController(api);
+
+    const created = await controller.open('example.test', {
+      inputHostname: 'login.example.test',
+      availability: 'registered',
+    }, 'deep');
+    assert.match(created.status, /Opened a new case/iu);
+    assert.equal(created.record?.domain, 'example.test');
+    assert.equal(created.record?.evidenceHistory[0]?.inputHostname, 'login.example.test');
+
+    const refreshed = await controller.open('example.test', {
+      inputHostname: 'account.example.test',
+      availability: 'registered',
+    }, 'deep');
+    assert.match(refreshed.status, /Refreshed the retained Case evidence/iu);
+    assert.deepEqual(refreshed.record?.evidenceHistory.map((snapshot) => snapshot.inputHostname), [
+      'login.example.test',
+      'account.example.test',
+    ]);
+  });
+
   test('persists one explicit checkpoint batch through the existing case boundary', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
@@ -70,7 +111,7 @@ describe('Lookup case controller', () => {
       addNote: unused,
       edit: async (_id, value) => {
         patches.push(value);
-        return { record, pruned: 0 };
+        return { record, cases: [record], pruned: 0 };
       },
     };
     const controller = new LookupCaseController(api);
@@ -110,7 +151,7 @@ describe('Lookup case controller', () => {
       addNote: unused,
       edit: async (_id, value) => {
         patches.push(value);
-        return { record, pruned: 0 };
+        return { record, cases: [record], pruned: 0 };
       },
     };
     const controller = new LookupCaseController(api);

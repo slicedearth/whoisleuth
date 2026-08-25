@@ -56,7 +56,10 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
       validity: { status: 'valid' },
     },
     baseline,
-    pageIdentity: { forms: { externalActionOrigins: ['https://forms.snapshot.example'] } },
+    pageIdentity: {
+      forms: { externalActionOrigins: ['https://forms.snapshot.example'] },
+      publicationMetadata: { version: 1, marker: 'publication metadata must not persist' },
+    },
     technologyFindings: [{ id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' }],
     securityPostureFindings: [{ id: 'transport', state: 'observed' }],
     diagnostics: {
@@ -98,6 +101,7 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     complete: true,
     truncated: false,
   });
+  assert.doesNotMatch(JSON.stringify(snapshot), /publication metadata|deliveryMetadata/u);
 });
 
 test('keeps a fast or incomplete lookup snapshot explicitly partial', () => {

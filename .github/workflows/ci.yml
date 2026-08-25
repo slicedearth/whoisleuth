@@ -37,6 +37,20 @@ jobs:
         run: npm ci --include=optional --ignore-scripts
       - name: Verify release version
         run: npm run release:check
+      - name: Verify retained timing and balanced browser plan
+        run: npm run verification:timing:check
+      - name: Verify focused ownership map
+        run: npm run verification:ownership:check
+      - name: Verify mandatory analyst journeys
+        run: npm run verification:journeys:check
+      - name: Verify canonical capability catalogue
+        run: npm run capabilities:check
+      - name: Verify canonical privacy catalogue
+        run: npm run privacy:check
+      - name: Verify schema lifecycle inventory
+        run: npm run schema:inventory
+      - name: Kill reviewed critical mutants
+        run: npm run test:mutation
       - name: Verify production dependency notices
         run: npm run licenses:check
       - name: Verify optional-provider policy freshness
@@ -67,6 +81,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Install tested shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
       - name: Run tests with production-source coverage
@@ -79,6 +97,9 @@ jobs:
           path: test-coverage.lcov
           if-no-files-found: ignore
           retention-days: 7
+      - name: Clean generated unit artifacts
+        if: always()
+        run: npm run verification:artifacts -- --cleanup=unit
 
   browser:
     runs-on: ubuntu-latest
@@ -112,11 +133,12 @@ jobs:
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
       - name: Run Playwright e2e shard
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}
+        run: npm run test:e2e:shard -- --run=${{ matrix.shard }}
       - name: Summarize Playwright result data
         if: always()
         env:
           WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: ${{ matrix.label }}
+          WHOISLEUTH_PLAYWRIGHT_SHARD: ${{ matrix.shard }}
         run: npm run test:e2e:summary
       - name: Upload Playwright result data
         if: always()
@@ -136,6 +158,9 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Clean generated browser artifacts and verify port state
+        if: always()
+        run: npm run verification:artifacts -- --cleanup=browser
 
   verify:
     if: ${{ always() }}

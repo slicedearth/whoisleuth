@@ -30,5 +30,6 @@
   .nodes{fill:color-mix(in srgb,var(--panel) 78%,transparent);stroke:color-mix(in srgb,var(--accent2) 52%,var(--border));stroke-width:1.2}
   .nodes :nth-child(3n){stroke:color-mix(in srgb,var(--amber) 52%,var(--border))}
   .nodes :nth-child(4n){stroke:color-mix(in srgb,var(--violet) 52%,var(--border));stroke-dasharray:3 2}
+  :global(:root[data-theme="light"]) .topology-backdrop{opacity:.16}
   @media(max-width:680px){.topology-backdrop{inset:30px -70vw 30%;opacity:.16;mask-image:linear-gradient(to bottom,#000,transparent)}}
 </style>

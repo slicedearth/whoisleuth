@@ -12,7 +12,7 @@ import {
   skippedDnsDelegationHealth,
   type AuthorityQuery,
 } from './dns-delegation-health.mts';
-import { createObservation } from './observation.mts';
+import { createObservation } from '../packages/evidence/observation.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,

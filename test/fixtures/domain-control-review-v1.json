@@ -1,0 +1,128 @@
+{
+  "schema": "whoisleuth.domain-control-review",
+  "version": 1,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "state": "drift",
+  "manifest": {
+    "generatedAt": "2026-08-03T00:00:00.000Z",
+    "expiresAt": "2026-09-03T00:00:00.000Z",
+    "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a",
+    "expired": false
+  },
+  "counts": {
+    "aligned": 1,
+    "drift": 0,
+    "partial": 1,
+    "unavailable": 5,
+    "unsupported": 0,
+    "not_configured": 0,
+    "due": 1
+  },
+  "domains": [
+    {
+      "domain": "example.test",
+      "state": "drift",
+      "comparisons": [
+        {
+          "field": "nameservers",
+          "state": "aligned",
+          "desired": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ],
+          "observed": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ],
+          "source": "Saved DNS evidence",
+          "observedAt": "2026-08-20T00:00:00.000Z",
+          "explanation": "The complete supplied observation matches the desired value."
+        },
+        {
+          "field": "ds",
+          "state": "unavailable",
+          "desired": [
+            "12345 13 2 abcdef"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "No separately attributed observation was supplied for this field."
+        },
+        {
+          "field": "mx",
+          "state": "partial",
+          "desired": [
+            "0 .",
+            "10 mail.example.test"
+          ],
+          "observed": [],
+          "source": "Saved DNS evidence",
+          "observedAt": "2026-08-20T00:00:00.000Z",
+          "explanation": "The supplied observation was partial, so a difference is inconclusive."
+        },
+        {
+          "field": "caa",
+          "state": "unavailable",
+          "desired": [
+            "0 issue ca.example"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "No separately attributed observation was supplied for this field."
+        },
+        {
+          "field": "tlsIssuer",
+          "state": "unavailable",
+          "desired": [
+            "example issuer"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "No separately attributed observation was supplied for this field."
+        },
+        {
+          "field": "tlsSpkiSha256",
+          "state": "unavailable",
+          "desired": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "No separately attributed observation was supplied for this field."
+        },
+        {
+          "field": "registrarLock",
+          "state": "unavailable",
+          "desired": [
+            "required"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "No separately attributed observation was supplied for this field."
+        },
+        {
+          "field": "renewalReviewAt",
+          "state": "due",
+          "desired": [
+            "2026-08-20T00:00:00.000Z"
+          ],
+          "observed": [],
+          "source": null,
+          "observedAt": null,
+          "explanation": "The configured renewal review date is due."
+        }
+      ]
+    }
+  ],
+  "ignoredObservationCount": 0,
+  "limitations": [
+    "This local review compares analyst-authored desired state with separately supplied observations and performs no collection or configuration change.",
+    "Only complete observations can produce drift. Partial, unavailable, unsupported, or missing evidence remains inconclusive.",
+    "A valid manifest digest or signature establishes file integrity, not the correctness of the desired state or supplied observations."
+  ]
+}

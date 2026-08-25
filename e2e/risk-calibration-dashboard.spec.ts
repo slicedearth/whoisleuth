@@ -40,6 +40,7 @@ function reports() {
 test('target-free calibration review stays tab-local, exact, accessible, and mobile-safe', async ({ page }, testInfo) => {
   const { detailed, summary } = reports();
   await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
   const dashboard = page.locator('.calibration-dashboard');
   await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
 
@@ -114,4 +115,41 @@ test('target-free calibration review stays tab-local, exact, accessible, and mob
     body: Buffer.from(JSON.stringify(summary, null, 2)),
     contentType: 'application/json',
   });
+});
+
+test('a delayed calibration read cannot replace a newer file selection', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const { summary } = reports();
+  const content = JSON.stringify(summary);
+  await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
+  const dashboard = page.locator('.calibration-dashboard');
+  const input = dashboard.locator('input[type="file"]');
+  await page.evaluate(() => {
+    const state = window as typeof window & {
+      __resolveSlowCalibration?: (value: string) => void;
+      __slowCalibrationReleased?: boolean;
+    };
+    const originalText = File.prototype.text;
+    File.prototype.text = function text() {
+      if (this.name !== 'slow-calibration.json') return originalText.call(this);
+      return new Promise<string>((resolve) => {
+        state.__resolveSlowCalibration = (value) => {
+          resolve(value);
+          queueMicrotask(() => { state.__slowCalibrationReleased = true; });
+        };
+      });
+    };
+  });
+
+  await input.setInputFiles({ name: 'slow-calibration.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await input.setInputFiles({ name: 'latest-calibration.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await expect(dashboard.locator('.report-file')).toContainText('latest-calibration.json');
+  await page.evaluate((value) => {
+    const state = window as typeof window & { __resolveSlowCalibration?: (text: string) => void };
+    state.__resolveSlowCalibration?.(value);
+  }, content);
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { __slowCalibrationReleased?: boolean }
+  ).__slowCalibrationReleased)).toBe(true);
+  await expect(dashboard.locator('.report-file')).toContainText('latest-calibration.json');
 });

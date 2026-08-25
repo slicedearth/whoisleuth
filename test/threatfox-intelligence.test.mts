@@ -112,6 +112,19 @@ describe('malware-IOC provider policy and configuration', () => {
 });
 
 describe('malware-IOC lookup', () => {
+  test('rejects zone-less provider times and canonicalizes explicit offsets', async () => {
+    const invalid = await fixtureAdapter(async () => jsonResponse({
+      query_status: 'ok', data: [iocRecord({ first_seen: '2026-07-14T12:00:00.000', last_seen: null })],
+    })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(invalid.state, 'partial');
+    assert.deepEqual(invalid.findings, []);
+    const offset = await fixtureAdapter(async () => jsonResponse({
+      query_status: 'ok', data: [iocRecord({ first_seen: '2026-07-14T12:00:00.000+01:00', last_seen: '2026-07-14T13:00:00.000+01:00' })],
+    })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(offset.findings[0]?.firstObservedAt, '2026-07-14T11:00:00.000Z');
+    assert.equal(offset.findings[0]?.lastObservedAt, '2026-07-14T12:00:00.000Z');
+  });
+
   test('posts only an exact registrable-domain query to the fixed endpoint', async () => {
     const calls: FetchCall[] = [];
     const adapter = fixtureAdapter(async () => jsonResponse({ query_status: 'ok', data: [iocRecord()] }), calls);

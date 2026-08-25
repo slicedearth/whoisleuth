@@ -19,6 +19,7 @@ type NoticeMode = 'check' | 'write';
 type InventoryOptions = Readonly<{
   directDependencyNames?: readonly string[];
   scopeLabel?: string;
+  lockfileValue?: unknown;
 }>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
@@ -300,7 +301,8 @@ export async function buildThirdPartyNotices(
   options: InventoryOptions = {},
 ): Promise<string> {
   const realRepositoryRoot = await realpath(repositoryRoot);
-  const lockfile = await readBoundedJson(path.join(realRepositoryRoot, 'package-lock.json'));
+  const lockfile = options.lockfileValue
+    ?? await readBoundedJson(path.join(realRepositoryRoot, 'package-lock.json'));
   const packages = collectProductionPackages(lockfile, options);
   const nodeModulesRoot = await realpath(path.join(realRepositoryRoot, 'node_modules'));
   if (!pathIsWithin(realRepositoryRoot, nodeModulesRoot)) {

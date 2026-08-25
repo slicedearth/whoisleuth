@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { runIndexedDbFeasibilityProbe } from '../frontend/src/lib/local-data-platform-probe';
-import { readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, openBulkShortlist, openDashboardSecondaryWorkspaces, readBrowserLocalCollection } from './helpers';
 import type {
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
@@ -12,10 +12,8 @@ import {
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 
-function legacyShortlist() {
-  return {
-    schema: 'whoisleuth.shortlist',
-    version: 2,
+function publicShortlist() {
+  return currentBrowserLocalDocument('shortlist', {
     entries: [{
       domain: 'priority.invalid',
       scanDepth: 'fast',
@@ -26,7 +24,7 @@ function legacyShortlist() {
       mutationTypes: ['omission'],
       savedAt: '2026-07-22T01:00:00.000Z',
     }],
-  };
+  });
 }
 
 async function rawLocalDataSnapshot(page: import('@playwright/test').Page): Promise<string> {
@@ -87,8 +85,8 @@ test('native IndexedDB satisfies the bounded local data feasibility probe', asyn
   expect(retainedProbeDatabases).toEqual([]);
 });
 
-test('legacy browser data migrates once into verified IndexedDB records without deleting the source', async ({ page }) => {
-  const legacy = legacyShortlist();
+test('public browser data migrates once into verified IndexedDB records without deleting the source', async ({ page }) => {
+  const legacy = publicShortlist();
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
     value: legacy,
@@ -111,13 +109,68 @@ test('legacy browser data migrates once into verified IndexedDB records without 
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual(legacy);
 });
 
+test('malformed legacy data remains unavailable and is never replaced with an authoritative empty collection', async ({ page }) => {
+  const malformed = '{"schema":"whoisleuth.shortlist","entries":[';
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SHORTLIST_KEY,
+    value: malformed,
+  });
+
+  await page.goto('/bulk');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Shortlist data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), SHORTLIST_KEY)).toBe(malformed);
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
+});
+
+test('wrong-shaped legacy data remains unavailable and is never normalized to an empty collection', async ({ page }) => {
+  const malformed = '{}';
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SHORTLIST_KEY,
+    value: malformed,
+  });
+
+  await page.goto('/bulk');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Legacy Shortlist data is malformed and was not migrated.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), SHORTLIST_KEY)).toBe(malformed);
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
+});
+
+test('retired unversioned Case stores remain preserved and unavailable during migration', async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, '[]'), CASES_COLLECTION.legacyKey);
+
+  await page.goto('/dashboard');
+
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Unversioned Cases data is retired. Export it with the last broad-reader release or choose an explicit reset before continuing; no data was changed.')).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), CASES_COLLECTION.legacyKey)).toBe('[]');
+  expect(JSON.parse(await rawLocalDataSnapshot(page))).toEqual({ manifests: [], records: [] });
+});
+
 test('application writes remain authoritative across reloads while the retained legacy source stays untouched', async ({ page }) => {
-  const legacy = legacyShortlist();
+  const legacy = publicShortlist();
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
     value: legacy,
   });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+    key: CAMPAIGNS_COLLECTION.legacyKey,
+    value: currentBrowserLocalDocument('campaigns', {
+      campaigns: [{
+        id: 'rollback-tools-campaign',
+        name: 'Rollback tools fixture',
+        description: '',
+        domains: [],
+        createdAt: '2026-07-22T01:00:00.000Z',
+        updatedAt: '2026-07-22T01:00:00.000Z',
+      }],
+    }),
+  });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear shortlist' }).click();
@@ -130,6 +183,7 @@ test('application writes remain authoritative across reloads while the retained 
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual(legacy);
 
   await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByText('How workspace backups work', { exact: true }).click();
   await page.getByRole('button', { name: 'Update legacy rollback copy' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Updated the legacy rollback copy' })).toBeVisible();
@@ -143,9 +197,10 @@ test('application writes remain authoritative across reloads while the retained 
 test('a tampered IndexedDB record stops the console instead of presenting an empty collection', async ({ page }) => {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
-    value: legacyShortlist(),
+    value: publicShortlist(),
   });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
@@ -182,12 +237,13 @@ test('a tampered IndexedDB record stops the console instead of presenting an emp
   await expect(page.getByText('Shortlist contains a record that could not be verified.')).toBeVisible();
 });
 
-test('an older IndexedDB collection schema is normalized and recommitted at the current version', async ({ page }) => {
+test('a retired local-only IndexedDB schema remains preserved and unavailable', async ({ page }) => {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
     key: SHORTLIST_KEY,
-    value: legacyShortlist(),
+    value: publicShortlist(),
   });
   await page.goto('/bulk');
+  await openBulkShortlist(page);
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
@@ -215,9 +271,20 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   });
   await page.reload();
 
-  const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1, minimumRevision: 2 });
-  expect(collection.manifest).toMatchObject({ schemaVersion: 3, revision: 2, source: 'application' });
-  expect(collection.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Shortlist schema 1 is retired. Restore or export it with the last broad-reader release, or choose an explicit reset; no data was changed.')).toBeVisible();
+  const retained = JSON.parse(await rawLocalDataSnapshot(page)) as {
+    manifests: BrowserLocalCollectionManifest[];
+    records: BrowserLocalStoredRecord[];
+  };
+  expect(retained.manifests.find((manifest) => manifest.collection === 'shortlist')).toMatchObject({
+    schemaVersion: 1,
+    revision: 1,
+    recordCount: 1,
+    source: 'legacy-localstorage',
+  });
+  expect(retained.records).toHaveLength(1);
+  expect(retained.records[0]?.payload).toContain('priority.invalid');
 });
 
 test('initialization validates every existing collection before writing a missing collection', async ({ page }) => {
@@ -257,20 +324,30 @@ test('initialization validates every existing collection before writing a missin
   await page.reload();
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
-  await expect(page.getByText('Campaigns was created by a newer app version. Update the app before reading it.')).toBeVisible();
+  await expect(page.getByText('Campaigns schema 2 was created by a newer app version. Update the app before reading it; no data was changed.')).toBeVisible();
   expect(await rawLocalDataSnapshot(page)).toBe(beforeReload);
 });
 
-test('collection reads request only one record beyond the configured maximum', async ({ page }) => {
-  await page.addInitScript(() => {
+test('collection reads use a bounded cursor and stop at the configured maximum', async ({ page }) => {
+  await page.addInitScript(({ casesId }) => {
+    const originalOpenCursor = IDBIndex.prototype.openCursor;
     const originalGetAll = IDBIndex.prototype.getAll;
-    const calls: Array<{ query: string | null; count: number | null }> = [];
-    Object.defineProperty(window, '__whoisleuthGetAllCalls', { value: calls, configurable: true });
+    const originalContinue = IDBCursor.prototype.continue;
+    const calls = { openCursor: [] as Array<string | null>, getAll: [] as Array<string | null>, casesContinued: 0 };
+    Object.defineProperty(window, '__whoisleuthCursorCalls', { value: calls, configurable: true });
+    IDBIndex.prototype.openCursor = function openCursor(query?: IDBValidKey | IDBKeyRange | null, direction?: IDBCursorDirection) {
+      calls.openCursor.push(typeof query === 'string' ? query : null);
+      return originalOpenCursor.call(this, query, direction);
+    };
     IDBIndex.prototype.getAll = function getAll(query?: IDBValidKey | IDBKeyRange | null, count?: number) {
-      calls.push({ query: typeof query === 'string' ? query : null, count: count ?? null });
+      calls.getAll.push(typeof query === 'string' ? query : null);
       return originalGetAll.call(this, query, count);
     };
-  });
+    IDBCursor.prototype.continue = function continueCursor(key?: IDBValidKey) {
+      if (this.key === casesId) calls.casesContinued += 1;
+      return key === undefined ? originalContinue.call(this) : originalContinue.call(this, key);
+    };
+  }, { casesId: CASES_COLLECTION.id });
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.evaluate(async ({ collection, maximumRecords }) => {
@@ -289,8 +366,8 @@ test('collection reads request only one record beyond the configured maximum', a
     });
     if (!manifest) throw new Error('The fixture cases manifest is missing.');
     records.delete(IDBKeyRange.bound([collection], [collection, []]));
-    for (let ordinal = 0; ordinal <= maximumRecords; ordinal++) {
-      const lookupKey = `overflow-${ordinal}`;
+    for (let ordinal = 0; ordinal < maximumRecords; ordinal++) {
+      const lookupKey = `record-${String(ordinal).padStart(6, '0')}`;
       records.put({
         key: [collection, lookupKey],
         collection,
@@ -301,6 +378,16 @@ test('collection reads request only one record beyond the configured maximum', a
         payloadBytes: 2,
       } satisfies BrowserLocalStoredRecord);
     }
+    const lookupKey = 'zzzz-overflow';
+    records.put({
+      key: [collection, lookupKey],
+      collection,
+      lookupKey,
+      ordinal: maximumRecords,
+      codec: 'json-v1',
+      payload: '{}',
+      payloadBytes: 2,
+    } satisfies BrowserLocalStoredRecord);
     manifests.put({ ...manifest, recordCount: maximumRecords });
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
@@ -315,9 +402,11 @@ test('collection reads request only one record beyond the configured maximum', a
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
   await expect(page.getByText('Cases exceeds its bounded record count.')).toBeVisible();
   const calls = await page.evaluate(() => (
-    window as typeof window & { __whoisleuthGetAllCalls?: Array<{ query: string | null; count: number | null }> }
-  ).__whoisleuthGetAllCalls ?? []);
-  expect(calls.some((call) => call.query === CASES_COLLECTION.id
-    && call.count === CASES_COLLECTION.maximumRecords + 1)).toBe(true);
-  expect(calls.some((call) => call.query === CASES_COLLECTION.id && call.count === null)).toBe(false);
+    window as typeof window & {
+      __whoisleuthCursorCalls?: { openCursor: Array<string | null>; getAll: Array<string | null>; casesContinued: number };
+    }
+  ).__whoisleuthCursorCalls);
+  expect(calls?.openCursor).toContain(CASES_COLLECTION.id);
+  expect(calls?.getAll).not.toContain(CASES_COLLECTION.id);
+  expect(calls?.casesContinued).toBe(CASES_COLLECTION.maximumRecords);
 });

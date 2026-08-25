@@ -14,6 +14,7 @@ import {
   parseArguments,
 } from '../tools/local-data-platform-evaluation.mts';
 import { BROWSER_LOCAL_COLLECTIONS } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 const NOW = new Date('2026-07-22T00:00:00.000Z');
 const DECLARED_BROWSER_STORE_BYTES = BROWSER_LOCAL_COLLECTIONS
@@ -25,6 +26,18 @@ function capture() {
 }
 
 describe('local data platform evaluation', () => {
+  test('keeps the dependency-neutral manifest identical to live browser collection metadata', () => {
+    assert.deepEqual(BROWSER_LOCAL_COLLECTIONS.map((definition) => ({
+      id: definition.id,
+      label: definition.label,
+      schemaVersion: definition.schemaVersion,
+      minimumReadableVersion: definition.minimumReadableVersion,
+      acceptsUnversionedLegacy: definition.acceptsUnversionedLegacy,
+      maximumBytes: definition.maximumBytes,
+      maximumRecords: definition.maximumRecords,
+    })), BROWSER_LOCAL_COLLECTION_MANIFEST);
+  });
+
   test('derives the aggregate ceiling from the owning browser-store constants', () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     assert.equal(report.schema, LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA);
@@ -34,10 +47,10 @@ describe('local data platform evaluation', () => {
     assert.equal(report.current.storeCount, BROWSER_LOCAL_COLLECTIONS.length);
     assert.ok(report.current.storeCount <= MAX_LOCAL_DATA_EVALUATION_STORES);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
-    assert.equal(report.current.declaredMaximumMiB, 15.75);
+    assert.equal(report.current.declaredMaximumMiB, 16.25);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);
-    assert.equal(report.current.exceedsReferenceByBytes, 11_272_192);
-    assert.equal(report.current.exceedsReferenceByMiB, 10.75);
+    assert.equal(report.current.exceedsReferenceByBytes, 11_796_480);
+    assert.equal(report.current.exceedsReferenceByMiB, 11.25);
   });
 
   test('keeps the evaluation offline and does not inspect or change browser data', () => {
@@ -110,7 +123,7 @@ describe('local data platform evaluation', () => {
   test('formats a concise maintainer decision and rejects unsupported arguments', async () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     const output = formatLocalDataPlatformEvaluation(report);
-    assert.match(output, /15\.75 MiB across 12 stores/);
+    assert.match(output, /16\.25 MiB across 13 stores/);
     assert.match(output, /native_indexeddb \(no production dependency\)/);
     assert.match(output, /Encryption, PWA support, and synchronisation remain separately gated/);
 

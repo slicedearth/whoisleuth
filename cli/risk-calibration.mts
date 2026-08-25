@@ -1,32 +1,75 @@
 import { Buffer } from 'node:buffer';
+import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { canonicalRegistrableDomain } from '../lib/registrable-domain.mts';
 import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
 import {
-  RISK_CALIBRATION_SUMMARY_SCHEMA,
-  RISK_CALIBRATION_SUMMARY_VERSION,
+  buildRiskCalibrationSummaryReport,
+  parseRiskCalibrationSummaryReport,
   RISK_CALIBRATION_SUMMARY_INTERPRETATION,
   RISK_CALIBRATION_SUMMARY_THRESHOLDS,
+  type RiskCalibrationSummaryReport,
 } from '../lib/risk-calibration-summary.mts';
+import {
+  MAX_RISK_CALIBRATION_ACTIVITY_LENGTH,
+  MAX_RISK_CALIBRATION_AVAILABILITY_LENGTH,
+  MAX_RISK_CALIBRATION_DISPOSITION_LENGTH,
+  MAX_RISK_CALIBRATION_DOMAIN_AGE_DAYS,
+  MAX_RISK_CALIBRATION_DOMAIN_LENGTH,
+  MAX_RISK_CALIBRATION_FINDING_CATEGORY_LENGTH,
+  MAX_RISK_CALIBRATION_FINDINGS_PER_PROVIDER,
+  MAX_RISK_CALIBRATION_INPUT_BYTES,
+  MAX_RISK_CALIBRATION_JSON_CONTAINER_ITEMS,
+  MAX_RISK_CALIBRATION_JSON_DEPTH,
+  MAX_RISK_CALIBRATION_JSON_KEYS,
+  MAX_RISK_CALIBRATION_JSON_VALUES,
+  MAX_RISK_CALIBRATION_MUTATIONS,
+  MAX_RISK_CALIBRATION_PROVIDER_ID_LENGTH,
+  MAX_RISK_CALIBRATION_PROVIDER_STATE_LENGTH,
+  MAX_RISK_CALIBRATION_PROVIDERS,
+  MAX_RISK_CALIBRATION_RECORD_ID_LENGTH,
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH,
+  MAX_RISK_CALIBRATION_SCAN_DEPTH_LENGTH,
+  MAX_RISK_CALIBRATION_STRING_LENGTH,
+  MAX_RISK_CALIBRATION_TIMESTAMP_LENGTH,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_VERSION,
+  serializeRiskCalibrationSnapshot,
+  snapshotRiskCalibrationReportForSerialization,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+  type RiskCalibrationDataset,
+  type RiskCalibrationDisposition,
+  type RiskCalibrationEvidence,
+  type RiskCalibrationRecord,
+  type RiskCalibrationThreatIntelligence,
+} from '../packages/contracts/risk-calibration.mts';
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import { RISK_MUTATION_TYPES } from '../lib/risk-scoring.mts';
 import type { RiskExplanation, RiskInput } from '../lib/risk-scoring.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 
-export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 2;
-export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([1, RISK_CALIBRATION_DATASET_VERSION]);
-export const RISK_CALIBRATION_REPORT_SCHEMA = RISK_CALIBRATION_SUMMARY_SCHEMA;
-export const RISK_CALIBRATION_REPORT_VERSION = RISK_CALIBRATION_SUMMARY_VERSION;
-export const MAX_RISK_CALIBRATION_INPUT_BYTES = 2 * 1024 * 1024;
-export const MAX_RISK_CALIBRATION_RECORDS = 500;
-export const MAX_RISK_CALIBRATION_STRING_LENGTH = 256;
+export {
+  MAX_RISK_CALIBRATION_INPUT_BYTES,
+  MAX_RISK_CALIBRATION_RECORDS,
+  MAX_RISK_CALIBRATION_STRING_LENGTH,
+  RISK_CALIBRATION_DATASET_SCHEMA,
+  RISK_CALIBRATION_DATASET_VERSION,
+  RISK_CALIBRATION_REPORT_SCHEMA,
+  RISK_CALIBRATION_REPORT_VERSION,
+  SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
+} from '../packages/contracts/risk-calibration.mts';
 export const RISK_CALIBRATION_THRESHOLDS = RISK_CALIBRATION_SUMMARY_THRESHOLDS;
 
-const MAX_MUTATIONS = 30;
-const MAX_PROVIDERS = 10;
-const MAX_FINDINGS_PER_PROVIDER = 100;
-const MAX_TIMESTAMP_LENGTH = 64;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const DISPOSITIONS = new Set([
   'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
@@ -44,34 +87,20 @@ const REVIEW_REASON_CODES = ANALYST_REVIEW_REASON_VALUES;
 const MUTATION_TYPES = new Set(RISK_MUTATION_TYPES);
 
 type UnknownRecord = Record<string, unknown>;
-type ProjectedThreatIntelligence = {
-  providers: Array<{
-    provider: { id: string };
-    state: string;
-    observation?: { observedAt?: string };
-    findings: Array<{
-      category: string;
-      firstObservedAt?: string;
-      lastObservedAt?: string;
-    }>;
-  }>;
-};
-type CalibrationEvidence = Omit<RiskInput, 'threatIntelligence'> & {
-  threatIntelligence?: ProjectedThreatIntelligence;
-};
-type CalibrationDisposition = 'unreviewed' | 'suspicious' | 'confirmed_abuse' | 'false_positive' | 'expected' | 'closed_no_action';
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
+type ProjectedThreatIntelligence = RiskCalibrationThreatIntelligence;
+type CalibrationEvidence = Mutable<RiskCalibrationEvidence>;
+type CalibrationDisposition = RiskCalibrationDisposition;
 type MetricClass = 'positive' | 'negative' | 'excluded';
 type CalibrationRecord = {
-  id: string;
-  domain: string;
-  analystDisposition: CalibrationDisposition;
-  reviewReasonCode?: string;
-  evidence: CalibrationEvidence;
+  -readonly [Key in keyof RiskCalibrationRecord]: Key extends 'evidence'
+    ? CalibrationEvidence
+    : RiskCalibrationRecord[Key];
 };
 type CalibrationDataset = {
-  schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-  version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
-  records: CalibrationRecord[];
+  -readonly [Key in keyof RiskCalibrationDataset]: Key extends 'records'
+    ? CalibrationRecord[]
+    : RiskCalibrationDataset[Key];
 };
 type ExplainRiskScore = (input: RiskInput) => RiskExplanation | null;
 type CalibrationScoredRecord = {
@@ -115,7 +144,7 @@ type RiskCalibrationReport = {
   generatedAt: string;
   dataset: {
     schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-    version: 1 | typeof RISK_CALIBRATION_DATASET_VERSION;
+    version: typeof RISK_CALIBRATION_DATASET_VERSION;
     recordCount: number;
   };
   riskModelVersion: number;
@@ -169,14 +198,14 @@ function boundedString(value: unknown, field: string, maximum = MAX_RISK_CALIBRA
 
 function optionalTimestamp(value: unknown, field: string): string | undefined {
   if (value === null || value === undefined) return undefined;
-  return boundedString(value, field, MAX_TIMESTAMP_LENGTH);
+  return boundedString(value, field, MAX_RISK_CALIBRATION_TIMESTAMP_LENGTH);
 }
 
 function projectThreatIntelligence(value: unknown, field: string): ProjectedThreatIntelligence | undefined {
   if (value === null || value === undefined) return undefined;
   const envelope = object(value, field);
   if (!Array.isArray(envelope.providers)) throw new CliUsageError(`${field}.providers must be an array.`);
-  if (envelope.providers.length > MAX_PROVIDERS) throw new CliUsageError(`${field}.providers exceeds the ${MAX_PROVIDERS}-provider limit.`);
+  if (envelope.providers.length > MAX_RISK_CALIBRATION_PROVIDERS) throw new CliUsageError(`${field}.providers exceeds the ${MAX_RISK_CALIBRATION_PROVIDERS}-provider limit.`);
   return {
     providers: envelope.providers.map((item: unknown, providerIndex: number) => {
       const prefix = `${field}.providers[${providerIndex}]`;
@@ -186,15 +215,15 @@ function projectThreatIntelligence(value: unknown, field: string): ProjectedThre
         ? null
         : object(provider.observation, `${prefix}.observation`);
       if (!Array.isArray(provider.findings)) throw new CliUsageError(`${prefix}.findings must be an array.`);
-      if (provider.findings.length > MAX_FINDINGS_PER_PROVIDER) {
-        throw new CliUsageError(`${prefix}.findings exceeds the ${MAX_FINDINGS_PER_PROVIDER}-finding limit.`);
+      if (provider.findings.length > MAX_RISK_CALIBRATION_FINDINGS_PER_PROVIDER) {
+        throw new CliUsageError(`${prefix}.findings exceeds the ${MAX_RISK_CALIBRATION_FINDINGS_PER_PROVIDER}-finding limit.`);
       }
       const observedAt = observation
         ? optionalTimestamp(observation.observedAt, `${prefix}.observation.observedAt`)
         : undefined;
       return {
-        provider: { id: boundedString(identity.id, `${prefix}.provider.id`, 64) },
-        state: boundedString(provider.state, `${prefix}.state`, 32),
+        provider: { id: boundedString(identity.id, `${prefix}.provider.id`, MAX_RISK_CALIBRATION_PROVIDER_ID_LENGTH) },
+        state: boundedString(provider.state, `${prefix}.state`, MAX_RISK_CALIBRATION_PROVIDER_STATE_LENGTH),
         ...(observation ? { observation: observedAt ? { observedAt } : {} } : {}),
         findings: provider.findings.map((findingValue: unknown, findingIndex: number) => {
           const findingPrefix = `${prefix}.findings[${findingIndex}]`;
@@ -202,7 +231,7 @@ function projectThreatIntelligence(value: unknown, field: string): ProjectedThre
           const firstObservedAt = optionalTimestamp(finding.firstObservedAt, `${findingPrefix}.firstObservedAt`);
           const lastObservedAt = optionalTimestamp(finding.lastObservedAt, `${findingPrefix}.lastObservedAt`);
           return {
-            category: boundedString(finding.category, `${findingPrefix}.category`, 64),
+            category: boundedString(finding.category, `${findingPrefix}.category`, MAX_RISK_CALIBRATION_FINDING_CATEGORY_LENGTH),
             ...(firstObservedAt ? { firstObservedAt } : {}),
             ...(lastObservedAt ? { lastObservedAt } : {}),
           };
@@ -214,9 +243,11 @@ function projectThreatIntelligence(value: unknown, field: string): ProjectedThre
 
 function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   const source = object(value, field);
-  const availability = boundedString(source.availability ?? source.state, `${field}.availability`, 32);
+  const availability = boundedString(source.availability ?? source.state, `${field}.availability`, MAX_RISK_CALIBRATION_AVAILABILITY_LENGTH);
   if (!AVAILABILITY_STATES.has(availability)) throw new CliUsageError(`${field}.availability is unsupported.`);
-  const result: CalibrationEvidence = { availability };
+  const result: CalibrationEvidence = {
+    availability: availability as RiskCalibrationEvidence['availability'],
+  };
 
   for (const name of BOOLEAN_FIELDS) {
     const candidate = source[name];
@@ -226,12 +257,12 @@ function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   }
 
   if (source.activityStatus !== null && source.activityStatus !== undefined) {
-    const activity = boundedString(source.activityStatus, `${field}.activityStatus`, 32);
+    const activity = boundedString(source.activityStatus, `${field}.activityStatus`, MAX_RISK_CALIBRATION_ACTIVITY_LENGTH);
     if (!ACTIVITY_STATES.has(activity)) throw new CliUsageError(`${field}.activityStatus is unsupported.`);
-    result.activityStatus = activity;
+    result.activityStatus = activity as NonNullable<RiskCalibrationEvidence['activityStatus']>;
   }
   if (source.scanDepth !== null && source.scanDepth !== undefined) {
-    const depth = boundedString(source.scanDepth, `${field}.scanDepth`, 16);
+    const depth = boundedString(source.scanDepth, `${field}.scanDepth`, MAX_RISK_CALIBRATION_SCAN_DEPTH_LENGTH);
     if (depth !== 'fast' && depth !== 'deep') throw new CliUsageError(`${field}.scanDepth must be fast or deep.`);
     Object.assign(result, { scanDepth: depth });
   }
@@ -244,16 +275,16 @@ function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   }
   if (source.domainAgeDays !== null && source.domainAgeDays !== undefined) {
     if (typeof source.domainAgeDays !== 'number' || !Number.isFinite(source.domainAgeDays)
-      || source.domainAgeDays < 0 || source.domainAgeDays > 100_000) {
+      || source.domainAgeDays < 0 || source.domainAgeDays > MAX_RISK_CALIBRATION_DOMAIN_AGE_DAYS) {
       throw new CliUsageError(`${field}.domainAgeDays must be a finite number from 0 to 100000.`);
     }
     result.domainAgeDays = source.domainAgeDays;
   }
   if (source.mutationTypes !== null && source.mutationTypes !== undefined) {
     if (!Array.isArray(source.mutationTypes)) throw new CliUsageError(`${field}.mutationTypes must be an array.`);
-    if (source.mutationTypes.length > MAX_MUTATIONS) throw new CliUsageError(`${field}.mutationTypes exceeds the ${MAX_MUTATIONS}-item limit.`);
+    if (source.mutationTypes.length > MAX_RISK_CALIBRATION_MUTATIONS) throw new CliUsageError(`${field}.mutationTypes exceeds the ${MAX_RISK_CALIBRATION_MUTATIONS}-item limit.`);
     result.mutationTypes = [...new Set(source.mutationTypes.map((item: unknown, index: number) => {
-      const mutation = boundedString(item, `${field}.mutationTypes[${index}]`, 64);
+      const mutation = boundedString(item, `${field}.mutationTypes[${index}]`, MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH);
       if (!MUTATION_TYPES.has(mutation)) throw new CliUsageError(`${field}.mutationTypes[${index}] is unsupported.`);
       return mutation;
     }))];
@@ -276,7 +307,11 @@ export async function readRiskCalibrationInputBounded(
     if (total > limit) throw new CliUsageError(`Risk calibration input is limited to ${limit} bytes.`);
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  try {
+    return decodeBoundedUtf8(Buffer.concat(chunks), 'Risk calibration input');
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'Risk calibration input must contain valid UTF-8 text.');
+  }
 }
 
 export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
@@ -284,11 +319,18 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
   if (Buffer.byteLength(text, 'utf8') > MAX_RISK_CALIBRATION_INPUT_BYTES) {
     throw new CliUsageError(`Risk calibration input is limited to ${MAX_RISK_CALIBRATION_INPUT_BYTES} bytes.`);
   }
+  const normalized = text.replace(/^\uFEFF/u, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
+    scanBoundedJson(normalized, {
+      maximumDepth: MAX_RISK_CALIBRATION_JSON_DEPTH,
+      maximumKeys: MAX_RISK_CALIBRATION_JSON_KEYS,
+      maximumValues: MAX_RISK_CALIBRATION_JSON_VALUES,
+      maximumContainerItems: MAX_RISK_CALIBRATION_JSON_CONTAINER_ITEMS,
+    });
+    parsed = JSON.parse(normalized);
   } catch {
-    throw new CliUsageError('Risk calibration input must be valid JSON.');
+    throw new CliUsageError('Risk calibration input must be valid bounded JSON without duplicate keys.');
   }
   const document = object(parsed, 'Risk calibration input');
   const documentVersion = typeof document.version === 'number' && Number.isInteger(document.version)
@@ -296,7 +338,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     : null;
   if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA
     || documentVersion === null
-    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion)) {
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION)) {
     throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.join(' or ')}.`);
   }
   if (!Array.isArray(document.records) || !document.records.length) {
@@ -310,16 +352,16 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
   const records = document.records.map((value: unknown, index: number): CalibrationRecord => {
     const prefix = `records[${index}]`;
     const record = object(value, prefix);
-    const id = boundedString(record.id, `${prefix}.id`, 128);
+    const id = boundedString(record.id, `${prefix}.id`, MAX_RISK_CALIBRATION_RECORD_ID_LENGTH);
     if (ids.has(id)) throw new CliUsageError(`${prefix}.id must be unique.`);
     ids.add(id);
-    const domain = boundedString(record.domain, `${prefix}.domain`, 253).toLowerCase().replace(/\.$/, '');
+    const domain = boundedString(record.domain, `${prefix}.domain`, MAX_RISK_CALIBRATION_DOMAIN_LENGTH).toLowerCase().replace(/\.$/, '');
     if (!isValidAsciiDomainName(domain, { requireDot: true })) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
-    const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, 32);
+    const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, MAX_RISK_CALIBRATION_DISPOSITION_LENGTH);
     if (!DISPOSITIONS.has(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
     let reviewReasonCode: string | undefined;
     if (record.reviewReasonCode !== null && record.reviewReasonCode !== undefined) {
-      reviewReasonCode = boundedString(record.reviewReasonCode, `${prefix}.reviewReasonCode`, 64);
+      reviewReasonCode = boundedString(record.reviewReasonCode, `${prefix}.reviewReasonCode`, MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH);
       if (!REVIEW_REASON_CODES.has(reviewReasonCode)) throw new CliUsageError(`${prefix}.reviewReasonCode is unsupported.`);
     }
     return {
@@ -332,7 +374,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
   });
   return {
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: documentVersion as 1 | typeof RISK_CALIBRATION_DATASET_VERSION,
+    version: documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION,
     records,
   };
 }
@@ -402,6 +444,30 @@ function scoreBand(score: number | null): string {
   return '0_39';
 }
 
+function scoringEvidence(record: CalibrationRecord): RiskInput {
+  const threatIntelligence = record.evidence.threatIntelligence;
+  const scoringDomain = canonicalRegistrableDomain(record.domain);
+  return {
+    ...record.evidence,
+    domain: scoringDomain ?? record.domain,
+    ...(threatIntelligence && scoringDomain ? {
+      threatIntelligence: {
+        version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+        providers: threatIntelligence.providers.map((provider) => ({
+          ...provider,
+          schema: THREAT_INTELLIGENCE_SCHEMA,
+          version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          target: {
+            type: 'domain',
+            value: scoringDomain,
+            exposure: 'registrable_domain',
+          },
+        })),
+      },
+    } : {}),
+  };
+}
+
 export function buildRiskCalibrationReport(
   dataset: CalibrationDataset,
   explainRiskScore: ExplainRiskScore,
@@ -414,7 +480,7 @@ export function buildRiskCalibrationReport(
   },
 ): RiskCalibrationReport {
   const records: CalibrationReportRecord[] = dataset.records.map((record) => {
-    const explained = explainRiskScore(record.evidence);
+    const explained = explainRiskScore(scoringEvidence(record));
     const classification = metricClass(record.analystDisposition);
     const includedInMetrics = classification !== 'excluded' && explained !== null;
     return {
@@ -476,7 +542,7 @@ export function buildRiskCalibrationReport(
       const source = dataset.records[index];
       const current = records[index];
       if (!source || !current) continue;
-      const previous = options.explainPreviousRiskScore(source.evidence);
+      const previous = options.explainPreviousRiskScore(scoringEvidence(source));
       if (previous?.score !== current.score) scoresChanged += 1;
       if (scoreBand(previous?.score ?? null) !== current.band) bandsChanged += 1;
       if (((previous?.score ?? -1) >= options.reviewThreshold) !== ((current.score ?? -1) >= options.reviewThreshold)) {
@@ -514,4 +580,26 @@ export function buildRiskCalibrationReport(
   };
 }
 
-export type { CalibrationDataset, CalibrationDisposition, CalibrationRecord, ExplainRiskScore };
+export function serializeRiskCalibrationReport(
+  report: RiskCalibrationReport | RiskCalibrationSummaryReport,
+): string {
+  try {
+    const snapshot = snapshotRiskCalibrationReportForSerialization(report);
+    const serialised = serializeRiskCalibrationSnapshot(snapshot);
+    if (snapshot.mode === 'summary') parseRiskCalibrationSummaryReport(serialised);
+    else buildRiskCalibrationSummaryReport(snapshot.document);
+    return serialised;
+  } catch (cause) {
+    throw new CliUsageError(cause instanceof Error
+      ? cause.message
+      : 'Risk calibration output must use the current detailed or summary report contract.');
+  }
+}
+
+export type {
+  CalibrationDataset,
+  CalibrationDisposition,
+  CalibrationRecord,
+  ExplainRiskScore,
+  RiskCalibrationReport,
+};

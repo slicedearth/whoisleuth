@@ -38,6 +38,7 @@ type RiskScoreSensitivity = Readonly<{
   limitations: readonly string[];
 }>;
 type RiskInput = ScoreEvidenceQualityInput & {
+  domain?: unknown;
   availability?: unknown;
   state?: unknown;
   mutationTypes?: unknown;
@@ -162,7 +163,9 @@ function scoreQuality(input: RiskInput): ScoreEvidenceQuality {
   if ([input.hasPasswordField, input.hasExternalFormAction].some(hasBoolean) || typeof input.phishingLanguageMatch === 'string') {
     observedFamilies.push('credential-lure');
   }
-  if (input.threatIntelligence !== undefined && input.threatIntelligence !== null) observedFamilies.push('external-intelligence');
+  if (calibrateExternalIntelligenceRisk(input.threatIntelligence, input.domain).eligibleProviderCount > 0) {
+    observedFamilies.push('external-intelligence');
+  }
   if ([input.hasMx, input.hasSpf, input.hasDmarc].some(hasBoolean)
     || typeof input.activityStatus === 'string'
     || typeof input.domainAgeDays === 'number') observedFamilies.push('operational-support');
@@ -214,7 +217,7 @@ function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily |
     add('credential-lure', 'External form destination observed without a password field', 0);
   }
 
-  const external = calibrateExternalIntelligenceRisk(input.threatIntelligence);
+  const external = calibrateExternalIntelligenceRisk(input.threatIntelligence, input.domain);
   if (external.factor) add('external-intelligence', external.factor.label, external.contribution);
 
   const primaryFamilies = (['domain-resemblance', 'brand-presentation', 'credential-lure', 'external-intelligence'] as const)
@@ -316,7 +319,7 @@ export function explainRiskScoreV6(input: RiskInput): RiskExplanation | null {
   if (typeof input.phishingLanguageMatch === 'string' && input.phishingLanguageMatch.trim()) { add('credential-lure', 'Suspicious urgency language observed', 8); contextual.add('credential-lure'); }
   if (input.hasPasswordField === true) { add('credential-lure', 'Login/password form present', 5); contextual.add('credential-lure'); }
   if (contextual.size >= 2) add('corroboration', `Corroborating context across ${contextual.size} distinct evidence families`, contextual.size >= 3 ? 20 : 10);
-  const external = calibrateExternalIntelligenceRisk(input.threatIntelligence);
+  const external = calibrateExternalIntelligenceRisk(input.threatIntelligence, input.domain);
   if (external.factor) add('external-intelligence', external.factor.label, external.contribution);
   if (input.activityStatus === 'active') add('operational-support', 'Active site in use', 8);
   if (input.hasMx === true) add('operational-support', 'Mail server configured', 8);

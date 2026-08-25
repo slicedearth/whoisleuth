@@ -15,6 +15,8 @@ describe('linear ASCII hostname validation', () => {
     assert.equal(isValidAsciiHostname('bad-.example'), false);
     assert.equal(isValidAsciiHostname('bad_label.example'), false);
     assert.equal(isValidAsciiHostname('Upper.example', { requireLowercase: true }), false);
+    assert.equal(isValidAsciiHostname('ſ.example'), false);
+    assert.equal(isValidAsciiHostname('K.example'), false);
     assert.equal(isValidAsciiHostname(`${'xn--0.'.repeat(20_000)}example`), false);
   });
 

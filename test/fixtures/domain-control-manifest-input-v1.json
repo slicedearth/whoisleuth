@@ -1,0 +1,28 @@
+{
+  "schema": "whoisleuth.domain-control-manifest-input",
+  "version": 1,
+  "expiresAt": "2026-09-03T00:00:00.000Z",
+  "entries": [
+    {
+      "domain": "Example.Test.",
+      "nameservers": [
+        "NS2.EXAMPLE.TEST",
+        "ns1.example.test"
+      ],
+      "ds": [
+        "12345 13 2 abcdef"
+      ],
+      "mx": [
+        "10 mail.example.test",
+        "0 ."
+      ],
+      "caa": [
+        "0 issue \"ca.example\""
+      ],
+      "tlsIssuer": "Example Issuer",
+      "tlsSpkiSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "registrarLock": "required",
+      "renewalReviewAt": "2026-08-20T00:00:00Z"
+    }
+  ]
+}

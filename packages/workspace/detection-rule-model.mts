@@ -1,0 +1,410 @@
+// Pure browser-local custom detection-rule model. Rules are deliberately a
+// small structured language: field names and operators come from allowlists,
+// so imported rules cannot execute code or reach outside bounded case evidence.
+
+import { latestCaseEvidence } from '../cases/case-model.mts';
+import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
+import {
+  DETECTION_RULE_SCHEMA,
+  DETECTION_RULE_SCHEMA_VERSION,
+  MAX_CONDITION_VALUE_LENGTH,
+  MAX_CUSTOM_RISK_TOTAL,
+  MAX_DETECTION_RULES,
+  MAX_RULE_CONDITIONS,
+  MAX_RULE_INPUT_RECORDS,
+  MAX_RULE_NAME_LENGTH,
+  MAX_RULE_RISK_DELTA,
+  MAX_RULE_STORE_BYTES,
+  MAX_RULE_TAG_LENGTH,
+} from '../contracts/workspace-portability.mts';
+
+export {
+  DETECTION_RULE_SCHEMA,
+  DETECTION_RULE_SCHEMA_VERSION,
+  MAX_CONDITION_VALUE_LENGTH,
+  MAX_CUSTOM_RISK_TOTAL,
+  MAX_DETECTION_RULES,
+  MAX_RULE_CONDITIONS,
+  MAX_RULE_IMPORT_BYTES,
+  MAX_RULE_INPUT_RECORDS,
+  MAX_RULE_NAME_LENGTH,
+  MAX_RULE_RISK_DELTA,
+  MAX_RULE_STORE_BYTES,
+  MAX_RULE_TAG_LENGTH,
+} from '../contracts/workspace-portability.mts';
+
+const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const TEXT_CONTROL_RE = /[\x00-\x1f\x7f]/;
+
+type RuleFieldKind = 'enum' | 'number' | 'text' | 'boolean' | 'list';
+export type RuleOperator = 'equals' | 'at_least' | 'at_most' | 'contains' | 'present';
+export type RuleCondition = {
+  field: string;
+  operator: RuleOperator;
+  value: boolean | number | string;
+};
+export type DetectionRule = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  match: 'all' | 'any';
+  conditions: RuleCondition[];
+  riskDelta: number;
+  tag: string;
+};
+export type DetectionRuleStore = {
+  version: typeof DETECTION_RULE_SCHEMA_VERSION;
+  rules: DetectionRule[];
+};
+export type DetectionRuleMatch = {
+  id: string;
+  name: string;
+  riskDelta: number;
+  appliedDelta: number;
+  tag: string;
+};
+export type DetectionRuleEvaluation = {
+  caseId: string;
+  domain: string;
+  builtInRiskScore: number | null;
+  customRiskDelta: number;
+  contextualRiskScore: number | null;
+  matchedRules: DetectionRuleMatch[];
+  suggestedTags: string[];
+};
+export type DetectionRulePreview = Readonly<{
+  candidate: DetectionRule;
+  matchCount: number;
+  affectedCaseIds: readonly string[];
+  affectedDispositionCounts: Readonly<Record<string, number>>;
+  unreviewedMatchCount: number;
+  collisionRuleIds: readonly string[];
+  limitation: string;
+}>;
+type RuleFieldDefinition = {
+  value: string;
+  label: string;
+  kind: RuleFieldKind;
+  values?: readonly string[];
+  min?: number;
+  max?: number;
+};
+type NormalizedDetectionRule = Omit<DetectionRule, 'id'> & { id: string | null };
+type CaseRecordInput = Parameters<typeof latestCaseEvidence>[0];
+
+export const RULE_FIELD_DEFINITIONS: readonly RuleFieldDefinition[] = Object.freeze([
+  { value: 'availability', label: 'Availability state', kind: 'enum', values: ['registered', 'for_sale', 'expiring', 'available', 'unknown', 'error'] },
+  { value: 'activityStatus', label: 'Website state', kind: 'enum', values: ['active', 'parked', 'unreachable', 'no_site'] },
+  { value: 'riskScore', label: 'Built-in risk score', kind: 'number', min: 0, max: 100 },
+  { value: 'registrar', label: 'Registrar', kind: 'text' },
+  { value: 'pageTitle', label: 'Page title', kind: 'text' },
+  { value: 'httpResponseStatus', label: 'HTTP response status', kind: 'number', min: 100, max: 599 },
+  { value: 'httpTransportSecurity', label: 'HTTP transport', kind: 'enum', values: ['https', 'http'] },
+  { value: 'hasMx', label: 'MX present', kind: 'boolean' },
+  { value: 'hasDmarc', label: 'DMARC present', kind: 'boolean' },
+  { value: 'hasPasswordField', label: 'Password field detected', kind: 'boolean' },
+  { value: 'faviconMatch', label: 'Exact favicon match', kind: 'boolean' },
+  { value: 'faviconNearMatch', label: 'Similar favicon', kind: 'boolean' },
+  { value: 'reusesOfficialAssets', label: 'Official assets reused', kind: 'boolean' },
+  { value: 'phishingLanguageMatch', label: 'Phishing-language signal', kind: 'text' },
+  { value: 'hasExternalFormAction', label: 'External form action observed', kind: 'boolean' },
+  { value: 'mutationTypes', label: 'Mutation type', kind: 'list' },
+  { value: 'nameservers', label: 'Nameserver', kind: 'list' },
+  { value: 'httpSecurityHeaders', label: 'HTTP security header', kind: 'list' },
+  { value: 'status', label: 'Case status', kind: 'enum', values: ['new', 'investigating', 'monitoring', 'escalated', 'closed'] },
+  { value: 'disposition', label: 'Case disposition', kind: 'enum', values: ['unreviewed', 'benign', 'suspicious', 'confirmed_abuse', 'false_positive'] },
+  { value: 'tags', label: 'Case tag', kind: 'list' },
+]);
+
+const FIELD_BY_VALUE = new Map<string, RuleFieldDefinition>(RULE_FIELD_DEFINITIONS.map((field) => [field.value, field]));
+
+function record(value: unknown): Record<string, unknown> {
+  return ordinaryWorkspaceRecord(value, 'Detection-rule input') ?? {};
+}
+
+export function operatorsForRuleField(field: unknown): RuleOperator[] {
+  const definition = typeof field === 'string' ? FIELD_BY_VALUE.get(field) : undefined;
+  if (!definition) return [];
+  if (definition.kind === 'number') return ['equals', 'at_least', 'at_most'];
+  if (definition.kind === 'text') return ['contains', 'equals', 'present'];
+  if (definition.kind === 'list') return ['contains', 'present'];
+  return ['equals'];
+}
+
+function normalizedText(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string' || TEXT_CONTROL_RE.test(value)) return '';
+  return value.replace(/\s+/g, ' ').trim().slice(0, maxLength).trim();
+}
+
+function safeId(value: unknown): string | null {
+  return typeof value === 'string' && SAFE_ID_RE.test(value) ? value : null;
+}
+
+function makeId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  return `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeInteger(value: unknown, min: number, max: number): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+export function normalizeRuleCondition(raw: unknown): RuleCondition | null {
+  const condition = record(raw);
+  const definition = typeof condition.field === 'string' ? FIELD_BY_VALUE.get(condition.field) : undefined;
+  if (!definition) return null;
+  const operator = typeof condition.operator === 'string'
+    && operatorsForRuleField(definition.value).includes(condition.operator as RuleOperator)
+    ? condition.operator as RuleOperator
+    : null;
+  if (!operator) return null;
+
+  let value;
+  if (operator === 'present') value = true;
+  else if (definition.kind === 'number') {
+    value = normalizeInteger(condition.value, definition.min ?? 0, definition.max ?? 100);
+    if (value === null) return null;
+  } else if (definition.kind === 'boolean') {
+    if (condition.value !== true && condition.value !== false && condition.value !== 'true' && condition.value !== 'false') return null;
+    value = condition.value === true || condition.value === 'true';
+  } else {
+    value = normalizedText(condition.value, MAX_CONDITION_VALUE_LENGTH).toLowerCase();
+    if (!value) return null;
+    if (definition.kind === 'enum' && (!Array.isArray(definition.values) || !definition.values.includes(value))) return null;
+  }
+  return { field: definition.value, operator, value };
+}
+
+export function normalizeDetectionRule(
+  raw: unknown,
+  { generateId = false }: { generateId?: boolean } = {},
+): NormalizedDetectionRule | null {
+  const item = record(raw);
+  const name = normalizedText(item.name, MAX_RULE_NAME_LENGTH);
+  if (!name) return null;
+  const conditions: RuleCondition[] = [];
+  const rawConditions = Array.isArray(item.conditions) ? item.conditions : [];
+  for (const item of rawConditions.slice(0, MAX_RULE_CONDITIONS)) {
+    const condition = normalizeRuleCondition(item);
+    if (condition) conditions.push(condition);
+  }
+  if (!conditions.length) return null;
+  const riskDelta = normalizeInteger(item.riskDelta, 0, MAX_RULE_RISK_DELTA);
+  return {
+    id: safeId(item.id) || (generateId ? makeId() : null),
+    name,
+    enabled: item.enabled !== false,
+    match: item.match === 'any' ? 'any' : 'all',
+    conditions,
+    riskDelta: riskDelta ?? 0,
+    tag: normalizedText(item.tag, MAX_RULE_TAG_LENGTH).toLowerCase(),
+  };
+}
+
+function ruleList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  const item = record(raw);
+  if (Array.isArray(item.rules)) return item.rules;
+  return [];
+}
+
+export function detectionRuleStoreVersion(raw: unknown): number | null {
+  const item = record(raw);
+  return typeof item.version === 'number' && Number.isFinite(item.version) ? item.version : null;
+}
+
+export function normalizeDetectionRuleStore(raw: unknown): DetectionRuleStore {
+  assertWorkspaceInputGraph(raw, 'Detection-rule store');
+  assertWorkspaceDeclaredVersion(raw, 'Detection-rule store');
+  const byId = new Map<string, DetectionRule>();
+  for (const item of ruleList(raw).slice(0, MAX_RULE_INPUT_RECORDS)) {
+    const rule = normalizeDetectionRule(item);
+    if (!rule?.id || byId.has(rule.id)) continue;
+    byId.set(rule.id, { ...rule, id: rule.id });
+    if (byId.size >= MAX_DETECTION_RULES) break;
+  }
+  return { version: DETECTION_RULE_SCHEMA_VERSION, rules: [...byId.values()] };
+}
+
+export function createDetectionRule(rules: unknown, input: unknown): { rules: DetectionRule[]; record: DetectionRule } {
+  const normalized = normalizeDetectionRule(input, { generateId: true });
+  if (!normalized?.id) throw new Error('Enter a rule name and one valid condition.');
+  const existing = normalizeDetectionRuleStore(rules).rules;
+  if (existing.length >= MAX_DETECTION_RULES) throw new Error(`Custom rules are limited to ${MAX_DETECTION_RULES}. Delete or export one first.`);
+  const created = { ...normalized, id: normalized.id };
+  return { rules: [created, ...existing], record: created };
+}
+
+export function updateDetectionRule(rules: unknown, id: unknown, patch: unknown): DetectionRule[] {
+  const normalizedRules = normalizeDetectionRuleStore(rules).rules;
+  const current = normalizedRules.find((rule) => rule.id === id);
+  if (!current) throw new Error('That custom rule no longer exists.');
+  const updated = normalizeDetectionRule({ ...current, ...record(patch), id });
+  if (!updated?.id) throw new Error('A custom rule needs a name and at least one valid condition.');
+  return normalizeDetectionRuleStore(normalizedRules.map((rule) => rule.id === id ? updated : rule)).rules;
+}
+
+function comparableValue(caseRecord: unknown, snapshot: unknown, field: string): unknown {
+  if (field === 'status' || field === 'disposition' || field === 'tags') return record(caseRecord)[field];
+  return record(snapshot)[field];
+}
+
+export function conditionMatchesCase(conditionRaw: unknown, caseRecord: CaseRecordInput): boolean {
+  const condition = normalizeRuleCondition(conditionRaw);
+  if (!condition) return false;
+  const snapshot = latestCaseEvidence(caseRecord);
+  const actual = comparableValue(caseRecord, snapshot, condition.field);
+  if (condition.operator === 'present') {
+    return Array.isArray(actual) ? actual.length > 0 : actual !== null && actual !== undefined && actual !== '';
+  }
+  if (condition.operator === 'at_least') return typeof actual === 'number' && typeof condition.value === 'number' && actual >= condition.value;
+  if (condition.operator === 'at_most') return typeof actual === 'number' && typeof condition.value === 'number' && actual <= condition.value;
+  if (condition.operator === 'equals') {
+    if (typeof condition.value === 'boolean' || typeof condition.value === 'number') return actual === condition.value;
+    return typeof actual === 'string' && actual.toLowerCase() === condition.value;
+  }
+  if (condition.operator === 'contains') {
+    if (typeof condition.value !== 'string') return false;
+    const needle = condition.value;
+    if (Array.isArray(actual)) return actual.some((value) => typeof value === 'string' && value.toLowerCase().includes(needle));
+    return typeof actual === 'string' && actual.toLowerCase().includes(needle);
+  }
+  return false;
+}
+
+export function evaluateDetectionRules(caseRecord: CaseRecordInput, rawRules: unknown): DetectionRuleEvaluation {
+  const rules = normalizeDetectionRuleStore(rawRules).rules;
+  const matchedRules: DetectionRuleMatch[] = [];
+  let customRiskDelta = 0;
+  const suggestedTags = new Set<string>();
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const results = rule.conditions.map((condition) => conditionMatchesCase(condition, caseRecord));
+    const matched = rule.match === 'any' ? results.some(Boolean) : results.every(Boolean);
+    if (!matched) continue;
+    const appliedDelta = Math.min(rule.riskDelta, Math.max(0, MAX_CUSTOM_RISK_TOTAL - customRiskDelta));
+    customRiskDelta += appliedDelta;
+    if (rule.tag) suggestedTags.add(rule.tag);
+    matchedRules.push({ id: rule.id, name: rule.name, riskDelta: rule.riskDelta, appliedDelta, tag: rule.tag });
+  }
+  const snapshot = latestCaseEvidence(caseRecord);
+  const builtInRiskScore = typeof snapshot?.riskScore === 'number' ? snapshot.riskScore : null;
+  const item = record(caseRecord);
+  return {
+    caseId: typeof item.id === 'string' ? item.id : '',
+    domain: typeof item.domain === 'string' ? item.domain : '',
+    builtInRiskScore,
+    customRiskDelta,
+    contextualRiskScore: builtInRiskScore === null ? null : Math.min(100, builtInRiskScore + customRiskDelta),
+    matchedRules,
+    suggestedTags: [...suggestedTags].sort(),
+  };
+}
+
+export function evaluateRuleSet(records: unknown, rawRules: unknown): DetectionRuleEvaluation[] {
+  if (!Array.isArray(records)) return [];
+  return records.slice(0, 500).map((record) => evaluateDetectionRules(record, rawRules));
+}
+
+function ruleSignature(rule: Pick<DetectionRule, 'match' | 'conditions'>): string {
+  return JSON.stringify({
+    match: rule.match,
+    conditions: [...rule.conditions]
+      .map((condition) => ({ ...condition }))
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+  });
+}
+
+export function previewDetectionRule(
+  records: unknown,
+  existingRules: unknown,
+  rawCandidate: unknown,
+): DetectionRulePreview | null {
+  const normalized = normalizeDetectionRule({ ...record(rawCandidate), id: 'preview-rule', enabled: true });
+  if (!normalized?.id) return null;
+  const candidate: DetectionRule = { ...normalized, id: normalized.id };
+  const sourceRecords = Array.isArray(records) ? records.slice(0, 500) : [];
+  const evaluations = evaluateRuleSet(sourceRecords, [candidate]).filter((item) => item.matchedRules.length > 0);
+  const recordsById = new Map(sourceRecords.map((item) => [String(record(item).id ?? ''), record(item)]));
+  const affectedDispositionCounts: Record<string, number> = {};
+  for (const evaluation of evaluations) {
+    const disposition = String(recordsById.get(evaluation.caseId)?.disposition ?? 'unreviewed');
+    affectedDispositionCounts[disposition] = (affectedDispositionCounts[disposition] ?? 0) + 1;
+  }
+  const signature = ruleSignature(candidate);
+  const collisionRuleIds = normalizeDetectionRuleStore(existingRules).rules
+    .filter((rule) => rule.name.toLowerCase() === candidate.name.toLowerCase() || ruleSignature(rule) === signature)
+    .map((rule) => rule.id)
+    .slice(0, MAX_DETECTION_RULES);
+  return Object.freeze({
+    candidate: Object.freeze(candidate),
+    matchCount: evaluations.length,
+    affectedCaseIds: Object.freeze(evaluations.map((item) => item.caseId).filter(Boolean)),
+    affectedDispositionCounts: Object.freeze(affectedDispositionCounts),
+    unreviewedMatchCount: affectedDispositionCounts.unreviewed ?? 0,
+    collisionRuleIds: Object.freeze(collisionRuleIds),
+    limitation: 'This preview evaluates the latest bounded evidence already retained in local cases. It does not save the rule, change a score, refresh evidence, or establish whether a match is correct.',
+  });
+}
+
+export function mergeDetectionRules(localRaw: unknown, importedRaw: unknown) {
+  assertWorkspaceInputGraph(localRaw, 'Local detection-rule store');
+  assertWorkspaceInputGraph(importedRaw, 'Imported detection-rule document');
+  assertWorkspacePortableVersion(importedRaw, DETECTION_RULE_SCHEMA_VERSION, 'Imported detection-rule document');
+  const importedRecord = record(importedRaw);
+  if (importedRecord.schema !== DETECTION_RULE_SCHEMA
+    || !Array.isArray(importedRecord.rules)) {
+    throw new Error('This JSON file is not a WHOISleuth custom-rule export.');
+  }
+  const version = detectionRuleStoreVersion(importedRaw);
+  if (version !== null && version > DETECTION_RULE_SCHEMA_VERSION) {
+    throw new Error(`This custom-rule file uses newer schema ${version}. Update the app before importing it.`);
+  }
+  if (version !== DETECTION_RULE_SCHEMA_VERSION) {
+    throw new Error(`Expected custom-rule schema ${DETECTION_RULE_SCHEMA_VERSION}.`);
+  }
+  const local = normalizeDetectionRuleStore(localRaw).rules;
+  const byId = new Map(local.map((rule) => [rule.id, rule]));
+  const importedList = ruleList(importedRaw);
+  let added = 0;
+  let updated = 0;
+  let skipped = Math.max(0, importedList.length - MAX_RULE_INPUT_RECORDS);
+  for (const item of importedList.slice(0, MAX_RULE_INPUT_RECORDS)) {
+    const rule = normalizeDetectionRule(item);
+    if (!rule?.id) { skipped++; continue; }
+    const storedRule = { ...rule, id: rule.id };
+    if (byId.has(rule.id)) { byId.set(rule.id, storedRule); updated++; }
+    else if (byId.size < MAX_DETECTION_RULES) { byId.set(rule.id, storedRule); added++; }
+    else skipped++;
+  }
+  return { rules: [...byId.values()], added, updated, skipped };
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+export function assertDetectionRuleStoreBudget(rules: unknown): DetectionRuleStore {
+  const store = normalizeDetectionRuleStore(rules);
+  if (byteLength(JSON.stringify(store)) > MAX_RULE_STORE_BYTES) {
+    throw new Error('Custom-rule storage is full. Remove or export rules before saving more.');
+  }
+  return store;
+}
+
+export function serializeDetectionRuleStore(rules: unknown): string {
+  return JSON.stringify(assertDetectionRuleStoreBudget(rules));
+}
+
+export function buildDetectionRuleExport(rules: unknown, nowIso: unknown = new Date().toISOString()) {
+  const timestamp = typeof nowIso === 'string' ? nowIso : '';
+  const parsed = Date.parse(timestamp);
+  return {
+    schema: DETECTION_RULE_SCHEMA,
+    version: DETECTION_RULE_SCHEMA_VERSION,
+    exportedAt: Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString(),
+    rules: normalizeDetectionRuleStore(rules).rules,
+    limitations: 'Custom rules are browser-local analyst heuristics. Matches and score contributions are not proof of maliciousness and do not alter built-in risk scores.',
+  };
+}

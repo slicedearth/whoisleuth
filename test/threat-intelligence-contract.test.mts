@@ -173,6 +173,8 @@ describe('threat-intelligence provider definition', () => {
     assert.equal(value.limits.cacheTtlMs, 60_000);
     assert.equal(Object.isFrozen(value), true);
     assert.equal(Object.isFrozen(value.terms), true);
+    assert.equal(provider({ terms: { ...provider().terms, reviewedAt: '2026-07-15T12:00:00.000' } }).terms.reviewedAt, '2026-07-15T12:00:00.000Z');
+    assert.equal(provider({ terms: { ...provider().terms, reviewedAt: '2026-07-15T12:00:00.000+01:00' } }).terms.reviewedAt, '2026-07-15T11:00:00.000Z');
   });
 
   test('rejects unknown fields so credentials cannot hide in definitions', () => {
@@ -784,6 +786,11 @@ describe('curated connector fixture harness', () => {
     assert.equal(result.state, 'success');
     assert.equal(requiredValue(result.entities[0]).canonical, 'example.test');
     assert.equal(result.observation.observedAt, '2026-07-19T00:00:00.000Z');
+    const legacyTime = runCuratedConnectorFixture(definition, {
+      id: 'legacy-time', target: { type: 'domain', value: 'example.test' },
+      observedAt: '2026-07-19T12:00:00.000', json: '{}',
+    }, () => ({ state: 'not_found', entities: [], relationships: [] }));
+    assert.equal(legacyTime.observation.observedAt, '2026-07-19T12:00:00.000Z');
   });
 
   test('rejects malformed, over-limit, asynchronous, and nondeterministic fixtures', () => {

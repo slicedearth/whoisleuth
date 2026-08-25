@@ -1,0 +1,238 @@
+{
+  "schema": "whoisleuth.cli.domain-control-monitor",
+  "version": 1,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "manifest": {
+    "digestSha256": "sha256:d9c5cfd70fdd6e4218fdef110221326e60585eedf7f71dd65483cbf1482c5efc",
+    "expiresAt": "2026-09-20T00:00:00.000Z"
+  },
+  "collection": {
+    "requested": 1,
+    "succeeded": 1,
+    "failed": 0,
+    "failures": []
+  },
+  "observations": [
+    {
+      "domain": "example.test",
+      "observedAt": "2026-08-20T00:00:00.000Z",
+      "collectionDepth": "deep",
+      "fields": [
+        {
+          "id": "registrar",
+          "source": "WHOIS",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "registrar_lock",
+          "source": "WHOIS",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "registry_dnssec",
+          "source": "Registry RDAP",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "registry_nameservers",
+          "source": "Registry RDAP",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "whois_nameservers",
+          "source": "WHOIS",
+          "state": "unsupported",
+          "values": []
+        },
+        {
+          "id": "delegated_nameservers",
+          "source": "DNS",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "delegation_ds",
+          "source": "DNS delegation",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "mail_exchangers",
+          "source": "DNS",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "caa_policy",
+          "source": "DNS",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "tls_certificate",
+          "source": "TLS",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "tls_public_key",
+          "source": "TLS",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "http_origin",
+          "source": "HTTP",
+          "state": "unavailable",
+          "values": []
+        },
+        {
+          "id": "page_identity",
+          "source": "Static page identity",
+          "state": "unavailable",
+          "values": []
+        }
+      ]
+    }
+  ],
+  "review": {
+    "schema": "whoisleuth.domain-control-review",
+    "version": 1,
+    "generatedAt": "2026-08-20T00:00:00.000Z",
+    "state": "aligned",
+    "manifest": {
+      "generatedAt": "2026-08-19T00:00:00.000Z",
+      "expiresAt": "2026-09-20T00:00:00.000Z",
+      "digestSha256": "sha256:d9c5cfd70fdd6e4218fdef110221326e60585eedf7f71dd65483cbf1482c5efc",
+      "expired": false
+    },
+    "counts": {
+      "aligned": 0,
+      "drift": 0,
+      "partial": 0,
+      "unavailable": 0,
+      "unsupported": 0,
+      "not_configured": 8,
+      "due": 0
+    },
+    "domains": [
+      {
+        "domain": "example.test",
+        "state": "aligned",
+        "comparisons": [
+          {
+            "field": "nameservers",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "ds",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "mx",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "caa",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "tlsIssuer",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "tlsSpkiSha256",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "registrarLock",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No desired value was configured for this field."
+          },
+          {
+            "field": "renewalReviewAt",
+            "state": "not_configured",
+            "desired": [],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "No renewal review date was configured."
+          }
+        ]
+      }
+    ],
+    "ignoredObservationCount": 0,
+    "limitations": [
+      "This local review compares analyst-authored desired state with separately supplied observations and performs no collection or configuration change.",
+      "Only complete observations can produce drift. Partial, unavailable, unsupported, or missing evidence remains inconclusive.",
+      "A valid manifest digest or signature establishes file integrity, not the correctness of the desired state or supplied observations."
+    ]
+  },
+  "flightRecorder": {
+    "schema": "whoisleuth.domain-control-flight-recorder",
+    "version": 1,
+    "generatedAt": "2026-08-20T00:00:00.000Z",
+    "domains": [
+      "example.test"
+    ],
+    "observationCount": 1,
+    "events": [],
+    "summary": {
+      "firstObservations": 0,
+      "observedChanges": 0,
+      "approvedChanges": 0,
+      "unexpectedChanges": 0,
+      "collectionChanges": 0,
+      "recoveredSources": 0
+    },
+    "limitations": [
+      "The flight recorder compares only supplied bounded observations and performs no collection or configuration change.",
+      "Source fields remain separate. A collection failure, partial result, unsupported source, or missing field never becomes evidence that a prior value disappeared.",
+      "Approved windows label expected timing but do not delete evidence or establish that a change was authorised, successful, safe, or complete.",
+      "Observed changes can reflect publication lag or different collection conditions and require analyst review."
+    ]
+  },
+  "limitations": [
+    "This is one bounded run, not a daemon. Scheduling and secure checkpoint retention remain operator-controlled.",
+    "The output retains compact normalised observations and errors, not raw RDAP, WHOIS, DNS, HTTP, TLS or page payloads.",
+    "A failed source or lookup remains incomplete and does not establish that a previously observed value disappeared."
+  ]
+}

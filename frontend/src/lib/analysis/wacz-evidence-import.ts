@@ -1,4 +1,7 @@
-import { Gunzip, UnzipInflate, unzipSync } from 'fflate';
+import { UnzipInflate } from 'fflate';
+import { parseBoundedJson } from '../bounded-json.ts';
+import { extractBoundedZipEntries } from '../../../../packages/interchange/bounded-zip-extraction.mts';
+import { decompressBoundedGzip } from '../../../../packages/interchange/bounded-gzip.mts';
 
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -92,7 +95,7 @@ function decodeJson(bytes: Uint8Array, label: string): unknown {
     throw new Error(`${label} is not valid UTF-8.`);
   }
   try {
-    return JSON.parse(decoded) as unknown;
+    return parseBoundedJson(decoded, { label, maximumBytes: MAX_WACZ_MANIFEST_BYTES });
   } catch {
     throw new Error(`${label} is not valid JSON.`);
   }
@@ -182,23 +185,12 @@ function concatBytes(chunks: readonly Uint8Array[], total: number): Uint8Array {
 }
 
 function gunzipBounded(input: Uint8Array, remainingBytes: number): Uint8Array {
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    const gunzip = new Gunzip((chunk) => {
-      total += chunk.byteLength;
-      if (total > remainingBytes) {
-        throw new Error(`Expanded WARC data exceeds the ${MAX_WARC_IMPORT_BYTES}-byte import bound.`);
-      }
-      chunks.push(chunk.slice());
-    });
-    gunzip.push(input, true);
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.includes('import bound')) throw cause;
-    throw new Error('A compressed WACZ WARC resource could not be safely decompressed.');
-  }
-  if (!total) throw new Error('A compressed WACZ WARC resource was empty.');
-  return concatBytes(chunks, total);
+  return decompressBoundedGzip(input, {
+    maximumOutputBytes: remainingBytes,
+    exceededMessage: `Expanded WARC data exceeds the ${MAX_WARC_IMPORT_BYTES}-byte import bound.`,
+    invalidMessage: 'A compressed WACZ WARC resource could not be safely decompressed.',
+    emptyMessage: 'A compressed WACZ WARC resource was empty.',
+  });
 }
 
 function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
@@ -211,8 +203,8 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
   const seen = new Set<string>();
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(bytes, {
-      filter(file) {
+    const extracted = extractBoundedZipEntries(bytes, {
+      inspect(file) {
         zipEntries += 1;
         if (zipEntries > MAX_WACZ_ENTRIES) {
           throw new Error(`WACZ imports are limited to ${MAX_WACZ_ENTRIES} ZIP entries.`);
@@ -238,7 +230,14 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
           || canonicalName === 'datapackage-digest.json'
           || isWarcResourcePath(file.name)
         );
-        if (!selected) return false;
+        if (!selected) {
+          return {
+            key: canonicalName,
+            selected: false,
+            maximumBytes: 0,
+            exceededMessage: 'Selected WACZ entries exceed the bounded extraction allowance.',
+          };
+        }
         if (![0, UnzipInflate.compression].includes(file.compression)) {
           throw new Error('A required WACZ entry uses an unsupported ZIP compression method.');
         }
@@ -246,9 +245,25 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
         if (selectedBytes > MAX_WACZ_IMPORT_BYTES + (2 * MAX_WACZ_MANIFEST_BYTES)) {
           throw new Error('Selected WACZ entries exceed the bounded extraction allowance.');
         }
-        return true;
+        return {
+          key: canonicalName,
+          selected: true,
+          maximumBytes: canonicalName === 'datapackage.json' || canonicalName === 'datapackage-digest.json'
+            ? MAX_WACZ_MANIFEST_BYTES
+            : MAX_WACZ_IMPORT_BYTES,
+          exceededMessage: canonicalName === 'datapackage.json' || canonicalName === 'datapackage-digest.json'
+            ? 'Selected WACZ manifest entry exceeds its bounded extraction allowance.'
+            : 'Selected WACZ WARC entry exceeds its bounded extraction allowance.',
+        };
       },
+      keyForName: (name) => name.toLowerCase(),
+      maximumEntries: MAX_WACZ_ENTRIES,
+      maximumSelectedBytes: MAX_WACZ_IMPORT_BYTES + (2 * MAX_WACZ_MANIFEST_BYTES),
+      selectedBytesExceededMessage: 'Selected WACZ entries exceed the bounded extraction allowance.',
+      metadataMismatchMessage: 'The WACZ contains inconsistent ZIP metadata.',
     });
+    files = Object.fromEntries(extracted.files);
+    zipEntries = extracted.entryCount;
   } catch (cause) {
     if (cause instanceof Error && cause.message.startsWith('WACZ')) throw cause;
     if (cause instanceof Error && cause.message.startsWith('The WACZ')) throw cause;

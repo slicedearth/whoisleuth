@@ -75,6 +75,7 @@ export type LookupEvidenceQualityEntry = Readonly<{
   durationMs: number | null;
   timingOutcome: 'fulfilled' | 'rejected' | null;
   refreshAvailable: boolean;
+  requestDisclosure: string | null;
   limitations: readonly string[];
   supports: readonly string[];
 }>;
@@ -96,7 +97,7 @@ type JsonRecord = Record<string, unknown>;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const MAX_TEXT = 320;
 const MAX_ENTRIES = 24;
-const MAX_ACTIONS = 6;
+export const MAX_LOOKUP_SOURCE_ACTIONS = 6;
 export const MAX_LOOKUP_PRESENTED_ACTIONS = 3;
 const LOOKUP_TASK_EVIDENCE_KINDS = new Set<LookupTaskEvidenceKind>([
   'delegation', 'dependency', 'dns', 'form', 'http', 'identity', 'mail', 'page',
@@ -616,7 +617,8 @@ export function buildLookupDecisionSupport(input: Readonly<{
       priority: 'low',
     });
   }
-  const uniqueActions = [...new Map(actions.map((action) => [action.id, action])).values()].slice(0, MAX_ACTIONS);
+  const uniqueActions = [...new Map(actions.map((action) => [action.id, action])).values()]
+    .slice(0, MAX_LOOKUP_SOURCE_ACTIONS);
   return {
     version: 1,
     guidance: taskGuidance(input.task),
@@ -629,21 +631,38 @@ export function buildLookupDecisionSupport(input: Readonly<{
   };
 }
 
-export function projectLookupNextActions(
+export function rankLookupNextActions(
   actions: readonly LookupNextAction[],
   task: LookupTaskView,
-): LookupNextAction[] {
+): readonly LookupNextAction[] {
   const taskActionId = TASK_ACTION_ID[task];
-  return actions
-    .slice(0, MAX_ACTIONS)
-    .map((action, index) => ({ action, index }))
+  return Object.freeze(actions
+    .slice(0, MAX_LOOKUP_SOURCE_ACTIONS)
+    .map((action, index) => ({
+      action: Object.freeze({
+        id: action.id,
+        label: action.label,
+        reason: action.reason,
+        expectedOutcome: action.expectedOutcome,
+        href: action.href,
+        priority: action.priority,
+      }),
+      index,
+    }))
     .sort((left, right) => (
       ACTION_PRIORITY[left.action.priority] - ACTION_PRIORITY[right.action.priority]
       || Number(right.action.id === taskActionId) - Number(left.action.id === taskActionId)
       || left.index - right.index
     ))
-    .slice(0, MAX_LOOKUP_PRESENTED_ACTIONS)
-    .map(({ action }) => action);
+    .map(({ action }) => action));
+}
+
+export function projectLookupNextActions(
+  actions: readonly LookupNextAction[],
+  task: LookupTaskView,
+): LookupNextAction[] {
+  return rankLookupNextActions(actions, task)
+    .slice(0, MAX_LOOKUP_PRESENTED_ACTIONS);
 }
 
 function timingByEvidence(timing: LookupTiming | null): Map<string, LookupTiming['sources'][number]> {
@@ -668,9 +687,15 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   const observedAt = isoDate(input.observedAt);
   const currentAgeDays = ageDays(observedAt, input.now ?? new Date().toISOString());
   const timings = timingByEvidence(input.timing);
-  const refreshIds = new Set(input.refreshPlan.items.flatMap((item) => item.evidenceIds));
+  const refreshByEvidence = new Map<string, LookupSourceRefreshPlan['items'][number]>();
+  for (const item of input.refreshPlan.items) {
+    for (const evidenceId of item.evidenceIds) {
+      if (!refreshByEvidence.has(evidenceId)) refreshByEvidence.set(evidenceId, item);
+    }
+  }
   const entries = input.coverage.entries.slice(0, MAX_ENTRIES).map((entry) => {
     const timing = timings.get(entry.id);
+    const refresh = refreshByEvidence.get(entry.id);
     const entryObservedAt = isoDate(input.observedAtByEvidence?.[entry.id]) ?? observedAt;
     return {
       id: entry.id,
@@ -686,7 +711,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       ageDays: ageDays(entryObservedAt, input.now ?? new Date().toISOString()),
       durationMs: timing?.durationMs ?? null,
       timingOutcome: timing?.outcome ?? null,
-      refreshAvailable: refreshIds.has(entry.id),
+      refreshAvailable: refresh !== undefined,
+      requestDisclosure: refresh?.requestDisclosure ?? null,
       limitations: entry.limitations,
       supports: SUPPORTS[entry.id] ?? Object.freeze([]),
     };

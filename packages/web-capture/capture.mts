@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, open, rmdir, unlink } from 'node:fs/promises';
+import { lstat, mkdir, open, rmdir, unlink } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import path from 'node:path';
 
@@ -8,6 +8,11 @@ import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
 import { readBytesCapped, resolvePublicAddresses, safeFetchDetailed } from '../../lib/safe-fetch.mts';
+import {
+  startAnchoredArtifactWriter,
+  type AnchoredArtifactIdentity,
+  type AnchoredArtifactWriter,
+} from './anchored-artifact-writer.mts';
 import {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
   MAX_WEB_CAPTURE_DOM_ELEMENTS,
@@ -19,7 +24,7 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
+} from '../contracts/web-capture.mts';
 export {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
   MAX_WEB_CAPTURE_DOM_ELEMENTS,
@@ -31,7 +36,7 @@ export {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
+} from '../contracts/web-capture.mts';
 export const MAX_CAPTURE_REQUESTS = 100;
 export const MAX_CAPTURE_HOSTS = 30;
 export const MAX_CAPTURE_URL_LENGTH = 2048;
@@ -161,14 +166,26 @@ function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function boundedPlainText(value: unknown, maximum: number): string {
+const TERMINAL_UNSAFE_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const TERMINAL_UNSAFE_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
+
+export function hasTerminalUnsafeCharacters(value: string): boolean {
+  return TERMINAL_UNSAFE_RE.test(value);
+}
+
+export function sanitizeCaptureText(value: unknown, maximum: number): string {
   return typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum)
+    ? value
+      .replace(TERMINAL_UNSAFE_GLOBAL_RE, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, maximum)
     : '';
 }
 
 function captureUrl(value: unknown): URL {
-  if (typeof value !== 'string' || !value || value.length > MAX_CAPTURE_URL_LENGTH) {
+  if (typeof value !== 'string' || !value || value.length > MAX_CAPTURE_URL_LENGTH
+    || hasTerminalUnsafeCharacters(value)) {
     throw new Error(`Capture URL must be between 1 and ${MAX_CAPTURE_URL_LENGTH} characters.`);
   }
   let parsed: URL;
@@ -200,7 +217,7 @@ function captureTargetUrl(value: unknown): URL {
 }
 
 function outputDirectory(value: unknown): string {
-  if (typeof value !== 'string' || !value || value.length > 2048 || /[\u0000-\u001f\u007f]/u.test(value)) {
+  if (typeof value !== 'string' || !value || value.length > 2048 || hasTerminalUnsafeCharacters(value)) {
     throw new Error('Output directory must be one bounded local path.');
   }
   return path.resolve(value);
@@ -255,7 +272,37 @@ async function projectDom(page: Page): Promise<NormalizedDomProjection> {
   return normalizeDomProjection(projected);
 }
 
-type OwnedArtifactIdentity = Readonly<{ dev: number; ino: number }>;
+type OwnedArtifactIdentity = AnchoredArtifactIdentity;
+
+function sameArtifactIdentity(left: OwnedArtifactIdentity, right: OwnedArtifactIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function assertPrivateDirectoryReservation(
+  reservation: Awaited<ReturnType<typeof lstat>>,
+  expectedUid: number | null,
+): void {
+  if (!reservation.isDirectory()
+    || (expectedUid !== null && Number(reservation.uid) !== expectedUid)
+    || (process.platform !== 'win32' && (Number(reservation.mode) & 0o077) !== 0)) {
+    throw new Error('Capture output directory could not be reserved as a private directory owned by the current user.');
+  }
+}
+
+async function assertPublishedDirectoryIdentity(
+  targetDirectory: string,
+  reservation: OwnedArtifactIdentity,
+): Promise<void> {
+  let current: Awaited<ReturnType<typeof lstat>>;
+  try {
+    current = await lstat(targetDirectory);
+  } catch {
+    throw new Error('Capture output directory identity changed before artefact publication completed.');
+  }
+  if (!current.isDirectory() || !sameArtifactIdentity(current, reservation)) {
+    throw new Error('Capture output directory identity changed before artefact publication completed.');
+  }
+}
 
 async function privateWrite(
   filePath: string,
@@ -694,10 +741,13 @@ export async function captureRenderedPage(
     if (code === 'EEXIST') throw new Error('Capture output directory already exists.');
     throw error;
   }
-  await chmod(targetDirectory, 0o700);
-  const reservation = await lstat(targetDirectory);
+  const reservationStats = await lstat(targetDirectory);
+  const expectedUid = typeof process.getuid === 'function' ? process.getuid() : null;
+  assertPrivateDirectoryReservation(reservationStats, expectedUid);
+  const reservation = { dev: reservationStats.dev, ino: reservationStats.ino };
   const ownedArtifacts = new Map<string, OwnedArtifactIdentity>();
   const pendingArtifactWrites = new Set<Promise<void>>();
+  let anchoredWriter: AnchoredArtifactWriter | null = null;
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
   let page: Page | null = null;
@@ -709,12 +759,20 @@ export async function captureRenderedPage(
     ].filter((operation): operation is Promise<void> => Boolean(operation)));
   });
   async function writeArtifact(fileName: string, value: string | Buffer): Promise<void> {
-    const operation = (dependencies.writeArtifact ?? privateWrite)(
-      path.join(targetDirectory, fileName),
-      value,
-      deadline.signal,
-      (identity) => ownedArtifacts.set(fileName, identity),
-    );
+    if (!dependencies.writeArtifact) await assertPublishedDirectoryIdentity(targetDirectory, reservation);
+    const operation = dependencies.writeArtifact
+      ? dependencies.writeArtifact(
+          path.join(targetDirectory, fileName),
+          value,
+          deadline.signal,
+          (identity) => ownedArtifacts.set(fileName, identity),
+        )
+      : anchoredWriter?.write(
+          fileName,
+          value,
+          deadline.signal,
+          (identity) => ownedArtifacts.set(fileName, identity),
+        ) ?? Promise.reject(new Error('Anchored capture artefact writer is unavailable.'));
     pendingArtifactWrites.add(operation);
     void operation.then(
       () => pendingArtifactWrites.delete(operation),
@@ -723,6 +781,10 @@ export async function captureRenderedPage(
     await deadline.run(operation);
   }
   try {
+    if (!dependencies.writeArtifact) {
+      anchoredWriter = await deadline.run(startAnchoredArtifactWriter(targetDirectory, reservation, expectedUid));
+      await deadline.run(assertPublishedDirectoryIdentity(targetDirectory, reservation));
+    }
     browser = await deadline.run(dependencies.launchBrowser());
     context = await deadline.run(browser.newContext({
       viewport: VIEWPORT,
@@ -749,7 +811,7 @@ export async function captureRenderedPage(
     await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
     await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
     const finalUrl = captureUrl(page.url());
-    const title = boundedPlainText(await deadline.run(page.title()), 300);
+    const title = sanitizeCaptureText(await deadline.run(page.title()), 300);
     const dom = await deadline.run(projectDom(page));
     const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
     const screenshotBuffer = Buffer.from(screenshot);
@@ -801,7 +863,7 @@ export async function captureRenderedPage(
     await writeArtifact(screenshotName, screenshotBuffer);
     await writeArtifact(domName, domBytes);
     const limitations = [
-      'Rendered collection executed page JavaScript in a disposable browser context and disclosed each admitted exact resource URL, including path and query, to that resource operator; retained output omits those paths and queries.',
+      'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
       'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
       `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
@@ -839,13 +901,22 @@ export async function captureRenderedPage(
     // The manifest is the final commit marker. A reserved directory without it
     // is never a completed capture, and the destination is never replaced.
     await writeArtifact('manifest.json', manifestBytes);
+    await deadline.run(assertPublishedDirectoryIdentity(targetDirectory, reservation));
+    if (anchoredWriter) {
+      await deadline.run(anchoredWriter.finish(false));
+      anchoredWriter = null;
+    }
     deadline.clear();
     return manifest;
   } catch (error) {
     await Promise.allSettled([...pendingArtifactWrites]);
+    if (anchoredWriter) {
+      await anchoredWriter.finish(true).catch(() => anchoredWriter?.terminate());
+      anchoredWriter = null;
+    }
     try {
       const current = await lstat(targetDirectory);
-      if (current.dev === reservation.dev && current.ino === reservation.ino) {
+      if (sameArtifactIdentity(current, reservation)) {
         for (const [fileName, identity] of ownedArtifacts) {
           const filePath = path.join(targetDirectory, fileName);
           try {

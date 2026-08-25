@@ -9,7 +9,7 @@ import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mt
 import { MAX_ENVELOPE_BYTES } from '../lib/scheduled-monitor-crypto.mts';
 
 type BlobRead = Awaited<ReturnType<NetlifyBlobStore['getWithMetadata']>>;
-type BlobReadCall = { key: string; options: { consistency: 'strong'; type: 'text' } };
+type BlobReadCall = { key: string; options: { consistency: 'strong'; type: 'stream' } };
 type BlobWriteCall = {
   key: string;
   value: string;
@@ -39,8 +39,12 @@ class FakeBlobStore implements NetlifyBlobStore {
   }
 }
 
+function blobStream(value: string): ReadableStream<Uint8Array> {
+  return new Blob([value]).stream();
+}
+
 describe('scheduled monitoring Netlify Blobs adapter', () => {
-  test('uses a strongly consistent text read and maps a missing Blob to an empty snapshot', async () => {
+  test('uses a strongly consistent stream read and maps a missing Blob to an empty snapshot', async () => {
     const blobs = new FakeBlobStore();
     const store = createNetlifyBlobVersionedTextStore(blobs);
     assert.deepEqual(await store.read('whoisleuth:scheduled-monitor'), {
@@ -49,13 +53,13 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
     });
     assert.deepEqual(blobs.reads, [{
       key: 'whoisleuth:scheduled-monitor',
-      options: { consistency: 'strong', type: 'text' },
+      options: { consistency: 'strong', type: 'stream' },
     }]);
   });
 
   test('preserves bounded ciphertext and the opaque ETag returned by Netlify', async () => {
     const blobs = new FakeBlobStore();
-    blobs.entry = { data: '{"ciphertext":"opaque"}', etag: 'W/"opaque-version"' };
+    blobs.entry = { data: blobStream('{"ciphertext":"opaque"}'), etag: 'W/"opaque-version"' };
     const store = createNetlifyBlobVersionedTextStore(blobs);
     assert.deepEqual(await store.read('state'), {
       value: '{"ciphertext":"opaque"}',
@@ -100,13 +104,34 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
     for (const entry of [
       {},
       { data: null, etag: '"v1"' },
-      { data: 'ciphertext', etag: null },
-      { data: 'ciphertext', etag: 'bad\netag' },
-      { data: 'x'.repeat(MAX_ENVELOPE_BYTES + 1), etag: '"v1"' },
+      { data: blobStream('ciphertext'), etag: null },
+      { data: blobStream('ciphertext'), etag: 'bad\netag' },
+      { data: new Blob([new Uint8Array([0xc3, 0x28])]).stream(), etag: '"v1"' },
     ]) {
       blobs.entry = entry as NonNullable<BlobRead>;
       await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
     }
+
+    const invalidMetadataStream = blobStream('ciphertext');
+    blobs.entry = { data: invalidMetadataStream, etag: null } as NonNullable<BlobRead>;
+    await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
+    assert.equal(invalidMetadataStream.locked, false);
+
+    let pulls = 0;
+    let cancelled = false;
+    blobs.entry = {
+      etag: '"v1"',
+      data: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulls += 1;
+          controller.enqueue(new Uint8Array(pulls === 1 ? MAX_ENVELOPE_BYTES : 1));
+        },
+        cancel() { cancelled = true; },
+      }),
+    };
+    await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
+    assert.ok(pulls >= 2 && pulls <= 3);
+    assert.equal(cancelled, true);
 
     await assert.rejects(store.compareAndSet('state', '', 'ciphertext'), /Blob version is invalid/i);
     await assert.rejects(

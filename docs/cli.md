@@ -1,16 +1,18 @@
 # WHOISleuth CLI guide
 
-The first-party CLI runs locally and uses the same bounded classification,
-collection, and analysis modules as the web application. It does not call the
-hosted WHOISleuth deployment. Use this guide for installation, first commands,
-collection boundaries, output, and automation behaviour. The
-[complete CLI reference](cli-reference.md) documents every command family and
-artefact contract.
+The first-party CLI runs on the operator's machine and does not call the hosted
+WHOISleuth deployment. Use this guide for installation, common commands,
+collection boundaries and output. Installed `whoisleuth --help`, focused
+`--help` and `whoisleuth commands` output are the authority for that installed
+version. The [CLI reference](cli-reference.md) covers durable command and
+artefact contracts.
+
+The generated [privacy and data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
+lists the network, recipient, retention and export boundary for every command.
 
 ## Installation
 
-Public releases require Node.js 24 or later and install the `whoisleuth`
-command:
+Public releases require Node.js 24 or later:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
@@ -26,296 +28,126 @@ whoisleuth --version
 whoisleuth doctor
 ```
 
-The scoped package and application share one semantic version. The package
-includes `LICENSE`, `NOTICE`, `TRADEMARKS.md`, this guide, and the complete
-reference. It requires no lifecycle scripts, so the examples disable them.
-An unqualified `npx whoisleuth` is not this project.
-
-From a repository checkout, replace `whoisleuth` with
-`node bin/whoisleuth.mts`. Maintainers can assemble, install, and smoke-test the
-exact compiled package closure without publishing it:
-
-```bash
-npm run cli:package:check
-```
+The package and application share one semantic version. The package requires no
+dependency lifecycle scripts. From a repository checkout, replace `whoisleuth`
+with `node bin/whoisleuth.mts`; maintainers can verify the exact package closure
+with `npm run cli:package:check`.
 
 ## First commands
 
-Inspect the installed capabilities before collection:
+Inspect the installed command set and plan one Lookup before collecting:
 
 ```bash
 whoisleuth --help
-whoisleuth commands
+whoisleuth commands --common
 whoisleuth doctor
-whoisleuth lookup example.com --plan --json
+whoisleuth lookup example.test --plan --json
 ```
 
-Run a fast lookup or deliberately request the deeper profile:
+Run Fast or Deep Lookup:
 
 ```bash
-whoisleuth lookup example.com
-whoisleuth lookup example.com --deep
-whoisleuth lookup example.com --deep --summary
-whoisleuth lookup example.com --deep --markdown --output lookup.md
+whoisleuth example.test
+whoisleuth lookup example.test --deep
+whoisleuth lookup example.test --deep --summary
+whoisleuth lookup example.test --deep --browse
+whoisleuth lookup example.test --deep --markdown --output lookup.md
 ```
 
-Process an explicit bounded list, generate lookalike candidates, or inspect a
-saved result without sending it anywhere:
+Process selected local input:
 
 ```bash
 whoisleuth bulk domains.txt --csv
-whoisleuth discover example.com --preset common --jsonl
+whoisleuth discover example.test --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json --strict-exit
-whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit
-whoisleuth interchange-report workspace.json --json
 whoisleuth compare lookup.json --json
-whoisleuth diff earlier-bulk.json later-bulk.json --left-session session-1 --right-session session-2 --json
 whoisleuth brief lookup.json
-whoisleuth registry-doctor lookup.json --json
-whoisleuth registry-cohort retained-cohorts.jsonl --json
 ```
 
-Only one query is accepted by `lookup`; multi-input processing belongs to
-`bulk`. Standard input to `lookup` is capped at 4 KiB and must contain one
-non-empty line.
+One strict domain, IP address or ASN can occupy command position as Lookup
+shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
+Only `bulk` accepts multiple targets.
 
-## Collection profiles
+## Command groups
 
-Commands are classified as either networked or offline in focused help, the
-generated manual, and `commands --json`.
+The installed registry groups commands under the same analyst vocabulary as the
+application:
 
-| Profile | Boundary |
+| Group | Common commands |
 | --- | --- |
-| Fast Lookup | Conservative default for domain triage. It does not run WHOIS or deep website and TLS collection. |
-| Deep Lookup | Explicitly requested bounded RDAP, WHOIS, DNS, website, TLS, registrar-RDAP, and observed-network work where applicable. |
-| Compact deep Bulk | Uses the shared Lookup orchestration but omits full-only response fields and collectors. |
-| Offline review | Reads only the named bounded artefact or analyst-authored input and makes no network request. |
-| Isolated authorised action | Runs only when its dedicated command and per-run acknowledgement flags are supplied; it is never added to Lookup, Bulk, monitoring, or recipes. |
+| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `brief` |
+| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` |
+| Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
+| Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
 
-Networked commands run from the local machine and contact the sources declared
-by their profile. They do not use the hosted login or hosted usage controls;
-upstream services can see and rate-limit the local network address. The CLI
-does not implicitly enable the browser Console's optional external intelligence
-actions.
-
-`lookup --plan` performs classification and emits a versioned preflight without
-starting collection. It lists planned source families and disclosure targets,
-but cannot predict cache state, live configuration, redirects, referrals,
-source availability, or exact request count.
-
-`doctor` is offline by default. `doctor --network` adds three independent,
-bounded checks against fixed diagnostic infrastructure and retains only state,
-HTTP status, and a bounded explanation.
-
-## Command map
-
-| Goal | Commands |
-| --- | --- |
-| Investigate a target | `lookup`, `http`, `tls`, `dnssec-validate`, `mail-transport`, `posture`, `registry-support` |
-| Review many targets | `bulk`, `discover`, `discover-scan`, `ct-search`, `ct-intake` |
-| Compare saved evidence | `compare`, `page-compare`, `diff`, `reconcile`, `timeline`, `mail-review` |
-| Review supplied evidence | `brief`, `review-evidence`, `registry-doctor`, `registry-cohort`, `source-report`, `sharing-review`, `map-observations` |
-| Plan and assure changes | `domain-control`, `monitor-once`, `assurance`, `change-packet`, `workflow-plan`, `workflow-run` |
-| Verify and package evidence | `case-pack`, `manifest`, `oam-export`, `verify-artifact`, `interchange-report`, `inspect-archive`, `sign-artifact`, `verify-signature`, `export` |
-| Calibrate offline | `risk-calibrate`, `lookalike-calibrate` |
-| Operate the CLI | `doctor`, `registry-scaffold`, `commands`, `completion`, `manual` |
-
-Use focused help for the exact arguments and collection ceiling:
+Filter the canonical index without running the selected commands:
 
 ```bash
-whoisleuth lookup --help
-whoisleuth sharing-review --help
+whoisleuth commands --group investigate
+whoisleuth commands --group respond --mode offline
 whoisleuth commands --json
 whoisleuth manual | man -l -
 ```
 
+`registry-scaffold` has a separate fixture bootstrap contract: its `--profile`
+selects one fixed fixture profile and it rejects shared `--config` profiles.
+It creates sanitised local fixtures and does not contact a registry.
+
+## Collection boundaries
+
+| Mode | Behaviour |
+| --- | --- |
+| Fast Lookup | Registration-first triage without WHOIS or deeper website and TLS collection. |
+| Deep Lookup | Explicit RDAP, WHOIS, DNS, website, TLS, registrar-RDAP and observed-network collection where applicable. |
+| Compact Deep Bulk | Comparison fields from shared Lookup orchestration, omitting full-only collectors and response fields. |
+| Offline | Reads only the named local artefact, stdin or built-in catalogue. |
+| Authorised active | Requires its dedicated command and per-run owned-or-authorised acknowledgement. |
+
+Networked commands run from the local machine and contact the sources named in
+their focused help. They do not use the hosted login or hosted usage controls.
+`lookup --plan` lists planned source families and disclosure targets before
+collection. `doctor` is offline unless `--network` is selected.
+
 ## Output and automation
 
-Human-readable terminal output is the default. Interactive terminals use
-restrained semantic colour and transient progress on stderr. Redirected output,
-JSON, and JSONL contain no ANSI sequences or progress text. State remains
-explicit in text, so colour is never the only distinction.
+Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML
+or domain-only output only where declared by the installed registry. Redirected
+and machine output contains no ANSI or transient progress text.
 
-- `--json` and `--jsonl` provide bounded machine-readable documents.
-- `--summary` and `--verbose` change human detail without changing collection.
-- `--no-color` or `NO_COLOR` disables colour.
-- `WHOISLEUTH_NO_PROGRESS=1` disables the transient progress indicator.
-- `--events` keeps the final document on stdout and writes versioned JSONL
-  lifecycle events to stderr.
-- `--strict-exit` treats failures in explicitly requested source families as a
-  partial failure while keeping skipped or unsupported sources neutral.
-- `--fail-on` applies explicit `source-failure`, `inconclusive`, `danger`, or
-  `material-drift` automation policy where the selected command supports it.
-- `--junit` emits bounded CI test cases for Lookup, Bulk, and one-shot control
-  reviews; owned-domain Posture can emit `--sarif` only with
-  `--owned-domain`.
+- `--summary` and `--verbose` change presentation, not collection.
+- `lookup --browse` provides an interactive terminal view; press `?` for keys.
+- `--events` writes versioned lifecycle events to stderr.
+- `--strict-exit` and `--fail-on` expose selected evidence states to automation.
+- `--output` writes a private local file atomically and refuses an existing path
+  unless `--force` is also selected.
 
-`--config <file> --profile <name>` applies a strict version-1 local profile.
-The default path is `$XDG_CONFIG_HOME/whoisleuth/config.json`. Profiles can set
-only presentation mode, Fast collection, bounded concurrency, and observer or
-vantage labels. They cannot add targets, enable Deep collection, select output
-paths, approve network work, or set failure policy. Explicit command options
-override defaults from the same option group.
-
-Every command accepts `--output <file>`. WHOISleuth buffers bounded output,
-creates a private temporary file beside the destination, syncs it, and publishes
-it atomically with mode `0600`. Existing destinations are refused unless
-`--force` is deliberately combined with `--output`. Failed or cancelled
-commands do not publish partial files. Output is capped at 32 MiB.
+Local configuration profiles can set presentation, Fast collection, bounded
+concurrency and observer labels. They cannot add targets, enable Deep
+collection, choose output paths or approve network work. Explicit command
+options override profile defaults.
 
 ## Exit codes
 
 | Code | Meaning |
 | ---: | --- |
-| 0 | Command completed. Individual sources can still be partial or inconclusive; inspect diagnostics. |
-| 2 | Invalid command, option, input, or stdin shape. |
-| 3 | The requested lookup, collection, or comparison could not run. |
-| 4 | A bounded operation completed partially. |
-| 70 | Unexpected CLI bootstrap failure. |
-| 130 | The analyst cancelled the command; no partial final result was emitted. |
-| 143 | The process received SIGTERM; no partial final result was emitted. |
+| 0 | The command completed. |
+| 2 | Invalid command, option or input. |
+| 3 | Collection, lookup or comparison failed. |
+| 4 | The result was partial or a selected evidence policy was not met. |
+| 70 | Internal CLI bootstrap failure. |
+| 130 | The analyst cancelled the command. |
+| 143 | The process received SIGTERM. |
 
-## Detailed command reference
+## Command details
 
-The headings below preserve the established guide anchors while moving their
-full contracts into the packaged reference.
-
-### Registry capability coverage
-
-[Read the complete registry capability reference.](cli-reference.md#registry-capability-coverage)
-
-### Offline Risk calibration
-
-[Read the calibration dataset and replay contract.](cli-reference.md#offline-risk-calibration)
-
-### Lookalike review-yield calibration
-
-[Read the reviewed candidate calibration contract.](cli-reference.md#lookalike-review-yield-calibration)
-
-### Offline artefact verification
-
-[Read the archive, saved Lookup, Lookup-evidence, and signed-artefact verification contract.](cli-reference.md#offline-artefact-verification)
-
-### Privacy-safe source reliability report
-
-[Read the target-free source diagnostic contract.](cli-reference.md#privacy-safe-source-reliability-report)
-
-### Workspace archive inspection
-
-[Read the redacted archive summary, stable content-digest, transfer-check, and
-search contract.](cli-reference.md#workspace-archive-inspection)
-
-### Optional evidence-package signing
-
-[Read the local signing and verification contract.](cli-reference.md#optional-evidence-package-signing)
-
-### Reproducible investigation manifest
-
-[Read the ordered, path-free artefact digest contract.](cli-reference.md#reproducible-investigation-manifest)
-
-### Bulk lookup
-
-[Read Bulk bounds, filters, formats, checkpoints, and cancellation behaviour.](cli-reference.md#bulk-lookup)
-
-### Certificate Transparency search
-
-[Read the CT query and source-limit contract.](cli-reference.md#certificate-transparency-search)
-
-### Local certificate event intake
-
-[Read the offline, source-qualified event import contract.](cli-reference.md#local-certificate-event-intake)
-
-### Declarative observation interchange
-
-[Read the bounded field-mapping and Open Asset Model bridge contracts.](cli-reference.md#declarative-observation-interchange)
-
-### Lookalike discovery
-
-[Read candidate generation, dictionaries, snapshots, and output behaviour.](cli-reference.md#lookalike-discovery)
-
-### Supervised candidate scan
-
-[Read the bounded candidate collection workflow.](cli-reference.md#supervised-candidate-scan)
-
-### Domain posture audit
-
-[Read the DNS, mail, and certificate posture contract.](cli-reference.md#domain-posture-audit)
-
-### HTTP intelligence
-
-[Read the bounded HTTP collection contract.](cli-reference.md#http-intelligence)
-
-### TLS intelligence
-
-[Read the bounded TLS collection contract.](cli-reference.md#tls-intelligence)
-
-### Isolated cryptographic and mail transport review
-
-[Read the explicitly authorised DNSSEC, TLSA/DANE, STARTTLS, and SMTP transport contract.](cli-reference.md#isolated-cryptographic-and-mail-transport-review)
-The mail report keeps address selection, public revalidation, confirmed
-connection, and cryptographic address authentication as separate provenance;
-address authentication is unavailable when no address candidate was retained.
-If a DANE-TA TLSA usage 2 association is published, active collection retains
-only the observed leaf certificate and leaves that comparison partial without
-certificate-path construction and trust-anchor path validation. SMTP relay
-PKIX-TA usage 0 and PKIX-EE usage 1 records are retained as unsupported and
-cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.
-
-### Registry-source comparison
-
-[Read the normalised RDAP and WHOIS comparison contract.](cli-reference.md#registry-source-comparison)
-
-### Static page comparison
-
-[Read saved page-identity comparison behaviour.](cli-reference.md#static-page-comparison)
-
-### Passive mail exposure review
-
-[Read the saved-evidence mail review contract.](cli-reference.md#passive-mail-exposure-review)
-
-### Offline supplied-evidence review
-
-[Read the separate DNSSEC, route-origin, DANE/TLSA, zone-intent, portfolio, domain-change, and supplied-observation review contract.](cli-reference.md#offline-supplied-evidence-review)
-
-### Domain control manifests
-
-[Read desired-state manifest and drift-review behaviour.](cli-reference.md#domain-control-manifests)
-
-### Domain assurance review
-
-[Read planned-change, recovery-dependency, and retirement contracts.](cli-reference.md#domain-assurance-review)
-
-### Domain change assurance packet
-
-[Read the bounded pre-change, post-change, planning, and integrity contract.](cli-reference.md#domain-change-assurance-packet)
-
-### Pre-sharing review
-
-[Read the local marking, scope, redaction, and integrity preflight.](cli-reference.md#pre-sharing-review)
-
-### Fixed investigation plans
-
-[Read the plan-only recipe contract and approval gates.](cli-reference.md#fixed-investigation-plans)
-
-### Local handoffs and one-shot monitoring
-
-[Read brief, case-package, fixed-recipe execution, and one-shot control-review contracts.](cli-reference.md#local-handoffs-and-one-shot-monitoring)
-
-### Optional local rendered capture
-
-[Read the separate Playwright capture package boundary.](cli-reference.md#optional-local-rendered-capture)
-
-### Lookup evidence export
-
-[Read normalised JSON, Markdown, and HTML export behaviour.](cli-reference.md#lookup-evidence-export)
-Saved Lookup JSON is byte-, nesting-, entry-, and per-container-bounded before parsing, and the
-completed evidence package must satisfy the stricter portable-tree contract.
+Run `whoisleuth <command> --help` for exact arguments, input ceilings, network
+effects and output formats. The packaged [CLI reference](cli-reference.md) gives
+the longer-lived compatibility and evidence contracts, while the generated
+[online command reference](https://whoisleuth.com/cli#commands) provides a searchable index.
 
 ## Safety and limitations
 
 WHOISleuth is a defensive investigation tool, not an authorisation mechanism.
-Operators remain responsible for applicable law, registry and provider terms,
-and permission to assess a target. Missing, unsupported, partial, or failed
-evidence never establishes absence, availability, safety, ownership, or intent.
-Offline analyst assertions remain separately attributed and are not converted
-into observed facts.
+Operators remain responsible for permission, applicable law and provider terms.
+Incomplete evidence remains explicitly qualified, and analyst assertions remain
+separate from observed facts.

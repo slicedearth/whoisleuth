@@ -169,7 +169,7 @@
     </div>
   </header>
 
-  <p class="privacy-note">Files and parsed values remain in this tab only until cleared or the page is left. Nothing is sent to the server, saved to the Brand Profile, or treated as authenticated provider evidence.</p>
+  <p class="privacy-note">Files and parsed values stay in this tab until cleared or the page is left. They are not uploaded or saved to the Brand Profile.</p>
   {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
   {#if review}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
@@ -146,6 +147,77 @@ describe('offline evidence review command', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(JSON.parse(stdout.value()).result.state, 'valid');
     assert.match(formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO)), /State\s+valid/u);
+  });
+
+  test('treats imported TLSA prerequisite labels as unvalidated claims', () => {
+    const certificate = Buffer.from('fixture TLSA material');
+    const input = JSON.stringify({
+      schema: 'whoisleuth.tlsa-evidence-input',
+      version: 1,
+      serviceName: '_25._tcp.mx.example.test',
+      dnssecState: 'validated',
+      pkixValidationState: 'validated',
+      records: [{
+        usage: 3,
+        selector: 0,
+        matchingType: 1,
+        associationData: createHash('sha256').update(certificate).digest('hex'),
+      }],
+      certificateDerBase64: certificate.toString('base64'),
+    });
+    const result = buildOfflineEvidenceReview(input, ISO).result as {
+      state: string;
+      dnssecState: string;
+      pkixValidationState: string;
+    };
+    assert.equal(result.state, 'partial');
+    assert.equal(result.dnssecState, 'unavailable');
+    assert.equal(result.pkixValidationState, 'unavailable');
+  });
+
+  test('sanitises imported cryptographic provenance before terminal display', () => {
+    const input = JSON.stringify({
+      schema: 'whoisleuth.cryptographic-assurance.input',
+      version: 1,
+      dnssec: null,
+      routeOrigin: {
+        source: 'Fixture\u009b[31m\u202eroute snapshot',
+        observedAt: ISO,
+        evidence: { routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: [] },
+      },
+      tlsa: null,
+    });
+    const output = formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO));
+    assert.match(output, /Source Fixture \[31mroute snapshot/u);
+    assert.doesNotMatch(output, /[\u0080-\u009f\u202e]/u);
+  });
+
+  test('sanitises imported review reasons before terminal display', () => {
+    const input = JSON.stringify({
+      schema: 'whoisleuth.dns-convergence.input',
+      version: 1,
+      domain: 'example.test',
+      expected: null,
+      snapshots: [
+        {
+          observer: 'Resolver\u009b[31m\u202eone',
+          source: 'Fixture resolver one',
+          observedAt: ISO,
+          state: 'partial',
+          records: [{ owner: '@', type: 'A', value: '192.0.2.10', ttl: 300 }],
+        },
+        {
+          observer: 'Resolver two',
+          source: 'Fixture resolver two',
+          observedAt: ISO,
+          state: 'observed',
+          records: [{ owner: '@', type: 'A', value: '192.0.2.10', ttl: 300 }],
+        },
+      ],
+    });
+    const output = formatOfflineEvidenceReview(buildOfflineEvidenceReview(input, ISO));
+    assert.match(output, /Resolver \[31mone latest evidence is partial/u);
+    assert.doesNotMatch(output, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
   test('offers an opt-in CI gate for explicit domain-change and zone-intent review failures', async () => {

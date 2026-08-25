@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { publicFooterNavigation } from '$lib/workspaces';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../lib/project-metadata.mts';
 
   let { console = false }: { console?: boolean } = $props();
@@ -10,33 +12,31 @@
 </script>
 
 <footer class="site-footer public-footer" class:console>
-  <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
   <div class="footer-meta">
     <p>WHOISleuth {__WHOISLEUTH_VERSION__} · build {revisionLabel} · © 2026 <a href="https://github.com/slicedearth" target="_blank" rel="noopener noreferrer">slicedearth<span class="sr-only"> (opens in a new tab)</span></a></p>
     <nav class="footer-links" aria-label="Footer">
-      <a href={sourceHref} target="_blank" rel="noopener noreferrer">Source and licence<span class="sr-only"> (opens in a new tab)</span></a>
-      <a href="/resources" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Resources{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
-      <a href="/privacy" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Privacy{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
-      <a href="/terms" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Terms{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
-      <a href="/request-policy" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Requests{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
-      <a href="/contact" target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>Contact{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      {#each publicFooterNavigation as item}
+        <a class:active={!console && page.url.pathname === item.href} aria-current={!console && page.url.pathname === item.href ? 'page' : undefined} href={item.href} target={console ? '_blank' : undefined} rel={console ? 'noopener noreferrer' : undefined}>{item.label}{#if console}<span class="sr-only"> (opens in a new tab)</span>{/if}</a>
+      {/each}
+      <a href={sourceHref} target="_blank" rel="noopener noreferrer">Source<span class="sr-only"> and licence (opens in a new tab)</span></a>
     </nav>
   </div>
 </footer>
 
 <style>
-  footer{display:flex;justify-content:space-between;gap:30px;padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
+  footer{padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
   footer.console{margin-top:54px}
-  p{max-width:72ch;margin:0}
-  .footer-meta{display:grid;flex:none;gap:8px;text-align:right}
-  .footer-links{display:flex;justify-content:flex-end;gap:14px;margin:0}
+  p{margin:0}
+  .footer-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:16px 30px}
+  .footer-links{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:4px 14px;margin:0}
   .footer-links a{display:inline-flex;align-items:center;min-height:32px;margin:0;padding:4px 0}
+  .footer-links a.active{color:var(--text);text-decoration:underline;text-underline-offset:4px}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
   a{color:var(--accent);font-weight:700;text-decoration:none}
   a:hover,a:focus-visible{color:var(--text)}
   @media(max-width:720px){
-    footer{align-items:flex-start;flex-direction:column;gap:16px;padding:18px 0 22px}
-    .footer-meta{width:100%;gap:8px;text-align:left}
+    footer{padding:18px 0 22px}
+    .footer-meta{width:100%;align-items:flex-start;flex-direction:column;gap:8px;text-align:left}
     .footer-links{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px 16px}
   }
 </style>

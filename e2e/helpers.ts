@@ -1,15 +1,19 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 import type {
+  AnyLocalDataCollectionDefinition,
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
 } from '../frontend/src/lib/browser-local-data';
-import { decodeBrowserLocalCollectionRecord } from '../frontend/src/lib/browser-local-data-definitions';
+import { BROWSER_LOCAL_COLLECTIONS, decodeBrowserLocalCollectionRecord } from '../frontend/src/lib/browser-local-data-definitions';
 import type {
   BrowserLocalDecodedCollectionRecord,
   BrowserLocalCollectionId,
 } from '../frontend/src/lib/browser-local-data-definitions';
+import { classifyQuery } from '../lib/classify.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
+import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { summarizeBulkProfileContexts, unavailableBulkProfileContext } from '../packages/workspace/bulk-session-model.mts';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -33,6 +37,90 @@ type BrowserLocalCollectionReadOptions = Readonly<{
   minimumRevision?: number;
   timeout?: number;
 }>;
+
+export function lookupDomainIdentity(query: string) {
+  const classified = classifyQuery(query);
+  if (classified.type !== 'domain') throw new Error(`Expected a domain fixture, received ${classified.type}.`);
+  return {
+    query,
+    type: 'domain' as const,
+    inputHostname: classified.inputHostname,
+    registrableDomain: classified.registrableDomain,
+    isSubdomain: classified.isSubdomain,
+  };
+}
+
+export function currentBrowserLocalDocument(
+  collection: BrowserLocalCollectionId,
+  document: unknown,
+): Record<string, unknown> {
+  const definition = BROWSER_LOCAL_COLLECTIONS.find((candidate) => candidate.id === collection) as
+    | AnyLocalDataCollectionDefinition
+    | undefined;
+  if (!definition) throw new Error(`The ${collection} browser-local fixture owner is unavailable.`);
+  const emptyRoot = definition.join([], definition.schemaVersion);
+  const documentRecord = !Array.isArray(document)
+    && document !== null
+    && typeof document === 'object'
+    ? document as Record<string, unknown>
+    : null;
+  const emptyRecord = emptyRoot !== null
+    && typeof emptyRoot === 'object'
+    && !Array.isArray(emptyRoot)
+    ? emptyRoot as Record<string, unknown>
+    : null;
+  const ownsEnvelopePayload = documentRecord !== null
+    && emptyRecord !== null
+    && Object.keys(emptyRecord)
+      .some((key) => key !== 'schema' && key !== 'version' && Object.hasOwn(documentRecord, key));
+  const currentRoot = !Array.isArray(document)
+    && documentRecord !== null
+    && emptyRecord !== null
+    && ownsEnvelopePayload
+    ? {
+        ...emptyRecord,
+        ...documentRecord,
+        ...Object.fromEntries(
+          Object.entries(emptyRecord)
+            .filter(([key]) => key === 'schema' || key === 'version'),
+        ),
+      }
+    : document;
+  const parsed: unknown = JSON.parse(definition.serialize(definition.normalize(currentRoot)));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`The ${collection} browser-local fixture owner emitted an invalid root.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+export function currentBrandProfileBrowserStore(profiles: readonly unknown[]) {
+  return currentBrowserLocalDocument('brand_profiles', {
+    version: BRAND_PROFILE_SCHEMA_VERSION,
+    profiles: [...profiles],
+  });
+}
+
+export function currentBulkSessionBrowserStore(sessions: readonly Record<string, unknown>[]) {
+  return currentBrowserLocalDocument('bulk_sessions', {
+    sessions: sessions.map((session) => {
+      const results = Array.isArray(session.results)
+        ? session.results.map((result) => result !== null
+          && typeof result === 'object'
+          && !Array.isArray(result)
+          && !Object.hasOwn(result, 'profileContext')
+          ? { ...result, profileContext: unavailableBulkProfileContext() }
+          : result)
+        : [];
+      return {
+        ...session,
+        results,
+        profileContext: summarizeBulkProfileContexts(
+          results as Array<{ profileContext: ReturnType<typeof unavailableBulkProfileContext> }>,
+        ),
+      };
+    }),
+  });
+}
 
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
   await page.addInitScript(({ key, value }) => {
@@ -64,11 +152,96 @@ export async function expectNoHorizontalOverflow(page: Page) {
 }
 
 export async function expandLookupFamilies(page: Page): Promise<void> {
-  const expandAll = page
-    .getByRole('group', { name: 'Evidence family visibility' })
-    .getByRole('button', { name: 'Expand all' });
-  await expect(expandAll).toBeEnabled();
-  await expandAll.click();
+  await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+  const visibility = page.getByRole('group', { name: 'Evidence family visibility' });
+  const expandAll = visibility.getByRole('button', { name: 'Expand all' });
+  const collapseAll = visibility.getByRole('button', { name: 'Collapse all' });
+  await expect(expandAll).toBeVisible();
+  if (await expandAll.getAttribute('aria-disabled') !== 'true') await expandAll.click();
+  await expect(expandAll).toHaveAttribute('aria-disabled', 'true');
+  await expect(collapseAll).toHaveAttribute('aria-disabled', 'false');
+}
+
+export async function openDashboardSecondaryWorkspaces(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
+  const trigger = page.getByRole('button', { name: 'Open saved-work tools' });
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: 'Saved-work tools', exact: true })).toBeVisible();
+}
+
+export async function openDashboardGuidedInvestigation(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
+  const returningTrigger = page.getByRole('button', { name: 'Open saved-work tools' });
+  if (await returningTrigger.isVisible()) {
+    await openDashboardSecondaryWorkspaces(page);
+    return;
+  }
+  const firstUseTrigger = page.getByRole('button', { name: /^Start a guided investigation/u });
+  await expect(firstUseTrigger).toBeVisible();
+  if (await firstUseTrigger.getAttribute('aria-expanded') !== 'true') await firstUseTrigger.click();
+  await expect(firstUseTrigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: 'Start a guided investigation', exact: true })).toBeVisible();
+}
+
+export async function openBulkShortlist(page: Page): Promise<void> {
+  const trigger = page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' });
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: /^Shortlist ·/u })).toBeVisible();
+}
+
+export async function openBrandWorkbench(
+  page: Page,
+  workbench: 'attestations' | 'baselines' | 'certificates' | 'control' | 'mail' | 'passport' | 'portfolio' | 'posture',
+): Promise<void> {
+  const selector = page.locator('#brand-workbench');
+  await expect(selector).toBeEnabled();
+  if (await selector.inputValue() !== workbench) await selector.selectOption(workbench);
+  await expect(selector).toHaveValue(workbench);
+}
+
+export async function openBulkWorkspaceTools(
+  page: Page,
+  tool: 'review' | 'sessions' = 'sessions',
+): Promise<void> {
+  const trigger = page.getByRole('button', { name: /^Workspace tools\b/u });
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const switcher = page.getByRole('group', { name: 'Bulk workspace tool' });
+  const option = switcher.getByRole('button', {
+    name: tool === 'sessions' ? 'Saved sessions' : 'Saved review views',
+  });
+  if (await option.getAttribute('aria-pressed') !== 'true') await option.click();
+  await expect(option).toHaveAttribute('aria-pressed', 'true');
+}
+
+export async function openBulkFilters(page: Page): Promise<void> {
+  const disclosure = page.getByRole('button', { name: /^Filters and result actions\b/u });
+  await expect(disclosure).toBeVisible();
+  if (await disclosure.getAttribute('aria-expanded') !== 'true') await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  const compactToggle = page.getByRole('button', { name: /^Filters \d+$/u });
+  if ((page.viewportSize()?.width ?? 1_280) <= 700) {
+    await expect(compactToggle).toBeVisible();
+    if (await compactToggle.getAttribute('aria-expanded') !== 'true') await compactToggle.click();
+    await expect(compactToggle).toHaveAttribute('aria-expanded', 'true');
+  }
+  const sourceCoverage = page.getByRole('combobox', { name: 'Source coverage', exact: true });
+  await expect(sourceCoverage).toBeVisible();
+}
+
+export async function selectBulkResultView(
+  page: Page,
+  view: 'Analysis' | 'List' | 'Review',
+): Promise<void> {
+  const option = page.getByRole('group', { name: 'Bulk result view' })
+    .getByRole('button', { name: view, exact: true });
+  if (await option.getAttribute('aria-pressed') !== 'true') await option.click();
+  await expect(option).toHaveAttribute('aria-pressed', 'true');
 }
 
 export async function expectNoHorizontalScrollContainers(locator: Locator) {
@@ -324,16 +497,19 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
   await page.evaluate((collectionId) => {
     const originalGet = IDBObjectStore.prototype.get;
     const originalPut = IDBObjectStore.prototype.put;
+    let active = true;
     let failNextRead = false;
     IDBObjectStore.prototype.put = function put(value: unknown, key?: IDBValidKey) {
-      if (this.name === 'manifests'
+      if (active
+        && this.name === 'manifests'
         && value
         && typeof value === 'object'
         && Reflect.get(value, 'collection') === collectionId) failNextRead = true;
       return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
     };
     IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
-      if (failNextRead && this.name === 'manifests' && query === collectionId) {
+      if (active && failNextRead && this.name === 'manifests' && query === collectionId) {
+        active = false;
         failNextRead = false;
         throw new DOMException(`Browser-local ${collectionId} post-write read is unavailable`, 'InvalidStateError');
       }

@@ -1,6 +1,8 @@
 // IANA RDAP bootstrap retrieval, bounded stale caching, and authority
 // selection for domain, IP, and ASN queries.
 
+import net from 'node:net';
+
 import {
   fetchRdapDetailedWithTimeout,
   type RdapFetch,
@@ -21,6 +23,27 @@ const MAX_RDAP_ENDPOINT_LENGTH = 2048;
 const bootstrapCache = new Map<string, { data: BootstrapData; fetchedAt: number }>();
 const bootstrapInflight = new Map<string, Promise<BootstrapData>>();
 
+function admitRdapEndpoint(value: unknown, options: { allowQuery?: boolean } = {}): string | null {
+  if (typeof value !== 'string'
+    || !value
+    || value !== value.trim()
+    || value.length > MAX_RDAP_ENDPOINT_LENGTH
+    || /[\u0000-\u001f\u007f]/u.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)
+      || !parsed.hostname
+      || parsed.username
+      || parsed.password
+      || parsed.port
+      || parsed.hash
+      || (!options.allowQuery && parsed.search)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 function ipv4ToLong(ip: string): number {
   return ip.split('.').reduce(
     (accumulator, octet) => (accumulator << 8) + (parseInt(octet, 10) & 0xff),
@@ -29,25 +52,41 @@ function ipv4ToLong(ip: string): number {
 }
 
 function ipInCidrV4(ip: string, cidr: string): boolean {
-  const [range, bitsString] = cidr.split('/');
-  if (!range) return false;
-  const bits = bitsString !== undefined ? parseInt(bitsString, 10) : 32;
+  const parts = cidr.split('/');
+  if (parts.length > 2) return false;
+  const [range, bitsString] = parts;
+  if (!range || net.isIP(ip) !== 4 || net.isIP(range) !== 4) return false;
+  const bits = bitsString === undefined || /^\d{1,2}$/u.test(bitsString)
+    ? Number(bitsString ?? 32)
+    : -1;
+  if (!Number.isSafeInteger(bits) || bits < 0 || bits > 32) return false;
   const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
   return (ipv4ToLong(ip) & mask) === (ipv4ToLong(range) & mask);
 }
 
 function expandIpv6(ip: string): string[] {
-  let head = ip;
+  let normalized = ip;
+  if (normalized.includes('.')) {
+    const lastColon = normalized.lastIndexOf(':');
+    const embedded = normalized.slice(lastColon + 1);
+    if (lastColon < 0 || net.isIP(embedded) !== 4) {
+      throw new TypeError('Invalid IPv4-embedded IPv6 address.');
+    }
+    const value = ipv4ToLong(embedded);
+    normalized = `${normalized.slice(0, lastColon)}:${(value >>> 16).toString(16)}:${(value & 0xffff).toString(16)}`;
+  }
+  if (net.isIP(normalized) !== 6) throw new TypeError('Invalid IPv6 address.');
+  let head = normalized;
   let tail = '';
-  if (ip.includes('::')) {
-    const [headPart = '', tailPart = ''] = ip.split('::');
+  if (normalized.includes('::')) {
+    const [headPart = '', tailPart = ''] = normalized.split('::');
     head = headPart;
     tail = tailPart;
   }
   const headParts = head ? head.split(':').filter(Boolean) : [];
   const tailParts = tail ? tail.split(':').filter(Boolean) : [];
   const missing = 8 - headParts.length - tailParts.length;
-  const parts = ip.includes('::')
+  const parts = normalized.includes('::')
     ? [...headParts, ...Array(Math.max(missing, 0)).fill('0'), ...tailParts]
     : headParts;
   while (parts.length < 8) parts.push('0');
@@ -62,12 +101,21 @@ function ipv6ToBigInt(ip: string): bigint {
 }
 
 function ipInCidrV6(ip: string, cidr: string): boolean {
-  const [range, bitsString] = cidr.split('/');
+  const parts = cidr.split('/');
+  if (parts.length > 2) return false;
+  const [range, bitsString] = parts;
   if (!range) return false;
-  const bits = bitsString !== undefined ? parseInt(bitsString, 10) : 128;
+  const bits = bitsString === undefined || /^\d{1,3}$/u.test(bitsString)
+    ? Number(bitsString ?? 128)
+    : -1;
+  if (!Number.isSafeInteger(bits) || bits < 0 || bits > 128) return false;
   const full = (1n << 128n) - 1n;
   const mask = bits === 0 ? 0n : (full << BigInt(128 - bits)) & full;
-  return (ipv6ToBigInt(ip) & mask) === (ipv6ToBigInt(range) & mask);
+  try {
+    return (ipv6ToBigInt(ip) & mask) === (ipv6ToBigInt(range) & mask);
+  } catch {
+    return false;
+  }
 }
 
 function validBootstrap(data: unknown): data is BootstrapData {
@@ -94,11 +142,16 @@ async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Pro
 
   const request = (async () => {
     try {
+      const requestedEndpoint = `https://data.iana.org/rdap/${kind}.json`;
       const response = await fetchUpstream(
-        `https://data.iana.org/rdap/${kind}.json`,
+        requestedEndpoint,
         {},
         BOOTSTRAP_FETCH_TIMEOUT_MS,
       );
+      const finalEndpoint = admitRdapEndpoint(response.finalUrl ?? requestedEndpoint);
+      if (finalEndpoint !== requestedEndpoint) {
+        throw new Error(`IANA bootstrap redirected outside its fixed source endpoint for ${kind}`);
+      }
       if (!response.ok) {
         throw new Error(`IANA bootstrap fetch failed for ${kind} (${response.status})`);
       }
@@ -135,10 +188,10 @@ function clearRdapBootstrapCache() {
 function uniqueRdapBases(urls: unknown): string[] {
   const seen = new Set<string>();
   return (Array.isArray(urls) ? urls : [])
-    .filter((url): url is string => typeof url === 'string'
-      && url.length <= MAX_RDAP_ENDPOINT_LENGTH
-      && !/[\u0000-\u001f\u007f]/.test(url)
-      && /^https?:\/\//i.test(url))
+    .flatMap((url) => {
+      const admitted = admitRdapEndpoint(url);
+      return admitted ? [admitted] : [];
+    })
     .sort((left, right) => Number(/^http:\/\//i.test(left)) - Number(/^http:\/\//i.test(right)))
     .filter((url) => {
       const key = url.replace(/\/$/, '').toLowerCase();
@@ -199,6 +252,7 @@ export {
   BOOTSTRAP_STALE_TTL_MS,
   BOOTSTRAP_TTL_MS,
   MAX_RDAP_ENDPOINT_LENGTH,
+  admitRdapEndpoint,
   clearRdapBootstrapCache,
   fetchBootstrap,
   findRdapBases,

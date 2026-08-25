@@ -353,6 +353,35 @@ describe('reviewed technology reference-build intake', () => {
     assert.equal(result.provenance.buildEnvironment, null);
     assert.deepEqual(result.fixture.expectedIds, ['apache-http-server', 'typo3']);
     assert.doesNotMatch(JSON.stringify(result), /Excluded demonstration copy|https?:\/\//u);
+
+    assert.throws(
+      () => buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+        ...positiveOptions,
+        id: 'official-typo3-demonstration-zone-less',
+        expectedIds: ['typo3'],
+        licenceBasis: 'official-demonstration-terms',
+        sourceReference: 'official:typo3/demo',
+        sourceRevision: '2026-08-05T03:52:53',
+        sourceIntegrity: null,
+        sourceLicence: 'official-demonstration-terms',
+        runtimeReference: null,
+        buildRecipe: 'official-public-demonstration',
+      }),
+      /explicit timezone/u,
+    );
+    const offset = buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+      ...positiveOptions,
+      id: 'official-typo3-demonstration-offset',
+      expectedIds: ['typo3'],
+      licenceBasis: 'official-demonstration-terms',
+      sourceReference: 'official:typo3/demo',
+      sourceRevision: '2026-08-05T03:52:53+01:00',
+      sourceIntegrity: null,
+      sourceLicence: 'official-demonstration-terms',
+      runtimeReference: null,
+      buildRecipe: 'official-public-demonstration',
+    });
+    assert.equal(offset.provenance.sourceRevision, '2026-08-05T02:52:53.000Z');
   });
 
   test('minimises response metadata and preserves explicit mixed controls', () => {

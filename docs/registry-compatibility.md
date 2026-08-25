@@ -14,8 +14,8 @@ RDAP transport regardless of whether the request came from Express, a hosted
 function, the CLI, Bulk, availability analysis, or scheduled monitoring. A
 documented absent service is returned as unsupported without opening a socket
 or resolving an RDAP endpoint. Registry-policy and source-authorisation WHOIS
-profiles are also blocked unless a future reviewed approval mechanism is
-explicitly configured; no deployment currently provides such an override.
+profiles are also blocked because no deployment has a reviewed override
+configured.
 These admission results describe collection capability only and cannot decide
 registration or availability.
 
@@ -593,8 +593,8 @@ Repeated Kazakhstan primary or secondary server lines are retained only up to
 the existing nameserver cap with explicit truncation, and indented legacy
 registrant headers are recognised case-insensitively like the adjacent contact
 roles. Bare numeric hyphen dates remain deliberately day-first for the
-currently profiled sources; a future month-first source requires a separately
-gated parser rather than changing that shared interpretation.
+currently profiled sources. Supporting a month-first source requires a
+separately gated parser rather than changing that shared interpretation.
 
 Version 13 extends twelve existing fixture-backed registry families to 27
 additional active country-code suffixes. Twenty-six are IDN A-labels, and

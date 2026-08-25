@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_RESPONSE_COOKIES,
   MAX_RESPONSE_POLICY_HEADER_BYTES,
+  MAX_RESPONSE_POLICY_TOKENS,
   MIN_RECOMMENDED_HSTS_SECONDS,
   RESPONSE_POLICY_VERSION,
   analyzeCspMetaPolicies,
@@ -165,6 +166,39 @@ describe('privacy-minimized response-policy analysis', () => {
     assert.equal(oversized.status, 'partial');
     assert.equal(oversized.components.contentSecurityPolicy, 'partial');
     assert.deepEqual(oversized.signals, []);
+  });
+
+  test('rejects duplicate HSTS directives without deriving order-dependent signals', () => {
+    for (const value of [
+      'max-age=31536000; max-age=0',
+      'max-age=0; max-age=31536000',
+      'max-age=31536000; includeSubDomains; includeSubDomains',
+    ]) {
+      const result = analyzeResponsePolicyHeaders(headers({ 'strict-transport-security': value }));
+      assert.equal(result.status, 'partial');
+      assert.equal(result.complete, false);
+      assert.equal(result.components.strictTransportSecurity, 'malformed');
+      assert.equal(signalIds(result).includes('hsts_disabled'), false);
+      assert.equal(signalIds(result).includes('hsts_short_max_age'), false);
+    }
+  });
+
+  test('marks cookie attribute omission partial without deriving missing-attribute signals', () => {
+    const exact = analyzeResponsePolicyHeaders(headers({}, [
+      `session=value; ${Array.from({ length: MAX_RESPONSE_POLICY_TOKENS - 3 }, (_, index) => `x${index}=1`).join('; ')}; Secure; HttpOnly; SameSite=Lax`,
+    ]));
+    assert.equal(exact.components.responseCookies, 'parsed');
+    assert.equal(exact.diagnostics.cookiesTruncated, false);
+    assert.deepEqual(exact.signals, []);
+
+    const over = analyzeResponsePolicyHeaders(headers({}, [
+      `session=value; ${Array.from({ length: MAX_RESPONSE_POLICY_TOKENS }, (_, index) => `x${index}=1`).join('; ')}; Secure; HttpOnly; SameSite=Lax`,
+    ]));
+    assert.equal(over.status, 'partial');
+    assert.equal(over.complete, false);
+    assert.equal(over.components.responseCookies, 'partial');
+    assert.equal(over.diagnostics.cookiesTruncated, true);
+    assert.deepEqual(over.signals, []);
   });
 
   test('caps cookie count and cumulative analysis without retaining excess values', () => {

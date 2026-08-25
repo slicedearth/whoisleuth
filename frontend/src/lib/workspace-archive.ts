@@ -22,6 +22,7 @@ import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bul
 import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
 import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
 import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
+import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
@@ -31,25 +32,17 @@ import { loadBulkSessions } from './bulk-sessions';
 import { loadWebsiteSnapshots } from './website-snapshots';
 import { loadInvestigationTemplates } from './investigation-templates';
 import { loadBulkReviewStore } from './bulk-review';
+import { loadAnalystReviewState } from './analyst-review-state';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
-import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import {
-  CAMPAIGNS_COLLECTION,
-  CASES_COLLECTION,
-  DETECTION_RULES_COLLECTION,
-  PROFILES_COLLECTION,
-  SHORTLIST_COLLECTION,
-  WATCHLISTS_COLLECTION,
-  RELATIONSHIP_OBSERVATIONS_COLLECTION,
-  BULK_SESSIONS_COLLECTION,
-  WEBSITE_SNAPSHOTS_COLLECTION,
-  INVESTIGATION_TEMPLATES_COLLECTION,
-  BULK_REVIEW_COLLECTION,
-} from './browser-local-data-definitions.ts';
+  browserLocalDataCollection,
+  browserLocalDataProvider,
+} from './browser-local-data-service.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
+import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -86,7 +79,7 @@ function importSummary(
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview] = await Promise.all([
+  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview, analystReviewState] = await Promise.all([
     loadCases(),
     loadCampaigns(),
     loadProfiles(),
@@ -98,6 +91,7 @@ async function localInput() {
     loadWebsiteSnapshots(),
     loadInvestigationTemplates(),
     loadBulkReviewStore(),
+    loadAnalystReviewState(),
   ]);
   return {
     cases,
@@ -111,6 +105,7 @@ async function localInput() {
     websiteSnapshots,
     investigationTemplates,
     bulkReview,
+    analystReviewState,
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -219,19 +214,25 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
   const settingsSnapshot = snapshotSettings();
   const dataSections = sections.filter((section) => section.id !== 'settings');
-  const definitionBySection = new Map<string, AnyLocalDataCollectionDefinition>([
-    ['cases', CASES_COLLECTION],
-    ['campaigns', CAMPAIGNS_COLLECTION],
-    ['brandProfiles', PROFILES_COLLECTION],
-    ['watchlists', WATCHLISTS_COLLECTION],
-    ['shortlist', SHORTLIST_COLLECTION],
-    ['detectionRules', DETECTION_RULES_COLLECTION],
-    ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
-    ['bulkSessions', BULK_SESSIONS_COLLECTION],
-    ['websiteSnapshots', WEBSITE_SNAPSHOTS_COLLECTION],
-    ['investigationTemplates', INVESTIGATION_TEMPLATES_COLLECTION],
-    ['bulkReview', BULK_REVIEW_COLLECTION],
-  ]);
+  const sectionCollections = [
+    ['cases', 'cases'],
+    ['campaigns', 'campaigns'],
+    ['brandProfiles', 'brand_profiles'],
+    ['watchlists', 'watchlists'],
+    ['shortlist', 'shortlist'],
+    ['detectionRules', 'detection_rules'],
+    ['relationshipObservations', 'relationship_observations'],
+    ['bulkSessions', 'bulk_sessions'],
+    ['websiteSnapshots', 'website_snapshots'],
+    ['investigationTemplates', 'investigation_templates'],
+    ['bulkReview', 'bulk_review'],
+    ['analystReviewState', 'analyst_review_state'],
+  ] as const;
+  const definitionEntries = await Promise.all(sectionCollections.map(async ([section, collection]) => [
+    section,
+    await browserLocalDataCollection(collection),
+  ] as const));
+  const definitionBySection = new Map<string, AnyLocalDataCollectionDefinition>(definitionEntries);
   const definitions = dataSections
     .map((section) => definitionBySection.get(section.id))
     .filter((definition): definition is AnyLocalDataCollectionDefinition => Boolean(definition));
@@ -295,6 +296,10 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
             const result = mergeBulkReviewStores(documents.get('bulk_review'), section.data);
             next.set('bulk_review', result.store);
             summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'analystReviewState') {
+            const result = mergeAnalystReviewStateStores(documents.get('analyst_review_state'), section.data);
+            next.set('analyst_review_state', result.store);
+            summaries.push(importSummary(section.id, result));
           } else continue;
         }
         appliedDocuments = new Map(next);
@@ -308,6 +313,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
       results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0 });
     }
   } catch (cause) {
+    rethrowUnknownWorkspaceCommit(cause);
     let fullyRestored = true;
     try {
       if (dataApplied && definitions.length && previousDocuments.size) {

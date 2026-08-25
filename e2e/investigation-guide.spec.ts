@@ -1,12 +1,8 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView } from './helpers';
 import { BASE_URL } from './constants';
-
-const GUIDE_KEY = 'whoisleuth:investigation-guide:v5';
-const PREVIOUS_GUIDE_KEY = 'whoisleuth:investigation-guide:v4';
-const LEGACY_GUIDE_KEY = 'whoisleuth:investigation-guide:v3';
-const ORIGINAL_GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
-const EARLIEST_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 
 type RecipeLabel =
   | 'Brand sweep'
@@ -16,9 +12,13 @@ type RecipeLabel =
   | 'Mail abuse response'
   | 'Domain-control change response';
 
-async function startRecipe(page: import('@playwright/test').Page, recipe: RecipeLabel = 'New-domain triage') {
+async function startRecipe(
+  page: import('@playwright/test').Page,
+  recipe: RecipeLabel = 'New-domain triage',
+  target = 'Portal.Example.Test.',
+) {
   await page.goto('/dashboard');
-  await expect(page.locator('section[aria-labelledby="local-summary-title"]')).toHaveAttribute('aria-busy', 'false');
+  await openDashboardGuidedInvestigation(page);
   await page.getByRole('combobox', { name: 'Guide' }).selectOption({ label: recipe });
   const targetLabel = recipe === 'Brand sweep' || recipe === 'Domain-control change response'
     ? 'Official domain'
@@ -27,7 +27,7 @@ async function startRecipe(page: import('@playwright/test').Page, recipe: Recipe
       : recipe.endsWith('response')
         ? 'Domain under review'
         : 'Domain';
-  await page.getByRole('textbox', { name: targetLabel, exact: true }).fill('Portal.Example.Test.');
+  await page.getByRole('textbox', { name: targetLabel, exact: true }).fill(target);
   await page.getByRole('button', { name: 'Start guide' }).click();
   await expect(page.locator('.guide')).toBeFocused();
   await expect(currentAction(page)).toBeVisible();
@@ -98,12 +98,13 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
+    const identity = lookupDomainIdentity(domain);
     const compact = url.searchParams.get('compact') === '1';
     const availability = {
       applicable: true,
       state: 'registered',
       confidence: 'high',
-      domain,
+      domain: identity.registrableDomain,
       deepScanComplete: url.searchParams.get('fast') !== '1',
       registrar: { name: 'Example Registrar' },
       nameservers: ['ns1.example.net'],
@@ -119,9 +120,7 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(compact ? { availability, diagnostics } : {
-        query: domain,
-        type: 'domain',
-        registrableDomain: domain,
+        ...identity,
         availability,
         rdap: { parsed: { status: ['active'], entities: [] } },
         whois: { parsed: {}, chain: [] },
@@ -265,10 +264,11 @@ test('a response playbook reaches focused local packet preflight without a reque
   await expect(page).toHaveURL(/\/monitor\?view=cases&investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
   const queue = page.locator('#case-review-queue');
   await queue.getByRole('button', { name: 'Open case for portal.example.test' }).click();
-  const preflight = page.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  const preflight = page.locator('details[id^="case-response-preflight-"]');
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
-  await expect(preflight).toContainText('WHOISleuth does not send reports');
+  await expect(preflight).toContainText('This prepares local drafts only; nothing is sent.');
+  await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into browser-local cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {
     expect(request.origin).toBe(expectedOrigin);
@@ -311,6 +311,13 @@ test('active context can change its target only through an explicit guide restar
 
 test('an analyst can save and run a bounded local guide template without removing request gates', async ({ page }) => {
   await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
+      id: 'template-context', domain: 'template-context.example.test', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
+      source: 'manual', evidenceHistory: [], createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    }] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('button', { name: 'New template' }).click();
   await page.getByRole('textbox', { name: 'Template name' }).fill('Focused local review');
   await page.getByRole('textbox', { name: 'Summary' }).fill('Review the selected bounded evidence and record a decision.');
@@ -346,14 +353,15 @@ test('new-domain triage leads from a deep lookup through comparison and a review
 }, async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
-  await startRecipe(page);
+  await startRecipe(page, 'New-domain triage', 'Portal.Test.');
+  await expect(currentAction(page).getByRole('button', { name: 'Review requests' })).toBeVisible();
 
-  await runLookupStep(page, 'Collect domain evidence', 'portal.example.test');
+  await runLookupStep(page, 'Collect domain evidence', 'portal.test');
   await expect(currentAction(page)).toContainText('Compare focused peers');
-  await runBulkStep(page, 'Compare focused peers', ['portal.example.test', 'peer.example.test']);
+  await runBulkStep(page, 'Compare focused peers', ['portal.test', 'peer.test']);
   await expect(currentAction(page)).toContainText('Record disposition');
   await page.setViewportSize({ width: 320, height: 760 });
-  await retainCases(page, 'Record disposition', ['portal.example.test', 'peer.example.test']);
+  await retainCases(page, 'Record disposition', ['portal.test', 'peer.test']);
   await expectNoHorizontalOverflow(page);
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
@@ -364,21 +372,23 @@ test('infrastructure pivot keeps the starting domain through lookup, peer compar
   test.slow();
   await page.setViewportSize({ width: 393, height: 852 });
   await installLookupFixture(page);
-  await startRecipe(page, 'Infrastructure pivot');
+  await startRecipe(page, 'Infrastructure pivot', 'Portal.Test.');
+  await expect(currentAction(page).getByRole('button', { name: 'Review requests' })).toBeVisible();
 
-  await runLookupStep(page, 'Collect starting evidence', 'portal.example.test');
-  await runBulkStep(page, 'Compare relationships', ['portal.example.test', 'related.example.test']);
-  await retainCases(page, 'Retain defensible pivots', ['portal.example.test', 'related.example.test']);
+  await runLookupStep(page, 'Collect starting evidence', 'portal.test');
+  await runBulkStep(page, 'Compare relationships', ['portal.test', 'related.test']);
+  await retainCases(page, 'Retain defensible pivots', ['portal.test', 'related.test']);
   await expect(page.locator('.guide')).toContainText('3 of 3 steps reviewed');
 });
 
 test('returning to the same guided Bulk step keeps its peer set and completed results', { tag: '@timing-sensitive' }, async ({ page }) => {
+  test.slow();
   await installLookupFixture(page);
-  await startRecipe(page);
+  await startRecipe(page, 'New-domain triage', 'Portal.Test.');
 
-  await runLookupStep(page, 'Collect domain evidence', 'portal.example.test');
+  await runLookupStep(page, 'Collect domain evidence', 'portal.test');
   await allowAndOpen(page, 'Bulk');
-  const peers = ['portal.example.test', 'peer.example.test'];
+  const peers = ['portal.test', 'peer.test'];
   await page.locator('#domains').fill(peers.join('\n'));
   await page.getByRole('button', { name: 'Scan 2 domains' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(2);
@@ -437,7 +447,8 @@ test('brand sweep carries the official domain and selected candidates across eve
   await candidateSelectionLink.click();
   await expect(page).toHaveURL(/\/bulk\?source=discover&handoff=[0-9a-f]{32}#results$/u);
   await expect(page.locator('#results')).toBeInViewport();
-  const reviewCockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
+  await selectBulkResultView(page, 'Review');
+  const reviewCockpit = page.getByRole('region', { name: 'Review one result' });
   await expect(reviewCockpit.getByRole('heading', { name: primaryCandidate })).toBeVisible();
   await reviewCockpit.getByRole('button', { name: 'Inspect in Lookup' }).click();
   await expect(page).toHaveURL(new RegExp(`/lookup\\?q=${primaryCandidate.replaceAll('.', '\\.')}.*depth=deep`));
@@ -500,7 +511,8 @@ test('return control recovers when the first action-panel scroll is displaced', 
 
 test('a browser-local context failure does not block or misstate a guided investigation', async ({ page }) => {
   await page.goto('/dashboard');
-  await expect(page.locator('.index-count')).toBeVisible();
+  await openDashboardGuidedInvestigation(page);
+  await expect(page.getByRole('combobox', { name: 'Template' })).toBeEnabled();
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await failBrowserLocalReads(page);
   await page.getByRole('button', { name: 'Start guide' }).click();
@@ -553,7 +565,7 @@ test('a browser-local context failure does not block or misstate a guided invest
 test('an unavailable active-profile preference does not hide a healthy retained Case', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 12, cases: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
       id: 'healthy-guide-case',
       domain: 'portal.example.test',
       status: 'reviewing',
@@ -573,6 +585,7 @@ test('an unavailable active-profile preference does not hide a healthy retained 
       updatedAt: '2026-08-01T00:00:00.000Z',
     }] },
   });
+  await openDashboardSecondaryWorkspaces(page);
   await page.evaluate(() => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function getItem(name: string) {
@@ -645,11 +658,12 @@ test('exports only a compact versioned progress summary after explicit confirmat
 test('shows retained evidence without treating it as workflow completion', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases: [{
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
       id: 'case-recipe-1', domain: 'portal.example.test', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
       source: 'lookup', evidenceHistory: [], createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
     }] },
   });
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await page.getByRole('button', { name: 'Start guide' }).click();
   await page.getByText(/^Saved evidence/).click();
@@ -657,35 +671,19 @@ test('shows retained evidence without treating it as workflow completion', async
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
 });
 
-test('prior progress migrates while future and oversized current records stay untouched', async ({ page }) => {
+test('future and oversized current guide records stay untouched', async ({ page }) => {
   await page.goto('/dashboard');
-  const legacy = JSON.stringify({ version: 1, domain: 'example.test', createdAt: '2026-07-18T00:00:00.000Z', updatedAt: '2026-07-18T00:05:00.000Z', visitedStages: ['lookup'] });
-  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: EARLIEST_GUIDE_KEY, value: legacy });
-  await page.reload();
-  await expect(page.locator('.guide')).toContainText('New-domain triage: example.test');
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), EARLIEST_GUIDE_KEY)).toBe(legacy);
-
-  const migrated = await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY);
-  expect(migrated).not.toBeNull();
-  const previous = JSON.stringify({ ...JSON.parse(migrated || '{}'), version: 4 });
-  await page.evaluate(({ current, prior, value }) => {
-    sessionStorage.removeItem(current);
-    sessionStorage.setItem(prior, value);
-  }, { current: GUIDE_KEY, prior: PREVIOUS_GUIDE_KEY, value: previous });
-  await page.reload();
-  await expect(page.locator('.guide')).toContainText('New-domain triage: example.test');
-  const normalized = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
-  expect(normalized).toMatchObject({ version: 5, recipeId: 'new_domain_triage' });
-
   const future = JSON.stringify({ version: 6, recipeId: 'new_domain_triage' });
   await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: GUIDE_KEY, value: future });
   await page.reload();
+  await openDashboardGuidedInvestigation(page);
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBe(future);
 
   const oversized = 'x'.repeat(12_289);
   await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: GUIDE_KEY, value: oversized });
   await page.reload();
+  await openDashboardGuidedInvestigation(page);
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBe(oversized);
 });
@@ -713,17 +711,10 @@ test('malformed guide focus fragments are ignored without disrupting the active 
   expect(pageErrors).toEqual([]);
 });
 
-test('ending a recipe removes current and legacy tab records only', async ({ page }) => {
+test('ending a recipe removes its current tab record only', async ({ page }) => {
   await startRecipe(page);
-  await page.evaluate((key) => sessionStorage.setItem(key, 'previous-copy'), PREVIOUS_GUIDE_KEY);
-  await page.evaluate((key) => sessionStorage.setItem(key, 'legacy-copy'), LEGACY_GUIDE_KEY);
-  await page.evaluate((key) => sessionStorage.setItem(key, 'original-copy'), ORIGINAL_GUIDE_KEY);
-  await page.evaluate((key) => sessionStorage.setItem(key, 'earliest-copy'), EARLIEST_GUIDE_KEY);
   await page.getByText('Guide options', { exact: true }).click();
   await page.getByRole('button', { name: 'End guide' }).click();
   await expect(page.locator('.guide')).toHaveCount(0);
-  expect(await page.evaluate(
-    ({ current, previous, legacy, original, earliest }) => [sessionStorage.getItem(current), sessionStorage.getItem(previous), sessionStorage.getItem(legacy), sessionStorage.getItem(original), sessionStorage.getItem(earliest)],
-    { current: GUIDE_KEY, previous: PREVIOUS_GUIDE_KEY, legacy: LEGACY_GUIDE_KEY, original: ORIGINAL_GUIDE_KEY, earliest: EARLIEST_GUIDE_KEY },
-  )).toEqual([null, null, null, null, null]);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBeNull();
 });

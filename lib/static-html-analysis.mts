@@ -9,6 +9,11 @@ import {
   MAX_CSP_META_POLICIES,
   MAX_RESPONSE_POLICY_HEADER_BYTES,
 } from './response-policy.mts';
+import {
+  MAX_PAGE_PUBLICATION_DECLARATIONS,
+  MAX_PAGE_PUBLICATION_META_ELEMENTS,
+  MAX_PAGE_PUBLICATION_ROBOTS_DIRECTIVES,
+} from './homepage-metadata-contract.mts';
 
 type StaticScript = {
   reference: string | null;
@@ -39,6 +44,47 @@ type StaticFormAnalysis = {
   truncated: boolean;
 };
 
+type StaticPublicationMetadata = {
+  truncated: boolean;
+  documentTruncated: boolean;
+  robots: {
+    observed: boolean;
+    malformed: boolean;
+    truncated: boolean;
+    directives: string[];
+    recognizedDirectiveCount: number;
+    unknownDirectiveCount: number;
+    conflicting: boolean;
+  };
+  twitterCard: {
+    observed: boolean;
+    malformed: boolean;
+    truncated: boolean;
+    cardTypes: string[];
+    declarationCount: number;
+    titlePresent: boolean;
+    descriptionPresent: boolean;
+    imagePresent: boolean;
+    imageAltPresent: boolean;
+    sitePresent: boolean;
+    creatorPresent: boolean;
+    playerPresent: boolean;
+    appPresent: boolean;
+  };
+  headings: { truncated: boolean; total: number; h1: number; h2: number; h3: number; h4: number; h5: number; h6: number };
+  images: {
+    totalComplete: boolean;
+    classificationComplete: boolean;
+    truncated: boolean;
+    total: number;
+    altMissing: number;
+    altEmpty: number;
+    altNonEmpty: number;
+    altUnclassified: number;
+  };
+  renderBlockingCandidates: { truncated: boolean; script: number; stylesheet: number; total: number };
+};
+
 type StaticHtmlAnalysis = {
   markup: string;
   visibleText: string;
@@ -47,6 +93,7 @@ type StaticHtmlAnalysis = {
   cspMetaPolicies: StaticCspMetaPolicy[];
   cspMetaLimitReached: boolean;
   forms: StaticFormAnalysis;
+  publicationMetadata: StaticPublicationMetadata;
   inputLimitReached: boolean;
   tagLimitReached: boolean;
   structureLimitReached: boolean;
@@ -71,8 +118,12 @@ const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
 const MAX_STATIC_VISIBLE_TEXT_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_STATIC_FORMS = 50;
 const MAX_STATIC_INPUTS = 500;
+const MAX_STATIC_PUBLICATION_META_ELEMENTS = MAX_PAGE_PUBLICATION_META_ELEMENTS;
+const MAX_STATIC_PUBLICATION_DECLARATIONS = MAX_PAGE_PUBLICATION_DECLARATIONS;
+const MAX_STATIC_ROBOTS_DIRECTIVES = MAX_PAGE_PUBLICATION_ROBOTS_DIRECTIVES;
 const MAX_FORM_ATTRIBUTE_LENGTH = 2_048;
-const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
+const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
+const CONTROL_CHARACTER_RE_GLOBAL = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const PAYMENT_AUTOCOMPLETE_TOKENS = new Set([
   'cc-name',
   'cc-given-name',
@@ -103,6 +154,24 @@ const VOID_TAGS = new Set([
   'param', 'source', 'track', 'wbr',
 ]);
 const NON_VISIBLE_TEXT_TAGS = new Set(['script', 'style', 'template']);
+const HEAD_CONTEXT_TAGS = new Set([
+  'html', 'head', 'base', 'basefont', 'bgsound', 'link', 'meta', 'title',
+  'noscript', 'noframes', 'style', 'template', 'script',
+]);
+const IMPLICIT_HEAD_TEXT_TAGS = new Set([
+  'title', 'noscript', 'noframes', 'style', 'template', 'script',
+]);
+const ROBOTS_DIRECTIVES = new Set([
+  'all', 'follow', 'index', 'max-image-preview', 'max-snippet', 'max-video-preview',
+  'noarchive', 'nocache', 'nofollow', 'noimageindex', 'noindex', 'none', 'nositelinkssearchbox',
+  'nosnippet', 'notranslate', 'unavailable_after',
+]);
+const JAVASCRIPT_MEDIA_TYPES = new Set([
+  'application/ecmascript', 'application/javascript', 'application/x-ecmascript',
+  'application/x-javascript', 'text/ecmascript', 'text/javascript', 'text/javascript1.0',
+  'text/javascript1.1', 'text/javascript1.2', 'text/javascript1.3', 'text/javascript1.4',
+  'text/javascript1.5', 'text/jscript', 'text/livescript', 'text/x-ecmascript', 'text/x-javascript',
+]);
 
 type StaticHtmlAnalysisOptions = {
   baseUrl?: unknown;
@@ -238,6 +307,31 @@ function scriptMediaType(attributes: Array<{ name: string; value: string }>): st
   return null;
 }
 
+function classicScriptCandidate(attributes: Array<{ name: string; value: string }>): { candidate: boolean; truncated: boolean } {
+  const type = attributeValue(attributes, 'type', MAX_SCRIPT_MEDIA_TYPE_LENGTH);
+  const asyncAttribute = attributeValue(attributes, 'async', 10);
+  const deferAttribute = attributeValue(attributes, 'defer', 10);
+  const truncated = type.truncated || asyncAttribute.truncated || deferAttribute.truncated;
+  if (asyncAttribute.present || deferAttribute.present || type.value === 'module') return { candidate: false, truncated };
+  return {
+    candidate: !type.present || type.value === '' || Boolean(type.value && JAVASCRIPT_MEDIA_TYPES.has(type.value)),
+    truncated,
+  };
+}
+
+function stylesheetCandidate(attributes: Array<{ name: string; value: string }>): { candidate: boolean; truncated: boolean } {
+  const rel = attributeValue(attributes, 'rel', 320);
+  const href = attributeValue(attributes, 'href', MAX_SCRIPT_REFERENCE_LENGTH);
+  const disabled = attributeValue(attributes, 'disabled', 10);
+  const media = attributeValue(attributes, 'media', 120);
+  return {
+    candidate: rel.value?.split(/\s+/u).includes('stylesheet') === true
+      && href.present && Boolean(href.value) && !disabled.present
+      && (!media.present || media.value === '' || media.value === 'all' || media.value === 'screen'),
+    truncated: rel.truncated || href.truncated || disabled.truncated || media.truncated,
+  };
+}
+
 function serializedStartTag(
   tagName: string,
   attributes: Array<{ name: string; value: string }>,
@@ -278,6 +372,48 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     actions: { sameOrigin: 0, external: 0, missing: 0, cleartext: 0, unclassified: 0 },
     truncated: false,
   };
+  const publicationMetadata: StaticPublicationMetadata = {
+    truncated: false,
+    documentTruncated: false,
+    robots: {
+      observed: false,
+      malformed: false,
+      truncated: false,
+      directives: [],
+      recognizedDirectiveCount: 0,
+      unknownDirectiveCount: 0,
+      conflicting: false,
+    },
+    twitterCard: {
+      observed: false,
+      malformed: false,
+      truncated: false,
+      cardTypes: [],
+      declarationCount: 0,
+      titlePresent: false,
+      descriptionPresent: false,
+      imagePresent: false,
+      imageAltPresent: false,
+      sitePresent: false,
+      creatorPresent: false,
+      playerPresent: false,
+      appPresent: false,
+    },
+    headings: { truncated: false, total: 0, h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0 },
+    images: {
+      totalComplete: true,
+      classificationComplete: true,
+      truncated: false,
+      total: 0,
+      altMissing: 0,
+      altEmpty: 0,
+      altNonEmpty: 0,
+      altUnclassified: 0,
+    },
+    renderBlockingCandidates: { truncated: false, script: 0, stylesheet: 0, total: 0 },
+  };
+  const robotDirectives = new Set<string>();
+  const twitterCardTypes = new Set<string>();
   let tokenizer: Tokenizer;
   let activeInlineScript: StaticScript | null = null;
   let tagsExamined = 0;
@@ -288,7 +424,13 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   let inlineLimitReached = false;
   let visibleTextLimitReached = false;
   let cspMetaLimitReached = false;
+  let publicationMetaElements = 0;
+  let robotDirectiveTokens = 0;
+  let publicationTagLimitReached = false;
   let insideExplicitHead = false;
+  let implicitHeadTextDepth = 0;
+  let headScopeClosed = false;
+  let bodyContentStarted = false;
   let scriptElementSeen = false;
   let nonVisibleTextDepth = 0;
   let visibleTextCharacters = 0;
@@ -333,6 +475,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
 
       if (tagsExamined >= MAX_STATIC_HTML_TAGS) {
         tagLimitReached = true;
+        publicationTagLimitReached = true;
         activeInlineScript = null;
         return;
       }
@@ -340,6 +483,49 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
       appendStructureToken(token.selfClosing || VOID_TAGS.has(tagName) ? `${tagName}/` : tagName);
 
       if (tagName === 'head') insideExplicitHead = true;
+      if (tagName === 'body' || (!insideExplicitHead && !HEAD_CONTEXT_TAGS.has(tagName))) {
+        bodyContentStarted = true;
+        headScopeClosed = true;
+      }
+      if (!insideExplicitHead && !headScopeClosed && !token.selfClosing && IMPLICIT_HEAD_TEXT_TAGS.has(tagName)) {
+        implicitHeadTextDepth += 1;
+      }
+      const inPublicationHead = insideExplicitHead || (!headScopeClosed && !bodyContentStarted && HEAD_CONTEXT_TAGS.has(tagName));
+      if (/^h[1-6]$/u.test(tagName)) {
+        const key = tagName as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+        publicationMetadata.headings[key] += 1;
+        publicationMetadata.headings.total += 1;
+      }
+      if (tagName === 'img') {
+        publicationMetadata.images.total += 1;
+        const alt = attributeValue(token.attrs, 'alt', MAX_FORM_ATTRIBUTE_LENGTH);
+        if (alt.truncated) {
+          publicationMetadata.truncated = true;
+          publicationMetadata.images.classificationComplete = false;
+          publicationMetadata.images.truncated = true;
+        }
+        if (alt.truncated && (!alt.present || alt.value === null)) publicationMetadata.images.altUnclassified += 1;
+        else if (!alt.present) publicationMetadata.images.altMissing += 1;
+        else if (alt.value === '') publicationMetadata.images.altEmpty += 1;
+        else if (alt.value !== null) publicationMetadata.images.altNonEmpty += 1;
+      }
+
+      if (insideExplicitHead && tagName === 'script') {
+        const candidate = classicScriptCandidate(token.attrs);
+        if (candidate.truncated) {
+          publicationMetadata.truncated = true;
+          publicationMetadata.renderBlockingCandidates.truncated = true;
+        }
+        if (candidate.candidate) publicationMetadata.renderBlockingCandidates.script += 1;
+      } else if (insideExplicitHead && tagName === 'link') {
+        const candidate = stylesheetCandidate(token.attrs);
+        if (candidate.truncated) {
+          publicationMetadata.truncated = true;
+          publicationMetadata.renderBlockingCandidates.truncated = true;
+        }
+        if (candidate.candidate) publicationMetadata.renderBlockingCandidates.stylesheet += 1;
+      }
+
       if (tagName === 'meta' && insideExplicitHead) {
         const httpEquiv = attributeValue(token.attrs, 'http-equiv', 64);
         if (httpEquiv.value === 'content-security-policy') {
@@ -350,6 +536,110 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
             cspMetaLimitReached = true;
           } else {
             cspMetaPolicies.push({ content: content.value, beforeScript: !scriptElementSeen });
+          }
+        }
+      }
+
+      if (tagName === 'meta' && inPublicationHead) {
+        const name = attributeValue(token.attrs, 'name', 120);
+        const property = attributeValue(token.attrs, 'property', 120);
+        const suppliedKeys = [name.value, property.value].filter((value): value is string => Boolean(value));
+        const key = suppliedKeys[0] || null;
+        const conflictingKeys = suppliedKeys.length > 1 && new Set(suppliedKeys).size > 1;
+        if (name.truncated || property.truncated) {
+          publicationMetadata.truncated = true;
+          // An over-bound or control-bearing key can hide which declaration
+          // family it belongs to. Mark both bounded declaration families
+          // partial instead of emitting a root state its children contradict.
+          publicationMetadata.robots.truncated = true;
+          publicationMetadata.twitterCard.truncated = true;
+        }
+        const publicationKey = suppliedKeys.some((value) => value === 'robots' || value.startsWith('twitter:'));
+        const processPublication = publicationKey
+          && publicationMetaElements < MAX_STATIC_PUBLICATION_META_ELEMENTS;
+        if (publicationKey && !processPublication) {
+          publicationMetadata.truncated = true;
+          if (suppliedKeys.includes('robots')) publicationMetadata.robots.truncated = true;
+          if (suppliedKeys.some((value) => value.startsWith('twitter:'))) publicationMetadata.twitterCard.truncated = true;
+        } else if (processPublication) {
+          publicationMetaElements += 1;
+        }
+        if (processPublication && conflictingKeys) {
+          if (suppliedKeys.includes('robots')) {
+            publicationMetadata.robots.observed = true;
+            publicationMetadata.robots.malformed = true;
+          }
+          if (suppliedKeys.some((value) => value.startsWith('twitter:'))) {
+            publicationMetadata.twitterCard.observed = true;
+            publicationMetadata.twitterCard.malformed = true;
+          }
+        } else if (processPublication && key === 'robots') {
+          publicationMetadata.robots.observed = true;
+          const content = attributeValue(token.attrs, 'content', 1_024);
+          if (content.value === null || content.truncated) {
+            publicationMetadata.robots.malformed = true;
+            publicationMetadata.truncated = publicationMetadata.truncated || content.truncated;
+            publicationMetadata.robots.truncated = publicationMetadata.robots.truncated || content.truncated;
+          } else {
+            for (const suppliedDirective of content.value.split(/[,\t\n\f\r ]+/u)) {
+              if (robotDirectiveTokens >= MAX_STATIC_ROBOTS_DIRECTIVES) {
+                publicationMetadata.truncated = true;
+                publicationMetadata.robots.truncated = true;
+                break;
+              }
+              robotDirectiveTokens += 1;
+              const directive = suppliedDirective.trim();
+              if (!directive) {
+                publicationMetadata.robots.malformed = true;
+                continue;
+              }
+              const directiveName = directive.split(':', 1)[0]!.trim().replace(/\s+/gu, '_');
+              if (ROBOTS_DIRECTIVES.has(directiveName)) {
+                publicationMetadata.robots.recognizedDirectiveCount += 1;
+                robotDirectives.add(directiveName);
+              } else {
+                publicationMetadata.robots.unknownDirectiveCount += 1;
+              }
+            }
+          }
+        } else if (processPublication && key?.startsWith('twitter:')) {
+          const category = key === 'twitter:card' ? 'card'
+            : key === 'twitter:title' ? 'title'
+              : key === 'twitter:description' ? 'description'
+                : key === 'twitter:image:alt' ? 'imageAlt'
+                  : key === 'twitter:image' || key.startsWith('twitter:image:') ? 'image'
+                    : key === 'twitter:site' || key.startsWith('twitter:site:') ? 'site'
+                      : key === 'twitter:creator' || key.startsWith('twitter:creator:') ? 'creator'
+                        : key === 'twitter:player' || key.startsWith('twitter:player:') ? 'player'
+                          : key === 'twitter:app' || key.startsWith('twitter:app:') ? 'app'
+                            : null;
+          if (category) {
+            publicationMetadata.twitterCard.observed = true;
+            if (publicationMetadata.twitterCard.declarationCount >= MAX_STATIC_PUBLICATION_DECLARATIONS) {
+              publicationMetadata.truncated = true;
+              publicationMetadata.twitterCard.truncated = true;
+            } else {
+              publicationMetadata.twitterCard.declarationCount += 1;
+              const content = attributeValue(token.attrs, 'content', 1_024);
+              if (content.value === null || content.truncated || !content.value) {
+                publicationMetadata.twitterCard.malformed = true;
+                publicationMetadata.truncated = publicationMetadata.truncated || content.truncated;
+                publicationMetadata.twitterCard.truncated = publicationMetadata.twitterCard.truncated || content.truncated;
+              } else if (category === 'card') {
+                twitterCardTypes.add(
+                  ['summary', 'summary_large_image', 'player', 'app'].includes(content.value)
+                    ? content.value
+                    : 'other',
+                );
+              } else if (category === 'title') publicationMetadata.twitterCard.titlePresent = true;
+              else if (category === 'description') publicationMetadata.twitterCard.descriptionPresent = true;
+              else if (category === 'image') publicationMetadata.twitterCard.imagePresent = true;
+              else if (category === 'imageAlt') publicationMetadata.twitterCard.imageAltPresent = true;
+              else if (category === 'site') publicationMetadata.twitterCard.sitePresent = true;
+              else if (category === 'creator') publicationMetadata.twitterCard.creatorPresent = true;
+              else if (category === 'player') publicationMetadata.twitterCard.playerPresent = true;
+              else if (category === 'app') publicationMetadata.twitterCard.appPresent = true;
+            }
           }
         }
       }
@@ -408,15 +698,29 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     onEndTag(token) {
       const tagName = token.tagName.toLowerCase();
       if (tagName === 'script') activeInlineScript = null;
-      if (tagName === 'head') insideExplicitHead = false;
+      if (tagName === 'head') {
+        insideExplicitHead = false;
+        headScopeClosed = true;
+      }
+      if (!insideExplicitHead && IMPLICIT_HEAD_TEXT_TAGS.has(tagName) && implicitHeadTextDepth > 0) {
+        implicitHeadTextDepth -= 1;
+      }
       if (!VOID_TAGS.has(tagName)) appendStructureToken(`/${tagName}`);
       if (NON_VISIBLE_TEXT_TAGS.has(tagName) && nonVisibleTextDepth > 0) nonVisibleTextDepth -= 1;
     },
     onCharacter(token) {
+      if (!insideExplicitHead && !headScopeClosed && implicitHeadTextDepth === 0 && token.chars.trim()) {
+        bodyContentStarted = true;
+        headScopeClosed = true;
+      }
       appendInlineScript(token.chars);
       appendVisibleText(token.chars);
     },
     onNullCharacter(token) {
+      if (!insideExplicitHead && !headScopeClosed && implicitHeadTextDepth === 0) {
+        bodyContentStarted = true;
+        headScopeClosed = true;
+      }
       appendInlineScript(token.chars);
       appendVisibleText(token.chars);
     },
@@ -432,14 +736,39 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   tokenizer = new Tokenizer({ sourceCodeLocationInfo: false }, handler);
   tokenizer.write(html, true);
 
+  publicationMetadata.truncated = publicationMetadata.truncated || inputLimitReached || publicationTagLimitReached;
+  publicationMetadata.documentTruncated = inputLimitReached || publicationTagLimitReached;
+  if (publicationMetadata.documentTruncated) {
+    publicationMetadata.robots.truncated = true;
+    publicationMetadata.twitterCard.truncated = true;
+    publicationMetadata.headings.truncated = true;
+    publicationMetadata.images.totalComplete = false;
+    publicationMetadata.images.classificationComplete = false;
+    publicationMetadata.images.truncated = true;
+    publicationMetadata.renderBlockingCandidates.truncated = true;
+  }
+  publicationMetadata.robots.directives = [...robotDirectives].sort();
+  publicationMetadata.robots.conflicting = (
+    (robotDirectives.has('index') || robotDirectives.has('all'))
+      && (robotDirectives.has('noindex') || robotDirectives.has('none'))
+  ) || (
+    (robotDirectives.has('follow') || robotDirectives.has('all'))
+      && (robotDirectives.has('nofollow') || robotDirectives.has('none'))
+  );
+  publicationMetadata.twitterCard.cardTypes = [...twitterCardTypes].sort().slice(0, 8);
+  if (twitterCardTypes.size > 8) publicationMetadata.truncated = true;
+  publicationMetadata.renderBlockingCandidates.total = publicationMetadata.renderBlockingCandidates.script
+    + publicationMetadata.renderBlockingCandidates.stylesheet;
+
   return {
     markup: markup.join('\n'),
-    visibleText: visibleTextParts.join(''),
+    visibleText: visibleTextParts.join('').replace(CONTROL_CHARACTER_RE_GLOBAL, ' ').replace(/\s+/gu, ' '),
     structureTokens,
     scripts,
     cspMetaPolicies,
     cspMetaLimitReached,
     forms,
+    publicationMetadata,
     inputLimitReached,
     tagLimitReached,
     structureLimitReached,
@@ -460,6 +789,9 @@ export {
   MAX_STATIC_FORMS,
   MAX_STATIC_HTML_CHARS,
   MAX_STATIC_INPUTS,
+  MAX_STATIC_PUBLICATION_META_ELEMENTS,
+  MAX_STATIC_PUBLICATION_DECLARATIONS,
+  MAX_STATIC_ROBOTS_DIRECTIVES,
   MAX_STATIC_HTML_TAGS,
   MAX_STATIC_STRUCTURE_TOKENS,
   MAX_STATIC_VISIBLE_TEXT_CHARS,
@@ -475,5 +807,6 @@ export type {
   StaticFormMethod,
   StaticHtmlAnalysis,
   StaticHtmlAnalysisOptions,
+  StaticPublicationMetadata,
   StaticScript,
 };

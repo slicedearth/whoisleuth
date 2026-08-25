@@ -1,6 +1,7 @@
 <script lang="ts">
   import { describeBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
   import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
+  import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
   import {
     nextBulkReviewIndex,
     type BulkReviewCockpitRow,
@@ -87,7 +88,7 @@
   <header>
     <div>
       <p class="eyebrow">Focused review</p>
-      <h2 id="review-cockpit-title">Bulk review cockpit</h2>
+      <h2 id="review-cockpit-title">Review one result</h2>
       <p>Review one filtered domain at a time while the full list remains available in this scan. Nothing advances or changes state automatically.</p>
     </div>
     <button class="btn" class:active={enabled} type="button" aria-pressed={enabled} onclick={() => enabled = !enabled}>{enabled ? 'Disable shortcuts' : 'Enable shortcuts'}</button>
@@ -103,7 +104,7 @@
       </div>
       <dl>
         <div><dt>Registration</dt><dd>{current.availability} · {current.confidence} confidence</dd></div>
-        <div><dt>Risk</dt><dd>{current.risk ?? '—'}{#if !current.profileContextReady}<small class="profile-limitation">Brand Profile context unevaluated. {current.profileContextLimitation}</small>{/if}</dd></div>
+        <div><dt>Risk triage</dt><dd><BulkRiskSummary risk={current.riskPresentation} domain={current.domain} />{#if !current.profileContextReady}<small class="profile-limitation">Brand Profile context unevaluated. {current.profileContextLimitation}</small>{/if}</dd></div>
         <div><dt>Website</dt><dd>{current.activity}</dd></div>
         <div><dt>Registrar</dt><dd>{current.registrar}</dd></div>
         <div><dt>Source coverage</dt><dd>{current.sourceCoverage.map((item) => describeBulkSourceCoverage(current.domain, item)).join(' · ') || 'Not recorded'}</dd></div>

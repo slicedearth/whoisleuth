@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://whoisleuth.com/</loc></url>
+  <url><loc>https://whoisleuth.com/cli</loc></url>
+  <url><loc>https://whoisleuth.com/coverage</loc></url>
   <url><loc>https://whoisleuth.com/demo</loc></url>
+  <url><loc>https://whoisleuth.com/examples</loc></url>
+  <url><loc>https://whoisleuth.com/methodology</loc></url>
   <url><loc>https://whoisleuth.com/privacy</loc></url>
-  <url><loc>https://whoisleuth.com/terms</loc></url>
   <url><loc>https://whoisleuth.com/request-policy</loc></url>
   <url><loc>https://whoisleuth.com/resources</loc></url>
   <url><loc>https://whoisleuth.com/resources/open-source-domain-intelligence</loc></url>
@@ -14,4 +17,5 @@
   <url><loc>https://whoisleuth.com/resources/bulk-domain-comparison</loc></url>
   <url><loc>https://whoisleuth.com/resources/ip-asn-investigation</loc></url>
   <url><loc>https://whoisleuth.com/resources/local-first-osint</loc></url>
+  <url><loc>https://whoisleuth.com/terms</loc></url>
 </urlset>

@@ -1,11 +1,19 @@
 import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
 import { parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { formatTerminalRiskCalibration } from '../cli/formatters/terminal.mts';
+import {
+  MAX_CLI_OUTPUT_BYTES,
+  writePrivateFile,
+  type OutputFileOperations,
+} from '../cli/output-file.mts';
 import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   MAX_RISK_CALIBRATION_RECORDS,
@@ -144,6 +152,27 @@ describe('risk calibration dataset projection', () => {
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([record({ evidence: { availability: 'registered', mutationTypes: ['invented'] } })]))), /mutationTypes\[0\] is unsupported/);
   });
 
+  test('preserves bounded integer and fractional domain ages and rejects non-finite or out-of-range values', () => {
+    for (const domainAgeDays of [0, 17, 17.5, 100_000]) {
+      const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([record({
+        evidence: { availability: 'registered', domainAgeDays },
+      })])));
+      assert.equal(parsed.records[0]?.evidence.domainAgeDays, domainAgeDays);
+    }
+    for (const domainAgeDays of [-0.1, 100_000.1]) {
+      assert.throws(
+        () => parseRiskCalibrationDataset(JSON.stringify(dataset([record({
+          evidence: { availability: 'registered', domainAgeDays },
+        })]))),
+        /finite number from 0 to 100000/u,
+      );
+    }
+    const nonFinite = JSON.stringify(dataset([record({
+      evidence: { availability: 'registered', domainAgeDays: 1 },
+    })])).replace('"domainAgeDays":1', '"domainAgeDays":1e309');
+    assert.throws(() => parseRiskCalibrationDataset(nonFinite), /valid bounded JSON|finite number from 0 to 100000/u);
+  });
+
   test('bounds and projects external provider evidence', () => {
     const providers = Array.from({ length: 11 }, (_, index) => ({
       provider: { id: `provider-${index}` }, state: 'success', findings: [],
@@ -245,6 +274,42 @@ describe('offline Risk calibration report', () => {
     assert.equal(requiredValue(report.thresholds[0]).specificity, null);
   });
 
+  test('replays current subdomain records and rejects reader-only version 1', () => {
+    const threatIntelligence = {
+      providers: ['urlscan_search', 'urlhaus_host'].map((id) => ({
+        provider: { id },
+        state: 'success',
+        observation: { observedAt: '2026-07-18T00:00:00.000Z' },
+        findings: [{ category: 'phishing', lastObservedAt: '2026-07-17T00:00:00.000Z' }],
+      })),
+    };
+    const current = {
+      ...dataset([record({
+        domain: 'portal.example.test',
+        evidence: { availability: 'registered', threatIntelligence },
+      })]),
+      version: RISK_CALIBRATION_DATASET_VERSION,
+    };
+    assert.throws(
+      () => parseRiskCalibrationDataset(JSON.stringify({ ...current, version: 1 })),
+      /version 2/u,
+    );
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(current));
+    const scoringInputs: Parameters<typeof explainRiskScore>[0][] = [];
+    const report = buildRiskCalibrationReport(parsed, (input) => {
+      scoringInputs.push(input);
+      return explainRiskScore(input);
+    }, {
+      modelVersion: RISK_MODEL_VERSION,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+    });
+    const scoringInput = requiredValue(scoringInputs[0]);
+    assert.equal(scoringInput.domain, 'example.test');
+    assert.match(JSON.stringify(scoringInput), /"target":\{"type":"domain","value":"example\.test","exposure":"registrable_domain"\}/u);
+    assert.equal(report.records[0]?.domain, 'portal.example.test');
+    assert.ok(report.records[0]?.factors.some((factor) => factor.label === 'Corroborated recent external phishing/malware records'));
+  });
+
   test('replays the previous model without changing labels or current results', () => {
     const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([
       record({ id: 'positive-high' }),
@@ -342,6 +407,102 @@ describe('risk-calibrate runner', () => {
     assert.equal(summary.schema, RISK_CALIBRATION_SUMMARY_SCHEMA);
     assert.equal(summary.summary.total, 1);
     assert.doesNotMatch(stdout.value(), /case-1|login\.example\.test|"records"/iu);
+  });
+
+  test('writes terminal, detailed JSON, and target-free summary output through the private file route', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-risk-calibration-output-'));
+    const routes = [
+      { name: 'terminal', arguments: [] as string[], file: 'risk.txt' },
+      { name: 'detailed', arguments: ['--json'], file: 'risk.json' },
+      { name: 'summary', arguments: ['--summary-json'], file: 'risk-summary.json' },
+    ] as const;
+    try {
+      for (const route of routes) {
+        const destination = join(directory, route.file);
+        const stdout = capture();
+        const stderr = capture();
+        const code = await runCli([
+          'risk-calibrate',
+          ...route.arguments,
+          '--output',
+          destination,
+        ], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+          stdin: Readable.from([JSON.stringify(dataset())]),
+          now: () => '2026-08-10T00:00:00.000Z',
+        });
+        assert.equal(code, EXIT_CODES.SUCCESS, route.name);
+        assert.equal(stdout.value(), '', route.name);
+        assert.equal(stderr.value(), '', route.name);
+        assert.equal((await stat(destination)).mode & 0o777, 0o600, route.name);
+        const output = await readFile(destination, 'utf8');
+        assert.ok(Buffer.byteLength(output, 'utf8') <= MAX_CLI_OUTPUT_BYTES, route.name);
+        assert.equal(output.endsWith('\n'), true, route.name);
+        if (route.name === 'terminal') {
+          assert.match(output, /Risk model/u);
+        } else if (route.name === 'detailed') {
+          assert.equal(JSON.parse(output).mode, 'detailed');
+          assert.match(output, /login\.example\.test/u);
+        } else {
+          const summary = parseRiskCalibrationSummaryReport(output);
+          assert.equal(summary.mode, 'summary');
+          assert.doesNotMatch(output, /case-1|login\.example\.test|"records"/iu);
+        }
+      }
+
+      const destination = join(directory, 'risk.json');
+      const before = await readFile(destination, 'utf8');
+      const refused = capture();
+      assert.equal(await runCli(['risk-calibrate', '--json', '--output', destination], {
+        stdout: capture().stream,
+        stderr: refused.stream,
+        stdin: Readable.from([JSON.stringify(dataset())]),
+      }), EXIT_CODES.USAGE);
+      assert.match(refused.value(), /already exists/u);
+      assert.equal(await readFile(destination, 'utf8'), before);
+
+      await writeFile(destination, 'stale\n', { mode: 0o644 });
+      assert.equal(await runCli(['risk-calibrate', '--json', '--output', destination, '--force'], {
+        stdout: capture().stream,
+        stderr: capture().stream,
+        stdin: Readable.from([JSON.stringify(dataset())]),
+        now: () => '2026-08-10T00:00:00.000Z',
+      }), EXIT_CODES.SUCCESS);
+      assert.equal(JSON.parse(await readFile(destination, 'utf8')).mode, 'detailed');
+      assert.equal((await stat(destination)).mode & 0o777, 0o600);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('accepts the private sink byte ceiling and rejects ceiling plus one before opening a file', async () => {
+    let opens = 0;
+    const operations: OutputFileOperations = {
+      randomUUID: () => '00000000-0000-4000-8000-000000000000',
+      async open() {
+        opens += 1;
+        return {
+          async writeFile() {},
+          async sync() {},
+          async close() {},
+        };
+      },
+      async link() {},
+      async rename() {},
+      async unlink() {},
+    };
+    const boundary = 'x'.repeat(MAX_CLI_OUTPUT_BYTES);
+    assert.equal(
+      await writePrivateFile('risk-calibration-boundary.json', boundary, {}, operations),
+      join(process.cwd(), 'risk-calibration-boundary.json'),
+    );
+    assert.equal(opens, 1);
+    await assert.rejects(
+      writePrivateFile('risk-calibration-over-limit.json', `${boundary}x`, {}, operations),
+      new RegExp(`limited to ${MAX_CLI_OUTPUT_BYTES} bytes`, 'u'),
+    );
+    assert.equal(opens, 1);
   });
 
   test('missing or malformed input is a usage error and quiet suppresses output', async () => {

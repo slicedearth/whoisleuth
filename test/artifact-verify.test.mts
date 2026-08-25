@@ -1,6 +1,5 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import {
@@ -24,23 +23,55 @@ import {
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
-import { buildCaseResponsePacket } from '../frontend/src/lib/analysis/case-response-packet.ts';
+import {
+  BULK_REVIEW_MANIFEST_SCHEMA,
+  BULK_REVIEW_MANIFEST_VERSION,
+  INVESTIGATION_CAPSULE_SCHEMA,
+  INVESTIGATION_CAPSULE_VERSION,
+  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
+} from '../packages/contracts/investigation-portability.mts';
+import {
+  buildCaseResponsePacket,
+  CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
+  CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  MAX_RESPONSE_ACTION_HISTORY,
+} from '../frontend/src/lib/analysis/case-response-packet.ts';
+import {
+  CASE_RESPONSE_PACKET_SCHEMA,
+  CASE_RESPONSE_PACKET_VERSION,
+  PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+} from '../packages/contracts/case-portability.mts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
+  appendCaseAction,
+  appendCaseActionTransition,
   MAX_CASE_ACTIONS,
   MAX_CASE_ASSERTIONS,
   MAX_CASE_DECISIONS,
   MAX_CASE_EVIDENCE_PINS,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
-import { historicalCasePackFixture } from './historical-case-pack-fixtures.mts';
-import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
+import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 const PASSPHRASE = 'fixture archive passphrase';
-const LOOKUP_EVIDENCE_V25_FIXTURE_SHA256 = '4ad2d13417fbfe24f9dff51d5baf77ca82a0f7c1a68c76e4c7bbdea18d055fcd';
+async function unsupportedCaseContracts(): Promise<{
+  retired: { cliCasePack: Record<string, unknown>; responsePacket: Record<string, unknown> };
+}> {
+  return JSON.parse(await readFile(
+    new URL('./fixtures/case-consolidation/unsupported-contracts-v1.json', import.meta.url),
+    'utf8',
+  )) as {
+    retired: { cliCasePack: Record<string, unknown>; responsePacket: Record<string, unknown> };
+  };
+}
 
 function decodeBase64url(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(Buffer.from(value, 'base64url'));
@@ -71,32 +102,59 @@ async function replaceAuthenticatedWorkspacePlaintext(
 
 async function resignArtifact<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
-  const packetVersion = (value.packet as Record<string, unknown> | undefined)?.version;
-  const casePack = packetVersion !== undefined;
-  const current = packetVersion === undefined ? Number(value.version) > 1 : packetVersion === 2;
-  const canonicalization = current ? 'sorted-json-v2' : casePack ? 'sorted-json-v1' : undefined;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      ...(canonicalization === undefined ? {} : { canonicalization }),
-      digestSha256: await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned)),
+      canonicalization: 'sorted-json-v2',
+      digestSha256: await sha256ArtifactDigestV2(unsigned),
     },
   } as unknown as T;
 }
 
 async function resignCaseResponsePacket<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity: _integrity, ...unsigned } = value;
-  const current = value.schemaVersion === 6;
   return {
     ...unsigned,
     integrity: {
       algorithm: 'SHA-256',
-      canonicalization: current ? 'sorted-json-v2' : 'sorted-json-v1',
+      canonicalization: 'sorted-json-v2',
       scope: 'packet excluding integrity',
-      digestSha256: (await (current ? sha256ArtifactDigestV2(unsigned) : sha256ArtifactDigest(unsigned))).slice('sha256:'.length),
+      digestSha256: (await sha256ArtifactDigestV2(unsigned)).slice('sha256:'.length),
     },
   } as unknown as T;
+}
+
+async function rebindCaseResponseReview<T extends Record<string, unknown>>(value: T): Promise<T> {
+  const profile = value.profile as Record<string, unknown>;
+  const reviewMaterial = {
+    contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
+    version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+    profile: {
+      id: profile.id,
+      label: profile.label,
+      audience: profile.audience,
+      subject: profile.subject,
+      checklist: profile.checklist,
+      includedEvidence: profile.includedEvidence,
+      excludedEvidence: profile.excludedEvidence,
+      redactions: profile.redactions,
+    },
+    case: value.case,
+    incident: value.incident,
+    contacts: value.contacts,
+    selectedEvidence: value.selectedEvidence,
+    contradictions: value.contradictions,
+    readiness: value.readiness,
+    artefactReferences: value.artefactReferences,
+    escalationHistory: value.escalationHistory,
+    escalationHistoryOmitted: value.escalationHistoryOmitted,
+    escalationHistoryLimitations: value.escalationHistoryLimitations,
+    responseLifecycle: value.responseLifecycle,
+  };
+  const authorisation = value.authorisation as Record<string, unknown>;
+  authorisation.reviewedInputDigestSha256 = (await sha256ArtifactDigestV2(reviewMaterial)).slice('sha256:'.length);
+  return value;
 }
 
 function lookupEvidenceArtifact(): Record<string, unknown> {
@@ -146,8 +204,10 @@ describe('offline artifact verifier', () => {
     });
     const report = await verifyOfflineArtifact(JSON.stringify(archive));
     assert.equal(report.artifact.kind, 'workspace_archive');
-    assert.equal(report.state, 'verified');
+    assert.equal(report.state, 'integrity_valid');
     assert.equal(report.checks.contentIntegrity, 'verified');
+    assert.equal(report.checks.contentIntegrityScope, 'embedded_projections');
+    assert.match(report.limitations.join(' '), /not root metadata/iu);
     assert.ok((report.summary.sectionCount ?? 0) > 0);
     assert.equal(report.summary.unsupportedSectionCount, 0);
     const terminal = formatOfflineArtifactVerification(report);
@@ -166,7 +226,7 @@ describe('offline artifact verifier', () => {
     cases.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
     cases.checksum = await sha256ArtifactDigest(archive.sections.cases);
     const report = await verifyOfflineArtifact(JSON.stringify(archive));
-    assert.equal(report.state, 'verified');
+    assert.equal(report.state, 'integrity_valid');
     assert.equal(report.summary.unsupportedSectionCount, 1);
     assert.match(report.limitations.join(' '), /cannot be imported/iu);
   });
@@ -184,7 +244,8 @@ describe('offline artifact verifier', () => {
     profiles.checksum = await sha256ArtifactDigest(archive.sections.brandProfiles);
 
     const ordinary = await verifyOfflineArtifact(JSON.stringify(archive));
-    assert.equal(ordinary.state, 'verified');
+    assert.equal(ordinary.state, 'integrity_valid');
+    assert.equal(ordinary.checks.contentIntegrityScope, 'embedded_projections');
     assert.equal(ordinary.summary.fullyImportable, false);
     assert.equal(ordinary.summary.skippedRecordCount, 1);
     assert.equal(ordinary.summary.unsupportedSectionCount, 0);
@@ -196,6 +257,28 @@ describe('offline artifact verifier', () => {
     assert.equal(decrypted.summary.fullyImportable, false);
     assert.equal(decrypted.summary.skippedRecordCount, 1);
     assert.doesNotMatch(JSON.stringify(decrypted), /must-not-appear|fixture archive passphrase/iu);
+  });
+
+  test('does not promote mutable ordinary archive metadata to whole-artifact integrity', async () => {
+    const archive = structuredClone(await buildWorkspaceArchive({}, {
+      generatedAt: '2026-07-15T00:00:00.000Z',
+    }));
+    archive.generatedAt = '2026-07-16T00:00:00.000Z';
+    const report = await verifyOfflineArtifact(JSON.stringify(archive));
+    assert.equal(report.state, 'integrity_valid');
+    assert.equal(report.checks.contentIntegrity, 'verified');
+    assert.equal(report.checks.contentIntegrityScope, 'embedded_projections');
+
+    const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
+      stdout: { write() {} }, stderr: { write() {} },
+      readArtifactInput: async () => JSON.stringify(archive),
+    });
+    assert.equal(strictCode, EXIT_CODES.PARTIAL_FAILURE);
+
+    const encrypted = await encryptWorkspaceArchive(archive, PASSPHRASE);
+    const encryptedReport = await verifyOfflineArtifact(JSON.stringify(encrypted), { passphrase: PASSPHRASE });
+    assert.equal(encryptedReport.state, 'verified');
+    assert.equal(encryptedReport.checks.contentIntegrityScope, 'whole_artifact');
   });
 
   test('withholds workspace integrity and importability claims for undeclared ordinary or authenticated data', async () => {
@@ -269,11 +352,11 @@ describe('offline artifact verifier', () => {
       /selection.*malformed structure/iu,
     );
 
-    const contentFree = {
+    const unsupportedReaderOnly = {
       schema: 'whoisleuth.bulk-review-manifest', version: 1,
       integrity: { algorithm: 'SHA-256', digestSha256: await sha256ArtifactDigest({ schema: 'whoisleuth.bulk-review-manifest', version: 1 }) },
     };
-    await assert.rejects(verifyOfflineArtifact(JSON.stringify(contentFree)), /malformed structure/iu);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(unsupportedReaderOnly)), /not supported|malformed structure/iu);
   });
 
   test('verifies a reviewed CLI case pack before browser import', async () => {
@@ -322,32 +405,12 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('inherits authentic historical Case identities and strict report projection across every audience', async () => {
-    for (const audience of ['public', 'trusted', 'internal'] as const) {
-      const authentic = historicalCasePackFixture(11, audience);
-      const verified = await verifyOfflineArtifact(JSON.stringify(authentic));
-      assert.equal(verified.state, 'verified', audience);
-      assert.equal(verified.summary.recordCount, 1, audience);
-
-      for (const field of ['id', 'fingerprint'] as const) {
-        const changed = structuredClone(authentic);
-        const item = (changed.cases as Array<Record<string, unknown>>)[0]!;
-        const snapshot = (item.evidenceHistory as Array<Record<string, unknown>>)[0]!;
-        snapshot[field] = field === 'id' ? 'ev-forged' : 'forged';
-        await assert.rejects(
-          verifyOfflineArtifact(JSON.stringify(await resignArtifact(changed))),
-          /invalid historical evidence identity|changed or unbounded historical evidenceHistory/iu,
-        );
-      }
-
-      const scalar = structuredClone(authentic);
-      const report = (((scalar.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!);
-      report.application = 'private material';
-      await assert.rejects(
-        verifyOfflineArtifact(JSON.stringify(await resignArtifact(scalar))),
-        /invalid or mismatched historical Case report projection/iu,
-      );
-    }
+  test('rejects a retired Case-pack before reading its historical projections', async () => {
+    const { retired } = await unsupportedCaseContracts();
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(retired.cliCasePack)),
+      /case-pack version 1 is retired.*no data was changed/iu,
+    );
   });
 
   test('validates saved Lookup structure without claiming content integrity', async () => {
@@ -371,6 +434,19 @@ describe('offline artifact verifier', () => {
     assert.equal(report.checks.structure, 'verified');
     assert.equal(report.checks.contentIntegrity, 'not_checked');
     assert.match(report.limitations[0] || '', /no embedded checksum or signature/u);
+    assert.doesNotMatch(JSON.stringify(report), /example\.test|\bfast\b/u);
+
+    const frozenLegacy = await verifyOfflineArtifact(await loadCliLookupV1Fixture());
+    assert.equal(frozenLegacy.artifact.version, 1);
+    const current = await verifyOfflineArtifact(JSON.stringify({ ...lookup, version: 2 }));
+    assert.equal(current.artifact.version, 2);
+    const asn = await verifyOfflineArtifact(
+      await readFile(new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url), 'utf8'),
+    );
+    assert.equal(asn.artifact.kind, 'saved_lookup');
+    assert.equal(asn.artifact.version, 2);
+    assert.equal(asn.state, 'structure_valid');
+    assert.doesNotMatch(JSON.stringify(asn), /AS64496|\bfast\b/u);
 
     const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {
       stdout: { write() {} }, stderr: { write() {} },
@@ -406,26 +482,53 @@ describe('offline artifact verifier', () => {
     assert.equal(JSON.parse(stdout).artifact.kind, 'lookup_evidence');
   });
 
-  test('keeps one frozen internally consistent schema-25 Lookup export readable', async () => {
-    const raw = await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8');
-    assert.equal(createHash('sha256').update(raw).digest('hex'), LOOKUP_EVIDENCE_V25_FIXTURE_SHA256);
-    const report = await verifyOfflineArtifact(raw);
+  test('keeps one frozen strict schema-26 Lookup export readable after later schemas become current', async () => {
+    const report = await verifyOfflineArtifact(await loadLookupEvidenceV26Fixture());
     assert.deepEqual(report.artifact, {
       kind: 'lookup_evidence',
       schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
-      version: lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      version: lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
     assert.equal(report.state, 'structure_valid');
   });
 
-  test('verifies authentic frozen schema-25 Fast, unavailable, error, and not-found wrapper states', async () => {
-    const fixtures = await loadLookupEvidenceV25CompatibilityFixtures();
-    for (const fixture of fixtures) {
-      const report = await verifyOfflineArtifact(JSON.stringify(fixture.document));
-      assert.equal(report.artifact.kind, 'lookup_evidence', fixture.name);
-      assert.equal(report.artifact.version, lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION, fixture.name);
-      assert.equal(report.state, 'structure_valid', fixture.name);
+  test('accepts exact current homepage metadata while rejecting malformed and pre-homepage injection', async () => {
+    const current = lookupEvidenceArtifact();
+    const availability = (current.analysis as Record<string, Record<string, unknown>>).availability!;
+    availability.pageIdentity = { status: 'success', publicationMetadata: pagePublicationMetadataFixture() };
+    availability.http = { status: 'success', response: { deliveryMetadata: httpDeliveryMetadataFixture() } };
+    const report = await verifyOfflineArtifact(JSON.stringify(current));
+    assert.equal(report.artifact.version, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+
+    const malformed = structuredClone(current);
+    const malformedAvailability = (malformed.analysis as Record<string, Record<string, unknown>>).availability!;
+    (((malformedAvailability.http as Record<string, unknown>).response as Record<string, unknown>).deliveryMetadata as Record<string, unknown>).version = 2;
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(malformed)),
+      /Lookup evidence HTTP delivery metadata.*malformed structure/iu,
+    );
+
+    for (const family of ['page', 'http'] as const) {
+      const unavailableParent = structuredClone(current);
+      const unavailableAvailability = (unavailableParent.analysis as Record<string, Record<string, unknown>>).availability!;
+      if (family === 'page') {
+        (unavailableAvailability.pageIdentity as Record<string, unknown>).status = 'error';
+      } else {
+        (unavailableAvailability.http as Record<string, unknown>).status = 'error';
+      }
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(unavailableParent)),
+        /(?:page publication|HTTP delivery) metadata source state/iu,
+      );
     }
+
+    const legacy = JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>;
+    const legacyAvailability = (legacy.analysis as Record<string, Record<string, unknown>>).availability!;
+    legacyAvailability.pageIdentity = { publicationMetadata: pagePublicationMetadataFixture() };
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(legacy)),
+      /Lookup evidence homepage metadata epoch.*malformed structure/iu,
+    );
   });
 
   test('rejects malformed, over-bound, legacy, and future Lookup-evidence documents', async () => {
@@ -652,7 +755,7 @@ describe('offline artifact verifier', () => {
       /limited to 5 MiB/iu,
     );
 
-    for (const schemaVersion of [lookupEvidenceModule.LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
+    for (const schemaVersion of [lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
       const unsupported = { ...lookupEvidenceArtifact(), schemaVersion };
       await assert.rejects(
         verifyOfflineArtifact(JSON.stringify(unsupported)),
@@ -702,11 +805,14 @@ describe('offline artifact verifier', () => {
       edges: [], sources: [], truncated: false, limitations: [],
     };
     const brief = {
-      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 1 as const,
+      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 2 as const,
       generatedAt: '2026-08-04T00:00:00.000Z', target: 'example.test', targetType: 'domain',
       task: 'general' as const, taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
       observation: { observedAt: '2026-08-04T00:00:00.000Z', evidenceAgeDays: 0, completeSources: 1, limitedSources: 0, freshnessPolicy: { version: 1 as const, id: 'task-default' as const, task: 'general' as const, thresholdsDays: { registration: 30, network: 7, web: 3 } } },
-      verifiedFacts: [], contradictions: [], unknowns: [], nextActions: [],
+      decisionFacts: {
+        version: 1 as const, total: 0, displayed: 0, omitted: 0,
+        contradictory: 0, unresolved: 0, facts: [],
+      },
       relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
     };
     const capsule = await buildInvestigationCapsule({
@@ -755,56 +861,145 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('rejects recomputed content-free digest envelopes for every supported review schema', async () => {
-    const schemas = [
-      ['whoisleuth.acquisition-decision', 1, null], ['whoisleuth.acquisition-decision', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-comparison', 3, null], ['whoisleuth.domain-comparison', 4, 'sorted-json-v2'],
-      ['whoisleuth.bulk-mail-exposure', 1, null], ['whoisleuth.bulk-mail-exposure', 2, 'sorted-json-v2'],
-      ['whoisleuth.bulk-review-manifest', 1, null], ['whoisleuth.bulk-review-manifest', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-control-manifest', 1, 'sorted-json-v1'], ['whoisleuth.domain-control-manifest', 2, 'sorted-json-v2'],
-      ['whoisleuth.domain-change-packet', 1, null], ['whoisleuth.domain-change-packet', 2, 'sorted-json-v2'],
-      ['whoisleuth.investigation-manifest', 1, null], ['whoisleuth.investigation-manifest', 2, 'sorted-json-v2'],
-    ] as const;
-    for (const [schema, version, canonicalization] of schemas) {
-      const unsigned = { schema, version };
-      const contentFree = {
-        ...unsigned,
-        integrity: {
-          algorithm: 'SHA-256',
-          ...(canonicalization ? { canonicalization } : {}),
-          digestSha256: await (canonicalization === 'sorted-json-v2'
-            ? sha256ArtifactDigestV2(unsigned)
-            : sha256ArtifactDigest(unsigned)),
-        },
-      };
-      await assert.rejects(
-        verifyOfflineArtifact(JSON.stringify(contentFree)),
-        /unsupported or malformed structure/iu,
-        schema,
-      );
-    }
+  test('rejects recomputed content-free digest envelopes at supported version edges', async () => {
+    const unsigned = { schema: BULK_REVIEW_MANIFEST_SCHEMA, version: BULK_REVIEW_MANIFEST_VERSION };
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify({
+      ...unsigned,
+      integrity: {
+        algorithm: 'SHA-256',
+        canonicalization: 'sorted-json-v2',
+        digestSha256: await sha256ArtifactDigestV2(unsigned),
+      },
+    })), /unsupported or malformed structure/iu);
 
-    for (const schemaVersion of [5, 6] as const) {
-      const packetUnsigned = { schema: 'whoisleuth.case-response-packet', schemaVersion };
+    for (const schemaVersion of [PUBLIC_CASE_RESPONSE_PACKET_VERSION, CASE_RESPONSE_PACKET_VERSION]) {
+      const packetUnsigned = { schema: CASE_RESPONSE_PACKET_SCHEMA, schemaVersion };
       await assert.rejects(verifyOfflineArtifact(JSON.stringify({
         ...packetUnsigned,
         integrity: {
-          algorithm: 'SHA-256', canonicalization: schemaVersion === 6 ? 'sorted-json-v2' : 'sorted-json-v1', scope: 'packet excluding integrity',
-          digestSha256: (await (schemaVersion === 6 ? sha256ArtifactDigestV2(packetUnsigned) : sha256ArtifactDigest(packetUnsigned))).slice('sha256:'.length),
+          algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'packet excluding integrity',
+          digestSha256: (await sha256ArtifactDigestV2(packetUnsigned)).slice('sha256:'.length),
         },
       })), /unsupported or malformed structure/iu);
     }
-    for (const schemaVersion of [1, 2] as const) {
+    for (const schemaVersion of [PUBLIC_INVESTIGATION_CAPSULE_VERSION, INVESTIGATION_CAPSULE_VERSION]) {
       await assert.rejects(verifyOfflineArtifact(JSON.stringify({
-        schema: 'whoisleuth.investigation-capsule', schemaVersion,
-        integrity: schemaVersion === 1
-          ? { algorithm: 'SHA-256', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null }
-          : { algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null, digestSha256: `sha256:${'0'.repeat(64)}` },
+        schema: INVESTIGATION_CAPSULE_SCHEMA, schemaVersion,
+        integrity: { algorithm: 'SHA-256', canonicalization: 'sorted-json-v2', scope: 'capsule excluding integrity', briefDigest: `sha256:${'0'.repeat(64)}`, graphDigest: `sha256:${'0'.repeat(64)}`, analystRecordsDigest: null, digestSha256: `sha256:${'0'.repeat(64)}` },
       })), /unsupported or malformed structure/iu);
     }
   });
 
-  test('enforces the real Case v5 collection maxima before accepting a recomputed packet digest', async () => {
+  test('rejects retired response packets and verifies current v7 with the exact review binding', async () => {
+    const { retired } = await unsupportedCaseContracts();
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(retired.responsePacket)),
+      /version 5 is retired.*no data was changed/iu,
+    );
+
+    const caseRecord = createCase({
+      domain: 'review-binding.example',
+      status: 'escalated',
+      disposition: 'confirmed_abuse',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+    }, '2026-07-15T00:00:00.000Z');
+    const packet = (await buildCaseResponsePacket(caseRecord, {
+      category: 'Reserved review',
+      affectedParty: 'Reserved service',
+      abusiveUrls: ['https://review-binding.example/review'],
+      observedHarm: 'A reserved synthetic observation.',
+      observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T01:00:00.000Z')).json;
+    const verified = await verifyOfflineArtifact(JSON.stringify(packet));
+    assert.equal(verified.state, 'verified');
+    assert.equal(verified.artifact.version, 7);
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    const authorisation = forged.authorisation as Record<string, unknown>;
+    authorisation.reviewedInputDigestSha256 = 'f'.repeat(64);
+    authorisation.suppliedReviewDigestSha256 = 'f'.repeat(64);
+    authorisation.digestMatches = true;
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('reconstructs the v7 provider lifecycle projection instead of trusting a re-signed summary', async () => {
+    const base = createCase({
+      domain: 'provider-lifecycle.example',
+      status: 'escalated',
+      disposition: 'confirmed_abuse',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: { recipient: 'Reserved response desk', type: 'registrar_report' },
+    }, '2026-07-15T00:00:00.000Z');
+    const actionId = base.actions[0]!.id;
+    let actions = base.actions;
+    for (const [index, nextState] of (['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const).entries()) {
+      actions = appendCaseActionTransition(actions, actionId, { nextState, sourceClass: 'analyst' },
+        new Date(Date.parse('2026-07-15T00:00:00.000Z') + (index + 1) * 60_000).toISOString());
+    }
+    actions = appendCaseActionTransition(actions, actionId, {
+      nextState: 'acknowledged', sourceClass: 'provider', providerOutcome: 'provider_reports_resolved',
+      outcomeDetail: 'The provider reported resolution.', provenance: 'provider_reported_resolution',
+    }, '2026-07-15T01:00:00.000Z');
+    actions = appendCaseActionTransition(actions, actionId, {
+      nextState: 'acknowledged', sourceClass: 'provider',
+      outcomeDetail: 'A later response supplied procedural detail only.', provenance: 'provider_detail_only',
+    }, '2026-07-15T01:30:00.000Z');
+    const packet = (await buildCaseResponsePacket({ ...base, actions, updatedAt: '2026-07-15T01:30:00.000Z' }, {
+      category: 'Reserved review',
+      affectedParty: 'Reserved service',
+      abusiveUrls: ['https://provider-lifecycle.example/review'],
+      observedHarm: 'A reserved synthetic observation.',
+      observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T02:00:00.000Z')).json;
+    const verified = await verifyOfflineArtifact(JSON.stringify(packet));
+    assert.equal(verified.state, 'verified');
+    assert.equal(packet.escalationHistory[0]?.providerOutcome, 'provider_reports_resolved');
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    const lifecycle = forged.responseLifecycle as Record<string, unknown>;
+    const latest = lifecycle.latestProviderOutcome as Record<string, unknown>;
+    latest.outcome = 'duplicate';
+    await rebindCaseResponseReview(forged);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('accepts explicit bounded packet action omissions only with conservative provider timing', async () => {
+    const base = createCase({
+      domain: 'bounded-packet-actions.example',
+      status: 'reviewing',
+      disposition: 'suspicious',
+      evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+    }, '2026-07-15T00:00:00.000Z');
+    let actions = base.actions;
+    for (let index = 0; index <= MAX_RESPONSE_ACTION_HISTORY; index += 1) {
+      actions = appendCaseAction(actions, { recipient: `Bounded local reviewer ${index}` },
+        new Date(Date.parse('2026-07-15T00:00:00.000Z') + index * 60_000).toISOString());
+    }
+    const packet = (await buildCaseResponsePacket({ ...base, actions }, {
+      category: 'Reserved review', affectedParty: 'Reserved service',
+      abusiveUrls: ['https://bounded-packet-actions.example/review'],
+      observedHarm: 'A reserved synthetic observation.', observedAt: '2026-07-15T00:00:00.000Z',
+    }, '2026-07-15T02:00:00.000Z')).json;
+    assert.equal(packet.escalationHistoryOmitted, 1);
+    assert.equal(packet.responseLifecycle.providerOutcomeState, 'ambiguous');
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(packet))).state, 'verified');
+
+    const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+    (forged.responseLifecycle as Record<string, unknown>).providerOutcomeState = 'missing';
+    await rebindCaseResponseReview(forged);
+    await assert.rejects(
+      verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+      /case-response .*unsupported or malformed structure/iu,
+    );
+  });
+
+  test('enforces current Case collection maxima before accepting a recomputed packet digest', async () => {
     const caseRecord = createCase({
       domain: 'bounded-response.example',
       status: 'escalated',
@@ -872,6 +1067,18 @@ describe('offline artifact verifier', () => {
       (value) => {
         const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
         contact.limitations = ['l'.repeat(241)];
+      },
+      (value) => {
+        const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
+        contact.freshness = 'current';
+      },
+      (value) => {
+        const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;
+        rows.find((row) => row.id === 'exact_url')!.requiredForAuthorisation = false;
+      },
+      (value) => {
+        const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;
+        rows.find((row) => row.id === 'exact_url')!.state = 'partial';
       },
       (value) => {
         value.escalationHistory = [{

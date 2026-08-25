@@ -27,7 +27,8 @@ rejects tokens whose remaining lifetime exceeds the new maximum. Signing out
 clears the cookie in that browser but cannot revoke a copied token. Rotate
 `SESSION_SECRET` to invalidate all outstanding sessions. If an older deployment
 omits it, the application derives a slower signing key from `SITE_PASSWORD`,
-but an independent secret is recommended.
+but an independent secret is recommended. Production logs report that fallback
+without exposing either secret.
 
 Deployments upgrading from the previous fixed 30-day session lifetime move to
 the 7-day default unless `SESSION_MAX_AGE_DAYS` is set explicitly. Existing
@@ -55,6 +56,19 @@ Do not enable proxy trust on a directly internet-facing Node process, where a
 client could forge forwarded headers.
 
 ## Emergency feature switches
+
+The generated [capability and data-flow contract](capability-manifest.md)
+describes the static execution, disclosure, budget, authorisation, retention,
+export, scoring, cancellation, partial-result, and privacy boundary for every
+capability family and installed CLI operation represented by the current
+product contract. Runtime availability remains dynamic:
+the authenticated capability report below applies deployment policy,
+configuration, runtime support, and bounded-budget state without changing that
+static contract.
+
+The generated [privacy and data-flow catalogue](privacy-data-flow-catalogue.md)
+and [JSON](privacy-data-flow-catalogue.json) list static recipients, retention
+and export boundaries. They do not replace the authenticated runtime report.
 
 Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 
@@ -91,6 +105,10 @@ When neither environment metadata nor a Git checkout is available, the footer
 uses `local` and links to the repository root rather than claiming an exact
 source revision.
 
+`frontend/static/social-preview.svg` is the canonical social-preview source.
+Render the reviewed 1280×640 `social-preview.png` from it, then run the public
+resource asset test before delivery.
+
 ## Optional external intelligence
 
 External adapters are disabled by default and run only for a Deep,
@@ -123,9 +141,9 @@ Review them again before enabling an adapter for a different deployment or use
 case. A miss, outage, expired record, quota response, or unsupported target is
 never evidence of safety.
 
-The connector contract under `lib/threat-intelligence-contract.mts` defines a
-bounded future integration boundary. It does not load arbitrary plugin code or
-enable a provider on its own.
+The connector contract under `lib/threat-intelligence-contract.mts` defines the
+bounded provider interface. It does not load arbitrary plugin code or enable a
+provider on its own.
 
 ## Request limits and operation admission
 
@@ -153,7 +171,7 @@ Network-heavy authenticated operations also acquire an immediate lease:
 | `registry_light` | Fast Lookup, RDAP, registry-scoped nameserver search, Fast availability | 12 | 36 |
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
 | `certificate_search` | Certificate Transparency | 2 | 4 |
-| `posture_audit` | Official-domain posture audit | 3 | 8 |
+| `posture_audit` | Official-domain settings review | 3 | 8 |
 
 Exhausted concurrency returns HTTP 429 with
 `NETWORK_CONCURRENCY_LIMITED`. Leases are released after success or failure and
@@ -216,7 +234,9 @@ observations, and deadlines cannot erase an earlier conclusive baseline.
 
 Ordinary browser watchlists are not uploaded automatically. A signed-in analyst
 must deliberately schedule one through Monitor and can replace, restore, pause,
-resume, or delete the hosted compact copy.
+resume, or delete a watchlist from the hosted compact logical state. That delete
+rewrites the encrypted state object; it does not physically delete the Blob
+object.
 
 Capacity admission reserves part of the fixed schedule for delayed or resumed
 work. The five-minute schedule can invoke the function 8,640 times in a 30-day
@@ -225,9 +245,15 @@ usage against the deployment's plan before enabling it.
 
 To stop Blob reads, writes, and lookups, set
 `WHOISLEUTH_SCHEDULED_MONITORING=0` or remove it and redeploy. This does not
-delete the encrypted Blob. Delete retained state deliberately only when it is
-no longer required. Remove the schedule itself if no-op invocations must also
-stop.
+delete the encrypted Blob. To remove all retained monitoring state physically,
+the deployment operator must delete the object whose key exactly equals the
+configured `WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE` from the site-wide Blob
+store named `whoisleuth-scheduled-monitor` through the hosting platform's Blob
+administration, then verify that the object is absent. Remove the schedule
+itself if no-op invocations must also stop. The Blob object contains ciphertext,
+while the configured worker runtime receives the encryption key from its
+deployment environment; encryption therefore does not protect against an
+operator or hosting runtime with access to that environment.
 
 ## Netlify deployment
 

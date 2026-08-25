@@ -12,7 +12,7 @@
       <div><p class="eyebrow">Certificate relationships</p><h2 id="certificate-groups-title">Issuance groups</h2></div>
       <div class="counts"><span><strong>{groups.length}</strong> retained</span><span><strong>{shared.length}</strong> cross-domain</span><span><strong>{wildcard.length}</strong> wildcard</span></div>
     </header>
-    <p class="intro">Each group represents names observed together in one public certificate record. Shared issuance is a review lead and does not establish common ownership, hosting, operation, intent, or current activity.</p>
+    <p class="intro">Each group contains names observed together in one public certificate record. Verify shared issuance independently.</p>
     <div class="group-grid">
       {#each groups.slice(0, 12) as group, index (group.certificateKey)}
         <article>

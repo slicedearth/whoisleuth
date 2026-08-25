@@ -1,17 +1,36 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { open, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { open, mkdtemp, mkdir, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import {
+  decodeBoundedUtf8,
   readBoundedRegularFile,
+  readBoundedRegularFileWithin,
   readBoundedRegularTextFile,
 } from '../lib/bounded-file.mts';
 
 const execFileAsync = promisify(execFile);
+
+test('rejects malformed UTF-8 without rejecting valid replacement characters or stripping a BOM', () => {
+  for (const bytes of [
+    Buffer.from([0x80]),
+    Buffer.from([0xc0, 0xaf]),
+    Buffer.from([0xe2, 0x82]),
+    Buffer.from([0xed, 0xa0, 0x80]),
+  ]) {
+    assert.throws(() => decodeBoundedUtf8(bytes, 'Fixture'), /valid UTF-8/iu);
+  }
+
+  const replacement = Buffer.from('\ufffd', 'utf8');
+  assert.equal(decodeBoundedUtf8(replacement), '\ufffd');
+  const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"ok":true}')]);
+  const decoded = decodeBoundedUtf8(withBom);
+  assert.deepEqual(Buffer.from(decoded, 'utf8'), withBom);
+});
 
 test('reads a regular file through one bounded descriptor', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-file-'));
@@ -26,6 +45,71 @@ test('reads a regular file through one bounded descriptor', async () => {
     }), '{"ok":true}');
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('confines reads to a canonical root and rejects final or intermediate symbolic links', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-root-'));
+  const outside = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-outside-'));
+  try {
+    await mkdir(path.join(directory, 'nested'));
+    await writeFile(path.join(directory, 'nested', 'input.txt'), 'inside', 'utf8');
+    await writeFile(path.join(outside, 'outside.txt'), 'outside', 'utf8');
+    assert.equal((await readBoundedRegularFileWithin(directory, 'nested/input.txt', {
+      maximumBytes: 64,
+      label: 'Confined fixture',
+    })).toString('utf8'), 'inside');
+
+    await symlink(path.join(outside, 'outside.txt'), path.join(directory, 'final-link'));
+    await assert.rejects(
+      readBoundedRegularFileWithin(directory, 'final-link', { maximumBytes: 64, label: 'Final link' }),
+      /symbolic link/iu,
+    );
+    await symlink(outside, path.join(directory, 'directory-link'));
+    await assert.rejects(
+      readBoundedRegularFileWithin(directory, 'directory-link/outside.txt', { maximumBytes: 64, label: 'Directory link' }),
+      /symbolic link/iu,
+    );
+    await assert.rejects(
+      readBoundedRegularFileWithin(directory, '../outside.txt', { maximumBytes: 64, label: 'Traversal' }),
+      /safe relative file path|escapes/iu,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test('binds the opened descriptor to the admitted target across an intermediate swap and restore', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-swap-'));
+  const outside = await mkdtemp(path.join(tmpdir(), 'whoisleuth-bounded-swap-outside-'));
+  try {
+    const nested = path.join(directory, 'nested');
+    const parked = path.join(directory, 'nested-admitted');
+    await mkdir(nested);
+    await writeFile(path.join(nested, 'input.txt'), 'inside', 'utf8');
+    await writeFile(path.join(outside, 'input.txt'), 'outside', 'utf8');
+    await assert.rejects(
+      readBoundedRegularFileWithin(directory, 'nested/input.txt', {
+        maximumBytes: 64,
+        label: 'Swap fixture',
+      }, {
+        openFile: async (filename, flags, mode) => {
+          await rename(nested, parked);
+          await symlink(outside, nested);
+          try {
+            return await open(filename, flags, mode);
+          } finally {
+            await unlink(nested);
+            await rename(parked, nested);
+          }
+        },
+      }),
+      /changed while it was being read/iu,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
 

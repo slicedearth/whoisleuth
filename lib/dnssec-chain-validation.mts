@@ -12,6 +12,7 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { isPrivateAddress } from './safe-fetch.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   MAX_DNS_MESSAGE_BYTES,
   defaultTcpExchange,
@@ -274,8 +275,7 @@ function normalizedText(value: unknown, maximum: number): string | null {
 
 function normalizedTimestamp(value: unknown): string | null {
   const text = normalizedText(value, 64);
-  if (!text || !Number.isFinite(Date.parse(text))) return null;
-  return new Date(text).toISOString();
+  return text ? normalizeExplicitIsoTimestamp(text) : null;
 }
 
 function normalizeTrustAnchorDs(value: unknown): DnssecTrustAnchorDs | null {

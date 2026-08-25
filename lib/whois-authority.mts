@@ -1,6 +1,6 @@
-// Authority-aware interpretation of WHOIS referral chains. The first
-// definitive non-root response decides existence; later registrar output is
-// diagnostic and cannot override the registry.
+// Authority-aware interpretation of WHOIS referral chains. Only the first
+// registry response referred by IANA can decide existence; later registrar
+// output is diagnostic and cannot replace an inconclusive registry result.
 
 import type { WhoisHop } from './whois-chain.mts';
 import type { WhoisAuthority } from './whois-contracts.mts';
@@ -10,9 +10,19 @@ import {
   whoisFieldLimit,
 } from './whois-values.mts';
 
-const NOT_FOUND_RE = /no match for|no match\b|not found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
-
 const LINE_NOT_FOUND_PATTERNS = Object.freeze([
+  /^[ \t]*(?:%{1,2}[ \t]*)?(?:error(?::\d+)?[ \t:.-]*)?no match(?:[ \t]+for(?:[ \t]+domain)?(?:[ \t]+["']?[a-z0-9.-]{1,253}["']?)?)?[.!]?[ \t]*$/im,
+  /^[ \t]*(?:%{1,2}[ \t]*)?(?:error(?::\d+)?[ \t:.-]*)?no entries found(?:[ \t]+(?:for(?:[ \t]+(?:the[ \t]+)?(?:selected source\(s\)|this query|query[ \t]+["']?[a-z0-9.-]{1,253}["']?))|in[ \t]+the[ \t]+\.[a-z0-9-]{1,63}[ \t]+database))?[.!]?[ \t]*$/im,
+  /^[ \t]*[a-z0-9.-]{1,253}[ \t]*:[ \t]*no entries found\.?[ \t]*$/im,
+  /^[ \t]*(?:%{1,2}[ \t]*)?(?:domain[ \t]+)?not found(?::[ \t]*[a-z0-9.-]{1,253})?[.!]?[ \t]*$/im,
+  /^[ \t]*(?:the[ \t]+)?domain[ \t]+["']?[a-z0-9.-]{1,253}["']?[ \t]+(?:was[ \t]+)?not found\.?[ \t]*$/im,
+  /^[ \t]*(?:domain[ \t]+status|the queried object does not exist)[ \t]*:[ \t]*(?:domain[ \t]+not found|no object found)[.!]?[ \t]*$/im,
+  /^[ \t]*no object found!?[ \t]*$/im,
+  /^[ \t]*(?:%{1,2}[ \t]*)?(?:error(?::\d+)?[ \t:.-]*)?(?:the[ \t]+)?domain(?:[ \t]+is|[ \t]+has)?[ \t]+not[ \t]+(?:been[ \t]+)?registered\.?[ \t]*$/im,
+  /^[ \t]*(?:domain[ \t]+)?status[ \t]*:[ \t]*(?:available|free)[ \t]*$/im,
+  /^[ \t]*registration[ \t]+status[ \t]*:[ \t]*available[ \t]*$/im,
+  /^[ \t]*registered[ \t]*:[ \t]*(?:no|false)[ \t]*$/im,
+  /^[ \t]*[a-z0-9.-]{1,253}[ \t]+is[ \t]+(?:available[ \t]+for[ \t]+(?:purchase|registration)|free)[.!]?[ \t]*$/im,
   /^[ \t]*%[ \t]*nothing found[ \t]*$/im,
   /^[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free[ \t]*$/im,
   /^[ \t]*el dominio no se encuentra registrado en nic argentina[ \t]*$/im,
@@ -68,8 +78,7 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
   if (
-    NOT_FOUND_RE.test(text)
-    || LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))
+    LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))
   ) {
     return 'negative';
   }
@@ -88,6 +97,25 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   return 'inconclusive';
 }
 
+function normalizedWhoisServer(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase().replace(/\.+$/u, '');
+  return /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/u.test(normalized) ? normalized : null;
+}
+
+function ianaRegistryReferral(hop: WhoisHop | undefined): string | null {
+  if (!hop || normalizedWhoisServer(hop.server) !== 'whois.iana.org' || typeof hop.response !== 'string') return null;
+  for (const pattern of [
+    /^[ \t]*refer:[ \t]*([a-zA-Z0-9.\-]+)/mi,
+    /^[ \t]*ReferralServer:[ \t]*whois:\/\/([a-zA-Z0-9.\-]+)/mi,
+    /^[ \t]*whois:[ \t]*([a-zA-Z0-9.\-]+)/mi,
+  ]) {
+    const referral = normalizedWhoisServer(hop.response.match(pattern)?.[1]);
+    if (referral) return referral;
+  }
+  return null;
+}
+
 export function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
   const source = normalizeWhoisChain(chain);
   const evidence = source.map((hop, index) => ({
@@ -98,10 +126,13 @@ export function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
   const failed = evidence.filter(
     (item) => item.kind === 'error' || item.kind === 'rate_limited',
   );
-  const authoritative = evidence.find(
-    (item) => item.index > 0
-      && (item.kind === 'positive' || item.kind === 'negative'),
-  );
+  const registryReferral = ianaRegistryReferral(source[0]);
+  const registryServer = normalizedWhoisServer(source[1]?.server);
+  const registryEvidence = registryReferral && registryServer === registryReferral ? evidence[1] : null;
+  const authoritative = registryEvidence
+    && (registryEvidence.kind === 'positive' || registryEvidence.kind === 'negative')
+    ? registryEvidence
+    : null;
   const conflict = authoritative
     ? evidence.find(
       (item) => item.index > authoritative.index

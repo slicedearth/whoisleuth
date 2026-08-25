@@ -109,6 +109,18 @@ describe('URLscan provider policy and configuration', () => {
 });
 
 describe('URLscan archived-verdict lookup', () => {
+  test('rejects zone-less provider times and canonicalizes explicit offsets', async () => {
+    const invalid = await fixtureAdapter(async () => jsonResponse({
+      results: [searchRecord({ task: { url: 'https://login.example.com/', time: '2026-07-14T12:00:00.000' } })],
+    })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(invalid.state, 'partial');
+    assert.deepEqual(invalid.findings, []);
+    const offset = await fixtureAdapter(async () => jsonResponse({
+      results: [searchRecord({ task: { url: 'https://login.example.com/', time: '2026-07-14T12:00:00.000+01:00' } })],
+    })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(offset.findings[0]?.lastObservedAt, '2026-07-14T11:00:00.000Z');
+  });
+
   test('keeps disabled and malformed configurations explicit without making a request', async () => {
     let calls = 0;
     const adapter = fixtureAdapter(async () => {

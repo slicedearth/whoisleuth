@@ -1,5 +1,6 @@
 import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
+import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
 import { createPageBaseline } from './page-baseline.ts';
@@ -26,11 +27,36 @@ import {
 } from './bulk-result-model.ts';
 
 export type BulkScanNormalizationContext = Readonly<{
+  targetDomain: string;
   mode: ScanMode;
   profile: BrandProfile | null;
   profileSourceState?: ActiveBrandProfileSourceState;
   candidate: Candidate | null;
 }>;
+
+/**
+ * Bulk registration, DNS, website, and TLS evidence is collected for the
+ * registrable domain. Canonicalise and de-duplicate that identity before any
+ * request so equivalent Unicode, trailing-dot, and subdomain inputs cannot
+ * create duplicate rows whose evidence all belongs to one target.
+ *
+ * Invalid inputs remain in the queue in a bounded lower-case form so the
+ * ordinary Lookup boundary can return an explicit per-row error rather than
+ * silently discarding analyst input.
+ */
+export function canonicalBulkTargets(values: readonly string[]): string[] {
+  const targets: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const target = canonicalRegistrableDomain(trimmed) ?? trimmed.toLowerCase();
+    if (seen.has(target)) continue;
+    seen.add(target);
+    targets.push(target);
+  }
+  return targets;
+}
 
 function pageBaselineRiskMatch(value: ReturnType<typeof comparePageBaselines>): boolean {
   if (!value || value.partial) return false;
@@ -53,7 +79,12 @@ export function normalizeBulkScanResult(
   context: BulkScanNormalizationContext,
 ): ScanResult {
   const availability = lookupRecord(body.availability);
-  const domain = body.availability.domain;
+  const targetDomain = canonicalRegistrableDomain(context.targetDomain);
+  const evidenceDomain = canonicalRegistrableDomain(body.availability.domain);
+  if (!targetDomain || !evidenceDomain || targetDomain !== evidenceDomain) {
+    throw new TypeError('Bulk result target does not match its registrable-domain evidence.');
+  }
+  const domain = evidenceDomain;
   const mutationTypes = context.candidate?.mutationTypes ?? [];
   const profileContextReady = (context.profileSourceState ?? 'ready') === 'ready';
   const profileContext = bulkProfileContextProvenance(context.profileSourceState ?? 'ready', context.profile);

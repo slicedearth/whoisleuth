@@ -1,0 +1,11 @@
+{
+  "schema": "whoisleuth.investigation-templates",
+  "version": 2,
+  "templates": [],
+  "generatedAt": "2000-01-01T00:00:00.000Z",
+  "limitations": [
+    "Templates contain allowlisted WHOISleuth tool steps and analyst-authored guidance only.",
+    "A template cannot run code, start collection, submit evidence, change a case, or bypass a required request approval gate.",
+    "Workflow outcomes are analyst progress markers and are not findings about a target."
+  ]
+}

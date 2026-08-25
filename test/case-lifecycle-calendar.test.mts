@@ -29,13 +29,36 @@ describe('case lifecycle calendar', () => {
         contactSource: 'Published route',
         contactLimitations: ['Not verified.'],
         dueAt: '2026-07-01T00:00:00.000Z',
-        state: 'planned',
+        state: 'drafting',
         reference: null,
         followUpAt: '2026-07-08T00:00:00.000Z',
+        providerOutcome: null,
         outcome: null,
+        originActionId: null,
+        history: [{
+          id: 'action-event-1', previousState: null, nextState: 'drafting',
+          occurredAt: '2026-01-01T00:00:00.000Z', sourceClass: 'analyst', provenance: 'fixture_creation',
+          reference: null, evidencePinId: null, limitations: [], providerOutcome: null,
+          outcomeDetail: null, originActionId: null, applied: true,
+        }],
+        historyOmitted: 0,
+        historyLimitations: [],
         createdAt: '2026-01-01T00:00:00.000Z',
+        metadataUpdatedAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       }],
+      observedEffects: {
+        reviews: [{
+          id: 'effect-review-1', state: 'not_checked', observedAt: '2026-06-01T00:00:00.000Z',
+          sourceClass: 'analyst', source: 'Manual local review', completeness: 'unknown',
+          limitations: ['No request was made.'], evidencePinId: null, sightingId: null,
+          followUpAt: '2026-07-15T00:00:00.000Z', createdAt: '2026-06-01T00:00:00.000Z',
+        }],
+        omitted: 0,
+        preV13HistoryUnavailable: false,
+        limitations: [],
+      },
+      closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
       evidencePins: [{
         id: 'pin-tls-expiry',
         checkpointId: 'checkpoint-1',
@@ -77,6 +100,7 @@ describe('case lifecycle calendar', () => {
     assert.deepEqual(events.map((event) => event.kind), [
       'action_due',
       'action_follow_up',
+      'observed_effect_follow_up',
       'disclosure_expiry_review',
       'certificate_expiry_review',
       'domain_expiry_review',
@@ -84,13 +108,14 @@ describe('case lifecycle calendar', () => {
     assert.deepEqual(events.map((event) => event.source), [
       'case_action',
       'case_action',
+      'observed_effect_review',
       'evidence_pin',
       'evidence_pin',
       'evidence_history',
     ]);
     assert.deepEqual(
       filterCaseLifecycleEvents(events, { window: '30d' }, '2026-06-15T00:00:00.000Z').map((event) => event.kind),
-      ['action_due', 'action_follow_up'],
+      ['action_due', 'action_follow_up', 'observed_effect_follow_up'],
     );
     assert.deepEqual(
       filterCaseLifecycleEvents(events, { kind: 'certificate_expiry_review', window: 'all' }).map((event) => event.kind),
@@ -99,7 +124,13 @@ describe('case lifecycle calendar', () => {
     const calendar = serializeCaseLifecycleCalendar(record ? [record] : [], '2026-06-01T00:00:00.000Z');
     assert.match(calendar, /BEGIN:VCALENDAR/);
     assert.match(calendar, /X-WHOISLEUTH-SCHEMA:whoisleuth\.case-review-calendar/);
+    assert.doesNotMatch(calendar, /X-WHOISLEUTH-(?:APP-)?VERSION/iu);
     assert.doesNotMatch(calendar, /private-route/);
+    assert.match(calendar, /performs no request/iu);
+    assert.doesNotMatch(
+      serializeCaseLifecycleCalendar([], '2026-06-01T00:00:00.000Z'),
+      /X-WHOISLEUTH-SCHEMA/iu,
+    );
 
     const hostileCalendar = serializeCaseLifecycleCalendar(record ? [{
       ...record,

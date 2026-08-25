@@ -1,11 +1,12 @@
 import { domainToASCII } from 'node:url';
 
 import { exactKeys } from './bounded-contract-normalizers.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const DOMAIN_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.domain-assurance.input';
 const DOMAIN_ASSURANCE_SCHEMA = 'whoisleuth.domain-assurance';
 const DOMAIN_ASSURANCE_VERSION = 2;
-const DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS = Object.freeze([1, 2] as const);
+const DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS = Object.freeze([DOMAIN_ASSURANCE_VERSION] as const);
 const MAX_ASSURANCE_INPUT_BYTES = 2 * 1024 * 1024;
 
 type AssuranceKind = 'planned-change' | 'recovery-dependencies' | 'retirement';
@@ -118,8 +119,9 @@ function optionalText(value: unknown, maximum = 160): string | null {
 
 function timestamp(value: unknown, field: string): string {
   const normalized = text(value, field, 64);
-  if (!Number.isFinite(Date.parse(normalized))) throw new Error(`${field} must be an ISO-compatible timestamp.`);
-  return new Date(normalized).toISOString();
+  const canonical = normalizeExplicitIsoTimestamp(normalized);
+  if (canonical) return canonical;
+  throw new Error(`${field} must be an ISO timestamp with an explicit timezone.`);
 }
 
 function optionalTimestamp(value: unknown, field: string): string | null {
@@ -328,7 +330,7 @@ const RETIREMENT_CHECKS = Object.freeze([
   ['reRegistrationPrevented', 'Registration continuity or defensive renewal is planned', true],
 ] as const);
 
-function buildRetirement(input: UnknownRecord, inputVersion: 1 | 2): RetirementResult {
+function buildRetirement(input: UnknownRecord): RetirementResult {
   const checksInput = record(input.checks);
   exactKeys(checksInput, new Set(RETIREMENT_CHECKS.map(([id]) => id)), 'checks');
   const fixedChecks = RETIREMENT_CHECKS.map(([id, checkLabel, expected]) => {
@@ -342,7 +344,7 @@ function buildRetirement(input: UnknownRecord, inputVersion: 1 | 2): RetirementR
   });
   const fixedIds = new Set<string>(RETIREMENT_CHECKS.map(([id]) => id));
   const customIds = new Set<string>();
-  const customChecks = inputVersion === 2 && input.customChecks !== undefined
+  const customChecks = input.customChecks !== undefined
     ? boundedArray(input.customChecks, 'customChecks', 0, 20).map((raw, index) => {
       const item = record(raw);
       exactKeys(item, CUSTOM_RETIREMENT_CHECK_KEYS, `customChecks[${index}]`);
@@ -379,18 +381,16 @@ function buildRetirement(input: UnknownRecord, inputVersion: 1 | 2): RetirementR
 
 function buildDomainAssurance(inputRaw: unknown, generatedAt = new Date().toISOString()): DomainAssuranceDocument {
   const input = record(inputRaw);
-  if (input.schema !== DOMAIN_ASSURANCE_INPUT_SCHEMA
-    || !DOMAIN_ASSURANCE_SUPPORTED_INPUT_VERSIONS.includes(input.version as 1 | 2)) {
-    throw new Error(`Domain assurance input must use ${DOMAIN_ASSURANCE_INPUT_SCHEMA} version 1 or ${DOMAIN_ASSURANCE_VERSION}.`);
+  if (input.schema !== DOMAIN_ASSURANCE_INPUT_SCHEMA || input.version !== DOMAIN_ASSURANCE_VERSION) {
+    throw new Error(`Domain assurance input must use ${DOMAIN_ASSURANCE_INPUT_SCHEMA} version ${DOMAIN_ASSURANCE_VERSION}.`);
   }
-  const inputVersion = input.version as 1 | 2;
   const kind = enumValue(input.kind, 'kind', ['planned-change', 'recovery-dependencies', 'retirement'] as const satisfies readonly AssuranceKind[]);
-  exactKeys(input, kind === 'retirement' && inputVersion === 2 ? RETIREMENT_ROOT_KEYS_V2 : ROOT_KEYS[kind], 'Domain assurance input');
+  exactKeys(input, kind === 'retirement' ? RETIREMENT_ROOT_KEYS_V2 : ROOT_KEYS[kind], 'Domain assurance input');
   const result = kind === 'planned-change'
     ? buildPlannedChange(input)
     : kind === 'recovery-dependencies'
       ? buildRecoveryDependencies(input)
-      : buildRetirement(input, inputVersion);
+      : buildRetirement(input);
   return {
     schema: DOMAIN_ASSURANCE_SCHEMA,
     version: DOMAIN_ASSURANCE_VERSION,

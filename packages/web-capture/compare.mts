@@ -4,7 +4,9 @@ import path from 'node:path';
 
 import { hammingDistanceHex, inspectDecodedImage } from '../../lib/perceptual-hash.mts';
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
-import { readBoundedRegularFile } from '../../lib/bounded-file.mts';
+import { decodeBoundedUtf8, readBoundedRegularFile } from '../../lib/bounded-file.mts';
+import { parseBoundedJson } from '../../lib/bounded-json.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
@@ -17,17 +19,16 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
-} from '../../lib/web-capture-contract.mts';
-import { MAX_CAPTURE_HOSTS } from './capture.mts';
+} from '../contracts/web-capture.mts';
+import { MAX_CAPTURE_HOSTS, hasTerminalUnsafeCharacters } from './capture.mts';
 
-export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../../lib/web-capture-contract.mts';
+export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../contracts/web-capture.mts';
 export const MAX_MANIFEST_BYTES = MAX_WEB_CAPTURE_MANIFEST_BYTES;
 export const MAX_DOM_DIGEST_BYTES = MAX_WEB_CAPTURE_DOM_DIGEST_BYTES;
 export const MAX_SCREENSHOT_BYTES = MAX_WEB_CAPTURE_SCREENSHOT_BYTES;
 
 const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/iu;
-const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts']);
@@ -86,7 +87,7 @@ function onlyKeys(value: UnknownRecord, allowed: ReadonlySet<string>): boolean {
 
 function boundedText(value: unknown, maximum: number, label: string, optional = false): string | null {
   if (optional && (value === null || value === undefined || value === '')) return null;
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum || CONTROL_RE.test(value)) {
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || hasTerminalUnsafeCharacters(value)) {
     throw new Error(`${label} must be bounded text without control characters.`);
   }
   return value.replace(/\s+/gu, ' ').trim();
@@ -131,9 +132,9 @@ function digest(value: unknown, label: string): string {
 
 function timestamp(value: unknown, label: string): string {
   const candidate = boundedText(value, 64, label) ?? '';
-  const parsed = new Date(candidate);
-  if (Number.isNaN(parsed.getTime())) throw new Error(`${label} must be a valid date and time.`);
-  return parsed.toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(candidate);
+  if (!normalized) throw new Error(`${label} must be a valid date and time with an explicit timezone.`);
+  return normalized;
 }
 
 function captureDomain(value: unknown, label: string): string {
@@ -320,7 +321,10 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   const bytes = await boundedFile(manifestPath, MAX_MANIFEST_BYTES, null, 'Rendered capture manifest');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(bytes.toString('utf8'));
+    parsed = parseBoundedJson(decodeBoundedUtf8(bytes, 'Rendered capture manifest'), {
+      label: 'Rendered capture manifest',
+      maximumBytes: MAX_MANIFEST_BYTES,
+    });
   } catch {
     throw new Error('Rendered capture manifest is not valid JSON.');
   }
@@ -340,7 +344,10 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   }
   let domValue: unknown;
   try {
-    domValue = JSON.parse(domBytes.toString('utf8'));
+    domValue = parseBoundedJson(decodeBoundedUtf8(domBytes, 'Rendered DOM digest'), {
+      label: 'Rendered DOM digest',
+      maximumBytes: MAX_DOM_DIGEST_BYTES,
+    });
   } catch {
     throw new Error('Rendered DOM digest is not valid JSON.');
   }
@@ -382,8 +389,13 @@ export async function compareRenderedCaptures(
   const exactScreenshot = left.manifest.screenshot.sha256 === right.manifest.screenshot.sha256;
   const screenshotDistance = hammingDistanceHex(left.manifest.screenshot.perceptualHash, right.manifest.screenshot.perceptualHash);
   const screenshotNear = screenshotDistance !== null && screenshotDistance <= 6;
-  const partial = left.manifest.completeness !== 'complete' || right.manifest.completeness !== 'complete'
+  const capturePartial = left.manifest.completeness !== 'complete' || right.manifest.completeness !== 'complete';
+  const partial = capturePartial
     || left.dom.structure.truncated || right.dom.structure.truncated || left.dom.visibleText.truncated || right.dom.visibleText.truncated;
+  const compareCapturedSet = (leftValues: readonly string[], rightValues: readonly string[]) => {
+    const comparison = setComparison(leftValues, rightValues);
+    return capturePartial ? { ...comparison, state: 'unavailable' as const } : comparison;
+  };
   const countComparison = (key: keyof DomDigest['counts']) => ({
     left: left.dom.counts[key],
     right: right.dom.counts[key],
@@ -408,12 +420,16 @@ export async function compareRenderedCaptures(
     },
     renderedDom: {
       structure: {
-        state: left.dom.structure.value === right.dom.structure.value ? 'same' : 'different',
+        state: left.dom.structure.value === right.dom.structure.value
+          ? left.dom.structure.truncated || right.dom.structure.truncated ? 'unavailable' : 'same'
+          : 'different',
         leftTruncated: left.dom.structure.truncated,
         rightTruncated: right.dom.structure.truncated,
       },
       visibleText: {
-        state: left.dom.visibleText.value === right.dom.visibleText.value ? 'same' : 'different',
+        state: left.dom.visibleText.value === right.dom.visibleText.value
+          ? left.dom.visibleText.truncated || right.dom.visibleText.truncated ? 'unavailable' : 'same'
+          : 'different',
         leftBytes: left.dom.visibleText.bytes,
         rightBytes: right.dom.visibleText.bytes,
         leftTruncated: left.dom.visibleText.truncated,
@@ -430,8 +446,8 @@ export async function compareRenderedCaptures(
     page: {
       title: scalarStateComparison(left.manifest.title, right.manifest.title),
       finalOrigin: scalarComparison(left.manifest.finalOrigin, right.manifest.finalOrigin),
-      requestDomains: setComparison(left.manifest.requestDomains, right.manifest.requestDomains),
-      technologies: setComparison(left.manifest.technologies, right.manifest.technologies),
+      requestDomains: compareCapturedSet(left.manifest.requestDomains, right.manifest.requestDomains),
+      technologies: compareCapturedSet(left.manifest.technologies, right.manifest.technologies),
     },
     limitations: [
       'This offline comparison verifies and reads only two selected local capture packages; it makes no network request.',

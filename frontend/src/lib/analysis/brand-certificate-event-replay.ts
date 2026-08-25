@@ -110,7 +110,8 @@ function clause(
   }
   const aligned = id === 'issuer'
     ? observed.some((value) => value.toLowerCase() === expected[0]?.toLowerCase())
-    : expected.every((pattern) => observed.some((value) => certificateSanPatternMatches(pattern, value)));
+    : expected.every((pattern) => observed.some((value) => certificateSanPatternMatches(pattern, value)))
+      && observed.every((value) => expected.some((pattern) => certificateSanPatternMatches(pattern, value)));
   return {
     id,
     label,

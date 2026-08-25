@@ -1,3 +1,5 @@
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+
 const ENCRYPTED_DNS_CONTRACT_SCHEMA = 'whoisleuth.encrypted-dns-adapter';
 const ENCRYPTED_DNS_CONTRACT_VERSION = 1;
 const DNS_TYPES = new Set(['A', 'AAAA', 'CAA', 'CNAME', 'DNSKEY', 'DS', 'HTTPS', 'MX', 'NS', 'RRSIG', 'SOA', 'SVCB', 'TLSA', 'TXT']);
@@ -42,9 +44,7 @@ function normalizeEncryptedDnsAdapter(value: unknown): EncryptedDnsAdapter {
   const endpoint = httpsUrl(source.endpoint);
   const termsUrl = httpsUrl(source.termsUrl);
   const privacyUrl = httpsUrl(source.privacyUrl);
-  const reviewedAt = typeof source.reviewedAt === 'string' && Number.isFinite(Date.parse(source.reviewedAt))
-    ? new Date(source.reviewedAt).toISOString()
-    : null;
+  const reviewedAt = normalizeExplicitIsoTimestamp(source.reviewedAt);
   const method = source.method === 'GET' || source.method === 'POST' ? source.method : null;
   const representation = source.representation === 'dns-json' || source.representation === 'dns-wire'
     ? source.representation

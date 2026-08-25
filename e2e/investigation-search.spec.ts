@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -52,10 +53,11 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
       profile('profile-source', 'Reserved identity', ['official.invalid']),
   ];
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 2, cases },
-    'whoisleuth-campaigns-v1': { version: 1, campaigns },
-    'whois-rdap-brand-profiles-v1': profiles,
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns }),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore(profiles),
   });
+  await openDashboardSecondaryWorkspaces(page);
 }
 
 test('dashboard local search pivots to exact cases, campaigns, and brand profiles without scanning', async ({ page }) => {
@@ -75,12 +77,14 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   await expect(page.locator('.case-head', { hasText: 'candidate.invalid' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Priority review');
   await page.getByRole('link', { name: /Open campaign/ }).click();
   await expect(page).toHaveURL('/monitor?view=campaigns&campaign=campaign-source', { timeout: 15_000 });
   await expect(page.locator('.campaign-head', { hasText: 'Priority review' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Reserved identity');
   await page.getByRole('link', { name: /Open profile/ }).click();
   await expect(page).toHaveURL('/brands?profile=profile-source', { timeout: 15_000 });
@@ -130,20 +134,22 @@ test('dashboard local search reports an unavailable store without remaining in a
   await failBrowserLocalReads(page);
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
 
-  await expect(page.locator('.summary-error')).toContainText('Some browser-local collections are unavailable.');
-  await expect(page.getByRole('alert')).toContainText('Saved-work search is unavailable');
-  await expect(page.getByText('Preparing saved-work search.')).toHaveCount(0);
+  await expect(page.locator('.summary-error')).toContainText('One or more required browser-local collections are unavailable.');
+  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search saved work' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
 });
 
 test('dashboard distinguishes pending counts from unavailable collections', async ({ page }) => {
   await page.goto('/bulk');
   await expect(page.locator('#domains')).toBeEditable();
-  await holdBrowserLocalReads(page, 1_000);
-  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await holdBrowserLocalReads(page, 4_000, '#console-navigation a[href="/dashboard"]');
 
-  await expect(page.locator('.summary-card strong').first()).toHaveText('Loading');
-  await expect(page.locator('.summary-card strong').filter({ hasText: 'Unavailable' })).toHaveCount(0);
-  await expect(page.locator('.summary-card strong').first()).not.toHaveText('Loading');
+  const pending = page.locator('section.dashboard-state[aria-busy="true"]');
+  await expect(pending.getByRole('heading', { name: 'Preparing your Dashboard' })).toBeVisible();
+  await expect(pending).not.toContainText('Unavailable');
+  await expect(pending).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
 });
 
 test('dashboard preserves fulfilled counts and search when one local collection is unavailable', async ({ page }) => {
@@ -151,6 +157,7 @@ test('dashboard preserves fulfilled counts and search when one local collection 
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
   await failBrowserLocalCollectionReads(page, 'watchlists');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await openDashboardSecondaryWorkspaces(page);
 
   const openCases = page.locator('.summary-card').filter({ hasText: 'Open cases' });
   const watchlists = page.locator('.summary-card').filter({ hasText: 'Watchlists' });
@@ -170,6 +177,7 @@ test('dashboard search retains matches and discloses one unavailable search prov
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
   await failBrowserLocalCollectionReads(page, 'campaigns');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await openDashboardSecondaryWorkspaces(page);
 
   const search = page.getByRole('searchbox', { name: 'Search saved work' });
   await search.fill('candidate.invalid');
@@ -184,16 +192,15 @@ test('dashboard search retains matches and discloses one unavailable search prov
   await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
 });
 
-test('dashboard distinguishes unavailable templates from an empty template collection', async ({ page }) => {
+test('dashboard does not expose template controls when their collection is unavailable', async ({ page }) => {
   await page.goto('/bulk');
   await expect(page.locator('#domains')).toBeEditable();
   await failBrowserLocalCollectionReads(page, 'investigation_templates');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
 
-  await expect(page.getByText('Saved investigation templates are unavailable.')).toBeVisible();
+  await expect(page.locator('.summary-error')).toContainText('One or more required browser-local collections are unavailable.');
   await expect(page.getByText(/No custom templates are saved/)).toHaveCount(0);
-  await expect(page.locator('#guide-template')).toBeDisabled();
-  await expect(page.getByText('Saved templates are unavailable; the reviewed standard steps remain available.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start guide' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'New template' })).toBeDisabled();
+  await expect(page.locator('#guide-template')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start guide' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New template' })).toHaveCount(0);
 });

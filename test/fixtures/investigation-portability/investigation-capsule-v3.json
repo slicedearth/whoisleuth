@@ -1,0 +1,167 @@
+{
+  "schema": "whoisleuth.investigation-capsule",
+  "schemaVersion": 3,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": "1.47.4"
+  },
+  "target": {
+    "value": "fixture.example",
+    "type": "domain"
+  },
+  "sourceContracts": [
+    {
+      "id": "lookup-evidence",
+      "schema": "whoisleuth.lookup-evidence",
+      "version": 28,
+      "digest": "sha256:b8062828bc8a24cd7f0f4b53d4fccc84447a7b2e6f5f0d2bb79e658a978fabb6",
+      "embedded": false
+    },
+    {
+      "id": "investigation-brief",
+      "schema": "whoisleuth.investigation-brief",
+      "version": 2,
+      "digest": "sha256:d6f13804456454589c19eb11a9be2b736ebe164e547367f50e6ead5dfcac3f21",
+      "embedded": true
+    },
+    {
+      "id": "asset-graph",
+      "schema": "whoisleuth.lookup-asset-graph",
+      "version": 2,
+      "digest": "sha256:e5454e211670d89de50412ceb046672c3371b8fb49405203f5c713d3523f2eb4",
+      "embedded": true
+    },
+    {
+      "id": "analyst-records",
+      "schema": "whoisleuth.case-analyst-records",
+      "version": 1,
+      "digest": "sha256:2164a6031acefdc72b3e1249b3db32f2efb1670da6c244e9eee0cea28bc12d68",
+      "embedded": true
+    }
+  ],
+  "investigationBrief": {
+    "schema": "whoisleuth.investigation-brief",
+    "schemaVersion": 2,
+    "generatedAt": "2026-08-22T00:00:00.000Z",
+    "target": "fixture.example",
+    "targetType": "domain",
+    "task": "general",
+    "taskLabel": "General investigation",
+    "question": "What does the bounded evidence establish?",
+    "summary": "Review the bounded evidence and retain unresolved questions.",
+    "observation": {
+      "observedAt": "2026-08-22T00:00:00.000Z",
+      "evidenceAgeDays": 0,
+      "completeSources": 1,
+      "limitedSources": 0,
+      "freshnessPolicy": {
+        "version": 1,
+        "id": "task-default",
+        "task": "general",
+        "thresholdsDays": {
+          "registration": 30,
+          "network": 7,
+          "web": 3
+        }
+      }
+    },
+    "decisionFacts": {
+      "version": 1,
+      "total": 0,
+      "displayed": 0,
+      "omitted": 0,
+      "contradictory": 0,
+      "unresolved": 0,
+      "facts": []
+    },
+    "relationships": {
+      "nodes": 3,
+      "edges": 0,
+      "truncated": false,
+      "kinds": []
+    },
+    "limitations": [
+      "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+      "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+      "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+      "Missing and incomplete sources remain explicit and are not represented as absent relationships.",
+      "This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.",
+      "Analyst assertions, hypotheses, and decisions must remain separate from observed evidence."
+    ]
+  },
+  "graphSnapshot": {
+    "version": 2,
+    "targetId": "target-fixture-example-he9xyi",
+    "nodes": [
+      {
+        "id": "target-fixture-example-he9xyi",
+        "label": "fixture.example",
+        "kind": "target",
+        "detail": "Lookup target"
+      },
+      {
+        "id": "observation-registry-publication-m032s8",
+        "label": "Registry publication",
+        "kind": "observation",
+        "detail": "Registry nameserver and glue evidence"
+      },
+      {
+        "id": "observation-recursive-parent-view-5esrn6",
+        "label": "Recursive parent view",
+        "kind": "observation",
+        "detail": "Point-in-time parent delegation observation"
+      }
+    ],
+    "edges": [],
+    "sources": [],
+    "truncated": false,
+    "limitations": [
+      "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+      "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+      "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+      "Missing and incomplete sources remain explicit and are not represented as absent relationships."
+    ]
+  },
+  "analystRecords": {
+    "caseId": "case-fixture",
+    "status": "reviewing",
+    "disposition": "unreviewed",
+    "decisions": [
+      {
+        "id": "decision-fixture",
+        "summary": "Retain the bounded evidence.",
+        "rationale": "",
+        "evidencePinIds": [],
+        "createdAt": "2026-08-22T00:00:00.000Z"
+      }
+    ],
+    "assertions": [
+      {
+        "id": "assertion-fixture",
+        "kind": "hypothesis",
+        "statement": "The evidence requires analyst review.",
+        "rationale": null,
+        "evidencePinIds": [],
+        "state": "open",
+        "createdAt": "2026-08-22T00:00:00.000Z",
+        "updatedAt": "2026-08-22T00:00:00.000Z"
+      }
+    ]
+  },
+  "limitations": [
+    "The Lookup evidence file is linked by digest but is not embedded; keep or share that exact file separately when verification is required.",
+    "Digest verification can detect changed content but does not establish who created the capsule. No digital signature is applied.",
+    "The graph and canonical Decision Fact brief are bounded projections of collected and derived evidence, not attribution, ownership, safety, availability, or maliciousness conclusions.",
+    "Analyst decisions and assertions were deliberately included; review them for sensitive or personal information before sharing."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "scope": "capsule excluding integrity",
+    "briefDigest": "sha256:d6f13804456454589c19eb11a9be2b736ebe164e547367f50e6ead5dfcac3f21",
+    "graphDigest": "sha256:e5454e211670d89de50412ceb046672c3371b8fb49405203f5c713d3523f2eb4",
+    "analystRecordsDigest": "sha256:2164a6031acefdc72b3e1249b3db32f2efb1670da6c244e9eee0cea28bc12d68",
+    "digestSha256": "sha256:8e2a1444d33397690f9c139fa63cc92986348773d8b2a5d2f9b5d0642c19888c"
+  }
+}

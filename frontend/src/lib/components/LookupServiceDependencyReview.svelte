@@ -16,6 +16,8 @@
     libraries = [],
     authorizedScope = $bindable(''),
     falsePositiveTargets = $bindable(''),
+    setAuthorizedScope,
+    setFalsePositiveTargets,
   }: {
     review: ServiceDependencyReview;
     target?: string;
@@ -23,6 +25,8 @@
     libraries?: LibraryFinding[];
     authorizedScope?: string;
     falsePositiveTargets?: string;
+    setAuthorizedScope?: (value: string) => void;
+    setFalsePositiveTargets?: (value: string) => void;
   } = $props();
 
   const dependencyMap = $derived.by(() => {
@@ -108,7 +112,8 @@
     <label class="scope-control">
       <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
       <textarea
-        bind:value={authorizedScope}
+        value={authorizedScope}
+        oninput={(event)=>{authorizedScope=(event.currentTarget as HTMLTextAreaElement).value;setAuthorizedScope?.(authorizedScope);}}
         rows="2"
         maxlength="1200"
         placeholder="Expected service target or namespace, one per line"
@@ -119,7 +124,8 @@
     <label class="scope-control">
       <span>Reviewed false positives <small>Optional, local to this Lookup view</small></span>
       <textarea
-        bind:value={falsePositiveTargets}
+        value={falsePositiveTargets}
+        oninput={(event)=>{falsePositiveTargets=(event.currentTarget as HTMLTextAreaElement).value;setFalsePositiveTargets?.(falsePositiveTargets);}}
         rows="2"
         maxlength="1200"
         placeholder="Exact observed target, one per line"

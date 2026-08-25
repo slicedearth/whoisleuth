@@ -7,12 +7,21 @@ import {
   EXTERNAL_INTELLIGENCE_RECENT_DAYS,
   calibrateExternalIntelligenceRisk,
 } from '../frontend/src/lib/analysis/external-intelligence-risk.ts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+  THREAT_INTELLIGENCE_SCHEMA,
+} from '../lib/threat-intelligence-types.mts';
 
 const OBSERVED_AT = '2026-07-15T00:00:00.000Z';
+const TARGET = 'example.test';
 
 function provider(id: string, overrides: Record<string, unknown> = {}) {
   return {
+    schema: THREAT_INTELLIGENCE_SCHEMA,
+    version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
     provider: { id, label: 'Untrusted label' },
+    target: { type: 'domain', value: TARGET, exposure: 'registrable_domain' },
     state: 'success',
     findings: [{
       id: '1',
@@ -25,9 +34,16 @@ function provider(id: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
+function calibration(providers: unknown[]) {
+  return calibrateExternalIntelligenceRisk({
+    version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+    providers,
+  }, TARGET);
+}
+
 test('returns a stable empty calibration for missing and malformed input', () => {
   for (const value of [null, undefined, 'bad', [], {}, { providers: 'bad' }]) {
-    const result = calibrateExternalIntelligenceRisk(value);
+    const result = calibrateExternalIntelligenceRisk(value, TARGET);
     assert.equal(result.version, EXTERNAL_INTELLIGENCE_CALIBRATION_VERSION);
     assert.equal(result.contribution, 0);
     assert.equal(result.factor, null);
@@ -36,7 +52,7 @@ test('returns a stable empty calibration for missing and malformed input', () =>
 });
 
 test('a lone provider remains independently presented but contributes no Risk points', () => {
-  const result = calibrateExternalIntelligenceRisk({ providers: [provider('urlscan_search')] });
+  const result = calibration([provider('urlscan_search')]);
   assert.equal(result.eligibleProviderCount, 1);
   assert.equal(result.independentPublisherCount, 1);
   assert.equal(result.recentPublisherCount, 1);
@@ -46,20 +62,20 @@ test('a lone provider remains independently presented but contributes no Risk po
 });
 
 test('two datasets from the same publisher family cannot corroborate one another', () => {
-  const result = calibrateExternalIntelligenceRisk({ providers: [
+  const result = calibration([
     provider('urlhaus_host'),
     provider('threatfox_domain_ioc'),
-  ] });
+  ]);
   assert.equal(result.eligibleProviderCount, 2);
   assert.equal(result.independentPublisherCount, 1);
   assert.equal(result.contribution, 0);
 });
 
 test('two independent recent publisher families produce one bounded contribution', () => {
-  const result = calibrateExternalIntelligenceRisk({ providers: [
+  const result = calibration([
     provider('urlscan_search'),
     provider('urlhaus_host'),
-  ] });
+  ]);
   assert.equal(result.independentPublisherCount, 2);
   assert.equal(result.recentPublisherCount, 2);
   assert.equal(result.contribution, 18);
@@ -76,7 +92,7 @@ test('corroborated stale or unknown-age evidence receives the lower contribution
   const unknown = provider('urlhaus_host', {
     findings: [{ category: 'malware', lastObservedAt: null, firstObservedAt: null }],
   });
-  const result = calibrateExternalIntelligenceRisk({ providers: [stale, unknown] });
+  const result = calibration([stale, unknown]);
   assert.equal(result.independentPublisherCount, 2);
   assert.equal(result.recentPublisherCount, 0);
   assert.equal(result.unknownAgeProviderCount, 1);
@@ -92,19 +108,19 @@ test('the exact freshness boundary is recent and one day beyond it is stale', ()
   const beyondBoundary = provider('urlscan_search', {
     findings: [{ category: 'phishing', lastObservedAt: '2026-04-15T00:00:00.000Z' }],
   });
-  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0]).ageDays, EXTERNAL_INTELLIGENCE_RECENT_DAYS);
-  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0]).recent, true);
-  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [beyondBoundary] }).sources[0]).recent, false);
+  assert.equal(requiredValue(calibration([atBoundary]).sources[0]).ageDays, EXTERNAL_INTELLIGENCE_RECENT_DAYS);
+  assert.equal(requiredValue(calibration([atBoundary]).sources[0]).recent, true);
+  assert.equal(requiredValue(calibration([beyondBoundary]).sources[0]).recent, false);
 });
 
 test('only allowlisted providers, positive states, and phishing or malware findings qualify', () => {
-  const result = calibrateExternalIntelligenceRisk({ providers: [
+  const result = calibration([
     provider('invented_provider'),
     provider('toString'),
     provider('urlscan_search', { state: 'not_found' }),
     provider('urlhaus_host', { findings: [{ category: 'suspicious', lastObservedAt: '2026-07-12T00:00:00.000Z' }] }),
     provider('threatfox_domain_ioc', { findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }] }),
-  ] });
+  ]);
   assert.deepEqual(result.sources.map((source) => source.providerId), ['threatfox_domain_ioc']);
   assert.equal(result.contribution, 0);
 });
@@ -112,7 +128,7 @@ test('only allowlisted providers, positive states, and phishing or malware findi
 test('duplicate provider IDs cannot manufacture corroboration', () => {
   const providers = Array.from({ length: 30 }, () => provider('urlscan_search'));
   providers[1] = provider('urlhaus_host');
-  const result = calibrateExternalIntelligenceRisk({ providers });
+  const result = calibration(providers);
   assert.deepEqual(result.sources.map((source) => source.providerId), ['urlhaus_host', 'urlscan_search']);
   assert.equal(result.independentPublisherCount, 2);
   assert.equal(result.contribution, 18);
@@ -121,33 +137,106 @@ test('duplicate provider IDs cannot manufacture corroboration', () => {
 test('provider and finding traversal stop at their hard input caps', () => {
   const providerOverflow = Array.from({ length: 10 }, () => provider('urlscan_search'));
   providerOverflow.push(provider('urlhaus_host'));
-  const providerResult = calibrateExternalIntelligenceRisk({ providers: providerOverflow });
+  const providerResult = calibration(providerOverflow);
   assert.deepEqual(providerResult.sources.map((source) => source.providerId), ['urlscan_search']);
   assert.equal(providerResult.contribution, 0);
 
   const findings: Array<Record<string, unknown>> = Array.from({ length: 100 }, () => ({ category: 'suspicious' }));
   findings.push({ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' });
-  const findingResult = calibrateExternalIntelligenceRisk({
-    providers: [provider('urlscan_search', { findings })],
-  });
+  const findingResult = calibration([provider('urlscan_search', { findings })]);
   assert.deepEqual(findingResult.sources, []);
 });
 
 test('future, invalid, and overlong timestamps cannot be treated as recent', () => {
   const findings = [
     { category: 'malware', lastObservedAt: '2026-07-17T00:00:00.000Z' },
+    { category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000' },
     { category: 'malware', lastObservedAt: 'invalid' },
     { category: 'malware', lastObservedAt: 'x'.repeat(65) },
   ];
-  const result = calibrateExternalIntelligenceRisk({ providers: [provider('urlscan_search', { findings })] });
+  const result = calibration([provider('urlscan_search', { findings })]);
   assert.equal(requiredValue(result.sources[0]).ageDays, null);
   assert.equal(requiredValue(result.sources[0]).recent, false);
   assert.equal(result.unknownAgeProviderCount, 1);
 });
 
+test('explicit timestamp offsets preserve the intended freshness boundary', () => {
+  const result = calibration([provider('urlscan_search', {
+    findings: [{ category: 'malware', lastObservedAt: '2026-07-12T01:00:00.000+01:00' }],
+  })]);
+  assert.equal(result.sources[0]?.lastObservedAt, '2026-07-12T00:00:00.000Z');
+  assert.equal(result.sources[0]?.ageDays, 3);
+});
+
 test('calibration does not mutate untrusted provider input', () => {
-  const input = { providers: [provider('urlscan_search'), provider('urlhaus_host')] };
+  const input = { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers: [provider('urlscan_search'), provider('urlhaus_host')] };
   const before = structuredClone(input);
-  calibrateExternalIntelligenceRisk(input);
+  calibrateExternalIntelligenceRisk(input, TARGET);
   assert.deepEqual(input, before);
+});
+
+test('rejects unbound, cross-target, and unsupported provider contracts', () => {
+  for (const changed of [
+    { ...provider('urlscan_search'), schema: 'whoisleuth.unsupported' },
+    { ...provider('urlscan_search'), version: THREAT_INTELLIGENCE_CONTRACT_VERSION + 1 },
+    { ...provider('urlscan_search'), target: undefined },
+    { ...provider('urlscan_search'), target: { type: 'domain', value: 'other.example', exposure: 'registrable_domain' } },
+    { ...provider('urlscan_search'), target: { type: 'domain', value: TARGET, exposure: 'hostname' } },
+  ]) {
+    assert.equal(calibration([changed]).eligibleProviderCount, 0);
+  }
+  assert.equal(calibrateExternalIntelligenceRisk({
+    version: THREAT_INTELLIGENCE_ENVELOPE_VERSION + 1,
+    providers: [provider('urlscan_search')],
+  }, TARGET).eligibleProviderCount, 0);
+});
+
+test('binds scoring to the canonical registrable domain rather than a claimed subdomain', () => {
+  const providers = [provider('urlscan_search'), provider('urlhaus_host')];
+  const canonical = calibrateExternalIntelligenceRisk({
+    version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+    providers,
+  }, 'portal.example.test');
+  assert.equal(canonical.contribution, 18);
+  assert.equal(canonical.independentPublisherCount, 2);
+
+  const subdomainClaim = providers.map((item) => ({
+    ...item,
+    target: { type: 'domain', value: 'portal.example.test', exposure: 'registrable_domain' },
+  }));
+  const rejected = calibrateExternalIntelligenceRisk({
+    version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+    providers: subdomainClaim,
+  }, 'portal.example.test');
+  assert.equal(rejected.contribution, 0);
+  assert.deepEqual(rejected.sources, []);
+});
+
+test('uses the collection runtime ICANN boundary for private-suffix hosts', () => {
+  const target = { type: 'domain', value: 'github.io', exposure: 'registrable_domain' };
+  const result = calibrateExternalIntelligenceRisk({
+    version: THREAT_INTELLIGENCE_ENVELOPE_VERSION,
+    providers: [
+      provider('urlscan_search', { target }),
+      provider('urlhaus_host', { target }),
+    ],
+  }, 'tenant.github.io');
+  assert.equal(result.contribution, 18);
+  assert.equal(result.independentPublisherCount, 2);
+});
+
+test('rejects reversed finding timelines before they can affect Risk', () => {
+  const reversed = {
+    findings: [{
+      category: 'phishing',
+      firstObservedAt: '2026-07-20T00:00:00.000Z',
+      lastObservedAt: '2026-07-12T00:00:00.000Z',
+    }],
+  };
+  const result = calibration([
+    provider('urlscan_search', reversed),
+    provider('urlhaus_host', reversed),
+  ]);
+  assert.equal(result.contribution, 0);
+  assert.deepEqual(result.sources, []);
 });

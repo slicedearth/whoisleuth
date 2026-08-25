@@ -1,0 +1,191 @@
+{
+  "schema": "whoisleuth.cli.comparison-ledger",
+  "version": 1,
+  "generatedAt": "2026-08-02T00:00:00.000Z",
+  "artifactFamily": "domain_portfolio",
+  "left": {
+    "schema": "whoisleuth.domain-portfolio.review",
+    "version": 1,
+    "id": "sha256:79d8693318e15a134303272908976267b5525cc660f4a082b413db4adcffc0db",
+    "label": "Reserved defensive set",
+    "retainedAt": "2026-08-01T00:00:00.000Z"
+  },
+  "right": {
+    "schema": "whoisleuth.domain-portfolio.review",
+    "version": 1,
+    "id": "sha256:c78b514ff9cd5b8be9c918e4abbbc827bd49fa538db3ea77856875cf5dc467e8",
+    "label": "Reserved defensive set",
+    "retainedAt": "2026-08-02T00:00:00.000Z"
+  },
+  "index": {
+    "items": [
+      {
+        "id": "ledger-retained_artifact_pair-1e4eb081rvk5zs",
+        "ownerType": "retained_artifact_pair",
+        "ownerId": "retained-portfolio-pair-1e4eb081rvk5zs",
+        "entityId": "domain-portfolio-pair",
+        "label": "Reserved defensive set → Reserved defensive set · retained portfolio pair",
+        "mode": "temporal",
+        "earlier": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "observedAt": null,
+          "publishedAt": null,
+          "retainedAt": "2026-08-01T00:00:00.000Z"
+        },
+        "later": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "observedAt": null,
+          "publishedAt": null,
+          "retainedAt": "2026-08-02T00:00:00.000Z"
+        },
+        "completeness": "complete",
+        "truncated": false,
+        "limitations": [
+          "This offline ledger compares bounded retained analyst-supplied portfolio assertions and makes no provider request."
+        ],
+        "omittedLimitations": 0,
+        "sourceOmittedRows": 0,
+        "ownerHref": ""
+      }
+    ],
+    "counts": {
+      "candidates": 1,
+      "retained": 1
+    },
+    "omissions": {
+      "inputRecords": 0,
+      "inputScanTruncations": 0,
+      "invalidRecords": 0,
+      "duplicateRecords": 0,
+      "indexItems": 0,
+      "limitations": 0,
+      "truncatedStrings": 0
+    },
+    "truncated": false
+  },
+  "details": {
+    "selectedItems": [
+      {
+        "id": "ledger-retained_artifact_pair-1e4eb081rvk5zs",
+        "ownerType": "retained_artifact_pair",
+        "ownerId": "retained-portfolio-pair-1e4eb081rvk5zs",
+        "entityId": "domain-portfolio-pair",
+        "label": "Reserved defensive set → Reserved defensive set · retained portfolio pair",
+        "mode": "temporal",
+        "earlier": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "observedAt": null,
+          "publishedAt": null,
+          "retainedAt": "2026-08-01T00:00:00.000Z"
+        },
+        "later": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "observedAt": null,
+          "publishedAt": null,
+          "retainedAt": "2026-08-02T00:00:00.000Z"
+        },
+        "completeness": "complete",
+        "truncated": false,
+        "limitations": [
+          "This offline ledger compares bounded retained analyst-supplied portfolio assertions and makes no provider request."
+        ],
+        "omittedLimitations": 0,
+        "sourceOmittedRows": 0,
+        "ownerHref": ""
+      }
+    ],
+    "rows": [
+      {
+        "id": "ledger-row-0yj7zzl0c8vmdz",
+        "ownerId": "retained-portfolio-pair-1e4eb081rvk5zs",
+        "entityId": "one.example",
+        "mode": "temporal",
+        "state": "collection_changed",
+        "field": "Analyst review time",
+        "family": "collection",
+        "earlier": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "value": "2026-08-01T00:00:00.000Z",
+          "observedAt": "2026-08-01T00:00:00.000Z",
+          "publishedAt": null,
+          "retainedAt": "2026-08-01T00:00:00.000Z"
+        },
+        "later": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "value": "2026-08-02T00:00:00.000Z",
+          "observedAt": "2026-08-02T00:00:00.000Z",
+          "publishedAt": null,
+          "retainedAt": "2026-08-02T00:00:00.000Z"
+        },
+        "completeness": "complete",
+        "truncated": false,
+        "limitations": [
+          "Review-time movement records analyst retention context and is not a change to the domain or provider."
+        ],
+        "omittedLimitations": 0
+      },
+      {
+        "id": "ledger-row-0lcflmn1vsxox5",
+        "ownerId": "retained-portfolio-pair-1e4eb081rvk5zs",
+        "entityId": "one.example",
+        "mode": "temporal",
+        "state": "different",
+        "field": "DNS providers",
+        "family": "dns",
+        "earlier": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "value": "[\"Reserved DNS\"]",
+          "observedAt": "2026-08-01T00:00:00.000Z",
+          "publishedAt": null,
+          "retainedAt": "2026-08-01T00:00:00.000Z"
+        },
+        "later": {
+          "source": "Retained domain portfolio · Reserved defensive set",
+          "sourceState": "analyst_supplied",
+          "value": "[\"Replacement DNS\"]",
+          "observedAt": "2026-08-02T00:00:00.000Z",
+          "publishedAt": null,
+          "retainedAt": "2026-08-02T00:00:00.000Z"
+        },
+        "completeness": "complete",
+        "truncated": false,
+        "limitations": [
+          "Values are bounded analyst-supplied portfolio assertions, not current provider observations or proof of ownership, configuration, or responsibility."
+        ],
+        "omittedLimitations": 0
+      }
+    ],
+    "totalRows": 2,
+    "limitations": [
+      "This offline ledger compares bounded retained analyst-supplied portfolio assertions and makes no provider request."
+    ],
+    "omissions": {
+      "inputRecords": 0,
+      "inputScanTruncations": 0,
+      "invalidRecords": 0,
+      "duplicateRecords": 0,
+      "indexItems": 0,
+      "entityRequests": 0,
+      "duplicateEntityRequests": 0,
+      "invalidEntityRequests": 0,
+      "missingEntities": 0,
+      "duplicateDetailRows": 0,
+      "detailRows": 0,
+      "sourceRows": 0,
+      "limitations": 0,
+      "truncatedStrings": 0
+    },
+    "truncated": false
+  },
+  "limitations": [
+    "Only the two explicitly selected retained review documents are compared; source file paths are not retained.",
+    "Portfolio values are analyst-supplied context. They do not prove live configuration, registration, ownership, control, availability, or provider responsibility."
+  ]
+}

@@ -1,10 +1,12 @@
 import { validateDnssecEvidence, type DnssecEvidenceReport } from './dnssec-evidence-validation.mts';
 import { reviewRpkiRoute, type RpkiEvidenceReport } from './rpki-evidence.mts';
 import { analyzeTlsaEvidence, type TlsaEvidenceReport } from './tlsa-evidence.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA = 'whoisleuth.cryptographic-assurance.input';
 const CRYPTOGRAPHIC_ASSURANCE_SCHEMA = 'whoisleuth.cryptographic-assurance.review';
-const CRYPTOGRAPHIC_ASSURANCE_VERSION = 1;
+const CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION = 1;
+const CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION = 2;
 
 type AssuranceFamily = 'dnssec_validation' | 'route_origin_authorisation' | 'dane_tlsa';
 type AssuranceCompleteness = 'complete' | 'partial' | 'unavailable';
@@ -24,7 +26,7 @@ type CryptographicAssuranceCard = Readonly<{
 
 type CryptographicAssuranceReview = Readonly<{
   schema: typeof CRYPTOGRAPHIC_ASSURANCE_SCHEMA;
-  version: typeof CRYPTOGRAPHIC_ASSURANCE_VERSION;
+  version: typeof CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION;
   generatedAt: string;
   cards: readonly CryptographicAssuranceCard[];
   combinedState: null;
@@ -47,10 +49,11 @@ function sourceLabel(value: unknown, label: string): string {
 }
 
 function observationTime(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) {
     throw new TypeError(`${label}.observedAt must be one ISO-compatible timestamp.`);
   }
-  return new Date(value).toISOString();
+  return normalized;
 }
 
 function suppliedEvidence(value: unknown, label: string): { source: string; observedAt: string; evidence: UnknownRecord } | null {
@@ -87,7 +90,14 @@ function dnssecCompleteness(report: DnssecEvidenceReport): AssuranceCompleteness
 }
 
 function rpkiCompleteness(report: RpkiEvidenceReport): AssuranceCompleteness {
-  return report.state === 'partial' ? 'partial' : report.state === 'invalid_input' ? 'unavailable' : 'complete';
+  return report.state === 'invalid_input' ? 'unavailable' : 'partial';
+}
+
+function rpkiCardState(report: RpkiEvidenceReport): string {
+  if (report.state === 'valid') return 'matches_supplied_rows';
+  if (report.state === 'invalid') return 'differs_from_supplied_rows';
+  if (report.state === 'not_found') return 'not_found_in_supplied_rows';
+  return report.state;
 }
 
 function tlsaCompleteness(report: TlsaEvidenceReport): AssuranceCompleteness {
@@ -104,8 +114,8 @@ function tlsaCompleteness(report: TlsaEvidenceReport): AssuranceCompleteness {
 
 function buildCryptographicAssuranceReview(inputValue: unknown, generatedAt = new Date().toISOString()): CryptographicAssuranceReview {
   const input = exactRecord(inputValue, new Set(['schema', 'version', 'dnssec', 'routeOrigin', 'tlsa']), 'Cryptographic assurance input');
-  if (input.schema !== CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA || input.version !== CRYPTOGRAPHIC_ASSURANCE_VERSION) {
-    throw new TypeError(`Cryptographic assurance input must use ${CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA} version ${CRYPTOGRAPHIC_ASSURANCE_VERSION}.`);
+  if (input.schema !== CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA || input.version !== CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION) {
+    throw new TypeError(`Cryptographic assurance input must use ${CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA} version ${CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION}.`);
   }
   const dnssecInput = suppliedEvidence(input.dnssec, 'dnssec');
   const routeInput = suppliedEvidence(input.routeOrigin, 'routeOrigin');
@@ -127,8 +137,8 @@ function buildCryptographicAssuranceReview(inputValue: unknown, generatedAt = ne
   }) : null;
   const tlsa = tlsaInput ? analyzeTlsaEvidence({
     serviceName: tlsaInput.evidence.serviceName,
-    dnssecState: tlsaInput.evidence.dnssecState,
-    pkixValidationState: tlsaInput.evidence.pkixValidationState,
+    dnssecState: 'unavailable',
+    pkixValidationState: 'unavailable',
     records: tlsaInput.evidence.records,
     certificateDerBase64: tlsaInput.evidence.certificateDerBase64,
     spkiDerBase64: tlsaInput.evidence.spkiDerBase64,
@@ -150,29 +160,35 @@ function buildCryptographicAssuranceReview(inputValue: unknown, generatedAt = ne
     routeOrigin && routeInput ? Object.freeze({
       family: 'route_origin_authorisation' as const,
       label: 'Route-origin authorisation',
-      authority: 'Analyst-supplied validated route-origin snapshot',
+      authority: 'Analyst-supplied route-origin rows',
       source: routeInput.source,
       observedAt: routeInput.observedAt,
-      state: routeOrigin.state,
+      state: rpkiCardState(routeOrigin),
       completeness: rpkiCompleteness(routeOrigin),
       result: routeOrigin,
-      limitations: routeOrigin.limitations,
-    }) : unavailableCard('route_origin_authorisation', 'Route-origin authorisation', 'Analyst-supplied validated route-origin snapshot'),
+      limitations: Object.freeze([
+        ...routeOrigin.limitations,
+        'The supplied rows do not include bounded validator provenance, implementation identity, validation time, or a complete authenticated snapshot, so this card reports only their local comparison and remains partial.',
+      ]),
+    }) : unavailableCard('route_origin_authorisation', 'Route-origin authorisation', 'Analyst-supplied route-origin rows'),
     tlsa && tlsaInput ? Object.freeze({
       family: 'dane_tlsa' as const,
       label: 'DANE and TLSA evidence review',
-      authority: 'Supplied TLSA, DNSSEC, PKIX, and certificate material',
+      authority: 'Supplied TLSA and certificate association material',
       source: tlsaInput.source,
       observedAt: tlsaInput.observedAt,
       state: tlsa.state,
       completeness: tlsaCompleteness(tlsa),
       result: tlsa,
-      limitations: tlsa.limitations,
-    }) : unavailableCard('dane_tlsa', 'DANE and TLSA evidence review', 'Supplied TLSA, DNSSEC, PKIX, and certificate material'),
+      limitations: Object.freeze([
+        ...tlsa.limitations,
+        'Caller-provided DNSSEC and PKIX state labels are not accepted as validator evidence. Positive DANE state requires separately validated prerequisite artefacts from an explicit collector.',
+      ]),
+    }) : unavailableCard('dane_tlsa', 'DANE and TLSA evidence review', 'Supplied TLSA and certificate association material'),
   ];
   return Object.freeze({
     schema: CRYPTOGRAPHIC_ASSURANCE_SCHEMA,
-    version: CRYPTOGRAPHIC_ASSURANCE_VERSION,
+    version: CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
     generatedAt: observationTime(generatedAt, 'generatedAt'),
     cards: Object.freeze(cards),
     combinedState: null,
@@ -186,8 +202,9 @@ function buildCryptographicAssuranceReview(inputValue: unknown, generatedAt = ne
 
 export {
   CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
+  CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
+  CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
   CRYPTOGRAPHIC_ASSURANCE_SCHEMA,
-  CRYPTOGRAPHIC_ASSURANCE_VERSION,
   buildCryptographicAssuranceReview,
 };
 

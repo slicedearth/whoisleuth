@@ -129,7 +129,8 @@ describe('optional local Ed25519 evidence-package signing', () => {
       signEvidencePackage(JSON.stringify({ schema: 'whoisleuth.unknown', version: 1 }), pair.privatePem, NOW),
       /not supported/iu,
     );
-    const contentFreeUnsigned = { schema: 'whoisleuth.bulk-review-manifest', version: 1 };
+    const currentManifest = await manifest();
+    const contentFreeUnsigned = { schema: currentManifest.schema, version: currentManifest.version };
     await assert.rejects(
       signEvidencePackage(JSON.stringify({
         ...contentFreeUnsigned,
@@ -143,6 +144,10 @@ describe('optional local Ed25519 evidence-package signing', () => {
     await assert.rejects(
       signEvidencePackage(JSON.stringify(await manifest()), rsa, NOW),
       /requires an Ed25519/iu,
+    );
+    await assert.rejects(
+      signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, '2026-07-29T10:00:00'),
+      /explicit timezone/iu,
     );
     const embeddedOnly = await verifyEvidencePackageSignature(JSON.stringify(signed));
     assert.equal(embeddedOnly.signature.signerTrust, 'embedded_key_only');

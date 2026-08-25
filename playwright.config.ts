@@ -3,6 +3,24 @@ import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/c
 
 const isCI = Boolean(process.env.CI);
 const useExistingBuild = isCI || process.env.WHOISLEUTH_E2E_USE_BUILD === '1';
+const performanceAuthoritySpecs = /(?:console-loading|deferred-interactions)\.spec\.ts/u;
+
+const chromiumProject = {
+  name: 'chromium',
+  use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
+  dependencies: ['setup'],
+  ...(!isCI ? { testIgnore: performanceAuthoritySpecs } : {}),
+};
+
+const localPerformanceAuthorityProject = {
+  name: 'performance-authority',
+  testMatch: performanceAuthoritySpecs,
+  use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
+  dependencies: ['setup'],
+  workers: 1,
+  fullyParallel: false,
+  retries: 0,
+};
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,11 +44,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
-      dependencies: ['setup'],
-    },
+    chromiumProject,
+    ...(!isCI ? [localPerformanceAuthorityProject] : []),
   ],
   // CI builds the frontend as its own step, so the server here just starts
   // node directly. Local standalone runs still build automatically; the full

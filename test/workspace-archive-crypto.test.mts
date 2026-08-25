@@ -14,6 +14,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
+  WORKSPACE_ARCHIVE_SECTION_IDS,
   WORKSPACE_ARCHIVE_VERSION,
   buildWorkspaceArchive,
   previewWorkspaceArchive,
@@ -229,7 +230,7 @@ describe('encrypted portable workspace archives', () => {
       iv: encrypted.cipher.iv,
     });
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 12);
+    assert.equal(parsed.sections.length, WORKSPACE_ARCHIVE_SECTION_IDS.length);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     const caseData = cases?.data as { cases?: Array<{ brandProfileIds?: string[] }> } | undefined;
     assert.deepEqual(caseData?.cases?.[0]?.brandProfileIds, ['encrypted-profile']);
@@ -352,19 +353,6 @@ describe('encrypted portable workspace archives', () => {
     assert.notEqual(first.ciphertext, second.ciphertext);
   });
 
-  test('preserves every readable legacy content version when locking an archive', async () => {
-    for (const version of [1, 2, 3]) {
-      const legacy = structuredClone(await workspaceArchive());
-      Reflect.set(legacy, 'version', version);
-      const encrypted = await encryptWorkspaceArchive(legacy, PASSPHRASE);
-
-      assert.equal(encrypted.content.version, version);
-      const decrypted = await decryptWorkspaceArchive(encrypted, PASSPHRASE);
-      const parsed = await readWorkspaceArchive(decrypted);
-      assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
-    }
-  });
-
   test('reports one generic failure for a wrong passphrase or authenticated-data tampering', async () => {
     const encrypted = await encryptWorkspaceArchive(await workspaceArchive(), PASSPHRASE);
     await assert.rejects(
@@ -392,6 +380,13 @@ describe('encrypted portable workspace archives', () => {
     const future = { ...encrypted, version: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION + 1 };
     assert.throws(() => inspectEncryptedWorkspaceArchive(future), /newer schema 2/);
 
+    const retiredContent = structuredClone(encrypted);
+    retiredContent.content.version = 4;
+    assert.throws(
+      () => inspectEncryptedWorkspaceArchive(retiredContent),
+      /content schema 4 is retired.*no data was changed/,
+    );
+
     const unknownField = { ...encrypted, unexpected: true };
     assert.throws(() => inspectEncryptedWorkspaceArchive(unknownField), /envelope is malformed/);
 
@@ -401,7 +396,10 @@ describe('encrypted portable workspace archives', () => {
 
     const oversized = structuredClone(encrypted);
     oversized.ciphertext = 'A'.repeat(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
-    assert.throws(() => inspectEncryptedWorkspaceArchive(oversized), /ciphertext exceeds its byte limit/);
+    assert.throws(
+      () => inspectEncryptedWorkspaceArchive(oversized),
+      /aggregate text exceeds the string ceiling|ciphertext exceeds its byte limit/,
+    );
   });
 
   test('bounds passphrases before encryption or decryption', async () => {
@@ -430,7 +428,11 @@ describe('encrypted portable workspace archives', () => {
 
   test('refuses to encrypt a document that is not a valid ordinary workspace archive', async () => {
     await assert.rejects(
-      encryptWorkspaceArchive({ schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION }, PASSPHRASE),
+      encryptWorkspaceArchive({
+        schema: WORKSPACE_ARCHIVE_SCHEMA,
+        version: WORKSPACE_ARCHIVE_VERSION,
+        generatedAt: NOW,
+      }, PASSPHRASE),
       /envelope contains missing or undeclared fields/,
     );
   });
@@ -442,36 +444,6 @@ describe('encrypted portable workspace archives', () => {
     const encryptedAttack = await replaceAuthenticatedPlaintext(validEnvelope, archive);
     const decrypted = await decryptWorkspaceArchive(encryptedAttack, PASSPHRASE);
     await assert.rejects(readWorkspaceArchive(decrypted), /envelope contains missing or undeclared fields/iu);
-  });
-
-  test('keeps encrypted schema-11 Case evidence readable while stripping current-only profile provenance', async () => {
-    const archive = structuredClone(await workspaceArchive());
-    const legacyCase = archive.sections.cases.cases[0] as unknown as Record<string, unknown>;
-    legacyCase.evidenceHistory = [{
-      scanDepth: 'deep',
-      availability: 'registered',
-      riskModelVersion: 1,
-      riskScore: 40,
-      profileContextState: 'ready',
-      profileContextLimitation: 'Smuggled current-only provenance.',
-      capturedAt: NOW,
-    }];
-    Reflect.set(archive.sections.cases, 'version', 11);
-    const entry = archive.manifest.sections.find((section) => section.id === 'cases');
-    assert.ok(entry);
-    entry.version = 11;
-    entry.bytes = new TextEncoder().encode(JSON.stringify(archive.sections.cases)).byteLength;
-    entry.checksum = await sha256ArtifactDigest(archive.sections.cases);
-
-    const decrypted = await decryptWorkspaceArchive(
-      await encryptWorkspaceArchive(archive, PASSPHRASE),
-      PASSPHRASE,
-    );
-    const parsed = await readWorkspaceArchive(decrypted);
-    const cases = parsed.sections.find((section) => section.id === 'cases');
-    const merged = mergeCases([], cases?.data);
-    assert.equal(merged.cases[0]?.evidenceHistory[0]?.profileContextState, null);
-    assert.equal(merged.cases[0]?.evidenceHistory[0]?.profileContextLimitation, null);
   });
 
   test('preserves a healthy local profile for malformed encrypted Settings and honors an exact encrypted clear', async () => {

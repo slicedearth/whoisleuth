@@ -302,18 +302,21 @@ function sanBaselineFinding(
   }
   const missing = expectedPatterns.filter((pattern) =>
     !observedNames.some((observed) => certificateSanPatternMatches(pattern, observed)));
+  const unexpected = observedNames.filter((observed) =>
+    !expectedPatterns.some((pattern) => certificateSanPatternMatches(pattern, observed)));
+  const changed = missing.length > 0 || unexpected.length > 0;
   return {
     id: 'expected_san',
     label: 'Reviewed expected certificate names',
-    state: missing.length ? 'changed' : 'aligned',
+    state: changed ? 'changed' : 'aligned',
     observed: observedNames,
     expected: expectedPatterns,
-    detail: missing.length
-      ? `Current certificate names do not satisfy ${missing.length} reviewed SAN pattern${missing.length === 1 ? '' : 's'}.`
-      : 'Current certificate names satisfy every reviewed SAN pattern.',
+    detail: changed
+      ? `Current certificate names leave ${missing.length} reviewed pattern${missing.length === 1 ? '' : 's'} unsatisfied and include ${unexpected.length} name${unexpected.length === 1 ? '' : 's'} outside the reviewed patterns.`
+      : 'Current certificate names exactly satisfy the reviewed SAN patterns.',
     sources: ['TLS certificate', 'Brand Profile'],
     limitations: [
-      'Unexpected additional SANs remain visible for review but do not establish compromise, ownership, or maliciousness.',
+      'Unexpected additional SANs are review leads and do not establish compromise, ownership, or maliciousness.',
       'A wildcard pattern matches exactly one label at its wildcard position.',
     ],
   };

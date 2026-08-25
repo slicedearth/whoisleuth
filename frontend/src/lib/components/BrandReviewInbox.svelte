@@ -68,7 +68,10 @@
   {/if}
 
   {#if ready && inbox.activeProfile}
-    <p class="association-count">{inbox.associatedCaseCount} associated case{inbox.associatedCaseCount === 1 ? '' : 's'} · keyed by <code>{inbox.activeProfile.id}</code></p>
+    <div class="association-row">
+      <p class="association-count">{inbox.associatedCaseCount} associated case{inbox.associatedCaseCount === 1 ? '' : 's'} · keyed by <code>{inbox.activeProfile.id}</code></p>
+      <a class="btn secondary" href={`/monitor?view=certificates&profile=${encodeURIComponent(inbox.activeProfile.id)}`}>Open central certificate inbox</a>
+    </div>
     {#if inbox.items.length}
       <p class="display-bound">Showing {firstVisible}–{lastVisible} of {inbox.items.length} retained local review rows; at most {PAGE_SIZE} rows are rendered per page.</p>
       <ol class="review-items">
@@ -116,6 +119,7 @@
   .review-heading>strong{max-width:45%;color:var(--muted);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere;text-align:right}
   .review-heading>strong.numeric{color:var(--accent2);font-size:2rem;font-weight:750}
   .association-count,.display-bound,.empty,.warning,.source-state,.unresolved>p,details{color:var(--muted);font-size:var(--text-sm)}
+  .association-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}.association-row .association-count{margin:0}.association-row a{flex:0 0 auto}
   .display-bound{margin:10px 0 0}
   .source-state.unavailable{padding:9px;border:1px dotted var(--muted);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted)}
   code{overflow-wrap:anywhere}
@@ -142,5 +146,5 @@
   details li{overflow-wrap:anywhere}
   .warning{color:var(--amber)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-  @media(max-width:640px){.review-items li{display:grid}.actions{width:100%}.unresolved li{grid-template-columns:1fr}.review-heading>strong.numeric{font-size:1.6rem}}
+  @media(max-width:640px){.review-items li,.association-row{display:grid}.actions,.association-row a{width:100%}.unresolved li{grid-template-columns:1fr}.review-heading>strong.numeric{font-size:1.6rem}}
 </style>

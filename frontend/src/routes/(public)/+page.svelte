@@ -14,17 +14,11 @@
     ['A reviewable record','Cases, timelines, relationships and exports keep useful findings together for later review.'],
   ];
 
-  const engineeringChoices = [
-    ['Safe request limits','Network checks have time, size, redirect and concurrency limits.'],
-    ['Tested registry handling','Known WHOIS and RDAP formats are checked against local fixtures.'],
-    ['Browser-local saved work','Core saved work stays in the current browser by default.'],
-    ['Portable operation','The same application can run through Express or optional Netlify functions.'],
-  ];
 </script>
 
 <PublicSeo
-  title="WHOISleuth | WHOIS, RDAP and domain intelligence"
-  description="Check domain registration, DNS, certificates, website platform indicators and network context in one place, with clear source attribution and honest handling of missing evidence."
+  title="WHOISleuth | WHOIS, RDAP and domain investigation"
+  description="Check domain registration, DNS, certificates, website platform indicators and network context with clear source attribution."
   path="/"
   website
 />
@@ -34,7 +28,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Check registration, DNS, certificates, website platform clues and network context in one place. WHOISleuth shows where each result came from, explains missing or conflicting evidence, and lets you save useful findings for later review.</p>
+    <p class="lede">Review WHOIS and RDAP registration data, DNS, certificates, websites and network context without losing where each result came from or what could not be collected.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
   </div>
   <div class="hero-preview">
@@ -42,30 +36,24 @@
   </div>
 </section>
 
-<section class="workflow" id="features" aria-labelledby="workflow-title">
-  <div class="section-intro"><h2 id="workflow-title">Choose the path that matches your task.</h2><p>Start with one domain, a brand search, or saved evidence that needs another review.</p></div>
+<section class="jobs" id="features" aria-labelledby="jobs-title">
+  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Investigate a target or candidate set, respond to reviewed findings, or assure retained evidence and controls over time.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 
 <section class="evidence" aria-labelledby="evidence-title">
-  <div class="section-intro"><h2 id="evidence-title">See why the result says what it says.</h2><p>Registration status comes from authoritative registry evidence. Other sources add context, and their limits remain visible.</p></div>
+  <div class="section-intro"><h2 id="evidence-title">See why the result says what it says</h2><p>Registration status comes from authoritative registry evidence. Other sources add context, and their limits remain visible.</p></div>
   <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source[0]}</h3><p>{source[1]}</p></article>{/each}</div>
 </section>
 
 <section class="learn" aria-labelledby="learn-title">
-  <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together.</h2><p>Focused guides explain what each source can support, where it can fail, and what to review next.</p></div>
+  <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together</h2><p>Focused guides explain what each source can support, where it can fail, and what to review next.</p></div>
   <PublicResourceCards resources={PUBLIC_RESOURCES.slice(0,4)} compact />
   <a class="all-resources" href="/resources">Browse the topic library <span aria-hidden="true">→</span></a>
 </section>
 
 <section class="principles card" aria-labelledby="principles-title">
-  <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Keep core investigation work in your browser.</h2><p>Profiles, cases, watchlists, campaigns, selected relationship pivots and search baselines stay in the current browser by default. Optional hosted monitoring stores only compact encrypted evidence for scheduled checks.</p></div>
-  <ul><li>No advertising profiles or cross-site tracking</li><li>The public demo uses fixed fictional data</li><li>Compact stores exclude raw registry responses</li><li>A failed check is not treated as a negative finding</li></ul>
-</section>
-
-<section class="build" aria-labelledby="build-title">
-  <div class="section-intro"><h2 id="build-title">Designed to stay predictable.</h2><p>The technical controls support the investigation workflow instead of hiding uncertainty behind a single answer.</p></div>
-  <div class="build-grid">{#each engineeringChoices as choice}<div><strong>{choice[0]}</strong><span>{choice[1]}</span></div>{/each}</div>
+  <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Browser-local by default</h2><p>Profiles, cases, watchlists, campaigns, selected relationships and search baselines stay in the current browser by default. Optional scheduled monitoring is a separate configured service.</p></div>
 </section>
 
 <style>
@@ -80,12 +68,11 @@
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
   .hero-preview{min-width:0}
   .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}
-  .workflow,.evidence,.learn,.build{padding:72px 0;border-top:1px solid var(--border)}
+  .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
   .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}
   .evidence{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:clamp(34px,7vw,82px);align-items:start}.evidence .section-intro{margin:0}.evidence-grid{display:grid}.evidence-grid article{display:grid;grid-template-columns:minmax(130px,.42fr) minmax(0,1fr);gap:24px;padding:18px 0;border-top:1px solid var(--border)}.evidence-grid article:last-child{border-bottom:1px solid var(--border)}.evidence-grid h3{margin:0;font:700 1rem var(--mono)}.evidence-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.65}
-  .principles{display:grid;grid-template-columns:1.15fr .85fr;gap:50px;margin:35px 0;padding:clamp(24px,5vw,46px);box-shadow:none}.principles ul{display:grid;gap:10px;margin:0;padding:0;list-style:none}.principles li{padding:11px 12px;border-left:2px solid var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .035);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .principles{margin:35px 0;padding:clamp(24px,5vw,46px);box-shadow:none}.principles>div{max-width:780px}
   .all-resources{display:inline-flex;margin-top:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
-  .build-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--border)}.build-grid div{display:grid;gap:7px;padding:18px;background:var(--bg)}.build-grid strong{font:700 var(--text-xs) var(--mono)}.build-grid span{color:var(--muted);font-size:var(--text-2xs);line-height:1.55}
-  @media(max-width:980px){.hero{grid-template-columns:1fr}.hero-preview{max-width:760px}.build-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.25rem,10vw,2.7rem)}.evidence,.principles,.build-grid{grid-template-columns:1fr}.evidence-grid article{grid-template-columns:1fr;gap:7px}.hero-preview :global(.preview-note){text-align:left}}
+  @media(max-width:980px){.hero{grid-template-columns:1fr}.hero-preview{max-width:760px}}
+  @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.25rem,10vw,2.7rem)}.evidence{grid-template-columns:1fr}.evidence-grid article{grid-template-columns:1fr;gap:7px}.hero-preview :global(.preview-note){text-align:left}}
 </style>

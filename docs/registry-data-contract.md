@@ -2,7 +2,7 @@
 
 This document describes the normalised WHOIS/RDAP data returned by the unified
 Lookup API, the source-health semantics used for comparisons, and the boundary
-between deliberate evidence exports and compact browser-local workflows.
+between deliberate evidence exports and compact browser-local uses.
 
 The contract is additive: existing fields remain available when new normalised
 metadata is introduced. Upstream registries vary widely, so most parsed fields
@@ -228,7 +228,7 @@ transaction, question, response bounds, record ordering, and parameter
 encoding, and uses TCP only when that same resolver returns a truncated UDP
 answer. No third-party DNS service is introduced. The domain Lookup does not
 send a generic SVCB query because SVCB requires a protocol-specific query name;
-the shared parser supports type 64 for future explicit service queries.
+the shared parser nevertheless validates type 64 records.
 
 HTTPS service-binding evidence retains priority, alias/service mode, effective
 target, TTL, ALPN identifiers, port, address hints, mandatory keys, and only
@@ -338,6 +338,11 @@ and the adapter provides demonstrated search or graph value.
 
 ## Capability discovery
 
+The generated [privacy and data-flow catalogue](privacy-data-flow-catalogue.md)
+and [JSON](privacy-data-flow-catalogue.json) list the static privacy boundaries
+for capabilities, CLI commands and portable formats. It is fixed documentation, not a new runtime endpoint; it neither changes nor
+extends the version-1 `/api/capabilities` response.
+
 Authenticated clients can request `GET /api/capabilities`. Version 1 returns a
 server-authoritative runtime identifier and a bounded feature list using
 `supported`, `disabled`, `unavailable`, or `local_only`. Each entry identifies
@@ -373,7 +378,7 @@ Older version-1 reports without `usage` remain valid.
 
 Consumers must reject malformed or unsupported future reports conservatively;
 the browser labels capability status unavailable without hiding otherwise
-usable local workflows. Runtime limitations distinguish process-local Express
+usable local tools. Runtime limitations distinguish process-local Express
 state from per-instance serverless state and must not be presented as globally
 enforced usage accounting.
 
@@ -389,7 +394,7 @@ Version 1 distinguishes fast/deep ordinary Lookup, fast/deep compact Bulk,
 direct RDAP, registry-scoped nameserver search, direct WHOIS, fast/deep
 availability, Certificate Transparency, and domain-posture requests. The
 feature is accounting provenance rather than
-proof of the browser workflow: compact mode is the Bulk contract, but a custom
+proof of browser behaviour: compact mode is the Bulk contract, but a custom
 client can select a different compatible response shape, so future durable
 enforcement must also retain deployment-wide totals.
 
@@ -710,68 +715,50 @@ vulnerability verdicts and do not contribute to Risk scoring. A response can
 still establish web-service activity when its body is unavailable for HTML
 inspection.
 
+The selected response can also carry nested `deliveryMetadata` version 1.
+This reduces Content-Encoding, Cache-Control, Age, ETag, Last-Modified, and
+Expires to fixed states, allowlisted tokens, bounded seconds, and
+presence/validity markers. Raw header and validator values are discarded, and
+no compression ratio is derived. These point-in-time declarations do not prove
+cache storage, transfer savings, delivery-provider identity, performance,
+privacy, or safety.
+
+Eligible captured HTML can carry nested `pageIdentity.publicationMetadata`
+version 1. One bounded tokenizer pass retains only fixed robots and Twitter
+Card declaration classes, heading counts, image alternative-text categories,
+and conservative explicit-head static blocking candidates. Raw declarations,
+titles, handles, URLs, image text, and resource paths are discarded. Partial
+captures remain partial; these observations are not indexing, accessibility,
+performance, identity, ownership, safety, or maliciousness conclusions.
+
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, current version `26`. It
-contains query context, explicitly projected diagnostics, normalised sources,
-a bounded privacy-projected registry RDAP publication, bounded WHOIS
-referral-hop metadata without response bodies,
-availability analysis, and the source-health-aware
-registry comparison. The recursive portable projection removes request and
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, with exact public
+version 26 and current version 27 as its complete durable reader boundary.
+Version 26 binds RDAP, WHOIS, network-registration, and reverse-DNS
+publications to their retained source states. Version 27 is the single v2
+successor: it adds bounded homepage publication and delivery/cache metadata
+when represented and applies the privacy-minimised registration projection.
+Other historical reader shapes and unreleased checkpoints are unsupported.
+
+The document can contain query context, explicitly projected diagnostics,
+normalised sources, registry comparison, separately attributed authoritative
+DNS comparison, local certificate-warning comparison, lifecycle and
+publication-quality summaries, passive posture and technology indicators,
+security.txt, reverse-DNS, network, structured-identity, credential-surface,
+HTTPS service-binding, page, HTTP, DNS, and TLS evidence when the selected
+Lookup represented them. Missing, partial, unavailable, direct no-data, and
+failed observations remain distinct and do not change availability or Risk.
+
+Current version 27 excludes raw RDAP payloads, expanded RDAP and WHOIS
+contacts, vCards, entity inventories, attributed contact routes, request and
 response headers, cookies, session and credential fields, URL credentials,
-queries, and fragments from retained nested values. Version 26 binds RDAP,
-WHOIS, network-registration, and reverse-DNS publications to their retained
-source states and shares the browser replay limits of 5 MiB,
-20,000 structured entries, 10,000 array items, and 24 nested levels with the
-CLI exporter and verifier. Version 25 remains readable through its historical
-wrapper contract: retained diagnostics are authoritative during replay and
-publication values from unavailable sources are suppressed. Version 25 can
-retain the separately attributed,
-bounded A, AAAA, CAA and MX record-set comparison collected directly from
-selected authoritative nameservers during an eligible deep non-compact domain
-Lookup. Direct no-data, partial and failed observations remain distinct and do
-not change availability or Risk. Version 24 adds bounded generator metadata containing the
-WHOISleuth version and stable project URL. The metadata is produced locally and
-does not add analytics, remote assets, or another request. Version 23 can add an exact local SSLBL leaf-certificate
-comparison from an eligible deep non-compact domain Lookup. It retains the
-observed SHA-1 provider identifier, snapshot age and digest, exact verdict,
-source health, and limitations. It does not make another request, affect
-availability or Risk, or turn a miss into evidence of safety. Version 21 adds bounded registry lifecycle, contact
-disclosure, publication-quality, reconciliation, and abuse-routing
-interpretation derived from the already-collected registry sources. It
-preserves the raw source statuses and does not infer that partial or unavailable
-contact data is absent. Version 20 replaces selected security-policy values in
-HTTP evidence with presence-only markers and can add fixed, bounded
-response-policy findings to the version-2 passive posture profile. Version 19
-adds the bounded credential-surface projection
-when eligible deep availability evidence represents it. Version 18 adds bounded publisher-declared structured
-identity metadata to eligible deep availability evidence. Version 17 adds the bounded HTTPS service-binding
-publication to eligible deep DNS evidence and the nested passive
-browser-library profile to eligible technology evidence. The service-binding
-projection excludes opaque parameter values and does not follow or connect to
-published targets. The browser-library projection excludes script references,
-matched content, and hashes and does not prove reachability or exploitability.
-Version 16 can add the normalised, bounded security.txt
-disclosure-contact result when that optional deep action was selected and the
-strict reverse-DNS projection when deep public-IP Lookup represented it; raw
-resolver answers and file text are never included. Version 15 added a strict, bounded projection of
-observed network context and never includes its raw IP RDAP object or contact
-entities. Version 14 added passive security-posture findings derived from
-already-retained deep evidence, and version 13 added curated technology
-indicators. Version 12
-additionally retained the bounded portable-field
-comparison between registry and registrar RDAP publications when that follow-up
-was represented. It preserves both normalised source display values and source
-health while excluding the registrar raw object, contacts, entities, links,
-notices, and source-specific handles. Version 11 added optional bounded,
-versioned browser-side
-IDN/script/confusable analysis, additive network-observation provenance supplied
-by deep Lookup, and bounded HTTP response/redirect, page-identity, DNS, and TLS
-evidence derived from the requested collection. URL query strings are
-deliberately omitted from retained HTTP provenance. It is intentionally rich
-and may contain public registry
-contact data. The file is generated locally and is the user's responsibility
-after download.
+queries, and fragments. Positive source allowlists retain only reviewed
+publication fields, while `registryContactsExcluded: true` records deliberate
+contact omission without asserting that the source published no contact. Exact
+public version 26 may contain public registry contact data and should be
+reviewed before sharing. The file is generated locally and remains the user's
+responsibility after download.
 
 The IDN analysis carries its own `mappingVersion`. Mapping version
 `tr39-17.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode
@@ -782,7 +769,7 @@ Unicode table is not part of the runtime bundle. Mapping changes can alter
 which domains share a visual skeleton, so exported analyses must retain the
 mapping version when present.
 
-The local CLI `export` command can convert one bounded version-1
+The local CLI `export` command can convert one bounded version-1 or version-2
 `whoisleuth.cli.lookup` domain document into the same evidence schema without
 making another request. CLI conversion retains the source material already in
 that saved document but cannot add browser-only profile context, so its optional
@@ -805,7 +792,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 26 JSON retains a supported version-5, version-6, or version-7
+When schema-version 26 or 27 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -813,7 +800,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 26 can also retain the bounded normalised security.txt source
+Schema versions 26 and 27 can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 
@@ -823,9 +810,9 @@ future version must not be silently interpreted as an older version.
 
 Bulk responses, watchlists, and case snapshots retain compact derived evidence
 only. Expanded contact inventories, raw RDAP JSON, raw WHOIS bodies, and endpoint
-response payloads do not enter those browser-local stores. Existing case and
-watchlist schemas remain readable because registry enrichment does not rewrite
-their storage shape.
+response payloads do not enter those browser-local stores. Exact public and
+current Case and watchlist formats remain readable because registry enrichment
+does not rewrite their storage shape.
 
 ## Compatibility rules
 

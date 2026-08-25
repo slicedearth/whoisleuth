@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 
 import packageJson from '../package.json' with { type: 'json' };
 import packageTemplate from '../packages/cli/package.template.json' with { type: 'json' };
@@ -11,6 +11,7 @@ import {
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
+import { CLI_PACKAGE_SUPPORT_FILES } from '../tools/cli-package.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -48,13 +49,33 @@ describe('CLI package boundary', () => {
     assert.match(readFileSync(join(__dirname, '..', 'DISCLOSURE'), 'utf8'), /defensive domain investigation/u);
     assert.match(readFileSync(join(__dirname, '..', 'SECURITY.md'), 'utf8'), /private vulnerability reporting/u);
     assert.match(packageReadme, /npm install --global --ignore-scripts @slicedearth\/whoisleuth-cli/u);
-    assert.match(packageReadme, /WHOISleuth does not require them/u);
-    assert.match(packageReadme, /github\.com\/slicedearth\/whoisleuth\/blob\/main\/DISCLOSURE/u);
+    assert.match(packageReadme, /does not use the hosted WHOISleuth login or workspace/u);
+    assert.match(packageReadme, /private channel in `SECURITY\.md`/u);
     assert.doesNotMatch(packageReadme, /whois-rdap-tool/u);
   });
 
   test('keeps the source CLI entry point executable for repository use', () => {
     const mode = statSync(join(__dirname, '..', 'bin/whoisleuth.mts')).mode;
     assert.notEqual(mode & 0o111, 0);
+  });
+
+  test('keeps relative Markdown links inside the installed support-file boundary', () => {
+    const packagedDestinations = new Set<string>(
+      CLI_PACKAGE_SUPPORT_FILES.map(([, destination]) => destination),
+    );
+    for (const [source, destination] of CLI_PACKAGE_SUPPORT_FILES) {
+      if (!source.endsWith('.md')) continue;
+      const markdown = readFileSync(join(__dirname, '..', source), 'utf8');
+      for (const match of markdown.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/gu)) {
+        const href = match[1] ?? '';
+        if (/^(?:https?:|mailto:|#)/u.test(href)) continue;
+        const path = href.split(/[?#]/u, 1)[0] ?? '';
+        const resolved = posix.normalize(posix.join(posix.dirname(destination), path));
+        assert.ok(
+          packagedDestinations.has(resolved),
+          `${destination} links to ${href}, which is not included in the installed package.`,
+        );
+      }
+    }
   });
 });

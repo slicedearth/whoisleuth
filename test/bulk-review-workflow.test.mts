@@ -93,6 +93,20 @@ function cockpitRow(domain: string, reviewState: string): BulkReviewCockpitRow {
     availability: 'registered',
     confidence: 'high',
     risk: 60,
+    riskPresentation: {
+      state: 'comparable',
+      band: 'review',
+      label: 'Review',
+      summary: 'Review priority.',
+      exactScore: 60,
+      modelVersion: 7,
+      modelLabel: 'Risk model v7',
+      scanDepth: 'fast',
+      coverageLabel: 'lookup complete',
+      provenanceLabel: 'Ready Brand Profile provenance',
+      factors: [],
+      limitations: [],
+    },
     opportunity: 10,
     activity: 'Active',
     registrar: 'Example Registrar',
@@ -274,7 +288,7 @@ describe('Bulk evidence review workflow', () => {
     assert.equal(nextBulkReviewIndex(rows.slice(0, 1), 0, 1), 0);
   });
 
-  test('previews source-aware and stale retries before collection', () => {
+  test('previews source-attributed and stale retries before collection', () => {
     const plan = buildBulkRetryPlan([
       result('limited.example', {
         sourceCoverage: [

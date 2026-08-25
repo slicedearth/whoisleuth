@@ -29,6 +29,18 @@ export type WhoisChain = WhoisHop[];
 const IANA_WHOIS = 'whois.iana.org';
 const WHOIS_HOP_DEADLINE_MS = 12_000;
 const WHOIS_CHAIN_DEADLINE_MS = 25_000;
+const MAX_WHOIS_QUERY_HOPS = 6;
+
+function incompleteReferralHop(server: string, reason: 'hop_limit' | 'referral_loop'): WhoisHop {
+  return {
+    server,
+    queryProfile: 'not-issued',
+    responseEncoding: 'utf-8',
+    error: reason === 'hop_limit'
+      ? 'WHOIS referral chain reached the bounded hop limit; this referral was not queried.'
+      : 'WHOIS referral chain repeated a previously queried server; this referral was not queried.',
+  };
+}
 
 const WHOIS_QUERY_FORMATTERS: Record<WhoisQueryProfile, (domain: string) => string> = {
   'plain-domain': (domain) => domain,
@@ -105,8 +117,11 @@ export async function buildWhoisChainUncached(
   let currentServer = IANA_WHOIS;
   const startedAt = now();
 
-  for (let hop = 0; hop < 6; hop += 1) {
-    if (visited.has(currentServer.toLowerCase())) break;
+  for (let hop = 0; hop < MAX_WHOIS_QUERY_HOPS; hop += 1) {
+    if (visited.has(currentServer.toLowerCase())) {
+      chain.push(incompleteReferralHop(currentServer, 'referral_loop'));
+      break;
+    }
     visited.add(currentServer.toLowerCase());
     const transport = whoisTransportForHop(query, hop);
     const remainingMs = chainDeadlineMs - (now() - startedAt);
@@ -151,7 +166,16 @@ export async function buildWhoisChainUncached(
       response: responseText,
     });
     const referral = extractReferral(responseText);
-    if (!referral || referral.toLowerCase() === currentServer.toLowerCase()) break;
+    if (!referral) break;
+    const referralKey = referral.toLowerCase();
+    if (visited.has(referralKey)) {
+      chain.push(incompleteReferralHop(referral, 'referral_loop'));
+      break;
+    }
+    if (hop + 1 >= MAX_WHOIS_QUERY_HOPS) {
+      chain.push(incompleteReferralHop(referral, 'hop_limit'));
+      break;
+    }
     currentServer = referral;
   }
 

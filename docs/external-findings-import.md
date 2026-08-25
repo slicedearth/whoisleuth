@@ -73,11 +73,11 @@ Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
-Versions 1 through 3 remain readable and normalise to version 4. Because version 1 did
-not distinguish provenance classes, its findings become `provider_report`
-rather than being upgraded to first-party observations. Analyst hypotheses and
-conclusions do not belong in this findings schema; use the separate case
-assertion workflow so claims never become observed evidence.
+Only the exact current version 4 findings writer is readable. Earlier
+reader-only findings versions and unreleased checkpoints are unsupported and
+never reclassified as first-party observations. Analyst hypotheses and
+conclusions do not belong in this findings schema; use the separate Case
+assertion review so claims never become observed evidence.
 
 ## Documented observation-row converters
 
@@ -123,7 +123,7 @@ digests are never compared with expected public-key digests.
 
 ## Sanitised capture artefact manifest
 
-`whoisleuth.web-capture-manifest` versions 1 and 2 import reviewed metadata for a
+`whoisleuth.web-capture-manifest` version 2 imports reviewed metadata for a
 sanitised screenshot and optional DOM digest without importing either
 artefact's bytes. Each capture declares a domain, capture time, completeness,
 optional page title and final HTTP(S) origin, up to 30 request domains, up to 20
@@ -131,7 +131,7 @@ technology labels, limitations, and one or two artefact metadata records.
 
 A screenshot record contains a plain file name, PNG, JPEG, or WebP MIME type,
 SHA-256 digest, declared byte size up to 10 MiB, and dimensions up to
-10,000 by 10,000. Version 2 can additionally carry one 16-character screenshot
+10,000 by 10,000. It can additionally carry one 16-character screenshot
 perceptual dHash produced by the optional local capture package. A DOM-digest record contains a plain file name,
 `application/json` MIME type, SHA-256 digest, and declared byte size up to
 1 MiB. The importer does not read or verify referenced files. It rejects

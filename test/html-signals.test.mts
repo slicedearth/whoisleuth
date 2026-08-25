@@ -15,9 +15,14 @@ import {
   MAX_RESOURCE_TAGS,
   MAX_TRACKING_IDENTIFIERS,
   PAGE_IDENTITY_VERSION,
+  PAGE_PUBLICATION_METADATA_VERSION,
   extractHtmlSignals,
   extractPageIdentity,
 } from '../lib/html-signals.mts';
+import {
+  PAGE_PUBLICATION_LIMITATIONS,
+  validPagePublicationMetadata,
+} from '../lib/homepage-metadata-contract.mts';
 import { requiredValue } from './value-assertions.mts';
 
 describe('pageTitle', () => {
@@ -31,11 +36,11 @@ describe('pageTitle', () => {
     assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Acme Bank Login');
   });
 
-  test('strips C0 and DEL controls before retaining a title', () => {
-    const html = '<title>Account\x00\x07 review\x7f centre</title>';
+  test('strips terminal controls and default-ignorable characters before retaining a title', () => {
+    const html = '<title>Account\x00\x07\x7f\u009b\u202e review\u00ad centre</title>';
     const title = extractHtmlSignals(html, 'example.com').pageTitle;
     assert.equal(title, 'Account review centre');
-    assert.equal(/[\x00-\x1f\x7f]/.test(title), false);
+    assert.equal(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u.test(title), false);
   });
 
   test('is null when there is no title tag', () => {
@@ -189,6 +194,18 @@ describe('pageIdentity', () => {
     assert.equal(result.generator, 'Example CMS 4');
     assert.match(result.limitations.join(' '), /Query strings and fragments were omitted/);
     assert.doesNotMatch(JSON.stringify(result), /secret|campaign=private/);
+  });
+
+  test('sanitises terminal controls and bidi formatting in retained identity metadata', () => {
+    const result = identity(`
+      <meta property="og:title" content="Account\u009b\u202e centre">
+      <meta property="og:site_name" content="Example\u00ad portal">
+      <meta name="generator" content="Fixture\u2066 generator">
+    `);
+    assert.equal(result.openGraph.title, 'Account centre');
+    assert.equal(result.openGraph.siteName, 'Example portal');
+    assert.equal(result.generator, 'Fixture generator');
+    assert.doesNotMatch(JSON.stringify(result), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
   test('resolves a meta-refresh target against the final response URL', () => {
@@ -345,6 +362,222 @@ describe('pageIdentity', () => {
     assert.deepEqual(behavior.indicators.map((item) => item.id), ['browser_storage']);
     assert.equal(behavior.observedAt, observedAt);
     assert.doesNotMatch(JSON.stringify({ role, behavior }), /private-key|private-value|class="login"/u);
+  });
+
+  test('summarizes bounded homepage publication declarations and static structure without retaining values', () => {
+    const result = extractHtmlSignals(`
+      <html><head>
+        <meta name="robots" content="index, noindex, follow, custom-directive">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="Private retained page title">
+        <meta property="twitter:description" content="Private retained description">
+        <meta name="twitter:image" content="https://cdn.example/private.png?token=secret">
+        <script src="/blocking.js"></script>
+        <script async src="/async.js"></script>
+        <script defer src="/defer.js"></script>
+        <script type="module" src="/module.js"></script>
+        <link rel="stylesheet" href="/blocking.css">
+        <link rel="preload" as="style" href="/preload.css">
+      </head><body>
+        <h1>Private heading</h1><h2>Another heading</h2>
+        <img src="one.png"><img src="two.png" alt=""><img src="three.png" alt="Private alternative">
+        <script src="/body.js"></script>
+      </body></html>
+    `, 'example.com', { observedAt });
+    const publication = requiredValue(requiredValue(result.pageIdentity).publicationMetadata);
+    assert.equal(publication.version, PAGE_PUBLICATION_METADATA_VERSION);
+    assert.equal(publication.status, 'success');
+    assert.equal(publication.complete, true);
+    assert.deepEqual(publication.robots, {
+      status: 'observed',
+      complete: true,
+      truncated: false,
+      directives: ['follow', 'index', 'noindex'],
+      recognizedDirectiveCount: 3,
+      unknownDirectiveCount: 1,
+      conflicting: true,
+    });
+    assert.deepEqual(publication.twitterCard, {
+      status: 'observed',
+      complete: true,
+      truncated: false,
+      cardType: 'summary_large_image',
+      declarationCount: 4,
+      titlePresent: true,
+      descriptionPresent: true,
+      imagePresent: true,
+      imageAltPresent: false,
+      sitePresent: false,
+      creatorPresent: false,
+      playerPresent: false,
+      appPresent: false,
+    });
+    assert.deepEqual(publication.headings, { complete: true, truncated: false, total: 2, h1: 1, h2: 1, h3: 0, h4: 0, h5: 0, h6: 0 });
+    assert.deepEqual(publication.images, {
+      totalComplete: true, classificationComplete: true, truncated: false,
+      total: 3, altMissing: 1, altEmpty: 1, altNonEmpty: 1, altUnclassified: 0,
+    });
+    assert.deepEqual(publication.renderBlockingCandidates, {
+      complete: true, truncated: false,
+      script: 1, stylesheet: 1, total: 2, scope: 'explicit-head-static-v1',
+    });
+    assert.doesNotMatch(JSON.stringify(publication), /Private|to[k]en=|blocking\.js|blocking\.css/u);
+  });
+
+  test('keeps absent declarations distinct from partial or malformed captured metadata', () => {
+    const complete = requiredValue(requiredValue(extractHtmlSignals('<body><h3>Example</h3></body>', 'example.com').pageIdentity).publicationMetadata);
+    assert.equal(complete.robots.status, 'not_observed');
+    assert.equal(complete.twitterCard.status, 'not_observed');
+    assert.equal(complete.complete, true);
+
+    const partial = requiredValue(requiredValue(extractHtmlSignals('<meta name="robots" content="index">', 'example.com', {
+      sourceTruncated: true,
+    }).pageIdentity).publicationMetadata);
+    assert.equal(partial.status, 'partial');
+    assert.equal(partial.robots.status, 'partial');
+    assert.equal(partial.twitterCard.status, 'partial');
+    assert.equal(partial.complete, false);
+    assert.equal(partial.truncated, true);
+
+    const malformed = requiredValue(requiredValue(extractHtmlSignals(
+      `<head><meta name="robots"><meta name="twitter:card" content="${'x'.repeat(1_025)}"></head>`,
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(malformed.robots.status, 'malformed');
+    assert.equal(malformed.twitterCard.status, 'partial');
+    assert.equal(malformed.status, 'partial');
+    assert.equal(malformed.complete, false);
+  });
+
+  test('observes implicit-head declarations while ignoring matching body metadata', () => {
+    const implicit = requiredValue(requiredValue(extractHtmlSignals(
+      '<meta name="robots" content="noindex"><meta name="twitter:card" content="summary"><body>Example</body>',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(implicit.robots.status, 'observed');
+    assert.deepEqual(implicit.robots.directives, ['noindex']);
+    assert.equal(implicit.twitterCard.status, 'observed');
+    assert.equal(implicit.twitterCard.cardType, 'summary');
+
+    const bodyOnly = requiredValue(requiredValue(extractHtmlSignals(
+      '<body><meta name="robots" content="noindex"><meta name="twitter:card" content="summary"></body>',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(bodyOnly.robots.status, 'not_observed');
+    assert.equal(bodyOnly.twitterCard.status, 'not_observed');
+
+    const afterBodyText = requiredValue(requiredValue(extractHtmlSignals(
+      'Body text<meta name="robots" content="noindex"><meta name="twitter:card" content="summary">',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(afterBodyText.robots.status, 'not_observed');
+    assert.equal(afterBodyText.twitterCard.status, 'not_observed');
+
+    const afterLeadingTrivia = requiredValue(requiredValue(extractHtmlSignals(
+      '  <!-- comment --><meta name="robots" content="noindex">',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(afterLeadingTrivia.robots.status, 'observed');
+  });
+
+  test('keeps bounded ambiguous meta attributes inside the publication validator contract', () => {
+    const fixtures = [
+      `<meta name="${'x'.repeat(121)}" content="ignored">`,
+      `<meta name="description" ${Array.from({ length: 129 }, (_, index) => `data-${index}="x"`).join(' ')}>`,
+      `<meta name="${'x'.repeat(121)}" property="twitter:title" content="Example">`,
+    ];
+    for (const html of fixtures) {
+      const publication = requiredValue(requiredValue(extractHtmlSignals(html, 'example.com').pageIdentity).publicationMetadata);
+      assert.equal(publication.status, 'partial');
+      assert.equal(publication.truncated, true);
+      assert.equal(publication.robots.truncated, true);
+      assert.equal(publication.twitterCard.truncated, true);
+      assert.equal(validPagePublicationMetadata(publication), true);
+    }
+  });
+
+  test('keeps combined malformed and truncated declarations inside the publication validator contract', () => {
+    const fixtures = [
+      {
+        html: '<meta name="robots">',
+        options: { sourceTruncated: true },
+      },
+      {
+        html: `<meta name="robots" property="${'x'.repeat(121)}">`,
+        options: {},
+      },
+      {
+        html: `<meta name="twitter:card" content="${'x'.repeat(1_025)}">`,
+        options: {},
+      },
+    ];
+    for (const fixture of fixtures) {
+      const publication = requiredValue(requiredValue(extractHtmlSignals(
+        fixture.html,
+        'example.com',
+        fixture.options,
+      ).pageIdentity).publicationMetadata);
+      assert.equal(publication.status, 'partial');
+      assert.equal(publication.truncated, true);
+      assert.equal(publication.limitations.includes(PAGE_PUBLICATION_LIMITATIONS.malformed), true);
+      assert.equal(validPagePublicationMetadata(publication), true);
+    }
+  });
+
+  test('rejects impossible publication states and unrelated limitations', () => {
+    const publication = requiredValue(requiredValue(extractHtmlSignals(
+      '<head><meta name="robots" content="index"><meta name="twitter:title" content="Example"></head>',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(validPagePublicationMetadata(publication), true);
+
+    const emptyObservedRobots = structuredClone(publication);
+    emptyObservedRobots.robots.directives = [];
+    emptyObservedRobots.robots.recognizedDirectiveCount = 0;
+    assert.equal(validPagePublicationMetadata(emptyObservedRobots), false);
+
+    const emptyObservedTwitter = structuredClone(publication);
+    emptyObservedTwitter.twitterCard.declarationCount = 0;
+    assert.equal(validPagePublicationMetadata(emptyObservedTwitter), false);
+
+    const spuriousLimitation = structuredClone(publication);
+    spuriousLimitation.limitations.push(PAGE_PUBLICATION_LIMITATIONS.bounds);
+    assert.equal(validPagePublicationMetadata(spuriousLimitation), false);
+
+    const spuriousMalformedLimitation = structuredClone(publication);
+    spuriousMalformedLimitation.limitations.push(PAGE_PUBLICATION_LIMITATIONS.malformed);
+    assert.equal(validPagePublicationMetadata(spuriousMalformedLimitation), false);
+
+    const malformed = requiredValue(requiredValue(extractHtmlSignals(
+      '<meta name="robots">',
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(malformed.robots.status, 'malformed');
+    const missingMalformedLimitation = structuredClone(malformed);
+    missingMalformedLimitation.limitations = missingMalformedLimitation.limitations.filter(
+      (limitation) => limitation !== PAGE_PUBLICATION_LIMITATIONS.malformed,
+    );
+    assert.equal(validPagePublicationMetadata(missingMalformedLimitation), false);
+  });
+
+  test('separates exact image totals from locally unclassified attributes and document caps', () => {
+    const localAttributeCap = requiredValue(requiredValue(extractHtmlSignals(
+      `<body><img alt="${'x'.repeat(2_049)}"></body>`,
+      'example.com',
+    ).pageIdentity).publicationMetadata);
+    assert.equal(localAttributeCap.images.total, 1);
+    assert.equal(localAttributeCap.images.totalComplete, true);
+    assert.equal(localAttributeCap.images.classificationComplete, false);
+    assert.equal(localAttributeCap.images.altUnclassified, 1);
+
+    const documentCap = requiredValue(requiredValue(extractHtmlSignals(
+      '<body><h1>Example</h1><img></body>',
+      'example.com',
+      { sourceTruncated: true },
+    ).pageIdentity).publicationMetadata);
+    assert.equal(documentCap.headings.complete, false);
+    assert.equal(documentCap.images.totalComplete, false);
+    assert.equal(documentCap.renderBlockingCandidates.complete, false);
   });
 
   test('reduces an early CSP meta policy to bounded qualification metadata', () => {

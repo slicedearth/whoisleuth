@@ -124,7 +124,7 @@
     <span class="bounded-count">{index.counts.retained} eligible retained comparison{index.counts.retained === 1 ? '' : 's'}</span>
   </header>
   <p>
-    Review truthful common mechanics across adjacent case snapshots, adjacent website profiles, retained watchlist changes, and one explicitly selected saved Bulk pair. Modes remain distinct, exact values load only for the selected owner, and this view makes no request or stored copy.
+    Compare adjacent case snapshots, website profiles, retained watchlist changes or one selected saved Bulk pair. Exact values load only for the selected record.
   </p>
 
   {#if orderedBulkSessions.length >= 2}

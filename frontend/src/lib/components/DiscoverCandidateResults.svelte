@@ -85,19 +85,19 @@
 
   function candidateSortGuidance(sort: string, isStructured: boolean): string {
     if (sort === 'review-signals') {
-      return `${isStructured ? 'Candidates' : 'Generated candidates'} are ordered by visible review cues, then generation paths and domain. Sorting changes presentation only.`;
+      return `${isStructured ? 'Candidates' : 'Generated candidates'} are ordered by visible review cues, then generation paths and domain.`;
     }
     if (sort === 'certificate-newest') {
-      return 'Certificate-log candidates are ordered by their latest retained observation, then domain. Sorting changes presentation only.';
+      return 'Certificate-log candidates are ordered by their latest retained observation, then domain.';
     }
     if (sort === 'generated') {
-      return `${isStructured ? 'Candidates use their retained source order.' : 'Generated candidates use deterministic generator order.'} Sorting changes presentation only.`;
+      return isStructured ? 'Candidates use their retained source order.' : 'Generated candidates use deterministic generator order.';
     }
-    if (sort === 'domain') return 'Candidates are ordered alphabetically by domain. Sorting changes presentation only.';
-    if (sort === 'generation-paths') return 'Candidates with more generation paths appear first, then domains are ordered alphabetically. Sorting changes presentation only.';
-    if (sort === 'reference') return 'Candidates with a source or Brand Profile character match appear first. Sorting changes presentation only.';
-    if (sort === 'mixed') return 'Candidates using mixed writing scripts appear first. Sorting changes presentation only.';
-    return 'Sorting changes presentation only.';
+    if (sort === 'domain') return 'Candidates are ordered alphabetically by domain.';
+    if (sort === 'generation-paths') return 'Candidates with more generation paths appear first, then domains are ordered alphabetically.';
+    if (sort === 'reference') return 'Candidates with a source or Brand Profile character match appear first.';
+    if (sort === 'mixed') return 'Candidates using mixed writing scripts appear first.';
+    return '';
   }
 
   function ctObservationLabel(state: CtHistoryObservationState): string {
@@ -189,10 +189,7 @@
       </div>
     {/each}
   </div>
-  {#if scopeCounts.reference}
-    <p class="candidate-note">Visual matches use a bounded character comparison. They are review leads, not proof of impersonation.</p>
-  {/if}
-  <p class="candidate-note">Review cues count visible candidate characteristics only. They are not a risk score or a claim of maliciousness.</p>
+  <p class="candidate-note">Visual matches and review cues are leads for further review, not findings.</p>
   {#if !selectedCount}
     <p class="candidate-note">Select individual candidates or the current filtered set before continuing to Bulk.</p>
   {/if}

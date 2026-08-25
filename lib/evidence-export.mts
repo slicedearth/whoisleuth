@@ -1,13 +1,20 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
-import { buildPortableGeneratorMetadata } from './portable-generator.mts';
+import { buildPortableGeneratorMetadata, isUriShapedLabel } from './portable-generator.mts';
 import { assertBoundedJsonStructure, isSafeJsonObjectKey } from './bounded-json.mts';
+import {
+  validHttpDeliveryMetadata,
+  validPagePublicationMetadata,
+} from './homepage-metadata-contract.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { defineSchemaCompatibility } from '../packages/contracts/schema-compatibility.mts';
+import { isValidAsciiHostname } from './hostname.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION = 25;
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
 export const SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS = Object.freeze([
-  LEGACY_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 ]);
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES = 5 * 1024 * 1024;
@@ -16,6 +23,21 @@ export const LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH = 24;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS = 10_000;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_KEY_LENGTH = 256;
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH = 1024 * 1024;
+
+export const LOOKUP_EVIDENCE_COMPATIBILITY = defineSchemaCompatibility({
+  id: 'export.lookup-evidence',
+  kind: 'export',
+  schema: LOOKUP_EVIDENCE_SCHEMA,
+  currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  supportedVersions: SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+  acceptsUnversionedLegacy: false,
+  futureVersionBehavior: 'reject',
+  migration: 'read_only',
+  writeSemantics: 'read_only',
+  byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
+  owner: 'lib/evidence-export.mts',
+  note: 'Exact v1.47.4 version 26 remains replayable; version 27 is the single v2 successor with bounded homepage and privacy-minimised registration projections.',
+});
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown; applicationVersion?: unknown };
@@ -51,7 +73,7 @@ const LOOKUP_TIMING_SOURCES = new Set([
   'network_context', 'security_txt', 'external_intelligence',
   'malware_host_intelligence', 'malware_ioc_intelligence',
 ]);
-const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
+const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   'applicable', 'type', 'domain', 'state', 'confidence', 'detail', 'source',
   'rdapServer', 'nameservers', 'statuses', 'registrar', 'registrant', 'abuse',
   'createdDate', 'expiryDate', 'createdDateIso', 'expiryDateIso', 'domainAgeDays',
@@ -63,6 +85,11 @@ const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   'technologyProfile', 'pageRoleProfile', 'clientBehaviorProfile',
   'securityPosture', 'dns', 'tls', 'hasMx', 'hasNullMx', 'mxHosts', 'hasSpf',
   'hasDmarc', 'bulkComparison', 'limitations',
+]);
+const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
+  ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
+    .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
+  'registryContactsExcluded',
 ]);
 const LOOKUP_IDN_ANALYSIS_KEYS = new Set([
   'version', 'mappingVersion', 'asciiDomain', 'unicodeDomain', 'hasIdn',
@@ -178,6 +205,28 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   // Bounded cross-row comparison evidence.
   'bulkComparison', 'technology', 'tls', 'ids', 'issuerLabel', 'spkiSha256',
 ]);
+const LOOKUP_AVAILABILITY_CREDENTIAL_CATEGORY_KEYS = new Set([
+  'password', 'email', 'username', 'one_time_code', 'payment',
+]);
+const LOOKUP_AVAILABILITY_VALUE_PATHS = new Set([
+  'dns.records.caa',
+  'dns.caaPolicy.records',
+  'http.response.bodyHash',
+  'pageIdentity.trackingIdentifiers',
+  'pageIdentity.fingerprints.exact',
+  'pageIdentity.fingerprints.normalizedHtml',
+  'pageIdentity.fingerprints.visibleText',
+  'pageIdentity.fingerprints.domStructure',
+  'pageIdentity.fingerprints.domStructure.similarity',
+  'pageIdentity.fingerprints.formStructure',
+  'pageIdentity.fingerprints.resourceHosts',
+  'pageIdentity.fingerprints.identifiers',
+  'pageIdentity.fingerprints.identifiers.values',
+]);
+const LOOKUP_AVAILABILITY_OWNER_PATHS = new Set([
+  'dns.records.https',
+  'dns.caaPolicy.queriedOwners',
+]);
 
 function recordOrNull(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -261,6 +310,13 @@ function projectPortableString(value: string): string {
     : sanitized.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH);
 }
 
+function projectLookupEvidenceAvailabilityString(value: string): string | null {
+  const sanitized = projectPortableString(value)
+    .replace(/[\u0080-\u009f]/gu, ' ')
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, '');
+  return isUriShapedLabel(value) ? null : sanitized;
+}
+
 function projectLookupEvidencePrivacySafeTreeValue<T>(
   value: T,
   state: PortableProjectionState,
@@ -294,7 +350,7 @@ export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
   return projectLookupEvidencePrivacySafeTreeValue(value, { entries: 0 }, 0);
 }
 
-function projectLookupEvidenceAvailabilityValue(
+function projectLookupEvidenceAvailabilityPublicValue(
   value: unknown,
   parentKey: string | null,
   state: PortableProjectionState,
@@ -310,7 +366,7 @@ function projectLookupEvidenceAvailabilityValue(
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidenceAvailabilityValue(item, parentKey, state, depth + 1));
+      .map((item) => projectLookupEvidenceAvailabilityPublicValue(item, parentKey, state, depth + 1));
   }
   const source = recordOrNull(value);
   if (!source) return null;
@@ -318,7 +374,47 @@ function projectLookupEvidenceAvailabilityValue(
   for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
     if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
       || privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityValue(item, key, state, depth + 1);
+    output[key] = projectLookupEvidenceAvailabilityPublicValue(item, key, state, depth + 1);
+  }
+  return output;
+}
+
+function projectLookupEvidenceAvailabilityValue(
+  value: unknown,
+  path: readonly string[],
+  state: PortableProjectionState,
+  depth: number,
+): unknown {
+  consumePortableProjectionEntry(state, depth);
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const normalizedParent = normalizedEvidenceKey(path.at(-1) || '');
+    if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value);
+    if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
+    return projectLookupEvidenceAvailabilityString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
+      .map((item) => projectLookupEvidenceAvailabilityValue(item, path, state, depth + 1));
+  }
+  const source = recordOrNull(value);
+  if (!source) return null;
+  const output: UnknownRecord = {};
+  for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
+    if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
+      || privateEvidenceKey(key, item)) continue;
+    const parentPath = path.join('.');
+    if (LOOKUP_AVAILABILITY_CREDENTIAL_CATEGORY_KEYS.has(key)
+      && (parentPath !== 'credentialSurfaceProfile.inputs.categories'
+        || !Number.isSafeInteger(item)
+        || Number(item) < 0
+        || Number(item) > LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) continue;
+    if (key === 'owner'
+      && (!LOOKUP_AVAILABILITY_OWNER_PATHS.has(parentPath) || typeof item !== 'string')) continue;
+    if (key === 'value'
+      && (!LOOKUP_AVAILABILITY_VALUE_PATHS.has(parentPath)
+        || (item !== null && typeof item !== 'string'))) continue;
+    output[key] = projectLookupEvidenceAvailabilityValue(item, [...path, key], state, depth + 1);
   }
   return output;
 }
@@ -329,19 +425,77 @@ function projectLookupEvidenceAvailabilityValue(
  * extension cannot become authenticated evidence merely by avoiding a
  * credential-key denylist.
  */
-export function projectLookupEvidenceAvailability(value: unknown): UnknownRecord | null {
+function projectLookupEvidenceAvailabilityWithKeys(
+  value: unknown,
+  rootKeys: ReadonlySet<string>,
+  registryContactsExcluded: boolean,
+  currentPrivacyRules: boolean,
+): UnknownRecord | null {
   const source = recordOrNull(value);
   if (!source) return null;
   const state: PortableProjectionState = { entries: 0 };
   consumePortableProjectionEntry(state, 0);
   const output: UnknownRecord = {};
-  for (const key of LOOKUP_AVAILABILITY_ANALYSIS_KEYS) {
+  for (const key of rootKeys) {
     if (!Object.hasOwn(source, key)) continue;
     const item = source[key];
     if (privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityValue(item, key, state, 1);
+    output[key] = currentPrivacyRules
+      ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1)
+      : projectLookupEvidenceAvailabilityPublicValue(item, key, state, 1);
+  }
+  if (registryContactsExcluded) output.registryContactsExcluded = true;
+  const pageIdentity = recordOrNull(source.pageIdentity);
+  const publicationMetadata = pageIdentity?.publicationMetadata;
+  if (publicationMetadata !== undefined) {
+    if (!['success', 'partial'].includes(String(pageIdentity?.status))
+      || !validPagePublicationMetadata(publicationMetadata)) {
+      throw new TypeError('Lookup evidence contains invalid page publication metadata.');
+    }
+    const projectedPageIdentity = recordOrNull(output.pageIdentity);
+    if (projectedPageIdentity) {
+      projectedPageIdentity.publicationMetadata = projectLookupEvidencePrivacySafeTree(publicationMetadata);
+    }
+  }
+  const httpResponse = recordOrNull(recordOrNull(source.http)?.response);
+  const sourceHttp = recordOrNull(source.http);
+  const deliveryMetadata = httpResponse?.deliveryMetadata;
+  if (deliveryMetadata !== undefined) {
+    if (!['success', 'partial'].includes(String(sourceHttp?.status))
+      || !validHttpDeliveryMetadata(deliveryMetadata)) {
+      throw new TypeError('Lookup evidence contains invalid HTTP delivery metadata.');
+    }
+    const projectedHttp = recordOrNull(output.http);
+    const projectedResponse = recordOrNull(projectedHttp?.response);
+    if (projectedResponse) {
+      projectedResponse.deliveryMetadata = projectLookupEvidencePrivacySafeTree(deliveryMetadata);
+    }
   }
   return output;
+}
+
+/** Exact availability projection used only to validate public schema 26. */
+export function projectLookupEvidenceAvailabilityPublic(value: unknown): UnknownRecord | null {
+  return projectLookupEvidenceAvailabilityWithKeys(
+    value,
+    PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+    false,
+    false,
+  );
+}
+
+/**
+ * Current availability projection. Registry-derived registrar, registrant,
+ * and abuse contact routes are deliberately excluded at the root boundary;
+ * the marker prevents that privacy omission from being read as source absence.
+ */
+export function projectLookupEvidenceAvailability(value: unknown): UnknownRecord | null {
+  return projectLookupEvidenceAvailabilityWithKeys(
+    value,
+    LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+    true,
+    true,
+  );
 }
 
 export function assertLookupEvidencePrivacySafeTree(value: unknown): void {
@@ -467,9 +621,7 @@ function boundedHttpStatus(value: unknown): number | null {
 
 function boundedTimestamp(value: unknown): string | null {
   const text = boundedString(value, 64);
-  if (!text) return null;
-  const time = Date.parse(text);
-  return Number.isFinite(time) ? new Date(time).toISOString() : null;
+  return text ? normalizeExplicitIsoTimestamp(text) : null;
 }
 
 function boundedEndpoint(value: unknown): string | null {
@@ -494,11 +646,8 @@ function boundedStringList(value: unknown, count: number, length: number): strin
 }
 
 function boundedHostname(value: unknown): string | null {
-  const text = boundedString(value, 253)?.toLowerCase().replace(/\.+$/u, '') || null;
-  if (!text || !text.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label))) {
-    return null;
-  }
-  return text;
+  const text = boundedString(value, 253)?.replace(/\.+$/u, '') || null;
+  return text && isValidAsciiHostname(text, { requireDot: false }) ? text.toLowerCase() : null;
 }
 
 function canonicalIpv4(value: unknown): string | null {
@@ -1000,6 +1149,360 @@ function boundedSourceError(value: unknown, fallback: string): string {
   return normalized.slice(0, 10_000) || fallback;
 }
 
+type ProjectedScalar = string | number | boolean | null;
+type ScalarProjector = (value: unknown) => ProjectedScalar | undefined;
+
+function nullableText(maximum: number): ScalarProjector {
+  return (value) => value === null ? null : boundedString(value, maximum) ?? undefined;
+}
+
+function nullableTimestamp(value: unknown): ProjectedScalar | undefined {
+  return value === null ? null : boundedTimestamp(value) ?? undefined;
+}
+
+function booleanValue(nullable = false): ScalarProjector {
+  return (value) => typeof value === 'boolean' ? value : nullable && value === null ? null : undefined;
+}
+
+function nullableInteger(maximum: number): ScalarProjector {
+  return (value) => value === null ? null : boundedInteger(value, maximum) ?? undefined;
+}
+
+function enumeration(values: ReadonlySet<string>, nullable = false): ScalarProjector {
+  return (value) => typeof value === 'string' && values.has(value)
+    ? value
+    : nullable && value === null ? null : undefined;
+}
+
+const LOOKUP_RDAP_PORTABLE_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  objectClassName: nullableText(80),
+  language: nullableText(35),
+  conformanceTruncated: booleanValue(),
+  redactionsTruncated: booleanValue(),
+  port43: nullableText(300),
+  parentHandle: nullableText(300),
+  linksTruncated: booleanValue(),
+  noticesTruncated: booleanValue(),
+  remarksTruncated: booleanValue(),
+  serverTruncated: booleanValue(),
+  statusesTruncated: booleanValue(),
+  eventsTruncated: booleanValue(),
+  domain: nullableText(253),
+  unicodeDomain: nullableText(253),
+  handle: nullableText(300),
+  nameserversTruncated: booleanValue(),
+  nameserverAddressesTruncated: booleanValue(),
+  dnssec: enumeration(new Set(['Signed', 'Unsigned', 'Unknown']), true),
+  zoneSigned: booleanValue(true),
+  delegationSigned: booleanValue(true),
+  dsDataTruncated: booleanValue(),
+  variantsTruncated: booleanValue(),
+  registrarIanaId: nullableText(300),
+  entitiesTruncated: booleanValue(),
+  name: nullableText(300),
+  startAddress: nullableText(80),
+  endAddress: nullableText(80),
+  cidrsTruncated: booleanValue(),
+  country: nullableText(2),
+  networkType: nullableText(160),
+  startAutnum: nullableInteger(4_294_967_295),
+  endAutnum: nullableInteger(4_294_967_295),
+  autnumType: nullableText(160),
+});
+const LOOKUP_RDAP_PORTABLE_STRING_LISTS: Readonly<Record<string, readonly [number, number]>> = Object.freeze({
+  conformance: [50, 160],
+  serverTruncationReasons: [8, 160],
+  statuses: [100, 160],
+  nameservers: [200, 253],
+  truncatedEntityRoles: [11, 80],
+  cidrs: [200, 160],
+});
+const LOOKUP_RDAP_EVENT_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  action: nullableText(100),
+  date: nullableText(64),
+});
+const LOOKUP_RDAP_LIFECYCLE_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  createdDate: nullableText(64),
+  reregistrationDate: nullableText(64),
+  expiryDate: nullableText(64),
+  updatedDate: nullableText(64),
+  transferDate: nullableText(64),
+  deletionDate: nullableText(64),
+  reinstantiationDate: nullableText(64),
+  databaseUpdatedDate: nullableText(64),
+  createdDateIso: nullableTimestamp,
+  reregistrationDateIso: nullableTimestamp,
+  expiryDateIso: nullableTimestamp,
+  updatedDateIso: nullableTimestamp,
+  transferDateIso: nullableTimestamp,
+  deletionDateIso: nullableTimestamp,
+  reinstantiationDateIso: nullableTimestamp,
+  databaseUpdatedDateIso: nullableTimestamp,
+});
+const LOOKUP_RDAP_REDACTION_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  name: nullableText(300),
+  reason: nullableText(300),
+  method: nullableText(80),
+  pathLanguage: nullableText(80),
+  prePath: nullableText(512),
+  postPath: nullableText(512),
+  replacementPath: nullableText(512),
+});
+const LOOKUP_RDAP_REGISTRAR_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  handle: nullableText(200),
+  name: nullableText(300),
+  org: nullableText(300),
+  truncated: booleanValue(),
+});
+const LOOKUP_RDAP_PUBLIC_ID_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  type: nullableText(160),
+  identifier: nullableText(300),
+});
+const LOOKUP_RDAP_NAMESERVER_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  name: nullableText(253),
+});
+const LOOKUP_RDAP_DS_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  keyTag: nullableInteger(65_535),
+  algorithm: nullableInteger(255),
+  digestType: nullableInteger(255),
+  digest: nullableText(512),
+});
+const LOOKUP_RDAP_VARIANT_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  idnTable: nullableText(300),
+});
+const LOOKUP_RDAP_VARIANT_NAME_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  ldhName: nullableText(253),
+  unicodeName: nullableText(253),
+});
+const LOOKUP_WHOIS_PORTABLE_SCALARS: Readonly<Record<string, ScalarProjector>> = Object.freeze({
+  domainName: nullableText(253),
+  registryDomainId: nullableText(300),
+  registrar: nullableText(300),
+  registrarIanaId: nullableText(300),
+  createdDate: nullableText(100),
+  expiryDate: nullableText(100),
+  updatedDate: nullableText(100),
+  createdDateIso: nullableTimestamp,
+  expiryDateIso: nullableTimestamp,
+  updatedDateIso: nullableTimestamp,
+  statusesTruncated: booleanValue(),
+  nameserversTruncated: booleanValue(),
+  dnssec: nullableText(300),
+  chainStatus: enumeration(new Set(['complete', 'partial'])),
+  authoritativeHop: nullableText(253),
+  failedHop: nullableText(253),
+  conflictingHop: nullableText(253),
+});
+const LOOKUP_REGISTRY_INSIGHT_PORTABLE_KEYS = new Set([
+  'version', 'contactDisclosure', 'lifecycle', 'reconciliation', 'publications',
+  'rdapCapabilities',
+]);
+
+function projectKnownArray(
+  value: unknown,
+  projectors: Readonly<Record<string, ScalarProjector>>,
+  maximum: number,
+): UnknownRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, maximum)
+    .map((item) => projectedKnownScalarRecord(item, projectors))
+    .filter((item): item is UnknownRecord => item !== null);
+}
+
+function projectedKnownScalarRecord(
+  value: unknown,
+  projectors: Readonly<Record<string, ScalarProjector>>,
+): UnknownRecord | null {
+  const source = recordOrNull(value);
+  if (!source) return null;
+  const output: UnknownRecord = {};
+  for (const [key, projector] of Object.entries(projectors)) {
+    if (!Object.hasOwn(source, key)) continue;
+    const item = projector(source[key]);
+    if (item !== undefined) output[key] = item;
+  }
+  return output;
+}
+
+/**
+ * Positive portable projection for normalized RDAP. Contact entities, vCards,
+ * entity inventories, arbitrary links/notices/remarks, and raw payloads never
+ * cross this boundary. The marker prevents deliberate omission from becoming
+ * an apparent source assertion that contacts were absent.
+ */
+export function projectLookupEvidenceRdapPublication(value: unknown): UnknownRecord | null {
+  const source = recordOrNull(value);
+  if (!source) return null;
+  const output = projectedKnownScalarRecord(source, LOOKUP_RDAP_PORTABLE_SCALARS) || {};
+  for (const [key, [count, length]] of Object.entries(LOOKUP_RDAP_PORTABLE_STRING_LISTS)) {
+    if (Object.hasOwn(source, key)) output[key] = boundedStringList(source[key], count, length);
+  }
+  if (Object.hasOwn(source, 'events')) {
+    output.events = projectKnownArray(source.events, LOOKUP_RDAP_EVENT_SCALARS, 100)
+      .filter((event) => typeof event.action === 'string' || typeof event.date === 'string');
+  }
+  if (Object.hasOwn(source, 'lifecycle')) {
+    output.lifecycle = projectedKnownScalarRecord(source.lifecycle, LOOKUP_RDAP_LIFECYCLE_SCALARS);
+  }
+  if (Object.hasOwn(source, 'redactions')) {
+    const inputRedactions = Array.isArray(source.redactions) ? source.redactions : [];
+    const redactions = projectKnownArray(inputRedactions, LOOKUP_RDAP_REDACTION_SCALARS, 100)
+      .filter((redaction) => Object.values(redaction).some((item) => item !== null));
+    output.redactions = redactions;
+    output.redactionsTruncated = source.redactionsTruncated === true
+      || !Array.isArray(source.redactions)
+      || inputRedactions.length > 100
+      || redactions.length < Math.min(inputRedactions.length, 100);
+  }
+  if (Object.hasOwn(source, 'nameserverDetails')) {
+    output.nameserverDetails = (Array.isArray(source.nameserverDetails) ? source.nameserverDetails : [])
+      .slice(0, 200)
+      .map((item) => {
+        const nameserver = projectedKnownScalarRecord(item, LOOKUP_RDAP_NAMESERVER_SCALARS);
+        const original = recordOrNull(item);
+        if (!nameserver || !original || typeof nameserver.name !== 'string') return null;
+        nameserver.addresses = boundedStringList(original.addresses, 20, 80);
+        return nameserver;
+      })
+      .filter((item): item is UnknownRecord => item !== null);
+  }
+  if (Object.hasOwn(source, 'dsData')) {
+    output.dsData = projectKnownArray(source.dsData, LOOKUP_RDAP_DS_SCALARS, 50)
+      .filter((item) => Number.isInteger(item.keyTag)
+        && Number.isInteger(item.algorithm)
+        && Number.isInteger(item.digestType)
+        && typeof item.digest === 'string'
+        && item.digest.length % 2 === 0
+        && /^[0-9a-f]+$/iu.test(item.digest));
+  }
+  if (Object.hasOwn(source, 'variants') && Array.isArray(source.variants)) {
+    output.variants = source.variants.slice(0, 20).map((item) => {
+      const group = projectedKnownScalarRecord(item, LOOKUP_RDAP_VARIANT_SCALARS);
+      if (!group) return null;
+      const original = recordOrNull(item);
+      const variantNames = projectKnownArray(original?.variantNames, LOOKUP_RDAP_VARIANT_NAME_SCALARS, 50)
+        .filter((name) => typeof name.ldhName === 'string' || typeof name.unicodeName === 'string');
+      const relation = boundedStringList(original?.relation, 20, 100);
+      group.variantNames = variantNames;
+      group.relation = relation;
+      return typeof group.idnTable === 'string' || variantNames.length || relation.length
+        ? group
+        : null;
+    }).filter((item): item is UnknownRecord => item !== null);
+  }
+  if (Object.hasOwn(source, 'registrar')) {
+    const registrar = projectedKnownScalarRecord(source.registrar, LOOKUP_RDAP_REGISTRAR_SCALARS);
+    if (registrar) {
+      const original = recordOrNull(source.registrar);
+      registrar.roles = boundedStringList(original?.roles, 12, 80);
+      registrar.publicIds = projectKnownArray(original?.publicIds, LOOKUP_RDAP_PUBLIC_ID_SCALARS, 20)
+        .filter((publicId) => typeof publicId.type === 'string'
+          && typeof publicId.identifier === 'string');
+    }
+    output.registrar = registrar;
+  }
+  output.contactsExcluded = true;
+  return output;
+}
+
+/** Positive portable projection for normalized WHOIS publication fields. */
+export function projectLookupEvidenceWhoisPublication(value: unknown): UnknownRecord | null {
+  const input = recordOrNull(value);
+  if (!input) return null;
+  const output = projectedKnownScalarRecord(input, LOOKUP_WHOIS_PORTABLE_SCALARS) || {};
+  if (Object.hasOwn(input, 'lifecycle')) {
+    output.lifecycle = projectedKnownScalarRecord(input.lifecycle, LOOKUP_RDAP_LIFECYCLE_SCALARS);
+  }
+  for (const [key, count, length] of [
+    ['statuses', 100, 160],
+    ['nameservers', 200, 253],
+    ['fieldsTruncated', 64, 80],
+  ] as const) {
+    if (Object.hasOwn(input, key)) output[key] = boundedStringList(input[key], count, length);
+  }
+  output.contactsExcluded = true;
+  return output;
+}
+
+/** Exact positive projection for one current-schema RDAP source wrapper. */
+export function projectLookupEvidenceRdapSourcePublication(value: unknown): UnknownRecord | null {
+  const source = recordOrNull(value);
+  if (!source) return null;
+  const status = sourceStatus(source.status, RDAP_SOURCE_STATUSES, 'error');
+  const attempts = boundedRdapAttempts(source.attempts, 16);
+  if (status === 'error') return {
+    status,
+    error: boundedSourceError(source.error, 'RDAP source reported an error.'),
+    attempts,
+  };
+  const endpoint = boundedEndpoint(source.endpoint);
+  const hasPublication = status === 'success' || status === 'partial';
+  const parsed = hasPublication ? projectLookupEvidenceRdapPublication(source.parsed) : null;
+  if (status === 'success' && parsed === null) return null;
+  return {
+    status,
+    endpoint,
+    transportSecurity: endpoint ? endpoint.startsWith('https:') ? 'https' : 'http' : null,
+    httpStatus: boundedHttpStatus(source.httpStatus),
+    fetchedAt: boundedTimestamp(source.fetchedAt),
+    attempts,
+    parsed,
+  };
+}
+
+function projectedWhoisChainHop(value: unknown): UnknownRecord | null {
+  const hop = recordOrNull(value);
+  if (!hop) return null;
+  const queryProfile = typeof hop.queryProfile === 'string' && WHOIS_QUERY_PROFILES.has(hop.queryProfile)
+    ? hop.queryProfile
+    : null;
+  const status = typeof hop.status === 'string'
+    && ['success', 'error', 'not_issued', 'unknown'].includes(hop.status)
+    ? hop.status
+    : 'unknown';
+  return {
+    server: boundedHostname(hop.server),
+    address: boundedString(hop.address, 64),
+    queriedAt: boundedTimestamp(hop.queriedAt),
+    queryProfile,
+    responseEncoding: hop.responseEncoding === 'utf-8' ? 'utf-8' : null,
+    status,
+    detail: boundedString(hop.detail, 240),
+  };
+}
+
+/** Exact positive projection for one current-schema WHOIS source wrapper. */
+export function projectLookupEvidenceWhoisSourcePublication(value: unknown): UnknownRecord | null {
+  const source = recordOrNull(value);
+  if (!source) return null;
+  const status = sourceStatus(source.status, WHOIS_SOURCE_STATUSES, 'error');
+  if (status === 'error') return {
+    status,
+    error: boundedSourceError(source.error, 'WHOIS source reported an error.'),
+  };
+  const hasPublication = status === 'complete' || status === 'partial';
+  const parsed = hasPublication ? projectLookupEvidenceWhoisPublication(source.parsed) : null;
+  if (status === 'complete' && parsed === null) return null;
+  return {
+    status,
+    queriedAt: boundedTimestamp(source.queriedAt),
+    authoritativeHop: boundedHostname(source.authoritativeHop),
+    failedHop: boundedHostname(source.failedHop),
+    conflictingHop: boundedHostname(source.conflictingHop),
+    parsed,
+    chain: hasPublication
+      ? (Array.isArray(source.chain) ? source.chain : [])
+          .slice(0, 16)
+          .map(projectedWhoisChainHop)
+          .filter((hop): hop is UnknownRecord => hop !== null)
+      : [],
+  };
+}
+
+export function projectLookupEvidenceRegistryInsights(value: unknown): UnknownRecord | null {
+  return projectedKnownRecord(value, LOOKUP_REGISTRY_INSIGHT_PORTABLE_KEYS);
+}
+
 function sourceStatus(value: unknown, allowed: ReadonlySet<string>, fallback: string): string {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
@@ -1014,19 +1517,15 @@ function rdapSource(rdap: unknown, diagnostics: UnknownRecord | null) {
     attempts,
   };
   const hasPublication = status === 'success' || status === 'partial';
+  const endpoint = boundedEndpoint(source.rdapServer ?? diagnostics?.endpoint);
   return {
     status,
-    endpoint: boundedEndpoint(source.rdapServer ?? diagnostics?.endpoint),
-    transportSecurity: source.transportSecurity === 'http' || source.transportSecurity === 'https'
-      ? source.transportSecurity
-      : diagnostics?.transportSecurity === 'http' || diagnostics?.transportSecurity === 'https'
-        ? diagnostics.transportSecurity
-        : null,
+    endpoint,
+    transportSecurity: endpoint ? endpoint.startsWith('https:') ? 'https' : 'http' : null,
     httpStatus: boundedHttpStatus(source.upstreamStatus ?? diagnostics?.httpStatus),
     fetchedAt: boundedTimestamp(source.fetchedAt ?? diagnostics?.fetchedAt),
     attempts,
-    parsed: hasPublication ? projectLookupEvidencePrivacySafeTree(source.parsed) : null,
-    raw: hasPublication ? projectLookupEvidencePrivacySafeTree(source.data) : null,
+    parsed: hasPublication ? projectLookupEvidenceRdapPublication(source.parsed) : null,
   };
 }
 
@@ -1047,7 +1546,7 @@ function whoisSource(whois: unknown, diagnostics: UnknownRecord | null) {
     authoritativeHop: boundedHostname(parsed?.authoritativeHop ?? diagnostics?.authoritativeHop),
     failedHop: boundedHostname(parsed?.failedHop ?? diagnostics?.failedHop),
     conflictingHop: boundedHostname(parsed?.conflictingHop ?? diagnostics?.conflictingHop),
-    parsed: hasPublication ? projectLookupEvidencePrivacySafeTree(parsed) : null,
+    parsed: hasPublication ? projectLookupEvidenceWhoisPublication(parsed) : null,
     chain,
   };
 }
@@ -1062,7 +1561,7 @@ function registrarPublicationComparison(body: UnknownRecord, registryParsed: Unk
 
   const reportedStatus = registrar?.status ?? registrarDiagnostics?.status;
   const parsed = ['success', 'partial'].includes(String(reportedStatus))
-    ? recordOrNull(projectLookupEvidencePrivacySafeTree(registrar?.parsed))
+    ? projectLookupEvidenceRdapPublication(registrar?.parsed)
     : null;
   const registrarStatus = typeof reportedStatus === 'string' && REGISTRAR_RDAP_STATUSES.has(reportedStatus)
     ? (reportedStatus === 'success' && !parsed ? 'partial' : reportedStatus)
@@ -1075,7 +1574,11 @@ function registrarPublicationComparison(body: UnknownRecord, registryParsed: Unk
 
 export function buildLookupEvidence(response: unknown, options: LookupEvidenceOptions = {}) {
   assertBoundedJsonStructure(response, 'Lookup response');
-  const { generatedAt = new Date().toISOString(), idnAnalysis = null, applicationVersion = null } = options;
+  const { generatedAt: generatedAtValue = new Date().toISOString(), idnAnalysis = null, applicationVersion = null } = options;
+  const generatedAt = normalizeExplicitIsoTimestamp(generatedAtValue);
+  if (!generatedAt) {
+    throw new TypeError('Lookup evidence generation time must be valid and include an explicit timezone.');
+  }
   const body = recordOrNull(response) || {};
   const rdap = recordOrNull(body.rdap);
   const whois = recordOrNull(body.whois);
@@ -1083,8 +1586,18 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   const projectedDiagnostics = lookupDiagnostics(diagnostics);
   const rdapDiagnostics = recordOrNull(projectedDiagnostics.rdap);
   const whoisDiagnostics = recordOrNull(projectedDiagnostics.whois);
-  const projectedRdap = rdapSource(rdap, rdapDiagnostics);
-  const projectedWhois = whoisSource(whois, whoisDiagnostics);
+  const projectedRdap = projectLookupEvidenceRdapSourcePublication(
+    rdapSource(rdap, rdapDiagnostics),
+  );
+  const projectedWhois = projectLookupEvidenceWhoisSourcePublication(
+    whoisSource(whois, whoisDiagnostics),
+  );
+  if (!projectedRdap) {
+    throw new TypeError('Lookup evidence cannot publish successful RDAP without normalized publication data.');
+  }
+  if (!projectedWhois) {
+    throw new TypeError('Lookup evidence cannot publish complete WHOIS without normalized publication data.');
+  }
   const projectedRdapRecord = recordOrNull(projectedRdap) || {};
   const projectedWhoisRecord = recordOrNull(projectedWhois) || {};
   const rdapParsed = ['success', 'partial'].includes(String(projectedRdapRecord.status))
@@ -1100,10 +1613,10 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   const registryInsights = buildRegistryInsights({
     rdapParsed,
     rdapStatus: rdapDiagnostics?.status,
-    rdapFetchedAt: rdap?.fetchedAt,
+    rdapFetchedAt: projectedRdapRecord.fetchedAt,
     whoisParsed,
     whoisStatus: whoisDiagnostics?.status,
-    whoisQueriedAt: recordOrNull(Array.isArray(whois?.chain) ? whois.chain[0] : null)?.queriedAt,
+    whoisQueriedAt: projectedWhoisRecord.queriedAt,
   });
   const query = projectLookupEvidenceQuery(body);
   const availabilityAnalysis = projectLookupEvidenceAvailability(body.availability);
@@ -1126,7 +1639,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     analysis: {
       availability: availabilityAnalysis,
       idn,
-      registryInsights: projectLookupEvidencePrivacySafeTree(registryInsights),
+      registryInsights: projectLookupEvidenceRegistryInsights(registryInsights),
       registryComparison: projectLookupEvidencePrivacySafeTree(compareRegistrySources(rdapParsed, whoisParsed, {
         rdapStatus: rdapDiagnostics?.status,
         whoisStatus: whoisDiagnostics?.status,

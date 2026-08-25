@@ -13,7 +13,7 @@
     rows,
     limitations,
     initiallyExpanded = false,
-    provenance = 'This maps one point-in-time public endpoint address to its registered network. CDNs, reverse proxies, load balancers, shared hosting, and location-dependent DNS can mean this is not the origin host. Network registration does not prove hosting control, ownership, intent, or maliciousness.',
+    provenance = 'Maps one point-in-time public endpoint address to its registered network. Shared services and location-dependent DNS mean the address may not be the origin.',
   }: {
     status: string;
     detail: string;

@@ -1,0 +1,42 @@
+{
+  "version": 12,
+  "exportedAt": "2026-08-01T12:00:00.000Z",
+  "cases": [
+    {
+      "id": "case-v12-response",
+      "domain": "response-history.example",
+      "status": "reviewing",
+      "disposition": "suspicious",
+      "reviewReasonCode": null,
+      "brandProfileIds": [],
+      "tags": ["response-review"],
+      "notes": [],
+      "source": "manual",
+      "evidenceHistory": [],
+      "evidencePins": [],
+      "decisions": [],
+      "actions": [
+        {
+          "id": "action-v12-response",
+          "type": "registrar_report",
+          "recipient": "Reviewed registrar route",
+          "contactSource": "Published registrar policy",
+          "contactLimitations": ["Route freshness was not retained."],
+          "dueAt": "2026-08-05T12:00:00.000Z",
+          "state": "acknowledged",
+          "reference": "LEGACY-RESPONSE-42",
+          "followUpAt": "2026-08-08T12:00:00.000Z",
+          "outcome": "A provider acknowledgement was recorded.",
+          "createdAt": "2026-07-28T12:00:00.000Z",
+          "updatedAt": "2026-08-01T12:00:00.000Z"
+        }
+      ],
+      "assertions": [],
+      "manualTrail": [],
+      "sightings": [],
+      "branches": [],
+      "createdAt": "2026-07-28T11:00:00.000Z",
+      "updatedAt": "2026-08-01T12:00:00.000Z"
+    }
+  ]
+}

@@ -33,15 +33,15 @@
 <section class="card posture-matrix" aria-labelledby="portfolio-posture-matrix-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Portfolio assurance</p>
-      <h2 id="portfolio-posture-matrix-title">Cross-domain posture matrix</h2>
-      <p>Compare saved desired-state controls with the latest deliberately retained compact posture observation for each official domain.</p>
+      <p class="eyebrow">Owned domains</p>
+      <h2 id="portfolio-posture-matrix-title">Owned-domain comparison</h2>
+      <p>Compare expected settings with the latest saved observation for each official domain.</p>
     </div>
-    <span class="scope">{matrix.baselineCount}/{matrix.rows.length} baselines · {matrix.observationCount} observed</span>
+    <span class="scope">{matrix.baselineCount}/{matrix.rows.length} configured · {matrix.observationCount} observed</span>
   </header>
 
   {#if matrix.rows.length}
-    <div class="state-summary" aria-label="Portfolio posture state counts">
+    <div class="state-summary" aria-label="Owned-domain comparison state counts">
       {#each Object.entries(matrix.stateCounts).filter(([, count]) => count > 0) as [state, count]}
         <span class={`state-${state}`}>{stateLabel(state as DomainPostureMatrixState)} <strong>{count}</strong></span>
       {/each}
@@ -49,7 +49,7 @@
 
     <div class="matrix-scroll">
       <table>
-        <caption class="visually-hidden">Official domains by desired posture control and retained comparison state</caption>
+        <caption class="visually-hidden">Official domains by expected setting and saved comparison state</caption>
         <thead><tr><th scope="col">Official domain</th>{#each matrix.columns as column}<th scope="col">{column.label}</th>{/each}</tr></thead>
         <tbody>
           {#each matrix.rows as row (row.domain)}
@@ -58,7 +58,7 @@
               {#each row.cells as cell (cell.field)}
                 <td class={`state-${cell.state}`} title={cellTitle(cell)}>
                   <strong>{stateLabel(cell.state)}</strong>
-                  <span><a href={cell.baselineHref}>Baseline</a>{#if cell.observationHref}<a href={cell.observationHref}>Observation</a>{:else}<em>No observation</em>{/if}</span>
+                  <span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span>
                 </td>
               {/each}
             </tr>
@@ -71,7 +71,7 @@
       {#each matrix.rows as row (row.domain)}
         <article>
           <header><div><h3>{row.domain}</h3><p>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</p></div><span>{row.observationAt ? date(row.observationAt) : 'No retained observation'}</span></header>
-          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong><span><a href={cell.baselineHref}>Baseline</a>{#if cell.observationHref}<a href={cell.observationHref}>Observation</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
+          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong><span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
         </article>
       {/each}
     </div>
@@ -81,14 +81,14 @@
       {#each matrix.rows.filter((row) => row.observationId) as row (row.domain)}
         <details id={row.observationId ?? undefined}>
           <summary><span>{row.domain}</span><strong>{row.observationAt ? date(row.observationAt) : 'Unavailable'}</strong></summary>
-          <p>Baseline updated {row.baselineUpdatedAt ? date(row.baselineUpdatedAt) : 'at an unavailable time'}.</p>
+          <p>Expected settings updated {row.baselineUpdatedAt ? date(row.baselineUpdatedAt) : 'at an unavailable time'}.</p>
           <ul>{#each row.observationChecks as check}<li><code>{check.id}</code> · {check.status}{#if check.records.length} · {check.records.join(' · ')}{:else} · no comparable record retained{/if}</li>{/each}</ul>
         </details>
       {/each}
-      {#if matrix.observationCount === 0}<p class="empty">No compact posture observation has been retained. The matrix does not turn that gap into alignment.</p>{/if}
+      {#if matrix.observationCount === 0}<p class="empty">No settings observation has been saved. This gap is not treated as alignment.</p>{/if}
     </div>
   {:else}
-    <p class="empty">Add an official domain before configuring a portfolio posture matrix.</p>
+    <p class="empty">Add an official domain before comparing expected and observed settings.</p>
   {/if}
 
   <ul class="limitations">{#each matrix.limitations as limitation}<li>{limitation}</li>{/each}</ul>

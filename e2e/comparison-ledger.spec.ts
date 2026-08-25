@@ -1,7 +1,8 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 const EARLIER = '2026-06-01T01:00:00.000Z';
 const MIDDLE = '2026-06-01T12:00:00.000Z';
@@ -90,7 +91,7 @@ function bulkSession(id: string, name: string, updatedAt: string, digestCharacte
 function retainedFixture() {
   return {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({
         id: 'ledger-case',
         domain: 'case-change.reservation.invalid',
@@ -101,19 +102,15 @@ function retainedFixture() {
         ],
       })],
     },
-    'whoisleuth-website-snapshots-v1': {
-      schema: 'whoisleuth.website-profile-snapshots',
-      version: 4,
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
       snapshots: [
         websiteSnapshot('website-complete-before', 'complete-profile.reservation.invalid', EARLIER),
         websiteSnapshot('website-complete-after', 'complete-profile.reservation.invalid', LATER, { technologies: [] }),
         websiteSnapshot('website-partial-before', 'partial-profile.reservation.invalid', EARLIER),
         websiteSnapshot('website-partial-after', 'partial-profile.reservation.invalid', LATER, { complete: false, technologies: [] }),
       ],
-    },
-    'whois-rdap-watchlist-v1': {
-      schema: 'whoisleuth.watchlists',
-      version: 2,
+    }),
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {
       watchlists: {
         'Watch review': {
           updatedAt: LATER,
@@ -175,14 +172,14 @@ function retainedFixture() {
           }],
         },
       },
-    },
+    }),
   };
 }
 
 function multiIntervalCaseFixture() {
   return {
     'whois-rdap-cases-v1': {
-      version: 2,
+      version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({
         id: 'ledger-interval-case',
         domain: 'case-intervals.reservation.invalid',
@@ -303,11 +300,7 @@ test('adds only the saved Bulk pair selected explicitly', async ({ page }) => {
   const unpaired = bulkSession('bulk-unpaired', 'Unpaired saved review', MIDDLE, '2', 'Unpaired Registrar');
   const later = bulkSession('bulk-later', 'Later saved review', LATER, '3', 'Later Registrar');
   const review = await openRetainedReview(page, {
-    'whoisleuth-bulk-sessions-v1': {
-      schema: 'whoisleuth.bulk-sessions',
-      version: 3,
-      sessions: [later, unpaired, earlier],
-    },
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([later, unpaired, earlier]),
   });
 
   await expect(review.getByText('No eligible retained comparison yet')).toBeVisible();
@@ -370,7 +363,9 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
     await page.setViewportSize({ width, height: 844 });
     const card = review.locator('.ledger-cards article', { hasText: 'Registrar' });
     await expect(card).toBeVisible();
-    await expect(review.locator('.ledger-table')).toBeHidden();
+    const desktopLedger = review.locator('.ledger-table');
+    await expect(desktopLedger).toHaveCount(1);
+    await expect(desktopLedger).toBeHidden();
     await expect(card.locator('.state-label')).toHaveText('Different');
     await expectNoHorizontalOverflow(page);
   }

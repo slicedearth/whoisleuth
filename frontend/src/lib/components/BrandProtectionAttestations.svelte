@@ -92,10 +92,10 @@
   <header class="section-head">
     <div>
       <p class="eyebrow">Account controls</p>
-      <h2>Reviewed protection attestations</h2>
-      <p>Record controls that public DNS and registry evidence cannot prove. These are analyst-owned statements with optional expiry dates, not collected findings or security guarantees.</p>
+      <h2>Reviewed account controls</h2>
+      <p>Record controls that public DNS and registry evidence cannot establish. These are analyst-supplied statements with optional expiry dates.</p>
     </div>
-    <button class="primary" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save attestations'}</button>
+    <button class="primary" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save controls'}</button>
   </header>
   <div class="attestation-grid">
     {#each PROTECTION_ATTESTATION_CONTROLS as control}
@@ -117,7 +117,7 @@
           <input type="date" value={drafts[control].expiresAt} oninput={(event) => update(control, 'expiresAt', event.currentTarget.value)}>
         </label>
         <label>
-          Bounded note
+          Review note
           <input maxlength="200" value={drafts[control].note} oninput={(event) => update(control, 'note', event.currentTarget.value)}>
         </label>
       </fieldset>

@@ -7,7 +7,7 @@ import type { AnyLocalDataCollectionDefinition } from '../frontend/src/lib/brows
 function definition(id: string): AnyLocalDataCollectionDefinition {
   return {
     id, label: id, legacyKey: id, schemaVersion: 1, maximumBytes: 1024, maximumRecords: 10,
-    empty: () => [], normalize: (value) => value ?? [], version: () => 1,
+    empty: () => [], acceptLegacyRoot: Array.isArray, normalize: (value) => value ?? [], version: () => 1,
     serialize: (value) => JSON.stringify(value), split: () => [], join: () => [],
   };
 }

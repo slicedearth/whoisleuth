@@ -125,6 +125,33 @@ function dnsResponse(query: Buffer, name: string, type: number, answers: readonl
 }
 
 describe('authorised SMTP transport review', () => {
+  test('assigns UTC to version-1 policy context and requires explicit collection times', async () => {
+    const input = {
+      schema: MAIL_TRANSPORT_INPUT_SCHEMA,
+      version: 1,
+      domain: 'example.test',
+      mxHosts: ['mx.example.test'],
+      policyContext: {
+        mtaSts: { state: 'enforce', source: 'Saved policy', observedAt: '2026-08-11T12:00:00.000', completeness: 'complete' },
+      },
+    };
+    const options = {
+      resolver: PUBLIC_ADDRESS, trustAnchor: ANCHOR, ownedOrAuthorized: true, activeProbeAcknowledged: true,
+    } as const;
+    const dependencies = {
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+      resolveHost: async () => ({ addresses: [{ address: PUBLIC_ADDRESS, family: 4 as const }], aliases: [] }),
+      validateDnssec: async ({ target }: { target: unknown }) => ({ report: secureReport(String(target)), zone: String(target), keys: [] }),
+      probe: async ({ address }: { address: string }) => probeResult(address),
+    };
+    const review = await collectMailTransportReview(input, options, dependencies);
+    assert.equal(review.policyContext.mtaSts.observedAt, '2026-08-11T12:00:00.000Z');
+    await assert.rejects(
+      () => collectMailTransportReview(input, options, { ...dependencies, observedAt: () => '2026-08-11T12:00:00.000' }),
+      /explicit timezone/u,
+    );
+  });
   test('keeps PKIX path validation separate from endpoint identity alignment', () => {
     const peerCertificate = {
       raw: Buffer.from(X509_FIXTURE_BASE64, 'base64'),

@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 
-import { canonicalArtifactJsonV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { CliUsageError } from './errors.mts';
 import { buildRegistryDoctorReport } from './registry-doctor.mts';
@@ -11,7 +12,6 @@ import {
 } from './saved-lookup.mts';
 
 export const REGISTRY_COHORT_SCHEMA = 'whoisleuth.cli.registry-cohort';
-export const LEGACY_REGISTRY_COHORT_VERSION = 1;
 export const REGISTRY_COHORT_VERSION = 2;
 export const MAX_REGISTRY_COHORT_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_REGISTRY_COHORT_SAMPLES = 500;
@@ -82,8 +82,6 @@ type SourceReport = Readonly<{
   duplicateTimelinePoints: number;
 }>;
 
-const LEGACY_ROOT_KEYS = new Set(['schema', 'version', 'generatedAt', 'sampleCount', 'minimumCohortSample', 'cohorts', 'limitations']);
-const LEGACY_COHORT_KEYS = new Set(['suffix', 'profileId', 'sampleCount', 'state', 'sourceAlignment', 'publication']);
 const ROOT_KEYS = new Set(['schema', 'version', 'generatedAt', 'inputFamily', 'sampleCount', 'reportsMerged', 'minimumCohortSample', 'sampleWindow', 'cohorts', 'omissions', 'truncated', 'limitations']);
 const COHORT_KEYS = new Set(['suffix', 'profileId', 'sampleCount', 'state', 'latestState', 'sampleWindow', 'sourceAlignment', 'publication', 'timeline', 'timelineOmitted']);
 const POINT_KEYS = new Set(['reportGeneratedAt', 'sampleWindow', 'sampleCount', 'state', 'sourceAlignment', 'publication']);
@@ -97,11 +95,6 @@ const LIMITATIONS = Object.freeze([
   `Every timeline point retains its original state. Cohorts with fewer than ${MIN_REGISTRY_COHORT_SAMPLE} observations remain insufficient sample and are never promoted by summing overlapping reports.`,
   'A merged cohort keeps the most conservative retained state and separately reports the latest point. Duplicate points are suppressed and inherited omission counts are not summed across overlapping retained reports.',
   'Review fixture provenance and source health before changing a parser or registry access profile.',
-]);
-const LEGACY_LIMITATIONS = Object.freeze([
-  'The report intentionally omits domains, queries and raw evidence. It groups saved observations only by suffix and capability profile.',
-  `Cohorts with fewer than ${MIN_REGISTRY_COHORT_SAMPLE} observations remain insufficient sample and must not drive catalogue changes.`,
-  'Repeated observations from one environment are not representative by themselves. Review fixture provenance and source health before changing a parser or access profile.',
 ]);
 
 function record(value: unknown, label: string): UnknownRecord {
@@ -128,9 +121,9 @@ function timestamp(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) {
     throw new CliUsageError(`${label} is invalid.`);
   }
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw new CliUsageError(`${label} is invalid.`);
-  return new Date(parsed).toISOString();
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (normalized) return normalized;
+  throw new CliUsageError(`${label} is invalid.`);
 }
 
 function identifier(value: unknown, label: string): string {
@@ -290,34 +283,6 @@ function sourceReportsFromLookups(documents: readonly UnknownRecord[], generated
   return [Object.freeze({ generatedAt, sampleWindow: Object.freeze({ from: observed[0]!, to: observed.at(-1)! }), cohorts: Object.freeze(cohorts), duplicateTimelinePoints: 0 })];
 }
 
-function parseLegacyReport(value: UnknownRecord): SourceReport {
-  const root = exact(value, LEGACY_ROOT_KEYS, 'Registry cohort v1 report');
-  if (root.schema !== REGISTRY_COHORT_SCHEMA || root.version !== LEGACY_REGISTRY_COHORT_VERSION) throw new CliUsageError('Registry cohort report version is unsupported.');
-  const generatedAt = timestamp(root.generatedAt, 'Registry cohort v1 generatedAt');
-  const sampleCount = integer(root.sampleCount, 1, MAX_REGISTRY_COHORT_SAMPLES, 'Registry cohort v1 sample count');
-  if (root.minimumCohortSample !== MIN_REGISTRY_COHORT_SAMPLE) throw new CliUsageError('Registry cohort v1 minimum sample is unsupported.');
-  boundedLimitations(root.limitations, LEGACY_LIMITATIONS, 'Registry cohort v1');
-  if (!Array.isArray(root.cohorts) || !root.cohorts.length || root.cohorts.length > MAX_REGISTRY_COHORT_GROUPS) throw new CliUsageError('Registry cohort v1 groups are invalid.');
-  const seen = new Set<string>();
-  let represented = 0;
-  const cohorts = root.cohorts.map((candidate, index) => {
-    const item = exact(candidate, LEGACY_COHORT_KEYS, `Registry cohort v1 group ${index + 1}`);
-    const count = integer(item.sampleCount, 1, sampleCount, 'Registry cohort v1 group sample count');
-    const sources = sourceAlignment(item.sourceAlignment, count, 'Registry cohort v1 source alignment');
-    const published = publication(item.publication, count, 'Registry cohort v1 publication');
-    const pointState = state(item.state, 'Registry cohort v1 state');
-    if (pointState !== derivedState(count, sources, published)) throw new CliUsageError('Registry cohort v1 state does not match its retained counts.');
-    const key = `${suffix(item.suffix)}\u0000${identifier(item.profileId, 'Registry cohort v1 profile ID')}`;
-    if (seen.has(key)) throw new CliUsageError('Registry cohort v1 groups must be unique.');
-    seen.add(key);
-    represented += count;
-    const point = Object.freeze({ reportGeneratedAt: generatedAt, sampleWindow: Object.freeze({ from: generatedAt, to: generatedAt }), sampleCount: count, state: pointState, sourceAlignment: sources, publication: published });
-    return Object.freeze({ suffix: key.split('\u0000')[0]!, profileId: key.split('\u0000')[1]!, sampleWindow: point.sampleWindow, points: Object.freeze([point]), inheritedState: pointState, upstreamTimelineOmitted: 0 });
-  });
-  if (represented !== sampleCount) throw new CliUsageError('Registry cohort v1 sample count does not match its groups.');
-  return Object.freeze({ generatedAt, sampleWindow: Object.freeze({ from: generatedAt, to: generatedAt }), cohorts: Object.freeze(cohorts), duplicateTimelinePoints: 0 });
-}
-
 function parseCurrentReport(value: UnknownRecord): SourceReport {
   const root = exact(value, ROOT_KEYS, 'Registry cohort v2 report');
   if (root.schema !== REGISTRY_COHORT_SCHEMA || root.version !== REGISTRY_COHORT_VERSION) throw new CliUsageError('Registry cohort report version is unsupported.');
@@ -459,11 +424,9 @@ export function buildRegistryCohortReport(text: string, generatedAt = new Date()
   const reports: SourceReport[] = [];
   let retainedPoints = 0;
   for (const document of documents) {
-    const report = document.version === LEGACY_REGISTRY_COHORT_VERSION
-      ? parseLegacyReport(document)
-      : document.version === REGISTRY_COHORT_VERSION
-        ? parseCurrentReport(document)
-        : (() => { throw new CliUsageError('Registry cohort report version is unsupported.'); })();
+    const report = document.version === REGISTRY_COHORT_VERSION
+      ? parseCurrentReport(document)
+      : (() => { throw new CliUsageError('Registry cohort report version is unsupported.'); })();
     retainedPoints += report.cohorts.reduce((total, cohort) => total + cohort.points.length, 0);
     if (retainedPoints > MAX_REGISTRY_COHORT_INPUT_POINTS) {
       throw new CliUsageError(`Retained registry cohort input contains more than ${MAX_REGISTRY_COHORT_INPUT_POINTS} timeline points.`);

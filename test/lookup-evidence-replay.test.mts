@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import {
   LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
   LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES,
@@ -13,8 +13,17 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  projectLookupEvidenceRegistryInsights,
+  projectLookupEvidenceRdapSourcePublication,
+  projectLookupEvidenceWhoisSourcePublication,
 } from '../frontend/src/lib/analysis/evidence-export.ts';
-import { loadLookupEvidenceV25CompatibilityFixtures } from './lookup-evidence-v25-fixtures.mts';
+import { compareRegistrySources } from '../lib/registry-comparison.mts';
+import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 function evidence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -34,14 +43,28 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
     sources: {
       rdap: {
         status: 'success',
+        endpoint: null,
+        transportSecurity: null,
+        httpStatus: null,
+        fetchedAt: '2026-07-31T00:00:00.000Z',
+        attempts: [],
         parsed: {
           domain: 'example.test',
-          registrar: { name: 'Example Registrar' },
+          registrar: { name: 'Example Registrar', roles: [], publicIds: [] },
           nameservers: ['ns1.example.test'],
-          lifecycle: { createdIso: '2025-01-01T00:00:00.000Z' },
+          lifecycle: { createdDateIso: '2025-01-01T00:00:00.000Z' },
+          contactsExcluded: true,
         },
       },
-      whois: { status: 'partial', parsed: { domain: 'example.test' } },
+      whois: {
+        status: 'partial',
+        queriedAt: '2026-07-31T00:00:00.000Z',
+        authoritativeHop: null,
+        failedHop: null,
+        conflictingHop: null,
+        parsed: { contactsExcluded: true },
+        chain: [],
+      },
       reverseDns: null,
       network: null,
       securityTxt: null,
@@ -51,13 +74,13 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
       availability: {
         state: 'registered',
         confidence: 'high',
+        registryContactsExcluded: true,
         dns: { status: 'success', records: {} },
         http: { status: 'success', finalUrl: 'https://example.test/' },
         tls: {
           status: 'success',
           complete: true,
           connectedAddress: '192.0.2.10',
-          authorization: { authorized: true, error: null },
           hostname: { matches: true, error: null },
           certificate: {
             fingerprintSha256: 'a'.repeat(64),
@@ -72,10 +95,35 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
       registryComparison: {
         fields: [{ label: 'Statuses', status: 'conflict' }],
       },
+      registryInsights: {},
       registrarPublicationComparison: null,
     },
     ...overrides,
   };
+}
+
+function rebuildCurrentRegistryDerivations(document: Record<string, unknown>): void {
+  const sources = document.sources as Record<string, Record<string, unknown>>;
+  const diagnostics = document.diagnostics as Record<string, Record<string, unknown>>;
+  const analysis = document.analysis as Record<string, unknown>;
+  const rdap = sources.rdap!;
+  const whois = sources.whois!;
+  const rdapStatus = String(diagnostics.rdap?.status ?? 'error');
+  const whoisStatus = String(diagnostics.whois?.status ?? 'error');
+  const rdapParsed = ['success', 'partial'].includes(rdapStatus) ? rdap.parsed : null;
+  const whoisParsed = ['complete', 'partial'].includes(whoisStatus) ? whois.parsed : null;
+  analysis.registryComparison = compareRegistrySources(rdapParsed, whoisParsed, {
+    rdapStatus,
+    whoisStatus,
+  });
+  analysis.registryInsights = projectLookupEvidenceRegistryInsights(buildRegistryInsights({
+    rdapParsed,
+    rdapStatus,
+    rdapFetchedAt: rdap.fetchedAt,
+    whoisParsed,
+    whoisStatus,
+    whoisQueriedAt: whois.queriedAt,
+  }));
 }
 
 test('replay validates and summarizes a current first-party export without raw rendering', async () => {
@@ -99,41 +147,297 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.ok(replay.recommendedSteps.some((value) => value.includes('historical evidence')));
   assert.ok(replay.graph.edges.some((edge) => edge.kind === 'presents-certificate'));
   assert.ok(replay.graph.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
-  assert.ok(replay.graph.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
+  assert.ok(!replay.graph.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
 });
 
-test('replay keeps the frozen schema-25 compatibility fixture readable', async () => {
-  const input = await readFile(new URL('./fixtures/lookup-evidence-v25.json', import.meta.url), 'utf8');
-  const replay = await parseLookupEvidenceReplay(input);
-  assert.equal(replay.schemaVersion, 25);
-  assert.equal(replay.target, 'legacy.example.test');
-  assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'success'));
-  assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'complete'));
+test('replay preserves the exact submitted hostname as its identity and graph root', async () => {
+  const document = evidence();
+  document.query = {
+    submitted: 'portal.example.test',
+    inputHostname: 'portal.example.test',
+    registrableDomain: 'example.test',
+    type: 'domain',
+  };
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  assert.equal(replay.target, 'portal.example.test');
+  assert.ok(replay.graph.nodes.some((node) => (
+    node.kind === 'target' && node.label === 'portal.example.test'
+  )));
+  assert.equal(replay.graph.nodes.some((node) => (
+    node.kind === 'target' && node.label === 'example.test'
+  )), false);
 });
 
-test('replay treats schema-25 diagnostics as authoritative across historical wrapper mismatches', async () => {
-  const fixtures = await loadLookupEvidenceV25CompatibilityFixtures();
-  for (const fixture of fixtures) {
-    const replay = await parseLookupEvidenceReplay(JSON.stringify(fixture.document));
-    assert.equal(replay.schemaVersion, 25, fixture.name);
-    if (fixture.name === 'fast-whois-skipped') {
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'skipped'));
-      assert.ok(replay.limitations.some((item) => item.includes('legacy publication wrappers')));
+test('replay requires explicit timestamps in supported documents', async () => {
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(JSON.stringify(evidence({ generatedAt: '2026-07-31T12:00:00.000' }))),
+    /timestamp is missing or invalid/u,
+  );
+  const currentSource = evidence();
+  (currentSource.sources as Record<string, Record<string, unknown>>).rdap!.fetchedAt = '2026-07-31T12:00:00.000';
+  await assert.rejects(() => parseLookupEvidenceReplay(JSON.stringify(currentSource)), /explicit timezone/u);
+  const offset = await parseLookupEvidenceReplay(JSON.stringify(evidence({ generatedAt: '2026-07-31T12:00:00.000+01:00' })));
+  assert.equal(offset.exportedAt, '2026-07-31T11:00:00.000Z');
+});
+
+test('replay rejects reader-only Lookup evidence without mutating it', async () => {
+  const unsupported = { schema: LOOKUP_EVIDENCE_SCHEMA, schemaVersion: 25 };
+  const before = structuredClone(unsupported);
+  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /schemas 26 or 27/iu);
+  assert.deepEqual(unsupported, before);
+});
+
+test('replay keeps the frozen strict schema-26 compatibility fixture readable without inventing current metadata', async () => {
+  const replay = await parseLookupEvidenceReplay(await loadLookupEvidenceV26Fixture());
+  assert.equal(replay.schemaVersion, 26);
+  assert.equal(replay.target, 'example.test');
+  assert.equal(replay.pagePublicationMetadata, null);
+  assert.equal(replay.httpDeliveryMetadata, null);
+});
+
+test('replay sanitises terminal controls from exact public evidence without rewriting the input', async () => {
+  const document = JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>;
+  const analysis = document.analysis as Record<string, Record<string, unknown>>;
+  analysis.availability!.pageTitle = 'Account\u009b\u202e centre\u00ad';
+  const input = JSON.stringify(document);
+  const replay = await parseLookupEvidenceReplay(input);
+  assert.equal(replay.facts.find((fact) => fact.id === 'page.title')?.value, 'Account centre');
+  assert.doesNotMatch(JSON.stringify(replay), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  assert.match(input, /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+});
+
+test('replay rejects current documents that carry excluded or arbitrary publication fields', async () => {
+  const mutations: Array<(document: Record<string, unknown>) => void> = [
+    (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.raw = { entities: [] }; },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
+      rdap.parsed!.registrant = { email: 'private@example.test' };
+    },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
+      delete rdap.parsed!.contactsExcluded;
+    },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
+      rdap.parsed!.contactsExcluded = false;
+    },
+    (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.unexpected = true; },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
+      rdap.endpoint = 'https://user:secret@rdap.example.test/path?query=private#fragment';
+    },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
+      rdap.attempts = [{
+        endpoint: 'https://rdap.example.test/',
+        transportSecurity: 'https',
+        status: 200,
+        outcome: 'success',
+        detail: null,
+        selected: true,
+        authorization: 'not-retained',
+      }];
+    },
+    (document) => {
+      const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
+      rdap.attempts = [{
+        endpoint: 'https://rdap.example.test/',
+        transportSecurity: 'http',
+        status: '200',
+        outcome: 'success',
+        detail: null,
+        selected: 'yes',
+      }];
+    },
+    (document) => {
+      const whois = (document.sources as Record<string, Record<string, unknown>>).whois!;
+      whois.chain = [{
+        server: 'whois.example.test',
+        address: '192.0.2.10',
+        queriedAt: '2026-07-31T00:00:00.000Z',
+        queryProfile: 'plain-domain',
+        responseEncoding: 'utf-8',
+        status: 'success',
+        detail: null,
+        response: 'Registrant: Private Person',
+        unexpected: true,
+      }];
+    },
+    (document) => {
+      const whois = (document.sources as Record<string, Record<string, unknown>>).whois!;
+      whois.chain = [{
+        server: 'whois.example.test',
+        address: '192.0.2.10',
+        queriedAt: 'not-a-timestamp',
+        queryProfile: 'unreviewed-profile',
+        responseEncoding: 'latin-1',
+        status: 'invented',
+        detail: null,
+      }];
+    },
+    (document) => {
+      const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+      availability.registrant = { name: 'Private registrant' };
+    },
+    (document) => {
+      const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+      availability.structuredDataIdentity = {
+        status: 'success',
+        entities: [{
+          types: ['Organization'],
+          name: 'Example publisher',
+          email: 'nested-private@example.test',
+          owner: 'Private owner',
+          value: 'https://example.test/path?session=private#fragment',
+        }],
+      };
+    },
+    (document) => {
+      const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+      delete availability.registryContactsExcluded;
+    },
+    (document) => {
+      const insights = (document.analysis as Record<string, Record<string, unknown>>).registryInsights!;
+      insights.abuseRouting = { email: 'abuse@example.test' };
+    },
+  ];
+  for (const mutate of mutations) {
+    const document = evidence();
+    mutate(document);
+    const serialized = JSON.stringify(document);
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(serialized),
+      /privacy-minimized publication boundary/iu,
+    );
+    await assert.rejects(
+      () => verifyOfflineArtifact(serialized),
+      /unsupported|malformed|portable|credential|URL/iu,
+    );
+  }
+});
+
+test('current replay retains reviewed credential-category counts at their exact model path', async () => {
+  const document = evidence();
+  const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+  availability.credentialSurfaceProfile = {
+    status: 'success',
+    inputs: {
+      categories: { password: 1, email: 1, username: 0, one_time_code: 0, payment: 0 },
+    },
+  };
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  assert.equal(replay.schemaVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+});
+
+test('current readers reject type-invalid and over-bound normalized registration facts', async () => {
+  const rdapDocument = () => buildLookupEvidence({
+    query: 'example.test', type: 'domain', inputHostname: 'example.test',
+    registrableDomain: 'example.test',
+    rdap: { parsed: { domain: 'example.test' } },
+    diagnostics: {
+      rdap: { status: 'success', fetchedAt: '2026-08-15T00:00:00.000Z' },
+      whois: { status: 'skipped' },
+    },
+    availability: { applicable: true, state: 'registered', confidence: 'medium' },
+  }, { generatedAt: '2026-08-15T00:00:00.000Z', applicationVersion: '1.47.4' });
+  const whoisDocument = () => buildLookupEvidence({
+    query: 'example.test', type: 'domain', inputHostname: 'example.test',
+    registrableDomain: 'example.test',
+    whois: { parsed: { domainName: 'example.test' }, chain: [] },
+    diagnostics: {
+      rdap: { status: 'unsupported' },
+      whois: { status: 'complete', queriedAt: '2026-08-15T00:00:00.000Z' },
+    },
+    availability: { applicable: true, state: 'registered', confidence: 'medium' },
+  }, { generatedAt: '2026-08-15T00:00:00.000Z', applicationVersion: '1.47.4' });
+  const cases: Array<Readonly<{
+    build: () => ReturnType<typeof buildLookupEvidence>;
+    mutate: (parsed: Record<string, unknown>) => void;
+  }>> = [
+    { build: rdapDocument, mutate: (parsed) => { parsed.domain = 7; } },
+    { build: rdapDocument, mutate: (parsed) => { parsed.handle = 'x'.repeat(301); } },
+    { build: rdapDocument, mutate: (parsed) => { parsed.zoneSigned = 'yes'; } },
+    { build: rdapDocument, mutate: (parsed) => { parsed.dnssec = 'invented'; } },
+    { build: rdapDocument, mutate: (parsed) => { parsed.startAutnum = 4_294_967_296; } },
+    { build: rdapDocument, mutate: (parsed) => { parsed.lifecycle = { createdDateIso: 'not-a-timestamp' }; } },
+    { build: whoisDocument, mutate: (parsed) => { parsed.domainName = 42; } },
+    { build: whoisDocument, mutate: (parsed) => { parsed.registrar = 'x'.repeat(301); } },
+    { build: whoisDocument, mutate: (parsed) => { parsed.statusesTruncated = 'yes'; } },
+    { build: whoisDocument, mutate: (parsed) => { parsed.chainStatus = 'invented'; } },
+    { build: whoisDocument, mutate: (parsed) => { parsed.lifecycle = { createdDateIso: 'not-a-timestamp' }; } },
+  ];
+  for (const { build, mutate } of cases) {
+    const document = build();
+    const sources = document.sources as Record<string, Record<string, unknown>>;
+    const positive = sources.rdap?.status === 'success' ? sources.rdap : sources.whois!;
+    mutate(positive.parsed as Record<string, unknown>);
+    rebuildCurrentRegistryDerivations(document as Record<string, unknown>);
+    const serialized = JSON.stringify(document);
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(serialized),
+      /privacy-minimized publication boundary/iu,
+    );
+    await assert.rejects(
+      () => verifyOfflineArtifact(serialized),
+      /unsupported|malformed|portable/iu,
+    );
+  }
+});
+
+test('replay projects only exact current homepage metadata and rejects it from legacy schemas', async () => {
+  const current = evidence();
+  const availability = (current.analysis as Record<string, Record<string, unknown>>).availability!;
+  (availability.pageIdentity as Record<string, unknown>).publicationMetadata = pagePublicationMetadataFixture();
+  (availability.http as Record<string, unknown>).response = {
+    deliveryMetadata: httpDeliveryMetadataFixture(),
+  };
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(current));
+  assert.equal(replay.pagePublicationMetadata?.rows.find((item) => item.id === 'publication.headings')?.value.includes('H1 1'), true);
+  assert.equal(replay.httpDeliveryMetadata?.rows.find((item) => item.id === 'delivery.cache.max_age')?.value, '3600 seconds');
+  assert.doesNotMatch(JSON.stringify(replay), /must-not-retain|private-header/iu);
+
+  for (const fixture of [JSON.parse(await loadLookupEvidenceV26Fixture()) as Record<string, unknown>]) {
+    const legacyAvailability = (fixture.analysis as Record<string, Record<string, unknown>>).availability!;
+    legacyAvailability.pageIdentity = {
+      ...((legacyAvailability.pageIdentity as Record<string, unknown> | undefined) ?? {}),
+      publicationMetadata: pagePublicationMetadataFixture(),
+    };
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(JSON.stringify(fixture)),
+      /Legacy Lookup evidence cannot contain homepage metadata/iu,
+    );
+  }
+
+  ((availability.pageIdentity as Record<string, unknown>).publicationMetadata as Record<string, unknown>).version = 2;
+  await assert.rejects(
+    () => parseLookupEvidenceReplay(JSON.stringify(current)),
+    /publication metadata is malformed or unsupported/iu,
+  );
+});
+
+test('replay rejects current homepage metadata beneath unavailable parent sources', async () => {
+  for (const family of ['page', 'http'] as const) {
+    const withoutChild = evidence();
+    const withoutAvailability = (withoutChild.analysis as Record<string, Record<string, unknown>>).availability!;
+    (withoutAvailability[family === 'page' ? 'pageIdentity' : 'http'] as Record<string, unknown>).status = 'error';
+    await assert.doesNotReject(() => parseLookupEvidenceReplay(JSON.stringify(withoutChild)));
+
+    const withChild = evidence();
+    const availability = (withChild.analysis as Record<string, Record<string, unknown>>).availability!;
+    if (family === 'page') {
+      const page = availability.pageIdentity as Record<string, unknown>;
+      page.status = 'error';
+      page.publicationMetadata = pagePublicationMetadataFixture();
+    } else {
+      const http = availability.http as Record<string, unknown>;
+      http.status = 'error';
+      http.response = { deliveryMetadata: httpDeliveryMetadataFixture() };
     }
-    if (fixture.name === 'unsupported-sources') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'unsupported'));
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'unsupported'));
-      assert.ok(!replay.facts.some((fact) => ['rdap', 'whois'].includes(fact.sourceId)));
-    }
-    if (fixture.name === 'source-errors') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'error'));
-      assert.ok(replay.sources.some((source) => source.id === 'whois' && source.state === 'error'));
-    }
-    if (fixture.name === 'rdap-not-found') {
-      assert.ok(replay.sources.some((source) => source.id === 'rdap' && source.state === 'not found'));
-      assert.ok(!replay.facts.some((fact) => fact.sourceId === 'rdap'));
-    }
+    await assert.rejects(
+      () => parseLookupEvidenceReplay(JSON.stringify(withChild)),
+      /metadata contradicts its parent source state/iu,
+    );
   }
 });
 
@@ -178,6 +482,47 @@ test('replay preserves unavailable registry states and rejects diagnostic contra
     () => parseLookupEvidenceReplay(JSON.stringify(contradictory)),
     /source states contradict/iu,
   );
+});
+
+test('builder derives RDAP transport from its bounded endpoint and closes under both current readers', async () => {
+  for (const [rdapServer, expectedTransport] of [
+    [undefined, null],
+    ['http://rdap.example.test/domain/example.test', 'http'],
+  ] as const) {
+    const exported = buildLookupEvidence({
+      query: 'example.test',
+      type: 'domain',
+      inputHostname: 'example.test',
+      registrableDomain: 'example.test',
+      rdap: {
+        ...(rdapServer ? { rdapServer } : {}),
+        transportSecurity: 'https',
+        parsed: { domain: 'example.test' },
+      },
+      diagnostics: {
+        rdap: {
+          status: 'success',
+          transportSecurity: 'https',
+          fetchedAt: '2026-08-15T00:00:00.000Z',
+        },
+        whois: { status: 'skipped' },
+      },
+      availability: { applicable: true, state: 'registered', confidence: 'medium' },
+    }, { generatedAt: '2026-08-15T00:00:00.000Z', applicationVersion: '1.47.4' });
+    assert.equal(exported.sources.rdap.transportSecurity, expectedTransport);
+    assert.deepEqual(
+      exported.sources.rdap,
+      projectLookupEvidenceRdapSourcePublication(exported.sources.rdap),
+    );
+    assert.deepEqual(
+      exported.sources.whois,
+      projectLookupEvidenceWhoisSourcePublication(exported.sources.whois),
+    );
+    const serialized = JSON.stringify(exported);
+    await assert.doesNotReject(() => parseLookupEvidenceReplay(serialized));
+    const verification = await verifyOfflineArtifact(serialized);
+    assert.equal(verification.state, 'structure_valid');
+  }
 });
 
 test('replay attributes complete WHOIS domain and lifecycle facts without marking the source incomplete', async () => {

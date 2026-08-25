@@ -1,8 +1,12 @@
-import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
+import type { BulkLookupResult } from '../bulk.mts';
 import { bulkDnsSummary } from '../bulk-output.mts';
-import type { UnknownRecord } from '../saved-lookup.mts';
+import {
+  SAVED_LOOKUP_SCHEMA_VERSION,
+  buildCliLookupDocument,
+  type UnknownRecord,
+} from '../saved-lookup.mts';
+import { CLI_LOOKUP_SCHEMA } from '../../packages/contracts/cli-lookup.mts';
 
-const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
 const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
 const CLI_BULK_ITEM_SCHEMA = 'whoisleuth.cli.bulk.item';
 const CLI_CT_SEARCH_SCHEMA = 'whoisleuth.cli.ct-search';
@@ -12,12 +16,12 @@ const CLI_POSTURE_SCHEMA = 'whoisleuth.cli.posture';
 const CLI_HTTP_SCHEMA = 'whoisleuth.cli.http';
 const CLI_TLS_SCHEMA = 'whoisleuth.cli.tls';
 const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
-const CLI_LOOKUP_SCHEMA_VERSION = 1;
+const CLI_LOOKUP_SCHEMA_VERSION = SAVED_LOOKUP_SCHEMA_VERSION;
 const CLI_BULK_SCHEMA_VERSION = 3;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 2;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
-const CLI_HTTP_SCHEMA_VERSION = 2;
+const CLI_HTTP_SCHEMA_VERSION = 3;
 const CLI_TLS_SCHEMA_VERSION = 1;
 const CLI_COMPARE_SCHEMA_VERSION = 3;
 
@@ -47,47 +51,23 @@ type BulkMetadata = {
   filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
 
-type LookupCollectionContext = Readonly<{
-  observerLabel?: string;
-  vantageLabel?: string;
-}>;
+const TERMINAL_UNSAFE_JSON_RE = /[\u007f-\u009f\u2028\u2029]|\p{Default_Ignorable_Code_Point}/gu;
 
-function buildCliLookupDocument(
-  query: string,
-  classified: ClassifiedQuery,
-  result: UnknownRecord,
-  generatedAt = new Date().toISOString(),
-  mode = 'fast',
-  collectionContext: LookupCollectionContext = {},
-): UnknownRecord {
-  const observerLabel = typeof collectionContext.observerLabel === 'string'
-    ? collectionContext.observerLabel
-    : null;
-  const vantageLabel = typeof collectionContext.vantageLabel === 'string'
-    ? collectionContext.vantageLabel
-    : null;
-  return {
-    ...result,
-    schema: CLI_LOOKUP_SCHEMA,
-    version: CLI_LOOKUP_SCHEMA_VERSION,
-    generatedAt,
-    mode: mode === 'deep' ? 'deep' : 'fast',
-    query,
-    type: classified.type,
-    inputHostname: classified.inputHostname,
-    registrableDomain: classified.registrableDomain,
-    isSubdomain: classified.isSubdomain,
-    ...((observerLabel || vantageLabel) ? {
-      collectionContext: {
-        ...(observerLabel ? { observerLabel } : {}),
-        ...(vantageLabel ? { vantageLabel } : {}),
-      },
-    } : {}),
-  };
+function jsonUnicodeEscape(value: string): string {
+  const codePoint = value.codePointAt(0)!;
+  if (codePoint <= 0xffff) return `\\u${codePoint.toString(16).padStart(4, '0')}`;
+  const offset = codePoint - 0x10000;
+  const high = 0xd800 + (offset >> 10);
+  const low = 0xdc00 + (offset & 0x3ff);
+  return `\\u${high.toString(16).padStart(4, '0')}\\u${low.toString(16).padStart(4, '0')}`;
+}
+
+function terminalSafeJson(value: unknown, space?: number): string {
+  return JSON.stringify(value, null, space).replace(TERMINAL_UNSAFE_JSON_RE, jsonUnicodeEscape);
 }
 
 function formatJsonDocument(document: unknown): string {
-  return `${JSON.stringify(document, null, 2)}\n`;
+  return `${terminalSafeJson(document, 2)}\n`;
 }
 
 function buildCliCtSearchDocument(
@@ -133,7 +113,7 @@ function discoverJsonItem(candidate: DiscoverCandidate, metadata: DiscoverMetada
 
 function formatDiscoverJsonLines(candidates: DiscoverCandidate[], metadata: DiscoverMetadata): string {
   if (!candidates.length) return '';
-  return `${candidates.map((candidate) => JSON.stringify(discoverJsonItem(candidate, metadata))).join('\n')}\n`;
+  return `${candidates.map((candidate) => terminalSafeJson(discoverJsonItem(candidate, metadata))).join('\n')}\n`;
 }
 
 function formatDiscoverDomainList(candidates: DiscoverCandidate[]): string {
@@ -217,7 +197,7 @@ function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata)
 
 function formatJsonLines(items: BulkLookupResult[], metadata: BulkMetadata): string {
   return items.length
-    ? `${items.map((item) => JSON.stringify(bulkJsonItem(item, metadata))).join('\n')}\n`
+    ? `${items.map((item) => terminalSafeJson(bulkJsonItem(item, metadata))).join('\n')}\n`
     : '';
 }
 
@@ -231,5 +211,6 @@ export {
   buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument,
   buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument,
   bulkJsonItem, discoverJsonItem, formatDiscoverDomainList, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines,
+  terminalSafeJson,
 };
 export type { BulkMetadata, DiscoverCandidate, DiscoverMetadata };
