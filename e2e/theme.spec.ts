@@ -94,6 +94,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(page.locator('.topology-backdrop')).toHaveCSS('opacity', '0.16');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(231, 226, 216)');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('border-color', 'rgb(214, 207, 194)');
 
@@ -102,6 +103,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(23, 26, 33)');
   await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(139, 147, 167)');
+  await expect(page.locator('.topology-backdrop')).toHaveCSS('opacity', '0.22');
 
   const navFontSizes = await page.locator('.public-header').evaluate((header) => ({
     navigation: getComputedStyle(header.querySelector('a[href="/demo"]')!).fontSize,

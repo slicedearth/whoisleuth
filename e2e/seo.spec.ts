@@ -4,6 +4,27 @@ import {
   PUBLIC_PRERENDERED_ROUTES,
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
+import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation.ts';
+
+type StructuredData = Record<string, unknown>;
+
+function structuredDataDocuments(html: string): StructuredData[] {
+  return [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gu)]
+    .map((match) => JSON.parse(match[1]!) as StructuredData);
+}
+
+function schemaByType(documents: readonly StructuredData[], type: string): StructuredData | undefined {
+  for (const document of documents) {
+    if (document['@type'] === type) return document;
+    const graph = document['@graph'];
+    if (!Array.isArray(graph)) continue;
+    const match = graph.find((item): item is StructuredData => (
+      typeof item === 'object' && item !== null && item['@type'] === type
+    ));
+    if (match) return match;
+  }
+  return undefined;
+}
 
 test('public pages expose prerendered search and sharing metadata', async ({ request }) => {
   for (const path of PUBLIC_PRERENDERED_ROUTES) {
@@ -26,11 +47,10 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     expect(html).toContain('<meta name="twitter:image" content="https://whoisleuth.com/social-preview.png"');
     expect(html).toMatch(/WHOISleuth \d+\.\d+\.\d+ · build (?:[a-f0-9]{7}|local)/u);
     expect(html).toMatch(/href="https:\/\/github\.com\/slicedearth\/whoisleuth(?:\/tree\/[a-f0-9]{7,64})?"/u);
+    const schemas = structuredDataDocuments(html);
 
     if (path === '/') {
-      const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
-      expect(schema).toBeTruthy();
-      expect(JSON.parse(schema!)).toEqual({
+      expect(schemaByType(schemas, 'WebSite')).toEqual({
         '@context': 'https://schema.org',
         '@type': 'WebSite',
         name: 'WHOISleuth',
@@ -39,16 +59,25 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     }
 
     if (path === '/resources') {
-      const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
-      expect(schema).toBeTruthy();
-      const parsed = JSON.parse(schema!);
-      expect(parsed).toMatchObject({ '@context': 'https://schema.org' });
-      expect(parsed['@graph']).toHaveLength(2);
-      const collection = parsed['@graph'].find((item: { '@type'?: string }) => item['@type'] === 'CollectionPage');
-      const faq = parsed['@graph'].find((item: { '@type'?: string }) => item['@type'] === 'FAQPage');
+      const collection = schemaByType(schemas, 'CollectionPage');
+      expect(collection).toMatchObject({ '@context': 'https://schema.org' });
       expect(collection?.hasPart).toHaveLength(8);
-      expect(faq?.mainEntity).toHaveLength(21);
-      expect(faq?.mainEntity[0]).toMatchObject({ '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } });
+      expect(schemaByType(schemas, 'FAQPage')).toBeUndefined();
+    }
+
+    const referenceDestination = PUBLIC_REFERENCE_DESTINATIONS.find((item) => item.href === path);
+    if (referenceDestination) {
+      const breadcrumb = schemaByType(schemas, 'BreadcrumbList');
+      expect(breadcrumb).toBeTruthy();
+      const items = breadcrumb?.itemListElement as StructuredData[];
+      expect(items[0]).toMatchObject({ position: 1, name: 'Home', item: `${WHOISLEUTH_SITE_ORIGIN}/` });
+      expect(items[1]).toMatchObject({ position: 2, name: 'Resources', item: `${WHOISLEUTH_SITE_ORIGIN}/resources` });
+      if (path === '/resources') {
+        expect(items).toHaveLength(2);
+      } else {
+        expect(items).toHaveLength(3);
+        expect(items[2]).toMatchObject({ position: 3, name: referenceDestination.label, item: canonical });
+      }
     }
   }
 });

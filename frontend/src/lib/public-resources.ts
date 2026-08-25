@@ -14,16 +14,24 @@ export type PublicResourceEvidence = Readonly<{
   limitation: string;
 }>;
 
+export type PublicResourceReference = Readonly<{
+  label: string;
+  href: string;
+  description: string;
+}>;
+
 export type PublicResource = Readonly<{
   slug: PublicResourceSlug;
   shortTitle: string;
   title: string;
+  seoTitle: string;
   description: string;
   eyebrow: string;
   summary: readonly string[];
   steps: readonly PublicResourceSection[];
   evidence: readonly PublicResourceEvidence[];
   questions: readonly string[];
+  references: readonly PublicResourceReference[];
   demoHref: string;
   demoLabel: string;
   guideHref: string;
@@ -36,6 +44,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'open-source-domain-intelligence',
     shortTitle: 'Domain investigation evidence',
     title: 'How WHOISleuth handles domain investigation evidence',
+    seoTitle: 'Open-source domain intelligence',
     description: 'See how WHOISleuth combines WHOIS, RDAP, DNS, certificates, website and network evidence while keeping every source and limitation visible.',
     eyebrow: 'Domain investigation',
     summary: Object.freeze([
@@ -57,6 +66,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Which checks were skipped, unavailable, partial or truncated?',
       'What can be saved without retaining raw or unnecessary personal data?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines RDAP query paths and bootstrap-based request patterns.' }),
+      Object.freeze({ label: 'IETF RFC 9083: RDAP response format', href: 'https://www.rfc-editor.org/rfc/rfc9083', description: 'Defines structured RDAP objects, events, notices and links.' }),
+      Object.freeze({ label: 'IANA RDAP DNS bootstrap registry', href: 'https://www.iana.org/assignments/rdap-dns/rdap-dns.xhtml', description: 'Maps DNS zones to their authoritative RDAP services.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'See the evidence map',
     guideHref: '/resources#results',
@@ -67,6 +81,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'rdap-vs-whois',
     shortTitle: 'RDAP versus WHOIS',
     title: 'RDAP versus WHOIS: why registration sources disagree',
+    seoTitle: 'RDAP vs WHOIS: why sources disagree',
     description: 'Understand the different formats, authorities and failure modes of RDAP and WHOIS, and how to review conflicts without losing provenance.',
     eyebrow: 'Registration evidence',
     summary: Object.freeze([
@@ -88,6 +103,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Were both responses complete and collected at comparable times?',
       'Does the difference affect the investigation question, or only presentation?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 3912: WHOIS protocol', href: 'https://www.rfc-editor.org/rfc/rfc3912', description: 'Defines the text-based WHOIS query and response protocol.' }),
+      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines structured RDAP queries for domains, nameservers and networks.' }),
+      Object.freeze({ label: 'IETF RFC 9083: RDAP response format', href: 'https://www.rfc-editor.org/rfc/rfc9083', description: 'Defines RDAP response objects and their common metadata.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'Inspect synthetic registration evidence',
     guideHref: '/resources#glossary',
@@ -98,6 +118,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'lookalike-domain-checker',
     shortTitle: 'Lookalike domain review',
     title: 'Find and review lookalike domains without treating similarity as abuse',
+    seoTitle: 'Lookalike domain checker and review guide',
     description: 'Generate bounded typo, homoglyph and impersonation candidates, add certificate-log observations, and review the strongest leads with explainable evidence.',
     eyebrow: 'Brand protection',
     summary: Object.freeze([
@@ -119,6 +140,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Is the domain registered, active, mail-capable or only similar in spelling?',
       'Does page or infrastructure evidence match a reviewed official baseline?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'Unicode Technical Standard #39', href: 'https://www.unicode.org/reports/tr39/', description: 'Defines security mechanisms for confusable and mixed-script identifiers.' }),
+      Object.freeze({ label: 'IETF RFC 5890: IDNA definitions', href: 'https://www.rfc-editor.org/rfc/rfc5890', description: 'Defines internationalised domain-name terminology and label forms.' }),
+      Object.freeze({ label: 'IETF RFC 5891: IDNA protocol', href: 'https://www.rfc-editor.org/rfc/rfc5891', description: 'Defines how internationalised labels are prepared and registered.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'Try the brand example',
     guideHref: '/resources#tool-discover',
@@ -129,6 +155,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'certificate-transparency-brand-protection',
     shortTitle: 'Certificate transparency',
     title: 'Use Certificate Transparency as a brand-protection lead',
+    seoTitle: 'Certificate Transparency for brand protection',
     description: 'Learn what public certificate logs can reveal about domain names, and why certificate observations need registration and website context.',
     eyebrow: 'Certificate evidence',
     summary: Object.freeze([
@@ -150,6 +177,10 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Are the certificate fingerprint, public key and hostname coverage comparable?',
       'Could a shared certificate, platform or edge explain the relationship?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 9162: Certificate Transparency', href: 'https://www.rfc-editor.org/rfc/rfc9162', description: 'Defines the current Certificate Transparency log protocol.' }),
+      Object.freeze({ label: 'Certificate Transparency project', href: 'https://certificate.transparency.dev/', description: 'Explains the public-log ecosystem and its operational model.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'Review synthetic TLS evidence',
     guideHref: '/resources#glossary',
@@ -160,6 +191,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'domain-investigation-workflow',
     shortTitle: 'Domain investigation guide',
     title: 'A practical domain investigation guide',
+    seoTitle: 'Domain investigation workflow guide',
     description: 'Move from one domain question to registration, DNS, certificate, website, relationship and case evidence without losing source health or scope.',
     eyebrow: 'Analyst guide',
     summary: Object.freeze([
@@ -181,6 +213,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Which evidence is observed, derived, imported or analyst-authored?',
       'What unknown or contradiction should be carried into the next step?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines registration-data queries and bootstrap discovery.' }),
+      Object.freeze({ label: 'IETF RFC 1034: DNS concepts', href: 'https://www.rfc-editor.org/rfc/rfc1034', description: 'Describes the DNS namespace, zones and resolver model.' }),
+      Object.freeze({ label: 'IETF RFC 9110: HTTP semantics', href: 'https://www.rfc-editor.org/rfc/rfc9110', description: 'Defines HTTP request, response and representation semantics.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'Try the investigation example',
     guideHref: '/resources#start',
@@ -191,6 +228,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'bulk-domain-comparison',
     shortTitle: 'Bulk domain comparison',
     title: 'Compare multiple domains without flattening incomplete evidence',
+    seoTitle: 'Bulk domain comparison guide',
     description: 'Use Bulk Fast or Bulk Deep collection, source-state filters and two-domain comparisons to prioritise a review queue.',
     eyebrow: 'Bulk triage',
     summary: Object.freeze([
@@ -212,6 +250,10 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Is a shared value rare in this set, or common infrastructure?',
       'Which rows need a full Deep Lookup before a decision?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines the registration-data queries used for comparable domain collection.' }),
+      Object.freeze({ label: 'IANA RDAP DNS bootstrap registry', href: 'https://www.iana.org/assignments/rdap-dns/rdap-dns.xhtml', description: 'Maps each DNS zone to its authoritative RDAP service.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'See synthetic Bulk triage',
     guideHref: '/resources#tool-bulk',
@@ -222,6 +264,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'ip-asn-investigation',
     shortTitle: 'IP and ASN context',
     title: 'Add IP and ASN context without claiming the origin host',
+    seoTitle: 'IP and ASN investigation guide',
     description: 'Interpret public IP registration, prefixes, routing identifiers and shared infrastructure as bounded investigation pivots.',
     eyebrow: 'Network context',
     summary: Object.freeze([
@@ -243,6 +286,11 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Could a shared edge or platform explain the relationship?',
       'Does a routing pivot add evidence, or only another shared neighbour?',
     ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines RDAP queries for IP networks and autonomous systems.' }),
+      Object.freeze({ label: 'IANA RDAP IP bootstrap registry', href: 'https://www.iana.org/assignments/rdap-ip/rdap-ip.xhtml', description: 'Maps IP ranges to the responsible RDAP services.' }),
+      Object.freeze({ label: 'IETF RFC 4632: classless routing', href: 'https://www.rfc-editor.org/rfc/rfc4632', description: 'Defines CIDR address-prefix notation and aggregation.' }),
+    ]),
     demoHref: '/demo',
     demoLabel: 'Inspect synthetic network context',
     guideHref: '/resources#glossary',
@@ -253,6 +301,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     slug: 'local-first-osint',
     shortTitle: 'Local-first investigation',
     title: 'Why local-first storage matters for domain investigations',
+    seoTitle: 'Local-first OSINT and browser storage',
     description: 'Understand what WHOISleuth keeps in the browser, what reaches public sources, and how deliberate exports preserve portability without hosted custody.',
     eyebrow: 'Privacy and storage',
     summary: Object.freeze([
@@ -273,6 +322,10 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Does this fact need to be retained, or only viewed temporarily?',
       'Which fields would an export recipient actually need?',
       'Is an encrypted archive recent enough to recover this workspace?',
+    ]),
+    references: Object.freeze([
+      Object.freeze({ label: 'W3C Indexed Database API', href: 'https://www.w3.org/TR/IndexedDB/', description: 'Defines the browser database used for local structured records.' }),
+      Object.freeze({ label: 'W3C Web Cryptography API', href: 'https://www.w3.org/TR/WebCryptoAPI/', description: 'Defines the browser cryptographic primitives used by encrypted exports.' }),
     ]),
     demoHref: '/demo',
     demoLabel: 'Explore the storage-safe demo',

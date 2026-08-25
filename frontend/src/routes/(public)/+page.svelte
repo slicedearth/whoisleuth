@@ -28,7 +28,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Review registration, DNS, certificates, websites and network context without losing where each result came from or what could not be collected.</p>
+    <p class="lede">Review WHOIS and RDAP registration data, DNS, certificates, websites and network context without losing where each result came from or what could not be collected.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
   </div>
   <div class="hero-preview">

@@ -10,7 +10,9 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.goal-paths article')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /See these steps/u }).first()).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: 'Find brand lookalikes guide' })).toHaveAttribute('href', '/resources#find-brand-lookalikes');
+  await expect(page.getByRole('link', { name: 'Track important findings guide' })).toHaveAttribute('href', '/resources#track-important-findings');
   await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveCSS('cursor', 'pointer');
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
@@ -34,7 +36,18 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
   await expect(topology.locator('#homepage-evidence-map-title')).toHaveCSS('clip-path', 'inset(50%)');
-  await expect(topology.getByRole('img', { name: 'Separately attributed evidence flow' })).toBeVisible();
+  const topologyGraphic = topology.getByRole('img', { name: 'Separately attributed evidence flow' });
+  await expect(topologyGraphic).toBeVisible();
+  const topologyLayout = await topology.evaluate((map) => {
+    const graphic = map.querySelector('svg')!;
+    const mapBox = map.getBoundingClientRect();
+    const graphicBox = graphic.getBoundingClientRect();
+    return {
+      topGap: graphicBox.top - mapBox.top,
+      bottomGap: mapBox.bottom - graphicBox.bottom,
+    };
+  });
+  expect(Math.abs(topologyLayout.topGap - topologyLayout.bottomGap)).toBeLessThanOrEqual(4);
   await expect(page.locator('.mobile-source-summary > li')).toHaveCount(5);
   await page.getByRole('button', { name: 'Show northstarr.example in the preview' }).click();
   await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
@@ -131,12 +144,20 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
   await expect(page.getByRole('heading', { name: 'Questions worth answering' })).toBeVisible();
+  const references = page.locator('#primary-references');
+  await expect(references.getByRole('heading', { name: 'Specifications behind this guide' })).toBeVisible();
+  await expect(references.getByRole('link')).toHaveCount(3);
+  await expect(references.getByRole('link', { name: /IETF RFC 3912: WHOIS protocol/u })).toHaveAttribute('href', 'https://www.rfc-editor.org/rfc/rfc3912');
+  await expect(references.locator('.sr-only').first()).toHaveCSS('clip-path', 'inset(50%)');
   await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence' })).toHaveAttribute('href', '/demo');
   await expect(page.getByRole('link', { name: 'Open docs/registry-data-contract.md' })).toHaveAttribute(
     'href',
     'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
   );
   const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+  await expect(breadcrumb.getByRole('link', { name: 'Resources' })).toHaveAttribute('href', '/resources');
+  await expect(breadcrumb.locator(':scope > span').last()).toHaveText('RDAP versus WHOIS');
   const breadcrumbLayout = await breadcrumb.locator(':scope > *').evaluateAll((elements) => elements.map((element) => {
     const box = element.getBoundingClientRect();
     const style = getComputedStyle(element);
@@ -156,6 +177,10 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  const articleSections = page.locator('.section-navigation-mobile');
+  await expect(articleSections).toBeVisible();
+  await articleSections.locator(':scope > summary').click();
+  await expect(articleSections.getByRole('link')).toHaveCount(5);
   expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
   await expectNoHorizontalOverflow(page);
 });
@@ -208,7 +233,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Website profile snapshot', { exact: true })).toBeVisible();
-  await expect(page.locator('.faq-list details')).toHaveCount(21);
+  await expect(page.locator('.faq-list details')).toHaveCount(8);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();

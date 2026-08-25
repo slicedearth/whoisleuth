@@ -18,6 +18,13 @@ function allStrings(value: unknown): string[] {
 }
 
 test('public resources expose a bounded unique set of useful investigation topics', () => {
+  const referenceHosts = new Set([
+    'certificate.transparency.dev',
+    'www.iana.org',
+    'www.rfc-editor.org',
+    'www.unicode.org',
+    'www.w3.org',
+  ]);
   assert.ok(PUBLIC_RESOURCES.length > 0 && PUBLIC_RESOURCES.length <= 32);
   assert.deepEqual(PUBLIC_RESOURCE_SLUGS, PUBLIC_RESOURCES.map((resource) => resource.slug));
   assert.equal(new Set(PUBLIC_RESOURCE_SLUGS).size, PUBLIC_RESOURCE_SLUGS.length);
@@ -28,6 +35,15 @@ test('public resources expose a bounded unique set of useful investigation topic
     assert.equal(resource.steps.length, 3);
     assert.equal(resource.evidence.length, 3);
     assert.equal(resource.questions.length, 3);
+    assert.ok(resource.references.length >= 2 && resource.references.length <= 3);
+    assert.equal(new Set(resource.references.map((reference) => reference.href)).size, resource.references.length);
+    assert.ok(`${resource.seoTitle} | WHOISleuth`.length <= 60);
+    assert.doesNotMatch(resource.seoTitle, /WHOISleuth|\|/u);
+    for (const reference of resource.references) {
+      const url = new URL(reference.href);
+      assert.equal(url.protocol, 'https:');
+      assert.equal(referenceHosts.has(url.hostname), true);
+    }
     assert.equal(resource.demoHref, '/demo');
     assert.match(resource.guideHref, /^\/resources#[a-z0-9-]+$/u);
     assert.match(resource.repositoryDoc, /^docs\/[a-z0-9-]+\.md$/u);

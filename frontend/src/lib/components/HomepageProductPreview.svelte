@@ -182,6 +182,7 @@
     <div
       id="homepage-preview-panel"
       class="preview-tab-panel"
+      class:source-view={previewView === 'sources'}
       role="tabpanel"
       aria-labelledby={`homepage-preview-tab-${previewView}`}
     >
@@ -287,6 +288,12 @@
   .lookup-timeline{display:grid;gap:0;margin:0;padding:16px 18px;list-style:none}.lookup-timeline li{display:grid;position:relative;grid-template-columns:12px minmax(0,1fr);gap:8px;min-height:68px}.lookup-timeline li::before{content:"";position:absolute;top:13px;bottom:-7px;left:4px;width:1px;background:var(--border)}.lookup-timeline li:last-child::before{display:none}.lookup-timeline li>span{z-index:1;width:9px;height:9px;margin-top:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}.lookup-timeline li.changed>span{border-color:var(--amber);box-shadow:0 0 7px rgb(var(--amber-rgb) / .32)}.lookup-timeline li strong,.lookup-timeline li small{display:block}.lookup-timeline li strong{font:650 var(--text-xs) var(--mono)}.lookup-timeline li small{margin-top:4px;color:var(--muted);font-size:.62rem;line-height:1.35}.lookup-timeline .change-summary{color:var(--accent)}
   .monitor-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:1px;background:var(--border)}.monitor-summary>div{display:grid;gap:5px;padding:11px;background:var(--panel)}.monitor-summary small{color:var(--muted);font:var(--text-2xs) var(--mono)}.monitor-summary>div strong{color:var(--text);font:750 1rem var(--mono)}.monitor-summary p{display:flex;grid-column:1 / -1;gap:8px;align-items:center;margin:0;padding:10px;background:var(--panel)}.monitor-summary p span{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--amber);box-shadow:0 0 7px rgb(var(--amber-rgb) / .35)}.monitor-summary p strong{font:650 var(--text-2xs) var(--mono)}
   .preview-note{margin:12px 0 0;color:var(--muted);font:var(--text-2xs) var(--mono);text-align:center}
+  @media(min-width:821px){
+    .lookup-panel{display:flex;flex-direction:column}
+    .preview-tab-panel{flex:1 1 auto}
+    .preview-tab-panel.source-view{display:flex}
+    .preview-tab-panel.source-view .preview-evidence-map{display:flex;width:100%;flex:1 1 auto;align-items:center}
+  }
   @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
   @media(max-width:560px){
     .product-preview{grid-template-columns:1fr}

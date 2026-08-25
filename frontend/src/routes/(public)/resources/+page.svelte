@@ -22,27 +22,15 @@
 
   const structuredData = {
     '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'CollectionPage',
-        name: 'WHOISleuth domain investigation resources',
-        description: 'Guidance for domain registration, lookalikes, certificates, network context, Bulk comparison and local investigation.',
-        url: `${WHOISLEUTH_SITE_ORIGIN}/resources`,
-        hasPart: PUBLIC_RESOURCES.map((resource) => ({
-          '@type': 'TechArticle',
-          headline: resource.title,
-          url: `${WHOISLEUTH_SITE_ORIGIN}/resources/${resource.slug}`,
-        })),
-      },
-      {
-        '@type': 'FAQPage',
-        mainEntity: guideFaqs.map((item) => ({
-          '@type': 'Question',
-          name: item.question,
-          acceptedAnswer: { '@type': 'Answer', text: item.answer },
-        })),
-      },
-    ],
+    '@type': 'CollectionPage',
+    name: 'WHOISleuth domain investigation resources',
+    description: 'Guidance for domain registration, lookalikes, certificates, network context, Bulk comparison and local investigation.',
+    url: `${WHOISLEUTH_SITE_ORIGIN}/resources`,
+    hasPart: PUBLIC_RESOURCES.map((resource) => ({
+      '@type': 'TechArticle',
+      headline: resource.title,
+      url: `${WHOISLEUTH_SITE_ORIGIN}/resources/${resource.slug}`,
+    })),
   };
   let practiceOpen = $state(false);
   function preloadPractice() {

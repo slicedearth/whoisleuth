@@ -170,11 +170,21 @@ test('shared Monitor destinations keep exactly one workflow active without chang
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
   assert.equal(glossaryTerms.length, 59);
-  assert.equal(guideFaqs.length, 21);
+  assert.equal(guideFaqs.length, 8);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
   assert.equal(unique(glossaryTerms.map((item) => item.term)), true);
   assert.equal(unique(guideFaqs.map((item) => item.question)), true);
+  assert.deepEqual(guideFaqs.map((item) => item.question), [
+    'Can I review a Lookup evidence export without scanning again?',
+    'Does WHOISleuth decide whether a domain is malicious?',
+    'Should I use Fast or Deep lookup?',
+    'Does a lookup contact the website?',
+    'Does WHOISleuth scan for vulnerabilities?',
+    'Where are cases and watchlists saved?',
+    'Can another person using the shared login see my saved browser work?',
+    'How do I export or delete saved work?',
+  ]);
   assert.deepEqual(glossaryTerms.map((item) => item.term), [...glossaryTerms].map((item) => item.term).sort((a, b) => a.localeCompare(b)));
   assert.match(glossaryTerms.find((item) => item.term === 'Unicode confusable')?.definition || '', /not proof/i);
   assert.match(glossaryTerms.find((item) => item.term === 'PTR')?.definition || '', /not proof/i);

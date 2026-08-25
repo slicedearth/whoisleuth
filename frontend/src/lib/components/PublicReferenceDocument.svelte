@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import PublicSectionNavigation from '$lib/components/PublicSectionNavigation.svelte';
   import { PUBLIC_REFERENCE_DESTINATIONS } from '$lib/public-reference-navigation';
+  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../lib/project-metadata.mts';
 
   let {
     currentHref,
@@ -23,19 +24,51 @@
     children: Snippet;
   } = $props();
 
+  const currentDestination = $derived(PUBLIC_REFERENCE_DESTINATIONS.find((item) => item.href === currentHref) ?? null);
   const currentIndex = $derived(PUBLIC_REFERENCE_DESTINATIONS.findIndex((item) => item.href === currentHref));
+  const breadcrumbLabel = $derived(currentHref === '/resources' ? 'Resources' : currentDestination?.label ?? title);
+  const breadcrumbItems = $derived([
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: `${WHOISLEUTH_SITE_ORIGIN}/`,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Resources',
+      item: `${WHOISLEUTH_SITE_ORIGIN}/resources`,
+    },
+    ...(currentHref === '/resources' ? [] : [{
+      '@type': 'ListItem',
+      position: 3,
+      name: breadcrumbLabel,
+      item: `${WHOISLEUTH_SITE_ORIGIN}${currentHref}`,
+    }]),
+  ]);
+  const breadcrumbJson = $derived(JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems,
+  }).replaceAll('<', '\\u003c'));
   const previous = $derived(currentIndex > 0 ? PUBLIC_REFERENCE_DESTINATIONS[currentIndex - 1] : null);
   const next = $derived(currentIndex >= 0 && currentIndex < PUBLIC_REFERENCE_DESTINATIONS.length - 1
     ? PUBLIC_REFERENCE_DESTINATIONS[currentIndex + 1]
     : null);
 </script>
 
+<svelte:head>
+  <svelte:element this={'script'} type="application/ld+json">{breadcrumbJson}</svelte:element>
+</svelte:head>
+
 <article class="reference-document">
   <nav class="breadcrumbs" aria-label="Breadcrumb">
+    <a href="/">Home</a><span aria-hidden="true">/</span>
     {#if currentHref === '/resources'}
-      <span>Documentation</span>
+      <span>Resources</span>
     {:else}
-      <a href="/resources">Documentation</a><span aria-hidden="true">/</span><span>{title}</span>
+      <a href="/resources">Resources</a><span aria-hidden="true">/</span><span>{breadcrumbLabel}</span>
     {/if}
   </nav>
 

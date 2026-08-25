@@ -30,7 +30,7 @@
       </ol>
       {#if !linkSteps}
         <a class="path-link" href={`/resources#${goal.id}`}>
-          See these steps <span aria-hidden="true">→</span>
+          {goal.title} guide <span aria-hidden="true">→</span>
         </a>
       {/if}
     </article>
