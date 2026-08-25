@@ -81,6 +81,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Install tested shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
       - name: Run tests with production-source coverage

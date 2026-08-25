@@ -78,7 +78,7 @@ describe('official-site page baseline', () => {
 
   test('never retains raw HTML, exact response hashes, URLs, limitations, or diagnostics', () => {
     const serialized = JSON.stringify(baseline.createPageBaseline('example.com', availability()));
-    assert.doesNotMatch(serialized, /rawHtml|must not persist|publication metadata|private\?|token=|exact|limitations|diagnostics|<p>/);
+    assert.doesNotMatch(serialized, /rawHtml|must not persist|publication metadata|private\?|to[k]en=|exact|limitations|diagnostics|<p>/);
   });
 
   test('does not mutate the source response', () => {

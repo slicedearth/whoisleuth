@@ -18,6 +18,13 @@
   } = $props();
 
   const accessibleLabel = $derived(/evidence$/iu.test(label) ? label : `${label} evidence`);
+  let pointerIntentHandled = false;
+
+  function preloadFromPointerMovement(): void {
+    if (pointerIntentHandled) return;
+    pointerIntentHandled = true;
+    onpreload?.();
+  }
 </script>
 
 <button
@@ -26,7 +33,8 @@
   type="button"
   aria-label={`${expanded ? 'Collapse' : 'Expand'} ${accessibleLabel}`}
   aria-expanded={expanded}
-  onpointerenter={onpreload}
+  onpointermove={preloadFromPointerMovement}
+  onpointerleave={() => pointerIntentHandled = false}
   onfocus={onpreload}
   onclick={expanded ? onhide : onshow}
 >

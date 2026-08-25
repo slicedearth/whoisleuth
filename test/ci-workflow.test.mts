@@ -68,7 +68,9 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 3);
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
+    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
+    assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/gmu), 3);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);

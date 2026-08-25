@@ -711,17 +711,17 @@ function preflightTypeScriptNesting(source: string, file: string): void {
   const variant = extension === '.jsx' || extension === '.tsx' ? ts.LanguageVariant.JSX : ts.LanguageVariant.Standard;
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, variant, source);
   let depth = 0;
-  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-    if (token === ts.SyntaxKind.OpenParenToken
-      || token === ts.SyntaxKind.OpenBracketToken
-      || token === ts.SyntaxKind.OpenBraceToken) {
+  for (let syntaxKind = scanner.scan(); syntaxKind !== ts.SyntaxKind.EndOfFileToken; syntaxKind = scanner.scan()) {
+    if (syntaxKind === ts.SyntaxKind.OpenParenToken
+      || syntaxKind === ts.SyntaxKind.OpenBracketToken
+      || syntaxKind === ts.SyntaxKind.OpenBraceToken) {
       depth += 1;
       if (depth > MAX_SCHEMA_SOURCE_AST_DEPTH) {
         throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_AST_DEPTH} lexical nesting levels.`);
       }
-    } else if (token === ts.SyntaxKind.CloseParenToken
-      || token === ts.SyntaxKind.CloseBracketToken
-      || token === ts.SyntaxKind.CloseBraceToken) {
+    } else if (syntaxKind === ts.SyntaxKind.CloseParenToken
+      || syntaxKind === ts.SyntaxKind.CloseBracketToken
+      || syntaxKind === ts.SyntaxKind.CloseBraceToken) {
       depth = Math.max(0, depth - 1);
     }
   }

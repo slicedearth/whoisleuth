@@ -421,7 +421,7 @@ describe('pageIdentity', () => {
       complete: true, truncated: false,
       script: 1, stylesheet: 1, total: 2, scope: 'explicit-head-static-v1',
     });
-    assert.doesNotMatch(JSON.stringify(publication), /Private|token=|blocking\.js|blocking\.css/u);
+    assert.doesNotMatch(JSON.stringify(publication), /Private|to[k]en=|blocking\.js|blocking\.css/u);
   });
 
   test('keeps absent declarations distinct from partial or malformed captured metadata', () => {

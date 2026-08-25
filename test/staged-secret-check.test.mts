@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MAX_STAGED_DIFF_BYTES, gitDiffArguments, scanAddedDiff } from '../tools/staged-secret-check.mts';
+import { MAX_STAGED_DIFF_LINE_BYTES, gitDiffArguments, scanAddedDiff, scanAddedDiffChunks } from '../tools/staged-secret-check.mts';
 
 describe('staged secret check', () => {
   const genericKey = ['to', 'ken'].join('');
@@ -20,7 +20,14 @@ describe('staged secret check', () => {
 
   test('allows documented placeholders and ignores removed values', () => {
     const fixtureCredential = ['npm_', '1'.repeat(36)].join('');
-    const value = ['diff --git a/.env.example b/.env.example', '+++ b/.env.example', '@@ -1 +1 @@', `-${genericKey}="${fixtureCredential}"`, `+${genericKey}="replace_me"`].join('\n');
+    const value = [
+      'diff --git a/.env.example b/.env.example',
+      '+++ b/.env.example',
+      '@@ -1 +1,2 @@',
+      `-${genericKey}="${fixtureCredential}"`,
+      `+${genericKey}="replace_me"`,
+      `+${['private', 'key'].join('_')}="must-not-render"`,
+    ].join('\n');
     assert.deepEqual(scanAddedDiff(value), []);
   });
 
@@ -143,7 +150,29 @@ describe('staged secret check', () => {
     assert.throws(() => gitDiffArguments(['--range', 'main..HEAD']), /Usage/u);
   });
 
-  test('rejects an oversized staged diff before scanning it', () => {
-    assert.throws(() => scanAddedDiff('x'.repeat(MAX_STAGED_DIFF_BYTES + 1)), /secret-scan boundary/u);
+  test('streams aggregate diffs beyond the former whole-diff boundary', async () => {
+    const line = `+description=${'x'.repeat(4096)}\n`;
+    const chunks = [
+      Buffer.from('diff --git a/large.txt b/large.txt\n+++ b/large.txt\n@@ -0,0 +1,1025 @@\n'),
+      ...Array.from({ length: 1025 }, () => Buffer.from(line)),
+    ];
+    assert.ok(chunks.reduce((total, chunk) => total + chunk.length, 0) > MAX_STAGED_DIFF_LINE_BYTES);
+    assert.deepEqual(await scanAddedDiffChunks(chunks), []);
+  });
+
+  test('detects credentials split across streamed chunks', async () => {
+    const credential = ['npm_', '4'.repeat(36)].join('');
+    assert.deepEqual(await scanAddedDiffChunks([
+      Buffer.from('+++ b/config.txt\n@@ -0,0 +1 @@\n+to'),
+      Buffer.from(`ken="${credential.slice(0, 20)}`),
+      Buffer.from(`${credential.slice(20)}"\n`),
+    ]), [{ file: 'config.txt', addedLine: 1, rule: 'npm-token' }]);
+  });
+
+  test('rejects an oversized diff line while streaming', async () => {
+    await assert.rejects(
+      scanAddedDiffChunks([Buffer.from('x'.repeat(MAX_STAGED_DIFF_LINE_BYTES)), Buffer.from('x')]),
+      /secret-scan boundary/u,
+    );
   });
 });
