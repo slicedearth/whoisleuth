@@ -232,6 +232,10 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
 
+  const registrationSummary = page.getByRole('button', { name: 'Collapse Registration evidence' });
+  await expect(registrationSummary).toContainText('7 equivalent');
+  await expect(registrationSummary).toContainText('1 conflicts');
+
   const evidenceQuality = page.locator('#evidence-quality');
   await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
   await expect(evidenceQuality).not.toContainText('Observation time unavailable');

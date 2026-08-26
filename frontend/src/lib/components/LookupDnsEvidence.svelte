@@ -204,7 +204,7 @@
   .delegation-finding.state-healthy{border-left-color:var(--success)}
   .delegation-finding.state-warning{border-left-color:var(--amber)}
   .delegation-finding.state-danger{border-left-color:var(--danger)}
-  .delegation-finding>div span,.authority-state{text-transform:uppercase;font:650 var(--text-2xs) var(--mono);letter-spacing:.04em}
+  .delegation-finding>div span,.authority-state{flex:0 0 auto;white-space:nowrap;text-transform:uppercase;font:650 var(--text-2xs) var(--mono);letter-spacing:.04em}
   .delegation-finding p{margin:6px 0 0;font-size:var(--text-xs)}
   .delegation-finding small{display:block;margin-top:5px}
   .delegation-finding b{display:block;margin-top:7px;color:var(--muted);font-size:var(--text-2xs);font-weight:500;line-height:1.5}

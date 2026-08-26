@@ -83,6 +83,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
             findings: [
               { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'warning', summary: 'Parent view and registry publication differ', detail: 'Parent view: ns1.example, ns2.example. Registry publication: ns1.example, ns3.example.', remediation: 'Confirm the intended delegation before changing nameservers.' },
               { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'warning', summary: '1 nameserver could not be confirmed', detail: 'Successful: 1. Lame or refused: 0. Unreachable or unresolved: 1.', remediation: 'Restore authoritative service on every delegated nameserver.' },
+              { id: 'record_consistency', label: 'Authoritative record consistency', state: 'healthy', summary: 'Observed answers agree', detail: 'A and MX answers align across the selected authorities.', remediation: '' },
             ],
           },
         },
@@ -130,6 +131,9 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText(/does not change DNS/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  const healthyState = card.locator('.delegation-finding.state-healthy > div > span');
+  await expect(healthyState).toHaveCount(1);
+  await expect(healthyState).toHaveCSS('white-space', 'nowrap');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -624,6 +624,25 @@ describe('portable workspace archive', () => {
     assert.equal(mergedProfiles.profiles.some((item) => item.id === 'profile-one'), false);
   });
 
+  test('preserves Brand Profile content across deletion and restore', async () => {
+    const source = input();
+    source.brandProfiles[0]!.updatedAt = '2026-07-18T01:02:03.000Z';
+    const archive = await buildWorkspaceArchive(source, { generatedAt: NOW });
+
+    const restored = mergeBrandProfiles([], archive.sections.brandProfiles, {
+      nowIso: '2026-07-20T04:05:06.000Z',
+    });
+    const reExported = await buildWorkspaceArchive(
+      { ...emptyInput(), brandProfiles: restored.profiles },
+      { generatedAt: '2026-07-20T04:05:06.000Z' },
+    );
+
+    assert.deepEqual(
+      reExported.sections.brandProfiles.profiles,
+      archive.sections.brandProfiles.profiles,
+    );
+  });
+
   test('blocks profile, Case, and Settings sections atomically when one exact profile id names a different profile', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const local = emptyInput();

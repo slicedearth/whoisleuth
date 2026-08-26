@@ -186,6 +186,15 @@ export function buildLookupRegistryDisplay(input: {
               ? 'warn'
               : '',
   }));
+  const comparisonMetrics = [...comparisonRows, ...publicationRows].reduce(
+    (counts, row) => {
+      if (row.status === 'equivalent') counts.equivalent += 1;
+      else if (row.status === 'conflict') counts.conflict += 1;
+      else counts.limitedOrSourceOnly += 1;
+      return counts;
+    },
+    { equivalent: 0, conflict: 0, limitedOrSourceOnly: 0 },
+  );
   const rows: Array<{ label: string; value: string; datetime?: string }> = [];
   if (result?.type === 'ipv4' || result?.type === 'ipv6') {
     rows.push(
@@ -248,6 +257,7 @@ export function buildLookupRegistryDisplay(input: {
   );
 
   return {
+    comparisonMetrics,
     comparisonRows,
     rdapPartialDetail: rdapParsed.serverTruncated
       ? `The registry reported that some RDAP data was omitted.${

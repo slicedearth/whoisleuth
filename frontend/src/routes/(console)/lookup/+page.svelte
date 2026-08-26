@@ -1042,7 +1042,7 @@
       <LookupFamilySummary
         label="Registration"
         description="Compare authoritative registry evidence with separately attributed registrar RDAP and WHOIS publications."
-        metrics={[`${comparison.counts.equivalent} equivalent`, `${comparison.counts.conflict} conflicts`, `${sourceOnlyCount+redactedComparisonCount+limitedComparisonCount} limited or source-only`]}
+        metrics={[`${registryDisplay.comparisonMetrics.equivalent} equivalent`, `${registryDisplay.comparisonMetrics.conflict} conflicts`, `${registryDisplay.comparisonMetrics.limitedOrSourceOnly} limited or source-only`]}
         expanded={sectionDetailVisible('registry')}
         onpreload={()=>preloadLookupSection('registry')}
         onshow={()=>void showSectionDetail('registry')}

@@ -577,6 +577,13 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
 
+  const originalWorkspace = JSON.parse(
+    (await downloadWorkspaceArchive(page)).content,
+  ) as WorkspaceArchiveDocument;
+  const originalInspection = await runOfflineCliJson<ArchiveInspectionReport>([
+    'inspect-archive', '--json',
+  ], originalWorkspace);
+
   const { download, content } = await downloadEncryptedWorkspaceArchive(page, passphrase);
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-encrypted-\d{4}-\d{2}-\d{2}\.json$/);
   const envelope = JSON.parse(content) as EncryptedWorkspaceArchiveEnvelope;
@@ -611,6 +618,17 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   const cases = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: 2 });
   expect(cases.records.map((record) => record.value.domain)).toContain('archive-case.invalid');
+
+  const restoredWorkspace = JSON.parse(
+    (await downloadWorkspaceArchive(page)).content,
+  ) as WorkspaceArchiveDocument;
+  const restoredInspection = await runOfflineCliJson<ArchiveInspectionReport>([
+    'inspect-archive',
+    '--expect-content-digest',
+    originalInspection.summary.contentDigestSha256,
+    '--json',
+  ], restoredWorkspace);
+  expect(restoredInspection.summary.contentDigestSha256).toBe(originalInspection.summary.contentDigestSha256);
 });
 
 test('workspace archive import previews conflicts before a non-destructive mobile-safe merge', {
@@ -619,6 +637,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
+  const archive = JSON.parse(content) as WorkspaceArchiveDocument;
 
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
@@ -654,6 +673,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(cases.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'local-only.invalid']);
   expect(campaigns.records).toHaveLength(1);
   expect(profiles.records).toHaveLength(1);
+  expect(profiles.records[0]?.value.updatedAt).toBe(archive.sections.brandProfiles.profiles[0]?.updatedAt);
   expect(relationshipObservations.records).toHaveLength(1);
   expect(websiteSnapshots.records).toHaveLength(1);
   expect(investigationTemplates.records).toHaveLength(1);
