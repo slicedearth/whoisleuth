@@ -317,6 +317,21 @@ test('structured imports merge by case-insensitive profile name', () => {
   assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
 });
 
+test('restoring a missing profile preserves its exported modification time', () => {
+  const exportedUpdatedAt = '2026-07-01T03:04:05.000Z';
+  const result = mergeBrandProfiles([], {
+    schema: 'whoisleuth.brand-profiles',
+    version: BRAND_PROFILE_SCHEMA_VERSION,
+    profiles: [profile({ updatedAt: exportedUpdatedAt })],
+  }, { nowIso: NOW });
+
+  assert.deepEqual(
+    { added: result.added, updated: result.updated, skipped: result.skipped },
+    { added: 1, updated: 0, skipped: 0 },
+  );
+  assert.equal(requiredValue(result.profiles[0]).updatedAt, exportedUpdatedAt);
+});
+
 test('rejects exact identifier reuse across different normalised profile names atomically', () => {
   const local = profile({ id: 'stable-profile', name: 'Stable Profile' });
   const conflicting = {

@@ -333,16 +333,41 @@ test('keeps registry comparison and source diagnostics separately attributed', (
     },
     registrarRdapParsed: {},
     registrarPublicationComparison: {
-      fields: [],
+      fields: [
+        {
+          label: 'Updated',
+          status: 'conflict',
+          registryState: 'value',
+          registrarState: 'value',
+          registryDisplay: '2026-01-01',
+          registrarDisplay: '2026-01-02',
+        },
+        {
+          label: 'DNSSEC',
+          status: 'equivalent',
+          registryState: 'value',
+          registrarState: 'value',
+          registryDisplay: 'Signed',
+          registrarDisplay: 'Signed',
+        },
+        {
+          label: 'Nameservers',
+          status: 'registrar_unavailable',
+          registryState: 'value',
+          registrarState: 'unavailable',
+          registryDisplay: 'ns1.example.test',
+          registrarDisplay: 'Unsupported by source',
+        },
+      ],
       counts: {
-        equivalent: 0,
-        conflict: 0,
+        equivalent: 1,
+        conflict: 1,
         registry_only: 0,
         registrar_only: 0,
         registry_redacted: 0,
         registrar_redacted: 0,
         registry_unavailable: 0,
-        registrar_unavailable: 0,
+        registrar_unavailable: 1,
         registry_incomplete: 0,
         registrar_incomplete: 0,
       },
@@ -356,6 +381,12 @@ test('keeps registry comparison and source diagnostics separately attributed', (
   assert.equal(registry.comparisonRows[0]?.whoisMatrixTone, 'conflict');
   assert.equal(registry.comparisonRows[1]?.rdapMatrixTone, 'observed');
   assert.equal(registry.comparisonRows[1]?.whoisMatrixTone, 'unavailable');
+  assert.deepEqual(registry.comparisonMetrics, {
+    equivalent: 1,
+    conflict: 2,
+    limitedOrSourceOnly: 2,
+  });
+  assert.equal(registry.registrarRdap.comparisonRows[0]?.tone, 'danger');
   assert.equal(registry.whoisContactRoles[0]?.contacts[0]?.identity, 'Abuse desk');
   assert.equal(registry.registrarRdap.label, 'partial');
   assert.match(registry.diagnosticDetail({

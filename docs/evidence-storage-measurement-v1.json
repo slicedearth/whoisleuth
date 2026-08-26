@@ -35,7 +35,7 @@
       {
         "file": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v13.json",
         "bytes": 9288,
-        "sha256": "sha256:77b7bce093a967d04a2cf0ead3b715625c00903c4c194227c5b74886f2b847c6"
+        "sha256": "sha256:915ca7f3171ae48a2d3d06dc089f5840d4240b6a1fff1c050413b8bcca75fe26"
       },
       {
         "file": "test/fixtures/case-lifecycle/workspace-archive-v6-empty-current.json",

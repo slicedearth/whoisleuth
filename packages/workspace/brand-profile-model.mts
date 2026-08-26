@@ -637,7 +637,7 @@ export function mergeBrandProfiles(
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
     const profile = normalizeBrandProfile(item, {
       existing,
-      touch: true,
+      touch: Boolean(existing),
       nowIso: options.nowIso,
       makeId: options.makeId,
     });
