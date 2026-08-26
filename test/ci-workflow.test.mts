@@ -239,8 +239,10 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee test-duration-report\.txt/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report\.txt$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee "\$RUNNER_TEMP\/test-duration-report\.txt"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: \$\{\{ runner\.temp \}\}\/test-duration-report\.txt$/mu);
+    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report\.txt$/mu);
     assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
     const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [

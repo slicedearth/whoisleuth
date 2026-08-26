@@ -26,6 +26,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Install tested shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
       - name: Run expanded property checks
@@ -38,12 +42,12 @@ jobs:
       - name: Profile the complete unit suite
         run: |
           set -o pipefail
-          npm run test:profile | tee test-duration-report.txt
+          npm run test:profile | tee "$RUNNER_TEMP/test-duration-report.txt"
       - name: Upload duration profile
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-duration-profile
-          path: test-duration-report.txt
+          path: ${{ runner.temp }}/test-duration-report.txt
           if-no-files-found: ignore
           retention-days: 14
