@@ -103,15 +103,22 @@ describe('bounded verification state machines', () => {
   test('keeps Case status, decision, and response transitions legal and append-only', (context) => {
     replay(context, 'Case lifecycle');
     const statuses = CASE_STATUSES.map((item) => item.value);
+    const validRationale = fc.string({ maxLength: 39 }).map((suffix) => `R${suffix}`);
+    const invalidRationale = fc.oneof(
+      fc.constant(''),
+      fc.array(fc.constantFrom(' ', '\t', '\n', '\r'), { minLength: 1, maxLength: 40 })
+        .map((characters) => characters.join('')),
+    );
     fc.assert(fc.property(
       fc.array(fc.constantFrom(...statuses), { minLength: 1, maxLength: 16 }),
-      fc.array(fc.string({ minLength: 1, maxLength: 40 }), { maxLength: 12 }),
+      fc.array(validRationale, { maxLength: 12 }),
+      fc.array(invalidRationale, { minLength: 1, maxLength: 12 }),
       fc.array(fc.record({
         previous: fc.option(fc.constantFrom(...CASE_ACTION_STATES), { nil: null }),
         next: fc.constantFrom(...CASE_ACTION_STATES),
         source: fc.constantFrom(...CASE_ACTION_EVENT_SOURCE_CLASSES),
       }), { maxLength: 40 }),
-      (statusSequence, rationales, transitions) => {
+      (statusSequence, rationales, invalidRationales, transitions) => {
         let record = createCase({ domain: 'case-state.example', source: 'manual' }, NOW);
         let cases = [record];
         for (const status of statusSequence) {
@@ -131,6 +138,14 @@ describe('bounded verification state machines', () => {
           }, new Date(Date.parse(NOW) + index * 1_000).toISOString());
           assert.deepEqual(decisions.slice(0, before.length), before);
           assert.equal(decisions.length, before.length + 1);
+        });
+        invalidRationales.forEach((rationale, index) => {
+          const before = structuredClone(decisions);
+          assert.throws(() => appendCaseDecision(decisions, {
+            summary: `Rejected decision ${index}`,
+            rationale,
+          }, new Date(Date.parse(NOW) + (rationales.length + index) * 1_000).toISOString()), /summary and rationale/u);
+          assert.deepEqual(decisions, before);
         });
         for (const transition of transitions) {
           const expected = referenceCaseTransition(transition.previous, transition.next, transition.source);
