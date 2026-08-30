@@ -115,6 +115,20 @@ function caseWorkspaceActionStatus(page: Page) {
     .getByRole('status', { name: 'Case workspace action status' });
 }
 
+function operationsReportActionStatus(page: Page, text: string) {
+  return page
+    .locator('.operations-report')
+    .getByRole('status')
+    .filter({ hasText: text });
+}
+
+function reviewInboxActionStatus(page: Page, text: string) {
+  return page
+    .locator('#monitor-view-panel')
+    .getByRole('status')
+    .filter({ hasText: text });
+}
+
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await page.goto('/monitor');
   const tabs = page.getByRole('tablist', { name: 'Monitor views' });
@@ -295,7 +309,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
     'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
     'Private response route', 'Analyst supplied', 'PRIVATE-CASE-7', 'Private analyst outcome text.',
   ]) expect(body).not.toContain(sentinel);
-  await expect(caseWorkspaceActionStatus(page)).toContainText('No response was submitted');
+  await expect(operationsReportActionStatus(page, 'No response was submitted')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -424,8 +438,8 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the reviewed evidence-gap dismissal');
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(reviewInboxActionStatus(page, 'Recorded the reviewed evidence-gap dismissal')).toBeVisible();
+  await expect(reviewInboxActionStatus(page, 'The change was saved, but Cases could not be reread')).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,

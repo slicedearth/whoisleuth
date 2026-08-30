@@ -1,6 +1,12 @@
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import {
+  BROWSER_LIBRARY_PROFILE_VERSION,
+  TECHNOLOGY_PROFILE_VERSION,
+  WEBSITE_SECURITY_POSTURE_VERSION,
+} from '../lib/lookup-child-profile-contract.mts';
+import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -196,9 +202,14 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           },
         },
         tls: {
-          version: 1, profileVersion: 2, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          version: 1, profileVersion: TLS_PROFILE_VERSION, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake fixture.'],
+          diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
+          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
+          protocol: 'TLSv1.3', alpnProtocol: 'h2',
+          cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
+          ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
           authorization: { authorized: true, error: null },
           hostname: { matches: true, error: null },
           validity: { status: 'valid' },
@@ -211,6 +222,9 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             fingerprintSha256: '7'.repeat(64),
             publicKey: { fingerprintSha256: '8'.repeat(64) },
           },
+          chain: [],
+          chainTruncated: false,
+          findings: [],
         },
         pageIdentity: {
           identityVersion: 3, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
@@ -283,29 +297,31 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           entities: [{
             types: ['Organization', 'WebSite'],
             name: 'Example publisher',
-            declaredOrigin: 'https://login.example.test',
+            declaredOrigin: 'https://login.example.test/',
             sameAsHosts: ['social.example.test'],
           }],
         },
         technologyProfile: {
-          profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          profileVersion: TECHNOLOGY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
           diagnostics: { findings: 2, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
           findings: [
-            { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'generator metadata', description: 'Generator metadata identifies the fixture CMS.' }] },
-            { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', evidence: [{ source: 'resource origin', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
+            { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', roles: ['application_platform'], evidence: [{ source: 'generator metadata', role: 'application_platform', description: 'Generator metadata identifies the fixture CMS.' }] },
+            { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'], evidence: [{ source: 'resource origin', role: 'observed_edge', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
           ],
           browserLibraryProfile: {
-            profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
             scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
             catalog: { name: 'Retire.js', version: 'retire.js-5.4.3', sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7' },
+            knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01' },
             limitations: ['A fixture advisory match does not establish reachability or exploitability.'],
             diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 1, advisoryMatches: 1 },
             findings: [{
               id: 'fixture-library', name: 'fixture library', apparentVersion: '1.2.3',
               detectionMethods: ['script filename'], advisoryCount: 1, highestSeverity: 'medium',
-              advisoryIdentifiers: ['CVE-0000-0000'], weaknessClasses: ['CWE-000'],
+              advisoryIdentifiers: ['CVE-0000-0000'], knownExploitedCount: 0,
+              knownExploitedIdentifiers: [], weaknessClasses: ['CWE-000'],
             }],
           },
         },
@@ -335,7 +351,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           }],
         },
         securityPosture: {
-          postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          postureVersion: WEBSITE_SECURITY_POSTURE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['This is a passive fixture interpretation, not an active vulnerability assessment.'],
           diagnostics: { findings: 3, observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
@@ -483,7 +499,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await structuredCard.locator(':scope > summary').click();
   await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeVisible();
   await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
-  await expect(structuredCard.getByText('https://login.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('https://login.example.test/', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
 
@@ -506,7 +522,11 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await technologySummary.focus();
   await technologySummary.press('Enter');
   await expect(technologyCard.getByRole('heading', { name: 'Fixture CMS' })).toBeVisible();
-  await expect(technologyCard.getByText('high confidence', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText('high signature strength', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText('Application-platform indicator', { exact: true }).locator('..'))
+    .toContainText('Fixture CMS');
+  await expect(technologyCard.getByText('Observed edge, CDN, reverse proxy or WAF', { exact: true }).locator('..'))
+    .toContainText('Fixture Edge');
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
@@ -600,7 +620,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
         confidence: 'high',
         domain: 'unmatched-technology.test',
         technologyProfile: {
-          profileVersion: 1,
+          profileVersion: TECHNOLOGY_PROFILE_VERSION,
           version: 1,
           status: 'success',
           observedAt: '2026-07-27T00:00:00.000Z',
@@ -613,7 +633,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
           diagnostics: { findings: 0, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 0 },
           findings: [],
           browserLibraryProfile: {
-            profileVersion: 1,
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION,
             version: 1,
             status: 'success',
             observedAt: '2026-07-27T00:00:00.000Z',
@@ -623,6 +643,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
             complete: true,
             truncated: false,
             catalog: { name: 'Retire.js', version: 'fixture-catalogue', sourceRevision: 'fixture-revision' },
+            knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01' },
             limitations: ['Static signatures are selective.'],
             diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 0, advisoryMatches: 0 },
             findings: [],
@@ -664,9 +685,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
       availability: {
         state: 'registered', confidence: 'high', domain: 'tls-evidence.test',
         tls: {
-          version: 1, profileVersion: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          version: 1, profileVersion: TLS_PROFILE_VERSION, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake to one validated public address.'],
+          diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
           connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
