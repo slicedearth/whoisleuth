@@ -63,6 +63,7 @@ import {
   PAGE_FINGERPRINT_VERSION,
   PAGE_IDENTITY_VERSION,
 } from '../packages/contracts/workspace-portability.mts';
+import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from './technology-evidence-role.mts';
 import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
@@ -581,6 +582,14 @@ const TECHNOLOGY_EVIDENCE_ROLES = new Set([
   'application_platform', 'embedded_dependency', 'framework_runtime', 'observed_edge',
 ]);
 const TECHNOLOGY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
+const SECURITY_POSTURE_CATEGORIES = new Set([
+  'transport', 'response headers', 'forms and resources', 'certificate', 'domain controls',
+]);
+const STRUCTURED_DATA_TYPES = new Set([
+  'Brand', 'Corporation', 'EducationalOrganization', 'GovernmentOrganization',
+  'LocalBusiness', 'NewsMediaOrganization', 'NGO', 'OnlineBusiness', 'Organization',
+  'PerformingGroup', 'Project', 'SportsOrganization', 'WebPage', 'WebSite',
+]);
 const PAGE_ROLE_VALUES = new Set([
   'access_challenge', 'authentication', 'commerce', 'support_contact',
   'parked_sale', 'content', 'unknown',
@@ -589,6 +598,18 @@ const CLIENT_BEHAVIOR_IDS = new Set([
   'inline_event_handlers', 'client_navigation', 'form_interception',
   'service_worker', 'browser_storage', 'clipboard_access',
   'dynamic_code_evaluation', 'browser_fingerprinting', 'persistent_connection',
+]);
+const SHA1_RE = /^[a-f0-9]{40}$/u;
+const SIMHASH64_RE = /^[a-f0-9]{16}$/u;
+const OID_RE = /^\d{1,10}(?:\.\d{1,10}){1,31}$/u;
+const CREDENTIAL_METHOD_KEYS = Object.freeze(['missing', 'get', 'post', 'dialog', 'other']);
+const CREDENTIAL_ACTION_KEYS = Object.freeze(['sameOrigin', 'external', 'missing', 'cleartext', 'unclassified']);
+const CREDENTIAL_CATEGORY_KEYS = Object.freeze(['password', 'email', 'username', 'one_time_code', 'payment']);
+const TLS_NAME_KEYS = Object.freeze([
+  'commonNames', 'organizations', 'organizationalUnits', 'countries', 'localities', 'states',
+]);
+const TLS_SAN_CLASS_KEYS = Object.freeze([
+  'dns', 'ip', 'email', 'uri', 'directoryName', 'registeredId', 'otherName', 'unclassified',
 ]);
 
 function hasOnlyKeys(value: JsonObject, allowed: readonly string[]): boolean {
@@ -633,7 +654,7 @@ function validProfileObservation(
     || !statuses.has(value.status)
     || typeof value.source !== 'string'
     || !sources.has(value.source)
-    || normalizeExplicitIsoTimestamp(value.observedAt) === null
+    || normalizeExplicitIsoTimestamp(value.observedAt) !== value.observedAt
     || value.scanMode !== 'deep'
     || !(value.durationMs === null
       || Number.isSafeInteger(value.durationMs)
@@ -650,7 +671,268 @@ function validProfileObservation(
     || !validObservationDiagnostics(value.diagnostics)) return false;
   if (value.status === 'success' && value.complete !== true) return false;
   if (value.status !== 'success' && value.complete !== false) return false;
+  if (value.complete === true && value.truncated === true) return false;
   return true;
+}
+
+function hasExactKeys(value: JsonObject, expected: readonly string[]): boolean {
+  return Object.keys(value).length === expected.length && hasOnlyKeys(value, expected);
+}
+
+function validNullableBoundedString(value: unknown, maximum: number): boolean {
+  return value === null || validBoundedString(value, maximum);
+}
+
+function validNullableDigest(value: unknown, expression: RegExp): boolean {
+  return value === null || typeof value === 'string' && expression.test(value);
+}
+
+function validNullableIsoTimestamp(value: unknown): boolean {
+  return value === null || typeof value === 'string' && normalizeExplicitIsoTimestamp(value) === value;
+}
+
+function validExactUintRecord(value: unknown, keys: readonly string[], maximum: number): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, keys)
+    && keys.every((key) => validUint(value[key], maximum));
+}
+
+function validHttpOrigin(value: unknown): boolean {
+  if (!validBoundedString(value, 2_048)) return false;
+  try {
+    const parsed = new URL(String(value));
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && Boolean(parsed.hostname)
+      && !parsed.username
+      && !parsed.password
+      && !parsed.search
+      && !parsed.hash
+      && parsed.pathname === '/'
+      && [parsed.origin, `${parsed.origin}/`].includes(String(value));
+  } catch {
+    return false;
+  }
+}
+
+function validHttpOriginArray(value: unknown, maximumItems: number): boolean {
+  return Array.isArray(value)
+    && value.length <= maximumItems
+    && value.every(validHttpOrigin)
+    && new Set(value).size === value.length;
+}
+
+function validFingerprintIdentifier(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['type', 'value'])
+    && typeof value.type === 'string'
+    && /^[a-z-]{1,40}$/u.test(value.type)
+    && typeof value.value === 'string'
+    && /^[A-Z0-9-]{1,64}$/u.test(value.value);
+}
+
+function validPageFingerprintProfile(value: JsonObject): boolean {
+  const normalizedHtml = value.normalizedHtml;
+  const visibleText = value.visibleText;
+  const domStructure = value.domStructure;
+  const formStructure = value.formStructure;
+  const resourceHosts = value.resourceHosts;
+  const identifiers = value.identifiers;
+  if (!isJsonObject(normalizedHtml)
+    || !hasExactKeys(normalizedHtml, ['algorithm', 'value', 'tokenCount', 'truncated'])
+    || normalizedHtml.algorithm !== 'sha256'
+    || typeof normalizedHtml.value !== 'string'
+    || !SHA256_RE.test(normalizedHtml.value)
+    || !validUint(normalizedHtml.tokenCount, 4_096)
+    || typeof normalizedHtml.truncated !== 'boolean'
+    || !(visibleText === null || isJsonObject(visibleText)
+      && hasExactKeys(visibleText, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
+      && visibleText.algorithm === 'simhash64-v1'
+      && typeof visibleText.value === 'string'
+      && SIMHASH64_RE.test(visibleText.value)
+      && validUint(visibleText.tokenCount, 8_192)
+      && validUint(visibleText.featureCount, 8_192)
+      && typeof visibleText.truncated === 'boolean')
+    || !isJsonObject(domStructure)
+    || !hasExactKeys(domStructure, ['algorithm', 'value', 'nodeCount', 'parser', 'truncated', 'similarity'])
+    || domStructure.algorithm !== 'sha256'
+    || typeof domStructure.value !== 'string'
+    || !SHA256_RE.test(domStructure.value)
+    || !validUint(domStructure.nodeCount, 4_096)
+    || domStructure.parser !== 'static-tag-sequence-v1'
+    || typeof domStructure.truncated !== 'boolean'
+    || !(domStructure.similarity === null || isJsonObject(domStructure.similarity)
+      && hasExactKeys(domStructure.similarity, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
+      && domStructure.similarity.algorithm === 'simhash64-v1'
+      && typeof domStructure.similarity.value === 'string'
+      && SIMHASH64_RE.test(domStructure.similarity.value)
+      && validUint(domStructure.similarity.tokenCount, 4_096)
+      && validUint(domStructure.similarity.featureCount, 4_096)
+      && typeof domStructure.similarity.truncated === 'boolean')
+    || !(formStructure === null || isJsonObject(formStructure)
+      && hasExactKeys(formStructure, ['algorithm', 'value', 'formCount', 'controlCount', 'truncated'])
+      && formStructure.algorithm === 'sha256'
+      && typeof formStructure.value === 'string'
+      && SHA256_RE.test(formStructure.value)
+      && validUint(formStructure.formCount, 50)
+      && validUint(formStructure.controlCount, 500)
+      && typeof formStructure.truncated === 'boolean')
+    || !isJsonObject(resourceHosts)
+    || !hasExactKeys(resourceHosts, ['algorithm', 'value', 'values', 'truncated'])
+    || resourceHosts.algorithm !== 'set-sha256'
+    || !validNullableDigest(resourceHosts.value, SHA256_RE)
+    || !validExactStringArray(resourceHosts.values, 30, 253)
+    || typeof resourceHosts.truncated !== 'boolean'
+    || !isJsonObject(identifiers)
+    || !hasExactKeys(identifiers, ['algorithm', 'value', 'values', 'truncated'])
+    || identifiers.algorithm !== 'set-sha256'
+    || !validNullableDigest(identifiers.value, SHA256_RE)
+    || !Array.isArray(identifiers.values)
+    || identifiers.values.length > 30
+    || !identifiers.values.every(validFingerprintIdentifier)
+    || new Set(identifiers.values.map((item) => JSON.stringify(item))).size !== identifiers.values.length
+    || typeof identifiers.truncated !== 'boolean') return false;
+  if ((resourceHosts.values as JsonValue[]).length === 0 !== (resourceHosts.value === null)
+    || (identifiers.values as JsonValue[]).length === 0 !== (identifiers.value === null)) return false;
+  return true;
+}
+
+function validCredentialCountRecord(
+  value: unknown,
+  keys: readonly string[],
+  maximum: number,
+): value is JsonObject {
+  return validExactUintRecord(value, keys, maximum);
+}
+
+function validDistinguishedName(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, TLS_NAME_KEYS)
+    && TLS_NAME_KEYS.every((key) => validExactStringArray(value[key], MAX_LOOKUP_TLS_NAME_VALUES, 256));
+}
+
+function validTlsAltNames(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['dnsNames', 'ipAddresses', 'classes', 'truncated'])
+    && validExactStringArray(value.dnsNames, MAX_LOOKUP_TLS_ALT_NAMES, 253)
+    && validExactStringArray(value.ipAddresses, MAX_LOOKUP_TLS_ALT_NAMES, 64)
+    && (value.dnsNames as JsonValue[]).length + (value.ipAddresses as JsonValue[]).length <= MAX_LOOKUP_TLS_ALT_NAMES
+    && validExactUintRecord(value.classes, TLS_SAN_CLASS_KEYS, 100)
+    && typeof value.truncated === 'boolean';
+}
+
+function validTlsPublicKey(value: unknown): boolean {
+  if (!isJsonObject(value) || !hasExactKeys(value, ['type', 'bits', 'curve', 'fingerprintSha256'])) return false;
+  return validNullableBoundedString(value.type, 32)
+    && (value.bits === null || validUint(value.bits, 32_768) && Number(value.bits) > 0)
+    && validNullableBoundedString(value.curve, 64)
+    && validNullableDigest(value.fingerprintSha256, SHA256_RE);
+}
+
+function validTlsSignature(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['algorithm', 'oid'])
+    && validNullableBoundedString(value.algorithm, 128)
+    && (value.oid === null || typeof value.oid === 'string' && OID_RE.test(value.oid));
+}
+
+function validTlsPurposes(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['values', 'truncated'])
+    && Array.isArray(value.values)
+    && value.values.length <= 16
+    && value.values.every((item) => isJsonObject(item)
+      && hasExactKeys(item, ['oid', 'name'])
+      && typeof item.oid === 'string'
+      && OID_RE.test(item.oid)
+      && validBoundedString(item.name, 128))
+    && typeof value.truncated === 'boolean';
+}
+
+function validAiaSummary(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['total', 'http', 'https', 'other'])
+    && ['total', 'http', 'https', 'other'].every((key) => validUint(value[key], 32))
+    && value.total === Number(value.http) + Number(value.https) + Number(value.other);
+}
+
+function validTlsAuthorityInformationAccess(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['ocsp', 'caIssuers', 'unknownMethods', 'truncated'])
+    && validAiaSummary(value.ocsp)
+    && validAiaSummary(value.caIssuers)
+    && validUint(value.unknownMethods, 32)
+    && Number((value.ocsp as JsonObject).total)
+      + Number((value.caIssuers as JsonObject).total)
+      + Number(value.unknownMethods) <= 32
+    && typeof value.truncated === 'boolean';
+}
+
+function validTlsExtensionProfile(value: unknown): boolean {
+  if (!isJsonObject(value)
+    || !hasExactKeys(value, ['certificatePolicies', 'crlDistributionPoints', 'parsed', 'partial'])
+    || !isJsonObject(value.certificatePolicies)
+    || !hasExactKeys(value.certificatePolicies, ['oids', 'truncated'])
+    || !validExactStringArray(value.certificatePolicies.oids, MAX_LOOKUP_TLS_CERTIFICATE_POLICIES, 128)
+    || !(value.certificatePolicies.oids as JsonValue[]).every((oid) => typeof oid === 'string' && OID_RE.test(oid))
+    || typeof value.certificatePolicies.truncated !== 'boolean'
+    || !isJsonObject(value.crlDistributionPoints)
+    || !hasExactKeys(value.crlDistributionPoints, ['total', 'http', 'https', 'ldap', 'other', 'truncated'])
+    || !['total', 'http', 'https', 'ldap', 'other'].every((key) => validUint((value.crlDistributionPoints as JsonObject)[key], 32))
+    || value.crlDistributionPoints.total !== ['http', 'https', 'ldap', 'other']
+      .reduce((sum, key) => sum + Number((value.crlDistributionPoints as JsonObject)[key]), 0)
+    || typeof value.crlDistributionPoints.truncated !== 'boolean'
+    || typeof value.parsed !== 'boolean'
+    || typeof value.partial !== 'boolean') return false;
+  return true;
+}
+
+function validTlsCertificate(value: unknown, leaf: boolean): boolean {
+  if (!isJsonObject(value)) return false;
+  const baseKeys = [
+    'subject', 'issuer', 'serialNumber', 'validFrom', 'validTo', 'fingerprintSha1',
+    'fingerprintSha256', 'isCertificateAuthority',
+  ];
+  const leafKeys = [
+    'subjectAltNames', 'publicKey', 'signature', 'extendedKeyUsage',
+    'authorityInformationAccess', 'extensionProfile',
+  ];
+  if (!hasOnlyKeys(value, leaf ? [...baseKeys, ...leafKeys] : baseKeys)
+    || !baseKeys.every((key) => Object.hasOwn(value, key))
+    || !validDistinguishedName(value.subject)
+    || !validDistinguishedName(value.issuer)
+    || !(value.serialNumber === null || typeof value.serialNumber === 'string'
+      && /^[a-f0-9]{1,128}$/u.test(value.serialNumber))
+    || !validNullableIsoTimestamp(value.validFrom)
+    || !validNullableIsoTimestamp(value.validTo)
+    || !validNullableDigest(value.fingerprintSha1, SHA1_RE)
+    || !validNullableDigest(value.fingerprintSha256, SHA256_RE)
+    || !(value.isCertificateAuthority === null || typeof value.isCertificateAuthority === 'boolean')) return false;
+  if (!leaf) return hasExactKeys(value, baseKeys);
+  return (value.subjectAltNames === undefined || validTlsAltNames(value.subjectAltNames))
+    && (value.publicKey === undefined || validTlsPublicKey(value.publicKey))
+    && (value.signature === undefined || validTlsSignature(value.signature))
+    && (value.extendedKeyUsage === undefined || validTlsPurposes(value.extendedKeyUsage))
+    && (value.authorityInformationAccess === undefined
+      || validTlsAuthorityInformationAccess(value.authorityInformationAccess))
+    && (value.extensionProfile === undefined || validTlsExtensionProfile(value.extensionProfile));
+}
+
+function validTlsCipher(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['name', 'standardName', 'version'])
+    && validNullableBoundedString(value.name, 128)
+    && validNullableBoundedString(value.standardName, 128)
+    && validNullableBoundedString(value.version, 32)
+    && [value.name, value.standardName, value.version].some((item) => item !== null);
+}
+
+function validTlsEphemeralKey(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasExactKeys(value, ['type', 'name', 'size'])
+    && validNullableBoundedString(value.type, 32)
+    && validNullableBoundedString(value.name, 64)
+    && (value.size === null || validUint(value.size, 32_768) && Number(value.size) > 0)
+    && [value.type, value.name, value.size].some((item) => item !== null);
 }
 
 function technologyProfileContractState(value: unknown): ChildContractState {
@@ -663,6 +945,7 @@ function technologyProfileContractState(value: unknown): ChildContractState {
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_TECHNOLOGY_FINDINGS
     || !(profile.browserLibraryProfile === null || isJsonObject(profile.browserLibraryProfile))) return 'invalid';
+  const findingIds = new Set<string>();
   for (const candidate of profile.findings) {
     if (!isJsonObject(candidate)
       || !hasOnlyKeys(candidate, profileVersion >= 11
@@ -678,6 +961,8 @@ function technologyProfileContractState(value: unknown): ChildContractState {
       || !Array.isArray(candidate.evidence)
       || candidate.evidence.length < 1
       || candidate.evidence.length > MAX_EVIDENCE_PER_TECHNOLOGY) return 'invalid';
+    if (findingIds.has(candidate.id as string)) return 'invalid';
+    findingIds.add(candidate.id as string);
     if (profileVersion >= 11 && !validExactStringArray(candidate.roles, 4, 40, TECHNOLOGY_EVIDENCE_ROLES)) return 'invalid';
     for (const evidence of candidate.evidence) {
       if (!isJsonObject(evidence)
@@ -687,6 +972,11 @@ function technologyProfileContractState(value: unknown): ChildContractState {
         || !validBoundedString(evidence.description, MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH)
         || profileVersion >= 11 && (typeof evidence.role !== 'string'
           || !TECHNOLOGY_EVIDENCE_ROLES.has(evidence.role))) return 'invalid';
+    }
+    if (profileVersion >= 11) {
+      const observedRoles = new Set((candidate.evidence as JsonObject[]).map((evidence) => String(evidence.role)));
+      const expectedRoles = TECHNOLOGY_EVIDENCE_ROLE_ORDER.filter((role) => observedRoles.has(role));
+      if (JSON.stringify(candidate.roles) !== JSON.stringify(expectedRoles)) return 'invalid';
     }
   }
   return 'supported';
@@ -706,10 +996,12 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
     || !isJsonObject(knownExploitedCatalog)
     || !hasOnlyKeys(knownExploitedCatalog, ['name', 'version', 'releasedAt'])
     || !['name', 'version', 'releasedAt'].every((field) => validBoundedString(knownExploitedCatalog[field], 160))
+    || normalizeExplicitIsoTimestamp(knownExploitedCatalog.releasedAt) !== knownExploitedCatalog.releasedAt
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_LIBRARY_FINDINGS) return 'invalid';
   const methods = new Set(['script URL', 'script filename', 'inline signature', 'inline hash']);
   const severities = new Set(['none', 'low', 'medium', 'high', 'critical']);
+  const findingIds = new Set<string>();
   for (const candidate of profile.findings) {
     if (!isJsonObject(candidate)
       || !hasOnlyKeys(candidate, [
@@ -729,6 +1021,16 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
       || !validUint(candidate.knownExploitedCount, 10_000)
       || !validExactStringArray(candidate.knownExploitedIdentifiers, 16, 80)
       || !validExactStringArray(candidate.weaknessClasses, 12, 80)) return 'invalid';
+    if (findingIds.has(candidate.id as string)
+      || !(candidate.advisoryIdentifiers as JsonValue[]).every((identifier) => typeof identifier === 'string'
+        && /^(?:CVE-[0-9X-]+|GHSA-[A-Z0-9-]+)$/u.test(identifier))
+      || !(candidate.knownExploitedIdentifiers as JsonValue[]).every((identifier) => typeof identifier === 'string'
+        && /^CVE-[0-9X-]+$/u.test(identifier))
+      || !(candidate.weaknessClasses as JsonValue[]).every((identifier) => typeof identifier === 'string'
+        && /^CWE-[0-9]+$/u.test(identifier))
+      || Number(candidate.advisoryCount) < (candidate.advisoryIdentifiers as JsonValue[]).length
+      || Number(candidate.knownExploitedCount) < (candidate.knownExploitedIdentifiers as JsonValue[]).length) return 'invalid';
+    findingIds.add(candidate.id as string);
   }
   return 'supported';
 }
@@ -737,7 +1039,7 @@ function pageFingerprintContractState(value: unknown): ChildContractState {
   const versionState = childVersionState(value, 'fingerprintVersion', [PAGE_FINGERPRINT_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
-  if (!hasOnlyKeys(profile, [
+  if (!hasExactKeys(profile, [
     'fingerprintVersion', 'exact', 'normalizedHtml', 'visibleText', 'domStructure',
     'formStructure', 'resourceHosts', 'identifiers', 'complete', 'truncated', 'limitations',
   ])
@@ -745,18 +1047,15 @@ function pageFingerprintContractState(value: unknown): ChildContractState {
     || typeof profile.truncated !== 'boolean'
     || !validExactStringArray(profile.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)
     || !isJsonObject(profile.exact)
+    || !hasExactKeys(profile.exact, ['algorithm', 'value', 'scope', 'bytes', 'source'])
     || profile.exact.algorithm !== 'sha256'
     || typeof profile.exact.value !== 'string'
     || !SHA256_RE.test(profile.exact.value)
     || !['complete-body', 'captured-prefix'].includes(String(profile.exact.scope))
     || !validUint(profile.exact.bytes, 300_000)
     || !['captured-response-bytes', 'decoded-markup'].includes(String(profile.exact.source))
-    || !isJsonObject(profile.normalizedHtml)
-    || !isJsonObject(profile.domStructure)
-    || !(profile.visibleText === null || isJsonObject(profile.visibleText))
-    || !(profile.formStructure === null || isJsonObject(profile.formStructure))
-    || !isJsonObject(profile.resourceHosts)
-    || !isJsonObject(profile.identifiers)) return 'invalid';
+    || !validPageFingerprintProfile(profile)
+    || profile.complete !== (profile.truncated !== true)) return 'invalid';
   return 'supported';
 }
 
@@ -797,7 +1096,9 @@ function pageIdentityContractState(value: unknown): ChildContractState {
     || !validUint(profile.forms.count, 50)
     || !validUint(profile.forms.postCount, 50)
     || !validUint(profile.forms.insecureActionCount, 50)
-    || !validExactStringArray(profile.forms.externalActionOrigins, 10, 2_048)
+    || Number(profile.forms.postCount) > Number(profile.forms.count)
+    || Number(profile.forms.insecureActionCount) > Number(profile.forms.count)
+    || !validHttpOriginArray(profile.forms.externalActionOrigins, 10)
     || typeof profile.forms.truncated !== 'boolean'
     || !isJsonObject(profile.resources)
     || !hasOnlyKeys(profile.resources, ['count', 'byType', 'externalOrigins', 'truncated'])
@@ -805,24 +1106,27 @@ function pageIdentityContractState(value: unknown): ChildContractState {
     || !isJsonObject(profile.resources.byType)
     || !hasOnlyKeys(profile.resources.byType, ['image', 'script', 'stylesheet', 'link', 'frame', 'media', 'object'])
     || !Object.values(profile.resources.byType).every((count) => validUint(count, 1_024))
-    || !validExactStringArray(profile.resources.externalOrigins, 30, 2_048)
+    || Object.values(profile.resources.byType).reduce<number>((sum, count) => sum + Number(count), 0) !== profile.resources.count
+    || !validHttpOriginArray(profile.resources.externalOrigins, 30)
     || typeof profile.resources.truncated !== 'boolean'
     || !isJsonObject(profile.downloads)
     || !hasOnlyKeys(profile.downloads, ['count', 'explicitCount', 'riskyCount', 'externalOrigins', 'riskyFileTypes', 'truncated'])
     || !validUint(profile.downloads.count, 1_024)
     || !validUint(profile.downloads.explicitCount, 1_024)
     || !validUint(profile.downloads.riskyCount, 1_024)
-    || !validExactStringArray(profile.downloads.externalOrigins, 20, 2_048)
+    || Number(profile.downloads.explicitCount) > Number(profile.downloads.count)
+    || Number(profile.downloads.riskyCount) > Number(profile.downloads.count)
+    || !validHttpOriginArray(profile.downloads.externalOrigins, 20)
     || !validExactStringArray(profile.downloads.riskyFileTypes, 20, 80)
     || typeof profile.downloads.truncated !== 'boolean'
-    || !validExactStringArray(profile.embeddedOrigins, 20, 2_048)
+    || !validHttpOriginArray(profile.embeddedOrigins, 20)
     || !validExactStringArray(profile.contactDomains, 20, 253)
+    || !(profile.contactDomains as JsonValue[]).every((domain) => typeof domain === 'string'
+      && normalizedDomain(domain) === domain)
     || !Array.isArray(profile.trackingIdentifiers)
     || profile.trackingIdentifiers.length > 30
-    || !profile.trackingIdentifiers.every((item) => isJsonObject(item)
-      && hasOnlyKeys(item, ['type', 'value'])
-      && validBoundedString(item.type, 80)
-      && validBoundedString(item.value, 240))
+    || !profile.trackingIdentifiers.every(validFingerprintIdentifier)
+    || new Set(profile.trackingIdentifiers.map((item) => JSON.stringify(item))).size !== profile.trackingIdentifiers.length
     || !isJsonObject(profile.fingerprints)
     || profile.publicationMetadata !== undefined
       && !validPagePublicationMetadata(profile.publicationMetadata)) return 'invalid';
@@ -833,21 +1137,25 @@ function tlsProfileContractState(value: unknown): ChildContractState {
   const versionState = childVersionState(value, 'profileVersion', [TLS_PROFILE_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
-  if (!hasOnlyKeys(profile, [
+  if (!hasExactKeys(profile, [
     ...OBSERVATION_FIELDS, 'profileVersion', 'connectedAddress', 'connectedFamily',
     'port', 'sniHost', 'protocol', 'alpnProtocol', 'cipher', 'ephemeralKey',
     'authorization', 'hostname', 'validity', 'certificate', 'chain',
     'chainTruncated', 'findings',
   ])
     || !validProfileObservation(profile, new Set(['success', 'partial', 'error', 'skipped']), new Set(['tls']))
-    || !(profile.connectedAddress === null || validBoundedString(profile.connectedAddress, 64))
-    || !(profile.connectedFamily === null || [4, 6].includes(Number(profile.connectedFamily)))
+    || !(profile.connectedAddress === null || typeof profile.connectedAddress === 'string'
+      && /^[0-9a-f:.]{2,64}$/iu.test(profile.connectedAddress))
+    || !(profile.connectedFamily === null || typeof profile.connectedFamily === 'number'
+      && [4, 6].includes(profile.connectedFamily))
+    || (profile.connectedAddress === null) !== (profile.connectedFamily === null)
     || profile.port !== 443
-    || !(profile.sniHost === null || validBoundedString(profile.sniHost, 253))
+    || !(profile.sniHost === null || typeof profile.sniHost === 'string'
+      && normalizedDomain(profile.sniHost) === profile.sniHost)
     || !(profile.protocol === null || validBoundedString(profile.protocol, 32))
     || !(profile.alpnProtocol === null || validBoundedString(profile.alpnProtocol, 32))
-    || !(profile.cipher === null || isJsonObject(profile.cipher))
-    || !(profile.ephemeralKey === null || isJsonObject(profile.ephemeralKey))
+    || !(profile.cipher === null || validTlsCipher(profile.cipher))
+    || !(profile.ephemeralKey === null || validTlsEphemeralKey(profile.ephemeralKey))
     || !isJsonObject(profile.authorization)
     || !hasOnlyKeys(profile.authorization, ['authorized', 'error'])
     || !(profile.authorization.authorized === null || typeof profile.authorization.authorized === 'boolean')
@@ -859,16 +1167,14 @@ function tlsProfileContractState(value: unknown): ChildContractState {
     || !isJsonObject(profile.validity)
     || !hasOnlyKeys(profile.validity, ['status'])
     || !['valid', 'expired', 'not_yet_valid', 'unknown'].includes(String(profile.validity.status))
-    || !(profile.certificate === null || isJsonObject(profile.certificate))
+    || !(profile.certificate === null || validTlsCertificate(profile.certificate, true))
     || !Array.isArray(profile.chain)
     || profile.chain.length > MAX_LOOKUP_TLS_CHAIN_CERTIFICATES
+    || !profile.chain.every((certificate) => validTlsCertificate(certificate, false))
     || typeof profile.chainTruncated !== 'boolean'
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_LOOKUP_TLS_FINDINGS
     || !profile.findings.every(validTlsFinding)) return 'invalid';
-  if (isJsonObject(profile.certificate)
-    && (!optionalTlsNameWithin(profile.certificate.subject)
-      || !optionalTlsNameWithin(profile.certificate.issuer))) return 'invalid';
   return 'supported';
 }
 
@@ -883,7 +1189,18 @@ function securityPostureContractState(value: unknown): ChildContractState {
     || !Object.values(profile.summary).every((count) => validUint(count, MAX_SECURITY_POSTURE_FINDINGS))
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_SECURITY_POSTURE_FINDINGS
-    || !profile.findings.every(validSecurityPostureFinding)) return 'invalid';
+    || !profile.findings.every(validSecurityPostureFinding)
+    || new Set(profile.findings.map((finding) => (finding as JsonObject).id)).size !== profile.findings.length
+    || ['observed', 'potentialExposure', 'observedAbsence', 'unavailable']
+      .reduce((sum, key) => sum + Number((profile.summary as JsonObject)[key]), 0) !== profile.findings.length
+    || Number((profile.summary as JsonObject).observed) !== profile.findings
+      .filter((finding) => (finding as JsonObject).state === 'observed').length
+    || Number((profile.summary as JsonObject).potentialExposure) !== profile.findings
+      .filter((finding) => (finding as JsonObject).state === 'potential_exposure').length
+    || Number((profile.summary as JsonObject).observedAbsence) !== profile.findings
+      .filter((finding) => (finding as JsonObject).state === 'observed_absence').length
+    || Number((profile.summary as JsonObject).unavailable) !== profile.findings
+      .filter((finding) => (finding as JsonObject).state === 'unavailable').length) return 'invalid';
   return 'supported';
 }
 
@@ -891,15 +1208,24 @@ function credentialSurfaceContractState(value: unknown): ChildContractState {
   const versionState = childVersionState(value, 'credentialSurfaceVersion', [CREDENTIAL_SURFACE_PROFILE_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
-  return hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'credentialSurfaceVersion', 'forms', 'inputs'])
-    && validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
-    && isJsonObject(profile.forms)
-    && isJsonObject(profile.inputs)
-    && validUint(profile.forms.count, 1_000)
-    && validUint(profile.inputs.count, 1_000)
-    && validUint(profile.inputs.classifiedCount, 1_000)
-    ? 'supported'
-    : 'invalid';
+  const forms = profile.forms;
+  const inputs = profile.inputs;
+  if (!hasExactKeys(profile, [...OBSERVATION_FIELDS, 'credentialSurfaceVersion', 'forms', 'inputs'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
+    || !isJsonObject(forms)
+    || !hasExactKeys(forms, ['count', 'methods', 'actions'])
+    || !validUint(forms.count, 50)
+    || !validCredentialCountRecord(forms.methods, CREDENTIAL_METHOD_KEYS, 50)
+    || !validCredentialCountRecord(forms.actions, CREDENTIAL_ACTION_KEYS, 50)
+    || CREDENTIAL_METHOD_KEYS.reduce((sum, key) => sum + Number((forms.methods as JsonObject)[key]), 0) !== forms.count
+    || CREDENTIAL_ACTION_KEYS.reduce((sum, key) => sum + Number((forms.actions as JsonObject)[key]), 0) !== forms.count
+    || !isJsonObject(inputs)
+    || !hasExactKeys(inputs, ['count', 'classifiedCount', 'categories'])
+    || !validUint(inputs.count, 500)
+    || !validUint(inputs.classifiedCount, 500)
+    || Number(inputs.classifiedCount) > Number(inputs.count)
+    || !validCredentialCountRecord(inputs.categories, CREDENTIAL_CATEGORY_KEYS, 500)) return 'invalid';
+  return 'supported';
 }
 
 function structuredDataContractState(value: unknown): ChildContractState {
@@ -912,10 +1238,12 @@ function structuredDataContractState(value: unknown): ChildContractState {
     || profile.entities.length > MAX_STRUCTURED_DATA_ENTITIES) return 'invalid';
   return profile.entities.every((entity) => isJsonObject(entity)
     && hasOnlyKeys(entity, ['types', 'name', 'declaredOrigin', 'sameAsHosts'])
-    && validExactStringArray(entity.types, 8, 160)
+    && validExactStringArray(entity.types, 8, 160, STRUCTURED_DATA_TYPES)
     && (entity.name === null || validBoundedString(entity.name, 160))
-    && (entity.declaredOrigin === null || validHttpProvenanceUrl(entity.declaredOrigin))
-    && validExactStringArray(entity.sameAsHosts, MAX_STRUCTURED_DATA_SAME_AS_HOSTS, 253))
+    && (entity.declaredOrigin === null || validHttpOrigin(entity.declaredOrigin))
+    && validExactStringArray(entity.sameAsHosts, MAX_STRUCTURED_DATA_SAME_AS_HOSTS, 253)
+    && (entity.sameAsHosts as JsonValue[]).every((host) => typeof host === 'string'
+      && normalizedDomain(host) === host))
     ? 'supported'
     : 'invalid';
 }
@@ -931,15 +1259,18 @@ function pageRoleContractState(value: unknown): ChildContractState {
     || !Array.isArray(profile.findings)
     || profile.findings.length < 1
     || profile.findings.length > MAX_PAGE_ROLE_FINDINGS) return 'invalid';
-  return profile.findings.every((finding) => isJsonObject(finding)
+  if (!profile.findings.every((finding) => isJsonObject(finding)
     && hasOnlyKeys(finding, ['role', 'label', 'confidence', 'evidence'])
     && typeof finding.role === 'string'
     && PAGE_ROLE_VALUES.has(finding.role)
     && validBoundedString(finding.label, 120)
     && ['high', 'medium', 'low'].includes(String(finding.confidence))
-    && validExactStringArray(finding.evidence, MAX_PAGE_ROLE_EVIDENCE, 300))
-    ? 'supported'
-    : 'invalid';
+    && validExactStringArray(finding.evidence, MAX_PAGE_ROLE_EVIDENCE, 300))) return 'invalid';
+  if ((profile.findings[0] as JsonObject).role !== profile.primaryRole
+    || new Set(profile.findings.map((finding) => (finding as JsonObject).role)).size !== profile.findings.length) {
+    return 'invalid';
+  }
+  return 'supported';
 }
 
 function clientBehaviorContractState(value: unknown): ChildContractState {
@@ -953,16 +1284,22 @@ function clientBehaviorContractState(value: unknown): ChildContractState {
     || !Object.values(profile.scriptSummary).every((count) => validUint(count, 10_000))
     || !Array.isArray(profile.indicators)
     || profile.indicators.length > MAX_CLIENT_BEHAVIOR_INDICATORS) return 'invalid';
-  return profile.indicators.every((indicator) => isJsonObject(indicator)
+  if (!profile.indicators.every((indicator) => isJsonObject(indicator)
     && hasOnlyKeys(indicator, ['id', 'label', 'evidenceClass', 'occurrences', 'explanation'])
     && typeof indicator.id === 'string'
     && CLIENT_BEHAVIOR_IDS.has(indicator.id)
     && validBoundedString(indicator.label, 120)
     && ['static_markup', 'inline_script'].includes(String(indicator.evidenceClass))
     && validUint(indicator.occurrences, 999)
-    && validBoundedString(indicator.explanation, 300))
-    ? 'supported'
-    : 'invalid';
+    && Number(indicator.occurrences) > 0
+    && validBoundedString(indicator.explanation, 300))) return 'invalid';
+  const summary = profile.scriptSummary as JsonObject;
+  if (Number(summary.referencedScripts) + Number(summary.inlineScripts) !== summary.elementsObserved
+    || Number(summary.moduleScripts) > Number(summary.elementsObserved)
+    || new Set(profile.indicators.map((indicator) => (indicator as JsonObject).id)).size !== profile.indicators.length) {
+    return 'invalid';
+  }
+  return 'supported';
 }
 
 function profilePlaceholder(label: string, source: string, state: Exclude<ChildContractState, 'supported'>): JsonObject {
@@ -1197,24 +1534,26 @@ function validDnsHttpsRecord(value: unknown): boolean {
 
 function validTlsFinding(value: unknown): boolean {
   return isJsonObject(value)
-    && validBoundedString(value.id, 80)
-    && validBoundedString(value.tone, 32)
+    && hasExactKeys(value, ['id', 'tone', 'label', 'detail'])
+    && typeof value.id === 'string'
+    && /^[a-z0-9_]{1,80}$/u.test(value.id)
+    && typeof value.tone === 'string'
+    && ['warning', 'neutral'].includes(value.tone)
     && validBoundedString(value.label, 160)
     && validBoundedString(value.detail, 500);
 }
 
 function validTlsChainCertificate(value: unknown): boolean {
-  if (!isJsonObject(value)) return false;
-  return (value.fingerprintSha256 === undefined
-      || value.fingerprintSha256 === null
-      || validBoundedString(value.fingerprintSha256, 64))
-    && optionalTlsNameWithin(value.subject);
+  return validTlsCertificate(value, false);
 }
 
 function validSecurityPostureFinding(value: unknown): boolean {
   return isJsonObject(value)
-    && validBoundedString(value.id, 80)
-    && validBoundedString(value.category, 80)
+    && hasExactKeys(value, ['id', 'category', 'state', 'tone', 'label', 'detail', 'evidence'])
+    && typeof value.id === 'string'
+    && /^[a-z0-9_]{1,80}$/u.test(value.id)
+    && typeof value.category === 'string'
+    && SECURITY_POSTURE_CATEGORIES.has(value.category)
     && typeof value.state === 'string'
     && ['observed', 'potential_exposure', 'observed_absence', 'unavailable'].includes(value.state)
     && typeof value.tone === 'string'

@@ -22,7 +22,7 @@ import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
-import { skippedTlsObservation } from '../lib/tls-intelligence.mts';
+import { buildTlsObservation, skippedTlsObservation } from '../lib/tls-intelligence.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -697,6 +697,63 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(parseLookupHttpResponse(excessivelyNested), parseLookupHttpResponse(excessivelyNested));
   });
 
+  test('withholds unowned nested profile fields instead of retaining them as current evidence', () => {
+    const profiles = canonicalPageProfiles();
+    const credential = structuredClone(profiles.credentialSurfaceProfile);
+    recordValue(credential.inputs).unreviewed = { raw: 'x'.repeat(10_000) };
+    const credentialResult = parseLookupHttpResponse(response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        pageIdentity: profiles.pageIdentity,
+        credentialSurfaceProfile: credential,
+      },
+    }));
+    assert.equal(credentialResult.ok, true);
+    assert.equal(recordValue(credentialResult.value.availability.credentialSurfaceProfile).compatibility, 'malformed');
+    assert.equal(credentialResult.value.availability.pageIdentity, profiles.pageIdentity);
+
+    const pageIdentity = structuredClone(profiles.pageIdentity);
+    recordValue(recordValue(pageIdentity.fingerprints).resourceHosts).unreviewed = ['raw-origin.example'];
+    const pageResult = parseLookupHttpResponse(response({
+      availability: { applicable: true, state: 'registered', pageIdentity },
+    }));
+    assert.equal(pageResult.ok, true);
+    const retainedPage = recordValue(pageResult.value.availability.pageIdentity);
+    assert.equal(recordValue(retainedPage.fingerprints).compatibility, 'malformed');
+    assert.equal(retainedPage.openGraph, pageIdentity.openGraph);
+
+    const tls = buildTlsObservation({
+      cipher: { name: 'TLS_AES_128_GCM_SHA256', standardName: 'TLS_AES_128_GCM_SHA256', version: 'TLSv1.3' },
+      peerCertificate: { subject: { CN: 'example.test' } },
+      sniHost: 'example.test',
+    }, { observedAt: '2026-07-13T04:05:06.000Z' });
+    recordValue(tls.cipher).unreviewed = 'raw cipher data';
+    const tlsResult = parseLookupHttpResponse(response({
+      availability: { applicable: true, state: 'registered', tls },
+    }));
+    assert.equal(tlsResult.ok, true);
+    assert.equal(recordValue(tlsResult.value.availability.tls).compatibility, 'malformed');
+
+    const posture = structuredClone(profiles.securityPosture);
+    recordValue(posture.findings[0]).unreviewed = { nested: true };
+    const postureResult = parseLookupHttpResponse(response({
+      availability: { applicable: true, state: 'registered', securityPosture: posture },
+    }));
+    assert.equal(postureResult.ok, true);
+    assert.equal(recordValue(postureResult.value.availability.securityPosture).compatibility, 'malformed');
+
+    const technology = structuredClone(profiles.technologyProfile);
+    recordValue(recordValue(technology.browserLibraryProfile).catalog).unreviewed = 'raw catalogue value';
+    const libraryResult = parseLookupHttpResponse(response({
+      availability: { applicable: true, state: 'registered', technologyProfile: technology },
+    }));
+    assert.equal(libraryResult.ok, true);
+    const retainedTechnology = recordValue(libraryResult.value.availability.technologyProfile);
+    assert.ok(arrayValue(retainedTechnology.findings).length > 0);
+    assert.equal(recordValue(retainedTechnology.browserLibraryProfile).compatibility, 'malformed');
+  });
+
   test('rejects over-bound or malformed nested HTTP evidence with the stable response error', () => {
     const baseRedirect = {
       from: 'https://from.example.test/',
@@ -848,12 +905,15 @@ describe('Lookup HTTP response contract', () => {
         applicable: true,
         dns: { records: { a: ['192.0.2.1'] } },
         http: { response: { securityHeaders: { contentSecurityPolicy: 'default-src none' } } },
-        tls: canonicalTlsProfile({ certificate: { subject: { commonNames: ['example.test'] } } }),
+        tls: buildTlsObservation({
+          peerCertificate: { subject: { CN: 'example.test' } },
+          sniHost: 'example.test',
+        }, { observedAt: '2026-07-13T04:05:06.000Z' }),
         pageIdentity: { ...profiles.pageIdentity, openGraph: { ...profiles.pageIdentity.openGraph, url: { url: 'https://example.test/', queryOmitted: false, pathTruncated: false } } },
-        credentialSurfaceProfile: { ...profiles.credentialSurfaceProfile, inputs: { ...profiles.credentialSurfaceProfile.inputs, classifiedCount: 2 } },
+        credentialSurfaceProfile: profiles.credentialSurfaceProfile,
         structuredDataIdentity: { ...profiles.structuredDataIdentity, entities: [{ types: ['Organization'], name: 'Example publisher', declaredOrigin: null, sameAsHosts: [] }] },
         technologyProfile: profiles.technologyProfile,
-        securityPosture: { ...profiles.securityPosture, summary: { ...profiles.securityPosture.summary, observed: 1 } },
+        securityPosture: profiles.securityPosture,
       },
       diagnostics: { registryAccess: { suffix: 'test' } },
       networkContext: { endpoint: { address: '192.0.2.1' }, rdap: { status: 'success' }, network: { handle: 'NET-1' } },
@@ -876,11 +936,11 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(view.tlsSubject.commonNames, ['example.test']);
     assert.equal(view.pageOpenGraphUrl.url, 'https://example.test/');
     assert.ok(isJsonObject(view.credentialSurfaceProfile.inputs));
-    assert.equal(view.credentialSurfaceProfile.inputs.classifiedCount, 2);
+    assert.equal(view.credentialSurfaceProfile.inputs.classifiedCount, 1);
     assert.ok(Array.isArray(view.structuredDataIdentity.entities));
     assert.ok(isJsonObject(view.structuredDataIdentity.entities[0]));
     assert.equal(view.structuredDataIdentity.entities[0].name, 'Example publisher');
-    assert.equal(view.securityPostureSummary.observed, 1);
+    assert.equal(view.securityPostureSummary.observed, profiles.securityPosture.summary.observed);
     assert.equal(view.registryAccess.suffix, 'test');
     assert.equal(view.observedNetworkEndpoint.address, '192.0.2.1');
     assert.equal(view.reverseDns.source, 'reverse_dns');
