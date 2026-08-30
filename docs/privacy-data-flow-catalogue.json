@@ -7834,12 +7834,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.website-snapshot-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -8956,12 +8957,13 @@
       "schema": "whoisleuth.website-profile-snapshots",
       "lifecycleSchema": "whoisleuth.website-profile-snapshots",
       "coverageClass": "registered_schema",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 786432,
       "storageClass": "deliberate_local_file",
@@ -13781,7 +13783,8 @@
         {
           "schema": "whoisleuth.browser.website-snapshot-store",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -13789,7 +13792,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.website-snapshot-store",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14235,7 +14238,8 @@
         {
           "schema": "whoisleuth.website-profile-snapshots",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -14260,7 +14264,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.website-profile-snapshots",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

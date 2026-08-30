@@ -514,8 +514,12 @@ const TECHNOLOGY_SIGNATURE_CATALOGUE: ReadonlyArray<TechnologySignatureDescripto
 );
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
-  const htmlAvailable = input.htmlAvailable === true
-    || input.htmlAvailable !== false && (input.htmlAnalysis !== undefined || typeof input.html === 'string');
+  // Existing direct callers pass minimised, already-derived page evidence rather
+  // than the page body. The real collector declares false for header-only
+  // responses, while an explicit malformed declaration also fails closed.
+  const htmlAvailable = input.htmlAvailable === undefined
+    ? true
+    : input.htmlAvailable === true;
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const browserLibraryProfile = htmlAvailable ? analyzeBrowserLibraries({
     htmlAnalysis,

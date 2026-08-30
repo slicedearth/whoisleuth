@@ -119,7 +119,7 @@ describe('browser-local collection definitions', () => {
       detection_rules: { version: 2, rules: [] },
       relationship_observations: { schema: 'whoisleuth.relationship-observations', version: 2, observations: [] },
       bulk_sessions: { schema: 'whoisleuth.bulk-sessions', version: 5, sessions: [] },
-      website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 5, snapshots: [] },
+      website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 6, snapshots: [] },
       investigation_templates: { schema: 'whoisleuth.investigation-templates', version: 3, templates: [] },
       bulk_review: { schema: 'whoisleuth.bulk-review', version: 2, presets: [], rows: [] },
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },

@@ -239,6 +239,9 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
+    assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee "\$RUNNER_TEMP\/test-duration-report\.txt"/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: \$\{\{ runner\.temp \}\}\/test-duration-report\.txt$/mu);

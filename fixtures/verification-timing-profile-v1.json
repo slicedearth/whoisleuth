@@ -38,13 +38,6 @@
       "sampleCount": 1
     },
     {
-      "id": "unit-local-finalarchitecture-60400ba9",
-      "lane": "unit",
-      "environmentClass": "local-darwin-arm64-node-26",
-      "sampleBasis": "accepted-final-architecture-working-tree-based-on-60400ba9",
-      "sampleCount": 1
-    },
-    {
       "id": "local-bulk-analysis-postfix-20260822",
       "lane": "browser",
       "environmentClass": "local-darwin-arm64-chromium-node26",
@@ -112,6 +105,13 @@
       "lane": "unit",
       "environmentClass": "local-darwin-arm64-node26",
       "sampleBasis": "exact-four-file-release-assurance-working-tree-based-on-482be2d3",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-evidence-repair-20260830",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node-26",
+      "sampleBasis": "accepted-four-new-unit-files-and-retained-closure",
       "sampleCount": 1
     }
   ],
@@ -717,6 +717,13 @@
       "weightMs": 202,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/browser-local-data-service.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-evidence-repair-20260830"
     },
     {
       "file": "test/browser-local-timestamp-contract.test.mts",
@@ -1664,6 +1671,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/documentation-contract.test.mts",
+      "lane": "unit",
+      "weightMs": 30,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-evidence-repair-20260830"
+    },
+    {
       "file": "test/documentation-links.test.mts",
       "lane": "unit",
       "weightMs": 41,
@@ -1781,6 +1795,13 @@
       "weightMs": 9,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/domain-posture-orchestration.test.mts",
+      "lane": "unit",
+      "weightMs": 24,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-evidence-repair-20260830"
     },
     {
       "file": "test/domain-posture-parsers.test.mts",
@@ -3311,9 +3332,9 @@
     {
       "file": "test/schema-lifecycle-repository.test.mts",
       "lane": "unit",
-      "weightMs": 33253,
+      "weightMs": 34493,
       "sampleCount": 1,
-      "provenanceId": "unit-local-finalarchitecture-60400ba9"
+      "provenanceId": "unit-local-evidence-repair-20260830"
     },
     {
       "file": "test/schema-lifecycle-v3.test.mts",
@@ -3419,6 +3440,13 @@
       "weightMs": 144,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/source-health.test.mts",
+      "lane": "unit",
+      "weightMs": 50,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-evidence-repair-20260830"
     },
     {
       "file": "test/source-reliability-dashboard.test.mts",
