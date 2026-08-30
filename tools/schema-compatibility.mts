@@ -365,6 +365,10 @@ import {
   REVIEWED_ACCURACY_STATUS_VERSION,
 } from './reviewed-accuracy-status.mts';
 import {
+  SOURCE_HEALTH_SCHEMA,
+  SOURCE_HEALTH_VERSION,
+} from './source-health.mts';
+import {
   MAX_SYNTHETIC_ANALYST_INPUT_BYTES,
   SYNTHETIC_ANALYST_REPORT_SCHEMA,
   SYNTHETIC_ANALYST_RESULT_SCHEMA,
@@ -520,6 +524,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.release-version-check', kind: 'cli_document', schema: RELEASE_VERSION_CHECK_SCHEMA, currentVersion: RELEASE_VERSION_CHECK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/release-version-check.mts', note: 'Local version-alignment and publication-boundary report across package manifests.' }),
   entry({ id: 'maintainer.reviewed-accuracy-intake', kind: 'cli_document', schema: REVIEWED_ACCURACY_INTAKE_SCHEMA, currentVersion: REVIEWED_ACCURACY_INTAKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-scaffold.mts', note: 'Bounded reviewed-accuracy intake contract; future records are rejected rather than silently normalized.' }),
   entry({ id: 'maintainer.reviewed-accuracy-status', kind: 'cli_document', schema: REVIEWED_ACCURACY_STATUS_SCHEMA, currentVersion: REVIEWED_ACCURACY_STATUS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-status.mts', note: 'Target-free corpus readiness report that never promotes insufficient samples to reviewed evidence.' }),
+  entry({ id: 'maintainer.source-health', kind: 'cli_document', schema: SOURCE_HEALTH_SCHEMA, currentVersion: SOURCE_HEALTH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/source-health.mts', note: 'Offline composition of checked-in retained-source health and reviewed evaluation readiness without refreshing or querying any source.' }),
   entry({ id: 'maintainer.schema-compatibility-inventory', kind: 'cli_document', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
   entry(SSLBL_SNAPSHOT_COMPATIBILITY),
   entry({ id: 'maintainer.synthetic-analyst-result', kind: 'cli_document', schema: SYNTHETIC_ANALYST_RESULT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SYNTHETIC_ANALYST_INPUT_BYTES, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Bounded explicitly synthetic journey result consumed without live target evidence.' }),

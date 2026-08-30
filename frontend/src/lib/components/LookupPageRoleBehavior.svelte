@@ -67,7 +67,7 @@
         {#each roles as role}
           <article>
             <span class="role-label">{role.label}</span>
-            <strong>{role.confidence}</strong>
+            <strong>{role.confidence} indicator strength</strong>
             <ul>{#each role.evidence as item}<li>{item}</li>{/each}</ul>
           </article>
         {/each}

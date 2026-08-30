@@ -3,8 +3,8 @@ import { describe, test } from 'node:test';
 
 import {
   formatSslblSnapshotHealth,
-  main,
-} from '../tools/sslbl-snapshot-status.mts';
+  sslblStatusMain,
+} from '../tools/source-health.mts';
 import {
   SSLBL_SNAPSHOT_EXPIRED_AGE_MS,
   SSLBL_SNAPSHOT_MAX_AGE_MS,
@@ -27,7 +27,7 @@ describe('local SSLBL snapshot health command', () => {
     ] as const) {
       let stdout = '';
       let stderr = '';
-      assert.equal(main(['--json'], {
+      assert.equal(sslblStatusMain(['--json'], {
         now: atAge(age),
         stdout: { write(value) { stdout += value; } },
         stderr: { write(value) { stderr += value; } },
@@ -43,7 +43,7 @@ describe('local SSLBL snapshot health command', () => {
     assert.match(output, /Network requests: 0/u);
     assert.doesNotMatch(output, /fingerprintChunks|listing reason/iu);
     let stderr = '';
-    assert.equal(main(['--unknown'], {
+    assert.equal(sslblStatusMain(['--unknown'], {
       stdout: { write() {} },
       stderr: { write(value) { stderr += value; } },
     }), 2);

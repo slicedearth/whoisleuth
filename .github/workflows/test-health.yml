@@ -39,6 +39,16 @@ jobs:
         run: npm run test:properties
       - name: Verify retained timing contract without rewriting it
         run: npm run verification:timing:check
+      - name: Report offline retained source health
+        run: |
+          set -o pipefail
+          npm run sources:health | tee "$RUNNER_TEMP/source-health-report.txt"
+          {
+            echo '## Offline retained source health'
+            echo '```text'
+            cat "$RUNNER_TEMP/source-health-report.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Profile the complete unit suite
         run: |
           set -o pipefail
@@ -49,5 +59,13 @@ jobs:
         with:
           name: test-duration-profile
           path: ${{ runner.temp }}/test-duration-report.txt
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload source-health report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: source-health-report
+          path: ${{ runner.temp }}/source-health-report.txt
           if-no-files-found: ignore
           retention-days: 14

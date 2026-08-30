@@ -104,7 +104,7 @@ additive; an HTTP 200 response with a malformed envelope is reported as an
 invalid response rather than being interpreted as partial evidence.
 
 The version-5 technology profile retains only curated finding identifiers,
-names, categories, confidence levels, evidence classes, and fixed
+names, categories, signature-strength levels, evidence classes, and fixed
 explanations. Platform-specific resource origins can corroborate retained page
 or generator evidence but cannot identify a site-builder or commerce platform
 on their own; delivery-origin findings remain separately attributed. The

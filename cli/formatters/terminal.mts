@@ -713,10 +713,10 @@ function formatTerminalLookup(
       const primary = roleFindings.map(terminalRecord).find((finding) => finding.role === pageRole.primaryRole)
         || terminalRecord(roleFindings[0]);
       if (positiveSourceStatus(pageRole.status) && detail !== 'summary' && Object.keys(primary).length) {
-        websiteLines.push(`Primary role   ${safeTerminalValue(primary.label, 'Unclassified')} · ${titleCase(primary.confidence)}`);
+        websiteLines.push(`Primary role   ${safeTerminalValue(primary.label, 'Unclassified')} · ${titleCase(primary.confidence)} indicator strength`);
       }
       if (positiveSourceStatus(pageRole.status) && detail === 'verbose') {
-        const findings = boundedFindingLabels(roleFindings, (finding) => `${safeTerminalValue(finding.label, 'Unclassified')} (${titleCase(finding.confidence)})`);
+        const findings = boundedFindingLabels(roleFindings, (finding) => `${safeTerminalValue(finding.label, 'Unclassified')} (${titleCase(finding.confidence)} indicator strength)`);
         if (findings) websiteLines.push(`Role labels    ${findings}`);
       }
     }

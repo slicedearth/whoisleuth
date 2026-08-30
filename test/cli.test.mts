@@ -1113,7 +1113,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Publication\s+Complete · robots Observed · card Observed/);
   assert.match(terminal, /Static page\s+headings 2 · images 2 · blocking candidates 2/);
   assert.match(terminal, /Content cue\s+Account access language observed · static review label/);
-  assert.match(terminal, /Primary role\s+Authentication · High/);
+  assert.match(terminal, /Primary role\s+Authentication · High indicator strength/);
   assert.match(terminal, /Scripts\s+6 elements · 3 referenced · 3 inline · 1 modules/);
   assert.match(terminal, /Credential UI\s+Success · 3 classified inputs/);
   assert.match(terminal, /Form surface\s+2 forms · 4 inputs · 1 external action/);
