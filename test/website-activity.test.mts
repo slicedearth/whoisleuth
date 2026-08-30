@@ -12,6 +12,26 @@ import { analyzeResponsePolicyHeaders } from '../lib/response-policy.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import { httpDeliveryMetadataFixture } from './homepage-metadata-fixtures.mts';
 
+function registeredLookupOptions(homepageFetcher: () => ReturnType<typeof fetchHomepage>) {
+  return {
+    featurePolicy: networkFeaturePolicy({
+      WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
+      WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1',
+    }),
+    rdapRecord: {
+      rdapServer: 'https://rdap.registry.test/domain/example.test',
+      transportSecurity: 'https',
+      upstreamStatus: 200,
+      fetchedAt: '2026-07-13T04:05:06.000Z',
+      data: {},
+      parsed: { statuses: [], nameservers: ['ns1.dns.example'], events: [], lifecycle: {} },
+      attempts: [],
+    },
+    fetchHomepage: homepageFetcher,
+    fetchFaviconHash: async () => null,
+  };
+}
+
 describe('website activity classification', () => {
   test('any HTTP response proves that a web service is active', async () => {
     for (const status of [401, 403, 404, 503]) {
@@ -304,10 +324,110 @@ describe('website activity classification', () => {
 
     const availability = recordValue(result);
     const securityPosture = recordValue(availability.securityPosture);
+    const technologyProfile = recordValue(availability.technologyProfile);
     const findings = arrayValue(securityPosture.findings).map(recordValue);
     assert.equal(availability.pageIdentity, null);
-    assert.equal(availability.technologyProfile, null);
+    assert.equal(technologyProfile.status, 'partial');
+    assert.equal(technologyProfile.complete, false);
+    assert.deepEqual(technologyProfile.findings, []);
     assert.equal(securityPosture.source, 'derived');
     assert.equal(findings.some((item) => item.id === 'static_page_evidence_unavailable'), true);
+  });
+
+  test('joins the real homepage collector to role-specific technology analysis', async () => {
+    let requests = 0;
+    const result = await checkDomainAvailability('example.test', registeredLookupOptions(
+      () => fetchHomepage('example.test', {
+        fetcher: async () => {
+          requests += 1;
+          return new Response(
+            '<script id="__NEXT_DATA__"></script><script src="https://assets.fixture.cloudfront.net/app.js"></script>',
+            {
+              status: 200,
+              headers: {
+                'content-type': 'text/html; charset=utf-8',
+                server: 'Cloudflare',
+                'x-served-by': 'cache-control-fixture-CONTROL-SYD',
+                'x-vercel-id': 'bounded-platform-indicator',
+              },
+            },
+          );
+        },
+      }),
+    ));
+
+    assert.equal(requests, 1);
+    const availability = recordValue(result);
+    const profile = recordValue(availability.technologyProfile);
+    const findings = arrayValue(profile.findings).map(recordValue);
+    const byId = new Map(findings.map((finding) => [finding.id, finding]));
+    assert.deepEqual(arrayValue(recordValue(byId.get('cloudflare')).roles), ['observed_edge']);
+    assert.deepEqual(arrayValue(recordValue(byId.get('fastly')).roles), ['observed_edge']);
+    assert.deepEqual(arrayValue(recordValue(byId.get('vercel')).roles), ['application_platform']);
+    assert.deepEqual(arrayValue(recordValue(byId.get('nextjs')).roles), ['framework_runtime']);
+    assert.deepEqual(arrayValue(recordValue(byId.get('cloudfront')).roles), ['embedded_dependency']);
+    assert.equal(availability.pageIdentity !== null, true);
+    assert.doesNotMatch(JSON.stringify(profile), /bounded-platform-indicator|cache-control-fixture|app\.js/u);
+  });
+
+  test('retains bounded technology headers for non-successful HTTP responses without page identity', async () => {
+    for (const status of [401, 403, 404, 503]) {
+      const result = await checkDomainAvailability('example.test', registeredLookupOptions(
+        () => fetchHomepage('example.test', {
+          fetcher: async () => new Response('not inspected', {
+            status,
+            headers: {
+              'content-type': 'text/html',
+              'x-vercel-id': `bounded-${status}`,
+              'x-unrelated-secret': `private-${status}`,
+            },
+          }),
+        }),
+      ));
+      const availability = recordValue(result);
+      const profile = recordValue(availability.technologyProfile);
+      assert.equal(availability.pageIdentity, null, String(status));
+      assert.equal(profile.status, 'partial', String(status));
+      assert.deepEqual(arrayValue(recordValue(arrayValue(profile.findings)[0]).roles), ['application_platform']);
+      assert.equal(recordValue(recordValue(availability.http).response).status, status);
+      assert.doesNotMatch(JSON.stringify(profile), new RegExp(`bounded-${status}|private-${status}`));
+    }
+  });
+
+  test('keeps missing, malformed, truncated and unavailable HTML evidence explicit', async () => {
+    const malformed = await checkDomainAvailability('example.test', registeredLookupOptions(
+      () => fetchHomepage('example.test', {
+        fetcher: async () => new Response('<main><script id="__NEXT_DATA__"><div', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        }),
+      }),
+    ));
+    assert.equal(recordValue(recordValue(malformed).technologyProfile).status, 'success');
+
+    const truncated = await checkDomainAvailability('example.test', registeredLookupOptions(
+      async () => ({
+        text: '<astro-island></astro-island>',
+        status: 'fetched',
+        detail: 'Synthetic bounded response.',
+        http: {
+          observedAt: '2026-07-13T04:05:06.000Z',
+          response: { status: 200, contentType: 'text/html', bodyTruncated: true },
+        },
+      }),
+    ));
+    const truncatedProfile = recordValue(recordValue(truncated).technologyProfile);
+    assert.equal(truncatedProfile.status, 'partial');
+    assert.equal(truncatedProfile.truncated, true);
+
+    const unavailable = await checkDomainAvailability('example.test', registeredLookupOptions(
+      async () => ({
+        text: null,
+        status: 'inconclusive',
+        detail: 'Synthetic unavailable response.',
+        http: { status: 'error', complete: false },
+      }),
+    ));
+    assert.equal(recordValue(unavailable).technologyProfile, null);
   });
 });

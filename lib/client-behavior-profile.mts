@@ -5,6 +5,10 @@
 
 import { createObservation } from '../packages/evidence/observation.mts';
 import {
+  CLIENT_BEHAVIOR_PROFILE_VERSION,
+  MAX_CLIENT_BEHAVIOR_INDICATORS,
+} from './lookup-child-profile-contract.mts';
+import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
@@ -33,8 +37,6 @@ type ClientBehaviorProfileInput = {
   sourceTruncated?: unknown;
 };
 
-const CLIENT_BEHAVIOR_PROFILE_VERSION = 1;
-const MAX_CLIENT_BEHAVIOR_INDICATORS = 12;
 const MAX_INDICATOR_OCCURRENCES = 999;
 
 function boundedOccurrences(value: number): number {

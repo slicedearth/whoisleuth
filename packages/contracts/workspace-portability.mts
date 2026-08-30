@@ -114,8 +114,8 @@ export const MAX_RELATIONSHIP_OBSERVATION_VALUE_LENGTH = 20_000;
 export const MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES = 768 * 1024;
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
-export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 4;
-export const WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS = Object.freeze([WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
+export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 5;
+export const WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, WEBSITE_SNAPSHOT_SCHEMA_VERSION]);
 export const SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS = WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
@@ -298,9 +298,9 @@ export const RELATIONSHIP_OBSERVATION_BROWSER_COMPATIBILITY = defineSchemaCompat
 export const WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.website-snapshots', kind: 'browser_store', schema: null,
   currentVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION, supportedVersions: WEBSITE_SNAPSHOT_BROWSER_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_WEBSITE_SNAPSHOT_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public version 4 writer remains the exact browser and export baseline; raw lookup payloads, contact data, certificate bytes, and fetched bodies remain excluded.',
+  note: 'Public version 4 records normalise to version 5 with explicit unknown profile provenance; raw lookup payloads, contact data, certificate bytes, and fetched bodies remain excluded.',
 });
 export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-sessions', kind: 'browser_store', schema: null, currentVersion: BULK_SESSION_SCHEMA_VERSION,
@@ -369,9 +369,9 @@ export const RELATIONSHIP_OBSERVATION_EXPORT_COMPATIBILITY = defineSchemaCompati
 export const WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.website-snapshots', kind: 'export', schema: WEBSITE_SNAPSHOT_SCHEMA,
   currentVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION, supportedVersions: SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public schema 4 archive section merges non-destructively without retaining fetched bodies.',
+  note: 'Public schema 4 archive sections normalise to version 5 with explicit unknown profile provenance and merge non-destructively without retaining fetched bodies.',
 });
 export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-sessions', kind: 'export', schema: BULK_SESSION_SCHEMA, currentVersion: BULK_SESSION_SCHEMA_VERSION,
@@ -871,6 +871,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.browser.website-snapshot-store",
     "version": 4,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.browser.website.v5",
+    "scope": "repository",
+    "shapeId": "workspace.browser.website.shape"
+  },
+  {
+    "id": "workspace.browser.website.v5",
+    "path": "test/fixtures/workspace-lifecycle/browser-website-v5.json",
+    "bytes": 90,
+    "sha256": "16550a8c24d5c7bcfe271086071fee7f3392279990cc6fe91e3b9c95f07d0759",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.browser.website-snapshot-store",
+    "version": 5,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
@@ -1025,6 +1039,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.website-profile-snapshots",
     "version": 4,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.portable.website.v5",
+    "scope": "repository",
+    "shapeId": "workspace.portable.website.shape"
+  },
+  {
+    "id": "workspace.portable.website.v5",
+    "path": "test/fixtures/workspace-lifecycle/portable-website-v5.json",
+    "bytes": 135,
+    "sha256": "0cab1675a632793141107fac330a130e7d300a7726e9963f8409199902bf0d23",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.website-profile-snapshots",
+    "version": 5,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,

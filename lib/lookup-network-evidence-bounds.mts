@@ -2,6 +2,7 @@
 // the Lookup response trust boundary, and the display projection.
 export const MAX_LOOKUP_DNS_RECORDS_PER_TYPE = 16;
 export const MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS = 8;
+export const TLS_PROFILE_VERSION = 3;
 export const MAX_LOOKUP_TLS_CHAIN_CERTIFICATES = 8;
 export const MAX_LOOKUP_TLS_ALT_NAMES = 50;
 export const MAX_LOOKUP_TLS_NAME_VALUES = 4;

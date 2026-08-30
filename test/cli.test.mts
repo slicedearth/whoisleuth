@@ -1121,7 +1121,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Structured ID\s+Success · 1 declared entity/);
   assert.match(terminal, /Declarations\s+Example publisher \(Organization\/WebSite\)/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
-  assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
+  assert.match(terminal, /Example Commerce \(commerce platform, high signature strength\)/);
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);

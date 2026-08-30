@@ -4,6 +4,10 @@
 // values, certificate errors, URLs, and DNS record contents are not copied.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import {
+  MAX_SECURITY_POSTURE_FINDINGS,
+  WEBSITE_SECURITY_POSTURE_VERSION,
+} from './lookup-child-profile-contract.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type PostureCategory = 'transport' | 'response headers' | 'forms and resources' | 'certificate' | 'domain controls';
@@ -28,8 +32,6 @@ type WebsiteSecurityPostureInput = {
   observedAt?: unknown;
 };
 
-const WEBSITE_SECURITY_POSTURE_VERSION = 2;
-const MAX_SECURITY_POSTURE_FINDINGS = 32;
 const MAX_RETAINED_ORIGINS = 30;
 
 function record(value: unknown): UnknownRecord {

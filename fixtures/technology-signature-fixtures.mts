@@ -33,11 +33,14 @@ function positive(
   input: TechnologyInput,
   expectedIds: readonly string[] = [id],
 ): TechnologySignatureFixture {
+  const completeInput = input.html === undefined && input.htmlAnalysis === undefined
+    ? { ...input, html: '<main>Fixture technology evidence</main>' }
+    : input;
   return Object.freeze({
     id: `positive-${id}`,
     label: `${id} positive evidence`,
     kind: 'positive',
-    input: Object.freeze(input),
+    input: Object.freeze(completeInput),
     expectedIds: Object.freeze([...expectedIds]),
     positiveFor: Object.freeze([id]),
     negativeFor: Object.freeze([]),

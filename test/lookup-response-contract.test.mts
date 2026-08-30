@@ -20,6 +20,9 @@ import {
 } from '../lib/observation.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.mts';
+import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
+import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { skippedTlsObservation } from '../lib/tls-intelligence.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -161,6 +164,33 @@ function nestedValue(depth: number): unknown {
   return value;
 }
 
+function canonicalPageProfiles() {
+  const signals = extractHtmlSignals(
+    '<html><head><title>Fixture</title></head><body><form><input type="password"></form><script id="__NEXT_DATA__"></script></body></html>',
+    'example.test',
+    {
+      observedAt: '2026-07-13T04:05:06.000Z',
+      includeCredentialSurfaceProfile: true,
+    },
+  );
+  return {
+    pageIdentity: requiredValue(signals.pageIdentity),
+    credentialSurfaceProfile: requiredValue(signals.credentialSurfaceProfile),
+    structuredDataIdentity: requiredValue(signals.structuredDataIdentity),
+    technologyProfile: requiredValue(signals.technologyProfile),
+    pageRoleProfile: requiredValue(signals.pageRoleProfile),
+    clientBehaviorProfile: requiredValue(signals.clientBehaviorProfile),
+    securityPosture: analyzeWebsiteSecurityPosture({
+      pageIdentity: signals.pageIdentity,
+      observedAt: '2026-07-13T04:05:06.000Z',
+    }),
+  };
+}
+
+function canonicalTlsProfile(overrides: Record<string, unknown> = {}) {
+  return { ...skippedTlsObservation('Fixture TLS collection was skipped.'), ...overrides };
+}
+
 describe('Lookup HTTP response contract', () => {
   test('accepts every canonical domain identity produced by query classification', () => {
     for (const [query, expected] of [
@@ -232,12 +262,13 @@ describe('Lookup HTTP response contract', () => {
   test('accepts exact homepage metadata, projects it for display, and rejects malformed children', () => {
     const publicationMetadata = pagePublicationMetadataFixture();
     const deliveryMetadata = httpDeliveryMetadataFixture();
+    const profiles = canonicalPageProfiles();
     const raw = response({
       availability: {
         applicable: true,
         domain: 'example.test',
         state: 'registered',
-        pageIdentity: { source: 'html', status: 'success', complete: true, publicationMetadata },
+        pageIdentity: { ...profiles.pageIdentity, publicationMetadata },
         http: { status: 'success', response: { status: 200, deliveryMetadata } },
       },
     });
@@ -259,12 +290,14 @@ describe('Lookup HTTP response contract', () => {
       { ...pagePublicationMetadataFixture(), version: 2 },
       { ...pagePublicationMetadataFixture(), privateValue: 'not allowed' },
     ]) {
-      assert.equal(parseLookupHttpResponse(response({
+      const parsedChild = parseLookupHttpResponse(response({
         availability: {
           applicable: true, state: 'registered',
-          pageIdentity: { source: 'html', status: 'success', complete: true, publicationMetadata: child },
+          pageIdentity: { ...profiles.pageIdentity, publicationMetadata: child },
         },
-      })).ok, false);
+      }));
+      assert.equal(parsedChild.ok, true);
+      assert.equal(recordValue(parsedChild.value.availability.pageIdentity).compatibility, 'malformed');
     }
     for (const child of [
       { ...httpDeliveryMetadataFixture(), version: 2 },
@@ -285,12 +318,14 @@ describe('Lookup HTTP response contract', () => {
           pageIdentity: { source: 'html', status: parentState },
         },
       })).ok, true);
-      assert.equal(parseLookupHttpResponse(response({
+      const incompatiblePage = parseLookupHttpResponse(response({
         availability: {
           applicable: true, state: 'registered',
           pageIdentity: { source: 'html', status: parentState, publicationMetadata },
         },
-      })).ok, false);
+      }));
+      assert.equal(incompatiblePage.ok, true);
+      assert.equal(recordValue(incompatiblePage.value.availability.pageIdentity).compatibility, 'malformed');
       assert.equal(parseLookupHttpResponse(response({
         availability: {
           applicable: true, state: 'registered',
@@ -308,12 +343,14 @@ describe('Lookup HTTP response contract', () => {
     const impossiblePartial = structuredClone(publicationMetadata);
     impossiblePartial.status = 'partial';
     impossiblePartial.complete = false;
-    assert.equal(parseLookupHttpResponse(response({
+    const invalidPublication = parseLookupHttpResponse(response({
       availability: {
         applicable: true, state: 'registered',
-        pageIdentity: { source: 'html', status: 'partial', complete: false, publicationMetadata: impossiblePartial },
+        pageIdentity: { ...profiles.pageIdentity, status: 'partial', complete: false, publicationMetadata: impossiblePartial },
       },
-    })).ok, false);
+    }));
+    assert.equal(invalidPublication.ok, true);
+    assert.equal(recordValue(invalidPublication.value.availability.pageIdentity).compatibility, 'malformed');
   });
 
   test('rejects a structurally over-nested response before display models can consume it', () => {
@@ -375,7 +412,7 @@ describe('Lookup HTTP response contract', () => {
             https: [validHttpsRecord()],
           },
         },
-        tls: {
+        tls: canonicalTlsProfile({
           limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
           findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
             id: `finding-${index}`,
@@ -389,30 +426,41 @@ describe('Lookup HTTP response contract', () => {
             subjectAltNames: { dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`), ipAddresses: [] },
             extensionProfile: { certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`) } },
           },
-        },
+        }),
       },
     });
     assert.equal(parseLookupHttpResponse(exact).ok, true);
 
-    const invalid = [
+    const invalidOuterEvidence = [
       response({ availability: { applicable: true, state: 'registered', dns: { records: { a: Array(MAX_LOOKUP_DNS_RECORDS_PER_TYPE + 1).fill('192.0.2.1') } } } }),
       response({ reverseDns: { records: { ptr: Array(MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS + 1).fill('ptr.example.test') } } }),
-      response({ availability: { applicable: true, state: 'registered', tls: { chain: Array(MAX_LOOKUP_TLS_CHAIN_CERTIFICATES + 1).fill({}) } } }),
       response({ availability: { applicable: true, state: 'registered', dns: { records: { a: [Array(500).fill('nested')] } } } }),
-      response({ availability: { applicable: true, state: 'registered', tls: { certificate: { subject: { commonNames: [Array(500).fill('nested')] } } } } }),
       response({ reverseDns: { records: { ptr: [Array(500).fill('nested')] } } }),
       response({ availability: { applicable: true, state: 'registered', dns: { records: { mx: [{ priority: 0, exchange: Array(500).fill('nested') }] } } } }),
       response({ availability: { applicable: true, state: 'registered', dns: { records: { caa: [{ critical: 0, tag: 'issue', value: Array(500).fill('nested') }] } } } }),
       response({ availability: { applicable: true, state: 'registered', dns: { records: { soa: [{ nsname: Array(500).fill('nested'), hostmaster: 'hostmaster.example.test', serial: 1, refresh: 1, retry: 1, expire: 1, minttl: 1 }] } } } }),
       response({ availability: { applicable: true, state: 'registered', dns: { records: { https: [validHttpsRecord({ parameters: { ...validHttpsRecord().parameters, alpn: [Array(500).fill('nested')] } })] } } } }),
-      response({ availability: { applicable: true, state: 'registered', tls: { limitations: Array(MAX_OBSERVATION_LIMITATIONS + 1).fill('limit') } } }),
-      response({ availability: { applicable: true, state: 'registered', tls: { limitations: [Array(500).fill('nested')] } } }),
-      response({ availability: { applicable: true, state: 'registered', tls: { diagnostics: { collection: { error: Array(500).fill('nested') } } } } }),
     ];
-    for (const candidate of invalid) assert.equal(parseLookupHttpResponse(candidate).ok, false);
+    for (const candidate of invalidOuterEvidence) assert.equal(parseLookupHttpResponse(candidate).ok, false);
+
+    const malformedTlsProfiles = [
+      canonicalTlsProfile({ chain: Array(MAX_LOOKUP_TLS_CHAIN_CERTIFICATES + 1).fill({}) }),
+      canonicalTlsProfile({ certificate: { subject: { commonNames: [Array(500).fill('nested')] } } }),
+      canonicalTlsProfile({ limitations: Array(MAX_OBSERVATION_LIMITATIONS + 1).fill('limit') }),
+      canonicalTlsProfile({ limitations: [Array(500).fill('nested')] }),
+      canonicalTlsProfile({ diagnostics: { collection: { error: Array(500).fill('nested') } } }),
+    ];
+    for (const tls of malformedTlsProfiles) {
+      const parsed = parseLookupHttpResponse(response({
+        availability: { applicable: true, state: 'registered', tls },
+      }));
+      assert.equal(parsed.ok, true);
+      assert.equal(recordValue(parsed.value.availability.tls).compatibility, 'malformed');
+    }
   });
 
   test('enforces registration, page, observation, and live-container producer bounds', () => {
+    const profiles = canonicalPageProfiles();
     const postureFinding = (index: number) => ({
       id: `posture-${index}`,
       category: 'transport',
@@ -454,9 +502,7 @@ describe('Lookup HTTP response contract', () => {
         domain: 'example.test',
         state: 'registered',
         pageIdentity: {
-          source: 'html',
-          status: 'success',
-          complete: true,
+          ...profiles.pageIdentity,
           embeddedOrigins: Array.from({ length: 20 }, (_, index) => `https://embed-${index}.example.test`),
           contactDomains: Array.from({ length: 20 }, (_, index) => `contact-${index}.example.test`),
           forms: { externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
@@ -467,9 +513,13 @@ describe('Lookup HTTP response contract', () => {
           },
         },
         securityPosture: {
-          source: 'derived',
-          status: 'success',
-          complete: true,
+          ...profiles.securityPosture,
+          summary: {
+            observed: MAX_SECURITY_POSTURE_FINDINGS,
+            potentialExposure: 0,
+            observedAbsence: 0,
+            unavailable: 0,
+          },
           findings: Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS }, (_, index) => postureFinding(index)),
         },
       },
@@ -484,11 +534,26 @@ describe('Lookup HTTP response contract', () => {
       response({ rdap: { parsed: { entitiesByRole: { registrant: [{ address: 'A'.repeat(1_001) }] } } } }),
       response({ rdap: { parsed: { redactions: [{ prePath: 'P'.repeat(513) }] } } }),
       response({ whois: { parsed: { nameservers: Array(201).fill('ns.example.test') } } }),
-      response({ availability: { applicable: true, state: 'registered', pageIdentity: { resources: { externalOrigins: Array(31).fill('https://asset.example.test') } } } }),
-      response({ availability: { applicable: true, state: 'registered', securityPosture: { findings: Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS + 1 }, (_, index) => postureFinding(index)) } } }),
       response({ additive: Array(MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS + 1).fill(null) }),
     ];
     for (const candidate of invalid) assert.equal(parseLookupHttpResponse(candidate).ok, false);
+
+    for (const child of [
+      {
+        key: 'pageIdentity',
+        value: { ...profiles.pageIdentity, resources: { ...profiles.pageIdentity.resources, externalOrigins: Array(31).fill('https://asset.example.test') } },
+      },
+      {
+        key: 'securityPosture',
+        value: { ...profiles.securityPosture, findings: Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS + 1 }, (_, index) => postureFinding(index)) },
+      },
+    ]) {
+      const parsed = parseLookupHttpResponse(response({
+        availability: { applicable: true, state: 'registered', [child.key]: child.value },
+      }));
+      assert.equal(parsed.ok, true);
+      assert.equal(recordValue(parsed.value.availability[child.key]).compatibility, 'malformed');
+    }
   });
 
   test('accepts producer-shaped null page profiles and exact TLS distinguished-name bounds', () => {
@@ -512,21 +577,124 @@ describe('Lookup HTTP response contract', () => {
       availability: {
         applicable: true,
         state: 'registered',
-        tls: {
+        tls: canonicalTlsProfile({
           certificate: {
             subject: { commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] },
           },
-        },
+        }),
       },
     });
     assert.equal(parseLookupHttpResponse(exactNames).ok, true);
-    assert.equal(parseLookupHttpResponse(response({
+    const malformed = parseLookupHttpResponse(response({
       availability: {
         applicable: true,
         state: 'registered',
-        tls: { certificate: { subject: { commonNames: ['C'.repeat(257)] } } },
+        tls: canonicalTlsProfile({ certificate: { subject: { commonNames: ['C'.repeat(257)] } } }),
       },
-    })).ok, false);
+    }));
+    assert.equal(malformed.ok, true);
+    assert.equal(recordValue(malformed.value.availability.tls).compatibility, 'malformed');
+  });
+
+  test('fails closed for malformed and future nested profiles while retaining independent evidence', () => {
+    const profiles = canonicalPageProfiles();
+    const futureTechnology = { ...profiles.technologyProfile, profileVersion: 999 };
+    const raw = response({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        pageIdentity: profiles.pageIdentity,
+        technologyProfile: futureTechnology,
+        securityPosture: profiles.securityPosture,
+        tls: canonicalTlsProfile(),
+      },
+    });
+    const before = structuredClone(raw);
+    const first = parseLookupHttpResponse(raw);
+    const second = parseLookupHttpResponse(raw);
+    assert.equal(first.ok, true);
+    assert.deepEqual(first, second);
+    assert.deepEqual(raw, before);
+    assert.notEqual(first.value, raw);
+    assert.equal(first.value.availability.pageIdentity, profiles.pageIdentity);
+    assert.equal(first.value.availability.securityPosture, profiles.securityPosture);
+    assert.deepEqual(recordValue(first.value.availability.technologyProfile), {
+      status: 'unsupported',
+      source: 'derived',
+      complete: false,
+      truncated: false,
+      compatibility: 'unsupported_version',
+      limitations: ['Technology profile uses a newer unsupported version; its evidence was withheld.'],
+      findings: [],
+      browserLibraryProfile: null,
+    });
+
+    for (const technologyProfile of [
+      { ...profiles.technologyProfile, status: 'unknown_status' },
+      { ...profiles.technologyProfile, source: 'http' },
+      { ...profiles.technologyProfile, findings: 'not-an-array' },
+      { ...profiles.technologyProfile, findings: [{ ...profiles.technologyProfile.findings[0], name: 'x'.repeat(121) }] },
+      { ...profiles.technologyProfile, findings: Array(25).fill(profiles.technologyProfile.findings[0]) },
+      42,
+    ]) {
+      const parsed = parseLookupHttpResponse(response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          pageIdentity: profiles.pageIdentity,
+          technologyProfile,
+        },
+      }));
+      assert.equal(parsed.ok, true);
+      assert.equal(recordValue(parsed.value.availability.technologyProfile).compatibility, 'malformed');
+      assert.equal(parsed.value.availability.pageIdentity, profiles.pageIdentity);
+    }
+
+    const futureLibrary = parseLookupHttpResponse(response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        technologyProfile: {
+          ...profiles.technologyProfile,
+          browserLibraryProfile: {
+            ...requiredValue(profiles.technologyProfile.browserLibraryProfile),
+            profileVersion: 999,
+          },
+        },
+      },
+    }));
+    assert.equal(futureLibrary.ok, true);
+    const retainedTechnology = recordValue(futureLibrary.value.availability.technologyProfile);
+    assert.equal(arrayValue(retainedTechnology.findings).length > 0, true);
+    assert.equal(recordValue(retainedTechnology.browserLibraryProfile).compatibility, 'unsupported_version');
+
+    for (const [key, value] of [
+      ['tls', { ...canonicalTlsProfile(), profileVersion: 999 }],
+      ['securityPosture', { ...profiles.securityPosture, postureVersion: 999 }],
+      ['pageIdentity', { ...profiles.pageIdentity, identityVersion: 999 }],
+      ['credentialSurfaceProfile', { ...profiles.credentialSurfaceProfile, credentialSurfaceVersion: 999 }],
+      ['structuredDataIdentity', { ...profiles.structuredDataIdentity, structuredDataVersion: 999 }],
+      ['pageRoleProfile', { ...profiles.pageRoleProfile, pageRoleProfileVersion: 999 }],
+      ['clientBehaviorProfile', { ...profiles.clientBehaviorProfile, clientBehaviorProfileVersion: 999 }],
+    ] as const) {
+      const parsed = parseLookupHttpResponse(response({
+        availability: { applicable: true, state: 'registered', [key]: value },
+      }));
+      assert.equal(parsed.ok, true, key);
+      assert.equal(recordValue(parsed.value.availability[key]).compatibility, 'unsupported_version', key);
+    }
+
+    const excessivelyNested = response({
+      availability: {
+        applicable: true,
+        state: 'registered',
+        technologyProfile: { ...profiles.technologyProfile, nested: nestedValue(MAX_BOUNDED_JSON_DEPTH + 1) },
+      },
+    });
+    assert.equal(parseLookupHttpResponse(excessivelyNested).ok, false);
+    assert.deepEqual(parseLookupHttpResponse(excessivelyNested), parseLookupHttpResponse(excessivelyNested));
   });
 
   test('rejects over-bound or malformed nested HTTP evidence with the stable response error', () => {
@@ -673,18 +841,19 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('projects separately attributed evidence without mutating the response', () => {
+    const profiles = canonicalPageProfiles();
     const raw = response({
       rdap: { parsed: { domain: 'EXAMPLE.TEST' }, registrarRdap: { parsed: { domain: 'EXAMPLE.TEST' } } },
       availability: {
         applicable: true,
         dns: { records: { a: ['192.0.2.1'] } },
         http: { response: { securityHeaders: { contentSecurityPolicy: 'default-src none' } } },
-        tls: { certificate: { subject: { commonNames: ['example.test'] } } },
-        pageIdentity: { openGraph: { url: { url: 'https://example.test/' } } },
-        credentialSurfaceProfile: { source: 'html', inputs: { classifiedCount: 2 } },
-        structuredDataIdentity: { source: 'html', entities: [{ name: 'Example publisher' }] },
-        technologyProfile: { source: 'derived' },
-        securityPosture: { summary: { observed: 1 } },
+        tls: canonicalTlsProfile({ certificate: { subject: { commonNames: ['example.test'] } } }),
+        pageIdentity: { ...profiles.pageIdentity, openGraph: { ...profiles.pageIdentity.openGraph, url: { url: 'https://example.test/', queryOmitted: false, pathTruncated: false } } },
+        credentialSurfaceProfile: { ...profiles.credentialSurfaceProfile, inputs: { ...profiles.credentialSurfaceProfile.inputs, classifiedCount: 2 } },
+        structuredDataIdentity: { ...profiles.structuredDataIdentity, entities: [{ types: ['Organization'], name: 'Example publisher', declaredOrigin: null, sameAsHosts: [] }] },
+        technologyProfile: profiles.technologyProfile,
+        securityPosture: { ...profiles.securityPosture, summary: { ...profiles.securityPosture.summary, observed: 1 } },
       },
       diagnostics: { registryAccess: { suffix: 'test' } },
       networkContext: { endpoint: { address: '192.0.2.1' }, rdap: { status: 'success' }, network: { handle: 'NET-1' } },

@@ -3,6 +3,10 @@ import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
 } from './portable-generator.mts';
+import {
+  technologyEvidenceRoles,
+  type TechnologyEvidenceRole,
+} from './technology-evidence-role.mts';
 
 const MAX_REPORT_VALUE_LENGTH = 300;
 const MAX_REPORT_LIST_ITEMS = 50;
@@ -37,6 +41,13 @@ type LookupEvidenceReport = {
 
 function objectOrEmpty(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function reportTechnologyNames(findings: unknown[], role: TechnologyEvidenceRole): string {
+  return listText(findings
+    .filter((finding) => technologyEvidenceRoles(finding).includes(role))
+    .map((finding) => objectOrEmpty(finding).name)
+    .filter((name): name is string => typeof name === 'string' && name.length > 0));
 }
 
 function cleanReportText(value: unknown, fallback = 'Not reported'): string {
@@ -176,6 +187,8 @@ function buildLookupEvidenceReport(
   const tlsHostname = objectOrEmpty(tls.hostname);
   const tlsValidity = objectOrEmpty(tls.validity);
   const tlsCertificate = objectOrEmpty(tls.certificate);
+  const technology = objectOrEmpty(availability.technologyProfile);
+  const technologyFindings = Array.isArray(technology.findings) ? technology.findings : [];
   const risk = riskReport(options.risk);
   const titleTarget = query.registrableDomain || query.submitted || 'Unknown domain';
   const registryAccessSuffix = [5, 6, 7, 8].includes(Number(diagnostics.version)) && registryAccess.authority === 'context_only'
@@ -276,6 +289,12 @@ function buildLookupEvidenceReport(
         reportField('Redirects', http.redirectCount),
         reportField('Page title', availability.pageTitle),
         reportField('Password field observed', yesNoUnknown(availability.hasPasswordField)),
+        reportField('Authoritative DNS operator evidence', listText(availability.nameservers)),
+        reportField('Observed edge, CDN, reverse proxy or WAF', reportTechnologyNames(technologyFindings, 'observed_edge')),
+        reportField('Application-platform indicators', reportTechnologyNames(technologyFindings, 'application_platform')),
+        reportField('Framework or runtime indicators', reportTechnologyNames(technologyFindings, 'framework_runtime')),
+        reportField('Embedded or third-party dependencies', reportTechnologyNames(technologyFindings, 'embedded_dependency')),
+        reportField('Origin host', 'Not established from retained evidence'),
       ],
     },
     tls: {

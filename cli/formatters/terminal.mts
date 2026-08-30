@@ -4,6 +4,10 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../../lib/homepage-metadata-contract.mts';
+import {
+  technologyEvidenceRoles,
+  type TechnologyEvidenceRole,
+} from '../../lib/technology-evidence-role.mts';
 
 const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_LOOKUP_TERMINAL_RECORDS = 5;
@@ -93,6 +97,14 @@ function terminalRecord(value: unknown): TerminalRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as TerminalRecord
     : {};
+}
+
+function terminalTechnologyRoleNames(findings: unknown[], role: TechnologyEvidenceRole): string {
+  const names = findings
+    .filter((finding) => technologyEvidenceRoles(finding).includes(role))
+    .slice(0, 6)
+    .map((finding) => safeTerminalValue(terminalRecord(finding).name, 'Unnamed indicator'));
+  return names.length ? boundedTerminalList(names, Math.max(0, findings.filter((finding) => technologyEvidenceRoles(finding).includes(role)).length - names.length)) : 'None retained';
 }
 
 function terminalCount(value: unknown): number {
@@ -652,12 +664,23 @@ function formatTerminalLookup(
       websiteLines.push(`Technology     ${titleCase(technology.status)} · ${findings.length} indicator${findings.length === 1 ? '' : 's'}`);
       const visible = findings.slice(0, 6).map((finding: unknown) => {
         const item = terminalRecord(finding);
-        const qualifiers = [item.category, item.confidence].filter(Boolean).map((value) => safeTerminalValue(value));
+        const qualifiers = [item.category, item.confidence ? `${item.confidence} signature strength` : null].filter(Boolean).map((value) => safeTerminalValue(value));
         return `${safeTerminalValue(item.name, 'Unnamed indicator')}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''}`;
       });
       if (detail !== 'summary' && visible.length) {
         const omitted = findings.length - visible.length;
         websiteLines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
+      }
+      if (detail !== 'summary') {
+        const nameservers = Array.isArray(availability.nameservers)
+          ? availability.nameservers.slice(0, MAX_LOOKUP_TERMINAL_NAMES).map((value) => safeTerminalValue(value))
+          : [];
+        websiteLines.push(`DNS operator   ${nameservers.length ? boundedTerminalList(nameservers, Math.max(0, (availability.nameservers as unknown[]).length - nameservers.length)) : 'Unavailable'} · nameserver evidence only`);
+        websiteLines.push(`Observed edge  ${terminalTechnologyRoleNames(findings, 'observed_edge')}`);
+        websiteLines.push(`App platform   ${terminalTechnologyRoleNames(findings, 'application_platform')}`);
+        websiteLines.push(`Framework/run  ${terminalTechnologyRoleNames(findings, 'framework_runtime')}`);
+        websiteLines.push(`Embedded deps  ${terminalTechnologyRoleNames(findings, 'embedded_dependency')}`);
+        websiteLines.push('Origin host    Not established from retained evidence');
       }
       if (detail !== 'summary' && (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived')) {
         const libraries = Array.isArray(browserLibraries.findings) ? browserLibraries.findings : [];

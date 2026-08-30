@@ -7,6 +7,11 @@
 import { domainToASCII } from 'node:url';
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import {
+  MAX_STRUCTURED_DATA_ENTITIES,
+  MAX_STRUCTURED_DATA_SAME_AS_HOSTS,
+  STRUCTURED_DATA_IDENTITY_VERSION,
+} from './lookup-child-profile-contract.mts';
 import { isUriShapedLabel } from './portable-generator.mts';
 import {
   analyzeStaticHtml,
@@ -29,7 +34,6 @@ type StructuredDataIdentityInput = {
   sourceTruncated?: unknown;
 };
 
-const STRUCTURED_DATA_IDENTITY_VERSION = 1;
 const MAX_STRUCTURED_DATA_SCRIPTS = 8;
 const MAX_STRUCTURED_DATA_SCRIPT_CHARS = 16_384;
 const MAX_STRUCTURED_DATA_TOTAL_CHARS = 32_768;
@@ -37,11 +41,9 @@ const MAX_STRUCTURED_DATA_DEPTH = 16;
 const MAX_STRUCTURED_DATA_OBJECTS = 256;
 const MAX_STRUCTURED_DATA_ARRAY_ITEMS = 256;
 const MAX_STRUCTURED_DATA_PROPERTIES = 64;
-const MAX_STRUCTURED_DATA_ENTITIES = 16;
 const MAX_STRUCTURED_DATA_TYPES = 8;
 const MAX_STRUCTURED_DATA_NAME_LENGTH = 160;
 const MAX_STRUCTURED_DATA_URL_LENGTH = 2_048;
-const MAX_STRUCTURED_DATA_SAME_AS_HOSTS = 12;
 const CONTROL_AND_DIRECTIONAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const CONTROL_AND_DIRECTIONAL_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;

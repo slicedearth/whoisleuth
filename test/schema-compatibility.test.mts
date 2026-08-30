@@ -450,7 +450,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.relationship-observations').currentVersion, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'browser.website-snapshots').schema, null);
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
-    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [4]);
+    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [4, 5]);
+    assert.equal(byId(inventory, 'browser.website-snapshots').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
     assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4]);
     assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'exact_current_only');

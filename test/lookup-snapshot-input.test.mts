@@ -35,8 +35,8 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     observedAt: NOW,
     savedAt: NOW,
     lookupEvidenceDepth: 'deep',
-    technologyProfile: { complete: true, truncated: false },
-    securityPosture: { complete: true, truncated: false },
+    technologyProfile: { profileVersion: 11, complete: true, truncated: false },
+    securityPosture: { postureVersion: 2, complete: true, truncated: false },
     tlsEvidence: {
       source: 'tls',
       scanMode: 'deep',
@@ -60,7 +60,7 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
       forms: { externalActionOrigins: ['https://forms.snapshot.example'] },
       publicationMetadata: { version: 1, marker: 'publication metadata must not persist' },
     },
-    technologyFindings: [{ id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' }],
+    technologyFindings: [{ id: 'framework', name: 'Framework', category: 'framework', confidence: 'high', roles: ['framework_runtime'] }],
     securityPostureFindings: [{ id: 'transport', state: 'observed' }],
     diagnostics: {
       rdap: { status: 'success' },
@@ -82,8 +82,12 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     { source: 'whois', state: 'partial' },
   ]);
   assert.deepEqual(snapshot.technologies, [
-    { id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' },
+    { id: 'framework', name: 'Framework', category: 'framework', confidence: 'high', roles: ['framework_runtime'] },
   ]);
+  assert.deepEqual(snapshot.profileProvenance, {
+    technology: { version: 11, state: 'known' },
+    securityPosture: { version: 2, state: 'known' },
+  });
   assert.deepEqual(snapshot.certificate, {
     observationVersion: 1,
     source: 'tls',

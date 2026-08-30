@@ -22,6 +22,7 @@ import {
   MAX_HTTP_PROVENANCE_URL,
 } from './http-evidence-bounds.mts';
 import {
+  OBSERVATION_VERSION,
   MAX_OBSERVATION_DIAGNOSTICS,
   MAX_OBSERVATION_LIMITATIONS,
   MAX_OBSERVATION_LIMITATION_LENGTH,
@@ -37,8 +38,31 @@ import {
   MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
   MAX_LOOKUP_TLS_FINDINGS,
   MAX_LOOKUP_TLS_NAME_VALUES,
+  TLS_PROFILE_VERSION,
 } from './lookup-network-evidence-bounds.mts';
-import { MAX_SECURITY_POSTURE_FINDINGS } from './website-security-posture.mts';
+import {
+  BROWSER_LIBRARY_PROFILE_VERSION,
+  CLIENT_BEHAVIOR_PROFILE_VERSION,
+  CREDENTIAL_SURFACE_PROFILE_VERSION,
+  MAX_EVIDENCE_PER_TECHNOLOGY,
+  MAX_CLIENT_BEHAVIOR_INDICATORS,
+  MAX_LIBRARY_FINDINGS,
+  MAX_PAGE_ROLE_EVIDENCE,
+  MAX_PAGE_ROLE_FINDINGS,
+  MAX_SECURITY_POSTURE_FINDINGS,
+  MAX_STRUCTURED_DATA_ENTITIES,
+  MAX_STRUCTURED_DATA_SAME_AS_HOSTS,
+  MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH,
+  MAX_TECHNOLOGY_FINDINGS,
+  PAGE_ROLE_PROFILE_VERSION,
+  STRUCTURED_DATA_IDENTITY_VERSION,
+  SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS,
+  WEBSITE_SECURITY_POSTURE_VERSION,
+} from './lookup-child-profile-contract.mts';
+import {
+  PAGE_FINGERPRINT_VERSION,
+  PAGE_IDENTITY_VERSION,
+} from '../packages/contracts/workspace-portability.mts';
 import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
@@ -537,6 +561,492 @@ function validObservationFields(value: unknown): value is JsonObject {
     && (value.truncated === undefined || typeof value.truncated === 'boolean')
     && validObservationLimitations(value.limitations)
     && validObservationDiagnostics(value.diagnostics);
+}
+
+type ChildContractState = 'supported' | 'unsupported' | 'invalid';
+const OBSERVATION_FIELDS = Object.freeze([
+  'version', 'status', 'observedAt', 'scanMode', 'source', 'durationMs',
+  'complete', 'truncated', 'limitations', 'diagnostics',
+]);
+const TECHNOLOGY_CATEGORIES = new Set([
+  'application runtime', 'content management', 'commerce', 'site builder',
+  'web framework', 'static site generator', 'web server', 'delivery platform',
+]);
+const TECHNOLOGY_CONFIDENCE = new Set(['high', 'medium']);
+const TECHNOLOGY_EVIDENCE_SOURCES = new Set([
+  'generator metadata', 'static HTML', 'resource origin', 'HTTP server header',
+  'passive response header',
+]);
+const TECHNOLOGY_EVIDENCE_ROLES = new Set([
+  'application_platform', 'embedded_dependency', 'framework_runtime', 'observed_edge',
+]);
+const TECHNOLOGY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
+const PAGE_ROLE_VALUES = new Set([
+  'access_challenge', 'authentication', 'commerce', 'support_contact',
+  'parked_sale', 'content', 'unknown',
+]);
+const CLIENT_BEHAVIOR_IDS = new Set([
+  'inline_event_handlers', 'client_navigation', 'form_interception',
+  'service_worker', 'browser_storage', 'clipboard_access',
+  'dynamic_code_evaluation', 'browser_fingerprinting', 'persistent_connection',
+]);
+
+function hasOnlyKeys(value: JsonObject, allowed: readonly string[]): boolean {
+  const keys = Object.keys(value);
+  const allowedKeys = new Set(allowed);
+  return keys.length <= allowed.length && keys.every((key) => allowedKeys.has(key));
+}
+
+function childVersionState(
+  value: unknown,
+  field: string,
+  supportedVersions: readonly number[],
+): ChildContractState {
+  if (!isJsonObject(value)) return 'invalid';
+  const version = value[field];
+  if (Number.isSafeInteger(version) && supportedVersions.includes(Number(version))) return 'supported';
+  return Number.isSafeInteger(version) && Number(version) > Math.max(...supportedVersions)
+    ? 'unsupported'
+    : 'invalid';
+}
+
+function validExactStringArray(
+  value: unknown,
+  maximumItems: number,
+  maximumLength: number,
+  allowed?: ReadonlySet<string>,
+): boolean {
+  return Array.isArray(value)
+    && value.length <= maximumItems
+    && value.every((item) => validBoundedString(item, maximumLength)
+      && (!allowed || allowed.has(String(item))))
+    && new Set(value).size === value.length;
+}
+
+function validProfileObservation(
+  value: JsonObject,
+  statuses: ReadonlySet<string>,
+  sources: ReadonlySet<string>,
+): boolean {
+  if (value.version !== OBSERVATION_VERSION
+    || typeof value.status !== 'string'
+    || !statuses.has(value.status)
+    || typeof value.source !== 'string'
+    || !sources.has(value.source)
+    || normalizeExplicitIsoTimestamp(value.observedAt) === null
+    || value.scanMode !== 'deep'
+    || !(value.durationMs === null
+      || Number.isSafeInteger(value.durationMs)
+        && Number(value.durationMs) >= 0
+        && Number(value.durationMs) <= 120_000)
+    || typeof value.complete !== 'boolean'
+    || typeof value.truncated !== 'boolean'
+    || !validExactStringArray(
+      value.limitations,
+      MAX_OBSERVATION_LIMITATIONS,
+      MAX_OBSERVATION_LIMITATION_LENGTH,
+    )
+    || !isJsonObject(value.diagnostics)
+    || !validObservationDiagnostics(value.diagnostics)) return false;
+  if (value.status === 'success' && value.complete !== true) return false;
+  if (value.status !== 'success' && value.complete !== false) return false;
+  return true;
+}
+
+function technologyProfileContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'profileVersion', SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  const profileVersion = Number(profile.profileVersion);
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'profileVersion', 'findings', 'browserLibraryProfile'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['derived']))
+    || !Array.isArray(profile.findings)
+    || profile.findings.length > MAX_TECHNOLOGY_FINDINGS
+    || !(profile.browserLibraryProfile === null || isJsonObject(profile.browserLibraryProfile))) return 'invalid';
+  for (const candidate of profile.findings) {
+    if (!isJsonObject(candidate)
+      || !hasOnlyKeys(candidate, profileVersion >= 11
+        ? ['id', 'name', 'category', 'confidence', 'roles', 'evidence']
+        : ['id', 'name', 'category', 'confidence', 'evidence'])
+      || typeof candidate.id !== 'string'
+      || !TECHNOLOGY_ID_RE.test(candidate.id)
+      || !validBoundedString(candidate.name, 120)
+      || typeof candidate.category !== 'string'
+      || !TECHNOLOGY_CATEGORIES.has(candidate.category)
+      || typeof candidate.confidence !== 'string'
+      || !TECHNOLOGY_CONFIDENCE.has(candidate.confidence)
+      || !Array.isArray(candidate.evidence)
+      || candidate.evidence.length < 1
+      || candidate.evidence.length > MAX_EVIDENCE_PER_TECHNOLOGY) return 'invalid';
+    if (profileVersion >= 11 && !validExactStringArray(candidate.roles, 4, 40, TECHNOLOGY_EVIDENCE_ROLES)) return 'invalid';
+    for (const evidence of candidate.evidence) {
+      if (!isJsonObject(evidence)
+        || !hasOnlyKeys(evidence, profileVersion >= 11 ? ['source', 'role', 'description'] : ['source', 'description'])
+        || typeof evidence.source !== 'string'
+        || !TECHNOLOGY_EVIDENCE_SOURCES.has(evidence.source)
+        || !validBoundedString(evidence.description, MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH)
+        || profileVersion >= 11 && (typeof evidence.role !== 'string'
+          || !TECHNOLOGY_EVIDENCE_ROLES.has(evidence.role))) return 'invalid';
+    }
+  }
+  return 'supported';
+}
+
+function browserLibraryProfileContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'profileVersion', [BROWSER_LIBRARY_PROFILE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  const catalog = profile.catalog;
+  const knownExploitedCatalog = profile.knownExploitedCatalog;
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'profileVersion', 'catalog', 'knownExploitedCatalog', 'findings'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['derived']))
+    || !isJsonObject(catalog)
+    || !hasOnlyKeys(catalog, ['name', 'version', 'sourceRevision'])
+    || !['name', 'version', 'sourceRevision'].every((field) => validBoundedString(catalog[field], 160))
+    || !isJsonObject(knownExploitedCatalog)
+    || !hasOnlyKeys(knownExploitedCatalog, ['name', 'version', 'releasedAt'])
+    || !['name', 'version', 'releasedAt'].every((field) => validBoundedString(knownExploitedCatalog[field], 160))
+    || !Array.isArray(profile.findings)
+    || profile.findings.length > MAX_LIBRARY_FINDINGS) return 'invalid';
+  const methods = new Set(['script URL', 'script filename', 'inline signature', 'inline hash']);
+  const severities = new Set(['none', 'low', 'medium', 'high', 'critical']);
+  for (const candidate of profile.findings) {
+    if (!isJsonObject(candidate)
+      || !hasOnlyKeys(candidate, [
+        'id', 'name', 'apparentVersion', 'detectionMethods', 'advisoryCount',
+        'highestSeverity', 'advisoryIdentifiers', 'knownExploitedCount',
+        'knownExploitedIdentifiers', 'weaknessClasses',
+      ])
+      || typeof candidate.id !== 'string'
+      || !/^[a-z0-9._-]{1,80}$/iu.test(candidate.id)
+      || !validBoundedString(candidate.name, 120)
+      || !/^[0-9][0-9.a-z_-]{0,63}$/iu.test(String(candidate.apparentVersion))
+      || !validExactStringArray(candidate.detectionMethods, 4, 40, methods)
+      || !validUint(candidate.advisoryCount, 10_000)
+      || !(candidate.highestSeverity === null
+        || typeof candidate.highestSeverity === 'string' && severities.has(candidate.highestSeverity))
+      || !validExactStringArray(candidate.advisoryIdentifiers, 16, 80)
+      || !validUint(candidate.knownExploitedCount, 10_000)
+      || !validExactStringArray(candidate.knownExploitedIdentifiers, 16, 80)
+      || !validExactStringArray(candidate.weaknessClasses, 12, 80)) return 'invalid';
+  }
+  return 'supported';
+}
+
+function pageFingerprintContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'fingerprintVersion', [PAGE_FINGERPRINT_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [
+    'fingerprintVersion', 'exact', 'normalizedHtml', 'visibleText', 'domStructure',
+    'formStructure', 'resourceHosts', 'identifiers', 'complete', 'truncated', 'limitations',
+  ])
+    || typeof profile.complete !== 'boolean'
+    || typeof profile.truncated !== 'boolean'
+    || !validExactStringArray(profile.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)
+    || !isJsonObject(profile.exact)
+    || profile.exact.algorithm !== 'sha256'
+    || typeof profile.exact.value !== 'string'
+    || !SHA256_RE.test(profile.exact.value)
+    || !['complete-body', 'captured-prefix'].includes(String(profile.exact.scope))
+    || !validUint(profile.exact.bytes, 300_000)
+    || !['captured-response-bytes', 'decoded-markup'].includes(String(profile.exact.source))
+    || !isJsonObject(profile.normalizedHtml)
+    || !isJsonObject(profile.domStructure)
+    || !(profile.visibleText === null || isJsonObject(profile.visibleText))
+    || !(profile.formStructure === null || isJsonObject(profile.formStructure))
+    || !isJsonObject(profile.resourceHosts)
+    || !isJsonObject(profile.identifiers)) return 'invalid';
+  return 'supported';
+}
+
+function validIdentityUrl(value: unknown): boolean {
+  return isJsonObject(value)
+    && hasOnlyKeys(value, ['url', 'queryOmitted', 'pathTruncated'])
+    && validHttpProvenanceUrl(value.url)
+    && typeof value.queryOmitted === 'boolean'
+    && typeof value.pathTruncated === 'boolean';
+}
+
+function validNullableIdentityUrl(value: unknown): boolean {
+  return value === null || validIdentityUrl(value);
+}
+
+function pageIdentityContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'identityVersion', [PAGE_IDENTITY_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [
+    ...OBSERVATION_FIELDS, 'identityVersion', 'documentLanguage', 'canonical',
+    'metaRefresh', 'openGraph', 'generator', 'forms', 'resources',
+    'embeddedOrigins', 'contactDomains', 'downloads', 'trackingIdentifiers',
+    'fingerprints', 'publicationMetadata',
+  ])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
+    || !(profile.documentLanguage === null || validBoundedString(profile.documentLanguage, 80))
+    || !(profile.generator === null || validBoundedString(profile.generator, 120))
+    || !validNullableIdentityUrl(profile.canonical)
+    || !validNullableIdentityUrl(profile.metaRefresh)
+    || !isJsonObject(profile.openGraph)
+    || !hasOnlyKeys(profile.openGraph, ['title', 'siteName', 'url'])
+    || !validOptionalNullableText(profile.openGraph.title, 200)
+    || !validOptionalNullableText(profile.openGraph.siteName, 200)
+    || !validNullableIdentityUrl(profile.openGraph.url)
+    || !isJsonObject(profile.forms)
+    || !hasOnlyKeys(profile.forms, ['count', 'postCount', 'insecureActionCount', 'externalActionOrigins', 'truncated'])
+    || !validUint(profile.forms.count, 50)
+    || !validUint(profile.forms.postCount, 50)
+    || !validUint(profile.forms.insecureActionCount, 50)
+    || !validExactStringArray(profile.forms.externalActionOrigins, 10, 2_048)
+    || typeof profile.forms.truncated !== 'boolean'
+    || !isJsonObject(profile.resources)
+    || !hasOnlyKeys(profile.resources, ['count', 'byType', 'externalOrigins', 'truncated'])
+    || !validUint(profile.resources.count, 1_024)
+    || !isJsonObject(profile.resources.byType)
+    || !hasOnlyKeys(profile.resources.byType, ['image', 'script', 'stylesheet', 'link', 'frame', 'media', 'object'])
+    || !Object.values(profile.resources.byType).every((count) => validUint(count, 1_024))
+    || !validExactStringArray(profile.resources.externalOrigins, 30, 2_048)
+    || typeof profile.resources.truncated !== 'boolean'
+    || !isJsonObject(profile.downloads)
+    || !hasOnlyKeys(profile.downloads, ['count', 'explicitCount', 'riskyCount', 'externalOrigins', 'riskyFileTypes', 'truncated'])
+    || !validUint(profile.downloads.count, 1_024)
+    || !validUint(profile.downloads.explicitCount, 1_024)
+    || !validUint(profile.downloads.riskyCount, 1_024)
+    || !validExactStringArray(profile.downloads.externalOrigins, 20, 2_048)
+    || !validExactStringArray(profile.downloads.riskyFileTypes, 20, 80)
+    || typeof profile.downloads.truncated !== 'boolean'
+    || !validExactStringArray(profile.embeddedOrigins, 20, 2_048)
+    || !validExactStringArray(profile.contactDomains, 20, 253)
+    || !Array.isArray(profile.trackingIdentifiers)
+    || profile.trackingIdentifiers.length > 30
+    || !profile.trackingIdentifiers.every((item) => isJsonObject(item)
+      && hasOnlyKeys(item, ['type', 'value'])
+      && validBoundedString(item.type, 80)
+      && validBoundedString(item.value, 240))
+    || !isJsonObject(profile.fingerprints)
+    || profile.publicationMetadata !== undefined
+      && !validPagePublicationMetadata(profile.publicationMetadata)) return 'invalid';
+  return 'supported';
+}
+
+function tlsProfileContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'profileVersion', [TLS_PROFILE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [
+    ...OBSERVATION_FIELDS, 'profileVersion', 'connectedAddress', 'connectedFamily',
+    'port', 'sniHost', 'protocol', 'alpnProtocol', 'cipher', 'ephemeralKey',
+    'authorization', 'hostname', 'validity', 'certificate', 'chain',
+    'chainTruncated', 'findings',
+  ])
+    || !validProfileObservation(profile, new Set(['success', 'partial', 'error', 'skipped']), new Set(['tls']))
+    || !(profile.connectedAddress === null || validBoundedString(profile.connectedAddress, 64))
+    || !(profile.connectedFamily === null || [4, 6].includes(Number(profile.connectedFamily)))
+    || profile.port !== 443
+    || !(profile.sniHost === null || validBoundedString(profile.sniHost, 253))
+    || !(profile.protocol === null || validBoundedString(profile.protocol, 32))
+    || !(profile.alpnProtocol === null || validBoundedString(profile.alpnProtocol, 32))
+    || !(profile.cipher === null || isJsonObject(profile.cipher))
+    || !(profile.ephemeralKey === null || isJsonObject(profile.ephemeralKey))
+    || !isJsonObject(profile.authorization)
+    || !hasOnlyKeys(profile.authorization, ['authorized', 'error'])
+    || !(profile.authorization.authorized === null || typeof profile.authorization.authorized === 'boolean')
+    || !validOptionalNullableText(profile.authorization.error, 240)
+    || !isJsonObject(profile.hostname)
+    || !hasOnlyKeys(profile.hostname, ['matches', 'error'])
+    || !(profile.hostname.matches === null || typeof profile.hostname.matches === 'boolean')
+    || !validOptionalNullableText(profile.hostname.error, 240)
+    || !isJsonObject(profile.validity)
+    || !hasOnlyKeys(profile.validity, ['status'])
+    || !['valid', 'expired', 'not_yet_valid', 'unknown'].includes(String(profile.validity.status))
+    || !(profile.certificate === null || isJsonObject(profile.certificate))
+    || !Array.isArray(profile.chain)
+    || profile.chain.length > MAX_LOOKUP_TLS_CHAIN_CERTIFICATES
+    || typeof profile.chainTruncated !== 'boolean'
+    || !Array.isArray(profile.findings)
+    || profile.findings.length > MAX_LOOKUP_TLS_FINDINGS
+    || !profile.findings.every(validTlsFinding)) return 'invalid';
+  if (isJsonObject(profile.certificate)
+    && (!optionalTlsNameWithin(profile.certificate.subject)
+      || !optionalTlsNameWithin(profile.certificate.issuer))) return 'invalid';
+  return 'supported';
+}
+
+function securityPostureContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'postureVersion', [WEBSITE_SECURITY_POSTURE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'postureVersion', 'summary', 'findings'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['derived']))
+    || !isJsonObject(profile.summary)
+    || !hasOnlyKeys(profile.summary, ['observed', 'potentialExposure', 'observedAbsence', 'unavailable'])
+    || !Object.values(profile.summary).every((count) => validUint(count, MAX_SECURITY_POSTURE_FINDINGS))
+    || !Array.isArray(profile.findings)
+    || profile.findings.length > MAX_SECURITY_POSTURE_FINDINGS
+    || !profile.findings.every(validSecurityPostureFinding)) return 'invalid';
+  return 'supported';
+}
+
+function credentialSurfaceContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'credentialSurfaceVersion', [CREDENTIAL_SURFACE_PROFILE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  return hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'credentialSurfaceVersion', 'forms', 'inputs'])
+    && validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
+    && isJsonObject(profile.forms)
+    && isJsonObject(profile.inputs)
+    && validUint(profile.forms.count, 1_000)
+    && validUint(profile.inputs.count, 1_000)
+    && validUint(profile.inputs.classifiedCount, 1_000)
+    ? 'supported'
+    : 'invalid';
+}
+
+function structuredDataContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'structuredDataVersion', [STRUCTURED_DATA_IDENTITY_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'structuredDataVersion', 'entities'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
+    || !Array.isArray(profile.entities)
+    || profile.entities.length > MAX_STRUCTURED_DATA_ENTITIES) return 'invalid';
+  return profile.entities.every((entity) => isJsonObject(entity)
+    && hasOnlyKeys(entity, ['types', 'name', 'declaredOrigin', 'sameAsHosts'])
+    && validExactStringArray(entity.types, 8, 160)
+    && (entity.name === null || validBoundedString(entity.name, 160))
+    && (entity.declaredOrigin === null || validHttpProvenanceUrl(entity.declaredOrigin))
+    && validExactStringArray(entity.sameAsHosts, MAX_STRUCTURED_DATA_SAME_AS_HOSTS, 253))
+    ? 'supported'
+    : 'invalid';
+}
+
+function pageRoleContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'pageRoleProfileVersion', [PAGE_ROLE_PROFILE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'pageRoleProfileVersion', 'primaryRole', 'findings'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['derived']))
+    || typeof profile.primaryRole !== 'string'
+    || !PAGE_ROLE_VALUES.has(profile.primaryRole)
+    || !Array.isArray(profile.findings)
+    || profile.findings.length < 1
+    || profile.findings.length > MAX_PAGE_ROLE_FINDINGS) return 'invalid';
+  return profile.findings.every((finding) => isJsonObject(finding)
+    && hasOnlyKeys(finding, ['role', 'label', 'confidence', 'evidence'])
+    && typeof finding.role === 'string'
+    && PAGE_ROLE_VALUES.has(finding.role)
+    && validBoundedString(finding.label, 120)
+    && ['high', 'medium', 'low'].includes(String(finding.confidence))
+    && validExactStringArray(finding.evidence, MAX_PAGE_ROLE_EVIDENCE, 300))
+    ? 'supported'
+    : 'invalid';
+}
+
+function clientBehaviorContractState(value: unknown): ChildContractState {
+  const versionState = childVersionState(value, 'clientBehaviorProfileVersion', [CLIENT_BEHAVIOR_PROFILE_VERSION]);
+  if (versionState !== 'supported') return versionState;
+  const profile = value as JsonObject;
+  if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'clientBehaviorProfileVersion', 'scriptSummary', 'indicators'])
+    || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['derived']))
+    || !isJsonObject(profile.scriptSummary)
+    || !hasOnlyKeys(profile.scriptSummary, ['elementsObserved', 'referencedScripts', 'inlineScripts', 'moduleScripts'])
+    || !Object.values(profile.scriptSummary).every((count) => validUint(count, 10_000))
+    || !Array.isArray(profile.indicators)
+    || profile.indicators.length > MAX_CLIENT_BEHAVIOR_INDICATORS) return 'invalid';
+  return profile.indicators.every((indicator) => isJsonObject(indicator)
+    && hasOnlyKeys(indicator, ['id', 'label', 'evidenceClass', 'occurrences', 'explanation'])
+    && typeof indicator.id === 'string'
+    && CLIENT_BEHAVIOR_IDS.has(indicator.id)
+    && validBoundedString(indicator.label, 120)
+    && ['static_markup', 'inline_script'].includes(String(indicator.evidenceClass))
+    && validUint(indicator.occurrences, 999)
+    && validBoundedString(indicator.explanation, 300))
+    ? 'supported'
+    : 'invalid';
+}
+
+function profilePlaceholder(label: string, source: string, state: Exclude<ChildContractState, 'supported'>): JsonObject {
+  return {
+    status: state === 'unsupported' ? 'unsupported' : 'error',
+    source,
+    complete: false,
+    truncated: false,
+    compatibility: state === 'unsupported' ? 'unsupported_version' : 'malformed',
+    limitations: [state === 'unsupported'
+      ? `${label} uses a newer unsupported version; its evidence was withheld.`
+      : `${label} was malformed; its evidence was withheld.`],
+  };
+}
+
+function sanitizeLookupChildProfiles(value: LookupHttpResponse): LookupHttpResponse {
+  let output = value;
+  let availability = value.availability;
+  const mutableAvailability = (): Record<string, JsonValue> => {
+    if (output === value) {
+      availability = { ...value.availability };
+      output = { ...value, availability } as LookupHttpResponse;
+    }
+    return availability as Record<string, JsonValue>;
+  };
+  const replaceChild = (
+    key: string,
+    label: string,
+    source: string,
+    contract: (child: unknown) => ChildContractState,
+  ) => {
+    const child = availability[key];
+    if (child === undefined || child === null) return;
+    const state = contract(child);
+    if (state !== 'supported') mutableAvailability()[key] = profilePlaceholder(label, source, state);
+  };
+
+  replaceChild('tls', 'TLS profile', 'tls', tlsProfileContractState);
+  replaceChild('securityPosture', 'Security-posture profile', 'derived', securityPostureContractState);
+  replaceChild('credentialSurfaceProfile', 'Credential-surface profile', 'html', credentialSurfaceContractState);
+  replaceChild('structuredDataIdentity', 'Structured-data identity profile', 'html', structuredDataContractState);
+  replaceChild('pageRoleProfile', 'Page-role profile', 'derived', pageRoleContractState);
+  replaceChild('clientBehaviorProfile', 'Client-behaviour profile', 'derived', clientBehaviorContractState);
+
+  const page = availability.pageIdentity;
+  if (page !== undefined && page !== null) {
+    const pageState = pageIdentityContractState(page);
+    if (pageState !== 'supported') {
+      mutableAvailability().pageIdentity = profilePlaceholder('Page-identity profile', 'html', pageState);
+    } else if (isJsonObject(page) && page.fingerprints !== undefined && page.fingerprints !== null) {
+      const fingerprintState = pageFingerprintContractState(page.fingerprints);
+      if (fingerprintState !== 'supported') {
+        const replacedPage = { ...page, fingerprints: profilePlaceholder('Page-fingerprint profile', 'derived', fingerprintState) };
+        mutableAvailability().pageIdentity = replacedPage;
+      }
+    }
+  }
+
+  const technology = availability.technologyProfile;
+  if (technology !== undefined && technology !== null) {
+    const technologyState = technologyProfileContractState(technology);
+    if (technologyState !== 'supported') {
+      mutableAvailability().technologyProfile = {
+        ...profilePlaceholder('Technology profile', 'derived', technologyState),
+        findings: [],
+        browserLibraryProfile: null,
+      };
+    } else if (isJsonObject(technology)
+      && technology.browserLibraryProfile !== undefined
+      && technology.browserLibraryProfile !== null) {
+      const libraryState = browserLibraryProfileContractState(technology.browserLibraryProfile);
+      if (libraryState !== 'supported') {
+        const replacedTechnology = {
+          ...technology,
+          browserLibraryProfile: {
+            ...profilePlaceholder('Browser-library profile', 'derived', libraryState),
+            findings: [],
+          },
+        };
+        mutableAvailability().technologyProfile = replacedTechnology;
+      }
+    }
+  }
+  return output;
 }
 
 function validSourceStatus(value: unknown): value is JsonObject {
@@ -1077,11 +1587,11 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
-  const lookupResponse = value as LookupHttpResponse;
-  if (!validAvailabilityScalars(value.availability)
-    || !validLookupDomainIdentity(value)
+  const lookupResponse = sanitizeLookupChildProfiles(value as LookupHttpResponse);
+  if (!validAvailabilityScalars(lookupResponse.availability)
+    || !validLookupDomainIdentity(lookupResponse)
     || !validRegistrationEvidence(lookupResponse)) return invalidLookupResponse();
-  if (value.availability.http !== undefined && !validNormalizedHttpEvidence(value.availability.http)) {
+  if (lookupResponse.availability.http !== undefined && !validNormalizedHttpEvidence(lookupResponse.availability.http)) {
     return invalidLookupResponse();
   }
   for (const section of [value.reverseDns, value.networkContext, value.securityTxt]) {

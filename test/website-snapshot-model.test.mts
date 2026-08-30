@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 import {
   MAX_WEBSITE_SNAPSHOTS,
@@ -30,7 +31,11 @@ function snapshot(
     savedAt: observedAt,
     complete: true,
     truncated: false,
-    technologies: [{ id: 'cms-one', name: 'CMS One', category: 'cms', confidence: 'high', raw: 'excluded' }],
+    profileProvenance: {
+      technology: { version: 11, state: 'known' },
+      securityPosture: { version: 2, state: 'known' },
+    },
+    technologies: [{ id: 'cms-one', name: 'CMS One', category: 'cms', confidence: 'high', roles: ['application_platform'], raw: 'excluded' }],
     posture: [{ id: 'https', state: 'observed', explanation: 'excluded' }],
     identity: {
       normalizedHtml: 'a'.repeat(64),
@@ -81,6 +86,7 @@ describe('website profile snapshots', () => {
       name: 'CMS One',
       category: 'cms',
       confidence: 'high',
+      roles: ['application_platform'],
     }]);
     assert.deepEqual(normalized.posture, [{ id: 'https', state: 'observed' }]);
     assert.deepEqual(normalized.sources, [{ source: 'page', state: 'success' }]);
@@ -116,7 +122,7 @@ describe('website profile snapshots', () => {
     const result = compareWebsiteSnapshots(
       snapshot('snapshot-one'),
       snapshot('snapshot-two', LATER, {
-        technologies: [{ id: 'commerce-one', name: 'Commerce One', category: 'commerce', confidence: 'medium' }],
+        technologies: [{ id: 'commerce-one', name: 'Commerce One', category: 'commerce', confidence: 'medium', roles: ['application_platform'] }],
         posture: [{ id: 'https', state: 'not_observed' }],
         sources: [{ source: 'page', state: 'partial' }],
         dependencies: [{ recordType: 'CNAME', target: 'service.example.net', state: 'unresolved', qualification: 'known_deprovision_pattern', serviceFamily: 'Hosted service' }],
@@ -220,6 +226,57 @@ describe('website profile snapshots', () => {
       }),
       /newer schema/,
     );
+  });
+
+  test('migrates the exact public v4 fixture to v5 with legacy-incomparable detector provenance', () => {
+    const publicV4 = JSON.parse(readFileSync(new URL('./fixtures/website-snapshot-v4.json', import.meta.url), 'utf8'));
+    const expectedV5 = JSON.parse(readFileSync(new URL('./fixtures/website-snapshot-v5-migrated.json', import.meta.url), 'utf8'));
+    const migrated = normalizeWebsiteSnapshotStore(publicV4);
+
+    assert.deepEqual(migrated, expectedV5);
+    assert.deepEqual(JSON.parse(serializeWebsiteSnapshotStore(publicV4)), expectedV5);
+    assert.deepEqual(normalizeWebsiteSnapshotStore(migrated), expectedV5);
+
+    const legacy = migrated.snapshots[0];
+    assert.ok(legacy);
+    const current = snapshot('current-snapshot', LATER, {
+      domain: 'snapshot.example',
+      technologies: [],
+      posture: [],
+    });
+    const comparison = compareWebsiteSnapshots(legacy, current);
+    assert.equal(comparison.compatible, true);
+    assert.deepEqual(comparison.profileComparability, {
+      technology: 'legacy_unknown',
+      securityPosture: 'legacy_unknown',
+    });
+    assert.equal(comparison.changes.some((change) => change.field.startsWith('technology.')
+      && change.field !== 'technology.profileVersion'), false);
+    assert.equal(comparison.changes.some((change) => change.field.startsWith('posture.')
+      && change.field !== 'posture.profileVersion'), false);
+  });
+
+  test('separates detector-version changes from target-observation changes', () => {
+    const before = snapshot('snapshot-one');
+    const after = snapshot('snapshot-two', LATER, {
+      profileProvenance: {
+        technology: { version: 12, state: 'known' },
+        securityPosture: { version: 3, state: 'known' },
+      },
+      technologies: [],
+      posture: [],
+    });
+    const comparison = compareWebsiteSnapshots(before, after);
+    assert.deepEqual(comparison.profileComparability, {
+      technology: 'detector_changed',
+      securityPosture: 'detector_changed',
+    });
+    assert.ok(comparison.changes.some((change) => change.field === 'technology.profileVersion'
+      && change.state === 'changed'));
+    assert.ok(comparison.changes.some((change) => change.field === 'posture.profileVersion'
+      && change.state === 'changed'));
+    assert.equal(comparison.changes.some((change) => change.field === 'technology.cms-one'), false);
+    assert.equal(comparison.changes.some((change) => change.field === 'posture.https'), false);
   });
 
   test('rejects reader-only versions without partial interpretation', () => {

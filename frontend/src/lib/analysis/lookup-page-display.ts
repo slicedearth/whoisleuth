@@ -13,6 +13,7 @@ import {
   type JsonRecord,
 } from './lookup-display-shared.ts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../../../../lib/website-security-posture.mts';
+import { technologyEvidenceRoles } from '../../../../lib/technology-evidence-role.mts';
 import { publicationMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 export function buildLookupPageDisplay(input: {
@@ -123,21 +124,29 @@ export function buildLookupPageDisplay(input: {
     .map((row) => ({ ...row, value: String(row.value) }));
   const technologyFindings = records(technologyProfile.findings)
     .slice(0, 24)
-    .map((finding) => ({
-      id: boundedTechnologyText(finding.id, 80),
-      name: boundedTechnologyText(finding.name || 'Unknown indicator', 120),
-      category: statusLabel(boundedTechnologyText(finding.category || 'technology', 80)),
-      confidence: boundedTechnologyText(finding.confidence || 'unknown', 20),
-      evidence: records(finding.evidence)
+    .map((finding) => {
+      const category = boundedTechnologyText(finding.category || 'technology', 80);
+      const evidence = records(finding.evidence)
         .slice(0, 4)
         .map((item) => ({
           source: statusLabel(boundedTechnologyText(item.source || 'evidence', 80)),
+          role: boundedTechnologyText(item.role, 40),
           description: boundedTechnologyText(
             item.description || 'Observed signature matched.',
             300,
           ),
-        })),
-    }));
+        }));
+      const declaredRoles = stringList(finding.roles)
+        .map((role) => boundedTechnologyText(role, 40));
+      return {
+        id: boundedTechnologyText(finding.id, 80),
+        name: boundedTechnologyText(finding.name || 'Unknown indicator', 120),
+        category: statusLabel(category),
+        confidence: boundedTechnologyText(finding.confidence || 'unknown', 20),
+        roles: technologyEvidenceRoles({ category, roles: declaredRoles, evidence }),
+        evidence,
+      };
+    });
   const securityPostureFindings = records(
     securityPosture.findings,
     MAX_SECURITY_POSTURE_FINDINGS,

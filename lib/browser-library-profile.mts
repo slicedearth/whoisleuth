@@ -11,6 +11,10 @@ import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
 import { createObservation } from '../packages/evidence/observation.mts';
 import {
+  BROWSER_LIBRARY_PROFILE_VERSION,
+  MAX_LIBRARY_FINDINGS,
+} from './lookup-child-profile-contract.mts';
+import {
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
   MAX_SCRIPT_ELEMENTS,
@@ -67,9 +71,7 @@ const MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS = 4_096;
 const MAX_INLINE_LIBRARY_SCAN_MS = 750;
 const MAX_INLINE_LIBRARY_WORKER_BYTES = 64 * 1024;
 
-const BROWSER_LIBRARY_PROFILE_VERSION = 2;
 const MAX_LIBRARY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
-const MAX_LIBRARY_FINDINGS = 16;
 const MAX_ADVISORY_IDENTIFIERS = 16;
 const MAX_WEAKNESS_CLASSES = 12;
 const MAX_MATCHES_PER_PATTERN = 4;

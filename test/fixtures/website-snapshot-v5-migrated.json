@@ -1,0 +1,61 @@
+{
+  "schema": "whoisleuth.website-profile-snapshots",
+  "version": 5,
+  "snapshots": [
+    {
+      "id": "public-v4-snapshot",
+      "domain": "snapshot.example",
+      "observedAt": "2026-08-28T00:00:00.000Z",
+      "savedAt": "2026-08-29T00:00:00.000Z",
+      "complete": true,
+      "truncated": false,
+      "profileProvenance": {
+        "technology": {
+          "version": null,
+          "state": "legacy_unknown"
+        },
+        "securityPosture": {
+          "version": null,
+          "state": "legacy_unknown"
+        }
+      },
+      "technologies": [
+        {
+          "id": "fixture-framework",
+          "name": "Fixture Framework",
+          "category": "web framework",
+          "confidence": "high",
+          "roles": []
+        }
+      ],
+      "posture": [
+        {
+          "id": "https_transport",
+          "state": "observed"
+        }
+      ],
+      "identity": {
+        "normalizedHtml": null,
+        "visibleText": null,
+        "domStructure": null,
+        "formStructure": null,
+        "resourceHosts": null,
+        "trackingIdentifiers": null,
+        "faviconHash": null
+      },
+      "identityValues": {
+        "resourceHosts": [],
+        "trackingIdentifiers": [],
+        "formActionOrigins": []
+      },
+      "sources": [
+        {
+          "source": "http",
+          "state": "success"
+        }
+      ],
+      "dependencies": [],
+      "certificate": null
+    }
+  ]
+}

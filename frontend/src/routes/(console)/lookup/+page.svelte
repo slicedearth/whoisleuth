@@ -1000,7 +1000,7 @@
           loadingLabel="Loading technology-profile evidence…"
           unavailableLabel="Technology-profile evidence could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(technologyProfile.status)),complete:Boolean(technologyProfile.complete),findings:pageDisplay.technologyFindings,limitations:pageDisplay.technologyLimitations,libraryAvailable:browserLibraryProfile.profileVersion===1||browserLibraryProfile.profileVersion===2,libraryStatus:statusLabel(show(browserLibraryProfile.status)),libraryComplete:Boolean(browserLibraryProfile.complete),libraryCatalog:boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80),libraries:pageDisplay.browserLibraries,libraryLimitations:pageDisplay.browserLibraryLimitations}}
+          props={{status:statusLabel(show(technologyProfile.status)),complete:Boolean(technologyProfile.complete),findings:pageDisplay.technologyFindings,authoritativeNameservers:Array.isArray(availability.nameservers)?availability.nameservers.filter((value):value is string=>typeof value==='string').slice(0,50):[],limitations:pageDisplay.technologyLimitations,libraryAvailable:browserLibraryProfile.profileVersion===1||browserLibraryProfile.profileVersion===2,libraryStatus:statusLabel(show(browserLibraryProfile.status)),libraryComplete:Boolean(browserLibraryProfile.complete),libraryCatalog:boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80),libraries:pageDisplay.browserLibraries,libraryLimitations:pageDisplay.browserLibraryLimitations}}
         /></div>
       {/if}
 

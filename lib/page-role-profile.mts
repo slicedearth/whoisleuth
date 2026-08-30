@@ -5,6 +5,11 @@
 
 import { createObservation } from '../packages/evidence/observation.mts';
 import {
+  MAX_PAGE_ROLE_EVIDENCE,
+  MAX_PAGE_ROLE_FINDINGS,
+  PAGE_ROLE_PROFILE_VERSION,
+} from './lookup-child-profile-contract.mts';
+import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
@@ -33,9 +38,6 @@ type PageRoleProfileInput = {
   sourceTruncated?: unknown;
 };
 
-const PAGE_ROLE_PROFILE_VERSION = 1;
-const MAX_PAGE_ROLE_FINDINGS = 4;
-const MAX_PAGE_ROLE_EVIDENCE = 4;
 const MAX_ROLE_TITLE_CHARS = 200;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 

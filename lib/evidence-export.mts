@@ -123,7 +123,7 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   'version', 'profileVersion', 'status', 'state', 'source', 'observedAt',
   'scanMode', 'durationMs', 'complete', 'truncated', 'limitations',
   'diagnostics', 'detail', 'error', 'count', 'total', 'discarded', 'summary',
-  'findings', 'id', 'label', 'tone', 'category', 'confidence', 'evidence',
+  'findings', 'id', 'label', 'tone', 'category', 'confidence', 'compatibility', 'role', 'roles', 'evidence',
   'value', 'values', 'name', 'type', 'types', 'mode', 'owner', 'target',
   'url', 'uri', 'href',
   'priority', 'ttl', 'records',
