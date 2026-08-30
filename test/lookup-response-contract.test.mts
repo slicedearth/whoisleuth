@@ -754,6 +754,21 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(retainedTechnology.browserLibraryProfile).compatibility, 'malformed');
   });
 
+  test('retains a version-one page fingerprint recorded before optional structure similarity', () => {
+    const profiles = canonicalPageProfiles();
+    const pageIdentity = structuredClone(profiles.pageIdentity);
+    const fingerprints = recordValue(pageIdentity.fingerprints);
+    delete recordValue(fingerprints.domStructure).similarity;
+
+    const parsed = parseLookupHttpResponse(response({
+      availability: { applicable: true, state: 'registered', pageIdentity },
+    }));
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value.availability.pageIdentity, pageIdentity);
+    assert.equal(Object.hasOwn(recordValue(recordValue(parsed.value.availability.pageIdentity).fingerprints), 'compatibility'), false);
+  });
+
   test('rejects over-bound or malformed nested HTTP evidence with the stable response error', () => {
     const baseRedirect = {
       from: 'https://from.example.test/',

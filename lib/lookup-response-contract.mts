@@ -734,6 +734,7 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
   const normalizedHtml = value.normalizedHtml;
   const visibleText = value.visibleText;
   const domStructure = value.domStructure;
+  const domStructureBaseKeys = ['algorithm', 'value', 'nodeCount', 'parser', 'truncated'];
   const formStructure = value.formStructure;
   const resourceHosts = value.resourceHosts;
   const identifiers = value.identifiers;
@@ -753,14 +754,15 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
       && validUint(visibleText.featureCount, 8_192)
       && typeof visibleText.truncated === 'boolean')
     || !isJsonObject(domStructure)
-    || !hasExactKeys(domStructure, ['algorithm', 'value', 'nodeCount', 'parser', 'truncated', 'similarity'])
+    || !hasOnlyKeys(domStructure, [...domStructureBaseKeys, 'similarity'])
+    || !domStructureBaseKeys.every((key) => Object.hasOwn(domStructure, key))
     || domStructure.algorithm !== 'sha256'
     || typeof domStructure.value !== 'string'
     || !SHA256_RE.test(domStructure.value)
     || !validUint(domStructure.nodeCount, 4_096)
     || domStructure.parser !== 'static-tag-sequence-v1'
     || typeof domStructure.truncated !== 'boolean'
-    || !(domStructure.similarity === null || isJsonObject(domStructure.similarity)
+    || !(domStructure.similarity === undefined || domStructure.similarity === null || isJsonObject(domStructure.similarity)
       && hasExactKeys(domStructure.similarity, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
       && domStructure.similarity.algorithm === 'simhash64-v1'
       && typeof domStructure.similarity.value === 'string'
