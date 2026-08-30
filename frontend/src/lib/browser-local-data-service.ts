@@ -15,33 +15,17 @@ export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'ready'; initialization: BrowserLocalDataInitialization }>
   | Readonly<{ state: 'error'; code: string; detail: string }>;
 
-let provider: BrowserLocalDataProvider | null = null;
-let providerPromise: Promise<BrowserLocalDataProvider> | null = null;
-let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
-let serviceState: BrowserLocalDataServiceState = Object.freeze({ state: 'idle' });
+export type BrowserLocalDataProviderBoundary = Readonly<{
+  initialize: BrowserLocalDataProvider['initialize'];
+  restoreLegacyCopies: BrowserLocalDataProvider['restoreLegacyCopies'];
+  read: BrowserLocalDataProvider['read'];
+  update: BrowserLocalDataProvider['update'];
+}>;
 
-function browserLocalCollections(): Promise<readonly AnyLocalDataCollectionDefinition[]> {
-  if (!collectionsPromise) {
-    collectionsPromise = import('./browser-local-data-definitions.ts')
-      .then((module) => module.BROWSER_LOCAL_COLLECTIONS)
-      .catch((cause) => {
-        collectionsPromise = null;
-        throw cause;
-      });
-  }
-  return collectionsPromise;
-}
-
-async function browserLocalDataCollection<Collection extends BrowserLocalCollectionId>(
-  collection: Collection,
-): Promise<LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>> {
-  const definitions = await browserLocalCollections();
-  const definition = definitions.find((candidate) => candidate.id === collection);
-  if (!definition) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `The ${collection} collection is unavailable.`);
-  }
-  return definition as LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>;
-}
+export type BrowserLocalDataServiceDependencies = Readonly<{
+  loadCollections: () => Promise<readonly AnyLocalDataCollectionDefinition[]>;
+  createProvider: () => BrowserLocalDataProviderBoundary;
+}>;
 
 function boundedDetail(cause: unknown): string {
   return (cause instanceof Error ? cause.message : 'Browser-local data could not be initialised.')
@@ -52,55 +36,120 @@ function boundedDetail(cause: unknown): string {
 }
 
 export function browserLocalDataServiceState(): BrowserLocalDataServiceState {
-  return serviceState;
+  return defaultService.state();
 }
 
-export async function browserLocalDataProvider(): Promise<BrowserLocalDataProvider> {
-  if (providerPromise) return providerPromise;
-  serviceState = Object.freeze({ state: 'initializing' });
-  providerPromise = (async () => {
-    try {
-      const collections = await browserLocalCollections();
-      provider = new BrowserLocalDataProvider();
-      const initialization = await provider.initialize(collections);
-      serviceState = Object.freeze({ state: 'ready', initialization });
-      return provider;
-    } catch (cause) {
-      provider = null;
-      providerPromise = null;
-      serviceState = Object.freeze({
-        state: 'error',
-        code: cause instanceof BrowserLocalDataError ? cause.code : 'LOCAL_DATA_INITIALIZATION_FAILED',
-        detail: boundedDetail(cause),
+export function createBrowserLocalDataService(
+  dependencies: Partial<BrowserLocalDataServiceDependencies> = {},
+) {
+  const loadCollections = dependencies.loadCollections ?? (() => import('./browser-local-data-definitions.ts')
+    .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
+  const createProvider = dependencies.createProvider ?? (() => new BrowserLocalDataProvider());
+  let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
+  let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
+  let serviceState: BrowserLocalDataServiceState = Object.freeze({ state: 'idle' });
+
+  function collections(): Promise<readonly AnyLocalDataCollectionDefinition[]> {
+    if (!collectionsPromise) {
+      collectionsPromise = loadCollections().catch((cause) => {
+        collectionsPromise = null;
+        throw cause;
       });
-      throw cause;
     }
-  })();
-  return providerPromise;
+    return collectionsPromise;
+  }
+
+  async function collection<Collection extends BrowserLocalCollectionId>(
+    id: Collection,
+  ): Promise<LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>> {
+    const definitions = await collections();
+    const definition = definitions.find((candidate) => candidate.id === id);
+    if (!definition) {
+      throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `The ${id} collection is unavailable.`);
+    }
+    return definition as LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>;
+  }
+
+  async function activeProvider(): Promise<BrowserLocalDataProviderBoundary> {
+    if (providerPromise) return providerPromise;
+    serviceState = Object.freeze({ state: 'initializing' });
+    providerPromise = (async () => {
+      try {
+        const definitions = await collections();
+        const nextProvider = createProvider();
+        const initialization = await nextProvider.initialize(definitions);
+        serviceState = Object.freeze({ state: 'ready', initialization });
+        return nextProvider;
+      } catch (cause) {
+        providerPromise = null;
+        serviceState = Object.freeze({
+          state: 'error',
+          code: cause instanceof BrowserLocalDataError ? cause.code : 'LOCAL_DATA_INITIALIZATION_FAILED',
+          detail: boundedDetail(cause),
+        });
+        throw cause;
+      }
+    })();
+    return providerPromise;
+  }
+
+  async function initialize(): Promise<BrowserLocalDataServiceState> {
+    try { await activeProvider(); }
+    catch { /* the explicit error state is returned below */ }
+    return serviceState;
+  }
+
+  async function restoreLegacyCopies() {
+    const [provider, definitions] = await Promise.all([activeProvider(), collections()]);
+    return provider.restoreLegacyCopies(definitions);
+  }
+
+  async function read<Collection extends BrowserLocalCollectionId>(
+    id: Collection,
+  ): Promise<BrowserLocalCollectionDocumentMap[Collection]> {
+    const [provider, definition] = await Promise.all([activeProvider(), collection(id)]);
+    return provider.read(definition);
+  }
+
+  async function update<Collection extends BrowserLocalCollectionId, Result>(
+    id: Collection,
+    updater: (
+      current: BrowserLocalCollectionDocumentMap[Collection],
+    ) => Readonly<{ document: BrowserLocalCollectionDocumentMap[Collection]; result: Result }>,
+  ): Promise<Result> {
+    const [provider, definition] = await Promise.all([activeProvider(), collection(id)]);
+    return provider.update(definition, updater);
+  }
+
+  return Object.freeze({
+    state: () => serviceState,
+    provider: activeProvider,
+    initialize,
+    restoreLegacyCopies,
+    read,
+    update,
+    collection,
+  });
+}
+
+const defaultService = createBrowserLocalDataService();
+
+export async function browserLocalDataProvider(): Promise<BrowserLocalDataProvider> {
+  return await defaultService.provider() as BrowserLocalDataProvider;
 }
 
 export async function initializeBrowserLocalData(): Promise<BrowserLocalDataServiceState> {
-  try { await browserLocalDataProvider(); }
-  catch { /* the explicit error state is returned below */ }
-  return browserLocalDataServiceState();
+  return defaultService.initialize();
 }
 
 export async function restoreLegacyBrowserData() {
-  const [activeProvider, collections] = await Promise.all([
-    browserLocalDataProvider(),
-    browserLocalCollections(),
-  ]);
-  return activeProvider.restoreLegacyCopies(collections);
+  return defaultService.restoreLegacyCopies();
 }
 
 export async function readBrowserLocalData<Collection extends BrowserLocalCollectionId>(
   collection: Collection,
 ): Promise<BrowserLocalCollectionDocumentMap[Collection]> {
-  const [activeProvider, definition] = await Promise.all([
-    browserLocalDataProvider(),
-    browserLocalDataCollection(collection),
-  ]);
-  return activeProvider.read(definition);
+  return defaultService.read(collection);
 }
 
 export async function updateBrowserLocalData<Collection extends BrowserLocalCollectionId, Result>(
@@ -109,11 +158,11 @@ export async function updateBrowserLocalData<Collection extends BrowserLocalColl
     current: BrowserLocalCollectionDocumentMap[Collection],
   ) => Readonly<{ document: BrowserLocalCollectionDocumentMap[Collection]; result: Result }>,
 ): Promise<Result> {
-  const [activeProvider, definition] = await Promise.all([
-    browserLocalDataProvider(),
-    browserLocalDataCollection(collection),
-  ]);
-  return activeProvider.update(definition, updater);
+  return defaultService.update(collection, updater);
 }
 
-export { browserLocalDataCollection };
+export async function browserLocalDataCollection<Collection extends BrowserLocalCollectionId>(
+  collection: Collection,
+): Promise<LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>> {
+  return defaultService.collection(collection);
+}

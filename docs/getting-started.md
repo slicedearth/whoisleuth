@@ -130,13 +130,20 @@ The less common commands below each have one narrow purpose:
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |
 | `npm run unicode:confusables` | Audit the local confusable catalogue and labelled corpus. |
-| `npm run registry:fixtures` | Check fixture freshness metadata without live registry collection. |
+| `npm run sources:health` | Compose retained-dataset and evaluation health offline; add `-- --strict` for maintenance enforcement. |
 | `npm run registry:drift` | Deliberately compare the fixed official registry catalogues; this is a manual network operation. |
 | `npm run providers:policy-check` | Review retained provider-policy freshness metadata. |
 | `npm run deployment:self-check` | Run the bounded operator deployment check when explicitly configured. |
 | `npm run security:codeql` | Run the local CodeQL wrapper under its documented prerequisites. |
 | `npm run security:retire` | Scan a built frontend for retired browser libraries. |
 | `npm run maintenance:duplication` | Produce a bounded static maintainer duplication report. |
+
+`npm run sources:health` distinguishes current, stale, unavailable, malformed,
+limited, measured and unproven local states and reports unavailable counts as
+unavailable rather than zero. It reads checked-in assets only, performs no
+refresh or network request, and does not fail an ordinary run merely because an
+optional retained source has aged. Use `npm run sources:health -- --strict` for
+the explicit maintenance gate; each entry names its narrower strict command.
 
 Candidate-acceptance, catalogue-update, staging-evidence, first-use-study and
 release-publication commands are deliberate maintainer actions rather than

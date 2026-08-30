@@ -321,6 +321,7 @@ export function formatSourceHealthReport(
     lines.push(`  Items: ${item.itemCount === null ? 'unavailable' : item.itemCount}; age: ${item.ageDays === null ? 'unavailable' : `${item.ageDays} days`}`);
     lines.push(`  Detail: ${item.detail}`);
     if (item.state !== 'current' && item.state !== 'measured') lines.push(`  Action: ${item.action}`);
+    lines.push(`  Strict drill-down: ${item.strictCommand}`);
   }
   lines.push('', ...report.limitations, '');
   return lines.join('\n');

@@ -70,6 +70,7 @@ describe('offline source-health composition', () => {
     const formatted = formatSourceHealthReport(report);
     assert.match(formatted, /UNAVAILABLE\s+Registry compatibility fixtures/u);
     assert.match(formatted, /Items: unavailable; age: unavailable/u);
+    assert.match(formatted, /Strict drill-down: npm run registry:fixtures/u);
     assert.match(formatted, /network requests: 0/u);
   });
 

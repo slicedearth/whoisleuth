@@ -109,6 +109,12 @@ async function openPacketWizardStep(
   await expect(button).toHaveAttribute('aria-current', 'step');
 }
 
+function caseWorkspaceActionStatus(page: Page) {
+  return page
+    .getByRole('region', { name: 'Case workspace controls' })
+    .getByRole('status', { name: 'Case workspace action status' });
+}
+
 test('Monitor views support roving keyboard navigation', async ({ page }) => {
   await page.goto('/monitor');
   const tabs = page.getByRole('tablist', { name: 'Monitor views' });
@@ -289,7 +295,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
     'Reviewed registrar route', 'Published registrar policy', 'Reachability was not tested.',
     'Private response route', 'Analyst supplied', 'PRIVATE-CASE-7', 'Private analyst outcome text.',
   ]) expect(body).not.toContain(sentinel);
-  await expect(page.getByRole('status')).toContainText('No response was submitted');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('No response was submitted');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -349,11 +355,11 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
 });
 
 
-test('a case created from Monitor persists across a reload', async ({ page }) => {
+test('@timing-sensitive a case created from Monitor persists across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'tracked.invalid');
 
-  await expect(page.getByRole('status')).toHaveText(/Opened a new case for tracked\.invalid/);
+  await expect(caseWorkspaceActionStatus(page)).toHaveText(/Opened a new case for tracked\.invalid/);
   const head = page.locator('.case-head', { hasText: 'tracked.invalid' });
   await expect(head.locator('.badge').first()).toHaveText('New');
   await expect(head.locator('.badge').nth(1)).toHaveText('Unreviewed');
@@ -418,8 +424,8 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
-  await expect(page.getByRole('status')).toContainText('Recorded the reviewed evidence-gap dismissal');
-  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the reviewed evidence-gap dismissal');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -549,7 +555,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   });
   expect(JSON.stringify(exported)).not.toContain('Private analyst note');
   expect(JSON.stringify(exported)).not.toContain('"riskScore"');
-  await expect(page.getByRole('status')).toContainText('No model setting was changed');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('No model setting was changed');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).uncheck();
@@ -969,7 +975,7 @@ test('a committed note remains singular when its immediate reread fails', async 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await note.getByRole('button', { name: 'Add note' }).click();
 
-  await expect(page.getByRole('status')).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
   await expect(note.getByLabel('Add note')).toHaveValue('');
   await expect(page.locator('.case-head', { hasText: 'note-neighbour.invalid' })).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
@@ -1002,7 +1008,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await status.selectOption('reviewing');
-  await expect(page.getByRole('status').filter({
+  await expect(caseWorkspaceActionStatus(page).filter({
     hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(status).toHaveValue('reviewing');
@@ -1016,7 +1022,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await page.getByLabel('Tags').fill('reviewed, retained');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('button', { name: 'Save tags' }).click();
-  await expect(page.getByRole('status').filter({
+  await expect(caseWorkspaceActionStatus(page).filter({
     hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
@@ -1030,7 +1036,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete case' }).click();
-  await expect(page.getByRole('status').filter({
+  await expect(caseWorkspaceActionStatus(page).filter({
     hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
@@ -1106,7 +1112,7 @@ test('keeps a drafting action form when the Case update fails before commit', as
   await failNextBrowserLocalCollectionRead(page, 'cases');
   await action.getByRole('button', { name: 'Create drafting action' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Cases could not be read' })).toBeVisible();
   await expect(action.getByLabel('Action type')).toHaveValue('registrar_report');
   await expect(action.getByLabel('Recipient or internal owner')).toHaveValue('Fixture review desk');
   await expect(action.getByLabel('Contact source')).toHaveValue('Fixture registry role');
@@ -1143,7 +1149,7 @@ test('shows the complete committed Case snapshot when the immediate action rerea
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await action.getByRole('button', { name: 'Create drafting action' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
   await expect(workspace).toContainText('registry report · drafting');
   await expect(page.locator('.case-head', { hasText: 'action-neighbour.invalid' })).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
@@ -1178,7 +1184,7 @@ test('keeps an investigation-branch draft when the Case update fails before comm
   await failNextBrowserLocalCollectionRead(page, 'cases');
   await branch.getByRole('button', { name: 'Create branch' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Cases could not be read' })).toBeVisible();
   await expect(branch.getByLabel('Branch name')).toHaveValue('Draft branch');
   await expect(branch.getByRole('checkbox', { name: 'Branch fixture pin' })).toBeChecked();
   const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
@@ -1210,7 +1216,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await branch.getByRole('button', { name: 'Create branch' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
   await expect(workspace).toContainText('Committed branch');
   await expect(page.locator('.case-head', { hasText: 'branch-neighbour.invalid' })).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
@@ -1401,7 +1407,7 @@ test('append-only response review, exact authorisation, independent verification
   expect(exported.escalationHistory[0].transitions).toHaveLength(6);
   expect(exported.readiness.rows).toHaveLength(10);
   expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
-  await expect(page.getByRole('status')).toContainText('Nothing was submitted');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
 
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
@@ -1481,7 +1487,7 @@ test('external findings require a validated preview before creating local eviden
 
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
   await expect(externalWorkspace).toContainText('1 pin · 1 sighting · 0 decisions');
 });
 
@@ -1570,7 +1576,7 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(externalImport).not.toContainText('private body');
   await expect(externalImport).not.toContainText('token=secret');
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
   await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
 });
@@ -1669,7 +1675,7 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
   await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
   await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
 
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
@@ -1724,7 +1730,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
     buffer: Buffer.from(JSON.stringify(importPayload)),
   });
 
-  await expect(page.getByRole('status').filter({ hasText: 'Imported 1 new' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Imported 1 new' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'local.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'imported.invalid' })).toBeVisible();
 });

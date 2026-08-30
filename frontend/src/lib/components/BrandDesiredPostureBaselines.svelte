@@ -255,6 +255,16 @@
     </label>
   </header>
 
+  <aside class="consumer-guide" aria-labelledby="desired-posture-consumers">
+    <h3 id="desired-posture-consumers">Where these expectations are reviewed</h3>
+    <ul>
+      <li><strong>DS records:</strong> portable domain-control and change reviews. The owned-domain posture matrix currently marks DS comparison unsupported.</li>
+      <li><strong>Certificate issuer:</strong> certificate-policy review, the certificate review inbox and retained certificate-event replay. The posture matrix currently marks issuer comparison unsupported.</li>
+      <li><strong>SAN patterns:</strong> certificate-policy review, the certificate review inbox and retained certificate-event replay. SAN patterns are not a posture-matrix column.</li>
+      <li><strong>SPKI SHA-256:</strong> certificate-policy review, the certificate review inbox and DNS change rehearsal. The posture matrix currently marks public-key comparison unsupported.</li>
+    </ul>
+  </aside>
+
   {#if selectedDomain}
     <fieldset class="baseline-editor" disabled={busy}>
     <div class="baseline-grid">
@@ -332,7 +342,7 @@
     </div>
     </fieldset>
     {#if message}<p class="message" role="status">{message}</p>{/if}
-    <p class="limitation">DS and TLS values are retained for review, but the current review cannot yet compare complete DS, issuer or public-key evidence. Those fields remain unsupported rather than appearing aligned.</p>
+    <p class="limitation">Each reviewer keeps unavailable or incomplete evidence explicit. No retained expectation establishes current ownership, control, legitimacy or safety.</p>
   {:else}
     <p class="empty">Add an official domain to this Brand Profile before configuring expected settings.</p>
   {/if}
@@ -342,6 +352,10 @@
   .baselines{margin-top:16px;padding:var(--card-pad)}
   .baselines h2{margin:0}
   .section-head>div>p:not(.eyebrow),.limitation,.empty{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .consumer-guide{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .consumer-guide h3{margin:0;font-size:var(--text-sm)}
+  .consumer-guide ul{display:grid;gap:6px;margin:9px 0 0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .consumer-guide strong{color:var(--text)}
   label{display:grid;gap:6px;min-width:0}
   label>span{color:var(--muted);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
   input,select,textarea{width:100%;min-width:0}

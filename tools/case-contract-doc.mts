@@ -14,6 +14,7 @@ import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 const DISPLAY_NAMES = Object.freeze({
   'browser.cases': 'Browser-local Cases',
@@ -90,7 +91,8 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release 2.0.0 directly preserves the formats written by public release 1.47.4:
+Release ${WHOISLEUTH_APPLICATION_VERSION} is the current public Case and workspace writer. It directly
+preserves the formats written by public release 1.47.4:
 browser and portable Case schema 12, Case report schema 8, response-packet schema 6,
 CLI Case-pack schema 2 with its Case 12/report 8 epoch, workspace archive schema
 5, workspace settings schema 1, and encrypted workspace archive schema 1.

@@ -26,6 +26,11 @@ import { deliveryMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
+  const priority = Number(record.priority);
+  if (!['alias', 'service'].includes(String(record.mode))
+    || !Number.isSafeInteger(priority)
+    || priority < 0
+    || priority > 0xffff) return '';
   const parameters = rec(record.parameters);
   const mode = record.mode === 'alias' ? 'Alias' : 'Service';
   const target =
@@ -35,9 +40,7 @@ function httpsServiceBindingValue(value: unknown): string {
         ? 'owner'
         : boundedTechnologyText(record.target, 253) || 'target unavailable';
   return [
-    `${mode} priority ${
-      Number.isInteger(Number(record.priority)) ? Number(record.priority) : '—'
-    } → ${target}`,
+    `${mode} priority ${priority} → ${target}`,
     stringList(parameters.alpn).length
       ? `ALPN ${stringList(parameters.alpn)
           .slice(0, 16)
@@ -80,6 +83,55 @@ function httpsServiceBindingValue(value: unknown): string {
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function boundedDnsRecordValue(name: string, value: unknown): string {
+  if (typeof value === 'string') return boundedTechnologyText(value, 1024);
+  const record = rec(value);
+  if (name === 'mx') {
+    const priority = Number(record.priority);
+    const exchange = boundedTechnologyText(record.exchange, 253);
+    return Number.isSafeInteger(priority) && priority >= 0 && priority <= 0xffff && exchange
+      ? `${priority} ${exchange}`
+      : '';
+  }
+  if (name === 'caa') {
+    const critical = Number(record.critical);
+    const tag = boundedTechnologyText(record.tag, 15);
+    const policy = boundedTechnologyText(record.value, 1024);
+    return Number.isSafeInteger(critical) && critical >= 0 && critical <= 0xff && tag && policy
+      ? `${critical} ${tag} ${policy}`
+      : '';
+  }
+  if (name === 'soa') {
+    const nsname = boundedTechnologyText(record.nsname, 253);
+    const hostmaster = boundedTechnologyText(record.hostmaster, 253);
+    const fields = ['serial', 'refresh', 'retry', 'expire', 'minttl'] as const;
+    const numbers = fields.map((field) => Number(record[field]));
+    if (!nsname || !hostmaster || numbers.some((field) => (
+      !Number.isSafeInteger(field) || field < 0 || field > 0xffff_ffff
+    ))) return '';
+    const [serial, refresh, retry, expire, minttl] = numbers;
+    return `${nsname} · hostmaster ${hostmaster} · serial ${serial} · refresh ${refresh}s · retry ${retry}s · expire ${expire}s · minimum TTL ${minttl}s`;
+  }
+  return name === 'https' ? httpsServiceBindingValue(record) : '';
+}
+
+function httpStatus(value: unknown): number | null {
+  return Number.isSafeInteger(value) && Number(value) >= 100 && Number(value) <= 599
+    ? Number(value)
+    : null;
+}
+
+function missingReverseDnsValue(reverseDns: JsonRecord): string {
+  const diagnostic = rec(rec(reverseDns.diagnostics).ptr);
+  if (reverseDns.status === 'skipped' || diagnostic.status === 'skipped') return 'Not evaluated';
+  if (diagnostic.status === 'success' || diagnostic.status === 'not_found') return 'Not observed';
+  if (['partial', 'error', 'unsupported'].includes(String(reverseDns.status))
+    || ['partial', 'error', 'unsupported'].includes(String(diagnostic.status))) {
+    return 'Not established (source unavailable or incomplete)';
+  }
+  return 'Not observed';
 }
 
 function formatBytes(value: unknown): string {
@@ -162,26 +214,38 @@ export function buildLookupNetworkDisplay(input: {
     tlsValidity,
     tlsDiagnostics,
   } = input;
-  const dnsValues = (name: string) => {
-    const values = Array.isArray(dnsRecords[name])
-      ? dnsRecords[name].slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)
+  const responseStatus = httpStatus(httpResponse.status);
+  const dnsProjection = (name: string) => {
+    const source = dnsRecords[name];
+    const values = Array.isArray(source)
+      ? source.slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)
       : [];
-    return values
-      .map((value) => {
-        if (typeof value === 'string') return boundedTechnologyText(value, 1024);
-        const record = rec(value);
-        if (name === 'mx') return `${record.priority} ${record.exchange || '.'}`;
-        if (name === 'caa') return `${record.critical} ${record.tag} ${record.value}`;
-        if (name === 'soa') {
-          return `${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`;
-        }
-        return name === 'https' ? httpsServiceBindingValue(record) : String(value);
-      })
-      .filter(Boolean)
-      .join(' | ');
+    const projected = values
+      .map((value) => boundedDnsRecordValue(name, value))
+      .filter(Boolean);
+    return {
+      value: projected.join(' | '),
+      malformed: (source !== undefined && !Array.isArray(source))
+        || (Array.isArray(source) && (source.length > values.length || projected.length !== values.length)),
+    };
   };
-  const dnsDisplay = (name: string) =>
-    dnsEvidence.status === 'skipped' ? 'Not evaluated' : dnsValues(name) || 'Not observed';
+  const dnsDisplay = (name: string) => {
+    const projection = dnsProjection(name);
+    if (projection.value) {
+      return projection.malformed
+        ? `${projection.value} · additional malformed or excess values withheld`
+        : projection.value;
+    }
+    if (projection.malformed) return 'Not established (malformed evidence)';
+    const diagnostic = rec(rec(dnsEvidence.diagnostics)[name]);
+    if (dnsEvidence.status === 'skipped' || diagnostic.status === 'skipped') return 'Not evaluated';
+    if (diagnostic.status === 'success' || diagnostic.status === 'not_found') return 'Not observed';
+    if (diagnostic.status === 'error' || diagnostic.status === 'partial'
+      || diagnostic.truncated === true || dnsEvidence.status === 'partial') {
+      return 'Not established (partial source)';
+    }
+    return dnsEvidence.status === 'error' ? 'Unavailable' : 'Not observed';
+  };
   const dnsRows: Array<{ label: string; value: string }> = [
     { label: 'DNSSEC', value: show(availability.dnssec) },
   ];
@@ -308,7 +372,7 @@ export function buildLookupNetworkDisplay(input: {
     ['Referrer policy', httpSecurityHeaders.referrerPolicy],
   ];
   const httpMetadata: Array<{ label: string; value: string; hash?: boolean }> = [];
-  if (httpResponse.status) {
+  if (responseStatus !== null) {
     httpMetadata.push(
       ...httpSecurityRows.map(([label, value]) => ({
         label,
@@ -470,7 +534,7 @@ export function buildLookupNetworkDisplay(input: {
         value:
           stringList(reverseDnsRecords.ptr, MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS, 253).join(
             ' · ',
-          ) || 'Not observed',
+          ) || missingReverseDnsValue(reverseDns),
       },
     ],
     reverseDnsFailure: (() => {
@@ -483,7 +547,7 @@ export function buildLookupNetworkDisplay(input: {
       { label: 'Final URL', value: show(httpEvidence.finalUrl || httpEvidence.requestUrl) },
       {
         label: 'Response',
-        value: httpResponse.status ? `HTTP ${httpResponse.status}` : 'Not observed',
+        value: responseStatus === null ? 'Not observed' : `HTTP ${responseStatus}`,
       },
       {
         label: 'Transport',

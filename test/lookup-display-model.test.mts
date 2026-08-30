@@ -210,6 +210,133 @@ test('bounds page, technology, and posture presentation models', () => {
   assert.equal(page.fingerprints[0]?.value, 'hash-1');
 });
 
+function emptyNetworkDisplayInput() {
+  return {
+    availability: {},
+    reverseDns: {},
+    reverseDnsRecords: {},
+    dnsEvidence: {},
+    dnsRecords: {},
+    httpEvidence: {},
+    httpResponse: {},
+    httpSecurityHeaders: {},
+    tlsEvidence: {},
+    tlsCertificate: {},
+    tlsSubject: {},
+    tlsIssuer: {},
+    tlsAltNames: {},
+    tlsPublicKey: {},
+    tlsCipher: {},
+    tlsAuthorization: {},
+    tlsHostname: {},
+    tlsValidity: {},
+    tlsDiagnostics: {},
+  };
+}
+
+test('projects malformed, partial, incompatible, and conflicting network evidence without inventing absence', () => {
+  const malformed = buildLookupNetworkDisplay({
+    ...emptyNetworkDisplayInput(),
+    dnsEvidence: {
+      status: 'partial',
+      diagnostics: {
+        a: { status: 'error' },
+        mx: { status: 'success' },
+        https: { status: 'success' },
+      },
+    },
+    dnsRecords: {
+      a: [{ rawAddress: 'private malformed value' }],
+      mx: [{ priority: 'invalid', exchange: { nested: true } }],
+      https: [{ mode: 'future', priority: 1, target: 'edge.example.test' }],
+    },
+    httpResponse: { status: '200', server: { private: true } },
+  });
+  for (const label of ['A', 'MX', 'HTTPS service binding']) {
+    assert.equal(
+      malformed.dnsRows.find((row) => row.label === label)?.value,
+      'Not established (malformed evidence)',
+    );
+  }
+  assert.equal(malformed.httpRows.find((row) => row.label === 'Response')?.value, 'Not observed');
+  assert.equal(malformed.httpMetadata.length, 0);
+  assert.doesNotMatch(JSON.stringify(malformed), /private malformed value|\[object Object\]/u);
+
+  const partial = buildLookupNetworkDisplay({
+    ...emptyNetworkDisplayInput(),
+    reverseDns: { status: 'partial', diagnostics: { ptr: { status: 'partial' } } },
+    dnsEvidence: {
+      status: 'partial',
+      diagnostics: { a: { status: 'error' }, mx: { status: 'success' } },
+    },
+    dnsRecords: { a: [], mx: [] },
+    tlsEvidence: {
+      status: 'unsupported',
+      source: 'tls',
+      complete: false,
+      compatibility: 'unsupported_version',
+      findings: [],
+    },
+  });
+  assert.equal(partial.dnsRows.find((row) => row.label === 'A')?.value, 'Not established (partial source)');
+  assert.equal(partial.dnsRows.find((row) => row.label === 'MX')?.value, 'Not observed');
+  assert.equal(
+    partial.reverseDnsRows[0]?.value,
+    'Not established (source unavailable or incomplete)',
+  );
+  assert.equal(partial.tlsFindings.length, 0);
+  assert.equal(partial.leafCertificate.length, 0);
+  assert.equal(partial.tlsRows.find((row) => row.label === 'Chain trust')?.value, 'Not observed');
+
+  const incompatibleAndConflicting = buildLookupNetworkDisplay({
+    ...emptyNetworkDisplayInput(),
+    dnsEvidence: {
+      status: 'partial',
+      diagnostics: { https: { status: 'success' } },
+      delegation: {
+        delegationHealthVersion: 1,
+        status: 'partial',
+        complete: false,
+        parent: { nameservers: ['ns-parent.example.test'] },
+        registry: { nameservers: ['ns-registry.example.test'] },
+        recordMatrix: [{
+          type: 'A',
+          state: 'different',
+          observations: [
+            { nameserver: 'ns1.example.test', state: 'success', values: ['192.0.2.1'] },
+            { nameserver: 'ns2.example.test', state: 'success', values: ['192.0.2.2'] },
+          ],
+        }],
+      },
+    },
+    dnsRecords: {
+      https: [{
+        mode: 'service',
+        priority: 1,
+        target: 'edge.example.test',
+        targetIsOwner: false,
+        serviceUnavailable: false,
+        compatible: false,
+        ttl: 300,
+        parameters: { unsupportedMandatoryKeys: [99] },
+      }],
+    },
+    tlsAuthorization: { authorized: false },
+    tlsHostname: { matches: false },
+  });
+  assert.match(
+    incompatibleAndConflicting.dnsRows.find((row) => row.label === 'HTTPS service binding')?.value ?? '',
+    /unsupported mandatory keys 99.*not compatible with this parser/u,
+  );
+  assert.equal(incompatibleAndConflicting.dnsDelegation?.recordMatrix[0]?.state, 'different');
+  assert.deepEqual(
+    incompatibleAndConflicting.dnsDelegation?.recordMatrix[0]?.observations.map((item) => item.values),
+    [['192.0.2.1'], ['192.0.2.2']],
+  );
+  assert.equal(incompatibleAndConflicting.tlsRows.find((row) => row.label === 'Chain trust')?.value, 'Not authorised');
+  assert.equal(incompatibleAndConflicting.tlsRows.find((row) => row.label === 'Hostname')?.value, 'Mismatch');
+});
+
 test('keeps DNS, HTTP, and TLS display states explicit and bounded', () => {
   const network = buildLookupNetworkDisplay({
     availability: { dnssec: 'signed' },
