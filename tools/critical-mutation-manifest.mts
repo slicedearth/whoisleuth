@@ -20,7 +20,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     id: 'authority-dns-delegation-required',
     area: 'authority_availability',
     file: 'lib/availability.mts',
-    line: 614,
+    line: 611,
     search: 'if (!rdapFound && !hasWhoisRegistrationData && !dnsDelegated) {',
     replacement: 'if (!rdapFound && !hasWhoisRegistrationData) {',
     focusedTests: Object.freeze(['test/availability-dns.test.mts']),
