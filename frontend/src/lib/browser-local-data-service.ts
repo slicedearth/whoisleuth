@@ -9,6 +9,7 @@ import type {
   BrowserLocalCollectionDocumentMap,
   BrowserLocalCollectionId,
 } from './browser-local-data-definitions.ts';
+import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.js';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>
@@ -42,7 +43,9 @@ export function browserLocalDataServiceState(): BrowserLocalDataServiceState {
 export function createBrowserLocalDataService(
   dependencies: Partial<BrowserLocalDataServiceDependencies> = {},
 ) {
-  const loadCollections = dependencies.loadCollections ?? (() => import('./browser-local-data-definitions.ts')
+  const loadCollections = dependencies.loadCollections ?? (() => loadDeferredModule(
+    () => import('./browser-local-data-definitions.ts'),
+  )
     .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
   const createProvider = dependencies.createProvider ?? (() => new BrowserLocalDataProvider());
   let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
@@ -50,13 +53,13 @@ export function createBrowserLocalDataService(
   let serviceState: BrowserLocalDataServiceState = Object.freeze({ state: 'idle' });
 
   function collections(): Promise<readonly AnyLocalDataCollectionDefinition[]> {
-    if (!collectionsPromise) {
-      collectionsPromise = loadCollections().catch((cause) => {
-        collectionsPromise = null;
-        throw cause;
-      });
-    }
-    return collectionsPromise;
+    if (collectionsPromise) return collectionsPromise;
+    const loading = loadCollections().catch((cause) => {
+      collectionsPromise = null;
+      throw cause;
+    });
+    collectionsPromise = loading;
+    return loading;
   }
 
   async function collection<Collection extends BrowserLocalCollectionId>(
@@ -84,7 +87,11 @@ export function createBrowserLocalDataService(
         providerPromise = null;
         serviceState = Object.freeze({
           state: 'error',
-          code: cause instanceof BrowserLocalDataError ? cause.code : 'LOCAL_DATA_INITIALIZATION_FAILED',
+          code: cause instanceof BrowserLocalDataError
+            ? cause.code
+            : isDeferredModuleLoadError(cause)
+              ? 'DEFERRED_MODULE_UNAVAILABLE'
+              : 'LOCAL_DATA_INITIALIZATION_FAILED',
           detail: boundedDetail(cause),
         });
         throw cause;

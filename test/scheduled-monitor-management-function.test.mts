@@ -142,6 +142,14 @@ test('rejects unsupported methods, missing authentication, and cross-site mutati
   ), options);
   assert.equal(crossSite.statusCode, 403);
   assert.equal(JSON.parse(crossSite.body || '').errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+
+  const crossScheme = await runScheduledMonitorManagementFunction(event(
+    'POST',
+    JSON.stringify({ action: 'delete', id: 'watchlist-00000001' }),
+    authenticatedHeaders({ origin: 'http://console.example' }),
+  ), options);
+  assert.equal(crossScheme.statusCode, 403);
+  assert.equal(JSON.parse(crossScheme.body || '').errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
   assert.equal(constructions, 0);
 });
 

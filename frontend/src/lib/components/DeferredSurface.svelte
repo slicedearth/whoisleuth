@@ -1,5 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, type Component } from 'svelte';
+  import {
+    DEFERRED_MODULE_RECOVERY_DETAIL,
+    loadDeferredModule,
+    reloadDeferredModulePage,
+  } from '$lib/deferred-module';
 
   type DeferredModule = Readonly<{ default: Component<any> }>;
 
@@ -8,14 +13,12 @@
     props = {},
     loadingLabel,
     unavailableLabel,
-    retryLabel = 'Try again',
     onready,
   }: {
     load: () => Promise<DeferredModule>;
     props?: Record<string, unknown>;
     loadingLabel: string;
     unavailableLabel: string;
-    retryLabel?: string;
     onready?: () => void | Promise<void>;
   } = $props();
 
@@ -27,6 +30,7 @@
   let active = true;
   let firstLoadingFrame = 0;
   let secondLoadingFrame = 0;
+  let loadController: AbortController | null = null;
 
   $effect.pre(() => {
     resolvedProps = { ...props };
@@ -53,10 +57,13 @@
 
   async function open(): Promise<void> {
     const request = ++generation;
+    loadController?.abort();
+    const controller = new AbortController();
+    loadController = controller;
     loadState = 'loading';
     scheduleLoadingState(request);
     try {
-      const module = await load();
+      const module = await loadDeferredModule(load, { signal: controller.signal });
       if (!active || request !== generation) return;
       cancelLoadingState();
       View = module.default;
@@ -68,6 +75,8 @@
       cancelLoadingState();
       View = null;
       loadState = 'unavailable';
+    } finally {
+      if (loadController === controller) loadController = null;
     }
   }
 
@@ -78,6 +87,8 @@
   onDestroy(() => {
     active = false;
     generation += 1;
+    loadController?.abort();
+    loadController = null;
     cancelLoadingState();
   });
 </script>
@@ -88,7 +99,8 @@
   {:else if loadState === 'unavailable'}
     <div class="deferred-state unavailable" role="alert">
       <p>{unavailableLabel}</p>
-      <button class="btn" type="button" onclick={() => void open()}>{retryLabel}</button>
+      <small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small>
+      <button class="btn" type="button" data-deferred-recovery="reload" onclick={reloadDeferredModulePage}>Reload page</button>
     </div>
   {:else if View}
     <View {...resolvedProps} />
@@ -98,8 +110,10 @@
 <style>
   .deferred-surface{min-width:0;max-width:100%;overflow-wrap:anywhere}
   .deferred-state{margin:0;padding:12px;border-left:2px solid var(--accent);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .deferred-state.unavailable{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;border-left-color:var(--muted);border-left-style:dotted}
+  .deferred-state.unavailable{display:grid;min-width:0;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 12px;border-left-color:var(--muted);border-left-style:dotted}
   .deferred-state.unavailable p{min-width:0;margin:0}
+  .deferred-state.unavailable small{min-width:0;grid-column:1;color:var(--muted);overflow-wrap:anywhere}
+  .deferred-state.unavailable button{grid-column:2;grid-row:1/3}
   .deferred-state button{flex:0 0 auto}
-  @media(max-width:560px){.deferred-state.unavailable{align-items:stretch;flex-direction:column}.deferred-state button{width:100%}}
+  @media(max-width:560px){.deferred-state.unavailable{grid-template-columns:minmax(0,1fr);align-items:stretch}.deferred-state.unavailable button{width:100%;grid-column:1;grid-row:auto}}
 </style>

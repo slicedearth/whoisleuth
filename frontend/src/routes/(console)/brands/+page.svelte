@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { getContext, onMount, tick } from 'svelte';
+  import { getContext, onDestroy, onMount, tick } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
@@ -27,6 +27,9 @@
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { LARGE_JSON_RESPONSE_BYTES, requestJsonCapped, STANDARD_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import { preloadBestEffort } from '$lib/idle-preload';
+  const moduleController = new AbortController();
+  const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
+  onDestroy(() => moduleController.abort());
   type AuditResult={domain:string;report:DomainPostureHttpResponse|null;error:string};
   type BrandsView='overview'|'assets';
   type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
@@ -99,17 +102,17 @@
   }
   async function refreshCasesForBrands(){caseSourceState='loading';cases=[];certificateReplayUnavailable=true;try{const loaded=await loadCases();cases=loaded;caseSourceState='ready';certificateReplayUnavailable=false;return loaded;}catch(cause){closeCaseSource();throw cause;}}
   async function refreshRelationshipsForBrands(){relationshipSourceState='loading';relationships=[];try{const loaded=await loadRelationshipObservations();relationships=loaded;relationshipSourceState='ready';return loaded;}catch(cause){closeRelationshipSource();throw cause;}}
-  function preloadBrandsView(next:BrandsView){if(next==='assets')preloadBestEffort(()=>import('$lib/components/BrandAssetRegister.svelte'));}
+  function preloadBrandsView(next:BrandsView){if(next==='assets')preloadModule(()=>import('$lib/components/BrandAssetRegister.svelte'));}
   async function selectBrandsView(next:BrandsView){preloadBrandsView(next);if(next===brandsView)return;const url=new URL(page.url);if(next==='overview')url.searchParams.delete('view');else url.searchParams.set('view','assets');if(next==='overview')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);url.hash='';await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});}
   function preloadBrandWorkbench(next:string){
-    if(next==='control')preloadBestEffort(()=>import('$lib/components/DomainControlCentre.svelte'));
-    else if(next==='portfolio')preloadBestEffort(()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte'));
-    else if(next==='posture')preloadBestEffort(()=>import('$lib/components/BrandPostureAudit.svelte'));
-    else if(next==='baselines')preloadBestEffort(()=>import('$lib/components/BrandDesiredPostureBaselines.svelte'));
-    else if(next==='passport')preloadBestEffort(()=>import('$lib/components/BrandDomainControlPassport.svelte'));
-    else if(next==='certificates')preloadBestEffort(()=>import('$lib/components/BrandCertificateEventReplay.svelte'));
-    else if(next==='attestations')preloadBestEffort(()=>import('$lib/components/BrandProtectionAttestations.svelte'));
-    else if(next==='mail')preloadBestEffort(()=>import('$lib/components/MailReportWorkbench.svelte'));
+    if(next==='control')preloadModule(()=>import('$lib/components/DomainControlCentre.svelte'));
+    else if(next==='portfolio')preloadModule(()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte'));
+    else if(next==='posture')preloadModule(()=>import('$lib/components/BrandPostureAudit.svelte'));
+    else if(next==='baselines')preloadModule(()=>import('$lib/components/BrandDesiredPostureBaselines.svelte'));
+    else if(next==='passport')preloadModule(()=>import('$lib/components/BrandDomainControlPassport.svelte'));
+    else if(next==='certificates')preloadModule(()=>import('$lib/components/BrandCertificateEventReplay.svelte'));
+    else if(next==='attestations')preloadModule(()=>import('$lib/components/BrandProtectionAttestations.svelte'));
+    else if(next==='mail')preloadModule(()=>import('$lib/components/MailReportWorkbench.svelte'));
   }
   async function selectBrandWorkbench(next:string){
     const url=new URL(page.url);

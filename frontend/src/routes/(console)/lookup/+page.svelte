@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { getContext, onMount, tick } from 'svelte';
+  import { getContext, onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '$lib/components/LookupAtAGlance.svelte';
@@ -80,6 +80,8 @@
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
   } from '../../../../../lib/observation.mts';
+  const moduleController = new AbortController();
+  onDestroy(() => moduleController.abort());
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
@@ -407,7 +409,7 @@
     }else if(sectionId==='advanced-evidence'&&threatIntelligenceProviders.length){
       loads.push(import('$lib/components/LookupExternalIntelligence.svelte'));
     }
-    if(loads.length)preloadBestEffort(()=>Promise.all(loads));
+    if(loads.length)preloadBestEffort(()=>Promise.all(loads), moduleController.signal);
   }
   async function showSectionDetail(sectionId:string){
     const href=`#${sectionId}`;

@@ -4,7 +4,7 @@
 // remains fail-closed behind the complete opt-in configuration.
 
 import { getStore } from '@netlify/blobs';
-import { isTrustedOrigin } from '../../lib/auth.mts';
+import { isTrustedOrigin, NETLIFY_REQUEST_ORIGIN_CONTEXT } from '../../lib/auth.mts';
 import {
   json,
   netlifyJsonToResponse,
@@ -123,7 +123,7 @@ function scheduledMonitorManagementAdmission(event: NetlifyFunctionEvent) {
   }
   const guard = guardNetlifyNetworkRequest(event);
   if (guard.response) return noStoreResponse(guard.response);
-  if (event.httpMethod === 'POST' && !isTrustedOrigin(event.headers)) {
+  if (event.httpMethod === 'POST' && !isTrustedOrigin(event.headers, NETLIFY_REQUEST_ORIGIN_CONTEXT)) {
     return json(403, {
       error: 'Cross-site request blocked',
       errorCode: 'CROSS_SITE_REQUEST_BLOCKED',

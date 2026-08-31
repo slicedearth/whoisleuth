@@ -177,7 +177,7 @@ describe('Express API response parity', () => {
     const privateQuery = 'private analyst note not a valid domain';
     for (const route of ['lookup', 'rdap', 'whois', 'availability', 'domain-posture']) {
       const expectedError = await fetch(`${origin}/api/${route}?q=${encodeURIComponent(privateQuery)}`, {
-        headers: { Cookie: session },
+        headers: { Cookie: session, Origin: origin, 'Sec-Fetch-Site': 'same-origin' },
       });
       assert.equal(expectedError.status, 400, route);
       const expectedBody = recordValue(await expectedError.json());
@@ -228,7 +228,9 @@ describe('fixture-injected Express network routes', () => {
   }
 
   async function request(route: string): Promise<Response> {
-    return fetch(`${fixtureOrigin}${route}`, { headers: { Cookie: sessionCookie() } });
+    return fetch(`${fixtureOrigin}${route}`, {
+      headers: { Cookie: sessionCookie(), Origin: fixtureOrigin, 'Sec-Fetch-Site': 'same-origin' },
+    });
   }
 
   test('covers every successful route projection without upstream traffic', async () => {

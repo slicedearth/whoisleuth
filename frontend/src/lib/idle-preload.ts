@@ -1,3 +1,5 @@
+import { loadDeferredModule } from './deferred-module.js';
+
 type IdleWindow = Window & typeof globalThis & {
   requestIdleCallback?: (callback: IdleRequestCallback) => number;
   cancelIdleCallback?: (handle: number) => void;
@@ -8,9 +10,9 @@ export type IdlePreloadScheduler = Readonly<{
   cancelIdleCallback?: (handle: number) => void;
 }>;
 
-/** Run an optional preload without exposing a rejected chunk request to the page. */
-export function preloadBestEffort(load: () => Promise<unknown>): void {
-  void load().catch(() => undefined);
+/** Run a bounded optional preload without exposing a rejected chunk request to the page. */
+export function preloadBestEffort(load: () => Promise<unknown>, signal?: AbortSignal): void {
+  void loadDeferredModule(load, signal ? { signal } : {}).catch(() => undefined);
 }
 
 export function scheduleIdlePreload(

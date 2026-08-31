@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import { preloadBestEffort } from '$lib/idle-preload';
   import type { CaseRecord } from '$lib/cases';
@@ -19,11 +19,14 @@
   } = $props();
 
   let open = $state(false);
+  const moduleController = new AbortController();
   const sectionId = $derived(`case-response-${record.id}`);
 
   function preloadWorkspace(): void {
-    preloadBestEffort(() => import('$lib/components/CaseResponseWorkspace.svelte'));
+    preloadBestEffort(() => import('$lib/components/CaseResponseWorkspace.svelte'), moduleController.signal);
   }
+
+  onDestroy(() => moduleController.abort());
 
   $effect(() => {
     if (openInitially) {

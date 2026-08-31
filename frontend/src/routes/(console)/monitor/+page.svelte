@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { getContext, tick, untrack } from 'svelte';
+  import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
@@ -59,6 +59,9 @@
     type WebsiteProfileCluster,
   } from '$lib/analysis/website-profile-clusters.ts';
   import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
+  const moduleController = new AbortController();
+  const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
+  onDestroy(() => moduleController.abort());
 
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules' | 'certificates';
   const MONITOR_VIEWS = new Set<View>(['inbox','timeline','watchlists','cases','campaigns','relationships','rules','certificates']);
@@ -101,13 +104,13 @@
     void navigateMonitor(next);
   }
   function preloadMonitorView(next:View){
-    if(next==='certificates')preloadBestEffort(()=>import('$lib/components/CertificateReviewInbox.svelte'));
-    else if(next==='timeline')preloadBestEffort(()=>Promise.all([import('$lib/components/RetainedEvidenceTimeline.svelte'),import('$lib/components/RetainedChangeReview.svelte')]));
-    else if(next==='campaigns')preloadBestEffort(()=>import('$lib/components/CampaignManager.svelte'));
-    else if(next==='relationships')preloadBestEffort(()=>Promise.all([import('$lib/components/WebsiteProfileClusters.svelte'),import('$lib/components/RetainedRelationshipObservations.svelte'),import('$lib/components/CaseRelationshipClusters.svelte'),import('$lib/components/CaseRelationshipWorkspace.svelte')]));
-    else if(next==='rules')preloadBestEffort(()=>import('$lib/components/DetectionRuleManager.svelte'));
-    else if(next==='cases')preloadBestEffort(()=>Promise.all([import('$lib/components/CaseWorkspaceToolbar.svelte'),import('$lib/components/ExternalFindingsImport.svelte'),import('$lib/components/CaseFilters.svelte'),import('$lib/components/CaseList.svelte'),import('$lib/components/CaseResponseWorkspace.svelte')]));
-    else if(next==='watchlists')preloadBestEffort(()=>Promise.all([import('$lib/components/MonitorActivityHeatmap.svelte'),import('$lib/components/WatchlistWorkspace.svelte'),import('$lib/components/HostedWatchlistManager.svelte')]));
+    if(next==='certificates')preloadModule(()=>import('$lib/components/CertificateReviewInbox.svelte'));
+    else if(next==='timeline')preloadModule(()=>Promise.all([import('$lib/components/RetainedEvidenceTimeline.svelte'),import('$lib/components/RetainedChangeReview.svelte')]));
+    else if(next==='campaigns')preloadModule(()=>import('$lib/components/CampaignManager.svelte'));
+    else if(next==='relationships')preloadModule(()=>Promise.all([import('$lib/components/WebsiteProfileClusters.svelte'),import('$lib/components/RetainedRelationshipObservations.svelte'),import('$lib/components/CaseRelationshipClusters.svelte'),import('$lib/components/CaseRelationshipWorkspace.svelte')]));
+    else if(next==='rules')preloadModule(()=>import('$lib/components/DetectionRuleManager.svelte'));
+    else if(next==='cases')preloadModule(()=>Promise.all([import('$lib/components/CaseWorkspaceToolbar.svelte'),import('$lib/components/ExternalFindingsImport.svelte'),import('$lib/components/CaseFilters.svelte'),import('$lib/components/CaseList.svelte'),import('$lib/components/CaseResponseWorkspace.svelte')]));
+    else if(next==='watchlists')preloadModule(()=>Promise.all([import('$lib/components/MonitorActivityHeatmap.svelte'),import('$lib/components/WatchlistWorkspace.svelte'),import('$lib/components/HostedWatchlistManager.svelte')]));
   }
 
   // --- Watchlists ---

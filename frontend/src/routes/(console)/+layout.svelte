@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { onMount, setContext, tick, type Component } from 'svelte';
+  import { onMount, setContext, tick } from 'svelte';
   import {
     consoleNavigationGroups,
     isNavigationItemActive,
@@ -18,6 +18,8 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import AnalystUndo from '$lib/components/AnalystUndo.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import { reloadDeferredModulePage } from '$lib/deferred-module';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
   import {
@@ -39,16 +41,15 @@
   let navigationToggle = $state<HTMLButtonElement>();
   let commandTrigger = $state<HTMLButtonElement>();
   let commandReturnFocus: HTMLElement | undefined;
-  let InvestigationGuideView = $state<Component | null>(null);
+  let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
-  let investigationGuideLoad: Promise<void> | null = null;
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
     void checkSession();
-    if (hasStoredInvestigationGuide()) void loadInvestigationGuideView();
+    if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
     const showInvestigationGuide = () => {
-      if (!InvestigationGuideView) revealInvestigationGuideOnMount = true;
-      void loadInvestigationGuideView();
+      if (!investigationGuideRequested) revealInvestigationGuideOnMount = true;
+      investigationGuideRequested = true;
     };
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     const mobileNavigation = window.matchMedia('(max-width: 900px)');
@@ -61,23 +62,6 @@
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     };
   });
-
-  function loadInvestigationGuideView(): Promise<void> {
-    if (InvestigationGuideView) return Promise.resolve();
-    if (!investigationGuideLoad) {
-      investigationGuideLoad = import('$lib/components/InvestigationGuide.svelte')
-        .then((module) => {
-          InvestigationGuideView = module.default;
-        })
-        .catch(() => {
-          InvestigationGuideView = null;
-        })
-        .finally(() => {
-          investigationGuideLoad = null;
-        });
-    }
-    return investigationGuideLoad;
-  }
 
   function signInTarget(){
     const destination = isProtectedDestination(page.url)
@@ -238,7 +222,7 @@
     detail="Opening bounded browser-local collections and checking the capabilities available to this deployment."
   />
 {:else if localData.state==='error'}
-  <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p><button class="primary" onclick={retryLocalData}>Retry</button><p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
+  <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p>{#if localData.code==='DEFERRED_MODULE_UNAVAILABLE'}<button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>{:else}<button class="primary" onclick={retryLocalData}>Retry</button>{/if}<p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
 {:else}
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -269,7 +253,7 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<SiteFooter console /></main>
+    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." />{/if}{@render children()}<SiteFooter console /></main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
       <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />

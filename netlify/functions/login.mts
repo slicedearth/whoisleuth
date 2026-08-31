@@ -5,7 +5,14 @@
 // defense-in-depth fallback for local tests and any request that reaches the
 // handler.
 
-import { checkPassword, createSessionToken, buildSessionCookie, isTrustedLoginOrigin } from '../../lib/auth.mts';
+import {
+  checkPassword,
+  createSessionToken,
+  buildSessionCookie,
+  isTrustedLoginOrigin,
+  NETLIFY_REQUEST_ORIGIN_CONTEXT,
+  type RequestOriginContext,
+} from '../../lib/auth.mts';
 import { checkLoginRateLimit, getClientIp } from '../../lib/rate-limit.mts';
 import {
   API_REQUEST_ERROR_CODES,
@@ -50,11 +57,12 @@ async function handleLoginRequest(
   httpMethod: string | undefined,
   headers: NetlifyFunctionHeaders | null | undefined,
   readBody: LoginBodyReader,
+  originContext: RequestOriginContext,
 ): Promise<NetlifyJsonResponse> {
   if (httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' }, { Allow: 'POST' });
   }
-  if (!isTrustedLoginOrigin(headers)) {
+  if (!isTrustedLoginOrigin(headers, originContext)) {
     return json(403, { error: 'Cross-site request blocked' });
   }
 
@@ -98,7 +106,7 @@ async function runLoginFunction(event: NetlifyFunctionEvent): Promise<NetlifyJso
     return Buffer.byteLength(body, 'utf8') > MAX_API_JSON_BODY_BYTES
       ? { status: 'too_large' }
       : { status: 'ok', body };
-  });
+  }, NETLIFY_REQUEST_ORIGIN_CONTEXT);
 }
 
 async function runLoginRequest(request: Request): Promise<Response> {
@@ -106,6 +114,7 @@ async function runLoginRequest(request: Request): Promise<Response> {
     request.method,
     Object.fromEntries(request.headers.entries()),
     () => readRequestTextCapped(request),
+    { protocol: new URL(request.url).protocol },
   );
   return netlifyJsonToResponse(response);
 }

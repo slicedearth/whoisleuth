@@ -33,10 +33,17 @@
     })),
   };
   let practiceOpen = $state(false);
+  const moduleController = new AbortController();
   function preloadPractice() {
-    preloadBestEffort(() => import('$lib/components/OfflineInvestigationScenarios.svelte'));
+    preloadBestEffort(() => import('$lib/components/OfflineInvestigationScenarios.svelte'), moduleController.signal);
   }
-  onMount(() => preloadOnIdle(preloadPractice));
+  onMount(() => {
+    const cancelIdlePreload = preloadOnIdle(preloadPractice);
+    return () => {
+      cancelIdlePreload();
+      moduleController.abort();
+    };
+  });
   const resourceSections = [
     { href: '#start', label: 'Start here' },
     { href: '#topics', label: 'Topics' },

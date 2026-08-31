@@ -12,7 +12,7 @@ test('the self-hosted TypeScript runtime can load without opening a listener', (
   assert.equal(typeof runtime.requireNetworkRequestAdmission, 'function');
 });
 
-test('the self-hosted network admission blocks cross-site browser metadata and allows omitted client metadata', () => {
+test('the self-hosted network admission blocks cross-site and metadata-free requests', () => {
   let status = 0;
   let payload: unknown;
   let nextCalls = 0;
@@ -41,6 +41,13 @@ test('the self-hosted network admission blocks cross-site browser metadata and a
   assert.equal(nextCalls, 0);
   runtime.requireNetworkRequestAdmission(
     { headers: { host: 'example.com' }, protocol: 'https', query: {}, path: '/api/lookup' },
+    response,
+    () => { nextCalls += 1; },
+  );
+  assert.equal(status, 403);
+  assert.equal(nextCalls, 0);
+  runtime.requireNetworkRequestAdmission(
+    { headers: { host: 'example.com', 'sec-fetch-site': 'same-origin' }, protocol: 'https', query: {}, path: '/api/lookup' },
     response,
     () => { nextCalls += 1; },
   );

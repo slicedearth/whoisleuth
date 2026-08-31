@@ -30,6 +30,10 @@ after(() => {
   else process.env.SESSION_SECRET = previousSecret;
 });
 
+function sameOriginHeaders() {
+  return { cookie, host: 'console.example', 'sec-fetch-site': 'same-origin' };
+}
+
 const [
   { handler: lookupHandler },
   { handler: rdapHandler },
@@ -113,6 +117,28 @@ describe('direct serverless network paths', () => {
     });
   }
 
+  for (const [name, handler] of networkHandlers) {
+    test(`${name} rejects authenticated requests with no Origin or Fetch Metadata`, async () => {
+      const response = await handler({
+        headers: { cookie, host: 'console.example' },
+        queryStringParameters: { q: 'example.test' },
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+    });
+  }
+
+  for (const [name, handler] of networkHandlers) {
+    test(`${name} rejects an HTTP Origin for the same HTTPS deployment host`, async () => {
+      const response = await handler({
+        headers: { cookie, host: 'console.example', origin: 'http://console.example' },
+        queryStringParameters: { q: 'example.test' },
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+    });
+  }
+
   test('returns a retryable stable error when the session concurrency budget is exhausted', async () => {
     const sessionKey = sessionFingerprintFromCookieHeader(cookie);
     const leases: Array<Extract<Awaited<ReturnType<typeof defaultOperationBudget.acquire>>, { allowed: true }>> = [];
@@ -123,7 +149,7 @@ describe('direct serverless network paths', () => {
         if (lease.allowed) leases.push(lease);
       }
       const response = await rdapHandler({
-        headers: { cookie },
+        headers: sameOriginHeaders(),
         queryStringParameters: { q: 'example.com' },
       });
       assert.equal(response.statusCode, 429);
@@ -156,7 +182,7 @@ describe('direct serverless network paths', () => {
 
   test('nameserver search rejects malformed input before registry discovery', async () => {
     const response = await rdapNameserverSearchHandler({
-      headers: { cookie },
+      headers: sameOriginHeaders(),
       queryStringParameters: { nameserver: 'not a hostname', scope: 'co.uk' },
     });
     assert.equal(response.statusCode, 400);
@@ -167,7 +193,7 @@ describe('direct serverless network paths', () => {
     test(`blocks disabled ${feature} before any upstream work can begin`, async () => {
       await withEnvironment(environmentName, '1', async () => {
         const response = await handler({
-          headers: { cookie },
+          headers: sameOriginHeaders(),
           queryStringParameters: { q: 'example.com' },
         });
         assert.equal(response.statusCode, 503);
@@ -182,7 +208,7 @@ describe('direct serverless network paths', () => {
   test('enforces dependency shutdown for direct posture audits', async () => {
     await withEnvironment('WHOISLEUTH_DISABLE_DNS_INTELLIGENCE', 'true', async () => {
       const response = await domainPostureHandler({
-        headers: { cookie },
+        headers: sameOriginHeaders(),
         queryStringParameters: { q: 'example.com' },
       });
       assert.equal(response.statusCode, 503);
@@ -196,7 +222,7 @@ describe('direct serverless network paths', () => {
   test('enforces RDAP shutdown for direct nameserver searches', async () => {
     await withEnvironment('WHOISLEUTH_DISABLE_RDAP', 'true', async () => {
       const response = await rdapNameserverSearchHandler({
-        headers: { cookie },
+        headers: sameOriginHeaders(),
         queryStringParameters: { nameserver: 'ns1.infra.example', scope: 'example' },
       });
       assert.equal(response.statusCode, 503);

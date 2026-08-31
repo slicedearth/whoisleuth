@@ -8,6 +8,7 @@
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import type { BrowserLocalCollectionDocumentMap } from '$lib/browser-local-data-definitions.ts';
   import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
+  import { loadDeferredModule } from '$lib/deferred-module';
   import {
     DASHBOARD_REQUIRED_COLLECTION_IDS,
     buildDashboardAttentionSummary,
@@ -74,6 +75,7 @@
   let attentionSummary = $state<DashboardAttentionSummaryModel | null>(null);
   let attentionUnavailable = $state(false);
   let workspaceMutationStatus = $state('');
+  const moduleController = new AbortController();
 
   async function refreshLocalSummary(message = '') {
     if (message) workspaceMutationStatus = message;
@@ -123,11 +125,18 @@
       if (requiredAttentionSources.some((source) => !documents.has(source))) {
         attentionUnavailable = true;
       } else {
-        const [{ buildAnalystReviewInbox }, { buildCertificateReviewInbox }, { buildLocalAnalystReviewProjection }] = await Promise.all([
-          import('$lib/analysis/analyst-review-inbox.ts'),
-          import('$lib/analysis/certificate-review-inbox.ts'),
-          import('$lib/analysis/analyst-review-local-projections.ts'),
-        ]);
+        let modules;
+        try {
+          modules = await loadDeferredModule(() => Promise.all([
+            import('$lib/analysis/analyst-review-inbox.ts'),
+            import('$lib/analysis/certificate-review-inbox.ts'),
+            import('$lib/analysis/analyst-review-local-projections.ts'),
+          ]), { signal: moduleController.signal });
+        } catch {
+          attentionUnavailable = true;
+          return;
+        }
+        const [{ buildAnalystReviewInbox }, { buildCertificateReviewInbox }, { buildLocalAnalystReviewProjection }] = modules;
         const reviewState = documents.get('analyst_review_state') as BrowserLocalCollectionDocumentMap['analyst_review_state'];
         const reviewNow = new Date().toISOString();
         const localProjection = buildLocalAnalystReviewProjection({
@@ -172,12 +181,16 @@
   }
 
   function preloadSecondaryWorkspaces() {
-    preloadBestEffort(() => import('$lib/components/DashboardSecondaryWorkspaces.svelte'));
+    preloadBestEffort(() => import('$lib/components/DashboardSecondaryWorkspaces.svelte'), moduleController.signal);
   }
 
   onMount(()=>{
     void refreshLocalSummary();
-    return preloadOnIdle(preloadSecondaryWorkspaces);
+    const cancelIdlePreload = preloadOnIdle(preloadSecondaryWorkspaces);
+    return () => {
+      cancelIdlePreload();
+      moduleController.abort();
+    };
   });
 
 </script>

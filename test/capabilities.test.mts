@@ -197,7 +197,7 @@ test('direct serverless capability path requires authentication', async () => {
     const denied = await handler({ headers: {} });
     assert.equal(denied.statusCode, 401);
     const cookie = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
-    const allowed = await handler({ headers: { cookie } });
+    const allowed = await handler({ headers: { cookie, host: 'console.example', 'sec-fetch-site': 'same-origin' } });
     assert.equal(allowed.statusCode, 200);
     const body = JSON.parse(requiredValue(allowed.body));
     assert.equal(body.runtime, 'netlify');
