@@ -42,14 +42,20 @@ function technologyEvidenceRoles(value: unknown): TechnologyEvidenceRole[] {
     }
   }
   if (!hasExplicitRole) {
+    const resourceOriginOnly = evidenceValues.length > 0
+      && evidenceValues.every((evidence) => (
+        String(record(evidence).source).toLowerCase() === 'resource origin'
+      ));
     if (evidenceValues.some((evidence) => String(record(evidence).source).toLowerCase() === 'resource origin')) {
       roles.add('embedded_dependency');
     }
-    const category = String(finding.category).toLowerCase();
-    if (category === 'delivery platform') roles.add('observed_edge');
-    else if (['application runtime', 'web framework', 'static site generator', 'web server'].includes(category)) {
-      roles.add('framework_runtime');
-    } else roles.add('application_platform');
+    if (!resourceOriginOnly) {
+      const category = String(finding.category).toLowerCase();
+      if (category === 'delivery platform') roles.add('observed_edge');
+      else if (['application runtime', 'web framework', 'static site generator', 'web server'].includes(category)) {
+        roles.add('framework_runtime');
+      } else roles.add('application_platform');
+    }
   }
   return TECHNOLOGY_EVIDENCE_ROLE_ORDER.filter((role) => roles.has(role));
 }

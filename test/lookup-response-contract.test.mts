@@ -187,6 +187,25 @@ function canonicalPageProfiles() {
   };
 }
 
+function legacyResourceOnlyTechnologyProfile() {
+  const current = canonicalPageProfiles().technologyProfile;
+  return {
+    ...current,
+    profileVersion: 10,
+    findings: [{
+      id: 'fixture-embedded-delivery',
+      name: 'Fixture embedded delivery asset',
+      category: 'delivery platform',
+      confidence: 'medium',
+      evidence: [{
+        source: 'resource origin',
+        description: 'A retained resource origin uses fixture delivery infrastructure.',
+      }],
+    }],
+    browserLibraryProfile: null,
+  };
+}
+
 function canonicalTlsProfile(overrides: Record<string, unknown> = {}) {
   return { ...skippedTlsObservation('Fixture TLS collection was skipped.'), ...overrides };
 }
@@ -695,6 +714,24 @@ describe('Lookup HTTP response contract', () => {
     });
     assert.equal(parseLookupHttpResponse(excessivelyNested).ok, false);
     assert.deepEqual(parseLookupHttpResponse(excessivelyNested), parseLookupHttpResponse(excessivelyNested));
+  });
+
+  test('retains supported v10 resource-only technology evidence for compatibility projections', () => {
+    const technologyProfile = legacyResourceOnlyTechnologyProfile();
+    const parsed = parseLookupHttpResponse(response({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'registered',
+        technologyProfile,
+      },
+    }));
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value.availability.technologyProfile, technologyProfile);
+    const retained = recordValue(parsed.value.availability.technologyProfile);
+    assert.equal(retained.profileVersion, 10);
+    assert.deepEqual(arrayValue(retained.findings), technologyProfile.findings);
   });
 
   test('withholds unowned nested profile fields instead of retaining them as current evidence', () => {

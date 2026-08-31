@@ -1139,6 +1139,42 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.doesNotMatch(`${terminal}${verbose}`, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
 });
 
+test('terminal projects v10 resource-only delivery evidence as embedded rather than edge', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      technologyProfile: {
+        profileVersion: 10,
+        source: 'derived',
+        status: 'success',
+        findings: [{
+          id: 'fixture-embedded-delivery',
+          name: 'Fixture embedded delivery asset',
+          category: 'delivery platform',
+          confidence: 'medium',
+          evidence: [{
+            source: 'resource origin',
+            description: 'A retained resource origin uses fixture delivery infrastructure.',
+          }],
+        }],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-31T00:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+
+  assert.match(output, /Observed edge\s+None retained/u);
+  assert.match(output, /Embedded deps\s+Fixture embedded delivery asset/u);
+  assert.doesNotMatch(output, /Observed edge\s+Fixture embedded delivery asset/u);
+});
+
 test('terminal page relationships use the registrable collection target and preserve producer counts', () => {
   const result = lookupResult({
     availability: {

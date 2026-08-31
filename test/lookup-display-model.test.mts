@@ -210,6 +210,47 @@ test('bounds page, technology, and posture presentation models', () => {
   assert.equal(page.fingerprints[0]?.value, 'hash-1');
 });
 
+test('projects v10 resource-only delivery evidence as an embedded dependency only', () => {
+  const page = buildLookupPageDisplay({
+    pageIdentity: {},
+    pageCanonical: {},
+    pageMetaRefresh: {},
+    pageOpenGraph: {},
+    pageOpenGraphUrl: {},
+    pageForms: {},
+    pageResources: {},
+    pageResourceTypes: {},
+    pageDownloads: {},
+    pageFingerprints: {},
+    credentialSurfaceProfile: {},
+    structuredDataIdentity: {},
+    technologyProfile: {
+      profileVersion: 10,
+      findings: [{
+        id: 'fixture-embedded-delivery',
+        name: 'Fixture embedded delivery asset',
+        category: 'delivery platform',
+        confidence: 'medium',
+        evidence: [{
+          source: 'resource origin',
+          description: 'A retained resource origin uses fixture delivery infrastructure.',
+        }],
+      }],
+    },
+    browserLibraryProfile: {},
+    pageRoleProfile: {},
+    clientBehaviorProfile: {},
+    observedNetworkContext: {},
+    observedNetworkEndpoint: {},
+    observedNetwork: {},
+    securityPosture: {},
+    securityPostureSummary: {},
+    pageComparison: null,
+  });
+
+  assert.deepEqual(page.technologyFindings[0]?.roles, ['embedded_dependency']);
+});
+
 function emptyNetworkDisplayInput() {
   return {
     availability: {},
