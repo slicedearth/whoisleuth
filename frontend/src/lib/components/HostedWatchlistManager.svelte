@@ -41,7 +41,7 @@
     ? hosted.find((item) => item.name.toLowerCase() === selectedLocal.toLowerCase()) || null
     : null);
   const recoveryMessage = $derived(response?.recovery
-    ? `Recovered ${response.recovery.recoveredItems} hosted-monitoring item${response.recovery.recoveredItems === 1 ? '' : 's'}: ${[
+    ? `${response.recovery.recoveredItems} hosted-monitoring recovery correction${response.recovery.recoveredItems === 1 ? '' : 's'} ${response.recovery.recoveredItems === 1 ? 'was' : 'were'} applied to the canonical view: ${[
         [response.recovery.categories.invalidWatchlists, 'invalid watchlist'],
         [response.recovery.categories.duplicateIdentifiers, 'duplicate identifier'],
         [response.recovery.categories.duplicateNames, 'duplicate name'],
@@ -50,7 +50,9 @@
         [response.recovery.categories.invalidActiveRuns, 'invalid active run'],
         [response.recovery.categories.releasedMalformedLeases, 'released malformed lease'],
         [response.recovery.categories.resetInconsistentStatuses, 'reset inconsistent status'],
-      ].filter(([count]) => Number(count) > 0).map(([count, label]) => `${count} ${label}${Number(count) === 1 ? '' : 's'}`).join(', ')}.`
+      ].filter(([count]) => Number(count) > 0).map(([count, label]) => `${count} ${label}${Number(count) === 1 ? '' : 's'}`).join(', ')}. ${response.action && response.action !== 'unchanged'
+        ? `${response.recovery.recoveredItems === 1 ? 'This correction was' : 'These corrections were'} saved with the successful hosted change.`
+        : `${response.recovery.recoveredItems === 1 ? 'This correction remains' : 'These corrections remain'} view-only until the next successful hosted change.`}`
     : '');
 
   onMount(() => {

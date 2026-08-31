@@ -34,6 +34,17 @@ const EXACT_SEMVER_RE = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9
 const EXACT_RUNTIME_VERSION_RE = /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const OCI_REFERENCE_RE = /^oci:(?:[a-z0-9.-]+\/)*[a-z0-9._-]+:[a-z0-9._-]+@sha256:[a-f0-9]{64}$/u;
 
+function reviewedFixture(id: string) {
+  const fixture = TECHNOLOGY_REVIEWED_FIXTURES.find((candidate) => candidate.id === id);
+  assert.ok(fixture, `Missing reviewed technology fixture: ${id}`);
+  return fixture;
+}
+
+function reviewedHeaders(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
 describe('contributor-reviewed technology fixture corpus', () => {
   test('keeps every reviewed observation compatible, minimised, and deterministic', () => {
     const ids = new Set<string>();
@@ -164,5 +175,50 @@ describe('contributor-reviewed technology fixture corpus', () => {
         `Fixture provenance mismatch: ${fixture.id}`,
       );
     }
+  });
+
+  test('exercises evidence roles, mixed stacks, benign collisions, and a non-empirical conflict composition', () => {
+    const roles = (id: string) => analyzeWebsiteTechnology(reviewedFixture(id).input).findings
+      .map((finding) => [finding.id, finding.roles] as const);
+
+    assert.deepEqual(roles('licensed-delivery-response-20260805'), [
+      ['fastly', ['observed_edge']],
+    ]);
+    assert.deepEqual(roles('licensed-deployment-header-docs-20260805'), [
+      ['vercel', ['application_platform']],
+    ]);
+    assert.deepEqual(roles('owned-public-delivery-stack-20260805'), [
+      ['cloudflare', ['observed_edge']],
+      ['netlify', ['application_platform']],
+      ['sveltekit', ['framework_runtime']],
+    ]);
+    assert.deepEqual(roles('licensed-cloudfront-resource-source-20260806'), [
+      ['cloudfront', ['embedded_dependency']],
+    ]);
+    assert.deepEqual(roles('official-nextjs-runtime-source-20260806'), [
+      ['nextjs', ['framework_runtime']],
+    ]);
+    assert.deepEqual(roles('official-netlify-header-source-20260806'), [
+      ['netlify', ['observed_edge', 'application_platform']],
+    ]);
+
+    const benign = reviewedFixture('official-static-starter-negative-20260805');
+    assert.equal(analyzeWebsiteTechnology(benign.input).findings.length, 0);
+    assert.ok(benign.negativeFor.includes('nextjs'));
+    assert.ok(benign.negativeFor.includes('nuxt'));
+    assert.ok(benign.negativeFor.includes('sveltekit'));
+
+    const vercel = reviewedFixture('licensed-deployment-header-docs-20260805');
+    const netlify = reviewedFixture('official-netlify-header-source-20260806');
+    const conflicting = analyzeWebsiteTechnology({
+      responseHeaders: {
+        ...reviewedHeaders(vercel.input.responseHeaders),
+        ...reviewedHeaders(netlify.input.responseHeaders),
+      },
+      observedAt: vercel.observedAt,
+    });
+    assert.deepEqual(conflicting.findings.filter((finding) => ['netlify', 'vercel'].includes(finding.id))
+      .map((finding) => finding.id).sort(), ['netlify', 'vercel']);
+    assert.equal(TECHNOLOGY_REVIEWED_FIXTURES.length, 78);
   });
 });

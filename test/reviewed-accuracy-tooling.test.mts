@@ -44,8 +44,11 @@ describe('reviewed accuracy programme tooling', () => {
     assert.equal(technology.readiness, 'limited');
     assert.equal(technology.reviewedPositiveCases, 76);
     assert.equal(technology.reviewedBenignCases, 2);
-    assert.ok(report.corpora.filter((corpus) => corpus.key !== 'technology-detection')
-      .every((corpus) => corpus.readiness === 'unproven'));
+    const unproven = report.corpora.filter((corpus) => corpus.key !== 'technology-detection');
+    assert.ok(unproven.every((corpus) => corpus.readiness === 'unproven'));
+    assert.ok(unproven.every((corpus) => corpus.reviewedCases === 0
+      && corpus.reviewedPositiveCases === 0
+      && corpus.reviewedBenignCases === 0));
     assert.equal(report.summary.limited, 1);
     assert.equal(report.summary.unproven, 4);
     assert.match(report.limitation, /do not establish general accuracy/iu);

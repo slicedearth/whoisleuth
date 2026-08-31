@@ -76,12 +76,13 @@
     <section class="infrastructure-roles" aria-labelledby="infrastructure-role-title">
       <h5 id="infrastructure-role-title">Web infrastructure evidence roles</h5>
       <dl>
-        <div><dt>Authoritative nameservers</dt><dd>{authoritativeNameservers.join(' · ') || 'Unavailable'}<small>Nameserver identities are retained as DNS evidence; operator or web-host ownership is not inferred.</small></dd></div>
+        <div><dt>Authoritative nameservers</dt><dd>{authoritativeNameservers.join(' · ') || 'Unavailable'}</dd></div>
         {#each roleOrder as role}
           <div><dt>{roleLabels[role]}</dt><dd>{findingsByRole[role].join(' · ') || 'No retained indicator'}</dd></div>
         {/each}
-        <div><dt>Origin host</dt><dd>Not established<small>Edge and application-platform indicators do not reveal a concealed origin.</small></dd></div>
+        <div><dt>Origin host</dt><dd>Not established</dd></div>
       </dl>
+      <p class="role-note">Nameserver identity remains DNS evidence. Edge, application-platform, framework, runtime and dependency indicators describe where each clue was observed; they do not establish provider ownership, control, a concealed origin, safety or maliciousness.</p>
     </section>
 
     {#if findings.length}
@@ -106,7 +107,7 @@
     {/if}
 
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Signature strength describes how distinctive the matched retained clue is; it is not an empirical accuracy rate or confirmation of a provider, origin, owner, or technology. These indicators make no additional request and do not affect availability or Risk scoring.</p>
+    <p class="card-note">Signature strength describes how distinctive the matched retained clue is; it is not an empirical accuracy rate or confirmation that a technology is present. These indicators make no additional request and do not affect availability or Risk scoring.</p>
 
     {#if libraryAvailable}
       <section class="library-profile" aria-labelledby="browser-library-title">
@@ -160,7 +161,7 @@
   .infrastructure-roles dl div{display:grid;grid-template-columns:minmax(180px,.42fr) minmax(0,1fr);gap:10px}
   .infrastructure-roles dt{color:var(--muted);font-size:var(--text-xs)}
   .infrastructure-roles dd{min-width:0;margin:0;color:var(--text);font-size:var(--text-xs);overflow-wrap:anywhere}
-  .infrastructure-roles small{display:block;margin-top:2px;color:var(--muted);line-height:1.45}
+  .role-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .technology-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .finding-head h5{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}

@@ -112,6 +112,7 @@ export interface ScheduledMonitorRecoveryCategories {
 
 export interface ScheduledMonitorRecoveryReport {
   version: 1;
+  /** Sum of category corrections, not a count of distinct watchlists or runs. */
   recoveredItems: number;
   categories: ScheduledMonitorRecoveryCategories;
 }

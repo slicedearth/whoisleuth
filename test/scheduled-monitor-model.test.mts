@@ -221,6 +221,31 @@ test('reports corruption and active-run recovery without retaining malformed val
   assert.doesNotMatch(JSON.stringify(released.recovery), /placeholder/u);
 });
 
+test('counts multiple recovery corrections on one retained watchlist without implying distinct records', () => {
+  const recovered = normalizeScheduledMonitorStateWithRecovery(state([{
+    ...watchlist(),
+    status: 'running',
+    unknownRetainedValue: 'must not survive',
+  }]));
+  assert.equal(recovered.state.watchlists.length, 1);
+  assert.equal(required(recovered.state.watchlists[0]).status, 'idle');
+  assert.deepEqual(recovered.recovery, {
+    version: 1,
+    recoveredItems: 2,
+    categories: {
+      invalidWatchlists: 0,
+      duplicateIdentifiers: 0,
+      duplicateNames: 0,
+      truncatedInputs: 0,
+      normalisedWatchlists: 1,
+      invalidActiveRuns: 0,
+      releasedMalformedLeases: 0,
+      resetInconsistentStatuses: 1,
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(recovered), /must not survive/u);
+});
+
 test('keeps only bounded recent history and discloses newly omitted relevant changes', () => {
   const changes = Array.from({ length: MAX_SCHEDULED_CHANGES_PER_EVENT + 5 }, (_, index) => ({
     domain: 'alpha.example',

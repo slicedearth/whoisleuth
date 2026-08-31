@@ -62,6 +62,7 @@ export type ScheduledMonitoringRecoveryCategories = {
 };
 export type ScheduledMonitoringRecoveryReport = {
   version: 1;
+  /** Deployed field name; the value is the sum of recovery-category corrections. */
   recoveredItems: number;
   categories: ScheduledMonitoringRecoveryCategories;
 };
