@@ -172,10 +172,16 @@ describe('continuous integration workflow', () => {
       /export function enforcesMachineTimingBudgets\(projectName: string\): boolean \{\s+return projectName === PERFORMANCE_AUTHORITY_PROJECT;\s+\}/u,
     );
     assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
+    assert.match(PLAYWRIGHT_CONFIG, /const performanceFirst = !isCI && process\.env\.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';/u);
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
+    assert.match(PLAYWRIGHT_CONFIG, /dependencies: performanceFirst \? \['performance-authority'\] : \['setup'\],/u);
     assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
     assert.doesNotMatch(WORKFLOW, /frontend:authenticated-loading-report/u);
+    assert.equal(
+      PACKAGE_MANIFEST.scripts?.['test:e2e:built'],
+      'WHOISLEUTH_E2E_USE_BUILD=1 WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test',
+    );
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
       'playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
@@ -245,6 +251,7 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s+npm run sources:health -- --github-annotations$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
     assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);

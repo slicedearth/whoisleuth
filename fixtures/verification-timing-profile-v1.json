@@ -52,10 +52,10 @@
       "sampleCount": 1
     },
     {
-      "id": "browser-local-batch1-deferred-20260823",
+      "id": "browser-local-deferred-loading-20260901",
       "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
-      "sampleBasis": "exact-seven-interaction-production-build-working-tree-based-on-b3a38562",
+      "environmentClass": "local-darwin-arm64-chromium-node26-no-retry-production-build",
+      "sampleBasis": "exact-deferred-interactions-and-recovery-production-build",
       "sampleCount": 1
     },
     {
@@ -87,10 +87,10 @@
       "sampleCount": 1
     },
     {
-      "id": "compatibility-reset-20260823",
+      "id": "unit-local-deferred-loading-20260901",
       "lane": "unit",
-      "environmentClass": "macos-arm64-node26",
-      "sampleBasis": "focused-passing-contract-synchronisation",
+      "environmentClass": "local-darwin-arm64-node26",
+      "sampleBasis": "exact-deferred-policy-and-timing-reporter-tests",
       "sampleCount": 1
     },
     {
@@ -245,9 +245,16 @@
     {
       "file": "e2e/deferred-interactions.spec.ts",
       "lane": "browser",
-      "weightMs": 11000,
+      "weightMs": 11878,
       "sampleCount": 1,
-      "provenanceId": "browser-local-batch1-deferred-20260823"
+      "provenanceId": "browser-local-deferred-loading-20260901"
+    },
+    {
+      "file": "e2e/deferred-recovery.spec.ts",
+      "lane": "browser",
+      "weightMs": 12374,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-deferred-loading-20260901"
     },
     {
       "file": "e2e/deletion-focus.spec.ts",
@@ -1564,6 +1571,13 @@
       "weightMs": 106,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
+    },
+    {
+      "file": "test/deferred-module.test.mts",
+      "lane": "unit",
+      "weightMs": 6,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-deferred-loading-20260901"
     },
     {
       "file": "test/demo-model.test.mts",
@@ -3591,9 +3605,9 @@
     {
       "file": "test/test-duration-reporter.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 6,
       "sampleCount": 1,
-      "provenanceId": "compatibility-reset-20260823"
+      "provenanceId": "unit-local-deferred-loading-20260901"
     },
     {
       "file": "test/theme-assets.test.mts",

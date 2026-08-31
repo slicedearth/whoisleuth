@@ -327,15 +327,49 @@ export function formatSourceHealthReport(
   return lines.join('\n');
 }
 
-function parseArguments(args: readonly string[]): Readonly<{ json: boolean; strict: boolean }> {
+function githubAnnotationValue(value: string, property = false): string {
+  const bounded = value
+    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 1_000)
+    .replaceAll('%', '%25');
+  return property ? bounded.replaceAll(':', '%3A').replaceAll(',', '%2C') : bounded;
+}
+
+export function formatSourceHealthAnnotations(
+  report: Awaited<ReturnType<typeof buildSourceHealthReport>>,
+): string {
+  const warnings = report.entries.filter((item) => item.kind === 'retained_dataset'
+    && (item.state === 'stale' || item.state === 'unavailable'));
+  if (!warnings.length) return '';
+  return `${warnings.map((item) => {
+    const title = githubAnnotationValue(`Retained source ${item.state}: ${item.label}`, true);
+    const message = githubAnnotationValue(
+      `${item.label} is ${item.state}. ${item.action} Drill-down: ${item.strictCommand}.`,
+    );
+    return `::warning title=${title}::${message}`;
+  }).join('\n')}\n`;
+}
+
+function parseArguments(args: readonly string[]): Readonly<{
+  githubAnnotations: boolean;
+  json: boolean;
+  strict: boolean;
+}> {
+  let githubAnnotations = false;
   let json = false;
   let strict = false;
   for (const argument of args) {
-    if (argument === '--json' && !json) json = true;
+    if (argument === '--github-annotations' && !githubAnnotations) githubAnnotations = true;
+    else if (argument === '--json' && !json) json = true;
     else if (argument === '--strict' && !strict) strict = true;
-    else throw new TypeError('Usage: npm run sources:health -- [--json] [--strict]');
+    else throw new TypeError('Usage: npm run sources:health -- [--github-annotations | --json] [--strict]');
   }
-  return { json, strict };
+  if (githubAnnotations && json) {
+    throw new TypeError('Usage: npm run sources:health -- [--github-annotations | --json] [--strict]');
+  }
+  return { githubAnnotations, json, strict };
 }
 
 export async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
@@ -349,9 +383,11 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   try {
     const parsed = parseArguments(args);
     const report = await buildSourceHealthReport(options);
-    (options.stdout ?? process.stdout).write(parsed.json
-      ? `${JSON.stringify(report, null, 2)}\n`
-      : formatSourceHealthReport(report));
+    (options.stdout ?? process.stdout).write(parsed.githubAnnotations
+      ? formatSourceHealthAnnotations(report)
+      : parsed.json
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : formatSourceHealthReport(report));
     if (report.summary.states.malformed > 0) return 2;
     return parsed.strict && report.summary.strictFailures > 0 ? 1 : 0;
   } catch (error) {

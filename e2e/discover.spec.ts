@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { BASE_URL } from './constants';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test
@@ -119,12 +120,15 @@ test('certificate search exposes and enforces the shared bounded query contract'
   await expect(page.locator('#ct-query-guidance')).toContainText('up to 200 characters');
   await expect(page.locator('#ct-query-guidance')).toContainText('does not submit the target for a live website scan');
 
-  const missingResponse = await request.get('/api/ct-search');
+  const sameOriginHeaders = { Origin: BASE_URL, 'Sec-Fetch-Site': 'same-origin' };
+  const missingResponse = await request.get('/api/ct-search', { headers: sameOriginHeaders });
   expect(missingResponse.status()).toBe(400);
   expect(missingResponse.headers()['cache-control']).toBe('no-store');
   expect(await missingResponse.json()).toMatchObject({ errorCode: 'MISSING_QUERY' });
 
-  const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`);
+  const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`, {
+    headers: sameOriginHeaders,
+  });
   expect(invalidResponse.status()).toBe(400);
   expect(await invalidResponse.json()).toMatchObject({ errorCode: 'INVALID_CT_QUERY' });
 });

@@ -9,7 +9,7 @@ import type {
   BrowserLocalCollectionDocumentMap,
   BrowserLocalCollectionId,
 } from './browser-local-data-definitions.ts';
-import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.js';
+import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>

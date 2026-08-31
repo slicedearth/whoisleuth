@@ -61,7 +61,12 @@ test('a pending protected module reaches a terminal reload state and ignores lat
       markRequested();
     }
     await held;
-    await route.fallback();
+    const response = await route.fetch();
+    const body = await response.text();
+    await route.fulfill({
+      response,
+      body: `globalThis.__whoisleuthLateDeferredChunkEvaluated = true;\n${body}`,
+    });
   });
 
   await page.goto('/monitor');
@@ -78,7 +83,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   await expect(unavailable.getByRole('button', { name: 'Reload page' })).toBeVisible();
 
   releaseChunk();
-  await page.waitForTimeout(250);
+  await page.waitForFunction(() => Reflect.get(globalThis, '__whoisleuthLateDeferredChunkEvaluated') === true);
   await expect(surface).toHaveAttribute('data-deferred-state', 'unavailable');
   await expect(unavailable.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expectNoHorizontalOverflow(page);

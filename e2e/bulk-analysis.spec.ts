@@ -905,6 +905,11 @@ test('keeps partial Bulk Risk evidence inconclusive and outside the comparable s
 
 test('keeps the current queue, results, filters, sort, and page during console navigation only', async ({ page }) => {
   const domains = invalidDomains(101);
+  // Load the deferred controls against one result before the intentionally
+  // large result DOM is present so snapshot collection cannot consume the
+  // product deadline.
+  await runBulkScan(page, [domains[0]!]);
+  await openBulkFilters(page);
   await runBulkScan(page, domains);
   await openBulkFilters(page);
   await page.locator('.filters').getByRole('button', { name: /^errors / }).click();

@@ -1,4 +1,4 @@
-import { loadDeferredModule } from './deferred-module.js';
+import { loadDeferredModule } from './deferred-module.ts';
 
 type IdleWindow = Window & typeof globalThis & {
   requestIdleCallback?: (callback: IdleRequestCallback) => number;

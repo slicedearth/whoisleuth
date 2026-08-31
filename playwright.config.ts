@@ -4,11 +4,14 @@ import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/c
 const isCI = Boolean(process.env.CI);
 const useExistingBuild = isCI || process.env.WHOISLEUTH_E2E_USE_BUILD === '1';
 const performanceAuthoritySpecs = /(?:console-loading|deferred-interactions)\.spec\.ts/u;
+const performanceFirst = !isCI && process.env.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';
 
 const chromiumProject = {
   name: 'chromium',
   use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
-  dependencies: ['setup'],
+  // A local production-build authority run must precede the functional load
+  // rather than inherit CPU scheduling pressure from hundreds of browser cases.
+  dependencies: performanceFirst ? ['performance-authority'] : ['setup'],
   ...(!isCI ? { testIgnore: performanceAuthoritySpecs } : {}),
 };
 

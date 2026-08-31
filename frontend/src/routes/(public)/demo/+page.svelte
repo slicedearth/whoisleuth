@@ -230,9 +230,13 @@
     heldWorkspaceHeight=Math.ceil(demoWorkspace?.getBoundingClientRect().height??0);
     view=target;
     await tick();
+    if(!active)return;
     await ensureStage(target);
+    if(!active)return;
     await tick();
+    if(!active)return;
     await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));
+    if(!active)return;
     demoWorkspace?.querySelector<HTMLElement>('[data-stage-heading]')?.focus({preventScroll:true});
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     centerActiveStage(reducedMotion?'auto':'smooth');

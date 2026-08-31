@@ -5,6 +5,7 @@ import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
 import { buildCatalogStatus } from '../tools/cisa-kev-catalog-status.mts';
 import {
   buildSourceHealthReport,
+  formatSourceHealthAnnotations,
   formatSourceHealthReport,
   main,
   SOURCE_HEALTH_SCHEMA,
@@ -23,7 +24,7 @@ function writer() {
 describe('offline source-health composition', () => {
   test('composes retained datasets and reviewed evaluations without network work', async () => {
     const report = await buildSourceHealthReport({
-      now: new Date('2026-08-13T12:00:00.000Z'),
+      now: new Date('2026-09-01T12:00:00.000Z'),
     });
 
     assert.equal(report.schema, SOURCE_HEALTH_SCHEMA);
@@ -72,6 +73,11 @@ describe('offline source-health composition', () => {
     assert.match(formatted, /Items: unavailable; age: unavailable/u);
     assert.match(formatted, /Strict drill-down: npm run registry:fixtures/u);
     assert.match(formatted, /network requests: 0/u);
+
+    const annotations = formatSourceHealthAnnotations(report);
+    assert.match(annotations, /::warning title=Retained source stale%3A CISA KEV catalogue projection::/u);
+    assert.match(annotations, /::warning title=Retained source unavailable%3A Registry compatibility fixtures::/u);
+    assert.doesNotMatch(annotations, /SSL certificate|evaluation|UNPROVEN|LIMITED/u);
   });
 
   test('reports predictably aged optional sources by default and reserves failure for strict mode', async () => {
@@ -89,6 +95,15 @@ describe('offline source-health composition', () => {
     assert.equal(await main(['--json'], { now, builders, stdout: json.stream }), 0);
     assert.ok(JSON.parse(json.read()).summary.strictFailures >= 1);
 
+    const annotations = writer();
+    assert.equal(await main(['--github-annotations'], {
+      now,
+      builders,
+      stdout: annotations.stream,
+    }), 0);
+    assert.match(annotations.read(), /::warning title=Retained source stale%3A CISA KEV catalogue projection::/u);
+    assert.doesNotMatch(annotations.read(), /Lookalike analysis|Page similarity|Technology detection/u);
+
     const malformed = writer();
     assert.equal(await main([], {
       now,
@@ -100,5 +115,11 @@ describe('offline source-health composition', () => {
     const errors = writer();
     assert.equal(await main(['--strict', '--strict'], { stderr: errors.stream }), 2);
     assert.match(errors.read(), /Usage:/u);
+    assert.equal(await main(['--json', '--github-annotations'], { stderr: errors.stream }), 2);
+  });
+
+  test('emits no annotation when retained datasets are current and evaluations are limited or unproven', async () => {
+    const report = await buildSourceHealthReport({ now: new Date('2026-09-01T12:00:00.000Z') });
+    assert.equal(formatSourceHealthAnnotations(report), '');
   });
 });
