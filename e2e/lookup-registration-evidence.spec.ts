@@ -710,6 +710,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   const option = page.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
   const malwareOption = page.getByRole('checkbox', { name: /Search malware-distribution records/ });
   const iocOption = page.getByRole('checkbox', { name: /Search malware infrastructure records/ });
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await expect(option).toBeVisible();
   await expect(malwareOption).toBeVisible();
   await expect(iocOption).toBeVisible();

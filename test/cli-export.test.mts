@@ -558,6 +558,49 @@ describe('lookup evidence Markdown rendering', () => {
     assert.doesNotMatch(markdown, /x{301}/);
   });
 
+  test('uses the same role-aware technology and nameserver semantics as interactive projections', async () => {
+    const source = savedLookup();
+    const availability = recordValue(source.availability);
+    availability.nameservers = ['ns1.example.test'];
+    availability.technologyProfile = {
+      profileVersion: 11,
+      version: 1,
+      status: 'partial',
+      observedAt: '2026-08-31T00:00:00.000Z',
+      scanMode: 'deep',
+      source: 'derived',
+      durationMs: null,
+      complete: false,
+      truncated: false,
+      limitations: ['A generic indicator remains incomplete.'],
+      diagnostics: {
+        findings: 3,
+        htmlEvaluated: false,
+        generatorEvaluated: false,
+        serverEvaluated: true,
+        resourceOriginsEvaluated: 0,
+      },
+      findings: [
+        { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'], evidence: [{ source: 'HTTP server header', role: 'observed_edge', description: 'A retained header indicates fixture edge delivery.' }] },
+        { id: 'fixture-platform', name: 'Fixture Platform', category: 'content management', confidence: 'medium', roles: ['application_platform'], evidence: [{ source: 'passive response header', role: 'application_platform', description: 'A retained header indicates the fixture platform.' }] },
+        { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [{ source: 'passive response header', role: 'framework_runtime', description: 'A generic retained header indicates the fixture runtime.' }] },
+      ],
+      browserLibraryProfile: null,
+    };
+
+    const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const markdown = formatLookupEvidenceMarkdown(result);
+
+    assert.match(markdown, /Authoritative nameserver evidence:\*\* ns1\\\.example\\\.test/u);
+    assert.match(markdown, /Observed edge, CDN, reverse proxy or WAF:\*\* Fixture Edge/u);
+    assert.match(markdown, /Application-platform indicators:\*\* Fixture Platform/u);
+    assert.match(markdown, /Framework or runtime indicators:\*\* Fixture Runtime/u);
+    assert.match(markdown, /Embedded or third-party dependencies:\*\* Not reported/u);
+    assert.match(markdown, /Origin host:\*\* Not established from retained evidence/u);
+    assert.match(markdown, /Nameserver identity does not establish operator or web-host ownership/u);
+    assert.match(markdown, /Edge and application-platform indicators do not establish concealed origin infrastructure/u);
+  });
+
   test('escapes untrusted Markdown, HTML, bare-link, and email syntax', () => {
     const hostile = '# [click](https://malicious.invalid) <SCRIPT>alert(1)</SCRIPT> user@example.invalid\u202e';
     const escaped = escapeMarkdownValue(hostile);

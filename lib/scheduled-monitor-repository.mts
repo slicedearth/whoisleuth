@@ -30,12 +30,18 @@ type ScheduledMonitorUpdate<Result> = {
   changed?: boolean;
 };
 
-type ScheduledMonitorRepositoryOptions<State> = {
+type ScheduledMonitorStateInspection<State, Recovery> = {
+  state: State;
+  recovery: Recovery | null;
+};
+
+type ScheduledMonitorRepositoryOptions<State, Recovery = never> = {
   rawStore: VersionedTextStore;
   encryptionKey: string;
   namespace: string;
   emptyState: () => unknown;
   normalizeState: (value: unknown) => State;
+  inspectState?: (value: unknown) => ScheduledMonitorStateInspection<State, Recovery>;
 };
 
 const MAX_UPDATE_ATTEMPTS = 4;
@@ -91,21 +97,24 @@ function normalizeUpdate<Result>(value: unknown): ScheduledMonitorUpdate<Result>
   return update;
 }
 
-class ScheduledMonitorRepository<State> {
+class ScheduledMonitorRepository<State, Recovery = never> {
   rawStore: VersionedTextStore;
   encryptionKey: string;
   namespace: string;
   emptyState: () => unknown;
   normalizeState: (value: unknown) => State;
+  inspectState: ((value: unknown) => ScheduledMonitorStateInspection<State, Recovery>) | null;
 
-  constructor(options: ScheduledMonitorRepositoryOptions<State>) {
+  constructor(options: ScheduledMonitorRepositoryOptions<State, Recovery>) {
     if (!options || !validRawStore(options.rawStore)) {
       throw new Error('A versioned scheduled monitoring storage adapter is required.');
     }
     if (!isScheduledMonitorNamespace(options.namespace)) {
       throw new Error('Scheduled monitoring storage namespace is invalid.');
     }
-    if (typeof options.emptyState !== 'function' || typeof options.normalizeState !== 'function') {
+    if (typeof options.emptyState !== 'function'
+      || typeof options.normalizeState !== 'function'
+      || (options.inspectState !== undefined && typeof options.inspectState !== 'function')) {
       throw new Error('Scheduled monitoring state contracts are required.');
     }
     parseScheduledMonitorKey(options.encryptionKey);
@@ -114,37 +123,55 @@ class ScheduledMonitorRepository<State> {
     this.namespace = options.namespace;
     this.emptyState = options.emptyState;
     this.normalizeState = options.normalizeState;
+    this.inspectState = options.inspectState || null;
   }
 
-  decode(value: string | null): State {
+  inspect(value: string | null): ScheduledMonitorStateInspection<State, Recovery> {
     const plaintext = value === null
       ? structuredClone(this.emptyState())
       : decryptScheduledMonitorState(value, this.encryptionKey, this.namespace);
-    return this.normalizeState(plaintext);
+    return this.inspectState
+      ? this.inspectState(plaintext)
+      : { state: this.normalizeState(plaintext), recovery: null };
   }
 
-  async snapshot(): Promise<{ state: State; version: string | null }> {
+  decode(value: string | null): State {
+    return this.inspect(value).state;
+  }
+
+  async snapshot(): Promise<{
+    state: State;
+    version: string | null;
+    recovery: Recovery | null;
+  }> {
     const raw = normalizeSnapshot(await this.rawStore.read(this.namespace));
-    return { state: this.decode(raw.value), version: raw.version };
+    return { ...this.inspect(raw.value), version: raw.version };
   }
 
   async read(): Promise<State> {
     return (await this.snapshot()).state;
   }
 
+  async readWithRecovery(): Promise<ScheduledMonitorStateInspection<State, Recovery>> {
+    const { state, recovery } = await this.snapshot();
+    return { state, recovery };
+  }
+
   async update<Result>(
     mutator: (state: State) => ScheduledMonitorUpdate<Result> | Promise<ScheduledMonitorUpdate<Result>>,
-  ): Promise<{ state: State; result: Result }> {
+  ): Promise<{ state: State; result: Result; recovery: Recovery | null }> {
     if (typeof mutator !== 'function') throw new Error('A scheduled monitoring state update is required.');
     for (let attempt = 0; attempt < MAX_UPDATE_ATTEMPTS; attempt += 1) {
       const current = await this.snapshot();
       const outcome = normalizeUpdate<Result>(await mutator(structuredClone(current.state)));
-      if (outcome.changed === false) return { state: current.state, result: outcome.result };
+      if (outcome.changed === false) {
+        return { state: current.state, result: outcome.result, recovery: current.recovery };
+      }
       const state = this.normalizeState(outcome.state);
       const encrypted = encryptScheduledMonitorState(state, this.encryptionKey, this.namespace);
       const committed = await this.rawStore.compareAndSet(this.namespace, current.version, encrypted);
       if (committed === true) {
-        return { state, result: outcome.result };
+        return { state, result: outcome.result, recovery: current.recovery };
       }
       if (committed !== false) {
         throw new Error('Scheduled monitoring storage returned an invalid compare-and-set result.');
@@ -161,6 +188,7 @@ export {
 };
 export type {
   ScheduledMonitorRepositoryOptions,
+  ScheduledMonitorStateInspection,
   ScheduledMonitorUpdate,
   VersionedTextSnapshot,
   VersionedTextStore,

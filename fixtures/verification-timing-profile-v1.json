@@ -94,10 +94,10 @@
       "sampleCount": 1
     },
     {
-      "id": "unit-local-bounded-zip-20260825",
+      "id": "unit-local-critical-io-20260831",
       "lane": "unit",
-      "environmentClass": "local-darwin-arm64-node24",
-      "sampleBasis": "exact-bounded-zip-unit-file-at-39d0af87",
+      "environmentClass": "local-macos-node26",
+      "sampleBasis": "focused-critical-io-and-bounded-zip-tests",
       "sampleCount": 1
     },
     {
@@ -530,6 +530,13 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
+      "file": "test/anchored-artifact-writer.test.mts",
+      "lane": "unit",
+      "weightMs": 5929,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-critical-io-20260831"
+    },
+    {
       "file": "test/api-error-status.test.mts",
       "lane": "unit",
       "weightMs": 19,
@@ -644,9 +651,9 @@
     {
       "file": "test/bounded-zip-extraction.test.mts",
       "lane": "unit",
-      "weightMs": 34,
+      "weightMs": 38,
       "sampleCount": 1,
-      "provenanceId": "unit-local-bounded-zip-20260825"
+      "provenanceId": "unit-local-critical-io-20260831"
     },
     {
       "file": "test/brand-asset-register.test.mts",

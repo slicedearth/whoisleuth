@@ -289,7 +289,7 @@ function buildLookupEvidenceReport(
         reportField('Redirects', http.redirectCount),
         reportField('Page title', availability.pageTitle),
         reportField('Password field observed', yesNoUnknown(availability.hasPasswordField)),
-        reportField('Authoritative DNS operator evidence', listText(availability.nameservers)),
+        reportField('Authoritative nameserver evidence', listText(availability.nameservers)),
         reportField('Observed edge, CDN, reverse proxy or WAF', reportTechnologyNames(technologyFindings, 'observed_edge')),
         reportField('Application-platform indicators', reportTechnologyNames(technologyFindings, 'application_platform')),
         reportField('Framework or runtime indicators', reportTechnologyNames(technologyFindings, 'framework_runtime')),
@@ -445,6 +445,7 @@ function buildLookupEvidenceReport(
       ...(networkContext.contextVersion === 1 ? [
         'Observed network registration describes one point-in-time public endpoint. It may identify an edge or shared network rather than the origin host and does not prove control, ownership, intent, or maliciousness.',
       ] : []),
+      'Nameserver identity does not establish operator or web-host ownership. Edge and application-platform indicators do not establish concealed origin infrastructure.',
       ...(registryAccessFields.length ? [
         'Registry access constraints describe collection reachability only. They do not decide registration, availability, ownership, safety, or maliciousness.',
       ] : []),

@@ -18,6 +18,7 @@ import {
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import type {
   ScheduledMonitorActiveRun,
+  ScheduledMonitorRecoveryReport,
   ScheduledMonitorState,
   ScheduledWatchlist,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
@@ -109,6 +110,42 @@ class MemoryRepository implements ScheduledMonitorRepositoryContract {
   }
 }
 
+class RecoveryRepository extends MemoryRepository {
+  recovery: ScheduledMonitorRecoveryReport = {
+    version: 1,
+    recoveredItems: 2,
+    categories: {
+      invalidWatchlists: 1,
+      duplicateIdentifiers: 0,
+      duplicateNames: 0,
+      truncatedInputs: 0,
+      normalisedWatchlists: 0,
+      invalidActiveRuns: 1,
+      releasedMalformedLeases: 0,
+      resetInconsistentStatuses: 0,
+    },
+  };
+
+  async readWithRecovery() {
+    return { state: await this.read(), recovery: this.recovery };
+  }
+
+  override async update<Result>(mutator: (
+    state: ScheduledMonitorState,
+  ) => {
+    state: ScheduledMonitorState;
+    result: Result;
+    changed?: boolean;
+  } | Promise<{
+    state: ScheduledMonitorState;
+    result: Result;
+    changed?: boolean;
+  }>) {
+    const outcome = await super.update(mutator);
+    return { ...outcome, recovery: this.recovery };
+  }
+}
+
 function manager(
   initial: ScheduledMonitorState = state(),
   overrides: Omit<Partial<ScheduledMonitorManagerOptions>, 'repository'> = {},
@@ -182,6 +219,25 @@ test('reads only bounded public state and capacity without operational leases', 
   assert.equal(Object.hasOwn(publicWatchlist, 'sources'), false);
   assert.equal(result.capacity.projectedLookupsPerWeek, 7);
   assert.equal(harness.repository.writes, 0);
+  assert.equal(result.recovery, null);
+});
+
+test('projects count-only recovery on reads and the mutation that persists cleaned state', async () => {
+  const repository = new RecoveryRepository(state([watchlist()]));
+  const manager = createScheduledMonitorManager({
+    repository,
+    now: () => NOW_MS,
+    randomUUID: () => 'generated-00000001',
+  });
+  const read = await manager.read();
+  assert.deepEqual(read.recovery, repository.recovery);
+  const written = await manager.execute({
+    action: 'update',
+    id: 'watchlist-00000001',
+    enabled: false,
+  });
+  assert.deepEqual(written.recovery, repository.recovery);
+  assert.doesNotMatch(JSON.stringify(written.recovery), /target|name|token|ciphertext/u);
 });
 
 test('creates a normalized scheduled watchlist and drops unknown compact evidence', async () => {

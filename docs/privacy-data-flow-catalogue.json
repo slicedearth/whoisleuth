@@ -1764,7 +1764,8 @@
       ],
       "returnedDataCategories": [
         "compact_monitoring_evidence",
-        "delivery_state"
+        "delivery_state",
+        "bounded_recovery_counts"
       ],
       "processingClasses": [
         "transient_processing",

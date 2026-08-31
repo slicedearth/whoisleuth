@@ -40,6 +40,18 @@
   const selectedHosted = $derived(selectedLocal
     ? hosted.find((item) => item.name.toLowerCase() === selectedLocal.toLowerCase()) || null
     : null);
+  const recoveryMessage = $derived(response?.recovery
+    ? `Recovered ${response.recovery.recoveredItems} hosted-monitoring item${response.recovery.recoveredItems === 1 ? '' : 's'}: ${[
+        [response.recovery.categories.invalidWatchlists, 'invalid watchlist'],
+        [response.recovery.categories.duplicateIdentifiers, 'duplicate identifier'],
+        [response.recovery.categories.duplicateNames, 'duplicate name'],
+        [response.recovery.categories.truncatedInputs, 'truncated input'],
+        [response.recovery.categories.normalisedWatchlists, 'normalised watchlist'],
+        [response.recovery.categories.invalidActiveRuns, 'invalid active run'],
+        [response.recovery.categories.releasedMalformedLeases, 'released malformed lease'],
+        [response.recovery.categories.resetInconsistentStatuses, 'reset inconsistent status'],
+      ].filter(([count]) => Number(count) > 0).map(([count, label]) => `${count} ${label}${Number(count) === 1 ? '' : 's'}`).join(', ')}.`
+    : '');
 
   onMount(() => {
     mounted = true;
@@ -220,6 +232,7 @@
     {#if !localNames.length}<p class="hint">Save a Bulk result as a browser-local watchlist before scheduling it.</p>{/if}
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
+    {#if recoveryMessage}<p class="recovery" role="status" aria-live="polite">{recoveryMessage} No malformed values were included in this status or displayed.</p>{/if}
     {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
     {#if hosted.length}
@@ -267,6 +280,7 @@
   .schedule-form select{width:100%}
   .schedule-form .primary{min-height:42px;white-space:nowrap}
   .message{color:var(--accent);font-size:var(--text-xs)}
+  .recovery{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:var(--text);font-size:var(--text-xs);line-height:1.5}
   .error,.item-error{color:var(--danger);font-size:var(--text-xs)}
   .hosted-list{display:grid;gap:10px;margin-top:18px}
   .hosted-list article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}

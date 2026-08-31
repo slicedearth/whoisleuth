@@ -3,6 +3,7 @@ import { boundingBox, currentBrandProfileBrowserStore, expandLookupFamilies, exp
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 
 // Coverage for the shared design system: native-sized checkbox controls with
@@ -223,6 +224,7 @@ test('optional intelligence checkboxes stay native-sized and aligned with their 
     status: 200, contentType: 'application/json', body: JSON.stringify(INTELLIGENCE_CAPABILITIES),
   }));
   await page.goto('/lookup');
+  await page.getByRole('radio', { name: /Deep/u }).check();
 
   const group = page.getByRole('group', { name: 'Optional third-party intelligence' });
   await expect(group).toBeVisible();
@@ -529,6 +531,7 @@ test('Lookup reports requested source families without implying staged completio
     });
   });
   await page.goto('/lookup');
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await page.locator('#query').fill('collection-state.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
@@ -1428,6 +1431,10 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
     await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
     await expect(page.getByRole('button', { name: `Collapse ${label} evidence` })).toBeVisible();
     await expectLookupTargetAligned(page, selector);
+    await page.getByRole('button', { name: `Collapse ${label} evidence` }).click();
+    await expectLookupTargetAligned(page, selector);
+    await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
+    await expectLookupTargetAligned(page, selector);
   }
 
   await page.getByRole('button', { name: 'Collapse Relationships and history evidence' }).click();
@@ -1458,13 +1465,118 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
   await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toBeVisible();
   await expectLookupTargetAligned(page, '#evidence-registry');
 
-  const delegatedRegistryLink = page.locator('.at-a-glance .next-action[href="#registry"]').first();
-  if (await delegatedRegistryLink.count()) {
-    await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
-    await delegatedRegistryLink.click();
-    await expect(page).toHaveURL(/#registry$/u);
-    await expectLookupTargetAligned(page, '#registry');
+  const delegatedQualityLink = page.getByRole('link', { name: /^Review limited or stale sources/u }).first();
+  await expect(delegatedQualityLink).toBeVisible();
+  await expect(delegatedQualityLink).toHaveAttribute('href', '#evidence-quality');
+  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await delegatedQualityLink.click();
+  await expect(page).toHaveURL(/#evidence-quality$/u);
+  await expect(page.getByRole('button', { name: 'Collapse Source quality evidence' })).toBeVisible();
+  await expectLookupTargetAligned(page, '#evidence-quality');
+
+  for (const eventName of ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const) {
+    const cancellation = await page.evaluate((name) => {
+      const button = document.querySelector<HTMLButtonElement>('.family-web button.family-summary');
+      const root = document.getElementById('result');
+      if (!button || !root) throw new Error('The Lookup cancellation fixture is incomplete.');
+      button.click();
+      const activeBeforeInput = root.classList.contains('lookup-scroll-aligning');
+      const inputEvent = name === 'wheel'
+        ? new WheelEvent(name, { bubbles: true, deltaY: 120 })
+        : name === 'pointerdown'
+          ? new PointerEvent(name, { bubbles: true, pointerType: 'mouse' })
+          : name === 'keydown'
+            ? new KeyboardEvent(name, { bubbles: true, key: 'ArrowDown' })
+            : new Event(name, { bubbles: true });
+      window.dispatchEvent(inputEvent);
+      return {
+        activeBeforeInput,
+        activeAfterInput: root.classList.contains('lookup-scroll-aligning'),
+      };
+    }, eventName);
+    expect(cancellation).toEqual({ activeBeforeInput: true, activeAfterInput: false });
   }
+});
+
+test('Lookup keeps a deferred mapped-evidence hash aligned through post-release layout changes @timing-sensitive', async ({ page }) => {
+  test.slow();
+  const builtManifest = JSON.parse(await readFile(
+    join(process.cwd(), 'frontend', '.svelte-kit', 'output', 'client', '.vite', 'manifest.json'),
+    'utf8',
+  )) as Record<string, { file: string }>;
+  const dnsChunkPath = builtManifest['src/lib/components/LookupDnsEvidence.svelte']?.file;
+  if (!dnsChunkPath) throw new TypeError('The production manifest does not own the Lookup DNS evidence chunk.');
+
+  let releaseChunk = () => {};
+  let markChunkRequested = () => {};
+  const chunkGate = new Promise<void>((resolve) => { releaseChunk = resolve; });
+  const chunkRequested = new Promise<void>((resolve) => { markChunkRequested = resolve; });
+  let chunkHeld = false;
+  await page.route('**/*', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === `/${dnsChunkPath}`) {
+      if (!chunkHeld) {
+        chunkHeld = true;
+        markChunkRequested();
+      }
+      await chunkGate;
+    }
+    await route.fallback();
+  });
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(sectionedLookupFixture('deferred-anchor.invalid')),
+  }));
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('deferred-anchor.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  const topology = page.getByRole('region', { name: 'Where this result came from' });
+  const dnsSource = topology.getByRole('list', { name: 'Evidence item status' })
+    .getByRole('link', { name: /DNS.*partial/iu });
+  await expect(dnsSource).toBeVisible();
+  await dnsSource.click();
+  await chunkRequested;
+
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expect(page.locator('#result')).toHaveClass(/lookup-scroll-aligning/u);
+  await page.evaluate(() => {
+    const runtime = window as typeof window & { __lookupReleaseShiftDone?: boolean };
+    const root = document.getElementById('result');
+    const web = document.getElementById('web-evidence');
+    if (!root || !web) throw new Error('The Lookup alignment fixture could not find its result geometry.');
+    document.documentElement.style.overflowAnchor = 'none';
+    const spacer = document.createElement('div');
+    spacer.dataset.lookupReleaseShift = 'true';
+    spacer.style.height = '0px';
+    spacer.style.pointerEvents = 'none';
+    web.before(spacer);
+    runtime.__lookupReleaseShiftDone = false;
+    const observer = new MutationObserver(() => {
+      if (root.classList.contains('lookup-scroll-aligning')) return;
+      observer.disconnect();
+      void (async () => {
+        for (const height of [96, 24, 144, 48, 113]) {
+          spacer.style.height = `${height}px`;
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        runtime.__lookupReleaseShiftDone = true;
+      })();
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  releaseChunk();
+  await expect(page.locator('#evidence-dns')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (
+    (window as typeof window & { __lookupReleaseShiftDone?: boolean }).__lookupReleaseShiftDone
+  ))).toBe(true);
+  await expect(page).toHaveURL(/#evidence-dns$/u);
+  await expectLookupTargetAligned(page, '#evidence-dns');
+  await expect(page.locator('#result')).not.toHaveClass(/lookup-scroll-aligning/u);
 });
 
 test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {

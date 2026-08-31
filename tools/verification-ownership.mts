@@ -21,6 +21,7 @@ const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@-]+\/)*[a-zA-Z0-9._+()@-]+$/u;
 export const FULL_BATCH_RELEASE_GATES = Object.freeze([
   'unit',
   'production-source-coverage',
+  'critical-io-coverage',
   'typecheck',
   'frontend-check',
   'build',
@@ -53,7 +54,8 @@ type SpecialisedCheck =
   | 'workflow-closure'
   | 'browser-timing-plan'
   | 'analyst-journey-assurance'
-  | 'critical-mutation';
+  | 'critical-mutation'
+  | 'critical-io-coverage';
 
 type OwnershipRule = Readonly<{
   id: string;
@@ -123,6 +125,14 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
     focusedUnit: unit('test/evidence-quality-properties.test.mts', 'test/model-contract-properties.test.mts'),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'privacy-catalogue', 'staged-security', 'critical-mutation'),
+    browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'anchored-artifact-writer', area: 'critical anchored artefact I/O', priority: 50,
+    matches: (value: string) => value === 'packages/web-capture/anchored-artifact-writer.mts',
+    focusedUnit: unit('test/anchored-artifact-writer.test.mts'),
+    focusedBrowser: browser(),
+    specialised: specialised('architecture', 'critical-io-coverage', 'staged-security'),
     browserRequired: false,
   }),
   Object.freeze({

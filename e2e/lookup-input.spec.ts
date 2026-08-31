@@ -36,8 +36,8 @@ test('a single domain can be entered normally', async ({ page }) => {
   await query.fill('bad-domain-one');
   await expect(query).toHaveValue('bad-domain-one');
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeVisible();
-  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
-  await expect(page.getByRole('radio', { name: /Fast/u })).not.toBeChecked();
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /Deep/u })).not.toBeChecked();
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
   await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
@@ -52,12 +52,13 @@ test('task guidance recommends depth and retained review without submitting a lo
   const question = guidance.getByLabel('Analyst question');
   await expect(question).toHaveValue('registration_authority');
   await expect(guidance).toContainText('Fast recommended');
-  await guidance.getByRole('button', { name: 'Use Fast recommendation' }).click();
+  await expect(guidance.getByRole('button', { name: 'Use Fast recommendation' })).toBeDisabled();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
 
   await question.selectOption('brand_impersonation');
   await expect(guidance).toContainText('Deep recommended');
   await expect(guidance).toContainText('Deep is broader, not complete or authoritative for every question');
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
 
@@ -81,6 +82,22 @@ test('acquisition deep-link guidance preserves the route and permits deliberate 
   await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
   await expect(page).toHaveURL('/lookup?task=acquisition&depth=fast#query');
+});
+
+test('a saved Deep choice remains Deep after client-side route restoration', async ({ page }) => {
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.getByRole('link', { name: /^Dashboard/u }).click();
+  await page.getByRole('link', { name: /^Lookup/u }).click();
+  await expect(page).toHaveURL('/lookup');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /Fast/u })).not.toBeChecked();
+});
+
+test('an explicit Deep URL restores Deep over the fresh Fast default', async ({ page }) => {
+  await page.goto('/lookup?depth=deep');
+  await expect(page).toHaveURL('/lookup?depth=deep');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /Fast/u })).not.toBeChecked();
 });
 
 test('the query keyboard shortcut uses the validated lookup submission', async ({ page }) => {
@@ -141,9 +158,8 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
   });
 
   await page.locator('#query').fill('example.test');
-  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
-  await page.getByRole('radio', { name: /Fast/u }).check();
-  await expect(page.getByText(/Fast returns lower-request registration evidence/u)).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
+  await expect(page.getByText(/Fast is the fresh-session default.*lower-request registration evidence/u)).toBeVisible();
 
   const requestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -199,6 +215,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   });
 
   await page.locator('#query').fill('timing.example.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
@@ -714,6 +731,7 @@ test('keeps the current Lookup form and result during console navigation only', 
   });
 
   await page.locator('#query').fill('portal.example.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
@@ -901,6 +919,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   });
 
   const option = page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u });
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await expect(option).not.toBeChecked();
   await page.locator('#query').fill('192.0.2.1');
   await expect(option).toBeDisabled();

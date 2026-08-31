@@ -238,6 +238,12 @@ resume, or delete a watchlist from the hosted compact logical state. That delete
 rewrites the encrypted state object; it does not physically delete the Blob
 object.
 
+The authenticated management surface reports bounded count-only recovery
+categories when malformed, duplicate, excessive or inconsistent stored records
+are omitted or normalised. These diagnostics are ephemeral and contain no
+targets, names, source records, lease tokens, ciphertext or raw stored values;
+they are not added to the encrypted durable schema.
+
 Capacity admission reserves part of the fixed schedule for delayed or resumed
 work. The five-minute schedule can invoke the function 8,640 times in a 30-day
 month or 8,928 times in a 31-day month, including no-op runs. Measure actual

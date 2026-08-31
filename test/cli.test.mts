@@ -1175,6 +1175,41 @@ test('terminal projects v10 resource-only delivery evidence as embedded rather t
   assert.doesNotMatch(output, /Observed edge\s+Fixture embedded delivery asset/u);
 });
 
+test('terminal preserves role-aware technology and nameserver non-inference semantics', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      nameservers: ['ns1.example.test'],
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'partial',
+        findings: [
+          { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'], evidence: [] },
+          { id: 'fixture-platform', name: 'Fixture Platform', category: 'content management', confidence: 'medium', roles: ['application_platform'], evidence: [] },
+          { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [] },
+        ],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-31T00:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+
+  assert.match(output, /Nameservers\s+ns1\.example\.test · identity does not establish operator or web-host ownership/u);
+  assert.match(output, /Observed edge\s+Fixture Edge/u);
+  assert.match(output, /App platform\s+Fixture Platform/u);
+  assert.match(output, /Framework\/run\s+Fixture Runtime/u);
+  assert.match(output, /Embedded deps\s+None retained/u);
+  assert.match(output, /Origin host\s+Not established from retained evidence/u);
+});
+
 test('terminal page relationships use the registrable collection target and preserve producer counts', () => {
   const result = lookupResult({
     availability: {

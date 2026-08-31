@@ -675,7 +675,7 @@ function formatTerminalLookup(
         const nameservers = Array.isArray(availability.nameservers)
           ? availability.nameservers.slice(0, MAX_LOOKUP_TERMINAL_NAMES).map((value) => safeTerminalValue(value))
           : [];
-        websiteLines.push(`DNS operator   ${nameservers.length ? boundedTerminalList(nameservers, Math.max(0, (availability.nameservers as unknown[]).length - nameservers.length)) : 'Unavailable'} · nameserver evidence only`);
+        websiteLines.push(`Nameservers   ${nameservers.length ? boundedTerminalList(nameservers, Math.max(0, (availability.nameservers as unknown[]).length - nameservers.length)) : 'Unavailable'} · identity does not establish operator or web-host ownership`);
         websiteLines.push(`Observed edge  ${terminalTechnologyRoleNames(findings, 'observed_edge')}`);
         websiteLines.push(`App platform   ${terminalTechnologyRoleNames(findings, 'application_platform')}`);
         websiteLines.push(`Framework/run  ${terminalTechnologyRoleNames(findings, 'framework_runtime')}`);

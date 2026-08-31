@@ -145,6 +145,12 @@ the Blob object. Disabling collection also leaves the object in place. Physical
 object deletion is a separate deployment-operator action through the hosting
 platform, as documented in the operations guide.
 
+When malformed, duplicate, excessive or inconsistent scheduled-monitor state
+is recovered, the authenticated management response can include an ephemeral
+bounded count by fixed recovery category. It never includes malformed targets,
+watchlist names, source records, lease tokens, ciphertext or raw payloads, and
+the recovery projection is not written back into the encrypted durable state.
+
 Optional distributed operation controls can send only bounded operation class,
 opaque lease, expiry and one-way opaque-session fingerprint metadata to the
 configured counter provider. Optional durable usage accounting stores fixed

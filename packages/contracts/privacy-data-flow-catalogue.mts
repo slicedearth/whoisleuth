@@ -143,7 +143,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   portable_evidence: capabilityPrivacyDetail('Build, verify or review bounded portable evidence under operator control.', ['bounded_portable_evidence', 'integrity_or_compatibility_state']),
   runtime_diagnostics: capabilityPrivacyDetail('Report local runtime readiness and only the explicitly selected fixed network diagnostics.', ['bounded_runtime_diagnostics']),
   workflow_execution: capabilityPrivacyDetail('Plan or run only installed fixed workflow steps with separate network approval.', ['bounded_workflow_state', 'explicit_step_outcomes']),
-  scheduled_monitoring: capabilityPrivacyDetail('Run an operator-configured bounded monitoring cycle over encrypted compact state.', ['compact_monitoring_evidence', 'delivery_state']),
+  scheduled_monitoring: capabilityPrivacyDetail('Run an operator-configured bounded monitoring cycle over encrypted compact state.', ['compact_monitoring_evidence', 'delivery_state', 'bounded_recovery_counts']),
   distributed_budgets: capabilityPrivacyDetail('Enforce configured distributed admission and usage controls using control metadata only.', ['bounded_control_state']),
 } satisfies Readonly<Record<CapabilityId, CapabilityPrivacyDetail>>);
 
@@ -1426,8 +1426,8 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
   fixtures: [{
     id: 'privacy-data-flow-catalogue-v1',
     path: 'docs/privacy-data-flow-catalogue.json',
-    bytes: 485_196,
-    sha256: 'b667fc7c1fdc5aacc14e53ca226c579fcb5258f62c9f6fc4439ceb075c947ea7',
+    bytes: 485_231,
+    sha256: '1e990fa37178b153e13286e0ca03e8dd0944c81f03d521e41f53a822f95a9e65',
     contentDigestSha256: null,
     schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
     version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,

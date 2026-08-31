@@ -73,7 +73,27 @@ function hostedWatchlist(entry = localEntry(), overrides: Partial<HostedItem> = 
   };
 }
 
-function managementResponse(watchlists: HostedItem[], action: string | null = null, id: string | null = null) {
+const RECOVERY_FIXTURE = {
+  version: 1,
+  recoveredItems: 5,
+  categories: {
+    invalidWatchlists: 1,
+    duplicateIdentifiers: 1,
+    duplicateNames: 1,
+    truncatedInputs: 0,
+    normalisedWatchlists: 0,
+    invalidActiveRuns: 1,
+    releasedMalformedLeases: 1,
+    resetInconsistentStatuses: 0,
+  },
+} as const;
+
+function managementResponse(
+  watchlists: HostedItem[],
+  action: string | null = null,
+  id: string | null = null,
+  recovery: typeof RECOVERY_FIXTURE | null = null,
+) {
   const projected = watchlists.reduce((total, item) => (
     total + (item.enabled ? item.domainCount * (7 * 24 / item.intervalHours) : 0)
   ), 0);
@@ -90,6 +110,7 @@ function managementResponse(watchlists: HostedItem[], action: string | null = nu
       utilizationPercent: Number((projected / 3024 * 100).toFixed(2)),
       reservePercent: 25,
     },
+    recovery,
     ...(action ? { action, id } : {}),
   };
 }
@@ -119,6 +140,7 @@ async function installManagementMock(
   initial: HostedItem[] = [],
   mutationGate: Promise<void> | null = null,
   refreshGate: { wait: Promise<void>; started: () => void } | null = null,
+  recovery: typeof RECOVERY_FIXTURE | null = null,
 ) {
   let watchlists = structuredClone(initial);
   const commands: Array<Record<string, unknown>> = [];
@@ -130,7 +152,7 @@ async function installManagementMock(
         refreshGate.started();
         await refreshGate.wait;
       }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists)) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists, null, null, recovery)) });
       return;
     }
     const command = route.request().postDataJSON() as Record<string, unknown>;
@@ -171,7 +193,7 @@ async function installManagementMock(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(managementResponse(watchlists, action, id)),
+      body: JSON.stringify(managementResponse(watchlists, action, id, recovery)),
     });
   });
   return { commands, watchlists: () => structuredClone(watchlists) };
@@ -251,6 +273,28 @@ test('hosted controls stay usable without horizontal overflow on a narrow mobile
   await expect(hosted.getByRole('button', { name: 'Restore to browser' })).toBeVisible();
   await expect(hosted.getByRole('button', { name: 'Delete hosted copy' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('announces count-only recovery on load and the next hosted mutation', async ({ page }) => {
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  await installManagementMock(page, [], null, null, RECOVERY_FIXTURE);
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const recovery = hosted.getByRole('status').filter({ hasText: 'Recovered 5 hosted-monitoring items' });
+  await expect(recovery).toContainText('1 invalid watchlist');
+  await expect(recovery).toContainText('1 duplicate identifier');
+  await expect(recovery).toContainText('1 duplicate name');
+  await expect(recovery).toContainText('1 invalid active run');
+  await expect(recovery).toContainText('1 released malformed lease');
+  await expect(recovery).toContainText('No malformed values were included in this status or displayed');
+  await expect(recovery).not.toContainText('private-target.invalid');
+
+  await hosted.getByLabel('Browser-local watchlist').selectOption('Priority domains');
+  await hosted.getByRole('button', { name: 'Schedule watchlist' }).click();
+  await expect(recovery).toBeVisible();
+  await expect(hosted.getByRole('status').filter({ hasText: 'Scheduled "Priority domains"' })).toBeVisible();
 });
 
 test('serializes hosted refresh and mutation controls while a command is pending', async ({ page }) => {

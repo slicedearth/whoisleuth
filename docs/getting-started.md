@@ -58,6 +58,8 @@ or release candidate, run the complete relevant gate:
 
 ```bash
 npm test
+npm run test:coverage
+npm run test:critical-io-coverage
 npm run test:properties
 npm run test:mutation
 npm run typecheck
@@ -126,6 +128,7 @@ The less common commands below each have one narrow purpose:
 | `npm run privacy:check` | Verify the generated privacy/data-flow catalogue. |
 | `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
+| `npm run test:critical-io-coverage` | Enforce focused line, branch and function coverage for the anchored capture artefact writer. |
 | `npm run frontend:loading-report` | Measure route closures against loading budgets. |
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |

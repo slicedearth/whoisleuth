@@ -76,7 +76,7 @@
     <section class="infrastructure-roles" aria-labelledby="infrastructure-role-title">
       <h5 id="infrastructure-role-title">Web infrastructure evidence roles</h5>
       <dl>
-        <div><dt>Authoritative DNS operator</dt><dd>{authoritativeNameservers.join(' · ') || 'Unavailable'}<small>Nameserver identities are retained as DNS evidence; operator ownership is not inferred.</small></dd></div>
+        <div><dt>Authoritative nameservers</dt><dd>{authoritativeNameservers.join(' · ') || 'Unavailable'}<small>Nameserver identities are retained as DNS evidence; operator or web-host ownership is not inferred.</small></dd></div>
         {#each roleOrder as role}
           <div><dt>{roleLabels[role]}</dt><dd>{findingsByRole[role].join(' · ') || 'No retained indicator'}</dd></div>
         {/each}

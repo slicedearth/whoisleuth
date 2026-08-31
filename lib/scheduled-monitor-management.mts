@@ -17,6 +17,7 @@ import {
   normalizeScheduledMonitorState,
   normalizeScheduledWatchlistName,
   scheduledMonitorPublicState,
+  type ScheduledMonitorRecoveryReport,
   type ScheduledWatchlist,
 } from '../packages/monitoring/scheduled-monitor-model.mts';
 
@@ -29,11 +30,16 @@ type RepositoryUpdate<Result> = {
 };
 type ScheduledMonitorRepositoryContract = {
   read: () => Promise<ScheduledMonitorState>;
+  readWithRecovery?: () => Promise<{
+    state: ScheduledMonitorState;
+    recovery: ScheduledMonitorRecoveryReport | null;
+  }>;
   update: <Result>(mutator: (
     state: ScheduledMonitorState,
   ) => RepositoryUpdate<Result> | Promise<RepositoryUpdate<Result>>) => Promise<{
     state: ScheduledMonitorState;
     result: Result;
+    recovery?: ScheduledMonitorRecoveryReport | null;
   }>;
 };
 type ScheduledMonitorManagerOptions = {
@@ -206,11 +212,16 @@ function assertUniqueName(
   }
 }
 
-function publicResult(state: ScheduledMonitorState, result: ScheduledMonitorCommandResult) {
+function publicResult(
+  state: ScheduledMonitorState,
+  result: ScheduledMonitorCommandResult,
+  recovery: ScheduledMonitorRecoveryReport | null,
+) {
   return {
     ...result,
     state: scheduledMonitorPublicState(state),
     capacity: scheduledMonitorCapacity(state),
+    recovery,
   };
 }
 
@@ -421,11 +432,19 @@ function createScheduledMonitorManager(options: ScheduledMonitorManagerOptions) 
   const now = options.now || Date.now;
   const idSource = options.randomUUID || randomUUID;
   return {
-    async read(): Promise<{ state: ScheduledMonitorPublicState; capacity: CapacityReport }> {
-      const state = normalizeScheduledMonitorState(await options.repository.read());
+    async read(): Promise<{
+      state: ScheduledMonitorPublicState;
+      capacity: CapacityReport;
+      recovery: ScheduledMonitorRecoveryReport | null;
+    }> {
+      const inspected = options.repository.readWithRecovery
+        ? await options.repository.readWithRecovery()
+        : { state: await options.repository.read(), recovery: null };
+      const state = normalizeScheduledMonitorState(inspected.state);
       return {
         state: scheduledMonitorPublicState(state),
         capacity: scheduledMonitorCapacity(state),
+        recovery: inspected.recovery,
       };
     },
     async execute(command: unknown) {
@@ -434,7 +453,7 @@ function createScheduledMonitorManager(options: ScheduledMonitorManagerOptions) 
         command,
         { now, randomUUID: idSource },
       ));
-      return publicResult(outcome.state, outcome.result);
+      return publicResult(outcome.state, outcome.result, outcome.recovery ?? null);
     },
   };
 }

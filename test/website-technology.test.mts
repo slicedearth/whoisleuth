@@ -316,6 +316,36 @@ describe('website technology profile', () => {
     assert.deepEqual(finding(result, 'nextjs').roles, ['framework_runtime']);
   });
 
+  test('keeps incomplete edge, platform, and generic runtime indicators separately attributed', () => {
+    const result = analyzeWebsiteTechnology({
+      htmlAvailable: false,
+      httpServer: 'Cloudflare',
+      responseHeaders: {
+        'x-nf-request-id': 'bounded-platform-indicator',
+        'x-vercel-id': 'conflicting-platform-indicator',
+        'x-powered-by': 'PHP/8.4',
+      },
+      observedAt,
+    });
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.deepEqual(result.findings.map((item) => [item.id, item.roles]), [
+      ['php', ['framework_runtime']],
+      ['cloudflare', ['observed_edge']],
+      ['netlify', ['application_platform']],
+      ['vercel', ['application_platform']],
+    ]);
+    assert.deepEqual(result.findings.map((item) => item.evidence[0]?.source), [
+      'passive response header',
+      'HTTP server header',
+      'passive response header',
+      'passive response header',
+    ]);
+    assert.match(result.limitations.join(' '), /HTML page identity was unavailable/i);
+    assert.doesNotMatch(JSON.stringify(result), /bounded-platform-indicator|conflicting-platform-indicator|8\.4/u);
+  });
+
   test('recognizes CloudFront from retained resource evidence', () => {
     const resourceResult = analyze({ resourceOrigins: ['https://assets.fixture.cloudfront.net'] });
     assert.equal(finding(resourceResult, 'cloudfront').confidence, 'medium');

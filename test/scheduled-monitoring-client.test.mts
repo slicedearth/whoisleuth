@@ -81,11 +81,39 @@ test('normalizes public hosted state and discards unknown compact evidence and o
   assert.ok(result);
   assert.equal(result.action, null);
   assert.equal(result.id, null);
+  assert.equal(result.recovery, null);
   const watchlist = required(result.state.watchlists[0]);
   assert.equal(watchlist.entry.results[0]?.rawWhois, undefined);
   assert.equal(Object.hasOwn(watchlist.entry, 'privateField'), false);
   assert.equal(Object.hasOwn(watchlist, 'lease'), false);
   assert.equal(result.capacity.remainingLookupsPerWeek, 3017);
+});
+
+test('accepts only a count-only bounded recovery projection', () => {
+  const categories = {
+    invalidWatchlists: 1,
+    duplicateIdentifiers: 2,
+    duplicateNames: 0,
+    truncatedInputs: 3,
+    normalisedWatchlists: 0,
+    invalidActiveRuns: 1,
+    releasedMalformedLeases: 1,
+    resetInconsistentStatuses: 0,
+  };
+  const result = normalizeScheduledMonitoringResponse(responseFixture({
+    recovery: { version: 1, recoveredItems: 8, categories },
+  }));
+  assert.deepEqual(result?.recovery, { version: 1, recoveredItems: 8, categories });
+  assert.doesNotMatch(JSON.stringify(result?.recovery), /target|watchlist name|lease token|ciphertext/u);
+
+  for (const recovery of [
+    { version: 1, recoveredItems: 7, categories },
+    { version: 2, recoveredItems: 8, categories },
+    { version: 1, recoveredItems: 8, categories: { ...categories, rawTarget: 'private.invalid' } },
+    { version: 1, recoveredItems: 1, categories: { ...categories, invalidWatchlists: -1 } },
+  ]) {
+    assert.equal(normalizeScheduledMonitoringResponse(responseFixture({ recovery })), null);
+  }
 });
 
 test('accepts a bounded mutation result and validates progress against membership', () => {

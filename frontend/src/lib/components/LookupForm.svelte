@@ -138,18 +138,18 @@
   <fieldset class="lookup-mode" disabled={loading}>
     <legend>Lookup depth</legend>
     <div class="mode-options" role="radiogroup" aria-label="Lookup depth">
-      <label class:active={lookupMode === 'deep'}>
-        <input type="radio" name="lookup-depth" value="deep" bind:group={lookupMode}>
-        <span><strong>Deep</strong><small>Detailed evidence</small></span>
-      </label>
       <label class:active={lookupMode === 'fast'}>
         <input type="radio" name="lookup-depth" value="fast" bind:group={lookupMode}>
         <span><strong>Fast</strong><small>Registration first</small></span>
       </label>
+      <label class:active={lookupMode === 'deep'}>
+        <input type="radio" name="lookup-depth" value="deep" bind:group={lookupMode}>
+        <span><strong>Deep</strong><small>Detailed evidence</small></span>
+      </label>
     </div>
     <p>{lookupMode === 'deep'
-      ? 'Deep is the default and may take longer while WHOIS, web, DNS, TLS, and registrar RDAP sources settle.'
-      : 'Fast returns lower-request registration evidence and skips slower deep-only sources.'}</p>
+      ? 'Deep adds WHOIS, web, DNS, TLS, registrar RDAP, and selected intelligence requests, so it may take longer.'
+      : 'Fast is the fresh-session default. It returns lower-request registration evidence and skips slower deep-only sources.'}</p>
   </fieldset>
 
   {#if loading}

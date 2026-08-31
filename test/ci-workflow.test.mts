@@ -119,6 +119,7 @@ describe('continuous integration workflow', () => {
       'npm run architecture:check',
       'npm run dependencies:audit',
       'npm run test:coverage',
+      'npm run test:critical-io-coverage',
       'npm run typecheck',
       'npm run check',
       'npm run build',
@@ -137,6 +138,10 @@ describe('continuous integration workflow', () => {
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
       'node tools/production-dependency-audit.mts',
+    );
+    assert.match(
+      PACKAGE_MANIFEST.scripts?.['test:critical-io-coverage'] ?? '',
+      /anchored-artifact-writer\.mts.*test\/anchored-artifact-writer\.test\.mts/u,
     );
     assert.match(WORKFLOW, /^\s{10}- shard: 1\/2\s*\n\s{12}label: 1-of-2\s*\n\s{10}- shard: 2\/2\s*\n\s{12}label: 2-of-2$/mu);
     assert.match(WORKFLOW, /^\s{10}WHOISLEUTH_PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/mu);

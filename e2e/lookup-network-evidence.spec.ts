@@ -175,6 +175,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
       query: 'http-evidence.test', type: 'domain', registrableDomain: 'http-evidence.test',
       availability: {
         state: 'registered', confidence: 'high', domain: 'http-evidence.test',
+        nameservers: ['ns1.example.test'],
         http: {
           version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'http',
           durationMs: 125, complete: true, truncated: false, limitations: ['URL query strings were omitted from retained provenance.'], diagnostics: {},
@@ -307,10 +308,11 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           profileVersion: TECHNOLOGY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
-          diagnostics: { findings: 2, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
+          diagnostics: { findings: 3, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
           findings: [
             { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', roles: ['application_platform'], evidence: [{ source: 'generator metadata', role: 'application_platform', description: 'Generator metadata identifies the fixture CMS.' }] },
             { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'], evidence: [{ source: 'resource origin', role: 'observed_edge', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
+            { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [{ source: 'passive response header', role: 'framework_runtime', description: 'A generic retained header indicates the fixture runtime.' }] },
           ],
           browserLibraryProfile: {
             profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
@@ -395,6 +397,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   }));
 
   await page.locator('#query').fill('http-evidence.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'http-evidence.test' })).toBeVisible();
   await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
@@ -529,6 +532,16 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
     .toContainText('Fixture CMS');
   await expect(technologyCard.getByText('Observed edge, CDN, reverse proxy or WAF', { exact: true }).locator('..'))
     .toContainText('Fixture Edge');
+  await expect(technologyCard.getByText('Framework or runtime indicator', { exact: true }).locator('..'))
+    .toContainText('Fixture Runtime');
+  await expect(technologyCard.getByText('Embedded or third-party dependency', { exact: true }).locator('..'))
+    .toContainText('No retained indicator');
+  await expect(technologyCard.getByText('Authoritative nameservers', { exact: true }).locator('..'))
+    .toContainText('ns1.example.test');
+  await expect(technologyCard.getByText(/operator or web-host ownership is not inferred/i)).toBeVisible();
+  await expect(technologyCard.getByText('Origin host', { exact: true }).locator('..'))
+    .toContainText('Not established');
+  await expect(technologyCard.getByText(/unmatched technology may still be present/i)).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();

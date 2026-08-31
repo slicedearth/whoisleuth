@@ -2,6 +2,7 @@ import {
   ALLOWED_SCHEDULE_INTERVAL_HOURS,
   isScheduledMonitorId,
   MAX_SCHEDULED_DOMAINS,
+  MAX_SCHEDULED_RECOVERY_COUNT,
   MAX_SCHEDULED_WATCHLISTS,
   normalizeScheduledWatchlistName,
   SCHEDULED_MONITOR_SCHEMA,
@@ -49,11 +50,27 @@ export type ScheduledMonitoringState = {
   version: typeof SCHEDULED_MONITOR_SCHEMA_VERSION;
   watchlists: ScheduledWatchlist[];
 };
+export type ScheduledMonitoringRecoveryCategories = {
+  invalidWatchlists: number;
+  duplicateIdentifiers: number;
+  duplicateNames: number;
+  truncatedInputs: number;
+  normalisedWatchlists: number;
+  invalidActiveRuns: number;
+  releasedMalformedLeases: number;
+  resetInconsistentStatuses: number;
+};
+export type ScheduledMonitoringRecoveryReport = {
+  version: 1;
+  recoveredItems: number;
+  categories: ScheduledMonitoringRecoveryCategories;
+};
 export type ScheduledMonitoringResponse = {
   state: ScheduledMonitoringState;
   capacity: ScheduledMonitoringCapacity;
   action: 'created' | 'updated' | 'deleted' | 'unchanged' | null;
   id: string | null;
+  recovery: ScheduledMonitoringRecoveryReport | null;
 };
 export type ScheduledMonitoringCommand =
   | { action: 'create'; name: string; entry: WatchlistEntry; intervalHours: number }
@@ -65,6 +82,16 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const INTERVALS = new Set<number>(ALLOWED_SCHEDULE_INTERVAL_HOURS);
 const STATUSES = new Set<string>(SCHEDULED_WATCHLIST_STATUSES);
 const ACTIONS = new Set(['created', 'updated', 'deleted', 'unchanged']);
+const RECOVERY_CATEGORIES = Object.freeze([
+  'invalidWatchlists',
+  'duplicateIdentifiers',
+  'duplicateNames',
+  'truncatedInputs',
+  'normalisedWatchlists',
+  'invalidActiveRuns',
+  'releasedMalformedLeases',
+  'resetInconsistentStatuses',
+] as const);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -210,6 +237,27 @@ function normalizeCapacity(value: unknown, state: ScheduledMonitoringState): Sch
   };
 }
 
+function normalizeRecovery(value: unknown): ScheduledMonitoringRecoveryReport | null {
+  if (value === undefined || value === null) return null;
+  const input = record(value);
+  const categoriesInput = record(input?.categories);
+  if (!input || input.version !== 1 || !categoriesInput) return null;
+  if (JSON.stringify(Object.keys(categoriesInput).sort()) !== JSON.stringify([...RECOVERY_CATEGORIES].sort())) {
+    return null;
+  }
+  const categories = {} as ScheduledMonitoringRecoveryCategories;
+  let total = 0;
+  for (const category of RECOVERY_CATEGORIES) {
+    const count = integer(categoriesInput[category], 0, MAX_SCHEDULED_RECOVERY_COUNT);
+    if (count === null) return null;
+    categories[category] = count;
+    total += count;
+  }
+  return total > 0 && input.recoveredItems === total
+    ? { version: 1, recoveredItems: total, categories }
+    : null;
+}
+
 export function normalizeScheduledMonitoringResponse(value: unknown): ScheduledMonitoringResponse | null {
   const input = record(value);
   if (!input) return null;
@@ -228,7 +276,9 @@ export function normalizeScheduledMonitoringResponse(value: unknown): ScheduledM
     : typeof input.id === 'string' && isScheduledMonitorId(input.id) ? input.id : null;
   if (input.id !== undefined && input.id !== null && id === null) return null;
   if ((action === null) !== (id === null)) return null;
-  return { state, capacity, action, id };
+  const recovery = normalizeRecovery(input.recovery);
+  if (input.recovery !== undefined && input.recovery !== null && recovery === null) return null;
+  return { state, capacity, action, id, recovery };
 }
 
 function responseError(response: Response, raw: unknown): Error {

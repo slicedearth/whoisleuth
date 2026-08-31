@@ -75,6 +75,7 @@
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController, type LookupCaseActionResult } from '$lib/controllers/lookup-case-controller';
+  import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
@@ -82,7 +83,7 @@
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
-  let lookupMode=$state<LookupMode>('deep');
+  let lookupMode=$state<LookupMode>('fast');
   let loading=$state(false);
   let loadingElapsedMs=$state(0);
   let includeExternalIntelligence=$state(false);
@@ -115,12 +116,7 @@
   let urlReconciliationReady=$state(false);
   let lastReconciledUrl=$state('');
   let lookupRevision=0;
-  let lookupScrollHref='';
-  let lookupScrollFrame=0;
-  let lookupScrollObserver:ResizeObserver|null=null;
-  let lookupScrollRoot:HTMLElement|null=null;
-  let lookupScrollSettleTimer=0;
-  let lookupScrollDeadline=0;
+  let lookupAnchorController:LookupAnchorController|null=null;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -413,103 +409,46 @@
     }
     if(loads.length)preloadBestEffort(()=>Promise.all(loads));
   }
-  const lookupScrollCancelEvents=['pointerdown','wheel','touchstart','keydown'] as const;
-  function stopLookupScrollAlignment(){
-    lookupScrollObserver?.disconnect();
-    lookupScrollObserver=null;
-    if(lookupScrollFrame&&typeof window!=='undefined')window.cancelAnimationFrame(lookupScrollFrame);
-    if(lookupScrollSettleTimer&&typeof window!=='undefined')window.clearTimeout(lookupScrollSettleTimer);
-    lookupScrollRoot?.classList.remove('lookup-scroll-aligning');
-    lookupScrollRoot=null;
-    lookupScrollFrame=0;
-    lookupScrollSettleTimer=0;
-    lookupScrollDeadline=0;
-    lookupScrollHref='';
-    if(typeof window==='undefined')return;
-    for(const eventName of lookupScrollCancelEvents)window.removeEventListener(eventName,cancelLookupScrollAlignment,true);
-    window.removeEventListener('scrollend',settleLookupScrollAlignment);
-  }
-  function cancelLookupScrollAlignment(){
-    stopLookupScrollAlignment();
-  }
-  function scheduleLookupScrollRelease(delayMs:number){
-    if(lookupScrollSettleTimer)window.clearTimeout(lookupScrollSettleTimer);
-    lookupScrollSettleTimer=window.setTimeout(()=>{
-      lookupScrollSettleTimer=0;
-      const activeHref=lookupScrollHref;
-      const loading=lookupScrollRoot?.querySelector('[data-deferred-state="loading"]');
-      if(activeHref&&loading&&performance.now()<lookupScrollDeadline){
-        scheduleLookupScrollRelease(100);
-        return;
-      }
-      if(activeHref&&window.location.hash===activeHref)scrollToLookupTarget(activeHref,'auto');
-      stopLookupScrollAlignment();
-    },delayMs);
-  }
-  function settleLookupScrollAlignment(){
-    const activeHref=lookupScrollHref;
-    if(!activeHref||window.location.hash!==activeHref){stopLookupScrollAlignment();return;}
-    scrollToLookupTarget(activeHref,'auto');
-    scheduleLookupScrollRelease(250);
-  }
-  function scheduleLookupScrollAlignment(){
-    if(lookupScrollFrame)return;
-    lookupScrollFrame=requestAnimationFrame(()=>{
-      lookupScrollFrame=0;
-      settleLookupScrollAlignment();
-    });
-  }
-  function keepLookupTargetAligned(href:string){
-    stopLookupScrollAlignment();
-    const resultRoot=document.getElementById('result');
-    if(!resultRoot)return;
-    lookupScrollHref=href;
-    lookupScrollRoot=resultRoot;
-    lookupScrollDeadline=performance.now()+5_000;
-    resultRoot.classList.add('lookup-scroll-aligning');
-    let resultHeight=resultRoot.getBoundingClientRect().height;
-    lookupScrollObserver=new ResizeObserver(()=>{
-      const nextHeight=resultRoot.getBoundingClientRect().height;
-      if(Math.abs(nextHeight-resultHeight)<0.5)return;
-      resultHeight=nextHeight;
-      scheduleLookupScrollAlignment();
-    });
-    lookupScrollObserver.observe(resultRoot);
-    for(const eventName of lookupScrollCancelEvents)window.addEventListener(eventName,cancelLookupScrollAlignment,{capture:true,passive:true});
-    window.addEventListener('scrollend',settleLookupScrollAlignment,{passive:true});
-    scheduleLookupScrollRelease(600);
-  }
   async function showSectionDetail(sectionId:string){
     const href=`#${sectionId}`;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     preloadLookupSection(sectionId);
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
       : [...expandedResultSections,sectionId];
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   async function hideSectionDetail(sectionId:string){
     const href=`#${sectionId}`;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     expandedResultSections=expandedResultSections.filter((id)=>id!==sectionId);
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   function expandableResultSectionIds():string[]{
     return resultSectionLinks()
       .map((section)=>section.href.slice(1))
       .filter((sectionId)=>sectionId!=='overview');
   }
-  function expandAllSectionDetails(){
+  function beginCurrentLookupAlignment():boolean{
+    const href=lookupEvidenceTargetForHref(window.location.hash);
+    const familyId=lookupEvidenceFamilyForHref(href);
+    return familyId?Boolean(lookupAnchorController?.begin(href,`#${familyId}`)):false;
+  }
+  async function expandAllSectionDetails(){
+    const realign=beginCurrentLookupAlignment();
     const sectionIds=expandableResultSectionIds();
     for(const sectionId of sectionIds)preloadLookupSection(sectionId);
     expandedResultSections=sectionIds;
+    if(realign){await tick();lookupAnchorController?.align();}
   }
-  function collapseAllSectionDetails(){
+  async function collapseAllSectionDetails(){
+    const realign=beginCurrentLookupAlignment();
     expandedResultSections=[];
+    if(realign){await tick();lookupAnchorController?.align();}
   }
   function allSectionDetailsVisible():boolean{
     const sectionIds=expandableResultSectionIds();
@@ -522,26 +461,26 @@
     const sectionId=href.startsWith('#')?href.slice(1):'';
     if(!sectionId)return;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     preloadLookupSection(sectionId);
     if(sectionId!=='overview'&&!expandedResultSections.includes(sectionId)){
       expandedResultSections=[...expandedResultSections,sectionId];
     }
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   async function navigateToLookupEvidence(href:string){
     const familyId=lookupEvidenceFamilyForHref(href);
     if(!familyId)return;
     const normalizedHref=lookupEvidenceTargetForHref(href);
     window.history.replaceState(window.history.state,'',normalizedHref);
+    lookupAnchorController?.begin(normalizedHref,`#${familyId}`);
     preloadLookupSection(familyId);
     expandedResultSections=familyId==='overview'||expandedResultSections.includes(familyId)
       ? expandedResultSections
       : [...expandedResultSections,familyId];
     await tick();
-    if(!scrollToLookupTarget(normalizedHref))scrollToLookupTarget(`#${familyId}`);
-    keepLookupTargetAligned(normalizedHref);
+    lookupAnchorController?.align();
   }
   function handleLookupEvidenceLink(event:MouseEvent){
     if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
@@ -565,24 +504,9 @@
   function sectionDetailVisible(sectionId:string):boolean{
     return expandedResultSections.includes(sectionId);
   }
-  function scrollToLookupTarget(href:string,behavior:ScrollBehavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'):boolean{
-    const targetId=href.startsWith('#')?href.slice(1):'';
-    if(!targetId)return false;
-    const target=document.getElementById(targetId);
-    if(!target)return false;
-    if(behavior==='auto'){
-      const targetTop=target.getBoundingClientRect().top+window.scrollY;
-      const scrollMarginTop=Number.parseFloat(getComputedStyle(target).scrollMarginTop)||0;
-      const maximumScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
-      window.scrollTo(window.scrollX,Math.min(Math.max(0,targetTop-scrollMarginTop),maximumScroll));
-    }else target.scrollIntoView({block:'start',behavior});
-    return true;
-  }
   async function restoreDeferredLookupTarget(){
     await tick();
-    const href=lookupScrollHref;
-    if(!href||window.location.hash!==href||!lookupEvidenceFamilyForHref(href))return;
-    scrollToLookupTarget(lookupEvidenceTargetForHref(href),'auto');
+    lookupAnchorController?.contentReady();
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -590,6 +514,7 @@
   }
   onMount(()=>{
     pageActive=true;
+    lookupAnchorController=new LookupAnchorController();
     const presentation=readLookupPresentation(localStorage);
     preferredTaskView=presentation.task;
     const restored=readLookupWorkflowState();
@@ -613,7 +538,8 @@
     return()=>{
       pageActive=false;
       invalidateCaseActions();
-      stopLookupScrollAlignment();
+      lookupAnchorController?.destroy();
+      lookupAnchorController=null;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
       writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
@@ -698,7 +624,7 @@
     }
 
     invalidateCaseActions();
-    stopLookupScrollAlignment();
+    lookupAnchorController?.stop();
     loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
