@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
 type CompletionResult = Readonly<{
   key: string;
@@ -8,6 +8,16 @@ type CompletionResult = Readonly<{
 
 const START_MARKER = '__WHOISLEUTH_COMPLETION_START_';
 const END_MARKER = '__WHOISLEUTH_COMPLETION_END_';
+
+export function assertSuccessfulShellProcess(child: SpawnSyncReturns<string>, label: string): void {
+  const detail = typeof child.stderr === 'string' ? child.stderr.trim().slice(0, 2_048) : '';
+  const outcome = child.error
+    ? `failed to start: ${child.error.message.slice(0, 512)}`
+    : child.signal
+      ? `terminated by ${child.signal}`
+      : `exited with status ${String(child.status)}`;
+  assert.equal(child.status, 0, `${label} ${outcome}${detail ? `: ${detail}` : ''}`);
+}
 
 function completionKey(words: readonly string[]): string {
   return JSON.stringify(words);
@@ -70,7 +80,7 @@ printf '${END_MARKER}${index}__\\n'
     encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
-  assert.equal(child.status, 0, child.stderr);
+  assertSuccessfulShellProcess(child, 'Bash completion batch');
   const results = parseMarkedResults(child.stdout, cases);
   return (words) => lookupResult(results, words);
 }
@@ -107,7 +117,7 @@ ${invocations}`;
     encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
-  assert.equal(child.status, 0, child.stderr);
+  assertSuccessfulShellProcess(child, 'Zsh completion batch');
   const results = parseMarkedResults(child.stdout, cases);
   return (words) => lookupResult(results, words);
 }
@@ -155,7 +165,7 @@ $results | ConvertTo-Json -Compress -Depth 4 -AsArray`;
     input: JSON.stringify(lines),
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
-  assert.equal(child.status, 0, child.stderr);
+  assertSuccessfulShellProcess(child, 'PowerShell completion batch');
   const results = parsePowerShellResults(child.stdout, lines);
   return (line) => {
     const result = results.get(line);

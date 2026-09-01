@@ -9,6 +9,7 @@ import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import {
+  assertSuccessfulShellProcess,
   prepareBashCompletionBatch,
   preparePowerShellCompletionBatch,
   prepareZshCompletionBatch,
@@ -25,6 +26,14 @@ function capture() {
 }
 
 describe('CLI shell completion', () => {
+  test('reports an unavailable shell with its bounded process diagnostic', () => {
+    const unavailable = spawnSync('whoisleuth-unavailable-shell-fixture', [], { encoding: 'utf8' });
+    assert.throws(
+      () => assertSuccessfulShellProcess(unavailable, 'Fixture shell'),
+      /Fixture shell failed to start: .*ENOENT/u,
+    );
+  });
+
   test('generates bounded static scripts for each supported shell', () => {
     for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       const script = buildShellCompletion(shell);
@@ -48,7 +57,7 @@ describe('CLI shell completion', () => {
     }
     const bash = buildShellCompletion('bash');
     const syntax = spawnSync('bash', ['-n'], { input: bash, encoding: 'utf8' });
-    assert.equal(syntax.status, 0, syntax.stderr);
+    assertSuccessfulShellProcess(syntax, 'Bash completion syntax check');
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
     assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
@@ -83,7 +92,7 @@ describe('CLI shell completion', () => {
     }
     const zsh = buildShellCompletion('zsh');
     const zshSyntax = spawnSync('zsh', ['-n'], { input: zsh, encoding: 'utf8' });
-    assert.equal(zshSyntax.status, 0, zshSyntax.stderr);
+    assertSuccessfulShellProcess(zshSyntax, 'Zsh completion syntax check');
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
     assert.match(zsh, /command="lookup"/u);
     assert.match(zsh, /--plan --json/u);
@@ -132,7 +141,7 @@ describe('CLI shell completion', () => {
       '-Command',
       '$code = [Console]::In.ReadToEnd(); [void][scriptblock]::Create($code)',
     ], { input: powershell, encoding: 'utf8' });
-    assert.equal(powershellSyntax.status, 0, powershellSyntax.stderr);
+    assertSuccessfulShellProcess(powershellSyntax, 'PowerShell completion syntax check');
     const powershellExpectedCases = [
       ['whoisleuth example.test --de', ['--deep']],
       ['whoisleuth report.json --de', []],
