@@ -1458,3 +1458,37 @@ test('repository CLI handles service termination while waiting for standard inpu
   assert.equal(stdout, '');
   assert.equal(stderr, 'Cancelled by analyst.\n');
 });
+
+test('review-family readers fail through bounded command-specific usage errors', async () => {
+  const commands = [
+    ['verify-artifact', 'artefact.json'],
+    ['interchange-report', 'artefact.json'],
+    ['source-report', 'lookups.json'],
+    ['compare', 'lookup.json'],
+    ['page-compare', 'left.json', 'right.json'],
+    ['mail-review', 'mail.json'],
+    ['review-evidence', 'evidence.json'],
+    ['brief', 'lookup.json'],
+    ['case-pack', 'cases.json', '--audience', 'internal', '--reviewed'],
+  ] as const;
+  for (const argv of commands) {
+    const stdout = capture();
+    const stderr = capture();
+    const failRead = async () => {
+      throw new Error('Reader failed\nadditional detail');
+    };
+    const code = await runCli([...argv], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      readArtifactInput: failRead,
+      readSourceReliabilityInput: failRead,
+      readCompareInput: failRead,
+      readDiffInput: failRead,
+      readMailReviewInput: failRead,
+    });
+    assert.equal(code, EXIT_CODES.USAGE, argv[0]);
+    assert.equal(stdout.value(), '', argv[0]);
+    assert.match(stderr.value(), /^Usage error: Could not read/u, argv[0]);
+    assert.doesNotMatch(stderr.value(), /[\r\n].*[\r\n]/u, argv[0]);
+  }
+});

@@ -32,7 +32,28 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
-  test('retains explicit floors for browser-local mutation, analyst actions, and Lookup projections', () => {
+  test('retains explicit floors for CLI ownership, browser-local mutation, analyst actions, and Lookup projections', () => {
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/discriminated-command-handlers.mts'], {
+      lines: 100, branches: 100, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/assurance-command-runner.mts'], {
+      lines: 90, branches: 60, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/evidence-command-runner.mts'], {
+      lines: 90, branches: 75, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/review-command-runner.mts'], {
+      lines: 95, branches: 50, functions: 80,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/workflow-command-runner.mts'], {
+      lines: 95, branches: 65, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/lookup-browser-view.mts'], {
+      lines: 95, branches: 75, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/formatters/terminal-lookup.mts'], {
+      lines: 95, branches: 85, functions: 100,
+    });
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/browser-local-data.ts'], {
       lines: 80, branches: 65, functions: 75,
     });

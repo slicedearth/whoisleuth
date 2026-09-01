@@ -78,6 +78,29 @@ describe('fixed investigation execution', () => {
     assert.equal(JSON.parse(stdout).state, 'awaiting_analyst_selection');
   });
 
+  test('reports resume read failures and renders an unapproved run without execution', async () => {
+    let stderr = '';
+    assert.equal(await runCli([
+      'workflow-run', 'domain-triage', 'example.test', '--resume', 'state.json',
+    ], {
+      stdout: { write() {} },
+      stderr: { write(value) { stderr += value; } },
+      readDiffInput: async () => { throw new Error('Resume read failed'); },
+    }), EXIT_CODES.USAGE);
+    assert.match(stderr, /Could not read investigation resume state: Resume read failed/u);
+
+    let terminal = '';
+    let calls = 0;
+    assert.equal(await runCli(['workflow-run', 'domain-triage', 'example.test', '--no-color'], {
+      stdout: { write(value) { terminal += value; } },
+      stderr: { write() {} },
+      now: () => NOW,
+      runUnifiedLookup: async () => { calls += 1; return {}; },
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(calls, 0);
+    assert.match(terminal, /awaiting network approval/iu);
+  });
+
   test('rejects resume data from another subject or injected step', async () => {
     const invalid = { schema: 'whoisleuth.cli.investigation-run', version: 1, recipe: 'domain-triage', subject: 'other.test', completedSteps: [] };
     await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {

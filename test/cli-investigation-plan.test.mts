@@ -91,6 +91,24 @@ describe('fixed investigation plans', () => {
     assert.deepEqual(JSON.parse(stdout.value()).recipes.map((recipe: { id: string }) => recipe.id), ['certificate-anomaly']);
   });
 
+  test('keeps terminal discovery readable and quiet plans silent', async () => {
+    const terminal = capture();
+    assert.equal(await runCli(['workflow-plan', '--list', '--no-color'], {
+      stdout: terminal.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(terminal.value(), /WHOISleuth workflow recipes/iu);
+    assert.match(terminal.value(), /domain-triage/u);
+
+    const quiet = capture();
+    assert.equal(await runCli(['workflow-plan', 'domain-triage', 'example.test', '--quiet'], {
+      stdout: quiet.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(quiet.value(), '');
+  });
+
   test('rejects unsupported recipes and non-domain subjects where required', () => {
     assert.throws(() => parseCliArguments(['workflow-plan', 'unknown', 'example.test']), /recipe must be one of/iu);
     assert.throws(() => parseCliArguments(['workflow-plan', '--list', 'example.test']), /do not accept a subject/iu);

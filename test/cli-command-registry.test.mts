@@ -29,10 +29,20 @@ import {
   type CliNetworkEffect,
 } from '../cli/command-reference.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
+import {
+  runDiscriminatedCommandHandler,
+  type DiscriminatedCommandHandlerMap,
+} from '../cli/discriminated-command-handlers.mts';
 import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
 import { buildCliManual } from '../cli/manual.mts';
+import { ASSURANCE_COMMAND_HANDLERS } from '../cli/assurance-command-runner.mts';
+import { EVIDENCE_COMMAND_HANDLERS } from '../cli/evidence-command-runner.mts';
+import { HISTORY_COMMAND_HANDLERS } from '../cli/history-command-runner.mts';
 import { FAMILY_COMMANDS } from '../cli/inline-command-runner.mts';
+import { REVIEW_COMMAND_HANDLERS } from '../cli/review-command-runner.mts';
 import { INLINE_CLI_COMMANDS } from '../cli/runner.mts';
+import { SUPPORT_COMMAND_HANDLERS } from '../cli/support-command-runner.mts';
+import { WORKFLOW_COMMAND_HANDLERS } from '../cli/workflow-command-runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
 import {
@@ -493,6 +503,24 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(FAMILY_COMMANDS.map(({ family }) => family), [
       'support', 'review', 'assurance', 'workflow', 'history',
     ]);
+    const inlineHandlerMaps = {
+      support: SUPPORT_COMMAND_HANDLERS,
+      review: REVIEW_COMMAND_HANDLERS,
+      assurance: ASSURANCE_COMMAND_HANDLERS,
+      workflow: WORKFLOW_COMMAND_HANDLERS,
+      history: HISTORY_COMMAND_HANDLERS,
+    } as const;
+    for (const { family, commands } of FAMILY_COMMANDS) {
+      assert.deepEqual(Object.keys(inlineHandlerMaps[family]), commands, `${family} handler ownership`);
+      assert.equal(Object.isFrozen(inlineHandlerMaps[family]), true, `${family} handler map`);
+    }
+    assert.deepEqual(
+      Object.keys(EVIDENCE_COMMAND_HANDLERS),
+      CLI_COMMAND_REGISTRY
+        .filter((definition) => definition.execution.handlerOwner === 'evidence')
+        .map((definition) => definition.command),
+    );
+    assert.equal(Object.isFrozen(EVIDENCE_COMMAND_HANDLERS), true);
 
     const effects = Object.fromEntries(CLI_COMMAND_REGISTRY.map((definition) => [
       definition.command,
@@ -520,6 +548,35 @@ describe('canonical CLI command registry', () => {
       assert.equal(Object.hasOwn(entry, 'grammar'), false);
       assert.equal(Object.hasOwn(entry, 'execution'), false);
     }
+  });
+
+  test('dispatches typed command families and rejects impossible runtime actions', async () => {
+    type TestArguments =
+      | Readonly<{ action: 'increment'; value: number }>
+      | Readonly<{ action: 'label'; value: string }>;
+    const handlers = Object.freeze({
+      increment: async (args: Extract<TestArguments, { action: 'increment' }>, amount: number) => args.value + amount,
+      label: async (args: Extract<TestArguments, { action: 'label' }>, amount: number) => args.value.length + amount,
+    } satisfies DiscriminatedCommandHandlerMap<TestArguments, [number], number>);
+
+    assert.equal(await runDiscriminatedCommandHandler<TestArguments, [number], number>(
+      handlers,
+      { action: 'increment', value: 2 },
+      3,
+    ), 5);
+    assert.equal(await runDiscriminatedCommandHandler<TestArguments, [number], number>(
+      handlers,
+      { action: 'label', value: 'test' },
+      1,
+    ), 5);
+    assert.throws(
+      () => runDiscriminatedCommandHandler<TestArguments, [number], number>(
+        handlers,
+        { action: 'missing', value: 0 } as unknown as TestArguments,
+        0,
+      ),
+      /No command handler is registered for missing/u,
+    );
   });
 
   test('selects the canonical catalogue with deterministic intersection filters', () => {

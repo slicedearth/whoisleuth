@@ -94,25 +94,25 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The executable dependency graph remains independently capped with three
-// modules of structural headroom above the reviewed 331-module runtime closure.
+// The executable and compatibility-root dependency graphs remain capped at
+// their reviewed 338-module and 340-module closures.
 // Two browser-safe domain-control paths remain explicit package roots because
-// released CLI archives permitted those deep imports. Splitting the WHOIS
-// parser by responsibility changes structure, not the independent byte limits.
-export const MAX_CLI_RUNTIME_MODULES = 334;
-export const MAX_CLI_PACKAGE_MODULES = 336;
+// released CLI archives permitted those deep imports. Structural extraction
+// does not change the independent source or packed-byte limits.
+export const MAX_CLI_RUNTIME_MODULES = 338;
+export const MAX_CLI_PACKAGE_MODULES = 340;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
-// dependency graph. They may emit no runtime code, but they remain bounded with
-// five inputs of headroom above the reviewed 321-input closure because
-// TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 326;
+// dependency graph. They may emit no runtime code, but the reviewed 328-input
+// closure remains bounded because TypeScript reads it while producing the
+// candidate.
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 328;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep four entries of structural headroom above the reviewed 332-entry
-// closure; packed and unpacked byte ceilings remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 336;
+// Keep the reviewed 339-entry closure exact; packed and unpacked byte ceilings
+// remain independent controls.
+export const MAX_CLI_PACKAGE_ENTRIES = 339;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;

@@ -154,6 +154,67 @@ describe('CLI automation arguments', () => {
 });
 
 describe('offline domain assurance', () => {
+  test('normalises assurance-family read failures through one usage boundary', async () => {
+    const cases = [
+      { argv: ['manifest', 'artefact.json', '--workflow', 'review'], label: 'manifest artefact' },
+      { argv: ['map-observations', 'mapping.json'], label: 'observation mapping' },
+      { argv: ['oam-export', 'bridge.json'], label: 'asset bridge' },
+      { argv: ['domain-control', 'control.json'], label: 'domain control' },
+      { argv: ['assurance', 'assurance.json'], label: 'domain assurance' },
+      { argv: ['change-packet', 'change.json'], label: 'domain change packet' },
+      {
+        argv: [
+          'sharing-review', 'packet.json', '--marking', 'amber', '--recipient-scope', 'organization',
+          '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed',
+        ],
+        label: 'sharing review',
+      },
+      { argv: ['ct-intake', 'events.json'], label: 'certificate event' },
+    ] as const;
+    for (const { argv, label } of cases) {
+      const stdout = capture();
+      const stderr = capture();
+      const failRead = async () => {
+        throw new Error('Input failed\n/private/source-detail');
+      };
+      const code = await runCli([...argv], {
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        readDiffInput: failRead,
+        readArtifactInput: failRead,
+      });
+      assert.equal(code, EXIT_CODES.USAGE, label);
+      assert.equal(stdout.value(), '', label);
+      assert.match(stderr.value(), new RegExp(`Could not read ${label}`, 'iu'), label);
+      assert.doesNotMatch(stderr.value(), /[\r\n].*[\r\n]/u, label);
+    }
+  });
+
+  test('rejects empty and malformed assurance-family documents before processing', async () => {
+    const cases = [
+      ['map-observations', 'mapping.json'],
+      ['oam-export', 'bridge.json'],
+      ['domain-control', 'control.json'],
+      ['assurance', 'assurance.json'],
+      ['change-packet', 'change.json'],
+      ['ct-intake', 'events.json'],
+    ] as const;
+    for (const argv of cases) {
+      for (const input of ['', '{"schema":"first","schema":"second"}']) {
+        const stdout = capture();
+        const stderr = capture();
+        const code = await runCli([...argv], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+          readArtifactInput: async () => input,
+        });
+        assert.equal(code, EXIT_CODES.USAGE, `${argv[0]} ${input ? 'malformed' : 'empty'}`);
+        assert.equal(stdout.value(), '', argv[0]);
+        assert.match(stderr.value(), /Usage error:/u, argv[0]);
+      }
+    }
+  });
+
   test('reviews a bounded retirement input without network collection', async () => {
     const stdout = capture();
     let lookupCalled = false;

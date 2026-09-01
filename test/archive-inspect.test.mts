@@ -140,6 +140,42 @@ describe('offline workspace archive inspection', () => {
     assert.doesNotMatch(stdout, new RegExp(DOMAIN, 'u'));
   });
 
+  test('keeps terminal, quiet, empty, and passphrase-file boundaries explicit', async () => {
+    const document = JSON.stringify(await archive());
+    let terminal = '';
+    assert.equal(await runCli(['inspect-archive', 'workspace.json', '--no-color'], {
+      stdout: { write(value) { terminal += value; } },
+      stderr: { write() {} },
+      readArtifactInput: async () => document,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(terminal, /Workspace archive inspection/iu);
+
+    let quiet = '';
+    assert.equal(await runCli(['inspect-archive', 'workspace.json', '--quiet'], {
+      stdout: { write(value) { quiet += value; } },
+      stderr: { write() {} },
+      readArtifactInput: async () => document,
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(quiet, '');
+
+    let emptyError = '';
+    assert.equal(await runCli(['inspect-archive', 'workspace.json'], {
+      stdout: { write() {} },
+      stderr: { write(value) { emptyError += value; } },
+      readArtifactInput: async () => '',
+    }), EXIT_CODES.USAGE);
+    assert.match(emptyError, /requires one workspace archive/u);
+
+    let passphraseError = '';
+    assert.equal(await runCli(['inspect-archive', 'workspace.json', '--passphrase-file', 'passphrase.txt'], {
+      stdout: { write() {} },
+      stderr: { write(value) { passphraseError += value; } },
+      readArtifactInput: async () => document,
+      readPassphraseFile: async () => 'two\nlines\n',
+    }), EXIT_CODES.USAGE);
+    assert.match(passphraseError, /exactly one non-empty UTF-8 line/u);
+  });
+
   test('canonicalizes IDN searches and can require an exact match for automation', async () => {
     const ascii = 'xn--bcher-kva.invalid';
     const report = await inspectWorkspaceArchive(JSON.stringify(await archive(ascii)), {

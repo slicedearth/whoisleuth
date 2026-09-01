@@ -22,6 +22,7 @@ import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
 import { readCliTextInput } from './input.mts';
 import type { BoundedTextStream } from './bulk.mts';
+import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 type WritableLike = { write(value: string): unknown };
 export type EvidenceCommandArguments =
@@ -116,59 +117,65 @@ async function readPassphrase(
   return passphrase;
 }
 
-export async function runEvidenceCommand(
-  args: EvidenceCommandArguments,
+async function runInspectArchiveCommand(
+  args: Extract<EvidenceCommandArguments, { action: 'inspect-archive' }>,
   dependencies: EvidenceCommandDependencies,
 ): Promise<number> {
-  if (args.action === 'inspect-archive') {
-    const input = await readArtifact(args.source, 'Archive input', dependencies);
-    if (!input.trim()) {
-      throw new CliUsageError(
-        'inspect-archive requires one workspace archive file or an archive on stdin.',
-      );
-    }
-    const passphrase = args.passphraseSource
-      ? await readPassphrase(args.passphraseSource, dependencies)
-      : null;
-    const report = await inspectWorkspaceArchive(input, {
-      passphrase,
-      search: args.search,
-      reveal: args.reveal,
-      requireMatch: args.requireMatch,
-      expectedContentDigest: args.expectedContentDigest,
-    });
-    if (!args.quiet) {
-      dependencies.stdout.write(
-        args.output === 'json'
-          ? formatJsonDocument(report)
-          : formatArchiveInspection(report),
-      );
-    }
-    return EXIT_CODES.SUCCESS;
-  }
-
-  if (args.action === 'sign-artifact') {
-    const input = await readArtifact(args.source, 'Evidence artefact input', dependencies);
-    if (!input.trim()) {
-      throw new CliUsageError(
-        'sign-artifact requires one reviewed artefact file or an artefact on stdin.',
-      );
-    }
-    const privateKey = await readKey(
-      args.privateKeySource,
-      'Private key file',
-      dependencies.readPrivateKeyFile,
-      dependencies,
+  const input = await readArtifact(args.source, 'Archive input', dependencies);
+  if (!input.trim()) {
+    throw new CliUsageError(
+      'inspect-archive requires one workspace archive file or an archive on stdin.',
     );
-    const signed = await signEvidencePackage(
-      input,
-      privateKey,
-      dependencies.now ? dependencies.now() : new Date().toISOString(),
-    );
-    dependencies.stdout.write(formatJsonDocument(signed));
-    return EXIT_CODES.SUCCESS;
   }
+  const passphrase = args.passphraseSource
+    ? await readPassphrase(args.passphraseSource, dependencies)
+    : null;
+  const report = await inspectWorkspaceArchive(input, {
+    passphrase,
+    search: args.search,
+    reveal: args.reveal,
+    requireMatch: args.requireMatch,
+    expectedContentDigest: args.expectedContentDigest,
+  });
+  if (!args.quiet) {
+    dependencies.stdout.write(
+      args.output === 'json'
+        ? formatJsonDocument(report)
+        : formatArchiveInspection(report),
+    );
+  }
+  return EXIT_CODES.SUCCESS;
+}
 
+async function runSignArtifactCommand(
+  args: Extract<EvidenceCommandArguments, { action: 'sign-artifact' }>,
+  dependencies: EvidenceCommandDependencies,
+): Promise<number> {
+  const input = await readArtifact(args.source, 'Evidence artefact input', dependencies);
+  if (!input.trim()) {
+    throw new CliUsageError(
+      'sign-artifact requires one reviewed artefact file or an artefact on stdin.',
+    );
+  }
+  const privateKey = await readKey(
+    args.privateKeySource,
+    'Private key file',
+    dependencies.readPrivateKeyFile,
+    dependencies,
+  );
+  const signed = await signEvidencePackage(
+    input,
+    privateKey,
+    dependencies.now ? dependencies.now() : new Date().toISOString(),
+  );
+  dependencies.stdout.write(formatJsonDocument(signed));
+  return EXIT_CODES.SUCCESS;
+}
+
+async function runVerifySignatureCommand(
+  args: Extract<EvidenceCommandArguments, { action: 'verify-signature' }>,
+  dependencies: EvidenceCommandDependencies,
+): Promise<number> {
   const input = await readArtifact(args.source, 'Signed evidence package input', dependencies);
   if (!input.trim()) {
     throw new CliUsageError(
@@ -193,3 +200,22 @@ export async function runEvidenceCommand(
   }
   return EXIT_CODES.SUCCESS;
 }
+
+const EVIDENCE_COMMAND_HANDLERS = Object.freeze({
+  'inspect-archive': runInspectArchiveCommand,
+  'sign-artifact': runSignArtifactCommand,
+  'verify-signature': runVerifySignatureCommand,
+} satisfies DiscriminatedCommandHandlerMap<
+  EvidenceCommandArguments,
+  [EvidenceCommandDependencies],
+  number
+>);
+
+function runEvidenceCommand(
+  args: EvidenceCommandArguments,
+  dependencies: EvidenceCommandDependencies,
+): Promise<number> {
+  return runDiscriminatedCommandHandler(EVIDENCE_COMMAND_HANDLERS, args, dependencies);
+}
+
+export { EVIDENCE_COMMAND_HANDLERS, runEvidenceCommand };
