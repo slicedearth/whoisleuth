@@ -24,13 +24,6 @@
       "sampleCount": 1
     },
     {
-      "id": "local-bulk-analysis-postfix-20260822",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node26",
-      "sampleBasis": "exact-no-retry-changed-bulk-spec-postfix",
-      "sampleCount": 1
-    },
-    {
       "id": "browser-local-deferred-loading-20260901",
       "lane": "browser",
       "environmentClass": "local-darwin-arm64-chromium-node26-no-retry-production-build",
@@ -71,6 +64,13 @@
       "environmentClass": "local-darwin-arm64-node24",
       "sampleBasis": "exact-seven-route-controller-tests",
       "sampleCount": 1
+    },
+    {
+      "id": "browser-local-e2e-split-20260901",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry",
+      "sampleBasis": "exact-one-hundred-moved-tests-and-auth-setup",
+      "sampleCount": 1
     }
   ],
   "files": [
@@ -98,9 +98,9 @@
     {
       "file": "e2e/auth.setup.ts",
       "lane": "browser_setup",
-      "weightMs": 48,
+      "weightMs": 47,
       "sampleCount": 1,
-      "provenanceId": "browser-local-change-60400ba9"
+      "provenanceId": "browser-local-e2e-split-20260901"
     },
     {
       "file": "e2e/auth.spec.ts",
@@ -126,9 +126,23 @@
     {
       "file": "e2e/bulk-analysis.spec.ts",
       "lane": "browser",
-      "weightMs": 32155,
+      "weightMs": 21440,
       "sampleCount": 1,
-      "provenanceId": "local-bulk-analysis-postfix-20260822"
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
+      "file": "e2e/bulk-presentation.spec.ts",
+      "lane": "browser",
+      "weightMs": 9031,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
+      "file": "e2e/bulk-session-workflows.spec.ts",
+      "lane": "browser",
+      "weightMs": 6867,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
     },
     {
       "file": "e2e/candidate-handoff.spec.ts",
@@ -159,6 +173,13 @@
       "provenanceId": "browser-local-start-60400ba9"
     },
     {
+      "file": "e2e/case-import-workflows.spec.ts",
+      "lane": "browser",
+      "weightMs": 8753,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
       "file": "e2e/case-relationship-workflows.spec.ts",
       "lane": "browser",
       "weightMs": 25231,
@@ -166,11 +187,18 @@
       "provenanceId": "browser-local-start-60400ba9"
     },
     {
+      "file": "e2e/case-response-lifecycle.spec.ts",
+      "lane": "browser",
+      "weightMs": 26709,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
       "file": "e2e/cases.spec.ts",
       "lane": "browser",
-      "weightMs": 46341,
+      "weightMs": 30668,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-e2e-split-20260901"
     },
     {
       "file": "e2e/collection-pagination.spec.ts",
@@ -231,9 +259,9 @@
     {
       "file": "e2e/design-system.spec.ts",
       "lane": "browser",
-      "weightMs": 47033,
+      "weightMs": 17850,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-e2e-split-20260901"
     },
     {
       "file": "e2e/discover.spec.ts",
@@ -278,11 +306,32 @@
       "provenanceId": "browser-local-start-60400ba9"
     },
     {
+      "file": "e2e/lookup-anchor-navigation.spec.ts",
+      "lane": "browser",
+      "weightMs": 18849,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
+      "file": "e2e/lookup-evidence-design.spec.ts",
+      "lane": "browser",
+      "weightMs": 16543,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
       "file": "e2e/lookup-input.spec.ts",
       "lane": "browser",
       "weightMs": 23518,
       "sampleCount": 1,
       "provenanceId": "browser-local-start-60400ba9"
+    },
+    {
+      "file": "e2e/lookup-interaction-design.spec.ts",
+      "lane": "browser",
+      "weightMs": 20029,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-e2e-split-20260901"
     },
     {
       "file": "e2e/lookup-network-evidence.spec.ts",

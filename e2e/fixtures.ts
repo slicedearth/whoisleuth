@@ -86,7 +86,7 @@ export async function installNetworkGuard(context: BrowserContext, allowedOrigin
 }
 
 type Options = {
-  // Opt-in, defaults to false: only bulk-analysis.spec.ts's deliberately
+  // Opt-in, defaults to false: only the Bulk analysis specifications'
   // invalid-domain scans (see runBulkScan) legitimately produce Chrome's
   // 400-response console noise as expected, handled behavior. Every other
   // spec keeps the guard fully strict.

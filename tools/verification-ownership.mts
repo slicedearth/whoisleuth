@@ -106,7 +106,12 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
     id: 'case-domain', area: 'Case domain and response lifecycle', priority: 40,
     matches: (value: string) => value.startsWith('packages/cases/'),
     focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts', 'test/case-portability-lifecycle.test.mts', 'test/model-contract-properties.test.mts'),
-    focusedBrowser: browser('e2e/cases.spec.ts', 'e2e/case-evidence-workflows.spec.ts'),
+    focusedBrowser: browser(
+      'e2e/cases.spec.ts',
+      'e2e/case-evidence-workflows.spec.ts',
+      'e2e/case-response-lifecycle.spec.ts',
+      'e2e/case-import-workflows.spec.ts',
+    ),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'critical-mutation', 'analyst-journey-assurance'),
     browserRequired: true,
   }),
