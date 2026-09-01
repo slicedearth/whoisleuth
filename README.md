@@ -66,7 +66,8 @@ flows. See the [privacy notice](PRIVACY.md) for retention, export and deletion.
 
 ## Quick start
 
-Requirements: Node.js 24 or later and npm.
+Requirements: Node.js 24 or later and npm. Repository verification uses the
+exact runtime in `.nvmrc`; packaged CLI smoke checks also run on Node.js 26.
 
 ```bash
 npm ci

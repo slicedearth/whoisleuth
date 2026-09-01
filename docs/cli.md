@@ -12,7 +12,9 @@ lists the network, recipient, retention and export boundary for every command.
 
 ## Installation
 
-Public releases require Node.js 24 or later:
+Public releases require Node.js 24 or later. Release verification uses the
+exact Node.js 24 maintainer runtime and separately exercises the installed
+package on Node.js 26:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help

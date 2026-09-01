@@ -67,6 +67,17 @@ jobs:
             --report="$RUNNER_TEMP/test-duration-report-3.txt" \
             | tee "$RUNNER_TEMP/test-duration-health.md"
           cat "$RUNNER_TEMP/test-duration-health.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build a directly reviewable unit timing candidate
+        run: |
+          npm run verification:timing:update-candidate -- \
+            --lane=unit \
+            --report="$RUNNER_TEMP/test-duration-report-1.txt" \
+            --report="$RUNNER_TEMP/test-duration-report-2.txt" \
+            --report="$RUNNER_TEMP/test-duration-report-3.txt" \
+            --provenance-id="unit-ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --environment=linux-x64-node24-ci \
+            --sample-basis=median-of-three-complete-unit-runs \
+            > "$RUNNER_TEMP/verification-timing-unit-candidate.json"
       - name: Upload duration evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -75,5 +86,6 @@ jobs:
           path: |
             ${{ runner.temp }}/test-duration-report-*.txt
             ${{ runner.temp }}/test-duration-health.md
+            ${{ runner.temp }}/verification-timing-unit-candidate.json
           if-no-files-found: ignore
           retention-days: 14

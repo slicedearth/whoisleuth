@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 
 import { buildAnalystJourneyAssurance, parseAnalystJourneySource } from '../tools/analyst-journey-assurance.mts';
 import { selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
+import { createTestDurationReport } from '../tools/test-duration-reporter.mts';
 import {
   buildBalancedBrowserShardPlan,
   buildVerificationTimingUpdateCandidate,
@@ -76,61 +77,68 @@ describe('verification architecture contracts', () => {
     }
   });
 
-  test('adds bounded provenance while retiring the completely replaced source measurement', () => {
+  test('builds a complete median-of-three unit candidate and retires replaced provenance', () => {
     const retained = readVerificationTimingProfile();
     assert.ok(retained.provenance.length < MAX_TIMING_PROVENANCE);
-    const provenanceUse = new Map<string, number>();
-    for (const file of retained.files) {
-      provenanceUse.set(file.provenanceId, (provenanceUse.get(file.provenanceId) ?? 0) + 1);
-    }
-    const unitProvenance = retained.provenance
-      .filter((item) => item.lane === 'unit')
-      .sort((left, right) => (
-        (provenanceUse.get(left.id) ?? 0) - (provenanceUse.get(right.id) ?? 0)
-        || left.id.localeCompare(right.id)
-      ))[0];
-    assert.ok(unitProvenance);
-    const replaceable = retained.files.filter((file) => file.provenanceId === unitProvenance.id);
-    assert.ok(replaceable.length > 0 && replaceable.every((file) => file.lane === 'unit'));
+    const unitFiles = retained.files.filter((file) => file.lane === 'unit');
+    const replacedProvenance = new Set(unitFiles.map((file) => file.provenanceId));
+    assert.ok(unitFiles.length > 0 && replacedProvenance.size > 0);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
-    const report = path.join(directory, 'unit.xml');
-    const testCases = replaceable.map((file) => (
-      `  <testcase name="catalogue" time="0.012" file="${path.resolve(file.file)}"/>`
-    ));
-    writeFileSync(report, [
-      '<testsuites>',
-      ...testCases,
-      `  <!-- tests ${replaceable.length} -->`,
-      `  <!-- pass ${replaceable.length} -->`,
-      '  <!-- fail 0 -->',
-      '  <!-- cancelled 0 -->',
-      '  <!-- skipped 0 -->',
-      '  <!-- todo 0 -->',
-      '</testsuites>',
-    ].join('\n'));
+    const reports = [10, 12, 20].map((durationMs, index) => {
+      const report = path.join(directory, `unit-${index + 1}.txt`);
+      writeFileSync(report, createTestDurationReport(
+        unitFiles.map((file) => ({ name: 'catalogue', file: file.file, durationMs, failed: false })),
+        20,
+        {
+          passed: unitFiles.length,
+          failed: 0,
+          cancelled: 0,
+          skipped: 0,
+          todo: 0,
+          durationMs: durationMs * unitFiles.length,
+        },
+      ));
+      return report;
+    });
     try {
       const profile = buildVerificationTimingUpdateCandidate([
         '--update-candidate',
         '--lane=unit',
-        `--report=${report}`,
+        ...reports.map((report) => `--report=${report}`),
         '--provenance-id=unit-local-provenance-replacement-test',
         '--environment=local-test-environment',
         '--sample-basis=exact-provenance-replacement-regression',
-        '--sample-count=1',
       ]);
       assert.ok(profile.provenance.length <= MAX_TIMING_PROVENANCE);
       assert.ok(profile.provenance.some((item) => item.id === 'unit-local-provenance-replacement-test'));
-      assert.ok(!profile.provenance.some((item) => item.id === unitProvenance.id));
+      assert.ok(!profile.provenance.some((item) => replacedProvenance.has(item.id)));
       assert.deepEqual(
-        profile.files.find((item) => item.file === replaceable[0]!.file),
+        profile.files.find((item) => item.file === unitFiles[0]!.file),
         {
-          file: replaceable[0]!.file,
+          file: unitFiles[0]!.file,
           lane: 'unit',
           weightMs: 12,
-          sampleCount: 1,
+          sampleCount: 3,
           provenanceId: 'unit-local-provenance-replacement-test',
         },
       );
+      const partial = path.join(directory, 'partial.txt');
+      const partialFiles = unitFiles.slice(0, -1);
+      writeFileSync(partial, createTestDurationReport(
+        partialFiles.map((file) => ({ name: 'catalogue', file: file.file, durationMs: 1, failed: false })),
+        20,
+        { passed: partialFiles.length, failed: 0, cancelled: 0, skipped: 0, todo: 0, durationMs: partialFiles.length },
+      ));
+      assert.throws(() => buildVerificationTimingUpdateCandidate([
+        '--update-candidate',
+        '--lane=unit',
+        `--report=${partial}`,
+        `--report=${partial}`,
+        `--report=${partial}`,
+        '--provenance-id=unit-incomplete-regression-test',
+        '--environment=local-test-environment',
+        '--sample-basis=incomplete-regression',
+      ]), /complete maintained unit inventory/u);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

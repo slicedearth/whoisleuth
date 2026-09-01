@@ -102,7 +102,7 @@ describe('test duration report', () => {
     ], 20, { passed: 2, failed: 0, cancelled: 0, skipped: 0, todo: 0, durationMs: wall }));
     const profile: VerificationTimingProfile = Object.freeze({
       profileVersion: 1,
-      sourceRevision: 'a'.repeat(40),
+      inventoryFingerprint: 'a'.repeat(64),
       provenance: Object.freeze([Object.freeze({
         id: 'unit', lane: 'unit', environmentClass: 'fixture', sampleBasis: 'fixture', sampleCount: 1,
       })]),

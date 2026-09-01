@@ -7,7 +7,7 @@ tasks.
 
 ## Requirements
 
-- Node.js 24 or later
+- Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
 

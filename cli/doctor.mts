@@ -66,8 +66,8 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
       label: 'Node runtime',
       state: nodeSupported ? 'pass' : 'partial',
       detail: nodeSupported
-        ? `Node ${nodeVersion} satisfies the supported Node ${MINIMUM_NODE_MAJOR}+ runtime.`
-        : `Node ${nodeVersion} is below the supported Node ${MINIMUM_NODE_MAJOR}+ runtime.`,
+        ? `Node ${nodeVersion} meets the minimum Node ${MINIMUM_NODE_MAJOR} runtime requirement.`
+        : `Node ${nodeVersion} is below the minimum Node ${MINIMUM_NODE_MAJOR} runtime requirement.`,
     }),
     Object.freeze({
       id: 'platform',

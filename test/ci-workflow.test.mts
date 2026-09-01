@@ -110,20 +110,24 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s{2}quality:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}unit:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}browser:\s*$/mu);
+    assert.match(WORKFLOW, /^\s{2}browser-health:\s*$/mu);
+    assert.match(WORKFLOW, /^\s{2}cli-runtime:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}verify:\s*$/mu);
     assert.match(WORKFLOW, /^concurrency:\s*\n\s{2}group: ci-/mu);
     assert.match(WORKFLOW, /^\s{2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser$/mu);
-    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 3);
+    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
+    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 5);
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
     const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
     assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/gmu), 3);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/gmu), 4);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}UNIT_RESULT: \$\{\{ needs\.unit\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}$/mu);
+    assert.match(WORKFLOW, /^\s{10}BROWSER_HEALTH_RESULT: \$\{\{ needs\.browser-health\.result \}\}$/mu);
+    assert.match(WORKFLOW, /^\s{10}CLI_RUNTIME_RESULT: \$\{\{ needs\.cli-runtime\.result \}\}$/mu);
 
     const actions = pinnedActions(WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [
@@ -136,6 +140,12 @@ describe('continuous integration workflow', () => {
       'actions/setup-node',
       'actions/upload-artifact',
       'actions/upload-artifact',
+      'actions/checkout',
+      'actions/setup-node',
+      'actions/download-artifact',
+      'actions/upload-artifact',
+      'actions/checkout',
+      'actions/setup-node',
     ]);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
@@ -178,6 +188,13 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s{6}WHOISLEUTH_PLAYWRIGHT_RUN_KIND: \$\{\{ matrix\.kind \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}WHOISLEUTH_PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}path: playwright-results\/$/mu);
+    assert.match(WORKFLOW, /^\s{10}pattern: playwright-results-\*-of-4$/mu);
+    assert.match(WORKFLOW, /^\s{10}merge-multiple: true$/mu);
+    assert.match(WORKFLOW, /npm run test:e2e:aggregate -- "\$\{reports\[@\]\}" > "\$RUNNER_TEMP\/playwright-browser-aggregate\.json"/u);
+    assert.equal(PACKAGE_MANIFEST.scripts?.['test:e2e:aggregate'], 'node tools/playwright-shard-aggregate.mts');
+    assert.match(WORKFLOW, /npm run verification:timing:update-candidate --/u);
+    assert.match(WORKFLOW, /^\s{10}node-version: 26$/mu);
+    assert.match(WORKFLOW, /^\s+run: npm run cli:package:check$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
     assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
@@ -327,8 +344,12 @@ describe('continuous integration workflow', () => {
       assert.match(TEST_HEALTH_WORKFLOW, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
     }
     assert.match(TEST_HEALTH_WORKFLOW, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
+    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
+    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /--sample-count=/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-report-\*\.txt$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-health\.md$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/verification-timing-unit-candidate\.json$/mu);
     assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report/mu);
     assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
     const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
@@ -339,6 +360,8 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:properties'] ?? '', /verification-state-machines\.test\.mts/u);
+    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties:stress'] ?? '', /WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER=10/u);
+    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties:stress'] ?? '', /WHOISLEUTH_FAST_CHECK_SEED=334462/u);
     assert.equal(PACKAGE_MANIFEST.scripts?.['test:duration-health'], 'node tools/test-duration-health.mts');
   });
 });

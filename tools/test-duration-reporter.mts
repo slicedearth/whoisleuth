@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 const DEFAULT_LIMIT = 20;
 const MAX_REPORTED_NAME_LENGTH = 180;
 const UNKNOWN_FILE = '(unknown file)';
+export const MAX_TEST_DURATION_REPORT_BYTES = 4 * 1024 * 1024;
+const MAX_TEST_DURATION_MS = 30 * 60 * 1_000;
+const SAFE_UNIT_PATH = /^test\/[a-zA-Z0-9._-]+\.test\.mts$/u;
+const DATA_KEYS = new Set(['version', 'totals', 'files']);
+const TOTAL_KEYS = new Set(['passed', 'failed', 'cancelled', 'skipped', 'todo', 'durationMs']);
+const FILE_KEYS = new Set(['file', 'durationMs', 'tests', 'failures']);
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const TEST_DURATION_DATA_BEGIN = '--- WHOISLEUTH TEST DURATION DATA V1 BEGIN ---';
 export const TEST_DURATION_DATA_END = '--- WHOISLEUTH TEST DURATION DATA V1 END ---';
@@ -37,6 +43,88 @@ export type TestDurationData = Readonly<{
   totals: TestRunTotals;
   files: readonly TestDurationFileSummary[];
 }>;
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && Array.isArray(value) === false;
+}
+
+function exactKeys(value: UnknownRecord, expected: ReadonlySet<string>, label: string): void {
+  const keys = Object.keys(value);
+  if (keys.length !== expected.size || keys.some((key) => !expected.has(key))) {
+    throw new TypeError(`${label} must use only the documented fields.`);
+  }
+}
+
+function boundedInteger(value: unknown, label: string, minimum: number, maximum: number): number {
+  if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum) {
+    throw new TypeError(`${label} is outside the maintained integer bound.`);
+  }
+  return Number(value);
+}
+
+function boundedDuration(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_TEST_DURATION_MS) {
+    throw new TypeError(`${label} is outside the maintained duration bound.`);
+  }
+  return value;
+}
+
+function parseDurationFile(value: unknown, index: number): TestDurationFileSummary {
+  if (!isRecord(value)) throw new TypeError(`Duration file ${index + 1} must be an object.`);
+  exactKeys(value, FILE_KEYS, `Duration file ${index + 1}`);
+  if (typeof value.file !== 'string' || !SAFE_UNIT_PATH.test(value.file)) {
+    throw new TypeError(`Duration file ${index + 1} must identify a maintained top-level unit test.`);
+  }
+  return Object.freeze({
+    file: value.file,
+    durationMs: boundedDuration(value.durationMs, `Duration for ${value.file}`),
+    tests: boundedInteger(value.tests, `Test count for ${value.file}`, 1, 100_000),
+    failures: boundedInteger(value.failures, `Failure count for ${value.file}`, 0, 100_000),
+  });
+}
+
+export function parseTestDurationData(input: string): TestDurationData {
+  const bytes = Buffer.byteLength(input, 'utf8');
+  if (bytes < 1 || bytes > MAX_TEST_DURATION_REPORT_BYTES) {
+    throw new TypeError('Test duration report has an invalid byte count.');
+  }
+  const begin = input.indexOf(TEST_DURATION_DATA_BEGIN);
+  const end = input.indexOf(TEST_DURATION_DATA_END);
+  if (begin < 0 || end < begin || input.indexOf(TEST_DURATION_DATA_BEGIN, begin + 1) >= 0 || input.indexOf(TEST_DURATION_DATA_END, end + 1) >= 0) {
+    throw new TypeError('Test duration report must contain exactly one complete machine-data block.');
+  }
+  const json = input.slice(begin + TEST_DURATION_DATA_BEGIN.length, end).trim();
+  let parsed: unknown;
+  try { parsed = JSON.parse(json) as unknown; } catch { throw new TypeError('Test duration machine data must be valid JSON.'); }
+  if (!isRecord(parsed)) throw new TypeError('Test duration machine data must be an object.');
+  exactKeys(parsed, DATA_KEYS, 'Test duration machine data');
+  if (parsed.version !== 1) throw new TypeError('Test duration machine data must use version 1.');
+  if (!isRecord(parsed.totals)) throw new TypeError('Test duration totals must be an object.');
+  exactKeys(parsed.totals, TOTAL_KEYS, 'Test duration totals');
+  const totals = Object.freeze({
+    passed: boundedInteger(parsed.totals.passed, 'Passed count', 0, 1_000_000),
+    failed: boundedInteger(parsed.totals.failed, 'Failed count', 0, 1_000_000),
+    cancelled: boundedInteger(parsed.totals.cancelled, 'Cancelled count', 0, 1_000_000),
+    skipped: boundedInteger(parsed.totals.skipped, 'Skipped count', 0, 1_000_000),
+    todo: boundedInteger(parsed.totals.todo, 'Todo count', 0, 1_000_000),
+    durationMs: boundedDuration(parsed.totals.durationMs, 'Run duration'),
+  });
+  if (totals.failed || totals.cancelled || totals.skipped || totals.todo || totals.passed < 1) {
+    throw new TypeError('Timing health requires a complete passing, non-cancelled, non-skipped run.');
+  }
+  if (!Array.isArray(parsed.files) || parsed.files.length < 1 || parsed.files.length > 1_000) {
+    throw new TypeError('Test duration files exceed the maintained inventory bound.');
+  }
+  const files = Object.freeze(parsed.files.map(parseDurationFile));
+  const identities = files.map((file) => file.file);
+  if (new Set(identities).size !== identities.length) throw new TypeError('Test duration file identities must be unique.');
+  if (files.some((file) => file.failures !== 0) || files.reduce((sum, file) => sum + file.tests, 0) !== totals.passed) {
+    throw new TypeError('Test duration file summaries do not match the accepted run totals.');
+  }
+  return Object.freeze({ version: 1, totals, files });
+}
 
 function boundedName(value: string): string {
   const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
