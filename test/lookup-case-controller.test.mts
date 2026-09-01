@@ -7,9 +7,43 @@ import {
 } from '../frontend/src/lib/controllers/lookup-case-controller.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export.ts';
+import type { ResolvedAbuseRecipient } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
+import type { CheckpointFact } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 
 function unused(): Promise<never> {
   throw new Error('Unused test dependency');
+}
+
+function fixtureFact(field = 'dns.mx'): CheckpointFact {
+  return {
+    version: 1 as const,
+    field,
+    category: 'dns',
+    label: 'MX hosts',
+    value: 'mx.case-context.example',
+    source: 'DNS',
+    sourceState: 'success' as const,
+    observedAt: '2026-07-29T01:00:00.000Z',
+    collectionDepth: 'deep' as const,
+    completeness: 'complete' as const,
+    truncated: false,
+    limitations: [],
+    sourceSchema: {
+      collection: 'lookup_result' as const,
+      schema: 'whoisleuth.lookup-evidence',
+      version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    },
+  };
+}
+
+function fixtureApi(overrides: Partial<LookupCaseApi> = {}): LookupCaseApi {
+  return {
+    getByDomain: unused,
+    open: unused,
+    addNote: unused,
+    edit: unused,
+    ...overrides,
+  };
 }
 
 describe('Lookup case controller', () => {
@@ -115,25 +149,7 @@ describe('Lookup case controller', () => {
       },
     };
     const controller = new LookupCaseController(api);
-    const result = await controller.recordCheckpoint(record, [{
-      version: 1,
-      field: 'dns.mx',
-      category: 'dns',
-      label: 'MX hosts',
-      value: 'mx.case-context.example',
-      source: 'DNS',
-      sourceState: 'success',
-      observedAt: '2026-07-29T01:00:00.000Z',
-      collectionDepth: 'deep',
-      completeness: 'complete',
-      truncated: false,
-      limitations: [],
-      sourceSchema: {
-        collection: 'lookup_result',
-        schema: 'whoisleuth.lookup-evidence',
-        version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-      },
-    }], ['dns.mx']);
+    const result = await controller.recordCheckpoint(record, [fixtureFact()], ['dns.mx']);
 
     assert.match(result.status, /Saved 1 analyst-selected checkpoint fact/u);
     const patch = patches[0];
@@ -169,5 +185,159 @@ describe('Lookup case controller', () => {
       summary: 'Prepared Incident response brief for case-context.example with 2 contradictions and 1 unknown record.',
       target: 'Local investigation brief generated 2026-07-29T01:30:00.000Z',
     });
+  });
+
+  test('handles absent create context, bounded pruning, and both open failure forms', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    assert.deepEqual(await new LookupCaseController(fixtureApi()).open('', {}, 'fast'), { record: null, status: '' });
+
+    const created = await new LookupCaseController(fixtureApi({
+      open: async () => ({ record, cases: [record], created: true, pruned: 1 }),
+    })).open(record.domain, {}, 'fast');
+    assert.match(created.status, /pruned 1 old evidence snapshot/u);
+
+    const existing = await new LookupCaseController(fixtureApi({
+      open: async () => ({ record, cases: [record], created: false, pruned: 0 }),
+      edit: async () => ({ record, cases: [record], pruned: 2 }),
+    })).open(record.domain, {}, 'deep');
+    assert.match(existing.status, /pruned 2 old evidence snapshots/u);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      open: async () => { throw new Error('Case storage denied.'); },
+    })).open(record.domain, {}, 'fast');
+    assert.equal(explicit.status, 'Case storage denied.');
+    const fallback = await new LookupCaseController(fixtureApi({
+      open: async () => { throw 'unknown failure'; },
+    })).open(record.domain, {}, 'fast');
+    assert.equal(fallback.status, 'Could not open the case.');
+  });
+
+  test('validates notes and preserves the retained record across write failures', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const controller = new LookupCaseController(fixtureApi());
+    assert.deepEqual(await controller.appendNote(null, 'note'), { record: null, status: '' });
+    assert.deepEqual(await controller.appendNote(record, '   '), { record, status: 'A note cannot be empty.' });
+
+    const saved = await new LookupCaseController(fixtureApi({
+      addNote: async (_id, note) => {
+        assert.equal(note, 'reviewed note');
+        return { record, cases: [record], pruned: 1 };
+      },
+    })).appendNote(record, ' reviewed note ');
+    assert.equal(saved.clearNote, true);
+    assert.match(saved.status, /pruned 1 old evidence snapshot/u);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      addNote: async () => { throw new Error('Note write denied.'); },
+    })).appendNote(record, 'note');
+    assert.deepEqual(explicit, { record, status: 'Note write denied.' });
+    const fallback = await new LookupCaseController(fixtureApi({
+      addNote: async () => { throw null; },
+    })).appendNote(record, 'note');
+    assert.deepEqual(fallback, { record, status: 'Could not add the note.' });
+  });
+
+  test('records one reviewed response route and rejects absent or duplicate actions', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const route: ResolvedAbuseRecipient = {
+      id: 'registrar-email',
+      kind: 'network_hosting',
+      channel: 'email',
+      contact: 'abuse@provider.example',
+      source: 'RDAP',
+      limitations: ['Delivery was not tested.'],
+      actionType: 'network_hosting_report',
+    };
+    const controller = new LookupCaseController(fixtureApi());
+    assert.match((await controller.recordRecipient(null, route)).status, /Create or open/u);
+
+    const duplicate = updateCase([record], record.id, { action: {
+      type: route.actionType,
+      recipient: route.contact.toUpperCase(),
+      contactSource: route.source,
+      contactLimitations: [...route.limitations],
+      state: 'planned',
+    } }, '2026-07-29T01:01:00.000Z').record;
+    assert.match((await controller.recordRecipient(duplicate, route)).status, /already recorded/u);
+
+    const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    const saved = await new LookupCaseController(fixtureApi({
+      edit: async (_id, value) => {
+        patches.push(value);
+        return { record, cases: [record], pruned: 2 };
+      },
+    })).recordRecipient(record, route);
+    assert.deepEqual(patches[0]?.action, {
+      type: 'network_hosting_report',
+      recipient: 'abuse@provider.example',
+      contactSource: 'RDAP',
+      contactLimitations: ['Delivery was not tested.'],
+      state: 'planned',
+    });
+    assert.match(saved.status, /network hosting route.*pruned 2/iu);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw new Error('Route write denied.'); },
+    })).recordRecipient(record, route);
+    assert.equal(explicit.status, 'Route write denied.');
+    const fallback = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw undefined; },
+    })).recordRecipient(record, route);
+    assert.equal(fallback.status, 'Could not record the response route.');
+  });
+
+  test('requires observed checkpoint facts and records reviewed transition plans', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const controller = new LookupCaseController(fixtureApi());
+    assert.match((await controller.recordCheckpoint(null, [], [])).status, /Create or open/u);
+    assert.match((await controller.recordCheckpoint(record, [fixtureFact()], [])).status, /Select at least one/u);
+
+    const saved = await new LookupCaseController(fixtureApi({
+      edit: async () => ({ record, cases: [record], pruned: 2 }),
+    })).recordCheckpoint(record, [fixtureFact()], ['dns.mx'], { 'dns.mx': 'change' });
+    assert.match(saved.status, /1 analyst-selected checkpoint fact with a reviewed transition plan.*pruned 2/iu);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw new Error('Checkpoint write denied.'); },
+    })).recordCheckpoint(record, [fixtureFact()], ['dns.mx']);
+    assert.equal(explicit.status, 'Checkpoint write denied.');
+    const fallback = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw false; },
+    })).recordCheckpoint(record, [fixtureFact()], ['dns.mx']);
+    assert.equal(fallback.status, 'Could not save the evidence checkpoint.');
+  });
+
+  test('keeps brief handoff failures bounded and pluralizes the recorded summary', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const brief = {
+      target: record.domain,
+      taskLabel: 'Ownership review',
+      generatedAt: '2026-07-29T01:30:00.000Z',
+      contradictionCount: 1,
+      unknownCount: 2,
+    };
+    assert.match((await new LookupCaseController(fixtureApi()).recordBriefHandoff(null, brief)).status, /Create or open/u);
+    const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    const saved = await new LookupCaseController(fixtureApi({
+      edit: async (_id, value) => {
+        patches.push(value);
+        return { record, cases: [record], pruned: 1 };
+      },
+    })).recordBriefHandoff(record, brief);
+    assert.deepEqual(patches[0]?.trailEvent, {
+      kind: 'handoff',
+      summary: 'Prepared Ownership review brief for case-context.example with 1 contradiction and 2 unknown records.',
+      target: 'Local investigation brief generated 2026-07-29T01:30:00.000Z',
+    });
+    assert.match(saved.status, /pruned 1 old evidence snapshot/u);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw new Error('Brief write denied.'); },
+    })).recordBriefHandoff(record, brief);
+    assert.equal(explicit.status, 'Brief write denied.');
+    const fallback = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw 0; },
+    })).recordBriefHandoff(record, brief);
+    assert.equal(fallback.status, 'Could not record the investigation brief handoff.');
   });
 });

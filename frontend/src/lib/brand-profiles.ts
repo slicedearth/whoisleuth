@@ -1,13 +1,16 @@
-import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.ts';
 import {
   buildBrandProfileExport,
   mergeBrandProfiles,
   normalizeBrandProfile,
   serializeBrandProfileStore,
   MAX_PROFILES,
-  MAX_PROFILE_VALUES,
   normalizeBrandProfileId,
 } from './analysis/brand-profile-model.ts';
+import {
+  parseProfileList,
+  profileDomainKind,
+  profileSignals,
+} from './analysis/brand-profile-signals.ts';
 import type {
   DesiredPostureBaseline,
   MailProtectionProfile,
@@ -117,30 +120,8 @@ export async function activeProfile(): Promise<BrandProfile | null> {
   return (await loadProfiles()).find((profile) => profile.id === active) || null;
 }
 
-export function profileDomainKind(domain: string, profile: BrandProfile | null = null): 'official' | 'partner' | 'allowlisted' | null {
-  if (!profile || !domain) return null;
-  const target = domain.trim().toLowerCase().replace(/\.$/, '');
-  if (profile.officialDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'official';
-  if (profile.approvedPartnerDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'partner';
-  if (profile.allowlistedDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'allowlisted';
-  return null;
-}
-
 export function isDomainAllowlisted(domain: string, profile: BrandProfile | null = null) {
   return profileDomainKind(domain, profile) !== null;
-}
-
-export function profileSignals(domain: string, evidence: Record<string, unknown>, profile: BrandProfile | null = null) {
-  const trusted = profileDomainKind(domain, profile);
-  if (!profile || trusted) return { trusted, faviconMatch: false, faviconNearMatch: false, reusesOfficialAssets: false };
-  const exact = Boolean(evidence.faviconHash && profile.officialFaviconHash && evidence.faviconHash === profile.officialFaviconHash);
-  const left = evidence.faviconPHash;
-  const right = profile.officialFaviconPHash;
-  const distance = isInformativeFaviconHash(left) && isInformativeFaviconHash(right) ? hammingDistanceHex(left, right) : null;
-  const official = new Set(profile.officialDomains.map((value) => value.toLowerCase().replace(/\.$/, '')));
-  const reused = Array.isArray(evidence.externalAssetHosts)
-    && evidence.externalAssetHosts.some((host: unknown) => official.has(String(host).toLowerCase().replace(/\.$/, '')));
-  return { trusted: null, faviconMatch: exact, faviconNearMatch: !exact && distance !== null && distance <= 8, reusesOfficialAssets: reused };
 }
 
 export async function upsertProfile(raw: unknown, editingId = ''): Promise<BrandProfile> {
@@ -197,5 +178,7 @@ export async function exportProfiles() {
 }
 
 export function parseList(raw: string, lower = false) {
-  return [...new Set(raw.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean).map((value) => lower ? value.toLowerCase() : value))].slice(0, MAX_PROFILE_VALUES);
+  return parseProfileList(raw, lower);
 }
+
+export { profileDomainKind, profileSignals };

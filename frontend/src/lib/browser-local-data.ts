@@ -5,6 +5,7 @@ export const LOCAL_DATA_DATABASE_VERSION = 1;
 export const LOCAL_DATA_RECORD_STORE = 'records';
 export const LOCAL_DATA_MANIFEST_STORE = 'manifests';
 export const LOCAL_DATA_OPERATION_TIMEOUT_MS = 10_000;
+export const MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS = 60_000;
 export const MAX_LOCAL_DATA_COLLECTIONS = 16;
 export const MAX_LOCAL_DATA_RECORDS_PER_COLLECTION = 2_000;
 export const MAX_LOCAL_DATA_RECORD_ID_LENGTH = 256;
@@ -404,7 +405,14 @@ export class BrowserLocalDataProvider {
     this.databaseName = boundedIdentifier(options.databaseName || LOCAL_DATA_DATABASE_NAME, 'Database name', 160);
     this.codec = options.codec || plaintextJsonCodec;
     boundedIdentifier(this.codec.id, 'Codec identifier', MAX_LOCAL_DATA_CODEC_ID_LENGTH);
-    this.timeoutMs = options.timeoutMs || LOCAL_DATA_OPERATION_TIMEOUT_MS;
+    const timeoutMs = options.timeoutMs ?? LOCAL_DATA_OPERATION_TIMEOUT_MS;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS) {
+      throw new BrowserLocalDataError(
+        'INVALID_LOCAL_DATA_TIMEOUT',
+        `Browser-local operations require a timeout between 1 and ${MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS} milliseconds.`,
+      );
+    }
+    this.timeoutMs = timeoutMs;
     this.#factory = factory;
     this.#storage = storage;
     this.#now = options.now || (() => new Date());

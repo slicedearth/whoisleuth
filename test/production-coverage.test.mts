@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  PRODUCTION_COVERAGE_POLICY,
   parseProductionCoverage,
   validateProductionCoverage,
   validateProductionCoverageInventory,
@@ -31,6 +32,18 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
+  test('retains explicit floors for browser-local mutation and analyst-action boundaries', () => {
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/browser-local-data.ts'], {
+      lines: 80, branches: 65, functions: 75,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/controllers/lookup-case-controller.ts'], {
+      lines: 95, branches: 90, functions: 95,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/brand-profile-signals.ts'], {
+      lines: 95, branches: 90, functions: 100,
+    });
+  });
+
   test('aggregates executable records and enforces global, ownership-area, and critical-file thresholds', () => {
     const report = parseProductionCoverage([
       lcovRecord('lib/critical.mts', [10, 9, 8, 6, 5, 5]),

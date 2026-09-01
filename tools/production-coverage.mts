@@ -92,6 +92,9 @@ export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
   global: Object.freeze({ lines: 90, branches: 75, functions: 85 }),
   criticalFiles: Object.freeze({
     'packages/web-capture/anchored-artifact-writer.mts': Object.freeze({ lines: 90, branches: 75, functions: 85 }),
+    'frontend/src/lib/browser-local-data.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
+    'frontend/src/lib/controllers/lookup-case-controller.ts': Object.freeze({ lines: 95, branches: 90, functions: 95 }),
+    'frontend/src/lib/analysis/brand-profile-signals.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
   }),
   requiredAreas: Object.freeze([
     'runtime entry points',
