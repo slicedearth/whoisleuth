@@ -95,24 +95,24 @@ export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // The executable dependency graph remains independently capped with three
-// modules of structural headroom above the reviewed command-family closure.
+// modules of structural headroom above the reviewed 329-module runtime closure.
 // Two browser-safe domain-control paths remain explicit package roots because
-// released CLI archives permitted those deep imports. Byte and packed-entry
-// ceilings remain unchanged so smaller ownership modules cannot widen payloads.
-export const MAX_CLI_RUNTIME_MODULES = 328;
-export const MAX_CLI_PACKAGE_MODULES = 330;
+// released CLI archives permitted those deep imports. Splitting the WHOIS
+// parser by responsibility changes structure, not the independent byte limits.
+export const MAX_CLI_RUNTIME_MODULES = 332;
+export const MAX_CLI_PACKAGE_MODULES = 334;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but they remain bounded with
-// five inputs of headroom because TypeScript reads them while producing the
-// candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 320;
+// five inputs of headroom above the reviewed 319-input closure because
+// TypeScript reads them while producing the candidate.
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 324;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep four entries of structural headroom above the reviewed command-family
+// Keep four entries of structural headroom above the reviewed 330-entry
 // closure; packed and unpacked byte ceilings remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 330;
+export const MAX_CLI_PACKAGE_ENTRIES = 334;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
