@@ -176,7 +176,7 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
     assert.match(PLAYWRIGHT_CONFIG, /dependencies: performanceFirst \? \['performance-authority'\] : \['setup'\],/u);
     assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
-    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(performanceFirst \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
     assert.doesNotMatch(WORKFLOW, /frontend:authenticated-loading-report/u);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:built'],
@@ -184,7 +184,7 @@ describe('continuous integration workflow', () => {
     );
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
-      'playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
+      'WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
     );
 
     const consoleAuthorityBlock = requiredValue(

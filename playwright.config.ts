@@ -48,7 +48,7 @@ export default defineConfig({
   projects: [
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     chromiumProject,
-    ...(!isCI ? [localPerformanceAuthorityProject] : []),
+    ...(performanceFirst ? [localPerformanceAuthorityProject] : []),
   ],
   // CI builds the frontend as its own step, so the server here just starts
   // node directly. Local standalone runs still build automatically; the full

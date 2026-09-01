@@ -80,9 +80,12 @@ npm run security:staged
 git diff --check
 ```
 
-The required delivery sequence includes `npm run test:e2e:built`; ordinary
-interactive browser work can use `npm run test:e2e`. Report exact failures,
-retries, flakes and skips rather than describing a retried run as clean.
+The required delivery sequence includes `npm run test:e2e:built`; it runs the
+single-worker performance authority before the functional browser load.
+Ordinary interactive browser work can use `npm run test:e2e`, which excludes
+machine-timing ceilings so a focused functional run cannot contend with its own
+performance measurement. Report exact failures, retries, flakes and skips
+rather than describing a retried run as clean.
 
 Some checks deliberately read the repository, dependency graph, fixtures or
 generated contracts. They do not contact live investigation targets. Commands

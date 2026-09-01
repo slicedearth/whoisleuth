@@ -20,7 +20,7 @@
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { BULK_SCORE_CSV_HEADERS, bulkScoreCsvFields, ctCsvFields } from '$lib/analysis/bulk-export.ts';
-  import { prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
+  import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
   import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
@@ -611,7 +611,6 @@
     if(profileSourceState!=='ready'){indicatorStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before exporting defensive indicators.';return;}
     const reviewOptions={selectedDomains:[...shortlistedDomains],officialDomains:profile?.officialDomains||[],allowlistedDomains:profile?.allowlistedDomains||[],includeWildcards:indicatorWildcards};
     try{
-      const {buildDefensiveIndicatorExport}=await loadDeferredModule(()=>import('$lib/analysis/defensive-indicator-export.ts'),{signal:moduleController.signal});
       const reviewed=buildDefensiveIndicatorExport(reviewedIndicatorRows,{...reviewOptions,format:indicatorFormat==='stix'||indicatorFormat==='misp'?'domains':indicatorFormat});
       if(!reviewed.domains.length){indicatorStatus='Shortlist an eligible domain and mark its case Suspicious or Confirmed abuse before exporting.';return;}
       const sources=reviewed.entries.map((entry)=>entry.source);
