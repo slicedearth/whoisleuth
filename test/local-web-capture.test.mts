@@ -89,6 +89,31 @@ const fakeFetchResource = async (url: string) => new Response(
   { status: 200, headers: { 'content-type': url.includes('.js') ? 'text/javascript' : 'text/html' } },
 );
 
+function controlledDeadlineScheduler() {
+  let callback: (() => void) | null = null;
+  const timer = Object.freeze({}) as ReturnType<typeof setTimeout>;
+  return {
+    scheduler: Object.freeze({
+      schedule(candidate: () => void, delayMs: number) {
+        assert.equal(callback, null);
+        assert.ok(delayMs >= 1_000);
+        callback = candidate;
+        return timer;
+      },
+      cancel(candidate: ReturnType<typeof setTimeout>) {
+        assert.equal(candidate, timer);
+        callback = null;
+      },
+    }),
+    expire() {
+      assert.ok(callback);
+      const candidate = callback;
+      callback = null;
+      candidate();
+    },
+  };
+}
+
 function fakeBrowser(options: {
   hostname?: string;
   title?: string;
@@ -451,8 +476,11 @@ describe('optional local rendered capture package', () => {
   test('removes an owned private artefact whose write crosses the total deadline', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-write-deadline-test-'));
     const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    let writeStarted!: () => void;
+    const writing = new Promise<void>((resolve) => { writeStarted = resolve; });
     try {
-      await assert.rejects(() => captureRenderedPage({
+      const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1000,
       }, {
         launchBrowser: async () => fakeBrowser(),
@@ -463,6 +491,7 @@ describe('optional local rendered capture package', () => {
           try {
             const identity = await handle.stat();
             onCreated({ dev: identity.dev, ino: identity.ino });
+            writeStarted();
             await new Promise<void>((_resolve, reject) => {
               const abort = () => reject(signal.reason);
               if (signal.aborted) abort();
@@ -472,7 +501,11 @@ describe('optional local rendered capture package', () => {
             await handle.close();
           }
         },
-      }), /total-run deadline/u);
+        deadlineScheduler: deadline.scheduler,
+      });
+      await writing;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -811,22 +844,30 @@ describe('optional local rendered capture package', () => {
   test('aborts an admitted direct resource fetch at the shared total deadline', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-fetch-deadline-test-'));
     const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
     let requestAborted = false;
+    let requestStarted!: () => void;
+    const requesting = new Promise<void>((resolve) => { requestStarted = resolve; });
     try {
-      await assert.rejects(() => captureRenderedPage({
+      const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
       }, {
         launchBrowser: async () => fakeBrowser(),
         fetchResource: async (_url, options) => new Promise<Response>((_resolve, reject) => {
           const signal = options.signal;
           if (!signal) throw new Error('Capture request did not receive its total-run signal.');
+          requestStarted();
           signal.addEventListener('abort', () => {
             requestAborted = true;
             reject(signal.reason);
           }, { once: true });
         }),
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
-      }), /total-run deadline/u);
+        deadlineScheduler: deadline.scheduler,
+      });
+      await requesting;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
       assert.equal(requestAborted, true);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
