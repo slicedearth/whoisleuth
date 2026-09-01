@@ -38,16 +38,17 @@ describe('offline source-health composition', () => {
     assert.equal(report.summary.entries, 9);
     assert.deepEqual(report.summary.states, {
       current: 4,
-      limited: 1,
-      measured: 0,
+      limited: 0,
+      measured: 1,
       unproven: 4,
       stale: 0,
       unavailable: 0,
       malformed: 0,
     });
     assert.equal(report.summary.strictFailures, 0);
+    assert.match(report.limitations.join(' '), /corpus coverage only; it does not establish general accuracy or recall/iu);
     const technology = report.entries.find((item) => item.id === 'accuracy_technology_detection');
-    assert.equal(technology?.state, 'limited');
+    assert.equal(technology?.state, 'measured');
     assert.equal(technology?.itemCount, 78);
     assert.ok(report.entries
       .filter((item) => item.kind === 'evaluation' && item.id !== 'accuracy_technology_detection')

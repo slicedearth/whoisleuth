@@ -36,21 +36,21 @@ export const MINIMUM_MEASURED_CASES_PER_CLASS = 5;
 const CORPORA: readonly Readonly<{
   key: ReviewedAccuracyCorpusKey;
   label: string;
-  reviewedCases: () => Readonly<{ positive: number; benign: number }>;
+  reviewedCases: () => Readonly<{ total: number; positive: number; benign: number }>;
   limitation: string;
   nextStep: string;
 }>[] = Object.freeze([
   Object.freeze({
     key: 'lookalike-analysis',
     label: 'Lookalike analysis',
-    reviewedCases: () => ({ positive: 0, benign: 0 }),
+    reviewedCases: () => ({ total: 0, positive: 0, benign: 0 }),
     limitation: 'Synthetic confusable calibration does not establish precision on reviewed real-world observations.',
     nextStep: 'Review minimised positive and benign-collision examples with a documented redistribution basis.',
   }),
   Object.freeze({
     key: 'page-similarity',
     label: 'Page similarity',
-    reviewedCases: () => ({ positive: 0, benign: 0 }),
+    reviewedCases: () => ({ total: 0, positive: 0, benign: 0 }),
     limitation: 'Component comparison is deterministic, but no reviewed real-world corpus measures useful matches or collisions.',
     nextStep: 'Retain only minimised component observations and reviewed component-level expectations.',
   }),
@@ -58,30 +58,30 @@ const CORPORA: readonly Readonly<{
     key: 'technology-detection',
     label: 'Technology detection',
     reviewedCases: () => ({
-      positive: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind !== 'negative').length,
-      benign: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'negative').length,
+      total: TECHNOLOGY_REVIEWED_FIXTURES.length,
+      positive: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.expectedIds.length > 0).length,
+      benign: TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.negativeFor.length > 0).length,
     }),
-    limitation: 'The small source- and permission-reviewed reference corpus does not establish coverage on the wider web.',
-    nextStep: 'Add independently reviewed benign nearest-collision and mixed delivery-stack references with a documented licence or permission basis, without retaining page content.',
+    limitation: 'The source- and permission-reviewed reference corpus includes mixed controls and deliberate non-matches, but does not establish coverage on the wider web.',
+    nextStep: 'Keep source provenance current and add independent observations when catalogue evidence rules change.',
   }),
   Object.freeze({
     key: 'service-deprovision-cues',
     label: 'Service deprovision cues',
-    reviewedCases: () => ({ positive: 0, benign: 0 }),
+    reviewedCases: () => ({ total: 0, positive: 0, benign: 0 }),
     limitation: 'Provider cues remain investigative prompts and have no measured false-positive rate.',
     nextStep: 'Review minimised active, unresolved, deprovision-cue, and benign provider responses.',
   }),
   Object.freeze({
     key: 'certificate-grouping',
     label: 'Certificate grouping',
-    reviewedCases: () => ({ positive: 0, benign: 0 }),
+    reviewedCases: () => ({ total: 0, positive: 0, benign: 0 }),
     limitation: 'Grouping is structural and bounded, but usefulness has not been measured against reviewed investigations.',
     nextStep: 'Review minimised co-occurrence, wildcard, renewal, and unrelated-certificate examples.',
   }),
 ]);
 
-function readiness(positive: number, benign: number): ReviewedAccuracyCorpusStatus['readiness'] {
-  const reviewedCases = positive + benign;
+function readiness(reviewedCases: number, positive: number, benign: number): ReviewedAccuracyCorpusStatus['readiness'] {
   if (reviewedCases >= MINIMUM_MEASURED_CASES
     && positive >= MINIMUM_MEASURED_CASES_PER_CLASS
     && benign >= MINIMUM_MEASURED_CASES_PER_CLASS) return 'measured';
@@ -95,14 +95,13 @@ export function buildReviewedAccuracyStatus(now = new Date()) {
   if (!Number.isFinite(now.getTime())) throw new TypeError('Accuracy status generation time must be valid.');
   const corpora = CORPORA.map((corpus): ReviewedAccuracyCorpusStatus => {
     const reviewedCases = corpus.reviewedCases();
-    const total = reviewedCases.positive + reviewedCases.benign;
     return Object.freeze({
       key: corpus.key,
       label: corpus.label,
-      reviewedCases: total,
+      reviewedCases: reviewedCases.total,
       reviewedPositiveCases: reviewedCases.positive,
       reviewedBenignCases: reviewedCases.benign,
-      readiness: readiness(reviewedCases.positive, reviewedCases.benign),
+      readiness: readiness(reviewedCases.total, reviewedCases.positive, reviewedCases.benign),
       limitation: corpus.limitation,
       nextStep: corpus.nextStep,
     });
@@ -121,7 +120,7 @@ export function buildReviewedAccuracyStatus(now = new Date()) {
       limited: corpora.filter((corpus) => corpus.readiness === 'limited').length,
       unproven: corpora.filter((corpus) => corpus.readiness === 'unproven').length,
     }),
-    limitation: 'Case counts describe the checked-in reviewed corpora only. They do not establish general accuracy, recall, safety, ownership, intent, or maliciousness.',
+    limitation: 'Case counts describe the checked-in reviewed corpora only. A mixed case can contribute to both class counts. These counts do not establish general accuracy, recall, safety, ownership, intent, or maliciousness.',
   });
 }
 
@@ -129,7 +128,7 @@ function humanReport(report: ReturnType<typeof buildReviewedAccuracyStatus>): st
   const lines = ['Reviewed accuracy status', `Generated: ${report.generatedAt}`, ''];
   for (const corpus of report.corpora) {
     lines.push(`${corpus.label}: ${corpus.readiness} (${corpus.reviewedCases} reviewed case${corpus.reviewedCases === 1 ? '' : 's'})`);
-    lines.push(`  Balance: ${corpus.reviewedPositiveCases} positive, ${corpus.reviewedBenignCases} benign or collision case${corpus.reviewedBenignCases === 1 ? '' : 's'}`);
+    lines.push(`  Class coverage: ${corpus.reviewedPositiveCases} positive, ${corpus.reviewedBenignCases} benign or collision case${corpus.reviewedBenignCases === 1 ? '' : 's'}`);
     lines.push(`  Limitation: ${corpus.limitation}`);
     lines.push(`  Next: ${corpus.nextStep}`);
   }

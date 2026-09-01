@@ -301,7 +301,7 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
     limitations: Object.freeze([
       'This command reads checked-in metadata and fixtures only; it does not query upstream publishers, domains, providers or registries.',
       'Current means the local owner passed its reviewed age and integrity policy. It does not prove that the upstream source is the newest publication.',
-      'Unproven and limited evaluation states are not promoted to empirical accuracy claims.',
+      'Reviewed evaluation maturity describes checked-in corpus coverage only; it does not establish general accuracy or recall.',
     ]),
   });
 }
