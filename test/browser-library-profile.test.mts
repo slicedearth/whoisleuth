@@ -14,6 +14,7 @@ import {
   MAX_SCRIPT_ELEMENTS,
   analyzeBrowserLibraries,
 } from '../lib/browser-library-profile.mts';
+import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
 import { fastCheckParameters } from './helpers/fast-check-config.mts';
 
 const OBSERVED_AT = '2026-07-27T00:00:00.000Z';
@@ -41,7 +42,7 @@ describe('bounded browser-library profile', () => {
     assert.ok(requiredValue(profile.findings[0]).advisoryIdentifiers.includes('CVE-2020-11022'));
     assert.deepEqual(requiredValue(profile.findings[0]).knownExploitedIdentifiers, ['CVE-2020-11023']);
     assert.equal(requiredValue(profile.findings[0]).knownExploitedCount, 1);
-    assert.equal(profile.knownExploitedCatalog.version, '2026.08.03');
+    assert.equal(profile.knownExploitedCatalog.version, CISA_KEV_CATALOG.catalogVersion);
     assert.doesNotMatch(JSON.stringify(profile), /cdn\.example|private-marker|jquery\.min\.js/);
   });
 
