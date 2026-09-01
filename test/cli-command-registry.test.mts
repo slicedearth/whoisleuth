@@ -206,6 +206,25 @@ function referencedConstraintOptions(constraint: CliGrammarConstraint): readonly
 }
 
 describe('canonical CLI command registry', () => {
+  test('keeps each command\'s maintained metadata in one typed seed', () => {
+    const source = readFileSync(new URL('../cli/command-reference.mts', import.meta.url), 'utf8');
+    assert.equal([...source.matchAll(/: commandSeed\(\{/gu)].length, CLI_COMMAND_REGISTRY.length);
+    for (const retiredParallelMap of [
+      'COMMAND_USAGE_SEED',
+      'COMMAND_DETAILS_SEED',
+      'COMMAND_COLLECTION_SEED',
+      'OPTIONS_BY_COMMAND_SEED',
+      'POSITIONALS_BY_COMMAND_SEED',
+      'GRAMMAR_CONSTRAINTS_SEED',
+      'COMMAND_DESCRIPTIONS_SEED',
+      'HANDLER_OWNER_BY_COMMAND',
+      'NETWORK_EFFECT_BY_COMMAND',
+      'COMMON_COMMANDS',
+      'SCHEMA_IDENTIFIERS_BY_COMMAND',
+      'PRIMARY_ARTEFACTS_BY_COMMAND',
+    ]) assert.doesNotMatch(source, new RegExp(`\\b${retiredParallelMap}\\b`, 'u'));
+  });
+
   test('keeps one ordered, unique, deeply immutable command contract', () => {
     assert.ok(CLI_COMMAND_REGISTRY.length > 0);
     assert.deepEqual(CLI_COMMANDS, CLI_COMMAND_REGISTRY.map((definition) => definition.command));
