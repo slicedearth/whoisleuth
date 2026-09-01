@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 
 import type { Browser, Route } from '@playwright/test';
@@ -31,6 +33,7 @@ import {
 import { parseWebCaptureManifest } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const CAPTURE_ENTRY = fileURLToPath(new URL('../packages/web-capture/bin/whoisleuth-capture.mts', import.meta.url));
 
 function pngChunk(type: string, data: Buffer) {
   const length = Buffer.alloc(4);
@@ -175,6 +178,21 @@ function fakeBrowser(options: {
 }
 
 describe('optional local rendered capture package', () => {
+  test('entry point fails closed with bounded usage for incomplete capture and comparison commands', () => {
+    for (const args of [[], ['compare']]) {
+      const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
+        cwd: path.dirname(CAPTURE_ENTRY),
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      assert.equal(result.status, 2);
+      assert.equal(result.signal, null);
+      assert.equal(result.stdout, '');
+      assert.match(result.stderr, /^Capture error: Usage: whoisleuth-capture/u);
+      assert.ok(Buffer.byteLength(result.stderr, 'utf8') < 1_024);
+    }
+  });
+
   test('requires explicit authorisation and a new bounded output directory', () => {
     assert.throws(() => parseCaptureArguments(['https://example.test', '--output-dir', 'capture']), /authorize-rendered-capture/u);
     assert.throws(() => parseCaptureArguments(['http://user:secret@example.test', '--output-dir', 'capture', '--authorize-rendered-capture']), /credentials/u);

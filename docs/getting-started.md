@@ -68,6 +68,14 @@ so a focused functional run cannot contend with its own performance
 measurement. Report exact failures, retries, flakes and skips rather than
 describing a retried run as clean.
 
+The coverage gate measures all loaded production TypeScript, enforces the
+global line, branch and function floors, and retains stricter per-file floors
+for critical artefact I/O. Its inventory check also rejects any newly omitted
+source file. Type-only modules, compatibility re-exports, browser adapters,
+framework entries and executable entry points remain visible as a small,
+explicit list with an owning type, build, browser or process check; they are
+not silently counted as covered.
+
 Some checks deliberately read the repository, dependency graph, fixtures or
 generated contracts. They do not contact live investigation targets. Commands
 whose names describe drift, provider status or deployment self-checks can have
@@ -112,7 +120,7 @@ The less common commands below each have one narrow purpose:
 | `npm run privacy:check` | Verify the generated privacy/data-flow catalogue. |
 | `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
-| `npm run test:critical-io-coverage` | Enforce focused line, branch and function coverage for the anchored capture artefact writer. |
+| `npm run test:duration-health -- --report=/absolute/path` | Compare medians from exactly three complete unit profiles (repeat `--report` three times) without rewriting the retained timing baseline. |
 | `npm run frontend:loading-report` | Measure route closures against loading budgets. |
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |

@@ -67,6 +67,13 @@ async function selectPortRange(count: number): Promise<readonly number[]> {
   throw new Error(`Could not find ${count} consecutive free local ports from ${preferred}.`);
 }
 
+async function requirePortRangeFree(ports: readonly number[]): Promise<void> {
+  const occupied = (await Promise.all(ports.map(async (port) => ({ port, free: await portIsFree(port) }))))
+    .filter((item) => !item.free)
+    .map((item) => item.port);
+  if (occupied.length) throw new Error(`Playwright left local test ports occupied: ${occupied.join(', ')}.`);
+}
+
 function runBuild(): void {
   const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const child = spawnSync(command, ['run', 'build'], {
@@ -152,7 +159,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       '--workers=1',
       '--retries=0',
     ], performanceEnvironment);
-    if (performanceExit !== 0) return performanceExit;
+    if (performanceExit !== 0) {
+      await requirePortRangeFree(ports);
+      return performanceExit;
+    }
 
     const functionalRuns = plan.shards.map((shard, index) => {
       const identity = `${shard.shard}/${plan.shardCount}`;
@@ -164,6 +174,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       });
     });
     const exits = await Promise.all(functionalRuns.map((run) => run.promise));
+    await requirePortRangeFree(ports);
     if (exits.some((code) => code !== 0)) return 2;
 
     const summaries = [

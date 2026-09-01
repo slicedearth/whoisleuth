@@ -52,15 +52,28 @@ jobs:
             cat "$RUNNER_TEMP/source-health-report.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Profile the complete unit suite
+      - name: Profile the complete unit suite three times
         run: |
           set -o pipefail
-          npm run test:profile | tee "$RUNNER_TEMP/test-duration-report.txt"
-      - name: Upload duration profile
+          for run in 1 2 3; do
+            npm run test:profile > "$RUNNER_TEMP/test-duration-report-$run.txt"
+          done
+      - name: Compare median duration health
+        run: |
+          set -o pipefail
+          npm run test:duration-health -- \
+            --report="$RUNNER_TEMP/test-duration-report-1.txt" \
+            --report="$RUNNER_TEMP/test-duration-report-2.txt" \
+            --report="$RUNNER_TEMP/test-duration-report-3.txt" \
+            | tee "$RUNNER_TEMP/test-duration-health.md"
+          cat "$RUNNER_TEMP/test-duration-health.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload duration evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-duration-profile
-          path: ${{ runner.temp }}/test-duration-report.txt
+          path: |
+            ${{ runner.temp }}/test-duration-report-*.txt
+            ${{ runner.temp }}/test-duration-health.md
           if-no-files-found: ignore
           retention-days: 14

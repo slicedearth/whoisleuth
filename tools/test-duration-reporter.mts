@@ -1,8 +1,13 @@
 import type { TestEvent } from 'node:test/reporters';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DEFAULT_LIMIT = 20;
 const MAX_REPORTED_NAME_LENGTH = 180;
 const UNKNOWN_FILE = '(unknown file)';
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const TEST_DURATION_DATA_BEGIN = '--- WHOISLEUTH TEST DURATION DATA V1 BEGIN ---';
+export const TEST_DURATION_DATA_END = '--- WHOISLEUTH TEST DURATION DATA V1 END ---';
 
 export type TestDurationRecord = Readonly<{
   name: string;
@@ -20,6 +25,19 @@ export type TestRunTotals = Readonly<{
   durationMs: number;
 }>;
 
+export type TestDurationFileSummary = Readonly<{
+  file: string;
+  durationMs: number;
+  tests: number;
+  failures: number;
+}>;
+
+export type TestDurationData = Readonly<{
+  version: 1;
+  totals: TestRunTotals;
+  files: readonly TestDurationFileSummary[];
+}>;
+
 function boundedName(value: string): string {
   const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
   return normalized.length > MAX_REPORTED_NAME_LENGTH
@@ -28,10 +46,9 @@ function boundedName(value: string): string {
 }
 
 function relativeFile(value: string): string {
-  const normalized = value.replaceAll('\\', '/');
-  const marker = '/whois-rdap-tool/';
-  const position = normalized.lastIndexOf(marker);
-  return boundedName(position >= 0 ? normalized.slice(position + marker.length) : normalized) || UNKNOWN_FILE;
+  const relative = path.relative(REPOSITORY_ROOT, path.resolve(value)).split(path.sep).join('/');
+  if (!relative || relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) return UNKNOWN_FILE;
+  return boundedName(relative) || UNKNOWN_FILE;
 }
 
 function duration(value: number): string {
@@ -79,6 +96,18 @@ export function createTestDurationReport(
     todo: 0,
     durationMs: ordered.reduce((sum, record) => sum + record.durationMs, 0),
   });
+  const data: TestDurationData = Object.freeze({
+    version: 1,
+    totals,
+    files: Object.freeze([...byFile.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([file, summary]) => Object.freeze({
+        file,
+        durationMs: Number(summary.durationMs.toFixed(3)),
+        tests: summary.tests,
+        failures: summary.failures,
+      }))),
+  });
   const lines = [
     'Test duration profile',
     `Measured ${countLabel(ordered.length, 'test')} across ${countLabel(byFile.size, 'file')}; ${failures} failed.`,
@@ -96,6 +125,10 @@ export function createTestDurationReport(
       `${index + 1}. ${record.file} :: ${boundedName(record.name) || '(unnamed test)'}: ${duration(record.durationMs)}`
       + (record.failed ? ' [failed]' : '')
     )),
+    '',
+    TEST_DURATION_DATA_BEGIN,
+    JSON.stringify(data),
+    TEST_DURATION_DATA_END,
   ];
   return `${lines.join('\n')}\n`;
 }

@@ -30,7 +30,6 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
   'test:coverage',
-  'test:critical-io-coverage',
 ] as const);
 
 export const CI_BROWSER_PREREQUISITE_SCRIPTS = Object.freeze([
@@ -38,6 +37,20 @@ export const CI_BROWSER_PREREQUISITE_SCRIPTS = Object.freeze([
   'frontend:loading-report',
   'security:retire',
 ] as const);
+
+export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
+  'test:e2e:install',
+  'test:e2e:shard',
+  'frontend:authenticated-loading-report',
+  'test:e2e:summary',
+  'verification:artifacts',
+] as const);
+
+export type HostedCiScriptPlan = Readonly<{
+  quality: readonly string[];
+  unit: readonly string[];
+  browser: readonly string[];
+}>;
 
 function commandName(): string {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -87,20 +100,67 @@ function npmRun(script: string, extra: readonly string[] = []): void {
   run(commandName(), ['run', script, ...extra]);
 }
 
+function workflowJob(workflow: string, job: string): string {
+  const match = new RegExp(`\\n  ${job}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|$)`, 'u').exec(workflow);
+  if (!match?.[1]) throw new TypeError(`Hosted CI workflow is missing the ${job} job.`);
+  return match[1];
+}
+
+function npmScripts(job: string): readonly string[] {
+  return Object.freeze([...job.matchAll(/^\s+(?:run:\s+)?npm run ([a-z0-9:.-]+)(?:\s|$)/gmu)]
+    .map((match) => match[1] as string));
+}
+
+export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
+  if (Buffer.byteLength(workflow, 'utf8') > 512 * 1024) throw new TypeError('Hosted CI workflow exceeds the maintained parsing bound.');
+  return Object.freeze({
+    quality: npmScripts(workflowJob(workflow, 'quality')),
+    unit: npmScripts(workflowJob(workflow, 'unit')),
+    browser: npmScripts(workflowJob(workflow, 'browser')),
+  });
+}
+
+export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
+  return Object.freeze({
+    quality: Object.freeze(['security:staged', ...CI_QUALITY_SCRIPTS]),
+    unit: Object.freeze([...CI_UNIT_SCRIPTS, 'verification:artifacts']),
+    browser: Object.freeze([...CI_BROWSER_PREREQUISITE_SCRIPTS, ...CI_HOSTED_ONLY_BROWSER_SCRIPTS]),
+  });
+}
+
+export function assertHostedCiParity(
+  workflow = readFileSync(path.join(REPOSITORY_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
+): void {
+  const actual = readHostedCiScriptPlan(workflow);
+  const expected = expectedHostedCiScriptPlan();
+  for (const lane of ['quality', 'unit', 'browser'] as const) {
+    if (JSON.stringify(actual[lane]) !== JSON.stringify(expected[lane])) {
+      throw new Error(
+        `Hosted ${lane} scripts have drifted from the maintained local CI contract.\n`
+        + `Expected: ${expected[lane].join(', ')}\nActual: ${actual[lane].join(', ')}`,
+      );
+    }
+  }
+}
+
 export function formatLocalCiPlan(): string {
   return [
-    'locked install',
     'changed-line secret scan',
+    'locked install',
     ...CI_QUALITY_SCRIPTS,
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_PREREQUISITE_SCRIPTS,
     'test:e2e:install',
     'test:e2e:built',
+    'verification:artifacts cleanup=all',
   ].join('\n');
 }
 
 export function main(args = process.argv.slice(2)): number {
+  let cleanup = false;
+  let failure: unknown;
   try {
+    assertHostedCiParity();
     if (args.length === 1 && args[0] === '--list') {
       process.stdout.write(`${formatLocalCiPlan()}\n`);
       return 0;
@@ -110,20 +170,31 @@ export function main(args = process.argv.slice(2)): number {
     if (gitOutput(['status', '--porcelain=v1', '--untracked-files=all'])) {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
+    cleanup = true;
     const range = localCiRevisionRange();
-    run(commandName(), ['ci', '--include=optional', '--ignore-scripts']);
     npmRun('security:staged', ['--', '--range', range]);
+    run(commandName(), ['ci', '--include=optional', '--ignore-scripts']);
     for (const script of CI_QUALITY_SCRIPTS) npmRun(script);
     for (const script of CI_UNIT_SCRIPTS) npmRun(script);
     for (const script of CI_BROWSER_PREREQUISITE_SCRIPTS) npmRun(script);
     npmRun('test:e2e:install');
     npmRun('test:e2e:built');
-    process.stdout.write('\nLocal CI matched every maintained quality, unit and browser gate.\n');
-    return 0;
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : 'Local CI verification failed.'}\n`);
+    failure = error;
+  }
+  if (cleanup) {
+    try {
+      npmRun('verification:artifacts', ['--', '--cleanup=all', '--skip-port-check']);
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure) {
+    process.stderr.write(`${failure instanceof Error ? failure.message : 'Local CI verification failed.'}\n`);
     return 2;
   }
+  process.stdout.write('\nLocal CI matched every maintained quality, unit and browser gate.\n');
+  return 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -56,6 +56,18 @@ describe('verification architecture contracts', () => {
       ['unknown', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = 'test/unknown.test.mts'; }],
       ['malformed', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = '../outside.test.mts'; }],
       ['unmeasured', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).weightMs = 0; }],
+      ['excess provenance', (value) => {
+        const provenance = value.provenance as Array<Record<string, unknown>>;
+        while (provenance.length <= MAX_TIMING_PROVENANCE) {
+          provenance.push({
+            id: `unit-excess-${provenance.length}`,
+            lane: 'unit',
+            environmentClass: 'fixture',
+            sampleBasis: 'fixture',
+            sampleCount: 1,
+          });
+        }
+      }],
     ];
     for (const [label, mutate] of variants) {
       const value = rawProfile();
@@ -64,9 +76,9 @@ describe('verification architecture contracts', () => {
     }
   });
 
-  test('replaces obsolete provenance when a bounded timing update reaches the profile limit', () => {
+  test('adds bounded provenance while retiring the completely replaced source measurement', () => {
     const retained = readVerificationTimingProfile();
-    assert.equal(retained.provenance.length, MAX_TIMING_PROVENANCE);
+    assert.ok(retained.provenance.length < MAX_TIMING_PROVENANCE);
     const provenanceUse = new Map<string, number>();
     for (const file of retained.files) {
       provenanceUse.set(file.provenanceId, (provenanceUse.get(file.provenanceId) ?? 0) + 1);
@@ -106,7 +118,7 @@ describe('verification architecture contracts', () => {
         '--sample-basis=exact-provenance-replacement-regression',
         '--sample-count=1',
       ]);
-      assert.equal(profile.provenance.length, MAX_TIMING_PROVENANCE);
+      assert.ok(profile.provenance.length <= MAX_TIMING_PROVENANCE);
       assert.ok(profile.provenance.some((item) => item.id === 'unit-local-provenance-replacement-test'));
       assert.ok(!profile.provenance.some((item) => item.id === unitProvenance.id));
       assert.deepEqual(

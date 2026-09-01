@@ -21,7 +21,6 @@ const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@-]+\/)*[a-zA-Z0-9._+()@-]+$/u;
 export const FULL_BATCH_RELEASE_GATES = Object.freeze([
   'unit',
   'production-source-coverage',
-  'critical-io-coverage',
   'typecheck',
   'frontend-check',
   'build',

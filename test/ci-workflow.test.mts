@@ -9,10 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_PREREQUISITE_SCRIPTS,
+  CI_HOSTED_ONLY_BROWSER_SCRIPTS,
   CI_QUALITY_SCRIPTS,
   CI_UNIT_SCRIPTS,
+  assertHostedCiParity,
   assertLocalCiRuntime,
+  expectedHostedCiScriptPlan,
   formatLocalCiPlan,
+  readHostedCiScriptPlan,
 } from '../tools/ci-verification.mts';
 import {
   buildToolchainCompatibilityReport,
@@ -144,16 +148,22 @@ describe('continuous integration workflow', () => {
     ]) {
       assert.match(WORKFLOW, new RegExp(`^\\s+run: ${escapeRegExp(command)}$`, 'mu'));
     }
+    assert.deepEqual(readHostedCiScriptPlan(WORKFLOW), expectedHostedCiScriptPlan());
+    assert.doesNotThrow(() => assertHostedCiParity(WORKFLOW));
+    const workflowWithUnownedGate = WORKFLOW.replace(
+      '      - name: Run type checks',
+      '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run type checks',
+    );
+    assert.throws(() => assertHostedCiParity(workflowWithUnownedGate), /quality scripts have drifted/u);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_HEAD_SHA: \$\{\{ github\.sha \}\}$/mu);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
       'node tools/production-dependency-audit.mts',
     );
-    assert.match(
-      PACKAGE_MANIFEST.scripts?.['test:critical-io-coverage'] ?? '',
-      /anchored-artifact-writer\.mts.*test\/anchored-artifact-writer\.test\.mts/u,
-    );
+    assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /packages\/\*\*\/\*\.mts/u);
+    assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /tools\/production-coverage\.mts/u);
+    assert.doesNotMatch(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /test:critical-io-coverage/u);
     for (const shard of [1, 2, 3, 4]) {
       assert.match(WORKFLOW, new RegExp(
         `^\\s{10}- kind: functional\\s*\\n\\s{12}shard: ${shard}\\/4\\s*\\n\\s{12}label: ${shard}-of-4$`,
@@ -178,6 +188,15 @@ describe('continuous integration workflow', () => {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
     assert.match(localPlan, /^test:e2e:built$/mu);
+    assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
+    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('locked install'));
+    assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
+      'test:e2e:install',
+      'test:e2e:shard',
+      'frontend:authenticated-loading-report',
+      'test:e2e:summary',
+      'verification:artifacts',
+    ]);
     assert.doesNotThrow(() => assertLocalCiRuntime('24.19.0', '24.19.0'));
     assert.throws(() => assertLocalCiRuntime('26.0.0', '24.19.0'), /requires Node\.js 24\.19\.0/u);
   });
@@ -288,9 +307,15 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
     assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:profile \| tee "\$RUNNER_TEMP\/test-duration-report\.txt"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}path: \$\{\{ runner\.temp \}\}\/test-duration-report\.txt$/mu);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report\.txt$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:duration-health --/u);
+    for (const run of [1, 2, 3]) {
+      assert.match(TEST_HEALTH_WORKFLOW, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
+    }
+    assert.match(TEST_HEALTH_WORKFLOW, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-report-\*\.txt$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-health\.md$/mu);
+    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report/mu);
     assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
     const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [
@@ -300,6 +325,7 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:properties'] ?? '', /verification-state-machines\.test\.mts/u);
+    assert.equal(PACKAGE_MANIFEST.scripts?.['test:duration-health'], 'node tools/test-duration-health.mts');
   });
 });
 
