@@ -1,4 +1,4 @@
-import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
+import { ALLOWED_ORIGIN, enforcesMachineTimingBudgets, expect, test } from './fixtures';
 import type { CDPSession, Page, TestInfo } from '@playwright/test';
 
 type ConsoleRoute = Readonly<{
@@ -37,6 +37,21 @@ type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   limitations: readonly string[];
 }>;
 
+type ConsoleLoadingSampleSet = Readonly<{
+  schema: 'whoisleuth.console-loading-sample-set';
+  version: 1;
+  mode: 'authenticated_local_chromium_repeated_cold_load';
+  path: ConsoleRoute['path'];
+  budget: ConsoleRoute['budget'];
+  sampleCount: number;
+  usableMsMedian: number;
+  usableMsMaximum: number;
+  longTaskTotalMsMedian: number;
+  longTaskTotalMsMaximum: number;
+  samples: readonly ConsoleLoadingMeasurement[];
+  limitations: readonly string[];
+}>;
+
 // Calibrated from repeated isolated and suite-ordered local production-build
 // cold loads on 2026-08-24. The maxima include first-route process and browser
 // cache variance instead of relying only on warmed suite timings.
@@ -48,6 +63,11 @@ const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
   '/monitor': Object.freeze({ encodedTransferBytes: 1_748_707, usableMs: 1_627.7, longTaskTotalMs: 68, layoutShiftScore: 0.0064 }),
   '/cli': Object.freeze({ encodedTransferBytes: 466_249, usableMs: 250.7, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
 });
+// Three samples make the median require two passes against the unchanged
+// reviewed budget. One scheduler-affected sample remains permitted, but the
+// two-times hard ceiling prevents the median from hiding a severe regression.
+const CONSOLE_LOADING_SAMPLE_COUNT = 3;
+const CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER = 2;
 
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
@@ -101,6 +121,31 @@ function attachTransferProbe(session: CDPSession) {
     completedRequestCount += 1;
   });
   return () => ({ encodedTransferBytes, completedRequestCount });
+}
+
+async function resetConsoleRouteState(page: Page): Promise<void> {
+  if (page.url() === ALLOWED_ORIGIN || page.url().startsWith(`${ALLOWED_ORIGIN}/`)) {
+    await page.evaluate(() => sessionStorage.clear());
+  }
+  await page.goto('about:blank');
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send('Network.enable');
+    await session.send('Network.clearBrowserCache');
+    await session.send('Storage.clearDataForOrigin', {
+      origin: ALLOWED_ORIGIN,
+      storageTypes: 'appcache,cache_storage,indexeddb,local_storage,service_workers,websql',
+    });
+  } finally {
+    await session.detach();
+  }
+}
+
+function median(values: readonly number[]): number {
+  if (values.length !== CONSOLE_LOADING_SAMPLE_COUNT) {
+    throw new TypeError(`Console loading requires exactly ${CONSOLE_LOADING_SAMPLE_COUNT} samples.`);
+  }
+  return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)]!;
 }
 
 async function installMainThreadProbe(page: Page): Promise<void> {
@@ -181,8 +226,8 @@ async function measureConsoleRoute(
   page: Page,
   route: ConsoleRoute,
   testInfo: TestInfo,
+  sample: number,
 ): Promise<ConsoleLoadingMeasurement> {
-  await installMainThreadProbe(page);
   const session = await page.context().newCDPSession(page);
   const transfer = attachTransferProbe(session);
   await session.send('Network.enable');
@@ -215,7 +260,7 @@ async function measureConsoleRoute(
         'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
-    await testInfo.attach(`console-loading-${route.path.slice(1)}.json`, {
+    await testInfo.attach(`console-loading-${route.path.slice(1)}-sample-${sample}.json`, {
       body: Buffer.from(`${JSON.stringify(measurement, null, 2)}\n`, 'utf8'),
       contentType: 'application/json',
     });
@@ -228,19 +273,54 @@ async function measureConsoleRoute(
 
 for (const route of routes) {
   test(`authenticated cold load for ${route.path} preserves deterministic loading contracts`, async ({ page }, testInfo) => {
-    const measurement = await measureConsoleRoute(page, route, testInfo);
-    expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
-    expect(measurement.encodedTransferBytes).toBeGreaterThan(100_000);
-    expect(measurement.encodedTransferBytes).toBeLessThanOrEqual(route.budget.encodedTransferBytes);
-    expect(measurement.usableMs).toBeGreaterThan(0);
-    expect(measurement.longTaskSupported).toBe(true);
-    expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.layoutShiftScore).toBeLessThanOrEqual(route.budget.layoutShiftScore);
+    await installMainThreadProbe(page);
+    const measurements: ConsoleLoadingMeasurement[] = [];
+    for (let sample = 1; sample <= CONSOLE_LOADING_SAMPLE_COUNT; sample += 1) {
+      await resetConsoleRouteState(page);
+      const measurement = await measureConsoleRoute(page, route, testInfo, sample);
+      measurements.push(measurement);
+      expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
+      expect(measurement.encodedTransferBytes).toBeGreaterThan(100_000);
+      expect(measurement.encodedTransferBytes).toBeLessThanOrEqual(route.budget.encodedTransferBytes);
+      expect(measurement.usableMs).toBeGreaterThan(0);
+      expect(measurement.longTaskSupported).toBe(true);
+      expect(measurement.layoutShiftSupported).toBe(true);
+      expect(measurement.layoutShiftScore).toBeLessThanOrEqual(route.budget.layoutShiftScore);
+    }
+    const sampleSet: ConsoleLoadingSampleSet = Object.freeze({
+      schema: 'whoisleuth.console-loading-sample-set',
+      version: 1,
+      mode: 'authenticated_local_chromium_repeated_cold_load',
+      path: route.path,
+      budget: route.budget,
+      sampleCount: measurements.length,
+      usableMsMedian: median(measurements.map((measurement) => measurement.usableMs)),
+      usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+      longTaskTotalMsMedian: median(measurements.map((measurement) => measurement.longTaskTotalMs)),
+      longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
+      samples: Object.freeze([...measurements]),
+      limitations: Object.freeze([
+        'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
+        'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
+        'Every sample remains subject to transfer and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
+      ]),
+    });
+    await testInfo.attach(`console-loading-${route.path.slice(1)}-samples.json`, {
+      body: Buffer.from(`${JSON.stringify(sampleSet, null, 2)}\n`, 'utf8'),
+      contentType: 'application/json',
+    });
+    process.stdout.write(`Console loading sample set: ${JSON.stringify(sampleSet)}\n`);
     // Shared hosted runners cannot provide a stable CPU scheduling authority.
     // Transfer and layout gates above remain blocking in every project.
     if (enforcesMachineTimingBudgets(testInfo.project.name)) {
-      expect(measurement.usableMs).toBeLessThanOrEqual(route.budget.usableMs);
-      expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
+      expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(route.budget.usableMs);
+      expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
+      expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
+        route.budget.usableMs * CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER,
+      );
+      expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
+        route.budget.longTaskTotalMs * CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER,
+      );
     }
   });
 }

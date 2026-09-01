@@ -242,11 +242,15 @@ describe('continuous integration workflow', () => {
     const consoleAuthorityBlock = requiredValue(
       /if \(enforcesMachineTimingBudgets\(testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(CONSOLE_LOADING_SOURCE)?.[1],
     );
-    for (const metric of ['usableMs', 'longTaskTotalMs']) {
-      assert.match(consoleAuthorityBlock, new RegExp(`expect\\(measurement\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
+    for (const metric of ['usableMsMedian', 'longTaskTotalMsMedian', 'usableMsMaximum', 'longTaskTotalMsMaximum']) {
+      assert.match(consoleAuthorityBlock, new RegExp(`expect\\(sampleSet\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
     }
     const consoleOutsideAuthority = CONSOLE_LOADING_SOURCE.replace(consoleAuthorityBlock, '');
-    assert.doesNotMatch(consoleOutsideAuthority, /expect\(measurement\.(?:usableMs|longTaskTotalMs)\)\.toBeLessThanOrEqual/u);
+    assert.doesNotMatch(consoleOutsideAuthority, /expect\(sampleSet\.(?:usableMsMedian|longTaskTotalMsMedian|usableMsMaximum|longTaskTotalMsMaximum)\)\.toBeLessThanOrEqual/u);
+    assert.match(consoleOutsideAuthority, /const CONSOLE_LOADING_SAMPLE_COUNT = 3;/u);
+    assert.match(consoleOutsideAuthority, /const CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER = 2;/u);
+    assert.match(consoleOutsideAuthority, /Network\.clearBrowserCache/u);
+    assert.match(consoleOutsideAuthority, /Storage\.clearDataForOrigin/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.encodedTransferBytes\)\.toBeLessThanOrEqual/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
