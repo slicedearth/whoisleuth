@@ -148,6 +148,7 @@ function resetRuntimeProbe(): void {
       residualLayoutShiftCount: number;
       residualLayoutShiftScore: number;
       residualLayoutShiftActive: boolean;
+      residualLayoutShiftStartedAt: number | null;
       observers: PerformanceObserver[];
     };
   };
@@ -162,6 +163,7 @@ function resetRuntimeProbe(): void {
     residualLayoutShiftCount: 0,
     residualLayoutShiftScore: 0,
     residualLayoutShiftActive: false,
+    residualLayoutShiftStartedAt: null,
     observers: [] as PerformanceObserver[],
   };
   scope.__whoisleuthDeferredRuntime = probe;
@@ -187,7 +189,9 @@ function resetRuntimeProbe(): void {
           probe.layoutShiftCount += 1;
           probe.layoutShiftScore += shift.value;
         }
-        if (probe.residualLayoutShiftActive) {
+        if (probe.residualLayoutShiftActive
+          && probe.residualLayoutShiftStartedAt !== null
+          && shift.startTime >= probe.residualLayoutShiftStartedAt) {
           probe.residualLayoutShiftCount += 1;
           probe.residualLayoutShiftScore += shift.value;
         }
@@ -294,12 +298,17 @@ async function beginInteractionProbe(page: Page) {
           residualLayoutShiftCount: number;
           residualLayoutShiftScore: number;
           residualLayoutShiftActive: boolean;
+          residualLayoutShiftStartedAt: number | null;
         };
       };
       const runtime = scope.__whoisleuthDeferredRuntime;
       if (runtime) {
         runtime.residualLayoutShiftCount = 0;
         runtime.residualLayoutShiftScore = 0;
+        // PerformanceObserver delivery can lag behind the layout-shift entry.
+        // Classify stability by the entry timestamp so a delayed callback for
+        // the initiating action cannot be mistaken for post-readiness motion.
+        runtime.residualLayoutShiftStartedAt = globalThis.performance.now();
         runtime.residualLayoutShiftActive = true;
       }
       await new Promise<void>((resolve) => {
@@ -311,7 +320,10 @@ async function beginInteractionProbe(page: Page) {
         };
         requestAnimationFrame(observeNextFrame);
       });
-      if (runtime) runtime.residualLayoutShiftActive = false;
+      if (runtime) {
+        runtime.residualLayoutShiftActive = false;
+        runtime.residualLayoutShiftStartedAt = null;
+      }
     });
     const runtime = await readRuntimeProbe(page);
     active = false;
