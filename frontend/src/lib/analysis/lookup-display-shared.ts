@@ -1,4 +1,8 @@
 import type { JsonObject } from './lookup-response.ts';
+import {
+  isRecord as isUnknownRecord,
+  recordOrEmpty,
+} from '../../../../lib/json-record.mts';
 
 export type JsonRecord = JsonObject;
 
@@ -64,10 +68,9 @@ export const MAX_LOOKUP_DISPLAY_TEXT_LENGTH = 4_096;
 export const MAX_LOOKUP_DISPLAY_VALUE_LENGTH = 1_024;
 export const MAX_LOOKUP_DISPLAY_OBJECT_DEPTH = 8;
 
-export const isRecord = (value: unknown): value is JsonRecord =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+export const isRecord = isUnknownRecord as (value: unknown) => value is JsonRecord;
 
-export const rec = (value: unknown): JsonRecord => (isRecord(value) ? value : {});
+export const rec = recordOrEmpty as (value: unknown) => JsonRecord;
 
 export const records = (value: unknown, maximum = MAX_LOOKUP_DISPLAY_RECORDS): JsonRecord[] =>
   Array.isArray(value)

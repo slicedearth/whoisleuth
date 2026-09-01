@@ -131,7 +131,7 @@ The less common commands below each have one narrow purpose:
 | `npm run deployment:self-check` | Run the bounded operator deployment check when explicitly configured. |
 | `npm run security:codeql` | Run the local CodeQL wrapper under its documented prerequisites. |
 | `npm run security:retire` | Scan a built frontend for retired browser libraries. |
-| `npm run maintenance:duplication` | Produce a bounded static maintainer duplication report. |
+| `npm run maintenance:duplication` | Review exact clones and the static call graph across bounded maintained TypeScript sources. |
 
 `npm run sources:health` distinguishes current, stale, unavailable, malformed,
 limited, measured and unproven local states and reports unavailable counts as

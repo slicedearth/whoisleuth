@@ -1,5 +1,6 @@
 import { normalizeDomain } from './case-model.ts';
 import { normalizeOpaqueReferenceId } from './opaque-reference-id.ts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 
 export const BRAND_ASSET_REGISTER_VERSION = 1;
 export const MAX_BRAND_ASSET_ROWS = 2_000;
@@ -182,11 +183,7 @@ const FIXED_LIMITATIONS = Object.freeze([
   'Missing, unavailable, incomplete, or truncated local evidence is not treated as absence or a safety conclusion.',
 ]);
 
-function record(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
+const record = recordOrNull;
 
 function codeUnitCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

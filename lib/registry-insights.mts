@@ -7,6 +7,7 @@
 
 import { compareRegistrySources } from './registry-comparison.mts';
 import { inspectRdapCapabilities } from './rdap-capabilities.mts';
+import { isRecord, recordOrEmpty } from './json-record.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type ContactDisclosureState =
@@ -28,15 +29,7 @@ const PRIVACY_PROXY_RE = /(?:privacy|proxy|whoisguard|data protected|identity pr
 const REDACTED_RE = /(?:redacted|masked|not published)/iu;
 const WITHHELD_RE = /(?:withheld|not disclosed|restricted disclosure)/iu;
 
-function record(value: unknown): UnknownRecord {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as UnknownRecord
-    : {};
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
+const record = recordOrEmpty;
 
 function text(value: unknown, maximum = 320): string {
   return typeof value === 'string' && !CONTROL_RE.test(value)

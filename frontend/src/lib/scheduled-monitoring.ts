@@ -11,6 +11,7 @@ import {
 } from './analysis/scheduled-monitor-model.ts';
 import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../lib/observation.mts';
+import { recordOrNull } from '../../../lib/json-record.mts';
 import type { WatchlistEntry } from './watchlists.ts';
 import {
   requestJsonCapped,
@@ -94,11 +95,7 @@ const RECOVERY_CATEGORIES = Object.freeze([
   'resetInconsistentStatuses',
 ] as const);
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const record = recordOrNull;
 
 function integer(value: unknown, minimum: number, maximum: number): number | null {
   return Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum

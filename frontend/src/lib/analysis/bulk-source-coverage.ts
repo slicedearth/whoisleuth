@@ -3,6 +3,7 @@
 // limitation was unexpected for the registry's published service paths.
 
 import { registryCapabilityFor } from '../../../../lib/registry-capabilities.mts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 
 const MAX_SOURCE_OBSERVATIONS = 32;
 const MAX_SOURCE_TEXT_LENGTH = 40;
@@ -37,11 +38,7 @@ function text(value: unknown): string {
     : '';
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const record = recordOrNull;
 
 function observations(value: unknown): NormalizedObservation[] {
   return Array.isArray(value)
