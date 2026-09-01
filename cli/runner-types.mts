@@ -11,7 +11,7 @@ import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import type { TerminalProgress } from './progress.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
-import type { TerminalEnvironment, WritableTerminal } from './terminal-presentation.mts';
+import type { TerminalEnvironment, TerminalPresentation, WritableTerminal } from './terminal-presentation.mts';
 import type { browseLookupDocument, browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import type { canLaunchInteractiveCli, launchInteractiveCli } from './interactive-launcher.mts';
 import type { cleanupPendingOutputFiles, writePrivateFile } from './output-file.mts';
@@ -105,18 +105,23 @@ type CliDependencies = {
 };
 
 type CliCommandContext = Readonly<{
+  packageVersion: string;
   stdout: WritableLike;
   stderr: WritableLike;
   terminal(value: string, color?: boolean): string;
+  presentation(color: boolean): TerminalPresentation;
   writeStdout(value: string): void;
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
   readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
+  readPassphraseSource(source: string): Promise<string>;
   now(): string;
   beginProgress(message: string): TerminalProgress;
   endProgress(): void;
   withProgress<T>(message: string, operation: () => T | Promise<T>): Promise<T>;
   setEventProgress(progress: CliProgressEvents): void;
+  setFailureLabel(label: string): void;
+  executeCli(argv: readonly string[], dependencies?: CliDependencies): Promise<number>;
 }>;
 
 export type {

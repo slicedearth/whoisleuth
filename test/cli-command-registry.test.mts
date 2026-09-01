@@ -31,6 +31,7 @@ import {
 import { buildShellCompletion } from '../cli/completion.mts';
 import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
 import { buildCliManual } from '../cli/manual.mts';
+import { FAMILY_COMMANDS } from '../cli/inline-command-runner.mts';
 import { INLINE_CLI_COMMANDS } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
@@ -486,6 +487,12 @@ describe('canonical CLI command registry', () => {
       CLI_COMMAND_REGISTRY.filter((definition) => definition.execution.handlerOwner === 'inline')
         .map((definition) => definition.command),
     );
+    const familyCommands = FAMILY_COMMANDS.flatMap(({ commands }) => commands);
+    assert.equal(new Set(familyCommands).size, familyCommands.length);
+    assert.deepEqual([...familyCommands].sort(), [...INLINE_CLI_COMMANDS].sort());
+    assert.deepEqual(FAMILY_COMMANDS.map(({ family }) => family), [
+      'support', 'review', 'assurance', 'workflow', 'history',
+    ]);
 
     const effects = Object.fromEntries(CLI_COMMAND_REGISTRY.map((definition) => [
       definition.command,

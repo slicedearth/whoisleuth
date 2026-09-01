@@ -94,23 +94,25 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The executable dependency graph remains independently capped with bounded
-// headroom for canonical domain owners. Two browser-safe domain-control paths
-// remain explicit package roots because released CLI archives permitted those
-// deep imports.
-export const MAX_CLI_RUNTIME_MODULES = 320;
-export const MAX_CLI_PACKAGE_MODULES = 322;
+// The executable dependency graph remains independently capped with three
+// modules of structural headroom above the reviewed command-family closure.
+// Two browser-safe domain-control paths remain explicit package roots because
+// released CLI archives permitted those deep imports. Byte and packed-entry
+// ceilings remain unchanged so smaller ownership modules cannot widen payloads.
+export const MAX_CLI_RUNTIME_MODULES = 328;
+export const MAX_CLI_PACKAGE_MODULES = 330;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
-// dependency graph. They may emit no runtime code, but they remain bounded
-// because TypeScript reads them while producing the candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 312;
+// dependency graph. They may emit no runtime code, but they remain bounded with
+// five inputs of headroom because TypeScript reads them while producing the
+// candidate.
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 320;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep the reviewed shared-domain package closure exact; packed and unpacked
-// byte ceilings remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 320;
+// Keep four entries of structural headroom above the reviewed command-family
+// closure; packed and unpacked byte ceilings remain independent controls.
+export const MAX_CLI_PACKAGE_ENTRIES = 330;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
@@ -170,6 +172,13 @@ const INSTALLED_HANDLER_MODULES: Readonly<Record<Exclude<CliHandlerOwner, 'inlin
   lookup: Object.freeze({ source: 'cli/lookup-command-runner.mjs', exportName: 'runLookupCommand' }),
   network: Object.freeze({ source: 'cli/network-command-runner.mjs', exportName: 'runNetworkCommand' }),
 });
+const INSTALLED_INLINE_FAMILY_MODULES = Object.freeze([
+  Object.freeze({ source: 'cli/support-command-runner.mjs', exportName: 'runSupportCommand', label: 'support-family-handler' }),
+  Object.freeze({ source: 'cli/review-command-runner.mjs', exportName: 'runReviewCommand', label: 'review-family-handler' }),
+  Object.freeze({ source: 'cli/assurance-command-runner.mjs', exportName: 'runAssuranceCommand', label: 'assurance-family-handler' }),
+  Object.freeze({ source: 'cli/workflow-command-runner.mjs', exportName: 'runWorkflowCommand', label: 'workflow-family-handler' }),
+  Object.freeze({ source: 'cli/history-command-runner.mjs', exportName: 'runHistoryCommand', label: 'history-family-handler' }),
+]);
 const TYPESCRIPT_COMPILER_SOURCE = 'node_modules/typescript/lib/_tsc.js';
 const NODE_MODULE_COMPILER_INPUT_SEGMENT_PATTERN = /^@?[A-Za-z0-9._-]+$/u;
 const NODE_MODULE_COMPILER_INPUT_SUFFIXES = Object.freeze([
@@ -1034,6 +1043,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         throw new TypeError(`Installed CLI handler ${owner} does not export ${handler.exportName}.`);
       }
       installedHandlerChecks.push(`${owner}-handler`);
+    }
+    for (const handler of INSTALLED_INLINE_FAMILY_MODULES) {
+      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
+      if (typeof handlerModule[handler.exportName] !== 'function') {
+        throw new TypeError(`Installed CLI command family does not export ${handler.exportName}.`);
+      }
+      installedHandlerChecks.push(handler.label);
     }
     if (publicationEnabled) {
       const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
