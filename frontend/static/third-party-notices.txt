@@ -4185,7 +4185,7 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-import-in-the-middle@3.3.3
+import-in-the-middle@3.4.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -5127,7 +5127,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-qs@6.15.3
+qs@6.16.0
 Relationship: transitive production dependency
 Declared licence: BSD-3-Clause
 Licence source: LICENSE.md

@@ -9,6 +9,7 @@ import {
   formatMaintainerDuplicationReport,
   main,
   MAX_MAINTAINER_TOOL_FILE_BYTES,
+  MAX_MAINTAINER_TOOL_FILES,
 } from '../tools/maintainer-duplication-report.mts';
 import {
   boundedControlFreeText,
@@ -104,8 +105,10 @@ describe('maintainer-tool duplication report', () => {
 
   test('measures the checked-out maintainer-tool inventory without source values', async () => {
     const report = await buildMaintainerDuplicationReport();
-    assert.equal(report.scope.fileCount, 64);
-    assert.equal(report.scope.entrypointCount, 53);
+    assert.equal(report.scope.fileCount, report.files.length);
+    assert.ok(report.scope.fileCount > 0 && report.scope.fileCount <= MAX_MAINTAINER_TOOL_FILES);
+    assert.equal(report.scope.entrypointCount, report.files.filter((file) => file.entrypoint).length);
+    assert.equal(report.files.some((file) => file.file === 'tools/toolchain-compatibility.mts'), true);
     assert.ok(report.callGraph.staticEdgeCount > 500);
     assert.equal(report.repeatedImplementations.exactClusterCount, 0);
     assert.equal(report.repeatedImplementations.repeatedLineCount, 0);

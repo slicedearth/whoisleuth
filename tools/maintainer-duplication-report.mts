@@ -33,7 +33,7 @@ type MainOptions = ReportOptions & Readonly<{
 
 export const MAINTAINER_DUPLICATION_REPORT_SCHEMA = 'whoisleuth.maintainer-duplication-report';
 export const MAINTAINER_DUPLICATION_REPORT_VERSION = 1;
-export const MAX_MAINTAINER_TOOL_FILES = 64;
+export const MAX_MAINTAINER_TOOL_FILES = 96;
 export const MAX_MAINTAINER_TOOL_FILE_BYTES = 512 * 1024;
 export const MAX_MAINTAINER_TOOL_TOTAL_BYTES = 8 * 1024 * 1024;
 export const MAX_MAINTAINER_TOOL_AST_NODES = 200_000;

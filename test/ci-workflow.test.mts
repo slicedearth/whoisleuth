@@ -2,10 +2,16 @@ import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import {
+  buildToolchainCompatibilityReport,
+  main as toolchainCompatibilityMain,
+  satisfiesCaretAlternatives,
+} from '../tools/toolchain-compatibility.mts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
@@ -45,6 +51,21 @@ const PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'package.json'),
   'utf8',
 )) as { scripts?: Record<string, string> };
+
+function toolchainManifests() {
+  return {
+    packageManifest: { devDependencies: { '@types/node': '^24.13.3', typescript: '^6.0.3' } },
+    frontendManifest: { devDependencies: { typescript: '^6.0.3' } },
+    lockfile: {
+      packages: {
+        'node_modules/@types/node': { version: '24.13.3' },
+        'node_modules/typescript': { version: '6.0.3' },
+        'node_modules/@sveltejs/kit': { peerDependencies: { typescript: '^5.3.3 || ^6.0.0' } },
+        'node_modules/svelte-check': { peerDependencies: { typescript: '^5.0.0 || ^6.0.0' } },
+      },
+    },
+  };
+}
 
 function pinnedActions(workflow: string): ReadonlyArray<Readonly<{ action: string; revision: string }>> {
   return [...workflow.matchAll(/^\s+uses: ([^@\s]+)@([^\s#]+)/gmu)]
@@ -103,6 +124,7 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
+      'npm run toolchain:check',
       'npm run release:check',
       'npm run verification:timing:check',
       'npm run verification:ownership:check',
@@ -267,5 +289,89 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:properties'] ?? '', /verification-state-machines\.test\.mts/u);
+  });
+});
+
+describe('development toolchain compatibility', () => {
+  test('binds the exact runtime to matching Node.js types and supported TypeScript peers', () => {
+    const report = buildToolchainCompatibilityReport({
+      nvmrc: '24.19.0\n',
+      runtimeVersion: '24.19.0',
+      ...toolchainManifests(),
+    });
+    assert.deepEqual(report, {
+      node: '24.19.0',
+      nodeTypes: '24.13.3',
+      typeScript: '6.0.3',
+      typeScriptPeerRanges: [
+        { installPath: 'node_modules/@sveltejs/kit', range: '^5.3.3 || ^6.0.0' },
+        { installPath: 'node_modules/svelte-check', range: '^5.0.0 || ^6.0.0' },
+      ],
+    });
+    assert.equal(satisfiesCaretAlternatives('6.0.3', '^5.3.3 || ^6.0.0'), true);
+    assert.equal(satisfiesCaretAlternatives('7.0.2', '^5.3.3 || ^6.0.0'), false);
+    assert.equal(satisfiesCaretAlternatives('6.0.3', '>=5'), false);
+  });
+
+  test('rejects runtime, Node.js types, TypeScript declaration and peer drift', () => {
+    assert.throws(() => buildToolchainCompatibilityReport({
+      nvmrc: '24.19.0', runtimeVersion: '26.4.0', ...toolchainManifests(),
+    }), /does not match/);
+
+    const nodeTypes = toolchainManifests();
+    nodeTypes.packageManifest.devDependencies['@types/node'] = '^26.4.0';
+    assert.throws(() => buildToolchainCompatibilityReport({
+      nvmrc: '24.19.0', runtimeVersion: '24.19.0', ...nodeTypes,
+    }), /must remain on/);
+
+    const declaration = toolchainManifests();
+    declaration.frontendManifest.devDependencies.typescript = '^7.0.2';
+    assert.throws(() => buildToolchainCompatibilityReport({
+      nvmrc: '24.19.0', runtimeVersion: '24.19.0', ...declaration,
+    }), /must match exactly/);
+
+    const peers = toolchainManifests();
+    peers.lockfile.packages['node_modules/typescript'].version = '7.0.2';
+    peers.packageManifest.devDependencies.typescript = '^7.0.2';
+    peers.frontendManifest.devDependencies.typescript = '^7.0.2';
+    assert.throws(() => buildToolchainCompatibilityReport({
+      nvmrc: '24.19.0', runtimeVersion: '24.19.0', ...peers,
+    }), /outside .* peer range/);
+  });
+
+  test('checks repository files and reports malformed input without exposing it', async () => {
+    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'whoisleuth-toolchain-check-'));
+    const values = toolchainManifests();
+    try {
+      await fs.promises.mkdir(path.join(directory, 'frontend'));
+      await Promise.all([
+        fs.promises.writeFile(path.join(directory, '.nvmrc'), '24.19.0\n', 'utf8'),
+        fs.promises.writeFile(path.join(directory, 'package.json'), JSON.stringify(values.packageManifest), 'utf8'),
+        fs.promises.writeFile(path.join(directory, 'frontend/package.json'), JSON.stringify(values.frontendManifest), 'utf8'),
+        fs.promises.writeFile(path.join(directory, 'package-lock.json'), JSON.stringify(values.lockfile), 'utf8'),
+      ]);
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+      assert.equal(await toolchainCompatibilityMain([], {
+        repositoryRoot: directory,
+        runtimeVersion: '24.19.0',
+        stdout: { write: (value) => stdout.push(value) },
+        stderr: { write: (value) => stderr.push(value) },
+      }), 0);
+      assert.match(stdout.join(''), /Node\.js: 24\.19\.0/);
+      assert.equal(stderr.join(''), '');
+
+      await fs.promises.writeFile(path.join(directory, 'package.json'), '{"private":"secret"', 'utf8');
+      const failure: string[] = [];
+      assert.equal(await toolchainCompatibilityMain([], {
+        repositoryRoot: directory,
+        runtimeVersion: '24.19.0',
+        stderr: { write: (value) => failure.push(value) },
+      }), 2);
+      assert.match(failure.join(''), /package\.json is not valid JSON/);
+      assert.doesNotMatch(failure.join(''), /secret/);
+    } finally {
+      await fs.promises.rm(directory, { recursive: true, force: true });
+    }
   });
 });

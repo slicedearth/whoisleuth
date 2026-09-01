@@ -35,6 +35,8 @@ jobs:
         run: npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
+      - name: Verify development toolchain compatibility
+        run: npm run toolchain:check
       - name: Verify release version
         run: npm run release:check
       - name: Verify retained timing and balanced browser plan

@@ -32,6 +32,8 @@ jobs:
           sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
+      - name: Verify development toolchain compatibility
+        run: npm run toolchain:check
       - name: Run expanded property checks
         env:
           WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'

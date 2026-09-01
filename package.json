@@ -94,6 +94,7 @@
     "public-product:check": "node tools/public-product-catalogue.mts --check",
     "privacy:check": "node tools/privacy-data-flow-catalogue.mts --check",
     "release:check": "node tools/release-version-check.mts",
+    "toolchain:check": "node tools/toolchain-compatibility.mts",
     "dependencies:audit": "node tools/production-dependency-audit.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
