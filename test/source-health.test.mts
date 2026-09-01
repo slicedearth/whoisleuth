@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
+import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
 import { buildCatalogStatus } from '../tools/cisa-kev-catalog-status.mts';
 import {
   buildSourceHealthReport,
@@ -12,6 +13,9 @@ import {
   SOURCE_HEALTH_VERSION,
   type SourceHealthBuilders,
 } from '../tools/source-health.mts';
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const daysAfterKevRelease = (days: number) => new Date(Date.parse(SOURCE_RELEASED_AT) + (days * DAY_MS));
 
 function writer() {
   let value = '';
@@ -51,7 +55,7 @@ describe('offline source-health composition', () => {
   });
 
   test('keeps stale, malformed and unavailable states distinct and never replaces unavailable counts with zero', async () => {
-    const now = new Date('2026-09-10T12:00:00.000Z');
+    const now = daysAfterKevRelease(32);
     const builders: Partial<SourceHealthBuilders> = {
       sslbl: () => sslblSnapshotHealth({ snapshot: {}, now }),
       kev: () => buildCatalogStatus(now, 30),
@@ -81,7 +85,7 @@ describe('offline source-health composition', () => {
   });
 
   test('reports predictably aged optional sources by default and reserves failure for strict mode', async () => {
-    const now = new Date('2026-09-10T12:00:00.000Z');
+    const now = daysAfterKevRelease(32);
     const builders: Partial<SourceHealthBuilders> = {
       kev: () => buildCatalogStatus(now, 30),
     };
