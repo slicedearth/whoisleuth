@@ -51,6 +51,10 @@ const DEFERRED_INTERACTIONS_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'e2e', 'deferred-interactions.spec.ts'),
   'utf8',
 );
+const PERFORMANCE_SAMPLING_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'e2e', 'performance-sampling.ts'),
+  'utf8',
+);
 const E2E_DIRECTORY = path.join(__dirname, '..', 'e2e');
 const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
   .filter((entry) => entry.endsWith('.ts'))
@@ -247,10 +251,12 @@ describe('continuous integration workflow', () => {
     }
     const consoleOutsideAuthority = CONSOLE_LOADING_SOURCE.replace(consoleAuthorityBlock, '');
     assert.doesNotMatch(consoleOutsideAuthority, /expect\(sampleSet\.(?:usableMsMedian|longTaskTotalMsMedian|usableMsMaximum|longTaskTotalMsMaximum)\)\.toBeLessThanOrEqual/u);
-    assert.match(consoleOutsideAuthority, /const CONSOLE_LOADING_SAMPLE_COUNT = 3;/u);
-    assert.match(consoleOutsideAuthority, /const CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER = 2;/u);
-    assert.match(consoleOutsideAuthority, /Network\.clearBrowserCache/u);
-    assert.match(consoleOutsideAuthority, /Storage\.clearDataForOrigin/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export const PERFORMANCE_SAMPLE_COUNT = 3;/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export const PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER = 2;/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /Network\.clearBrowserCache/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /Storage\.clearDataForOrigin/u);
+    assert.match(consoleOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
+    assert.match(consoleOutsideAuthority, /resetPerformanceSampleState\(page\)/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.encodedTransferBytes\)\.toBeLessThanOrEqual/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
@@ -258,11 +264,15 @@ describe('continuous integration workflow', () => {
     const deferredAuthorityBlock = requiredValue(
       /if \(enforcesMachineTimingBudgets\(options\.testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(DEFERRED_INTERACTIONS_SOURCE)?.[1],
     );
-    for (const metric of ['usableMs', 'longTaskTotalMs']) {
-      assert.match(deferredAuthorityBlock, new RegExp(`expect\\(measurement\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
+    for (const metric of ['usableMsMedian', 'longTaskTotalMsMedian', 'usableMsMaximum', 'longTaskTotalMsMaximum']) {
+      assert.match(deferredAuthorityBlock, new RegExp(`expect\\(sampleSet\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
     }
     const deferredOutsideAuthority = DEFERRED_INTERACTIONS_SOURCE.replace(deferredAuthorityBlock, '');
+    assert.doesNotMatch(deferredOutsideAuthority, /expect\(sampleSet\.(?:usableMsMedian|longTaskTotalMsMedian|usableMsMaximum|longTaskTotalMsMaximum)\)\.toBeLessThanOrEqual/u);
     assert.doesNotMatch(deferredOutsideAuthority, /expect\(measurement\.(?:usableMs|longTaskTotalMs)\)\.toBeLessThanOrEqual/u);
+    assert.match(deferredOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
+    assert.match(deferredOutsideAuthority, /resetPerformanceSampleState\(options\.page\)/u);
+    assert.match(deferredOutsideAuthority, /await options\.prepare\(sample\)/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.completedAssetRequestCount[^\n]+\)\.toBeGreaterThan/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.assetEncodedTransferBytes\)\.toBeLessThanOrEqual/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);

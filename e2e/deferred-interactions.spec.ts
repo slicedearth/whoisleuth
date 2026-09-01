@@ -5,6 +5,12 @@ import { ALLOWED_ORIGIN, enforcesMachineTimingBudgets, expect, test } from './fi
 import { caseRecord } from './case-test-fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import {
+  PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+  performanceSampleMedian,
+  resetPerformanceSampleState,
+} from './performance-sampling';
 
 type InteractionId =
   | 'cli_command_detail'
@@ -56,6 +62,22 @@ type DeferredInteractionMeasurement = Readonly<{
   residualLayoutShiftCount: number;
   residualLayoutShiftScore: number;
   investigationRequestCount: number;
+  limitations: readonly string[];
+}>;
+
+type DeferredInteractionSampleSet = Readonly<{
+  schema: 'whoisleuth.deferred-interaction-sample-set';
+  version: 1;
+  mode: 'authenticated_local_chromium_repeated_interaction';
+  interaction: InteractionId;
+  path: string;
+  budget: InteractionBudget;
+  sampleCount: number;
+  usableMsMedian: number;
+  usableMsMaximum: number;
+  longTaskTotalMsMedian: number;
+  longTaskTotalMsMaximum: number;
+  samples: readonly DeferredInteractionMeasurement[];
   limitations: readonly string[];
 }>;
 
@@ -313,17 +335,23 @@ async function beginInteractionProbe(page: Page) {
   return { close, abort };
 }
 
-async function measureDeferredInteraction(options: Readonly<{
+type DeferredInteractionOptions = Readonly<{
   page: Page;
   testInfo: TestInfo;
   interaction: InteractionId;
   path: string;
+  prepare: (sample: number) => Promise<void>;
   action: () => Promise<void>;
   ready: Locator;
   readyControl?: Locator;
   budget?: InteractionBudget;
   requireAsset?: boolean;
-}>): Promise<DeferredInteractionMeasurement> {
+}>;
+
+async function measureDeferredInteractionSample(
+  options: DeferredInteractionOptions,
+  sample: number,
+): Promise<DeferredInteractionMeasurement> {
   const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
   await options.page.waitForLoadState('networkidle');
   const probe = await beginInteractionProbe(options.page);
@@ -370,7 +398,7 @@ async function measureDeferredInteraction(options: Readonly<{
     });
     const body = Buffer.from(`${JSON.stringify(measurement, null, 2)}\n`, 'utf8');
     expect(body.byteLength, 'the attached measurement must remain bounded').toBeLessThan(16_384);
-    await options.testInfo.attach(`deferred-interaction-${options.interaction}.json`, {
+    await options.testInfo.attach(`deferred-interaction-${options.interaction}-sample-${sample}.json`, {
       body,
       contentType: 'application/json',
     });
@@ -389,18 +417,62 @@ async function measureDeferredInteraction(options: Readonly<{
     expect(measurement.layoutShiftSupported).toBe(true);
     expect(measurement.layoutShiftScore).toBeLessThanOrEqual(budget.layoutShiftScore);
     expect(measurement.residualLayoutShiftScore).toBeLessThanOrEqual(budget.residualLayoutShiftScore);
-    // Shared hosted runners cannot provide a stable CPU scheduling authority.
-    // Transfer, request, and layout gates remain blocking in every project.
-    if (enforcesMachineTimingBudgets(options.testInfo.project.name)) {
-      expect(measurement.usableMs).toBeLessThanOrEqual(budget.usableMs);
-      expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(budget.longTaskTotalMs);
-    }
     expect(captured.investigationRequests, 'module loading must not start an investigation or collection request').toEqual([]);
     return measurement;
   } catch (cause) {
     await probe.abort();
     throw cause;
   }
+}
+
+async function measureDeferredInteraction(options: DeferredInteractionOptions): Promise<DeferredInteractionSampleSet> {
+  const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const measurements: DeferredInteractionMeasurement[] = [];
+  for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
+    await resetPerformanceSampleState(options.page);
+    await options.prepare(sample);
+    measurements.push(await measureDeferredInteractionSample(options, sample));
+  }
+  const sampleSet: DeferredInteractionSampleSet = Object.freeze({
+    schema: 'whoisleuth.deferred-interaction-sample-set',
+    version: 1,
+    mode: 'authenticated_local_chromium_repeated_interaction',
+    interaction: options.interaction,
+    path: options.path,
+    budget,
+    sampleCount: measurements.length,
+    usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
+    usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+    longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
+    longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
+    samples: Object.freeze([...measurements]),
+    limitations: Object.freeze([
+      'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
+      'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
+      'Every sample remains subject to transfer, request and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
+    ]),
+  });
+  const body = Buffer.from(`${JSON.stringify(sampleSet, null, 2)}\n`, 'utf8');
+  expect(body.byteLength, 'the attached interaction sample set must remain bounded').toBeLessThan(32_768);
+  await options.testInfo.attach(`deferred-interaction-${options.interaction}-samples.json`, {
+    body,
+    contentType: 'application/json',
+  });
+  process.stdout.write(`Deferred interaction sample set: ${JSON.stringify(sampleSet)}\n`);
+
+  // Shared hosted runners cannot provide a stable CPU scheduling authority.
+  // Transfer, request and layout gates remain blocking in every project.
+  if (enforcesMachineTimingBudgets(options.testInfo.project.name)) {
+    expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(budget.usableMs);
+    expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(budget.longTaskTotalMs);
+    expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
+      budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+    );
+    expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
+      budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+    );
+  }
+  return sampleSet;
 }
 
 function brandProfileFixture() {
@@ -499,17 +571,19 @@ function bulkResponse(target: string) {
 }
 
 test('measures a deferred public CLI command detail without collection', async ({ page }, testInfo) => {
-  await page.goto('/cli');
   const command = page.locator('article[data-command="commands"]');
   const disclosure = command.locator(':scope > .command-row > button');
   const detail = command.locator('.command-detail');
-  await expect(detail).toHaveCount(0);
 
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'cli_command_detail',
     path: '/cli',
+    prepare: async () => {
+      await page.goto('/cli');
+      await expect(detail).toHaveCount(0);
+    },
     action: async () => {
       await disclosure.focus();
       await page.keyboard.press('Enter');
@@ -524,20 +598,21 @@ test('measures a deferred public CLI command detail without collection', async (
 });
 
 test('measures request-free local filtering of the public CLI catalogue', async ({ page }, testInfo) => {
-  await page.goto('/cli');
   const search = page.getByRole('searchbox', { name: 'Search commands' });
   const workflowPlan = page.locator('article[data-command="workflow-plan"]');
   const filteredStatus = page.getByRole('status').filter({ hasText: `Showing 1 of ${CLI_COMMANDS.length} commands.` });
-
-  await search.fill('workflow-');
-  await expect(page.getByRole('status')).toContainText(`Showing 2 of ${CLI_COMMANDS.length} commands.`);
-  await search.focus();
 
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'cli_catalogue_filter',
     path: '/cli',
+    prepare: async () => {
+      await page.goto('/cli');
+      await search.fill('workflow-');
+      await expect(page.getByRole('status')).toContainText(`Showing 2 of ${CLI_COMMANDS.length} commands.`);
+      await search.focus();
+    },
     action: async () => {
       await page.keyboard.press('p');
     },
@@ -551,17 +626,19 @@ test('measures request-free local filtering of the public CLI catalogue', async 
 });
 
 test('measures a deferred large synthetic public example without collection', async ({ page }, testInfo) => {
-  await page.goto('/examples');
   const example = page.locator('article[data-example="case-handoff"]');
   const disclosure = example.locator(':scope > button');
   const output = example.getByRole('textbox', { name: 'Reviewed public Case handoff synthetic output' });
-  await expect(output).toHaveCount(0);
 
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'examples_large_output',
     path: '/examples',
+    prepare: async () => {
+      await page.goto('/examples');
+      await expect(output).toHaveCount(0);
+    },
     action: async () => {
       await disclosure.focus();
       await page.keyboard.press('Enter');
@@ -575,12 +652,6 @@ test('measures a deferred large synthetic public example without collection', as
 });
 
 test('measures a later fictional demo stage without opening production storage', async ({ page }, testInfo) => {
-  await page.goto('/demo');
-  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Define the official identity' })).toHaveCount(0);
-  expect(await page.evaluate(async () => (await indexedDB.databases())
-    .some((database) => database.name === 'whoisleuth-browser-data-v1'))).toBe(false);
-
   const start = page.getByRole('button', { name: 'Begin with Brands' });
   const heading = page.getByRole('heading', { name: 'Define the official identity' });
   await measureDeferredInteraction({
@@ -588,6 +659,13 @@ test('measures a later fictional demo stage without opening production storage',
     testInfo,
     interaction: 'demo_later_stage',
     path: '/demo',
+    prepare: async () => {
+      await page.goto('/demo');
+      await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
+      await expect(heading).toHaveCount(0);
+      expect(await page.evaluate(async () => (await indexedDB.databases())
+        .some((database) => database.name === 'whoisleuth-browser-data-v1'))).toBe(false);
+    },
     action: () => start.click(),
     ready: heading,
     readyControl: page.getByRole('button', { name: 'Use synthetic profile' }),
@@ -599,16 +677,17 @@ test('measures a later fictional demo stage without opening production storage',
 });
 
 test('measures navigation to a non-default Monitor view', async ({ page }, testInfo) => {
-  await page.goto('/monitor');
   const relationshipWorkspace = page.getByRole('region', { name: 'Relationship workspace' });
-  await expect(relationshipWorkspace).toHaveCount(0);
-
   const selectedTab = page.getByRole('tab', { name: /^Relationships\b/u });
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'monitor_relationships_view',
     path: '/monitor',
+    prepare: async () => {
+      await page.goto('/monitor');
+      await expect(relationshipWorkspace).toHaveCount(0);
+    },
     action: async () => {
       await selectedTab.click();
     },
@@ -623,20 +702,22 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
 
 test('measures a deferred Brand Profile tool with a fictional active profile', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 393, height: 852 });
-  await migrateLegacyBrowserData(page, {
-    [PROFILES_KEY]: currentBrandProfileBrowserStore([brandProfileFixture()]),
-    [ACTIVE_PROFILE_KEY]: 'deferred-profile',
-  }, { clearStorage: true, destination: '/brands' });
   const workbench = page.locator('#brand-workbench');
-  await expect(workbench).toBeEnabled();
   const heading = page.getByRole('heading', { name: 'Owned-domain comparison' });
-  await expect(heading).toHaveCount(0);
 
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'brands_portfolio_workbench',
     path: '/brands',
+    prepare: async () => {
+      await migrateLegacyBrowserData(page, {
+        [PROFILES_KEY]: currentBrandProfileBrowserStore([brandProfileFixture()]),
+        [ACTIVE_PROFILE_KEY]: 'deferred-profile',
+      }, { clearStorage: true, destination: '/brands' });
+      await expect(workbench).toBeEnabled();
+      await expect(heading).toHaveCount(0);
+    },
     action: async () => {
       await workbench.selectOption('portfolio');
     },
@@ -657,14 +738,7 @@ test('measures a deferred Bulk cohort-analysis workspace after collection comple
       body: JSON.stringify(bulkResponse(target)),
     });
   });
-  await page.goto('/bulk');
-  await page.locator('#domains').fill(['alpha.test', 'beta.test', 'gamma.test'].join('\n'));
-  await page.getByRole('button', { name: 'Scan 3 domains' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
-  await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
   const outlierHeading = page.getByRole('heading', { name: 'Local cohort outliers' });
-  await expect(outlierHeading).toHaveCount(0);
-
   const resultViews = page.getByRole('group', { name: 'Bulk result view' });
   const analysisView = resultViews.getByRole('button', { name: 'Analysis', exact: true });
   await measureDeferredInteraction({
@@ -672,6 +746,14 @@ test('measures a deferred Bulk cohort-analysis workspace after collection comple
     testInfo,
     interaction: 'bulk_cohort_outliers',
     path: '/bulk',
+    prepare: async () => {
+      await page.goto('/bulk');
+      await page.locator('#domains').fill(['alpha.test', 'beta.test', 'gamma.test'].join('\n'));
+      await page.getByRole('button', { name: 'Scan 3 domains' }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
+      await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
+      await expect(outlierHeading).toHaveCount(0);
+    },
     action: async () => {
       await analysisView.click();
       await page.getByRole('button', { name: /Cohort outliers/u }).click();
@@ -690,20 +772,22 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
     contentType: 'application/json',
     body: JSON.stringify(lookupResponse(target)),
   }));
-  await page.goto('/lookup');
-  await page.locator('#query').fill(target);
-  await page.getByRole('button', { name: 'Run lookup' }).click();
   const familyToggle = page.locator('#web-evidence > button.family-summary');
-  await expect(familyToggle).toBeEnabled();
-  await expect(familyToggle).toHaveAttribute('aria-label', 'Expand Web and DNS evidence');
   const dnsHeading = page.locator('#evidence-dns .dns-card').getByRole('heading', { name: 'DNS evidence' });
-  await expect(dnsHeading).toHaveCount(0);
 
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'lookup_dns_evidence',
     path: '/lookup',
+    prepare: async () => {
+      await page.goto('/lookup');
+      await page.locator('#query').fill(target);
+      await page.getByRole('button', { name: 'Run lookup' }).click();
+      await expect(familyToggle).toBeEnabled();
+      await expect(familyToggle).toHaveAttribute('aria-label', 'Expand Web and DNS evidence');
+      await expect(dnsHeading).toHaveCount(0);
+    },
     action: async () => {
       await familyToggle.focus();
       await page.keyboard.press('Enter');
@@ -717,18 +801,8 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
 
 test('measures the deferred Case response and packet workspace', async ({ page }, testInfo) => {
   const caseId = 'deferred-response-case';
-  await migrateLegacyBrowserData(page, {
-    [CASES_KEY]: {
-      version: CASE_SCHEMA_VERSION,
-      cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
-    },
-  }, { clearStorage: true, destination: '/monitor?view=cases' });
   const caseHeading = page.locator(`#case-head-${caseId}`);
-  await expect(caseHeading).toBeVisible();
-  await caseHeading.click();
   const disclosure = page.locator(`#case-response-${caseId}`);
-  await expect(disclosure).toBeVisible();
-  await expect(disclosure.locator('.response-workspace')).toHaveCount(0);
   const summary = disclosure.locator(':scope > summary');
   const advancedPresentation = disclosure.getByRole('button', { name: 'Advanced', exact: true });
 
@@ -737,6 +811,18 @@ test('measures the deferred Case response and packet workspace', async ({ page }
     testInfo,
     interaction: 'case_response_packet',
     path: '/monitor',
+    prepare: async () => {
+      await migrateLegacyBrowserData(page, {
+        [CASES_KEY]: {
+          version: CASE_SCHEMA_VERSION,
+          cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
+        },
+      }, { clearStorage: true, destination: '/monitor?view=cases' });
+      await expect(caseHeading).toBeVisible();
+      await caseHeading.click();
+      await expect(disclosure).toBeVisible();
+      await expect(disclosure.locator('.response-workspace')).toHaveCount(0);
+    },
     action: async () => {
       await summary.focus();
       await page.keyboard.press('Enter');
@@ -750,11 +836,8 @@ test('measures the deferred Case response and packet workspace', async ({ page }
 });
 
 test('measures command navigation and preserves shortcut focus recovery', async ({ page }, testInfo) => {
-  await page.goto('/dashboard');
   const trigger = page.getByRole('button', { name: 'Open console navigation' });
-  await expect(trigger).toBeEnabled();
   const dialog = page.getByRole('dialog', { name: 'Go to' });
-  await expect(dialog).toHaveCount(0);
   const search = page.getByRole('combobox', { name: 'Search pages and tools' });
 
   await measureDeferredInteraction({
@@ -762,6 +845,11 @@ test('measures command navigation and preserves shortcut focus recovery', async 
     testInfo,
     interaction: 'dashboard_command_palette',
     path: '/dashboard',
+    prepare: async () => {
+      await page.goto('/dashboard');
+      await expect(trigger).toBeEnabled();
+      await expect(dialog).toHaveCount(0);
+    },
     action: () => page.keyboard.press('Control+K'),
     ready: dialog,
     readyControl: search,

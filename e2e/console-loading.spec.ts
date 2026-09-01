@@ -1,5 +1,11 @@
-import { ALLOWED_ORIGIN, enforcesMachineTimingBudgets, expect, test } from './fixtures';
+import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
 import type { CDPSession, Page, TestInfo } from '@playwright/test';
+import {
+  PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+  performanceSampleMedian,
+  resetPerformanceSampleState,
+} from './performance-sampling';
 
 type ConsoleRoute = Readonly<{
   path: '/lookup' | '/monitor' | '/cli';
@@ -63,12 +69,6 @@ const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
   '/monitor': Object.freeze({ encodedTransferBytes: 1_748_707, usableMs: 1_627.7, longTaskTotalMs: 68, layoutShiftScore: 0.0064 }),
   '/cli': Object.freeze({ encodedTransferBytes: 466_249, usableMs: 250.7, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
 });
-// Three samples make the median require two passes against the unchanged
-// reviewed budget. One scheduler-affected sample remains permitted, but the
-// two-times hard ceiling prevents the median from hiding a severe regression.
-const CONSOLE_LOADING_SAMPLE_COUNT = 3;
-const CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER = 2;
-
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
 }
@@ -121,31 +121,6 @@ function attachTransferProbe(session: CDPSession) {
     completedRequestCount += 1;
   });
   return () => ({ encodedTransferBytes, completedRequestCount });
-}
-
-async function resetConsoleRouteState(page: Page): Promise<void> {
-  if (page.url() === ALLOWED_ORIGIN || page.url().startsWith(`${ALLOWED_ORIGIN}/`)) {
-    await page.evaluate(() => sessionStorage.clear());
-  }
-  await page.goto('about:blank');
-  const session = await page.context().newCDPSession(page);
-  try {
-    await session.send('Network.enable');
-    await session.send('Network.clearBrowserCache');
-    await session.send('Storage.clearDataForOrigin', {
-      origin: ALLOWED_ORIGIN,
-      storageTypes: 'appcache,cache_storage,indexeddb,local_storage,service_workers,websql',
-    });
-  } finally {
-    await session.detach();
-  }
-}
-
-function median(values: readonly number[]): number {
-  if (values.length !== CONSOLE_LOADING_SAMPLE_COUNT) {
-    throw new TypeError(`Console loading requires exactly ${CONSOLE_LOADING_SAMPLE_COUNT} samples.`);
-  }
-  return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)]!;
 }
 
 async function installMainThreadProbe(page: Page): Promise<void> {
@@ -275,8 +250,8 @@ for (const route of routes) {
   test(`authenticated cold load for ${route.path} preserves deterministic loading contracts`, async ({ page }, testInfo) => {
     await installMainThreadProbe(page);
     const measurements: ConsoleLoadingMeasurement[] = [];
-    for (let sample = 1; sample <= CONSOLE_LOADING_SAMPLE_COUNT; sample += 1) {
-      await resetConsoleRouteState(page);
+    for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
+      await resetPerformanceSampleState(page);
       const measurement = await measureConsoleRoute(page, route, testInfo, sample);
       measurements.push(measurement);
       expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
@@ -294,9 +269,9 @@ for (const route of routes) {
       path: route.path,
       budget: route.budget,
       sampleCount: measurements.length,
-      usableMsMedian: median(measurements.map((measurement) => measurement.usableMs)),
+      usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
       usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
-      longTaskTotalMsMedian: median(measurements.map((measurement) => measurement.longTaskTotalMs)),
+      longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
       longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
       samples: Object.freeze([...measurements]),
       limitations: Object.freeze([
@@ -316,10 +291,10 @@ for (const route of routes) {
       expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(route.budget.usableMs);
       expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
       expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
-        route.budget.usableMs * CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER,
+        route.budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
       );
       expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
-        route.budget.longTaskTotalMs * CONSOLE_LOADING_TRANSIENT_OUTLIER_MULTIPLIER,
+        route.budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
       );
     }
   });
