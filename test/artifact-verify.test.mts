@@ -7,6 +7,8 @@ import {
   formatOfflineArtifactVerification,
   verifyOfflineArtifact,
 } from '../cli/artifact-verify.mts';
+import * as artifactStructureFacade from '../cli/artifact-structure.mts';
+import * as offlineArtifactValidation from '../cli/offline-artifact-validation.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import {
@@ -193,6 +195,10 @@ function lookupEvidenceArtifact(): Record<string, unknown> {
 }
 
 describe('offline artifact verifier', () => {
+  test('keeps the historical structure module as an exact compatibility facade', () => {
+    assert.deepEqual(artifactStructureFacade, offlineArtifactValidation);
+  });
+
   test('validates workspace manifests and section checksums without printing contents', async () => {
     const archive = await buildWorkspaceArchive({
       cases: {

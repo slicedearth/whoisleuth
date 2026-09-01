@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import * as artifactStructureModule from '../cli/artifact-structure.mts';
+import * as offlineArtifactValidationModule from '../cli/offline-artifact-validation.mts';
 import * as artifactVerifyModule from '../cli/artifact-verify.mts';
 import { commandOptionSpec } from '../cli/command-reference.mts';
 import {
@@ -133,7 +133,7 @@ const HOOK_MODULES: Readonly<Record<string, object>> = Object.freeze({
   'packages/evidence/domain-control-runtime.mts': domainControlRuntimeModule,
   'packages/workspace/domain-control-passport.mts': browserDomainControlModule,
   'lib/domain-control-manifest.mts': nodeDomainControlModule,
-  'cli/artifact-structure.mts': artifactStructureModule,
+  'cli/offline-artifact-validation.mts': offlineArtifactValidationModule,
   'cli/artifact-verify.mts': artifactVerifyModule,
   'cli/interchange-report.mts': interchangeReportModule,
   'cli/evidence-signing.mts': evidenceSigningModule,
@@ -155,7 +155,7 @@ const EXPECTED_HOOKS = Object.freeze([
   ['domain-control.node.build-document', 'builder', 'node', 'lib/domain-control-manifest.mts', 'buildDomainControlManifest'],
   ['domain-control.node.verify-integrity', 'integrity_verifier', 'node', 'lib/domain-control-manifest.mts', 'verifyDomainControlManifest'],
   ['domain-control.node.review', 'reviewer', 'node', 'lib/domain-control-manifest.mts', 'reviewDomainControlManifest'],
-  ['domain-control.cli.offline-structure', 'structure_validator', 'cli', 'cli/artifact-structure.mts', 'validateSignedDigestArtifactStructure'],
+  ['domain-control.cli.offline-structure', 'structure_validator', 'cli', 'cli/offline-artifact-validation.mts', 'validateSignedDigestArtifactStructure'],
   ['domain-control.cli.offline-verify', 'integrity_verifier', 'cli', 'cli/artifact-verify.mts', 'verifyOfflineArtifact'],
   ['domain-control.cli.interchange-report', 'interchange_reporter', 'cli', 'cli/interchange-report.mts', 'buildInterchangeFidelityReport'],
   ['domain-control.cli.sign-package', 'signer', 'cli', 'cli/evidence-signing.mts', 'signEvidencePackage'],

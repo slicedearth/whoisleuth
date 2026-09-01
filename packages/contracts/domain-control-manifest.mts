@@ -489,7 +489,7 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       { id: 'domain-control.node.build-document', role: 'builder', runtime: 'node', module: 'lib/domain-control-manifest.mts', exportName: 'buildDomainControlManifest' },
       { id: 'domain-control.node.verify-integrity', role: 'integrity_verifier', runtime: 'node', module: 'lib/domain-control-manifest.mts', exportName: 'verifyDomainControlManifest' },
       { id: 'domain-control.node.review', role: 'reviewer', runtime: 'node', module: 'lib/domain-control-manifest.mts', exportName: 'reviewDomainControlManifest' },
-      { id: 'domain-control.cli.offline-structure', role: 'structure_validator', runtime: 'cli', module: 'cli/artifact-structure.mts', exportName: 'validateSignedDigestArtifactStructure' },
+      { id: 'domain-control.cli.offline-structure', role: 'structure_validator', runtime: 'cli', module: 'cli/offline-artifact-validation.mts', exportName: 'validateSignedDigestArtifactStructure' },
       { id: 'domain-control.cli.offline-verify', role: 'integrity_verifier', runtime: 'cli', module: 'cli/artifact-verify.mts', exportName: 'verifyOfflineArtifact' },
       { id: 'domain-control.cli.interchange-report', role: 'interchange_reporter', runtime: 'cli', module: 'cli/interchange-report.mts', exportName: 'buildInterchangeFidelityReport' },
       { id: 'domain-control.cli.sign-package', role: 'signer', runtime: 'cli', module: 'cli/evidence-signing.mts', exportName: 'signEvidencePackage' },

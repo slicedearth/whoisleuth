@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
-import { validateOfflineArtifactStructure } from '../cli/artifact-structure.mts';
+import { validateOfflineArtifactStructure } from '../cli/offline-artifact-validation.mts';
 import * as casePack from '../cli/case-pack.mts';
 import * as caseModel from '../frontend/src/lib/analysis/case-model.ts';
 import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';

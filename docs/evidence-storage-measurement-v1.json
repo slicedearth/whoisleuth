@@ -585,14 +585,14 @@
       "lifecycleSerialisationProfiles": 7,
       "lifecyclePrivacyProfiles": 3,
       "lifecycleConsumerEdges": 16,
-      "versionSensitiveProductionLines": 221,
-      "versionSensitiveBranches": 54,
+      "versionSensitiveProductionLines": 215,
+      "versionSensitiveBranches": 51,
       "generatedInventoryEntries": 9,
       "generatedDocumentationEntries": 11,
       "sourceMeasurement": {
-        "sourceFiles": 13,
-        "versionSensitiveProductionLines": 221,
-        "versionSensitiveBranches": 54,
+        "sourceFiles": 15,
+        "versionSensitiveProductionLines": 215,
+        "versionSensitiveBranches": 51,
         "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
       }
     }

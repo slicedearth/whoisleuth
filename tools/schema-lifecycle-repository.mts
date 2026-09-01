@@ -4,7 +4,7 @@ import { types as utilTypes } from 'node:util';
 
 import ts from 'typescript';
 
-import * as artifactStructureModule from '../cli/artifact-structure.mts';
+import * as offlineArtifactValidationModule from '../cli/offline-artifact-validation.mts';
 import * as artifactVerifyModule from '../cli/artifact-verify.mts';
 import * as casePackModule from '../cli/case-pack.mts';
 import * as domainControlMonitorModule from '../cli/domain-control-monitor.mts';
@@ -123,7 +123,7 @@ const LIFECYCLE_CODE_EXTENSIONS = new Set([
 ]);
 
 export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
-  'cli/artifact-structure.mts': artifactStructureModule,
+  'cli/offline-artifact-validation.mts': offlineArtifactValidationModule,
   'cli/artifact-verify.mts': artifactVerifyModule,
   'cli/case-pack.mts': casePackModule,
   'cli/domain-control-monitor.mts': domainControlMonitorModule,

@@ -822,7 +822,7 @@ const CASE_LIFECYCLE_HOOKS = Object.freeze([
     id: 'case.packet.structure',
     role: 'structure_validator',
     runtime: 'cli',
-    module: 'cli/artifact-structure.mts',
+    module: 'cli/offline-artifact-validation.mts',
     exportName: 'validateOfflineArtifactStructure',
   },
   {

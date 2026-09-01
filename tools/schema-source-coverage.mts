@@ -152,7 +152,7 @@ const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
 
 const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['cli/archive-inspect.mts', 'writer', 2, 'Copies validated archive markers into inspection projections.'],
-  ['cli/artifact-structure.mts', 'reader', 1, 'Dispatches a bounded document through its selected canonical schema contract.'],
+  ['cli/artifact-validation/signed-review.mts', 'reader', 1, 'Confirms a directly selected signed-review contract before family-specific validation.'],
   ['cli/artifact-verify.mts', 'reader', 1, 'Compares bounded artifact markers during manifest verification.'],
   ['cli/artifact-verify.mts', 'writer', 7, 'Projects verified canonical and bounded artifact markers into reports.'],
   ['cli/evidence-signing.mts', 'writer', 1, 'Copies a verified source-artifact marker into signature metadata.'],

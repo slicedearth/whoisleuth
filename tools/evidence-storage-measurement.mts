@@ -52,7 +52,9 @@ const COMPATIBILITY_SOURCE_PATHS = Object.freeze([
   'packages/workspace/workspace-archive.mts',
   'packages/workspace/workspace-archive-crypto.mts',
   'cli/case-pack.mts',
-  'cli/artifact-structure.mts',
+  'cli/offline-artifact-validation.mts',
+  'cli/artifact-validation/case-response.mts',
+  'cli/artifact-validation/structure-primitives.mts',
   'cli/archive-inspect.mts',
   'tools/case-contract-doc.mts',
 ] as const);

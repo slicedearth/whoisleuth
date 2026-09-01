@@ -16,7 +16,7 @@ import {
 import { parseCliArguments } from '../cli/arguments.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { validateSignedDigestArtifactStructure } from '../cli/artifact-structure.mts';
+import { validateSignedDigestArtifactStructure } from '../cli/offline-artifact-validation.mts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { buildInterchangeFidelityReport } from '../cli/interchange-report.mts';
 import { canonicalArtifactJson } from '../frontend/src/lib/analysis/artifact-integrity.ts';
