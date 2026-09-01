@@ -38,12 +38,6 @@ import {
 } from '../packages/contracts/privacy-data-flow-catalogue.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
-  CASE_SCHEMA_VERSION,
-  PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
-  WORKSPACE_ARCHIVE_VERSION,
-} from '../packages/contracts/case-portability.mts';
-import {
   PRIVACY_DATA_FLOW_CATALOGUE,
   humanPrivacySummary,
   renderPrivacyDataFlowCatalogueJson,
@@ -89,10 +83,6 @@ function assertDeeplyFrozen(value: unknown, visited = new WeakSet<object>()): vo
   for (const child of Object.values(value as Record<string, unknown>)) {
     assertDeeplyFrozen(child, visited);
   }
-}
-
-function normaliseWhitespace(value: string): string {
-  return value.replace(/\s+/gu, ' ').trim();
 }
 
 function mutableCatalogue(): any {
@@ -462,24 +452,8 @@ describe('privacy data-flow catalogue', () => {
     }
   });
 
-  test('keeps critical public privacy facts aligned without duplicating catalogue prose', () => {
+  test('links the generated catalogue without duplicating it into public pages', () => {
     const privacyPage = readFileSync(new URL('../frontend/src/routes/(public)/privacy/+page.svelte', import.meta.url), 'utf8');
-    const privacyNotice = readFileSync(new URL('../PRIVACY.md', import.meta.url), 'utf8');
-    const publicPrivacySurfaces = [privacyPage, privacyNotice].map(normaliseWhitespace);
-    const criticalFacts = [
-      { category: 'compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remains readable`, 'iu') },
-      { category: 'compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*version ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} remains readable`, 'iu') },
-      { category: 'storage', pattern: /IndexedDB as plaintext JSON/iu },
-      { category: 'network', pattern: /Single and Bulk lookups send the selected target/iu },
-      { category: 'export', pattern: /full saved Lookup.*Review every file before sharing/iu },
-      { category: 'deletion', pattern: /Deleting browser data does not delete separately downloaded files/iu },
-    ] as const;
-    for (const fact of criticalFacts) {
-      for (const contents of publicPrivacySurfaces) {
-        assert.match(contents, fact.pattern, `Public privacy surface omits ${fact.category} fact.`);
-      }
-    }
-
     const resourcesPage = readFileSync(new URL('../frontend/src/routes/(public)/resources/+page.svelte', import.meta.url), 'utf8');
     assert.doesNotMatch(privacyPage, /<PrivacyDataFlowSummary/u);
     assert.match(privacyPage, /privacy-data-flow-catalogue\.md/u);

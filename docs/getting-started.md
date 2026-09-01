@@ -53,39 +53,20 @@ Architecture checks enforce that direction.
 
 ## Verification
 
-Run focused tests while changing a bounded surface. Before a major local commit
-or release candidate, run the complete relevant gate:
+Run focused tests while changing a bounded surface. Before pushing a clean
+commit, run the same maintained quality, unit and browser gates as hosted CI:
 
 ```bash
-npm test
-npm run test:coverage
-npm run test:critical-io-coverage
-npm run test:properties
-npm run test:mutation
-npm run typecheck
-npm run check
-npm run build
-npm run architecture:check
-npm run capabilities:check
-npm run public-product:check
-npm run privacy:check
-npm run schema:inventory
-npm run compatibility:check
-npm run licenses:check
-npm run cli:package:check
-npm run release:check
-npm run test:e2e:built
-npm run dependencies:audit
-npm run security:staged
-git diff --check
+npm run verification:ci
 ```
 
-The required delivery sequence includes `npm run test:e2e:built`; it runs the
-single-worker performance authority before the functional browser load.
-Ordinary interactive browser work can use `npm run test:e2e`, which excludes
-machine-timing ceilings so a focused functional run cannot contend with its own
-performance measurement. Report exact failures, retries, flakes and skips
-rather than describing a retried run as clean.
+The parity command requires the exact `.nvmrc` runtime and a clean worktree. It
+performs the locked install and changed-line security scan before the maintained
+quality, coverage, build and production-browser gates. Ordinary interactive
+browser work can use `npm run test:e2e`, which excludes machine-timing ceilings
+so a focused functional run cannot contend with its own performance
+measurement. Report exact failures, retries, flakes and skips rather than
+describing a retried run as clean.
 
 Some checks deliberately read the repository, dependency graph, fixtures or
 generated contracts. They do not contact live investigation targets. Commands

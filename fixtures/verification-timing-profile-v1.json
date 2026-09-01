@@ -1286,13 +1286,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/cli-lookup-v1-fixture.mts",
-      "lane": "unit",
-      "weightMs": 126,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/cli-mail-review.test.mts",
       "lane": "unit",
       "weightMs": 49,
@@ -1979,254 +1972,9 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/fixtures/architecture/cli/forbidden-presentation.mts",
-      "lane": "unit",
-      "weightMs": 135,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/artifact-integrity.mts",
-      "lane": "unit",
-      "weightMs": 133,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/brand-profile-model.mts",
-      "lane": "unit",
-      "weightMs": 106,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/case-model.mts",
-      "lane": "unit",
-      "weightMs": 120,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/domain-control-manifest-core.mts",
-      "lane": "unit",
-      "weightMs": 117,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/domain-control-records.mts",
-      "lane": "unit",
-      "weightMs": 106,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/external-findings-import.mts",
-      "lane": "unit",
-      "weightMs": 99,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/page-similarity.mts",
-      "lane": "unit",
-      "weightMs": 137,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/analysis/workspace-archive.mts",
-      "lane": "unit",
-      "weightMs": 99,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/components/adapter.mts",
-      "lane": "unit",
-      "weightMs": 102,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/frontend/src/lib/forbidden-observation-facade.mts",
-      "lane": "unit",
-      "weightMs": 127,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/lib/forbidden-frontend.mts",
-      "lane": "unit",
-      "weightMs": 152,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/lib/observation.mts",
-      "lane": "unit",
-      "weightMs": 101,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/lib/runtime.mts",
-      "lane": "unit",
-      "weightMs": 130,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/netlify/functions/forbidden-frontend.mts",
-      "lane": "unit",
-      "weightMs": 133,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/cases/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 142,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/cases/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 148,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/comparison/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 114,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/contracts/forbidden-contract.mts",
-      "lane": "unit",
-      "weightMs": 109,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/evidence/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 101,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/interchange/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 111,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/interchange/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 91,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/investigation/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 133,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/investigation/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 133,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/monitoring/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 119,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/monitoring/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 133,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/relationships/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 118,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/relationships/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 123,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/workspace/forbidden-domain.mts",
-      "lane": "unit",
-      "weightMs": 115,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/packages/workspace/forbidden-node-core.mts",
-      "lane": "unit",
-      "weightMs": 112,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/server.mts",
-      "lane": "unit",
-      "weightMs": 124,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/fixtures/architecture/tools/forbidden-frontend.mts",
-      "lane": "unit",
-      "weightMs": 114,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/frontend-loading-report.test.mts",
       "lane": "unit",
       "weightMs": 44,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/helpers/fast-check-config.mts",
-      "lane": "unit",
-      "weightMs": 177,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-change-60400ba9"
-    },
-    {
-      "file": "test/helpers/threat-provider-conformance.mts",
-      "lane": "unit",
-      "weightMs": 142,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/homepage-metadata-fixtures.mts",
-      "lane": "unit",
-      "weightMs": 162,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
     },
@@ -2567,13 +2315,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/lookup-evidence-v26-fixture.mts",
-      "lane": "unit",
-      "weightMs": 126,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/lookup-investigation-brief.test.mts",
       "lane": "unit",
       "weightMs": 9,
@@ -2906,13 +2647,6 @@
       "file": "test/privacy-data-flow-catalogue.test.mts",
       "lane": "unit",
       "weightMs": 566,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "test/privacy-dns-consistency.test.mts",
-      "lane": "unit",
-      "weightMs": 8,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
     },
@@ -3729,13 +3463,6 @@
       "provenanceId": "unit-local-start-60400ba9"
     },
     {
-      "file": "test/value-assertions.mts",
-      "lane": "unit",
-      "weightMs": 171,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
       "file": "test/verification-architecture.test.mts",
       "lane": "unit",
       "weightMs": 296,
@@ -3930,13 +3657,6 @@
       "weightMs": 23,
       "sampleCount": 1,
       "provenanceId": "unit-local-start-60400ba9"
-    },
-    {
-      "file": "tools/test-duration-reporter.mts",
-      "lane": "unit",
-      "weightMs": 179,
-      "sampleCount": 1,
-      "provenanceId": "unit-local-postrepair-60400ba9"
     }
   ]
 }

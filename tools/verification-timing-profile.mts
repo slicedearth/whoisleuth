@@ -23,7 +23,7 @@ const PROVENANCE_KEYS = new Set(['id', 'lane', 'environmentClass', 'sampleBasis'
 const FILE_KEYS = new Set(['file', 'lane', 'weightMs', 'sampleCount', 'provenanceId']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,79})$/u;
 const SAFE_REVISION = /^[0-9a-f]{40}$/u;
-const SAFE_TEST_PATH = /^(?:test\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+\.mts|tools\/test-[a-zA-Z0-9._-]+\.mts|e2e\/[a-zA-Z0-9._-]+\.(?:spec\.ts|setup\.ts))$/u;
+const SAFE_TEST_PATH = /^(?:test\/[a-zA-Z0-9._-]+\.test\.mts|e2e\/[a-zA-Z0-9._-]+\.(?:spec\.ts|setup\.ts))$/u;
 
 export type VerificationTimingLane = 'unit' | 'browser' | 'browser_setup';
 
@@ -96,7 +96,7 @@ function boundedInteger(value: unknown, label: string, maximum: number): number 
 }
 
 function testLane(file: string): VerificationTimingLane {
-  if (file.startsWith('test/') || file.startsWith('tools/test-')) return 'unit';
+  if (file.startsWith('test/')) return 'unit';
   if (file.endsWith('.setup.ts')) return 'browser_setup';
   return 'browser';
 }
@@ -127,10 +127,10 @@ function collectTestFiles(directory: string, suffix: RegExp, prefix: string): st
 }
 
 export function readVerificationTestInventory(): readonly string[] {
-  const unit = [
-    ...collectTestFiles('test', /\.mts$/u, 'test'),
-    ...collectTestFiles('tools', /^test-[a-zA-Z0-9._-]+\.mts$/u, 'tools'),
-  ];
+  const unit = readdirSync(path.join(REPOSITORY_ROOT, 'test'), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^[a-zA-Z0-9._-]+\.test\.mts$/u.test(entry.name))
+    .map((entry) => `test/${entry.name}`)
+    .sort();
   const browser = collectTestFiles('e2e', /\.(?:spec|setup)\.ts$/u, 'e2e');
   const inventory = [...unit, ...browser].sort();
   if (inventory.length < 1 || new Set(inventory).size !== inventory.length) {

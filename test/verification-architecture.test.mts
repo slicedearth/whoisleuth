@@ -33,6 +33,9 @@ describe('verification architecture contracts', () => {
     const second = buildBalancedBrowserShardPlan(profile);
     assert.deepEqual(first, second);
     assert.deepEqual(profile.files.map((item) => item.file).sort(), [...inventory].sort());
+    assert.ok(inventory.every((file) => !file.startsWith('test/') || /^test\/[^/]+\.test\.mts$/u.test(file)));
+    assert.equal(inventory.includes('tools/test-duration-reporter.mts'), false);
+    assert.equal(inventory.some((file) => file.startsWith('test/support/')), false);
     assert.equal(first.setupFiles.length, 1);
     assert.equal(first.shards.length, 4);
     const eligible = profile.files.filter((item) => item.lane === 'browser').map((item) => item.file).sort();

@@ -32,20 +32,7 @@ const REQUIRED_GUIDES = [
   'docs/getting-started.md',
   'docs/operations.md',
 ];
-const REQUIRED_DELIVERY_COMMANDS = [
-  'npm test',
-  'npm run typecheck',
-  'npm run check',
-  'npm run build',
-  'npm run architecture:check',
-  'npm run capabilities:check',
-  'npm run schema:inventory',
-  'npm run licenses:check',
-  'npm run cli:package:check',
-  'npm run test:e2e:built',
-  'git diff --check',
-  'npm run dependencies:audit',
-];
+const REQUIRED_DELIVERY_COMMANDS = ['npm run verification:ci'];
 const README_VERIFICATION_COMMANDS = [
   'npm test',
   'npm run typecheck',
