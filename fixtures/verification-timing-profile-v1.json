@@ -64,6 +64,13 @@
       "environmentClass": "local-darwin-arm64-node24",
       "sampleBasis": "complete-unit-suite-except-timing-contract-tests",
       "sampleCount": 1
+    },
+    {
+      "id": "unit-local-route-controllers-20260901",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node24",
+      "sampleBasis": "exact-seven-route-controller-tests",
+      "sampleCount": 1
     }
   ],
   "files": [
@@ -780,6 +787,13 @@
       "weightMs": 9,
       "sampleCount": 1,
       "provenanceId": "unit-local-maintenance-consolidated-20260901"
+    },
+    {
+      "file": "test/bulk-scan-controller.test.mts",
+      "lane": "unit",
+      "weightMs": 9,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-route-controllers-20260901"
     },
     {
       "file": "test/bulk-scan-normalizer.test.mts",
@@ -2404,6 +2418,13 @@
       "weightMs": 244,
       "sampleCount": 1,
       "provenanceId": "unit-local-maintenance-consolidated-20260901"
+    },
+    {
+      "file": "test/monitor-route-controller.test.mts",
+      "lane": "unit",
+      "weightMs": 10,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-route-controllers-20260901"
     },
     {
       "file": "test/nameserver-preflight-review.test.mts",

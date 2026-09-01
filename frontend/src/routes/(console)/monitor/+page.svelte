@@ -19,8 +19,20 @@
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
   import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
-  import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
+  import {
+    appendUnavailableCollectionStatus,
+    buildMonitorNavigationUrl,
+    createMonitorCollectionLoader,
+    monitorRouteKey,
+    monitorRouteTarget,
+    monitorViewCollections,
+    monitorViewFromUrl,
+    monitorWorkflowForView,
+    type MonitorCollection,
+    type MonitorFocus,
+    type MonitorView,
+  } from '$lib/controllers/monitor-route-controller.ts';
   import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
@@ -63,24 +75,12 @@
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
   onDestroy(() => moduleController.abort());
 
-  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules' | 'certificates';
-  const MONITOR_VIEWS = new Set<View>(['inbox','timeline','watchlists','cases','campaigns','relationships','rules','certificates']);
-  const RESPOND_VIEWS = new Set<View>(['inbox','cases','campaigns','relationships']);
   const CASE_PAGE_SIZE=25;
-  let view=$state<View>('inbox');
-  const monitorWorkflow=$derived(RESPOND_VIEWS.has(view)
-    ? {
-        eyebrow:'Respond',
-        description:'Review retained evidence, organise cases and prepare responses.',
-      }
-    : {
-        eyebrow:'Assure',
-        description:'Review monitoring history, watchlists and local control rules.',
-      });
+  let view=$state<MonitorView>('inbox');
+  const monitorWorkflow=$derived(monitorWorkflowForView(view));
   $effect(()=>{
     const currentUrl=page.url;
-    const rawView=currentUrl.searchParams.get('view');
-    const requested:View=currentUrl.searchParams.get('case')?'cases':rawView&&MONITOR_VIEWS.has(rawView as View)?rawView as View:'inbox';
+    const requested=monitorViewFromUrl(currentUrl);
     untrack(()=>{
       view=requested;
     });
@@ -88,22 +88,16 @@
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const scheduledCapability=$derived(featureCapability(capabilityReport?.()||null,'scheduled_monitoring'));
 
-  async function navigateMonitor(next:View,focus?:{parameter:'case'|'watchlist'|'campaign'|'observation';value:string}){
+  async function navigateMonitor(next:MonitorView,focus?:MonitorFocus){
     preloadMonitorView(next);
     view=next;
-    const url=new URL(page.url);
-    url.searchParams.set('view',next);
-    for(const parameter of ['case','watchlist','campaign','observation'])url.searchParams.delete(parameter);
-    if(!focus)for(const parameter of ['investigation','domain','response'])url.searchParams.delete(parameter);
-    if(focus)url.searchParams.set(focus.parameter,focus.value);
-    url.hash='';
-    await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});
+    await goto(buildMonitorNavigationUrl(page.url,next,focus),{noScroll:true,keepFocus:true});
   }
-  function selectMonitorView(next:View){
+  function selectMonitorView(next:MonitorView){
     if(next===view)return;
     void navigateMonitor(next);
   }
-  function preloadMonitorView(next:View){
+  function preloadMonitorView(next:MonitorView){
     if(next==='certificates')preloadModule(()=>import('$lib/components/CertificateReviewInbox.svelte'));
     else if(next==='timeline')preloadModule(()=>Promise.all([import('$lib/components/RetainedEvidenceTimeline.svelte'),import('$lib/components/RetainedChangeReview.svelte')]));
     else if(next==='campaigns')preloadModule(()=>import('$lib/components/CampaignManager.svelte'));
@@ -428,7 +422,6 @@
   }
 
   let appliedMonitorRouteKey='';
-  function monitorRouteKey(url:URL){return `${url.pathname}${url.search}${url.hash}`;}
   function restoreGuidedQueueTarget(){
     if(page.url.hash!=='#case-review-queue')return;
     const target=document.getElementById('case-review-queue');
@@ -456,28 +449,27 @@
     watchlistState:typeof watchlistsSourceState,
   ){
     if(routeKey===appliedMonitorRouteKey)return;
-    const focus=currentUrl.searchParams.get('case');
-    if(focus){
+    const routeTarget=monitorRouteTarget(currentUrl);
+    if(routeTarget.kind==='case'){
       if(caseState==='loading')return;
       appliedMonitorRouteKey=routeKey;
       if(caseState!=='ready')return;
-      const target=loadedCases.find((record)=>record.id===focus);
+      const target=loadedCases.find((record)=>record.id===routeTarget.id);
       if(!target)return;
-      clearCaseFilters();casePage=1;showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');noteDraft='';
+      clearCaseFilters();casePage=1;showCasePage(target);expandedId=routeTarget.id;tagDraft=target.tags.join(', ');noteDraft='';
       await tick();
       if(monitorRouteKey(page.url)!==routeKey)return;
       const workspace=document.getElementById(`case-response-${target.id}`);
-      if(currentUrl.hash===`#case-response-${encodeURIComponent(target.id)}`&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}
+      if(routeTarget.responseHash&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}
       else await focusCase(target);
       return;
     }
 
-    const requestedWatchlist=currentUrl.searchParams.get('watchlist');
-    if(requestedWatchlist){
+    if(routeTarget.kind==='watchlist'){
       if(watchlistState==='loading')return;
       appliedMonitorRouteKey=routeKey;
-      if(watchlistState==='ready'&&Object.hasOwn(loadedWatchlists,requestedWatchlist)){
-        selected=requestedWatchlist;changedOnly=false;
+      if(watchlistState==='ready'&&Object.hasOwn(loadedWatchlists,routeTarget.name)){
+        selected=routeTarget.name;changedOnly=false;
         await tick();
         if(monitorRouteKey(page.url)!==routeKey)return;
         const target=document.getElementById('watchlist-history');
@@ -487,22 +479,20 @@
       return;
     }
 
-    const guideDomain=parseDomainInput(currentUrl.searchParams.get('domain')||'').entries[0]||'';
-    const investigationRoute=currentUrl.searchParams.get('investigation')==='1';
     guidedDomains=[];guidedDomainsTruncated=false;
-    if(investigationRoute){
+    if(routeTarget.kind==='investigation'){
       if(caseState==='loading')return;
       view='cases';
       const guide=loadInvestigationGuide();
       const carried=guide?.recipeId==='brand_sweep'?(guide.focusDomain?[guide.focusDomain]:[]):guide?.reviewDomains||[];
-      guidedDomains=[...new Set([...carried,guideDomain].filter(Boolean))];
+      guidedDomains=[...new Set([...carried,routeTarget.domain].filter(Boolean))];
       guidedDomainsTruncated=Boolean(guide?.reviewDomainsTruncated);
       await tick();
       if(monitorRouteKey(page.url)!==routeKey)return;
-      if(currentUrl.hash==='#case-review-queue')restoreGuidedQueueTarget();
+      if(routeTarget.restoreQueue)restoreGuidedQueueTarget();
     }else{
-      if(guideDomain)view='cases';
-      newDomain=guideDomain;
+      if(routeTarget.kind==='domain')view='cases';
+      newDomain=routeTarget.kind==='domain'?routeTarget.domain:'';
     }
     appliedMonitorRouteKey=routeKey;
   }
@@ -517,21 +507,12 @@
     untrack(()=>{void applyMonitorRouteTarget(currentUrl,routeKey,loadedCases,caseState,loadedWatchlists,watchlistState);});
   });
 
-  const collectionLoads=new Map<string,Promise<void>>();
+  const collectionLoader=createMonitorCollectionLoader();
   function noteUnavailableCollection(label:string){
-    const prefix='Some browser-local context could not be loaded (';
-    const labels=localContextStatus.startsWith(prefix)
-      ?localContextStatus.slice(prefix.length,localContextStatus.indexOf(').')).split(', ').filter(Boolean)
-      :[];
-    if(!labels.includes(label))labels.push(label);
-    localContextStatus=`Some browser-local context could not be loaded (${labels.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
+    localContextStatus=appendUnavailableCollectionStatus(localContextStatus,label);
   }
-  function loadCollection(key:string,work:()=>Promise<void>):Promise<void>{
-    const existing=collectionLoads.get(key);
-    if(existing)return existing;
-    const pending=work();
-    collectionLoads.set(key,pending);
-    return pending;
+  function loadCollection(key:MonitorCollection,work:()=>Promise<void>):Promise<void>{
+    return collectionLoader.load(key,work);
   }
   function ensureWatchlists(){return loadCollection('watchlists',async()=>{try{await refresh();}catch{noteUnavailableCollection('watchlists');}});}
   function ensureCases(){return loadCollection('cases',async()=>{try{await refreshCases();}catch{noteUnavailableCollection('cases');}});}
@@ -542,23 +523,19 @@
   function ensureRules(){return loadCollection('rules',async()=>{try{detectionRules=await loadDetectionRules();customRuleCount=detectionRules.length;detectionRulesSourceState='ready';}catch{detectionRulesSourceState='unavailable';noteUnavailableCollection('rules');}});}
   function ensureProfiles(){return loadCollection('profiles',async()=>{try{brandProfiles=await loadProfiles();brandProfilesUnavailable=false;brandProfilesSourceState='ready';}catch{brandProfilesSourceState='unavailable';noteUnavailableCollection('Brand Profiles');}});}
   function ensureAnalystReviewState(){return loadCollection('analyst-review-state',async()=>{try{analystReviewState=await loadAnalystReviewState();analystReviewStateSourceState='ready';}catch{analystReviewStateSourceState='unavailable';noteUnavailableCollection('analyst Review Item lifecycle');}});}
-  async function ensureMonitorViewData(next:View){
-    const loads=next==='inbox'
-      ?[ensureCases(),ensureWatchlists(),ensureBulkSessions(),ensureAnalystReviewState(),ensureProfiles(),ensureRules(),ensureWebsiteSnapshots()]
-      :next==='timeline'
-        ?[ensureCases(),ensureWatchlists(),ensureBulkSessions(),ensureRelationships(),ensureWebsiteSnapshots()]
-        :next==='watchlists'
-          ?[ensureWatchlists()]
-          :next==='cases'
-            ?[ensureCases(),ensureProfiles()]
-            :next==='certificates'
-              ?[ensureCases(),ensureProfiles(),ensureAnalystReviewState()]
-            :next==='campaigns'
-              ?[ensureCampaigns(),ensureCases(),ensureProfiles(),ensureRelationships()]
-              :next==='relationships'
-                ?[ensureCases(),ensureCampaigns(),ensureRelationships(),ensureWebsiteSnapshots()]
-                :[ensureRules(),ensureCases()];
-    await Promise.all(loads);
+  const collectionEnsurers:Record<MonitorCollection,()=>Promise<void>>={
+    'analyst-review-state':ensureAnalystReviewState,
+    'bulk-sessions':ensureBulkSessions,
+    campaigns:ensureCampaigns,
+    cases:ensureCases,
+    profiles:ensureProfiles,
+    relationships:ensureRelationships,
+    rules:ensureRules,
+    watchlists:ensureWatchlists,
+    'website-snapshots':ensureWebsiteSnapshots,
+  };
+  async function ensureMonitorViewData(next:MonitorView){
+    await Promise.all(monitorViewCollections(next).map((key)=>collectionEnsurers[key]()));
   }
   $effect(()=>{
     const selectedView=view;

@@ -26,6 +26,10 @@
   import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
   import { fetchCompactBulkLookup } from '$lib/analysis/bulk-lookup-controller.ts';
   import {
+    executeBulkScan,
+    type BulkScanProfileSnapshot,
+  } from '$lib/controllers/bulk-scan-controller.ts';
+  import {
     bulkSessionInputDigest,
     bulkProfileContextsMatch,
     createBulkSessionId,
@@ -71,7 +75,7 @@
   import type { BulkReviewFilter, BulkReviewPreset, BulkReviewPresetView, BulkReviewState, BulkReviewStore } from '$lib/bulk-review';
   import { BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
   import { buildBulkDomainComparison, buildBulkDomainComparisonExport } from '$lib/analysis/bulk-domain-comparison.ts';
-  import { buildBulkRetryPlan, preservePriorBulkResult } from '$lib/analysis/bulk-retry-plan.ts';
+  import { buildBulkRetryPlan } from '$lib/analysis/bulk-retry-plan.ts';
   import {
     BULK_PACING_OPTIONS,
     buildBulkProgressEstimate,
@@ -97,7 +101,6 @@
 
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
-  const RESULT_PUBLISH_MS = 100;
   type ShortlistApi = typeof import('$lib/shortlist');
   type CasesApi = typeof import('$lib/cases');
   type ShortlistSelectionResult = Awaited<ReturnType<ShortlistApi['setShortlistSelection']>>;
@@ -106,13 +109,6 @@
   type BulkSessionsApi = typeof import('$lib/bulk-sessions');
   type BulkReviewApi = typeof import('$lib/bulk-review');
   type RelationshipApi = typeof import('$lib/relationship-observations');
-  type BulkScanProfileSnapshot = Readonly<{
-    mode: ScanMode;
-    sourceState: Exclude<ActiveBrandProfileSourceState, 'loading'>;
-    profile: BrandProfile | null;
-    provenance: BulkProfileContextProvenance;
-  }>;
-
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
   let pacing = $state<BulkPacing>('standard'); let scanElapsedMs = $state(0);
@@ -556,33 +552,23 @@
     const scanController=new AbortController();
     const generation=++scanGeneration;
     const ownsScan=()=>generation===scanGeneration&&controller===scanController;
-    const targetDomains=new Set(domains);
-    const priorByDomain=new Map(results.filter((row)=>targetDomains.has(row.domain)).map((row)=>[
-      row.domain,
-      reconcileBulkResultProfileContext(row,scanProfile.provenance),
-    ]));
-    const baseResults=replace?[]:results.filter((row)=>!targetDomains.has(row.domain));
-    const pendingResults:Array<ScanResult|undefined>=preservePrior?domains.map((domain)=>priorByDomain.get(domain)):new Array(domains.length);
-    const preservedReasons:string[]=[];
-    let cursor=0;
-    let localCompleted=0;
-    let publishTimer:ReturnType<typeof setTimeout>|null=null;
-    const snapshot=()=>[...baseResults,...pendingResults.filter((row):row is ScanResult=>Boolean(row))];
-    activeScanSnapshot=snapshot;
-    const publish=()=>{if(publishTimer){clearTimeout(publishTimer);publishTimer=null;}if(ownsScan())results=snapshot();};
-    const schedulePublish=()=>{if(ownsScan()&&!publishTimer)publishTimer=setTimeout(publish,RESULT_PUBLISH_MS);};
+    const currentResults=results;
     controller=scanController;running=true;paused=false;completed=0;total=domains.length;page=1;scanElapsedMs=0;
     if(replace)results=[];
     status=`Scanning ${total} domain${total===1?'':'s'}…${scanProfile.sourceState==='unavailable'?' Brand Profile-derived trust, allowlist, match, and contextual Risk evidence will remain inconclusive.':''}`;
-    const concurrency=bulkConcurrency(mode,pacing);
-    const startedAt=performance.now();
-    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted||!ownsScan())break;const index=cursor++,domain=domains[index];if(domain===undefined)break;let next:ScanResult;try{const body=await fetchLookup(domain,scanController.signal);next=normalize(domain,body,scanProfile);if(scanProfile.mode==='deep'&&body.availability?.deepScanComplete===false)next.saved.scanDepth='fast';}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;next=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed',scanProfile);}if(!ownsScan())break;const prior=priorByDomain.get(domain);if(preservePrior&&prior){const decision=preservePriorBulkResult(toBulkSessionResult(prior),toBulkSessionResult(next));if(decision.preserve){pendingResults[index]=prior;preservedReasons.push(`${domain}: ${decision.reason}`);}else pendingResults[index]=next;}else pendingResults[index]=next;localCompleted+=1;completed=localCompleted;scanElapsedMs=performance.now()-startedAt;schedulePublish();}};
-    await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));
-    if(!ownsScan()){if(publishTimer)clearTimeout(publishTimer);return preservedReasons;}
-    publish();activeScanSnapshot=null;running=false;controller=null;
-    if(scanController.signal.aborted)return preservedReasons;
-    status=`Completed ${completed} of ${total} lookups.${scanProfile.sourceState==='unavailable'?' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.':''}${preservedReasons.length?` Retained ${preservedReasons.length} stronger prior result${preservedReasons.length===1?'':'s'}.`:''}`;
-    return preservedReasons;
+    const execution=await executeBulkScan({
+      domains,currentResults,replace,preservePrior,profile:scanProfile,
+      controller:scanController,concurrency:bulkConcurrency(mode,pacing),ownsScan,waitWhilePaused,
+      fetchLookup,normalizeResult:normalize,failedResult,
+      onSnapshot:(snapshot)=>activeScanSnapshot=snapshot,
+      onPublish:(nextResults)=>results=nextResults,
+      onProgress:(nextCompleted,elapsedMs)=>{completed=nextCompleted;scanElapsedMs=elapsedMs;},
+    });
+    if(!execution.owned)return [...execution.preservedReasons];
+    running=false;controller=null;
+    if(execution.aborted)return [...execution.preservedReasons];
+    status=`Completed ${completed} of ${total} lookups.${scanProfile.sourceState==='unavailable'?' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.':''}${execution.preservedReasons.length?` Retained ${execution.preservedReasons.length} stronger prior result${execution.preservedReasons.length===1?'':'s'}.`:''}`;
+    return [...execution.preservedReasons];
   }
   async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(parsedInput.tooLarge){status='The pasted domain list exceeds the bounded input limit.';return;}if(profileSourceState==='loading'){status='Wait for browser-local Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
   async function retryErrors(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}const domains=results.filter(r=>r.status==='error').map(r=>r.domain);if(!domains.length||running)return;const plan=buildBulkRetryPlan(results.filter((row)=>domains.includes(row.domain)).map(toBulkSessionResult),mode,scanStartedAt);if(!confirm(`Retry ${plan.lookupRequests} failed lookup${plan.lookupRequests===1?'':'s'} using the ${mode} profile? Destinations: ${plan.destinations.join(', ')}.`))return;retryStatus=`Running ${plan.lookupRequests} reviewed retry${plan.lookupRequests===1?'':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
