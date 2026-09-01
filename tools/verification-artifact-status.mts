@@ -17,6 +17,7 @@ const GROUPS = Object.freeze({
     'playwright/.auth',
     'playwright-report',
     'playwright-results.json',
+    'playwright-results',
     'test-results',
   ]),
 });

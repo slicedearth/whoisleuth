@@ -34,15 +34,15 @@ describe('verification architecture contracts', () => {
     assert.deepEqual(first, second);
     assert.deepEqual(profile.files.map((item) => item.file).sort(), [...inventory].sort());
     assert.equal(first.setupFiles.length, 1);
-    assert.equal(first.shards.length, 2);
+    assert.equal(first.shards.length, 4);
     const eligible = profile.files.filter((item) => item.lane === 'browser').map((item) => item.file).sort();
     const assigned = first.shards.flatMap((item) => item.files).sort();
     assert.deepEqual(assigned, eligible);
     assert.equal(new Set(assigned).size, assigned.length);
     assert.equal(first.shards.reduce((sum, item) => sum + item.plannedWeightMs, 0), first.totalPlannedWeightMs);
     assert.ok(first.unavoidableImbalanceMs >= 0);
-    assert.deepEqual(selectBalancedBrowserShard('1/2').shard, first.shards[0]);
-    assert.throws(() => selectBalancedBrowserShard('3/2'), /must select/u);
+    assert.deepEqual(selectBalancedBrowserShard('1/4').shard, first.shards[0]);
+    assert.throws(() => selectBalancedBrowserShard('5/4'), /must select/u);
   });
 
   test('rejects missing, duplicate, unknown, malformed, and unmeasured timing identities', () => {
@@ -68,18 +68,25 @@ describe('verification architecture contracts', () => {
     for (const file of retained.files) {
       provenanceUse.set(file.provenanceId, (provenanceUse.get(file.provenanceId) ?? 0) + 1);
     }
-    const replaceable = retained.files.find((file) => (
-      file.lane === 'unit' && provenanceUse.get(file.provenanceId) === 1
-    ));
-    assert.ok(replaceable);
+    const unitProvenance = retained.provenance
+      .filter((item) => item.lane === 'unit')
+      .sort((left, right) => (
+        (provenanceUse.get(left.id) ?? 0) - (provenanceUse.get(right.id) ?? 0)
+        || left.id.localeCompare(right.id)
+      ))[0];
+    assert.ok(unitProvenance);
+    const replaceable = retained.files.filter((file) => file.provenanceId === unitProvenance.id);
+    assert.ok(replaceable.length > 0 && replaceable.every((file) => file.lane === 'unit'));
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
     const report = path.join(directory, 'unit.xml');
-    const measuredFile = path.resolve(replaceable.file);
+    const testCases = replaceable.map((file) => (
+      `  <testcase name="catalogue" time="0.012" file="${path.resolve(file.file)}"/>`
+    ));
     writeFileSync(report, [
       '<testsuites>',
-      `  <testcase name="catalogue" time="0.012" file="${measuredFile}"/>`,
-      '  <!-- tests 1 -->',
-      '  <!-- pass 1 -->',
+      ...testCases,
+      `  <!-- tests ${replaceable.length} -->`,
+      `  <!-- pass ${replaceable.length} -->`,
       '  <!-- fail 0 -->',
       '  <!-- cancelled 0 -->',
       '  <!-- skipped 0 -->',
@@ -98,11 +105,11 @@ describe('verification architecture contracts', () => {
       ]);
       assert.equal(profile.provenance.length, MAX_TIMING_PROVENANCE);
       assert.ok(profile.provenance.some((item) => item.id === 'unit-local-provenance-replacement-test'));
-      assert.ok(!profile.provenance.some((item) => item.id === replaceable.provenanceId));
+      assert.ok(!profile.provenance.some((item) => item.id === unitProvenance.id));
       assert.deepEqual(
-        profile.files.find((item) => item.file === replaceable.file),
+        profile.files.find((item) => item.file === replaceable[0]!.file),
         {
-          file: replaceable.file,
+          file: replaceable[0]!.file,
           lane: 'unit',
           weightMs: 12,
           sampleCount: 1,

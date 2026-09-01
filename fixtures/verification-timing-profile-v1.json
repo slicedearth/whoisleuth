@@ -73,10 +73,10 @@
       "sampleCount": 1
     },
     {
-      "id": "unit-local-batch3-20260823",
+      "id": "unit-local-ci-alignment-20260901",
       "lane": "unit",
       "environmentClass": "local-darwin-arm64-node24",
-      "sampleBasis": "exact-public-product-catalogue-working-tree-based-on-f3525a48",
+      "sampleBasis": "exact-public-catalogue-and-playwright-artifact-tests",
       "sampleCount": 1
     },
     {
@@ -2875,6 +2875,13 @@
       "provenanceId": "unit-local-change-60400ba9"
     },
     {
+      "file": "test/playwright-run-artifacts.test.mts",
+      "lane": "unit",
+      "weightMs": 3,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-ci-alignment-20260901"
+    },
+    {
       "file": "test/portable-domain-facades.test.mts",
       "lane": "unit",
       "weightMs": 240,
@@ -2940,9 +2947,9 @@
     {
       "file": "test/public-product-catalogue.test.mts",
       "lane": "unit",
-      "weightMs": 401,
+      "weightMs": 42,
       "sampleCount": 1,
-      "provenanceId": "unit-local-batch3-20260823"
+      "provenanceId": "unit-local-ci-alignment-20260901"
     },
     {
       "file": "test/public-resources.test.mts",

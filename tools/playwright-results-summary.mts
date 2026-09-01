@@ -9,6 +9,7 @@ import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
+import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 
 const MAX_RESULTS_BYTES = 64 * 1024 * 1024;
 const MAX_TEST_RESULTS = 4_000;
@@ -244,7 +245,7 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
 }
 
 async function main(): Promise<void> {
-  const resultPath = process.argv[2] || 'playwright-results.json';
+  const resultPath = process.argv[2] || playwrightRunArtifacts().jsonResults;
   let output: string;
   try {
     const source = await readBoundedRegularTextFile(resultPath, {

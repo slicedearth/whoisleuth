@@ -112,10 +112,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: 1/2
-            label: 1-of-2
-          - shard: 2/2
-            label: 2-of-2
+          - kind: functional
+            shard: 1/4
+            label: 1-of-4
+          - kind: functional
+            shard: 2/4
+            label: 2-of-4
+          - kind: functional
+            shard: 3/4
+            label: 3-of-4
+          - kind: functional
+            shard: 4/4
+            label: 4-of-4
+          - kind: performance
+            label: performance
+    env:
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: ${{ matrix.kind }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,8 +148,12 @@ jobs:
         run: npm run security:retire
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
-      - name: Run Playwright e2e shard
+      - name: Run Playwright functional shard
+        if: ${{ matrix.kind == 'functional' }}
         run: npm run test:e2e:shard -- --run=${{ matrix.shard }}
+      - name: Run isolated authenticated loading authority
+        if: ${{ matrix.kind == 'performance' }}
+        run: npm run frontend:authenticated-loading-report
       - name: Summarize Playwright result data
         if: always()
         env:
@@ -149,7 +165,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-results-${{ matrix.label }}
-          path: playwright-results.json
+          path: playwright-results/
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload Playwright failure report

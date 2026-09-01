@@ -46,12 +46,17 @@ export function main(args = process.argv.slice(2)): number {
         'test',
         ...selection.shard.files,
         '--project=chromium',
+        '--workers=1',
+        '--retries=0',
         ...(list ? ['--list'] : []),
       ],
       {
         cwd: REPOSITORY_ROOT,
         env: {
           ...process.env,
+          CI: '1',
+          WHOISLEUTH_E2E_USE_BUILD: '1',
+          WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
           WHOISLEUTH_PLAYWRIGHT_SHARD: `${selection.shard.shard}/${selection.plan.shardCount}`,
           WHOISLEUTH_PLAYWRIGHT_PLANNED_WEIGHT_MS: String(selection.shard.plannedWeightMs),
         },

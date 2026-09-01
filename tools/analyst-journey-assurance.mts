@@ -188,7 +188,7 @@ export function buildAnalystJourneyAssurance() {
   for (const required of REQUIRED_BOUNDARY_SPECS) assignedShard(required, plan);
   const config = boundedSource('playwright.config.ts');
   const fixture = boundedSource('e2e/fixtures.ts');
-  if (!/failOnFlakyTests:\s*isCI/u.test(config)
+  if (!/failOnFlakyTests:\s*true/u.test(config)
     || !/auto:\s*true/u.test(fixture)
     || !/context\.route\('\*\*\/\*'/u.test(fixture)
     || !/requests must stay within the local test server origin/u.test(fixture)) {

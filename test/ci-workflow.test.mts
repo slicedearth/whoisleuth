@@ -8,6 +8,13 @@ import { fileURLToPath } from 'node:url';
 
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
+  CI_BROWSER_PREREQUISITE_SCRIPTS,
+  CI_QUALITY_SCRIPTS,
+  CI_UNIT_SCRIPTS,
+  assertLocalCiRuntime,
+  formatLocalCiPlan,
+} from '../tools/ci-verification.mts';
+import {
   buildToolchainCompatibilityReport,
   main as toolchainCompatibilityMain,
   satisfiesCaretAlternatives,
@@ -124,31 +131,13 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
-      'npm run toolchain:check',
-      'npm run release:check',
-      'npm run verification:timing:check',
-      'npm run verification:ownership:check',
-      'npm run verification:journeys:check',
-      'npm run capabilities:check',
-      'npm run privacy:check',
-      'npm run schema:inventory',
-      'npm run test:mutation',
+      ...CI_QUALITY_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
-      'npm run licenses:check',
-      'npm run providers:policy-check',
-      'npm run technology:coverage-check',
-      'npm run cli:package:check',
-      'npm run architecture:check',
-      'npm run dependencies:audit',
-      'npm run test:coverage',
-      'npm run test:critical-io-coverage',
-      'npm run typecheck',
-      'npm run check',
-      'npm run build',
-      'npm run frontend:loading-report',
-      'npm run security:retire',
+      ...CI_UNIT_SCRIPTS.map((script) => `npm run ${script}`),
+      ...CI_BROWSER_PREREQUISITE_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run test:e2e:install',
       'npm run test:e2e:shard -- --run=${{ matrix.shard }}',
+      'npm run frontend:authenticated-loading-report',
       'npm run test:e2e:summary',
       'npm run verification:artifacts -- --cleanup=unit',
       'npm run verification:artifacts -- --cleanup=browser',
@@ -165,48 +154,70 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['test:critical-io-coverage'] ?? '',
       /anchored-artifact-writer\.mts.*test\/anchored-artifact-writer\.test\.mts/u,
     );
-    assert.match(WORKFLOW, /^\s{10}- shard: 1\/2\s*\n\s{12}label: 1-of-2\s*\n\s{10}- shard: 2\/2\s*\n\s{12}label: 2-of-2$/mu);
+    for (const shard of [1, 2, 3, 4]) {
+      assert.match(WORKFLOW, new RegExp(
+        `^\\s{10}- kind: functional\\s*\\n\\s{12}shard: ${shard}\\/4\\s*\\n\\s{12}label: ${shard}-of-4$`,
+        'mu',
+      ));
+    }
+    assert.match(WORKFLOW, /^\s{10}- kind: performance\s*\n\s{12}label: performance$/mu);
+    assert.match(WORKFLOW, /^\s{6}WHOISLEUTH_PLAYWRIGHT_RUN_KIND: \$\{\{ matrix\.kind \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}WHOISLEUTH_PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}path: playwright-results\.json$/mu);
+    assert.match(WORKFLOW, /^\s{10}path: playwright-results\/$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
     assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
-    assert.equal(shardPlan.shards.length, 2);
+    assert.equal(shardPlan.shards.length, 4);
     assert.equal(new Set(assigned).size, assigned.length);
     assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => item.lane === 'browser').map((item) => item.file).sort());
+    assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
+    const localPlan = formatLocalCiPlan();
+    for (const script of [...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
+      assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
+    }
+    assert.match(localPlan, /^test:e2e:built$/mu);
+    assert.doesNotThrow(() => assertLocalCiRuntime('24.19.0', '24.19.0'));
+    assert.throws(() => assertLocalCiRuntime('26.0.0', '24.19.0'), /requires Node\.js 24\.19\.0/u);
   });
 
-  test('fails CI when a browser test passes only on retry and retains bounded diagnostics', () => {
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}forbidOnly: isCI,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}failOnFlakyTests: isCI,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}retries: isCI \? 1 : 0,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /\['json', \{ outputFile: 'playwright-results\.json' \}\]/u);
+  test('uses the same zero-retry single-worker contract locally and in CI while retaining bounded diagnostics', () => {
+    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}forbidOnly: true,$/mu);
+    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}failOnFlakyTests: true,$/mu);
+    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}retries: 0,$/mu);
+    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}workers: 1,$/mu);
+    assert.match(PLAYWRIGHT_CONFIG, /\['json', \{ outputFile: artifacts\.jsonResults \}\]/u);
+    assert.match(PLAYWRIGHT_CONFIG, /outputDir: artifacts\.testResults/u);
     assert.match(PLAYWRIGHT_CONFIG, /trace: 'retain-on-failure'/u);
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
   });
 
-  test('keeps hosted checks deterministic and reserves runtime ceilings for the local performance authority', () => {
+  test('keeps functional checks deterministic and isolates runtime ceilings in every environment', () => {
     assert.match(E2E_FIXTURES_SOURCE, /export const PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';/u);
     assert.match(
       E2E_FIXTURES_SOURCE,
       /export function enforcesMachineTimingBudgets\(projectName: string\): boolean \{\s+return projectName === PERFORMANCE_AUTHORITY_PROJECT;\s+\}/u,
     );
     assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
-    assert.match(PLAYWRIGHT_CONFIG, /const performanceFirst = !isCI && process\.env\.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';/u);
-    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(!isCI \? \{ testIgnore: performanceAuthoritySpecs \} : \{\}\)/u);
-    assert.match(PLAYWRIGHT_CONFIG, /dependencies: performanceFirst \? \['performance-authority'\] : \['setup'\],/u);
+    assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthority = process\.env\.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';/u);
+    assert.match(PLAYWRIGHT_CONFIG, /testIgnore: performanceAuthoritySpecs,/u);
+    assert.match(PLAYWRIGHT_CONFIG, /dependencies: \['setup'\],/u);
     assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
-    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(performanceFirst \? \[localPerformanceAuthorityProject\] : \[\]\)/u);
-    assert.doesNotMatch(WORKFLOW, /frontend:authenticated-loading-report/u);
+    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(performanceAuthority \? \[performanceAuthorityProject\] : \[\]\)/u);
+    assert.match(WORKFLOW, /^\s+run: npm run frontend:authenticated-loading-report$/mu);
+    assert.match(WORKFLOW, /^\s+if: \$\{\{ matrix\.kind == 'performance' \}\}$/mu);
+    assert.equal(
+      PACKAGE_MANIFEST.scripts?.['test:e2e'],
+      'node tools/playwright-balanced-suite.mts',
+    );
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:built'],
-      'WHOISLEUTH_E2E_USE_BUILD=1 WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test',
+      'node tools/playwright-balanced-suite.mts --use-build',
     );
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
-      'WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
+      'WHOISLEUTH_PLAYWRIGHT_RUN_KIND=performance WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
     );
 
     const consoleAuthorityBlock = requiredValue(

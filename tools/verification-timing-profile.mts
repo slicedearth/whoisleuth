@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 export const VERIFICATION_TIMING_PROFILE_VERSION = 1;
 export const VERIFICATION_TIMING_PROFILE_PATH = 'fixtures/verification-timing-profile-v1.json';
-export const VERIFICATION_BROWSER_SHARD_COUNT = 2;
+export const VERIFICATION_BROWSER_SHARD_COUNT = 4;
 export const MAX_TIMING_PROFILE_BYTES = 256 * 1024;
 export const MAX_TIMING_REPORT_BYTES = 4 * 1024 * 1024;
 export const MAX_TIMING_FILES = 1_000;

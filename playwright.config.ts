@@ -1,24 +1,27 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/constants';
+import { playwrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
 
 const isCI = Boolean(process.env.CI);
 const useExistingBuild = isCI || process.env.WHOISLEUTH_E2E_USE_BUILD === '1';
 const performanceAuthoritySpecs = /(?:console-loading|deferred-interactions)\.spec\.ts/u;
-const performanceFirst = !isCI && process.env.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';
+const performanceAuthority = process.env.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';
+const artifacts = playwrightRunArtifacts();
 
 const chromiumProject = {
   name: 'chromium',
-  use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
-  // A local production-build authority run must precede the functional load
-  // rather than inherit CPU scheduling pressure from hundreds of browser cases.
-  dependencies: performanceFirst ? ['performance-authority'] : ['setup'],
-  ...(!isCI ? { testIgnore: performanceAuthoritySpecs } : {}),
+  use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
+  dependencies: ['setup'],
+  // Machine timing is an isolated authority lane. Functional shards retain
+  // deterministic readiness and layout assertions without inheriting runtime
+  // ceilings from a runner that is also executing hundreds of browser cases.
+  testIgnore: performanceAuthoritySpecs,
 };
 
-const localPerformanceAuthorityProject = {
+const performanceAuthorityProject = {
   name: 'performance-authority',
   testMatch: performanceAuthoritySpecs,
-  use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
+  use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
   dependencies: ['setup'],
   workers: 1,
   fullyParallel: false,
@@ -28,15 +31,16 @@ const localPerformanceAuthorityProject = {
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: isCI,
-  failOnFlakyTests: isCI,
-  retries: isCI ? 1 : 0,
-  ...(isCI ? { workers: 1 } : {}),
+  forbidOnly: true,
+  failOnFlakyTests: true,
+  retries: 0,
+  workers: 1,
+  outputDir: artifacts.testResults,
   reporter: isCI
     ? [
         ['list'],
-        ['json', { outputFile: 'playwright-results.json' }],
-        ['html', { outputFolder: 'playwright-report', open: 'never' }],
+        ['json', { outputFile: artifacts.jsonResults }],
+        ['html', { outputFolder: artifacts.htmlReport, open: 'never' }],
       ]
     : [['list']],
   use: {
@@ -48,7 +52,7 @@ export default defineConfig({
   projects: [
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     chromiumProject,
-    ...(performanceFirst ? [localPerformanceAuthorityProject] : []),
+    ...(performanceAuthority ? [performanceAuthorityProject] : []),
   ],
   // CI builds the frontend as its own step, so the server here just starts
   // node directly. Local standalone runs still build automatically; the full
