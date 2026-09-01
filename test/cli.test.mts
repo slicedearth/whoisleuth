@@ -19,6 +19,7 @@ import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -1423,6 +1424,7 @@ test('repository CLI handles service termination while waiting for standard inpu
     });
   `)}`;
   const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
+    env: environmentWithoutV8Coverage(),
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
   });
   assert.ok(child.stdout);

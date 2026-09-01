@@ -23,6 +23,7 @@ import {
   main as toolchainCompatibilityMain,
   satisfiesCaretAlternatives,
 } from '../tools/toolchain-compatibility.mts';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
@@ -99,6 +100,12 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
+  test('keeps deliberately interrupted subprocesses outside the parent coverage collector', () => {
+    const source = { PATH: '/fixture/bin', NODE_V8_COVERAGE: '/fixture/coverage' };
+    assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin' });
+    assert.equal(source.NODE_V8_COVERAGE, '/fixture/coverage');
+  });
+
   test('runs once for pull requests and again after changes reach main', () => {
     assert.match(WORKFLOW, /^on:\s*\n\s{2}push:\s*\n\s{4}branches:\s*\n\s{6}- main\s*\n\s{2}pull_request:\s*$/mu);
     assert.doesNotMatch(WORKFLOW, /^\s{6}- ['"]?\*['"]?\s*$/mu);
@@ -178,6 +185,9 @@ describe('continuous integration workflow', () => {
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /packages\/\*\*\/\*\.mts/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /tools\/production-coverage\.mts/u);
     assert.doesNotMatch(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /test:critical-io-coverage/u);
+    for (const script of ['test', 'test:coverage', 'test:profile'] as const) {
+      assert.match(PACKAGE_MANIFEST.scripts?.[script] ?? '', /--test-concurrency=4(?:\s|$)/u, script);
+    }
     for (const shard of [1, 2, 3, 4]) {
       assert.match(WORKFLOW, new RegExp(
         `^\\s{10}- kind: functional\\s*\\n\\s{12}shard: ${shard}\\/4\\s*\\n\\s{12}label: ${shard}-of-4$`,

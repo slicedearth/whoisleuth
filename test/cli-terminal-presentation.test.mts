@@ -2,8 +2,16 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import EXIT_CODES from '../cli/exit-codes.mts';
+import {
+  appendDeliveryMetadataLines,
+  appendPublicationMetadataLines,
+} from '../cli/formatters/terminal-metadata.mts';
 import { createTerminalProgress, safeProgressMessage } from '../cli/progress.mts';
 import { runCli } from '../cli/runner.mts';
+import {
+  HTTP_DELIVERY_LIMITATIONS,
+  PAGE_PUBLICATION_LIMITATIONS,
+} from '../lib/homepage-metadata-contract.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import {
@@ -12,6 +20,10 @@ import {
   wrapTerminalOutput,
   type WritableTerminal,
 } from '../cli/terminal-presentation.mts';
+import {
+  httpDeliveryMetadataFixture,
+  pagePublicationMetadataFixture,
+} from './homepage-metadata-fixtures.mts';
 
 function captureTerminal({ isTTY = true, columns = 52 }: { isTTY?: boolean; columns?: number } = {}) {
   let value = '';
@@ -82,6 +94,111 @@ describe('CLI terminal presentation', () => {
   test('keeps command examples copyable at the narrow terminal floor', () => {
     const command = '  cat domains.txt | whoisleuth bulk --jsonl';
     assert.equal(wrapTerminalOutput(`${command}\n`, 40), `${command}\n`);
+  });
+});
+
+describe('CLI homepage metadata presentation', () => {
+  test('renders publication summaries and keeps absent declarations explicit', () => {
+    const observed: string[] = [];
+    appendPublicationMetadataLines(observed, pagePublicationMetadataFixture(), 'standard');
+    assert.deepEqual(observed, [
+      'Publication    Complete · robots Observed · card Observed',
+      'Robots         follow, index',
+      'Card type      summary_large_image',
+      'Static page    headings 2 · images 2 · blocking candidates 2',
+    ]);
+
+    const absent = pagePublicationMetadataFixture();
+    absent.robots = {
+      status: 'not_observed', complete: true, truncated: false, directives: [],
+      recognizedDirectiveCount: 0, unknownDirectiveCount: 0, conflicting: false,
+    };
+    const absentLines: string[] = [];
+    appendPublicationMetadataLines(absentLines, absent, 'standard');
+    assert.match(absentLines.join('\n'), /No declaration observed in captured static HTML/u);
+
+    const ignored: string[] = [];
+    appendPublicationMetadataLines(ignored, observed, 'verbose');
+    appendPublicationMetadataLines(ignored, pagePublicationMetadataFixture(), 'summary');
+    assert.deepEqual(ignored, []);
+  });
+
+  test('renders verbose partial publication counts without weakening validation', () => {
+    const complete = pagePublicationMetadataFixture();
+    const partial = {
+      ...complete,
+      status: 'partial',
+      complete: false,
+      truncated: true,
+      limitations: [
+        PAGE_PUBLICATION_LIMITATIONS.scope,
+        PAGE_PUBLICATION_LIMITATIONS.bounds,
+      ],
+      robots: {
+        ...complete.robots,
+        status: 'partial',
+        complete: false,
+        truncated: true,
+      },
+    };
+    const lines: string[] = [];
+    appendPublicationMetadataLines(lines, partial, 'verbose');
+    assert.match(lines.join('\n'), /Publication\s+Partial/u);
+    assert.match(lines.join('\n'), /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/u);
+    assert.match(lines.join('\n'), /Blocking\s+scripts 1 · stylesheets 1 · static candidates only/u);
+  });
+
+  test('renders delivery declarations and distinguishes absent validators', () => {
+    const observed: string[] = [];
+    appendDeliveryMetadataLines(observed, httpDeliveryMetadataFixture(), true);
+    assert.match(observed.join('\n'), /Delivery\s+Complete · encoding Observed · cache Observed/u);
+    assert.match(observed.join('\n'), /Content coding\s+br, gzip/u);
+    assert.match(observed.join('\n'), /Cache policy\s+public, immutable/u);
+    assert.match(observed.join('\n'), /Validators\s+ETag, Last-Modified/u);
+
+    const absent = {
+      ...httpDeliveryMetadataFixture(),
+      contentEncoding: { status: 'not_observed', codings: [], encoded: null, unknownCodingCount: 0 },
+      cachePolicy: {
+        status: 'not_observed',
+        noStore: false, noCache: false, mustRevalidate: false, public: false, private: false, immutable: false,
+        maxAgeSeconds: null, sMaxAgeSeconds: null, ageSeconds: null,
+        maxAgePresent: false, sMaxAgePresent: false, agePresent: false, unknownDirectiveCount: 0,
+        etag: { present: false, valid: null },
+        lastModified: { present: false, valid: null },
+        expires: { present: false, valid: null },
+      },
+    };
+    const absentLines: string[] = [];
+    appendDeliveryMetadataLines(absentLines, absent, true);
+    assert.deepEqual(absentLines, [
+      'Delivery       Complete · encoding Not observed · cache Not observed',
+      'Validators     No validator declaration observed',
+    ]);
+
+    const ignored: string[] = [];
+    appendDeliveryMetadataLines(ignored, null, true);
+    assert.deepEqual(ignored, []);
+  });
+
+  test('renders partial delivery state without inventing absent coding evidence', () => {
+    const partial = {
+      ...httpDeliveryMetadataFixture(),
+      status: 'partial',
+      complete: false,
+      truncated: true,
+      limitations: [
+        HTTP_DELIVERY_LIMITATIONS.scope,
+        HTTP_DELIVERY_LIMITATIONS.bounds,
+      ],
+      contentEncoding: { status: 'partial', codings: [], encoded: null, unknownCodingCount: 0 },
+    };
+    const lines: string[] = [];
+    appendDeliveryMetadataLines(lines, partial);
+    assert.deepEqual(lines, [
+      'Delivery       Partial · encoding Partial · cache Observed',
+      'Cache policy   public, immutable',
+    ]);
   });
 });
 

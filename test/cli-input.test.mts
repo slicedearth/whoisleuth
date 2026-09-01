@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import { readCliTextInput } from '../cli/input.mts';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const execFileAsync = promisify(execFile);
 
@@ -88,6 +89,7 @@ test('the repository CLI honours one interrupt while standard input remains open
     });
   `)}`;
   const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
+    env: environmentWithoutV8Coverage(),
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
   });
   assert.ok(child.stdout);
