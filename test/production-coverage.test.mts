@@ -32,7 +32,7 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
-  test('retains explicit floors for browser-local mutation and analyst-action boundaries', () => {
+  test('retains explicit floors for browser-local mutation, analyst actions, and Lookup projections', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/browser-local-data.ts'], {
       lines: 80, branches: 65, functions: 75,
     });
@@ -41,6 +41,15 @@ describe('production coverage policy', () => {
     });
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/brand-profile-signals.ts'], {
       lines: 95, branches: 90, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/lookup-dns-display.ts'], {
+      lines: 95, branches: 80, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/lookup-tls-display.ts'], {
+      lines: 95, branches: 85, functions: 100,
+    });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/lookup-page-profile-display.ts'], {
+      lines: 95, branches: 70, functions: 100,
     });
   });
 

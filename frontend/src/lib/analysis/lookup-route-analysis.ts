@@ -20,7 +20,6 @@ import { buildLookupReviewActionModel } from './lookup-review-action-model.ts';
 import {
   buildLookupDecisionSupport,
   buildLookupEvidenceQualityMatrix,
-  type LookupTaskEvidenceKind,
 } from './lookup-decision-support.ts';
 import {
   buildLookupLifecycleDates,
@@ -31,10 +30,15 @@ import {
   rec,
   records,
   show,
-  stringList,
 } from './lookup-display-model.ts';
 import { buildLookupInvestigationBrief } from './lookup-investigation-brief.ts';
 import type { LookupDepth, LookupTaskView } from './lookup-presentation.ts';
+import {
+  buildLookupDnsRehearsalEvidence,
+  buildLookupObservationProjection,
+  buildLookupTaskEvidence,
+  hasLookupWebEvidence,
+} from './lookup-route-projections.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
 import { buildLookupSummaryModel } from './lookup-summary-model.ts';
@@ -50,6 +54,8 @@ import {
   type RiskScoreSensitivity,
 } from './scoring.ts';
 import { entityDisplayName } from './utils.ts';
+
+export { latestLookupTimestamp } from './lookup-route-projections.ts';
 
 export interface LookupRouteAnalysisInput {
   result: LookupHttpResponse | null;
@@ -80,23 +86,6 @@ function hasPublicRegistrantContact(value: unknown): boolean {
   return ['email', 'url'].some((key) => typeof contact[key] === 'string' && String(contact[key]).trim().length > 0);
 }
 
-const OBSERVED_TASK_SOURCE_STATES = new Set(['success', 'partial']);
-
-function retainsTaskEvidence(source: unknown, expected: string, state: unknown): boolean {
-  if (source !== expected) return false;
-  const normalizedState = boundedTechnologyText(state, 40)
-    .toLowerCase()
-    .replace(/[\s-]+/gu, '_');
-  return OBSERVED_TASK_SOURCE_STATES.has(normalizedState);
-}
-
-export function latestLookupTimestamp(...values: unknown[]): string | null {
-  const timestamps = values
-    .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
-    .filter(Number.isFinite);
-  return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
-}
-
 export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const { result, lookupView, profile, task } = input;
   const profileSourceState = input.profileSourceState ?? 'ready';
@@ -121,7 +110,6 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     reverseDnsRecords,
     observedNetworkContext,
     observedNetworkEndpoint,
-    observedNetworkRdap,
     observedNetwork,
     securityTxt,
     sslbl,
@@ -173,53 +161,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   // Null is possible only before a result exists or for an old ambiguous
   // in-memory workflow, where the conservative Fast contract is used.
   const lookupEvidenceDepth: LookupDepth = input.completedLookupDepth ?? 'fast';
-  const lookupObservedAt = latestLookupTimestamp(
-    result?.observedAt,
-    result?.fetchedAt,
-    rdapDiagnostic.fetchedAt,
-    whoisDiagnostic.queriedAt,
-    registrarRdap.fetchedAt,
-    reverseDns.observedAt,
-    observedNetworkContext.observedAt,
-    observedNetworkRdap.fetchedAt,
-    dnsEvidence.observedAt,
-    httpEvidence.observedAt,
-    tlsEvidence.observedAt,
-    pageIdentity.observedAt,
-    technologyProfile.observedAt,
-    pageRoleProfile.observedAt,
-    clientBehaviorProfile.observedAt,
-    securityPosture.observedAt,
-    securityTxt.observedAt,
-    sslbl.observedAt,
-    ...threatIntelligenceProviders
-      .slice(0, 10)
-      .map((provider) => rec(rec(provider).observation).observedAt),
-  );
-  const evidenceObservedAtById: Record<string, unknown> = {
-    rdap: rdapDiagnostic.fetchedAt,
-    whois: whoisDiagnostic.queriedAt,
-    availability: latestLookupTimestamp(dnsEvidence.observedAt, httpEvidence.observedAt, tlsEvidence.observedAt),
-    'registrar-rdap': registrarRdap.fetchedAt,
-    'reverse-dns': reverseDns.observedAt,
-    'network-context': latestLookupTimestamp(observedNetworkContext.observedAt, observedNetworkRdap.fetchedAt),
-    dns: dnsEvidence.observedAt,
-    http: httpEvidence.observedAt,
-    tls: tlsEvidence.observedAt,
-    'page-identity': latestLookupTimestamp(pageIdentity.observedAt, httpEvidence.observedAt),
-    technology: latestLookupTimestamp(technologyProfile.observedAt, httpEvidence.observedAt),
-    'page-role': latestLookupTimestamp(pageRoleProfile.observedAt, httpEvidence.observedAt),
-    'client-behavior': latestLookupTimestamp(clientBehaviorProfile.observedAt, httpEvidence.observedAt),
-    'security-posture': latestLookupTimestamp(securityPosture.observedAt, httpEvidence.observedAt, tlsEvidence.observedAt),
-    'security-txt': securityTxt.observedAt,
-    'sslbl-certificate': sslbl.observedAt,
-  };
-  for (const providerValue of threatIntelligenceProviders) {
-    const provider = rec(providerValue);
-    const identity = rec(provider.provider);
-    const id = String(identity.id || '').trim();
-    if (id) evidenceObservedAtById[`external-${id}`] = rec(provider.observation).observedAt;
-  }
+  const { lookupObservedAt, evidenceObservedAtById } = buildLookupObservationProjection(result, lookupView);
   const populatedWhoisRoles = whoisRoleOrder.filter((role) => records(whoisContactsByRole[role]).length > 0);
   const comparison = result?.type === 'domain'
     ? compareRegistrySources(rdapParsed, whoisParsed, {
@@ -284,24 +226,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     tlsValidity,
     tlsDiagnostics,
   });
-  const dnsRehearsalEvidence = {
-    currentGlue: records(rec(rec(dnsEvidence.delegation).registry).nameserverDetails),
-    currentDs: records(rdapParsed.dsData),
-    currentMx: records(dnsRecords.mx),
-    currentCaa: records(dnsRecords.caa),
-    currentCriticalAddresses: [{
-      hostname: String(availability.domain || result?.registrableDomain || '').trim().toLowerCase(),
-      addresses: [
-        ...stringList(dnsRecords.a, 16, 64),
-        ...stringList(dnsRecords.aaaa, 16, 64),
-      ],
-    }],
-    currentRegistrationStatuses: [
-      ...stringList(rdapParsed.statuses, 100, 160),
-      ...stringList(whoisParsed.statuses, 100, 160),
-    ],
-    currentTlsSpkiSha256: tlsPublicKey.fingerprintSha256,
-  };
+  const dnsRehearsalEvidence = buildLookupDnsRehearsalEvidence(result, lookupView);
   const registryDisplay = buildLookupRegistryDisplay({
     result,
     rdapParsed,
@@ -375,38 +300,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasPasswordField: availability.hasPasswordField,
     phishingLanguageMatch: availability.phishingLanguageMatch,
   });
-  const hasWebEvidence = reverseDns.source === 'reverse_dns'
-    || dnsEvidence.source === 'dns'
-    || httpEvidence.source === 'http'
-    || tlsEvidence.source === 'tls'
-    || sslbl.sslblVersion === 1
-    || pageIdentity.source === 'html'
-    || credentialSurfaceProfile.source === 'html'
-    || structuredDataIdentity.source === 'html'
-    || technologyProfile.source === 'derived'
-    || pageRoleProfile.source === 'derived'
-    || clientBehaviorProfile.source === 'derived'
-    || securityPosture.source === 'derived'
-    || securityTxt.securityTxtVersion === 1
-    || Boolean(pageComparison)
-    || Boolean(profile?.pageBaseline && result?.type === 'domain');
-  const lookupTaskEvidence: LookupTaskEvidenceKind[] = [];
-  if (retainsTaskEvidence(reverseDns.source, 'reverse_dns', reverseDns.status)) lookupTaskEvidence.push('ptr');
-  if (result?.type === 'domain') {
-    const hasDnsTaskEvidence = retainsTaskEvidence(dnsEvidence.source, 'dns', dnsEvidence.status);
-    const hasHttpTaskEvidence = retainsTaskEvidence(httpEvidence.source, 'http', httpEvidence.status);
-    const hasPageTaskEvidence = retainsTaskEvidence(pageIdentity.source, 'html', pageIdentity.status);
-    if (hasDnsTaskEvidence) lookupTaskEvidence.push('dns', 'delegation', 'mail', 'dependency');
-    if (hasHttpTaskEvidence) lookupTaskEvidence.push('http', 'dependency');
-    if (retainsTaskEvidence(tlsEvidence.source, 'tls', tlsEvidence.status)) lookupTaskEvidence.push('tls');
-    if (hasPageTaskEvidence) lookupTaskEvidence.push('page', 'identity', 'dependency');
-    if (retainsTaskEvidence(credentialSurfaceProfile.source, 'html', credentialSurfaceProfile.status)) lookupTaskEvidence.push('form');
-    if (hasHttpTaskEvidence && records(httpEvidence.redirects).length) lookupTaskEvidence.push('redirect');
-    if (hasPageTaskEvidence && (records(pageResources.externalOrigins).length || Number(pageResources.count) > 0)) {
-      lookupTaskEvidence.push('dependency');
-    }
-    if (retainsTaskEvidence(securityPosture.source, 'derived', securityPosture.status)) lookupTaskEvidence.push('posture');
-  }
+  const hasWebEvidence = hasLookupWebEvidence(result, lookupView, profile, pageComparison);
+  const lookupTaskEvidence = buildLookupTaskEvidence(result, lookupView);
   const hasCaseSection = Boolean(caseDomain) || Boolean(outreach) || abuseRecipientResolution.recipients.length > 0;
   const evidenceTopologyNodes = buildLookupEvidenceTopologyNodes({
     targetType: result?.type,

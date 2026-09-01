@@ -95,6 +95,12 @@ export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
     'frontend/src/lib/browser-local-data.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
     'frontend/src/lib/controllers/lookup-case-controller.ts': Object.freeze({ lines: 95, branches: 90, functions: 95 }),
     'frontend/src/lib/analysis/brand-profile-signals.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-dns-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-http-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-tls-display.ts': Object.freeze({ lines: 95, branches: 85, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-page-identity-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-page-network-display.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
+    'frontend/src/lib/analysis/lookup-page-profile-display.ts': Object.freeze({ lines: 95, branches: 70, functions: 100 }),
   }),
   requiredAreas: Object.freeze([
     'runtime entry points',
