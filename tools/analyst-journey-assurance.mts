@@ -216,10 +216,12 @@ export function buildAnalystJourneyAssurance() {
   const unknownTags = tests.flatMap((item) => item.tags.filter((tag) => tag.startsWith('@journey-') && !declaredTags.has(tag)));
   if (unknownTags.length) throw new TypeError('Analyst journey tests contain undeclared journey tags.');
 
+  const responseTaskIds = new Set(['case-decision-packet']);
+  const assuranceTaskIds = new Set(['case-monitor-recheck', 'archive-export-verify']);
   const jobs = Object.freeze({
-    Investigate: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => task !== 'case-decision-packet' && task !== 'archive-export-verify')).map((journey) => journey.id)),
+    Investigate: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => !responseTaskIds.has(task) && !assuranceTaskIds.has(task))).map((journey) => journey.id)),
     Respond: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.includes('case-decision-packet')).map((journey) => journey.id)),
-    Assure: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.includes('archive-export-verify')).map((journey) => journey.id)),
+    Assure: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => assuranceTaskIds.has(task))).map((journey) => journey.id)),
   });
   if (!jobs.Investigate.length || !jobs.Respond.length || !jobs.Assure.length) {
     throw new TypeError('Investigate, Respond, and Assure must each map to an explicit analyst journey.');

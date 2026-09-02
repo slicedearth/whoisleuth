@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "0d4739e51972364785e84b7c85ad889cd9937745399706d41d6e9f24ecfc213c",
+  "inventoryFingerprint": "74d1db773adf0559451e6d0a177965e9b552f2118810e3825ea040d525a8dd1f",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -70,6 +70,20 @@
       "lane": "browser",
       "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry",
       "sampleBasis": "exact-one-hundred-moved-tests-and-auth-setup",
+      "sampleCount": 1
+    },
+    {
+      "id": "unit-local-lookup-watchlist-20260903",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node26",
+      "sampleBasis": "exact-four-test-lookup-watchlist-working-tree",
+      "sampleCount": 1
+    },
+    {
+      "id": "browser-local-monitoring-handoff-20260903",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node26-one-worker-no-retry-production-build",
+      "sampleBasis": "exact-mobile-case-monitor-recheck-production-build",
       "sampleCount": 1
     }
   ],
@@ -311,6 +325,13 @@
       "weightMs": 18849,
       "sampleCount": 1,
       "provenanceId": "browser-local-e2e-split-20260901"
+    },
+    {
+      "file": "e2e/lookup-case-monitoring.spec.ts",
+      "lane": "browser",
+      "weightMs": 3461,
+      "sampleCount": 1,
+      "provenanceId": "browser-local-monitoring-handoff-20260903"
     },
     {
       "file": "e2e/lookup-evidence-design.spec.ts",
@@ -2418,6 +2439,13 @@
       "weightMs": 2,
       "sampleCount": 1,
       "provenanceId": "unit-local-maintenance-consolidated-20260901"
+    },
+    {
+      "file": "test/lookup-watchlist-handoff.test.mts",
+      "lane": "unit",
+      "weightMs": 4,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-lookup-watchlist-20260903"
     },
     {
       "file": "test/lookup.test.mts",

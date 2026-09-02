@@ -28,6 +28,7 @@ export const SYNTHETIC_ANALYST_TASK_IDS = Object.freeze([
   'guided-infrastructure-pivot',
   'guided-brand-sweep',
   'case-decision-packet',
+  'case-monitor-recheck',
   'archive-export-verify',
 ] as const);
 
@@ -180,6 +181,22 @@ export const SYNTHETIC_ANALYST_JOURNEYS: readonly SyntheticAnalystJourney[] = Ob
       'offline-verification-identified',
     ]),
     maxActions: 16,
+    maxBacktracks: 2,
+  }),
+  Object.freeze({
+    id: 'response-monitoring-recheck',
+    personaId: 'incident_responder',
+    taskIds: tasks('case-monitor-recheck'),
+    devices: BOTH_DEVICES,
+    evidenceStates: Object.freeze(['partial', 'fresh'] as const),
+    requiredMilestones: Object.freeze([
+      'partial-evidence-reviewed',
+      'analyst-classification-recorded',
+      'exact-hostname-baseline-retained',
+      'deliberate-recheck-completed',
+      'material-change-reviewed',
+    ]),
+    maxActions: 24,
     maxBacktracks: 2,
   }),
   Object.freeze({
