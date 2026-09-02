@@ -60,6 +60,7 @@ export type LookupEvidenceReplay = Readonly<{
   exportedAt: string;
   generatorVersion: string | null;
   target: string;
+  caseDomain: string | null;
   targetType: string;
   availability: string;
   confidence: string;
@@ -210,6 +211,55 @@ function factValue(value: unknown): string {
     normalized = text(item.name ?? item.org ?? item.handle ?? item.value, 300);
   } else normalized = text(value, 300);
   return normalized;
+}
+
+function replayFact(
+  replay: LookupEvidenceReplay,
+  id: string,
+): LookupEvidenceReplayFact | undefined {
+  return replay.facts.find((item) => item.id === id);
+}
+
+function replayBoolean(value: string | undefined): boolean | null {
+  if (value === 'true' || value === 'Observed') return true;
+  if (value === 'false' || value === 'Not observed') return false;
+  return null;
+}
+
+function replayOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password
+      ? parsed.origin
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildLookupReplayCaseEvidence(
+  replay: LookupEvidenceReplay,
+): Record<string, unknown> {
+  const value = (id: string) => replayFact(replay, id)?.value;
+  return {
+    source: 'import',
+    capturedAt: replay.exportedAt,
+    inputHostname: replay.target,
+    scanDepth: 'unknown',
+    availability: replay.availability,
+    confidence: replay.confidence,
+    registrar: value('registration.registrar') ?? null,
+    createdDate: value('registration.created') ?? null,
+    expiryDate: value('registration.expires') ?? null,
+    nameservers: value('registration.nameservers')?.split(', ').filter(Boolean) ?? [],
+    activityStatus: value('website.activity') ?? null,
+    httpFinalOrigin: replayOrigin(value('website.final-url')),
+    pageTitle: value('page.title') ?? null,
+    hasPasswordField: replayBoolean(value('page.password-field')),
+    hasExternalFormAction: replayBoolean(value('page.external-form-action')),
+    phishingLanguageMatch: value('page.phishing-language') ?? null,
+  };
 }
 
 function addFact(
@@ -473,6 +523,9 @@ export async function parseLookupEvidenceReplay(
   addFact(facts, 'tls.connected-address', 'Connected address', [{ value: tls.connectedAddress, sourceId: 'tls' }], replaySourcesById);
   addFact(facts, 'tls.certificate-fingerprint', 'Certificate fingerprint', [{ value: record(tls.certificate).fingerprintSha256, sourceId: 'tls' }], replaySourcesById);
   addFact(facts, 'page.title', 'Page title', [{ value: pageIdentity.title ?? availability.pageTitle, sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.password-field', 'Password field', [{ value: availability.hasPasswordField, sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.external-form-action', 'External form action', [{ value: availability.hasExternalFormAction, sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.phishing-language', 'Phishing-language cue', [{ value: availability.phishingLanguageMatch, sourceId: 'page-identity' }], replaySourcesById);
   const technologyFindings = Array.isArray(technology.findings)
     ? technology.findings.slice(0, 12).map((item) => record(item).name)
     : [];
@@ -537,6 +590,9 @@ export async function parseLookupEvidenceReplay(
     exportedAt,
     generatorVersion,
     target: text(query.inputHostname ?? query.submitted ?? query.registrableDomain, 253) || 'Unknown target',
+    caseDomain: text(query.type, 40) === 'domain'
+      ? text(query.registrableDomain ?? query.submitted, 253) || null
+      : null,
     targetType: text(query.type, 40) || 'unknown',
     availability: text(availability.state, 64).replaceAll('_', ' ') || 'unknown',
     confidence: text(availability.confidence, 64).replaceAll('_', ' ') || 'not reported',

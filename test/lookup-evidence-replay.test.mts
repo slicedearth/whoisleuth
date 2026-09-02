@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import {
+  buildLookupReplayCaseEvidence,
   LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
   LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES,
   parseLookupEvidenceReplay,
@@ -129,6 +130,7 @@ function rebuildCurrentRegistryDerivations(document: Record<string, unknown>): v
 test('replay validates and summarizes a current first-party export without raw rendering', async () => {
   const replay = await parseLookupEvidenceReplay(JSON.stringify(evidence()));
   assert.equal(replay.target, 'example.test');
+  assert.equal(replay.caseDomain, 'example.test');
   assert.equal(replay.availability, 'registered');
   assert.equal(replay.digestSha256.length, 64);
   assert.equal(replay.digestVerified, false);
@@ -161,12 +163,42 @@ test('replay preserves the exact submitted hostname as its identity and graph ro
   };
   const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
   assert.equal(replay.target, 'portal.example.test');
+  assert.equal(replay.caseDomain, 'example.test');
   assert.ok(replay.graph.nodes.some((node) => (
     node.kind === 'target' && node.label === 'portal.example.test'
   )));
   assert.equal(replay.graph.nodes.some((node) => (
     node.kind === 'target' && node.label === 'example.test'
   )), false);
+});
+
+test('replay builds historical Case evidence without promoting it to a fresh scan', async () => {
+  const document = evidence();
+  document.query = {
+    submitted: 'portal.example.test',
+    inputHostname: 'portal.example.test',
+    registrableDomain: 'example.test',
+    type: 'domain',
+  };
+  const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+  availability.activityStatus = 'active';
+  availability.hasPasswordField = true;
+  availability.hasExternalFormAction = false;
+  availability.phishingLanguageMatch = 'Account access language observed';
+  (availability.pageIdentity as Record<string, unknown>).observedAt = '2026-07-31T00:00:00.000Z';
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  const caseEvidence = buildLookupReplayCaseEvidence(replay);
+
+  assert.equal(caseEvidence.source, 'import');
+  assert.equal(caseEvidence.capturedAt, replay.exportedAt);
+  assert.equal(caseEvidence.inputHostname, 'portal.example.test');
+  assert.equal(caseEvidence.scanDepth, 'unknown');
+  assert.equal(caseEvidence.registrar, 'Example Registrar');
+  assert.equal(caseEvidence.activityStatus, 'active');
+  assert.equal(caseEvidence.httpFinalOrigin, 'https://example.test');
+  assert.equal(caseEvidence.hasPasswordField, true);
+  assert.equal(caseEvidence.hasExternalFormAction, false);
+  assert.equal(caseEvidence.phishingLanguageMatch, 'Account access language observed');
 });
 
 test('replay requires explicit timestamps in supported documents', async () => {

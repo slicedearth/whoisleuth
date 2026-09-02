@@ -158,6 +158,49 @@ describe('Lookup case controller', () => {
     assert.equal(patch.evidencePins.length, 1);
   });
 
+  test('opens replay evidence as a historical imported snapshot', async () => {
+    let records = [] as ReturnType<typeof createCase>[];
+    const edits: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    const api = fixtureApi({
+      open: async (input) => {
+        const existing = records.find((record) => record.domain === input.domain);
+        if (existing) return { record: existing, cases: records, created: false, pruned: 0 };
+        const record = createCase(input, '2026-08-20T00:00:00.000Z');
+        records = [record];
+        return { record, cases: records, created: true, pruned: 0 };
+      },
+      edit: async (id, patch) => {
+        edits.push(patch);
+        const updated = updateCase(records, id, patch, '2026-08-21T00:00:00.000Z');
+        records = updated.cases;
+        return { ...updated, pruned: 0 };
+      },
+    });
+    const controller = new LookupCaseController(api);
+    const evidence = {
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      inputHostname: 'portal.example.test',
+      availability: 'registered',
+    };
+
+    const created = await controller.openReplay('example.test', evidence);
+    assert.match(created.status, /Created a browser-local Case/u);
+    assert.equal(created.record?.source, 'manual');
+    assert.equal(created.record?.evidenceHistory[0]?.source, 'import');
+    assert.equal(created.record?.evidenceHistory[0]?.capturedAt, '2026-07-31T00:00:00.000Z');
+    assert.equal(created.record?.evidenceHistory[0]?.inputHostname, 'portal.example.test');
+    assert.equal(created.record?.evidenceHistory[0]?.scanDepth, 'unknown');
+
+    const refreshed = await controller.openReplay('example.test', {
+      ...evidence,
+      pageTitle: 'Later imported evidence',
+    });
+    assert.match(refreshed.status, /Added the historical replay evidence/u);
+    assert.equal(edits[0]?.source, undefined);
+    assert.equal((edits[0]?.evidence as Record<string, unknown>).source, 'import');
+    assert.equal((edits[0]?.evidence as Record<string, unknown>).scanDepth, 'unknown');
+  });
+
   test('records a deliberate investigation brief handoff without copying evidence into the trail', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];

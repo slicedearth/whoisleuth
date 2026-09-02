@@ -98,6 +98,41 @@ export class LookupCaseController {
     }
   }
 
+  async openReplay(
+    domain: string,
+    evidence: CaseEvidenceInput,
+  ): Promise<LookupCaseActionResult> {
+    if (!domain) return { record: null, status: '' };
+    const importedEvidence = {
+      ...evidence,
+      source: 'import',
+      scanDepth: 'unknown',
+    };
+    try {
+      const { record, created, pruned } = await this.#api.open({
+        domain,
+        source: 'manual',
+        evidence: importedEvidence,
+      });
+      if (!created) {
+        const refreshed = await this.#api.edit(record.id, { evidence: importedEvidence });
+        return {
+          record: refreshed.record,
+          status: `Added the historical replay evidence to the Case for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+        };
+      }
+      return {
+        record,
+        status: `Created a browser-local Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record: null,
+        status: cause instanceof Error ? cause.message : 'Could not save the replay evidence to a Case.',
+      };
+    }
+  }
+
   async appendNote(
     record: CaseRecord | null,
     note: string,

@@ -17,7 +17,7 @@ const OBSERVED_AT = '2026-08-01T00:00:00.000Z';
 function replay(overrides: Partial<LookupEvidenceReplay> = {}): LookupEvidenceReplay {
   return {
     version: 1, schemaVersion: 27, digestSha256: 'a'.repeat(64), digestVerified: false,
-    exportedAt: '2026-08-01T00:00:00.000Z', generatorVersion: '1.40.0', target: 'example.test', targetType: 'domain',
+    exportedAt: '2026-08-01T00:00:00.000Z', generatorVersion: '1.40.0', target: 'example.test', caseDomain: 'example.test', targetType: 'domain',
     availability: 'registered', confidence: 'high',
     sources: [{ id: 'dns', label: 'DNS', state: 'success', complete: true, observedAt: '2026-08-01T00:00:00.000Z', limitations: [] }],
     facts: [{ id: 'registration.nameservers', label: 'Nameservers', value: 'ns1.example.test', sourceId: 'dns', source: 'DNS', sourceState: 'success', sourceComplete: true }],
