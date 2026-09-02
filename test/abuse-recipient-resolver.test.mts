@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  abuseRecipientKindLabel,
   resolveAbuseRecipients,
 } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
 
 describe('abuse recipient resolver', () => {
+  test('uses evidence-limited analyst labels without changing durable route kinds', () => {
+    assert.equal(abuseRecipientKindLabel('registrar'), 'Registrar contact');
+    assert.equal(abuseRecipientKindLabel('registry'), 'Registry contact');
+    assert.equal(abuseRecipientKindLabel('security_txt'), 'security.txt contact');
+    assert.equal(
+      abuseRecipientKindLabel('network_hosting'),
+      'Observed endpoint network-registration contact',
+    );
+  });
+
   test('keeps separately attributed publication routes without inferring a host contact', () => {
     const result = resolveAbuseRecipients({
       registryInsights: {

@@ -26,17 +26,21 @@ export const THREAT_INTELLIGENCE_CATEGORIES = Object.freeze([
   'unknown',
 ] as const);
 export type ThreatIntelligenceCategory = (typeof THREAT_INTELLIGENCE_CATEGORIES)[number];
-export type ThreatIntelligenceSeverity =
-  | 'critical'
-  | 'high'
-  | 'medium'
-  | 'low'
-  | 'unknown';
-export type ThreatIntelligenceConfidence =
-  | 'high'
-  | 'medium'
-  | 'low'
-  | 'unknown';
+export const THREAT_INTELLIGENCE_SEVERITIES = Object.freeze([
+  'critical',
+  'high',
+  'medium',
+  'low',
+  'unknown',
+] as const);
+export type ThreatIntelligenceSeverity = (typeof THREAT_INTELLIGENCE_SEVERITIES)[number];
+export const THREAT_INTELLIGENCE_CONFIDENCES = Object.freeze([
+  'high',
+  'medium',
+  'low',
+  'unknown',
+] as const);
+export type ThreatIntelligenceConfidence = (typeof THREAT_INTELLIGENCE_CONFIDENCES)[number];
 export type ThreatIntelligenceCommercialUse =
   | 'allowed'
   | 'restricted'

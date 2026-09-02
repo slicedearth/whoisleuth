@@ -38,6 +38,17 @@ const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const EMAIL_RE = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/u;
 const KINDS = ['registrar', 'registry', 'security_txt', 'network_hosting'] as const;
 
+const KIND_LABELS: Readonly<Record<AbuseRecipientKind, string>> = Object.freeze({
+  registrar: 'Registrar contact',
+  registry: 'Registry contact',
+  security_txt: 'security.txt contact',
+  network_hosting: 'Observed endpoint network-registration contact',
+});
+
+export function abuseRecipientKindLabel(kind: AbuseRecipientKind): string {
+  return KIND_LABELS[kind];
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>

@@ -18,6 +18,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
+  import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
@@ -64,6 +65,11 @@
   } from '$lib/analysis/lookup-presentation.ts';
   import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
   import {
+    buildLookupWatchlistRecord,
+    defaultLookupWatchlistName,
+    lookupWatchlistsForDomain,
+  } from '$lib/analysis/lookup-watchlist-handoff.ts';
+  import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
@@ -101,8 +107,13 @@
   let draftStatus=$state('');
   let evidenceExportStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let caseDisposition=$state('unreviewed');let caseReviewReason=$state('');
   let caseActionBusy=$state(false);
   let caseActionGeneration=0;
+  let linkedWatchlistNames=$state<string[]>([]);
+  let watchlistSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  let watchlistName=$state('');let watchlistStatus=$state('');let watchlistContextTarget=$state('');
+  let watchlistActionBusy=$state(false);let watchlistActionGeneration=0;
   let expandedResultSections=$state<string[]>([]);
   let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
@@ -199,6 +210,7 @@
   const redactedComparisonCount=$derived(lookupAnalysis.redactedComparisonCount);
   const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
   const caseDomain=$derived(lookupAnalysis.caseDomain);
+  const caseObservationTarget=$derived(String(result?.inputHostname||caseDomain).trim().toLowerCase());
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
   const pageDisplay=$derived(lookupAnalysis.pageDisplay);
@@ -258,8 +270,28 @@
     if(actionGeneration!==caseActionGeneration||(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain)))return;
     caseRecord=next.record;
     caseStatus=next.status;
+    caseDisposition=next.record?.disposition??'unreviewed';
+    caseReviewReason=next.record?.reviewReasonCode??'';
   }
   function invalidateCaseActions(){caseActionGeneration+=1;caseActionBusy=false;}
+  function invalidateWatchlistActions(){watchlistActionGeneration+=1;watchlistActionBusy=false;}
+  async function refreshWatchlistContext(expectedRevision:number|null=null){
+    const target=caseObservationTarget;
+    if(!target){linkedWatchlistNames=[];watchlistSourceState='ready';watchlistContextTarget='';watchlistName='';return;}
+    const targetChanged=target!==watchlistContextTarget;
+    if(targetChanged){linkedWatchlistNames=[];watchlistName=defaultLookupWatchlistName(target);watchlistContextTarget=target;}
+    watchlistSourceState='loading';
+    try{
+      const all=await loadWatchlists();
+      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
+      linkedWatchlistNames=lookupWatchlistsForDomain(all,target);
+      watchlistSourceState='ready';
+      if(linkedWatchlistNames.length===1&&(targetChanged||!watchlistName.trim()))watchlistName=linkedWatchlistNames[0]??watchlistName;
+    }catch{
+      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
+      watchlistSourceState='unavailable';
+    }
+  }
   async function performCaseAction(
     action:()=>Promise<LookupCaseActionResult>,
     afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
@@ -281,9 +313,43 @@
       if(generation===caseActionGeneration)caseActionBusy=false;
     }
   }
-  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth));}
+  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth),(next)=>{caseDisposition=next.record?.disposition??'unreviewed';caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
+  async function saveLookupClassification(){const record=caseRecord;const disposition=caseDisposition;const reason=caseReviewReason;await performCaseAction(()=>lookupCaseController.classify(record,disposition,reason),(next)=>{caseDisposition=next.record?.disposition??'unreviewed';caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
+  async function saveLookupWatchlist(){
+    if(watchlistActionBusy)return;
+    const generation=++watchlistActionGeneration;
+    const revision=lookupRevision;
+    const target=caseObservationTarget;
+    const name=watchlistName;
+    const record=buildLookupWatchlistRecord(target,caseEvidence,lookupEvidenceDepth);
+    if(!record){watchlistStatus='The current Lookup result cannot be saved as a domain watchlist observation.';return;}
+    watchlistActionBusy=true;
+    try{
+      const saved=await saveSingleDomainWatchlist(name,record,lookupEvidenceDepth);
+      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
+      watchlistName=saved.name;
+      watchlistStatus=saved.created
+        ? `Created the browser-local watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
+        : saved.changes.length
+          ? `Updated “${saved.name}” and retained ${saved.changes.length} material change${saved.changes.length===1?'':'s'}.`
+          : `Updated “${saved.name}”; no comparable material change was observed.`;
+      await refreshWatchlistContext(revision);
+    }catch(cause){
+      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
+      watchlistStatus=cause instanceof Error?cause.message:'Could not save the browser-local watchlist observation.';
+    }finally{
+      if(generation===watchlistActionGeneration)watchlistActionBusy=false;
+    }
+  }
+  async function recheckLookupCase(){
+    const target=caseObservationTarget;
+    if(!target||loading)return;
+    query=target;
+    lookupMode=lookupEvidenceDepth;
+    await runLookup({refreshCaseEvidence:true});
+  }
   async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;await performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
   async function copyInvestigationBrief(){
     await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
@@ -320,6 +386,7 @@
   }
   function clearCompletedLookupContext(){
     invalidateCaseActions();
+    invalidateWatchlistActions();
     rawEvidenceOpen=false;
     result=null;
     completedLookupTarget='';
@@ -327,6 +394,13 @@
     caseRecord=null;
     caseNote='';
     caseStatus='';
+    caseDisposition='unreviewed';
+    caseReviewReason='';
+    linkedWatchlistNames=[];
+    watchlistSourceState='loading';
+    watchlistName='';
+    watchlistStatus='';
+    watchlistContextTarget='';
     expandedResultSections=[];
     detailedAssessmentOpen=false;
     evidenceExportStatus='';
@@ -526,10 +600,14 @@
     urlReconciliationReady=true;
     window.addEventListener('hashchange',navigateToCurrentLookupHash);
     if(result)requestAnimationFrame(navigateToCurrentLookupHash);
-    void (async()=>{await refreshProfileContext();if(result)await refreshCase(lookupRevision);})();
+    void (async()=>{
+      await refreshProfileContext();
+      if(result)await Promise.all([refreshCase(lookupRevision),refreshWatchlistContext(lookupRevision)]);
+    })();
     return()=>{
       pageActive=false;
       invalidateCaseActions();
+      invalidateWatchlistActions();
       lookupAnchorController?.destroy();
       lookupAnchorController=null;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
@@ -602,8 +680,7 @@
       hasCaseSection,
       task:taskView,
     });}
-  async function submit(event:SubmitEvent){
-    event.preventDefault();
+  async function runLookup(options:Readonly<{refreshCaseEvidence?:boolean}>={}){
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
     if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!entries.length||loading)return;
@@ -616,8 +693,9 @@
     }
 
     invalidateCaseActions();
+    invalidateWatchlistActions();
     lookupAnchorController?.stop();
-    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
+    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition='unreviewed';caseReviewReason='';linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
@@ -644,9 +722,12 @@
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
       result=outcome.value;completedLookupTarget=target;completedLookupDepth=requestedLookupMode;
-      await refreshCase(requestRevision);
+      await Promise.all([refreshCase(requestRevision),refreshWatchlistContext(requestRevision)]);
+      if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
+      if(options.refreshCaseEvidence)await openLookupCase();
       if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       requestAnimationFrame(()=>{
+        if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
         if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
         else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
       });
@@ -655,6 +736,10 @@
     }finally{
       if(pageActive&&requestRevision===lookupRevision)loading=false;
     }
+  }
+  async function submit(event:SubmitEvent){
+    event.preventDefault();
+    await runLookup();
   }
 </script>
 
@@ -923,7 +1008,7 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{domain:caseDomain,record:caseRecord,note:caseNote,caseStatus,draftStatus,outreach,recipientResolution:abuseRecipientResolution,setNote:(value:string)=>caseNote=value,createCase:openLookupCase,addNote:addLookupNote,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy}}
+          props={{domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,record:caseRecord,note:caseNote,caseStatus,caseDisposition,caseReviewReason,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(value==='unreviewed')caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,saveClassification:saveLookupClassification,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
         />
         {#if caseRecord && checkpointFacts.length}
           <DeferredSurface

@@ -10,9 +10,11 @@
 import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_CONFIDENCES,
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
   THREAT_INTELLIGENCE_SCHEMA,
+  THREAT_INTELLIGENCE_SEVERITIES,
   type ThreatIntelligenceResultState,
 } from './threat-intelligence-types.mts';
 import {
@@ -268,6 +270,8 @@ const THREAT_INTELLIGENCE_PROVIDERS: Readonly<Record<string, Readonly<{ label: s
 });
 const THREAT_INTELLIGENCE_STATES = new Set<ThreatIntelligenceResultState>(THREAT_INTELLIGENCE_RESULT_STATES);
 const THREAT_INTELLIGENCE_CATEGORY_SET = new Set<string>(THREAT_INTELLIGENCE_CATEGORIES);
+const THREAT_INTELLIGENCE_SEVERITY_SET = new Set<string>(THREAT_INTELLIGENCE_SEVERITIES);
+const THREAT_INTELLIGENCE_CONFIDENCE_SET = new Set<string>(THREAT_INTELLIGENCE_CONFIDENCES);
 const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
   'rdap',
   'whois',
@@ -321,10 +325,14 @@ function normalizeThreatFinding(value: unknown, providerId: string): JsonObject 
     : [];
   const firstObservedAt = threatTimestamp(input.firstObservedAt);
   const lastObservedAt = threatTimestamp(input.lastObservedAt);
+  const severity = boundedThreatText(input.severity, 32);
+  const confidence = boundedThreatText(input.confidence, 32);
   if (firstObservedAt && lastObservedAt && Date.parse(firstObservedAt) > Date.parse(lastObservedAt)) return null;
   return {
     id: boundedThreatText(input.id, 160),
     category,
+    severity: severity && THREAT_INTELLIGENCE_SEVERITY_SET.has(severity) ? severity : 'unknown',
+    confidence: confidence && THREAT_INTELLIGENCE_CONFIDENCE_SET.has(confidence) ? confidence : 'unknown',
     providerVerdict: boundedThreatText(input.providerVerdict, 120),
     detail: boundedThreatText(input.detail),
     firstObservedAt,

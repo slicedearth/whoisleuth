@@ -1065,10 +1065,12 @@ describe('Lookup HTTP response contract', () => {
         {
           id: 'valid',
           category: 'phishing',
+          severity: 'critical',
+          confidence: 'high',
           providerVerdict: 'review',
           referenceUrl: 'https://urlscan.io/result/11111111-1111-4111-8111-111111111111/',
         },
-        { id: 'script', category: 'malware', referenceUrl: 'javascript:alert(1)' },
+        { id: 'script', category: 'malware', severity: 'urgent', confidence: 'certain', referenceUrl: 'javascript:alert(1)' },
         { id: 'wrong-host', category: 'spam', referenceUrl: 'https://unrelated.invalid/record' },
         ...Array.from({ length: MAX_THREAT_INTELLIGENCE_FINDINGS + 4 }, (_, index) => ({ id: `finding-${index}`, category: 'unknown' })),
       ],
@@ -1089,7 +1091,11 @@ describe('Lookup HTTP response contract', () => {
     const findings = arrayValue(provider.findings);
     assert.equal(findings.length, MAX_THREAT_INTELLIGENCE_FINDINGS);
     assert.equal(recordValue(findings[0]).referenceUrl, 'https://urlscan.io/result/11111111-1111-4111-8111-111111111111/');
+    assert.equal(recordValue(findings[0]).severity, 'critical');
+    assert.equal(recordValue(findings[0]).confidence, 'high');
     assert.equal(recordValue(findings[1]).referenceUrl, null);
+    assert.equal(recordValue(findings[1]).severity, 'unknown');
+    assert.equal(recordValue(findings[1]).confidence, 'unknown');
     assert.equal(recordValue(findings[2]).referenceUrl, null);
     assert.equal(arrayValue(recordValue(provider.observation).limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
     assert.equal(rawProvider.findings.length, MAX_THREAT_INTELLIGENCE_FINDINGS + 7);

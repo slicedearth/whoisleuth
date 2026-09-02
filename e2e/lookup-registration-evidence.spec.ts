@@ -333,7 +333,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await network.getByText('IP RDAP source', { exact: true }).click();
   await expect(network.getByText(/deliberately-long-provenance-segment-for-wrapping/)).toBeVisible();
   const responseRoutes = page.locator('.response');
-  await expect(responseRoutes.getByText('network hosting route', { exact: true })).toBeVisible();
+  await expect(responseRoutes.locator('.response-actions').getByText('Observed endpoint network-registration contact', { exact: true })).toBeVisible();
   await expect(responseRoutes.getByText('abuse@network.example', { exact: true })).toBeVisible();
   await expect(responseRoutes.getByText(/does not prove hosting responsibility/i)).toBeVisible();
   await expect(responseRoutes.getByRole('button', { name: 'Record in case' })).toBeDisabled();
@@ -665,6 +665,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
             state: 'success', detail: 'Found one archived malicious-verdict match.',
             findings: [{
               id: '11111111-1111-4111-8111-111111111111', category: 'phishing',
+              severity: 'high', confidence: 'medium',
               providerVerdict: 'malicious verdict match', detail: 'Archived scan page title: Fixture sign-in',
               lastObservedAt: '2026-07-14T01:02:03.000Z',
               referenceUrl: 'https://urlscan.io/result/11111111-1111-4111-8111-111111111111/',
@@ -681,6 +682,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
             state: 'partial', detail: 'Found one bounded malware-distribution record before the provider result limit.',
             findings: [{
               id: '123456', category: 'malware',
+              severity: 'medium', confidence: 'high',
               providerVerdict: 'malware distribution · online',
               detail: 'The provider labels an archived malware-distribution URL on this host as online.',
               lastObservedAt: '2026-07-13T01:02:03.000Z',
@@ -744,6 +746,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(exactRiskFactors).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(1);
+  await expect(section.getByText(/Severity: high · Confidence: medium/u)).toBeVisible();
+  await expect(section.getByText(/Severity: medium · Confidence: high/u)).toBeVisible();
   const attributedRecords = section.getByRole('link', { name: 'View attributed provider record' });
   await expect(attributedRecords).toHaveCount(2);
   for (const link of await attributedRecords.all()) {
@@ -908,7 +912,7 @@ test('published response routes can be recorded in a local case with their prove
   const recordRoute = response.getByRole('button', { name: 'Record in case' });
   await expect(recordRoute).toBeEnabled();
   await recordRoute.click();
-  await expect(page.locator('.case-status')).toContainText('Recorded the registrar route');
+  await expect(page.locator('.case-status')).toContainText('Recorded the registrar contact');
 
   const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
   expect(stored?.actions).toEqual([

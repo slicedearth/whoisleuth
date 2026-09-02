@@ -280,6 +280,48 @@ describe('Lookup case controller', () => {
     assert.deepEqual(fallback, { record, status: 'Could not add the note.' });
   });
 
+  test('records a disposition and reviewed reason together', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const controller = new LookupCaseController(fixtureApi());
+    assert.match((await controller.classify(null, 'suspicious', 'insufficient_evidence')).status, /Create or open/u);
+    assert.match((await controller.classify(record, 'suspicious', '')).status, /Select the reviewed reason/u);
+
+    const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    const saved = await new LookupCaseController(fixtureApi({
+      edit: async (_id, patch) => {
+        patches.push(patch);
+        const updated = updateCase([record], record.id, patch, '2026-07-29T01:01:00.000Z');
+        return { ...updated, pruned: 1 };
+      },
+    })).classify(record, 'suspicious', 'insufficient_evidence');
+    assert.deepEqual(patches[0], {
+      disposition: 'suspicious',
+      reviewReasonCode: 'insufficient_evidence',
+    });
+    assert.equal(saved.record?.disposition, 'suspicious');
+    assert.equal(saved.record?.reviewReasonCode, 'insufficient_evidence');
+    assert.match(saved.status, /pruned 1 old evidence snapshot/u);
+
+    const cleared = await new LookupCaseController(fixtureApi({
+      edit: async (_id, patch) => {
+        patches.push(patch);
+        const updated = updateCase([record], record.id, patch, '2026-07-29T01:02:00.000Z');
+        return { ...updated, pruned: 0 };
+      },
+    })).classify(record, 'unreviewed', 'confirmed_malware');
+    assert.deepEqual(patches[1], { disposition: 'unreviewed', reviewReasonCode: '' });
+    assert.equal(cleared.record?.reviewReasonCode, null);
+
+    const explicit = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw new Error('Classification write denied.'); },
+    })).classify(record, 'suspicious', 'other_reviewed');
+    assert.equal(explicit.status, 'Classification write denied.');
+    const fallback = await new LookupCaseController(fixtureApi({
+      edit: async () => { throw false; },
+    })).classify(record, 'suspicious', 'other_reviewed');
+    assert.equal(fallback.status, 'Could not save the analyst classification.');
+  });
+
   test('records one reviewed response route and rejects absent or duplicate actions', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const route: ResolvedAbuseRecipient = {
@@ -319,7 +361,7 @@ describe('Lookup case controller', () => {
       contactLimitations: ['Delivery was not tested.'],
       state: 'planned',
     });
-    assert.match(saved.status, /network hosting route.*pruned 2/iu);
+    assert.match(saved.status, /observed endpoint network-registration contact.*pruned 2/iu);
 
     const explicit = await new LookupCaseController(fixtureApi({
       edit: async () => { throw new Error('Route write denied.'); },
