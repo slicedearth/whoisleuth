@@ -1159,6 +1159,60 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.doesNotMatch(`${terminal}${verbose}`, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
 });
 
+test('terminal distinguishes complete negative certificate-warning evidence from inconclusive evidence', () => {
+  const formatCertificateWarning = (sslbl: Record<string, unknown>, detail: 'standard' | 'verbose' = 'standard') => formatTerminalLookup(
+    buildCliLookupDocument(
+      'example.test',
+      classifiedDomain('example.test'),
+      lookupResult({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+        },
+        sslbl,
+      }),
+      '2026-07-24T00:00:00.000Z',
+      'deep',
+    ),
+    { detail },
+  );
+
+  const completeNegative = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'success',
+    verdict: 'not_listed',
+    complete: true,
+    truncated: false,
+  });
+  assert.match(completeNegative, /Result\s+No match in retained snapshot/);
+  assert.match(completeNegative, /Completeness\s+Complete/);
+
+  const incompleteNegative = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'partial',
+    verdict: 'not_listed',
+    complete: false,
+    limitations: ['First bound', 'Second bound', 'Third bound', 'Fourth bound'],
+  }, 'verbose');
+  assert.match(incompleteNegative, /Result\s+Inconclusive/);
+  assert.match(incompleteNegative, /Completeness\s+Incomplete/);
+  assert.match(incompleteNegative, /Limitation\s+\+1 more retained limitation/);
+  assert.doesNotMatch(incompleteNegative, /No match in retained snapshot/);
+
+  const unavailable = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'unavailable',
+    verdict: 'unavailable',
+  });
+  assert.match(unavailable, /Result\s+Inconclusive/);
+  assert.doesNotMatch(unavailable, /Completeness\s+/);
+});
+
 test('terminal projects v10 resource-only delivery evidence as embedded rather than edge', () => {
   const result = lookupResult({
     availability: {
