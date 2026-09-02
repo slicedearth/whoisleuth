@@ -1077,6 +1077,19 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         })),
       },
     },
+    sslbl: {
+      sslblVersion: 1,
+      source: 'sslbl',
+      status: 'success',
+      verdict: 'listed',
+      complete: true,
+      observedAt: '2026-07-24T00:00:00.000Z',
+      fingerprintSha1: 'ab'.repeat(20),
+      referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'ab'.repeat(20)}/`,
+      snapshot: { sourceUpdatedAt: '2026-07-23T00:00:00.000Z' },
+      detail: 'Fingerprint matched the retained snapshot.',
+      limitations: ['One retained snapshot match requires independent review.'],
+    },
   });
   const document = buildCliLookupDocument(
     'example.com',
@@ -1095,6 +1108,9 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /HTTP evidence\s+Success/);
   assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
   assert.match(terminal, /TLS and certificate:\nEvidence\s+Success/);
+  assert.match(terminal, /Certificate warning data:\nSource\s+Local SSLBL certificate snapshot/);
+  assert.match(terminal, /Result\s+Listed certificate review lead/);
+  assert.match(terminal, /Interpretation Review lead only; not a maliciousness verdict/);
   assert.match(terminal, /Completeness\s+Complete/);
   assert.match(terminal, /Protocol\s+TLSv1\.3/);
   assert.match(terminal, /Public key\s+rsa 2048 bits/);
@@ -1129,6 +1145,8 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(verbose, /Alt names\s+example\.com, www\.example\.com, 192\.0\.2\.44/);
   assert.match(verbose, /Purposes\s+TLS Web Server Authentication/);
   assert.match(verbose, /Findings\s+Wildcard certificate/);
+  assert.match(verbose, /Snapshot date\s+2026-07-23T00:00:00\.000Z/);
+  assert.match(verbose, /SHA-1\s+abababababababababababababababababababab/);
   assert.match(verbose, /Posture labels\s+.*\+1 more/);
   assert.match(verbose, /Client labels\s+.*\+2 more/);
   assert.match(verbose, /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/);
@@ -1136,6 +1154,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.doesNotMatch(summary, /Page title|Language\s+en-AU|Canonical|Primary role|Scripts\s+6|Public key|SAN summary/);
   assert.doesNotMatch(summary, /Publication|Delivery\s+/);
   assert.equal(formatTerminalLookup(document, { detail: 'verbose' }), verbose);
+  assert.doesNotMatch(terminal, /Fingerprint matched the retained snapshot|ssl-certificates\/sha1/);
   assert.doesNotMatch(`${terminal}${verbose}`, /private-marker|private-posture-detail|credential-private-marker|must-not-render|private-resource|private-frame|private-contact|private-download|PRIVATE-TRACKING|private-html|private-role-evidence|private-client-explanation|private-tls-detail|private-chain/);
   assert.doesNotMatch(`${terminal}${verbose}`, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
 });

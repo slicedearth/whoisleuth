@@ -116,6 +116,7 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
   const tlsSource = sourceObservation('tls', 'TLS', tls.status ?? tls.state, tls.observedAt, tls.checkedAt);
   const pageIdentity = record(availability.pageIdentity);
   const technology = record(availability.technologyProfile);
+  const sslbl = record(document.sslbl);
   const pageAnalysisSource = sourceObservation(
     'page_analysis',
     'Static page analysis',
@@ -124,7 +125,24 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
     technology.observedAt,
     http.observedAt,
   );
-  const sources = [rdapSource, registrarRdapSource, whoisSource, availabilitySource, dnsSource, httpSource, tlsSource, pageAnalysisSource];
+  const sslblSource = sourceObservation(
+    'sslbl',
+    'Local SSLBL certificate snapshot',
+    sslbl.status,
+    sslbl.observedAt,
+    record(sslbl.snapshot).sourceUpdatedAt,
+  );
+  const sources = [
+    rdapSource,
+    registrarRdapSource,
+    whoisSource,
+    availabilitySource,
+    dnsSource,
+    httpSource,
+    tlsSource,
+    pageAnalysisSource,
+    ...(Object.keys(sslbl).length ? [sslblSource] : []),
+  ];
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   const preferredRegistrationSource = Object.keys(rdap).length ? rdapSource : whoisSource;
   const externalFormActions = record(pageIdentity.forms).externalActionOrigins;
@@ -150,6 +168,13 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
         ? technology.findings.map((finding) => record(finding).name ?? record(finding).id)
         : null,
     ), pageAnalysisSource.id],
+    ['certificate-warning-data', 'Certificate warning data', sslbl.verdict === 'listed'
+      ? 'Listed certificate review lead'
+      : sslbl.verdict === 'not_listed' && sslbl.status === 'success' && sslbl.complete === true
+        ? 'No match in retained local snapshot'
+        : Object.keys(sslbl).length
+          ? 'Inconclusive'
+          : null, sslblSource.id],
   ].flatMap(([id, label, value, sourceId]) => {
     const normalized = text(value);
     const source = sourceById.get(String(sourceId));
@@ -189,6 +214,13 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
       reason: 'The saved observation used the intentionally narrower Fast contract.',
       expectedOutcome: 'Collect the explicitly selected additional source classes without implying that unavailable evidence is absent.',
       evidence: 'collection mode',
+    }] : []),
+    ...(sslbl.verdict === 'listed' ? [{
+      id: 'certificate-warning-review',
+      action: 'Review the matching certificate fingerprint alongside current TLS, page, and infrastructure evidence.',
+      reason: 'The retained local warning-data snapshot contains the observed certificate fingerprint as a review lead.',
+      expectedOutcome: 'Determine whether the listing is relevant and current without treating it alone as a maliciousness verdict.',
+      evidence: 'local SSLBL certificate snapshot',
     }] : []),
     {
       id: 'case-evidence-review',

@@ -137,6 +137,14 @@ function addressSelectionLabel(value: unknown): string {
   return labels[String(value)] || titleCase(value);
 }
 
+function certificateWarningVerdict(value: TerminalRecord): string {
+  if (value.verdict === 'listed') return 'Listed certificate review lead';
+  if (value.verdict === 'not_listed' && value.status === 'success' && value.complete === true) {
+    return 'No match in retained snapshot';
+  }
+  return 'Inconclusive';
+}
+
 function retainedUrlRelationship(value: unknown, target: unknown): string | null {
   const urlValue = terminalRecord(value);
   if (typeof urlValue.url !== 'string') return null;
@@ -281,6 +289,7 @@ function formatTerminalLookup(
   const dnsLines: string[] = [];
   const mailLines: string[] = [];
   const tlsLines: string[] = [];
+  const certificateWarningLines: string[] = [];
   if (document.mode === 'deep' && document.type === 'domain') {
     const dns = terminalRecord(availability.dns);
     const dnsRecords = terminalRecord(dns.records);
@@ -400,6 +409,30 @@ function formatTerminalLookup(
         for (const limitation of tls.limitations.slice(0, MAX_LOOKUP_TERMINAL_LIMITATIONS)) tlsLines.push(`Limitation     ${safeTerminalValue(limitation)}`);
         const omittedLimitations = Math.max(0, tls.limitations.length - MAX_LOOKUP_TERMINAL_LIMITATIONS);
         if (omittedLimitations) tlsLines.push(`Limitation     +${omittedLimitations} more retained limitation${omittedLimitations === 1 ? '' : 's'}`);
+      }
+    }
+
+    const sslbl = terminalRecord(document.sslbl);
+    if (Object.keys(sslbl).length) {
+      certificateWarningLines.push('Source         Local SSLBL certificate snapshot');
+      certificateWarningLines.push(`Evidence       ${titleCase(sslbl.status)}`);
+      certificateWarningLines.push(`Result         ${certificateWarningVerdict(sslbl)}`);
+      const completeness = sourceCompleteness(sslbl);
+      if (completeness) certificateWarningLines.push(`Completeness   ${completeness}`);
+      certificateWarningLines.push('Interpretation Review lead only; not a maliciousness verdict');
+      if (detail !== 'summary' && sslbl.observedAt) certificateWarningLines.push(`Observed       ${safeTerminalValue(sslbl.observedAt)}`);
+      if (detail === 'verbose') {
+        const snapshot = terminalRecord(sslbl.snapshot);
+        if (snapshot.sourceUpdatedAt) certificateWarningLines.push(`Snapshot date  ${safeTerminalValue(snapshot.sourceUpdatedAt)}`);
+        if (sslbl.fingerprintSha1) certificateWarningLines.push(`SHA-1          ${safeTerminalValue(sslbl.fingerprintSha1)}`);
+        if (sslbl.detail) certificateWarningLines.push(`Detail         ${safeTerminalValue(sslbl.detail)}`);
+        if (Array.isArray(sslbl.limitations)) {
+          for (const limitation of sslbl.limitations.slice(0, MAX_LOOKUP_TERMINAL_LIMITATIONS)) {
+            certificateWarningLines.push(`Limitation     ${safeTerminalValue(limitation)}`);
+          }
+          const omitted = Math.max(0, sslbl.limitations.length - MAX_LOOKUP_TERMINAL_LIMITATIONS);
+          if (omitted) certificateWarningLines.push(`Limitation     +${omitted} more retained limitation${omitted === 1 ? '' : 's'}`);
+        }
       }
     }
   }
@@ -663,6 +696,7 @@ function formatTerminalLookup(
   appendSection(lines, 'Mail', mailLines);
   appendSection(lines, 'Website and security', websiteLines);
   appendSection(lines, 'TLS and certificate', tlsLines);
+  appendSection(lines, 'Certificate warning data', certificateWarningLines);
   appendSection(lines, 'Network', networkLines);
   appendSection(lines, 'Source health', sourceHealthLines);
   appendSection(lines, 'Collection', collectionLines);

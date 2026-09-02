@@ -71,11 +71,32 @@ function positionalEnumValues(command: CliCommand): readonly string[] {
   return positionalValues(command, 1);
 }
 
-const VALUE_OPTIONS = Object.freeze(Object.fromEntries(
-  CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options)
-    .filter((option) => option.values.length > 0)
-    .map((option) => [option.option, option.values]),
-)) as Readonly<Record<string, readonly string[]>>;
+const VALUE_OPTION_DEFINITIONS = Object.freeze(CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options
+  .filter((option) => option.values.length > 0)
+  .map((option) => Object.freeze({ command: definition.command, option: option.option, values: option.values }))));
+const COMMAND_SPECIFIC_VALUE_OPTION_NAMES = new Set(VALUE_OPTION_DEFINITIONS
+  .filter((entry, _index, entries) => new Set(entries
+    .filter((candidate) => candidate.option === entry.option)
+    .map((candidate) => JSON.stringify(candidate.values))).size > 1)
+  .map((entry) => entry.option));
+const VALUE_OPTIONS = Object.freeze(Object.fromEntries(VALUE_OPTION_DEFINITIONS
+  .filter((entry) => !COMMAND_SPECIFIC_VALUE_OPTION_NAMES.has(entry.option))
+  .map((entry) => [entry.option, entry.values]))) as Readonly<Record<string, readonly string[]>>;
+const VALUE_OPTIONS_BY_COMMAND = Object.freeze(Object.fromEntries(VALUE_OPTION_DEFINITIONS
+  .filter((entry) => COMMAND_SPECIFIC_VALUE_OPTION_NAMES.has(entry.option))
+  .map((entry) => [`${entry.command}:${entry.option}`, entry.values]))) as Readonly<Record<string, readonly string[]>>;
+const commandValueOptionGroups = new Map<string, { option: string; values: readonly string[]; commands: CliCommand[] }>();
+for (const entry of VALUE_OPTION_DEFINITIONS.filter((candidate) => COMMAND_SPECIFIC_VALUE_OPTION_NAMES.has(candidate.option))) {
+  const key = `${entry.option}\u0000${JSON.stringify(entry.values)}`;
+  const group = commandValueOptionGroups.get(key) ?? { option: entry.option, values: entry.values, commands: [] };
+  group.commands.push(entry.command);
+  commandValueOptionGroups.set(key, group);
+}
+const COMMAND_VALUE_OPTION_GROUPS = Object.freeze([...commandValueOptionGroups.values()].map((group) => Object.freeze({
+  option: group.option,
+  values: group.values,
+  commands: Object.freeze([...group.commands]),
+})));
 
 function integerValues(command: CliCommand, option: string, whenOptionPresent: string | null): readonly string[] {
   const range = commandOptionSpec(command, option)?.integerRanges
@@ -98,6 +119,7 @@ function commandOptionPatterns(kinds: readonly string[]): string {
 
 function bashCompletion(): string {
   const cases = CLI_COMMANDS.map((command) => `    ${command}) options="${commandOptions(command)}"; value_options="${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}"; file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
+  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) COMPREPLY=( $(compgen -W "${group.values.join(' ')}" -- "\${current}") ); return ;;`).join('\n');
   const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) COMPREPLY=( $(compgen -W "${values.join(' ')}" -- "\${current}") ); return ;;`).join('\n');
   const integerCases = CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options
     .filter((option) => option.valueKind === 'integer')
@@ -155,6 +177,9 @@ ${cases}
     fi
   done
   if [[ " \${options} " == *" \${previous} "* ]]; then
+    case "\${command}:\${previous}" in
+${commandValueCases}
+    esac
     case "\${previous}" in
 ${valueCases}
     esac
@@ -180,6 +205,7 @@ complete -F _whoisleuth_completion whoisleuth
 function zshCompletion(): string {
   const commandEntries = CLI_COMMANDS.map((command) => `'${command}:${COMMAND_DESCRIPTIONS[command] || command}'`).join(' ');
   const cases = CLI_COMMANDS.map((command) => `    ${command}) options=(${commandOptions(command)}); value_options=(${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}); file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
+  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) compadd -- ${group.values.join(' ')}; return ;;`).join('\n');
   const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) compadd -- ${values.join(' ')}; return ;;`).join('\n');
   const integerCases = CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options
     .filter((option) => option.valueKind === 'integer')
@@ -236,6 +262,9 @@ ${cases}
     fi
   done
   if [[ " \${options[*]} " == *" \${previous} "* ]]; then
+    case "\${command}:\${previous}" in
+${commandValueCases}
+    esac
     case "\${previous}" in
 ${valueCases}
     esac
@@ -284,6 +313,15 @@ function fishCompletion(): string {
     const condition = `__whoisleuth_command_is ${group.commands.join(' ')}`
       + (group.commands.includes('lookup') ? '; or __whoisleuth_direct_lookup_target' : '');
     return `complete -c whoisleuth -n '${condition}'${group.option === HELP_LONG_ALIAS ? ` -s ${HELP_SHORT_ALIAS.slice(1)}` : ''} -l ${group.option.slice(2)}${group.arity === 1 ? ' -r' : ''}${group.file ? ' -F' : ''}`;
+  });
+  const commandValueLines = COMMAND_VALUE_OPTION_GROUPS.flatMap((group) => {
+    const lines = [
+      `complete -c whoisleuth -n '__whoisleuth_command_is ${group.commands.join(' ')}; and __fish_prev_arg_in ${group.option}' -a '${group.values.join(' ')}'`,
+    ];
+    if (group.commands.includes('lookup')) {
+      lines.push(`complete -c whoisleuth -n '__whoisleuth_direct_lookup_target; and __fish_prev_arg_in ${group.option}' -a '${group.values.join(' ')}'`);
+    }
+    return lines;
   });
   const valueLines = Object.entries(VALUE_OPTIONS).flatMap(([option, values]) => {
     const commands = CLI_COMMANDS.filter((command) => commandOptionSpec(command, option) !== null);
@@ -335,7 +373,7 @@ function fishCompletion(): string {
       ? [`complete -c whoisleuth -n '__whoisleuth_position_is 0 ${command}' -a '${values.join(' ')}'`]
       : [];
   });
-  return `# WHOISleuth fish completion
+  return `# WHOISleuth fish
 function __whoisleuth_clear_direct_lookup_cache --on-event fish_prompt
     set -e __whoisleuth_direct_lookup_cache_key
     set -e __whoisleuth_direct_lookup_cache_status
@@ -352,7 +390,7 @@ function __whoisleuth_direct_lookup_target
     if test "\$__whoisleuth_direct_lookup_cache_key" = "\$cache_key"
         return \$__whoisleuth_direct_lookup_cache_status
     end
-    \$words[1] \$first --plan --json >/dev/null 2>/dev/null
+    \$words[1] \$first --plan --json >/dev/null 2>&1
     set -l result \$status
     set -g __whoisleuth_direct_lookup_cache_key \$cache_key
     set -g __whoisleuth_direct_lookup_cache_status \$result
@@ -430,6 +468,7 @@ ${positionalEnumLines.join('\n')}
 complete -c whoisleuth -n '__whoisleuth_file_position' -F
 ${optionLines.join('\n')}
 ${valueLines.join('\n')}
+${commandValueLines.join('\n')}
 ${integerLines.join('\n')}
 `;
 }
@@ -471,7 +510,10 @@ Register-ArgumentCompleter -Native -CommandName whoisleuth -ScriptBlock {
 ${Object.entries(commandOptions).map(([command, options]) => `    '${command}' = @(${options.map((option) => `'${option}'`).join(', ')})`).join('\n')}
   }
   $values = @{
-${Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @(${values.map((value) => `'${value}'`).join(', ')})`).join('\n')}
+${[
+    ...Object.entries(VALUE_OPTIONS).map(([option, values]) => `    '${option}' = @(${values.map((value) => `'${value}'`).join(', ')})`),
+    ...Object.entries(VALUE_OPTIONS_BY_COMMAND).map(([key, values]) => `    '${key}' = @(${values.map((value) => `'${value}'`).join(', ')})`),
+  ].join('\n')}
   }
   $fileOptions = @{
 ${CLI_COMMANDS.map((command) => `    '${command}' = @(${optionNamesByKind(command, ['file']).map((option) => `'${option}'`).join(', ')})`).join('\n')}
@@ -560,9 +602,11 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
     if (-not $matched) { & $noMatch }
     return
   }
-  if ($previousOwned -and $values.ContainsKey($previous)) {
+  $valueKey = "${'$'}{command}:${'$'}previous"
+  if (-not $values.ContainsKey($valueKey)) { $valueKey = $previous }
+  if ($previousOwned -and $values.ContainsKey($valueKey)) {
     $matched = $false
-    foreach ($candidate in $values[$previous]) {
+    foreach ($candidate in $values[$valueKey]) {
       if ($candidate.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase)) {
         [System.Management.Automation.CompletionResult]::new($candidate, $candidate, 'ParameterValue', $candidate)
         $matched = $true
@@ -618,8 +662,9 @@ function buildShellCompletion(shell: CompletionShell): string {
       : shell === 'fish'
         ? fishCompletion()
         : powershellCompletion();
-  if (Buffer.byteLength(script, 'utf8') > MAX_CLI_COMPLETION_BYTES) {
-    throw new RangeError(`Generated completion is limited to ${MAX_CLI_COMPLETION_BYTES} UTF-8 bytes.`);
+  const byteLength = Buffer.byteLength(script, 'utf8');
+  if (byteLength > MAX_CLI_COMPLETION_BYTES) {
+    throw new RangeError(`Generated ${shell} completion is ${byteLength} UTF-8 bytes; the limit is ${MAX_CLI_COMPLETION_BYTES}.`);
   }
   return script;
 }

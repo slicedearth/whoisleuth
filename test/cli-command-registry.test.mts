@@ -691,6 +691,7 @@ describe('canonical CLI command registry', () => {
       ['whoisleuth', 'workflow-plan', '--'],
       ['whoisleuth', 'verify-artifact', '--manifest-entry', ''],
       ['whoisleuth', 'lookup', 'example.test', '--fail-on', ''],
+      ['whoisleuth', 'monitor-once', '--fail-on', ''],
       ...forbiddenBashCases.map(([words]) => words),
       ...fileWordCases.map(([words]) => words),
     ];
@@ -742,7 +743,9 @@ describe('canonical CLI command registry', () => {
       for (const recipe of ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']) {
         assert.match(script, new RegExp(recipe, 'u'));
       }
-      assert.match(script, /source-failure[\s\S]*inconclusive[\s\S]*danger[\s\S]*material-drift/u);
+      for (const policy of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
+        assert.match(script, new RegExp(policy, 'u'));
+      }
       assert.match(script, /artifact-1[\s\S]*artifact-16/u);
       assert.match(script, /(?:--help|-l help)/u);
       assert.match(script, /(?:-h|-s h)/u);
@@ -774,7 +777,10 @@ describe('canonical CLI command registry', () => {
     assert.ok(bashCandidates(['whoisleuth', 'workflow-plan', '--']).includes('--json'));
     assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']).length, 16);
     assert.deepEqual(bashCandidates(['whoisleuth', 'lookup', 'example.test', '--fail-on', '']), [
-      'source-failure', 'inconclusive', 'danger', 'material-drift',
+      'source-failure', 'inconclusive', 'danger',
+    ]);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--fail-on', '']), [
+      'source-failure', 'inconclusive', 'material-drift',
     ]);
     for (const [words, forbidden] of forbiddenBashCases) {
       const candidates = bashCandidates(words);
@@ -830,9 +836,13 @@ describe('canonical CLI command registry', () => {
     assert.match(fish, /__whoisleuth_integer_values 1 100/u);
     assert.match(fish, /__whoisleuth_integer_values 1 20/u);
 
-    for (const value of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
+    for (const value of ['source-failure', 'inconclusive', 'danger']) {
       assert.equal(parseCliArguments(['lookup', 'example.test', '--fail-on', value]).action, 'lookup');
     }
+    assert.throws(
+      () => parseCliArguments(['lookup', 'example.test', '--fail-on', 'material-drift']),
+      /for lookup supports/iu,
+    );
     for (const value of ['artifact-1', 'artifact-16']) {
       assert.equal(parseCliArguments(['verify-artifact', '--manifest', 'manifest.json', '--manifest-entry', value]).action, 'verify-artifact');
     }

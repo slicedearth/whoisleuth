@@ -3670,7 +3670,8 @@ export const PUBLIC_CLI_CATALOGUE = {
           }
         ],
         "limitations": [
-          "Collection remains analyst-triggered and source limitations remain explicit."
+          "Collection remains analyst-triggered and source limitations remain explicit.",
+          "Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports."
         ]
       },
       {
@@ -3736,7 +3737,8 @@ export const PUBLIC_CLI_CATALOGUE = {
           }
         ],
         "limitations": [
-          "Candidate generation does not establish registration, control, intent, or maliciousness."
+          "Candidate generation does not establish registration, control, intent, or maliciousness.",
+          "Official-reference collection and page comparison require analyst-selected saved evidence; use page-compare after retaining the reference and candidate observations."
         ]
       },
       {

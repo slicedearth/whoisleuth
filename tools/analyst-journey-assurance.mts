@@ -226,6 +226,8 @@ export function buildAnalystJourneyAssurance() {
   }
   return Object.freeze({
     assuranceVersion: ANALYST_JOURNEY_ASSURANCE_VERSION,
+    execution: 'static_source_audit' as const,
+    browserTestsExecuted: 0,
     journeyContractVersion: SYNTHETIC_ANALYST_JOURNEY_VERSION,
     declaredJourneys: SYNTHETIC_ANALYST_JOURNEYS.length,
     mappedJourneys: journeys.length,
@@ -252,9 +254,10 @@ export function main(args = process.argv.slice(2)): number {
     const result = buildAnalystJourneyAssurance();
     if (args[0] === '--json') process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else process.stdout.write(
-      `Analyst journey assurance v${result.assuranceVersion}: ${result.mappedJourneys}/${result.declaredJourneys} journeys, `
-      + `${result.playwrightTests} real tests, ${result.balancedShardSpecifications} balanced-shard specs, `
-      + `${result.skippedJourneys} skipped, retry acceptance ${result.retryAcceptance ? 'enabled' : 'disabled'}.\n`,
+      `Analyst journey contract audit v${result.assuranceVersion}: ${result.mappedJourneys}/${result.declaredJourneys} journeys mapped, `
+      + `${result.playwrightTests} enabled tagged test declarations, ${result.balancedShardSpecifications} balanced-shard specifications, `
+      + `${result.skippedJourneys} declared tests disabled, retry acceptance ${result.retryAcceptance ? 'enabled' : 'disabled'}. `
+      + 'This static audit did not execute a browser test.\n',
     );
     return 0;
   } catch (error) {

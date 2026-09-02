@@ -12,6 +12,7 @@ import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -378,12 +379,15 @@ function optionValueKind(command: CliCommand, option: string): CliOptionValueKin
 
 function optionSpec(command: CliCommand, option: string, scope: CliOptionScope): CliOptionSpec {
   const valueKind = optionValueKind(command, option);
+  const values = option === '--fail-on'
+    ? CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? []
+    : VALUE_OPTIONS[option] ?? [];
   return Object.freeze({
     option,
     scope,
     arity: valueKind === 'flag' ? 0 : 1,
     valueKind,
-    values: Object.freeze([...(VALUE_OPTIONS[option] ?? [])]),
+    values: Object.freeze([...values]),
     integerRanges: Object.freeze([...(INTEGER_RANGE_SEED[command]?.[option] ?? [])]),
     occurrence: REPEATABLE_OPTIONS.includes(option)
       ? 'repeatable'

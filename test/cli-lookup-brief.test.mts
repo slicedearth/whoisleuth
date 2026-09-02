@@ -64,6 +64,29 @@ describe('CLI Lookup brief', () => {
     assert.doesNotMatch(formatCliLookupBrief(brief), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
+  test('surfaces local certificate warning data as a review lead rather than a verdict', () => {
+    const source = lookup();
+    Object.assign(source, {
+      sslbl: {
+        sslblVersion: 1,
+        source: 'sslbl',
+        status: 'success',
+        verdict: 'listed',
+        complete: true,
+        observedAt: NOW,
+        fingerprintSha1: 'ab'.repeat(20),
+        snapshot: { sourceUpdatedAt: '2026-08-04T00:00:00.000Z' },
+      },
+    });
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    const warningFact = brief.facts.find((item) => item.id === 'certificate-warning-data');
+    assert.equal(warningFact?.value, 'Listed certificate review lead');
+    assert.equal(warningFact?.source.label, 'Local SSLBL certificate snapshot');
+    assert.equal(warningFact?.source.observedAt, NOW);
+    assert.match(brief.actionPlan.find((item) => item.id === 'certificate-warning-review')?.expectedOutcome ?? '', /without treating it alone as a maliciousness verdict/u);
+    assert.match(formatCliLookupBrief(brief), /Certificate warning data: Listed certificate review lead/u);
+  });
+
   test('routes the offline command without collecting', async () => {
     let stdout = '';
     let collected = false;

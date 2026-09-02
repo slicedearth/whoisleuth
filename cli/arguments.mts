@@ -259,7 +259,7 @@ function parseLookupArguments(
       includeAttribution = false;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(lookupArguments[++index]);
+      failOn = parseCliFailPolicies(lookupArguments[++index], 'lookup');
     } else if (argument === '--observer' || argument === '--vantage') {
       const isObserver = argument === '--observer';
       if (isObserver ? observerLabel !== null : vantageLabel !== null) {
@@ -492,7 +492,7 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
       plan = true;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'bulk');
     } else if (argument === '--registered-only' || argument === '--inconclusive-only' || argument === '--errors-only') {
       if (filter !== 'all') throw new CliUsageError('Bulk output filters are mutually exclusive and may be supplied only once.');
       filter = argument === '--registered-only'
@@ -721,7 +721,7 @@ function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { act
       plan = true;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'discover-scan');
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -1041,7 +1041,7 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
       }
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'monitor-once');
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);

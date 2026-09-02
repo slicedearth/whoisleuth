@@ -4,6 +4,13 @@ import { CliUsageError } from './errors.mts';
 
 export const CLI_FAIL_POLICIES = ['source-failure', 'inconclusive', 'danger', 'material-drift'] as const;
 export type CliFailPolicy = typeof CLI_FAIL_POLICIES[number];
+export const CLI_FAIL_POLICIES_BY_COMMAND = Object.freeze({
+  lookup: Object.freeze(['source-failure', 'inconclusive', 'danger']),
+  bulk: Object.freeze(['source-failure', 'inconclusive', 'danger']),
+  'discover-scan': Object.freeze(['source-failure', 'inconclusive', 'danger']),
+  'monitor-once': Object.freeze(['source-failure', 'inconclusive', 'material-drift']),
+} as const satisfies Readonly<Record<string, readonly CliFailPolicy[]>>);
+export type CliFailPolicyCommand = keyof typeof CLI_FAIL_POLICIES_BY_COMMAND;
 
 type FailPolicyFinding = Readonly<{ policy: CliFailPolicy; reason: string }>;
 
@@ -11,24 +18,33 @@ function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
 }
 
-export function parseCliFailPolicies(value: unknown): CliFailPolicy[] {
+export function parseCliFailPolicies(value: unknown, command: CliFailPolicyCommand): CliFailPolicy[] {
   if (typeof value !== 'string' || !value || value.length > 100) throw new CliUsageError('--fail-on requires a comma-separated policy list.');
   const policies = [...new Set(value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean))];
-  if (!policies.length || policies.some((item) => !(CLI_FAIL_POLICIES as readonly string[]).includes(item))) {
-    throw new CliUsageError(`--fail-on supports: ${CLI_FAIL_POLICIES.join(', ')}.`);
+  const supported = CLI_FAIL_POLICIES_BY_COMMAND[command];
+  if (!policies.length || policies.some((item) => !(supported as readonly string[]).includes(item))) {
+    throw new CliUsageError(`--fail-on for ${command} supports: ${supported.join(', ')}.`);
   }
   return policies as CliFailPolicy[];
 }
 
 function availabilityStates(document: UnknownRecord): string[] {
   const direct = String(record(document.availability).state || '').toLowerCase();
+  const review = String(record(document.review).state || '').toLowerCase();
   const results = Array.isArray(document.results) ? document.results : [];
   const resultStates = results.flatMap((value) => {
     const item = record(value);
     const state = item.availabilityState ?? record(item.availability).state;
     return typeof state === 'string' ? [state.toLowerCase()] : [];
   });
-  return [direct, ...resultStates].filter(Boolean);
+  return [direct, review, ...resultStates].filter(Boolean);
+}
+
+function riskScore(value: UnknownRecord): number | null {
+  const raw = record(value.risk).score ?? value.riskScore;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function evaluateCliFailPolicies(document: unknown, policies: readonly CliFailPolicy[]): FailPolicyFinding[] {
@@ -48,10 +64,20 @@ export function evaluateCliFailPolicies(document: unknown, policies: readonly Cl
       const count = availabilityStates(root).filter((state) => ['unknown', 'inconclusive', 'partial', 'unavailable'].includes(state)).length;
       if (count) findings.push({ policy, reason: `${count} authority or availability state(s) remained inconclusive` });
     } else if (policy === 'danger') {
-      const risk = Number(record(root.risk).score ?? root.riskScore);
-      const severity = String(root.severity || record(root.review).severity || '').toLowerCase();
-      if ((Number.isFinite(risk) && risk >= 70) || severity === 'danger' || severity === 'critical') {
-        findings.push({ policy, reason: Number.isFinite(risk) ? `risk score ${risk} met the 70 review threshold` : `explicit ${severity} severity was present` });
+      const documents = [root, ...(Array.isArray(root.results) ? root.results.map(record) : [])];
+      const risks = documents.map(riskScore).filter((score): score is number => score !== null);
+      const severities = documents
+        .flatMap((item) => [item.severity, record(item.review).severity])
+        .map((severity) => String(severity || '').toLowerCase())
+        .filter((severity) => severity === 'danger' || severity === 'critical');
+      const highestRisk = risks.length ? Math.max(...risks) : null;
+      if ((highestRisk !== null && highestRisk >= 70) || severities.length) {
+        findings.push({
+          policy,
+          reason: highestRisk !== null && highestRisk >= 70
+            ? `risk score ${highestRisk} met the 70 review threshold`
+            : `explicit ${severities[0]} severity was present`,
+        });
       }
     } else {
       const summary = record(record(root.flightRecorder).summary);

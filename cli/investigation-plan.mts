@@ -43,7 +43,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     subjectRequirement: 'domain',
     objective: 'Collect and preserve separately attributed registration, DNS, HTTP, TLS, page, and network-context evidence.',
     runnable: true,
-    limitations: Object.freeze(['Collection remains analyst-triggered and source limitations remain explicit.']),
+    limitations: Object.freeze([
+      'Collection remains analyst-triggered and source limitations remain explicit.',
+      'Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports.',
+    ]),
     steps: (domain: string) => Object.freeze([
       step('collect', 'Collect a Deep lookup', 'lookup', [domain, '--deep', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.lookup', 'Review source health and limitations before using missing fields.'),
       step('export', 'Create a portable evidence report', 'export', ['<saved-lookup.json>'], 'offline', 'analyst_selection', 'whoisleuth.lookup-evidence', 'Select the reviewed lookup file; the plan never guesses a path.'),
@@ -56,7 +59,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     subjectRequirement: 'brand_or_domain',
     objective: 'Generate a bounded candidate queue, collect only the selected scope, and retain a reviewed candidate lookup.',
     runnable: true,
-    limitations: Object.freeze(['Candidate generation does not establish registration, control, intent, or maliciousness.']),
+    limitations: Object.freeze([
+      'Candidate generation does not establish registration, control, intent, or maliciousness.',
+      'Official-reference collection and page comparison require analyst-selected saved evidence; use page-compare after retaining the reference and candidate observations.',
+    ]),
     steps: (subject: string) => Object.freeze([
       step('generate', 'Generate candidates offline', 'discover', [subject, '--preset', 'all', '--json'], 'offline', 'none', 'whoisleuth.cli.discover', 'Review mutation families and suppressions before collection.'),
       step('scan', 'Collect a bounded candidate queue', 'discover-scan', [subject, '--fast', '--scan-limit', '50', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.discovery-scan', 'Fast collection is a triage boundary; partial or inconclusive authority evidence remains explicit.'),
@@ -289,6 +295,7 @@ export function buildInvestigationPlan(
     execution: 'plan_only' as const,
     steps,
     limitations: Object.freeze([
+      ...recipe.limitations,
       'This document is a fixed plan. It does not execute commands, expand placeholders, make requests, read files, change cases, or submit reports.',
       'Network steps require deliberate execution and disclose the selected target to the sources described by that command.',
       'Analyst-selection steps require reviewed local artefacts; placeholders are never interpreted as file paths by this planner.',
