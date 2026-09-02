@@ -932,6 +932,12 @@ export function buildCaseResponsePreflight(
     .filter((item) => item.kind === 'contradiction' && item.state === 'open')
     .length;
   const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
+  const retainedPinIds = new Set(caseRecord.evidencePins.map((pin) => pin.id));
+  const evidenceLinkedDecisionCount = caseRecord.decisions.filter((decision) =>
+    decision.evidencePinIds.some((evidencePinId) => retainedPinIds.has(evidencePinId))).length;
+  const responseDisposition = ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition);
+  const reviewedActionCount = caseRecord.actions.filter((action) =>
+    ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;
   const profile = responsePacketProfile(input.profile);
   const checks: CaseResponsePreflightCheck[] = [
     {
@@ -953,10 +959,12 @@ export function buildCaseResponsePreflight(
     {
       id: 'analyst_decision',
       label: 'Analyst decision',
-      state: caseRecord.decisions.length ? 'pass' : 'caution',
-      detail: caseRecord.decisions.length
-        ? `${caseRecord.decisions.length} analyst decision${caseRecord.decisions.length === 1 ? '' : 's'} record the escalation rationale.`
-        : 'No explicit analyst decision explains why external reporting is appropriate.',
+      state: evidenceLinkedDecisionCount ? 'pass' : 'caution',
+      detail: evidenceLinkedDecisionCount
+        ? `${evidenceLinkedDecisionCount} analyst decision${evidenceLinkedDecisionCount === 1 ? '' : 's'} cite retained evidence and record the escalation rationale.`
+        : caseRecord.decisions.length
+          ? 'Analyst decisions are recorded, but none cites a retained evidence pin.'
+          : 'No explicit analyst decision explains why external reporting is appropriate.',
     },
     {
       id: 'recipient_route',
@@ -985,10 +993,14 @@ export function buildCaseResponsePreflight(
     {
       id: 'case_disposition',
       label: 'Case disposition',
-      state: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition) ? 'pass' : 'caution',
-      detail: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition)
-        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}.`
-        : `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`,
+      state: responseDisposition && caseRecord.reviewReasonCode && evidenceLinkedDecisionCount ? 'pass' : 'caution',
+      detail: responseDisposition && caseRecord.reviewReasonCode && evidenceLinkedDecisionCount
+        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')} with the reviewed reason ${caseRecord.reviewReasonCode.replaceAll('_', ' ')} and an evidence-linked decision.`
+        : !responseDisposition
+          ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`
+          : !caseRecord.reviewReasonCode
+            ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}, but no reviewed reason is recorded.`
+            : 'The case disposition and reason are recorded, but no analyst decision cites retained evidence.',
     },
     {
       id: 'evidence_freshness',
@@ -1019,10 +1031,12 @@ export function buildCaseResponsePreflight(
     {
       id: 'action_tracking',
       label: 'Action tracking',
-      state: actionSummary.total ? 'pass' : 'caution',
-      detail: actionSummary.total
-        ? `${actionSummary.total} reviewed action${actionSummary.total === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
-        : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
+      state: reviewedActionCount ? 'pass' : 'caution',
+      detail: reviewedActionCount
+        ? `${reviewedActionCount} reviewed or later-stage action${reviewedActionCount === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
+        : actionSummary.total
+          ? `${actionSummary.total} action${actionSummary.total === 1 ? ' remains' : 's remain'} before reviewed state.`
+          : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
     },
   ];
   const counts = {

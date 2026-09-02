@@ -26,6 +26,7 @@ function reviewedCase() {
     domain: 'report.example',
     status: 'escalated',
     disposition: 'confirmed_abuse',
+    reviewReasonCode: 'confirmed_credential_abuse',
     evidence: {
       inputHostname: 'login.report.example',
       scanDepth: 'deep',
@@ -33,9 +34,15 @@ function reviewedCase() {
       capturedAt: NOW,
     },
   }, NOW);
-  const reasoned = updateCase([created], created.id, {
+  const pinned = updateCase([created], created.id, {
     evidencePin: { label: 'Observed path', value: 'A credential form was observed.', observedAt: NOW },
-    decision: { summary: 'Escalate', rationale: 'The selected evidence requires external review.' },
+  }, NOW).record;
+  const reasoned = updateCase([pinned], pinned.id, {
+    decision: {
+      summary: 'Escalate',
+      rationale: 'The selected evidence requires external review.',
+      evidencePinIds: [pinned.evidencePins[0]!.id],
+    },
   }, NOW).record;
   let record = updateCase([reasoned], reasoned.id, {
     action: {
@@ -416,6 +423,60 @@ describe('case response packet', () => {
     assert.equal(preflight.counts.block, 4);
     assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'block');
     assert.equal(preflight.checks.find((item) => item.id === 'packet_action')?.state, 'block');
+  });
+
+  test('does not describe unlinked decisions or drafting actions as reviewed response evidence', () => {
+    let caseRecord = createCase({
+      domain: 'review-state.example',
+      disposition: 'suspicious',
+      reviewReasonCode: 'other_reviewed',
+    }, NOW);
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      evidencePin: { label: 'Retained observation', value: 'A bounded observation.', observedAt: NOW },
+    }, NOW).record;
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      decision: { summary: 'Review externally', rationale: 'A rationale without an evidence link.' },
+    }, NOW).record;
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'registrar_report',
+        recipient: 'Reviewed route',
+        contactSource: 'Published policy',
+        routeObservedAt: NOW,
+      },
+    }, NOW).record;
+    const actionId = caseRecord.actions[0]!.id;
+    const input = {
+      ...packetInput(caseRecord),
+      actionId,
+      selectedEvidencePinIds: [caseRecord.evidencePins[0]!.id],
+    };
+    let preflight = buildCaseResponsePreflight(caseRecord, input, NOW);
+    assert.equal(preflight.checks.find((item) => item.id === 'analyst_decision')?.state, 'caution');
+    assert.equal(preflight.checks.find((item) => item.id === 'case_disposition')?.state, 'caution');
+    assert.equal(preflight.checks.find((item) => item.id === 'action_tracking')?.state, 'caution');
+    assert.match(preflight.checks.find((item) => item.id === 'action_tracking')?.detail ?? '', /before reviewed state/u);
+
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      decision: {
+        summary: 'Evidence-linked review',
+        rationale: 'The retained observation is the basis for this decision.',
+        evidencePinIds: [caseRecord.evidencePins[0]!.id],
+      },
+    }, NOW).record;
+    for (const [index, nextState] of (['ready_for_review', 'reviewed'] as const).entries()) {
+      const occurredAt = new Date(Date.parse(NOW) + (index + 1) * 60_000).toISOString();
+      caseRecord = updateCase([caseRecord], caseRecord.id, {
+        actionUpdate: {
+          id: actionId,
+          transition: { nextState, occurredAt, sourceClass: 'analyst', provenance: `analyst_${nextState}` },
+        },
+      }, occurredAt).record;
+    }
+    preflight = buildCaseResponsePreflight(caseRecord, { ...input, actionId }, NOW);
+    assert.equal(preflight.checks.find((item) => item.id === 'analyst_decision')?.state, 'pass');
+    assert.equal(preflight.checks.find((item) => item.id === 'case_disposition')?.state, 'pass');
+    assert.equal(preflight.checks.find((item) => item.id === 'action_tracking')?.state, 'pass');
   });
 
   test('keeps case-response preflight case-owned when transient Lookup facts are unavailable', () => {

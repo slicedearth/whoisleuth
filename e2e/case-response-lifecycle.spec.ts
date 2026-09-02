@@ -63,6 +63,13 @@ test('Quick and Advanced Case Response presentations keep one record and restore
   await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
   await expect(workspace.getByRole('status')).toContainText('Next incomplete requirement');
   await expect(workspace.locator('.stages > li')).toHaveCount(5);
+  await expect(workspace.locator('.stages > li').locator('strong')).toHaveText([
+    'Observation',
+    'Assessment',
+    'Response decision',
+    'Evidence handoff',
+    'Outcome tracking',
+  ]);
   await expect(workspace.locator('details')).toHaveCount(0);
   await workspace.getByRole('button', { name: 'Continue observation' }).click();
   const observation = workspace.locator('details[id^="case-response-observation-"]').first();
@@ -390,6 +397,8 @@ test('append-only response review, exact authorisation, independent verification
 }, async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'response.invalid');
+  await page.locator('.case-body').getByLabel('Disposition').selectOption('confirmed_abuse');
+  await page.locator('.case-body').getByLabel('Review reason').selectOption('confirmed_credential_abuse');
 
   const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
@@ -409,6 +418,13 @@ test('append-only response review, exact authorisation, independent verification
   await decision.getByRole('checkbox', { name: 'Observed credential form' }).check();
   await decision.getByRole('button', { name: 'Record decision' }).click();
   await expect(workspace).toContainText('Escalate for reviewed reporting');
+
+  await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
+  await expect(workspace.locator('.stages > li').nth(0)).toHaveAttribute('data-status', 'complete');
+  await expect(workspace.locator('.stages > li').nth(1)).toHaveAttribute('data-status', 'complete');
+  await expect(workspace.locator('.stages > li').nth(3)).toContainText('Evidence handoff');
+  await expect(workspace.locator('.stages > li').nth(4)).toContainText('Outcome tracking');
+  await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
 
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await action.getByText('Track append-only response actions', { exact: true }).click();
@@ -457,10 +473,11 @@ test('append-only response review, exact authorisation, independent verification
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
   await openPacketWizardStep(packet, 'Readiness limitations');
-  await expect(packet).toContainText('review cautions');
+  await expect(packet).toContainText('needs input');
   await openPacketWizardStep(packet, 'Source and contact provenance');
-  await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
-  await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
+  await packet.getByLabel('Case action for this packet').selectOption({ index: 1 });
+  await expect(packet).toContainText('Registrar abuse desk');
+  await expect(packet).toContainText('RDAP entity role');
   await openPacketWizardStep(packet, 'Evidence selection');
   await packet.getByRole('checkbox', { name: /Observed credential form/ }).check();
   await openPacketWizardStep(packet, 'Readiness limitations');
@@ -484,6 +501,8 @@ test('append-only response review, exact authorisation, independent verification
   await packet.getByLabel('Captured at').fill('2026-07-28T10:00');
   await packet.getByLabel('SHA-256 digest').fill('a'.repeat(64));
   await packet.getByLabel('Byte length').fill('1024');
+  await openPacketWizardStep(packet, 'Readiness limitations');
+  await expect(packet).toContainText('review cautions');
 
   await openPacketWizardStep(packet, 'Exact-input digest');
   await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
@@ -517,7 +536,7 @@ test('append-only response review, exact authorisation, independent verification
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 7,
+    schemaVersion: 8,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',
@@ -561,6 +580,10 @@ test('append-only response review, exact authorisation, independent verification
   expect(exported.readiness.rows).toHaveLength(10);
   expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+  await packet.getByRole('button', { name: 'Continue to record delivery' }).click();
+  await expect(action.getByLabel('Bounded reference')).toHaveValue(`response-packet-sha256:${exported.integrity.digestSha256}`);
+  await expect(action.getByLabel('Event limitations')).toHaveValue(/Confirm actual delivery/u);
+  await expect(caseWorkspaceActionStatus(page)).toContainText('choose a legal transition only after the corresponding event occurs');
 
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();

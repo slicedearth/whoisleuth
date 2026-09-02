@@ -24,11 +24,13 @@
     visible,
     onmessage,
     onstagechange,
+    onpacketexported,
   }: {
     record: CaseRecord;
     visible: boolean;
     onmessage: (message: string) => void;
     onstagechange: (stage: CaseResponseStage) => void;
+    onpacketexported: (exported: Readonly<{ actionId: string; exportedAt: string; digestSha256: string }>) => void | Promise<void>;
   } = $props();
 
   let packetCategory = $state('');
@@ -80,6 +82,7 @@
   ] as const);
   let packetWizardStep = $state(1);
   let packetBusy = $state(false);
+  let lastPacketExport = $state<Readonly<{ actionId: string; exportedAt: string; digestSha256: string }> | null>(null);
   const reviewNow = new Date().toISOString();
 
   const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
@@ -94,7 +97,7 @@
   );
   const stage = $derived<CaseResponseStage>({
     id: 'evidence_handoff',
-    number: 5,
+    number: 4,
     label: 'Evidence handoff',
     status: packetAuthorisationConfirmedAt && packetReviewIsCurrent
       ? 'complete'
@@ -271,6 +274,11 @@
       anchor.download = caseResponsePacketFilename(record.domain, format, generatedAt);
       anchor.click();
       URL.revokeObjectURL(url);
+      lastPacketExport = packetActionId ? {
+        actionId: packetActionId,
+        exportedAt: generatedAt,
+        digestSha256: built.json.integrity.digestSha256,
+      } : null;
       onmessage(`Exported a ${built.json.authorisation.status} ${format === 'txt' ? 'plain-text email draft' : format.toUpperCase()} response packet. Nothing was submitted.`);
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not prepare the response packet.');
@@ -291,6 +299,10 @@
     } finally {
       packetBusy = false;
     }
+  }
+
+  async function continueToDeliveryRecord() {
+    if (lastPacketExport) await onpacketexported(lastPacketExport);
   }
 
   async function setPacketWizardStep(value: number) {
@@ -377,6 +389,12 @@
           <header><div><p class="eyebrow">Deliberate handoff</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local export</h4></div><span>8 of 8</span></header>
           <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
           <div class="actions"><button class="btn" type="button" onclick={() => void downloadPacket('json')} disabled={packetBusy || !packetPreflight.canExport}>Export JSON draft or authorised packet</button><button class="btn" type="button" onclick={() => void downloadPacket('md')} disabled={packetBusy || !packetPreflight.canExport}>Export Markdown</button><button class="btn" type="button" onclick={() => void downloadPacket('txt')} disabled={packetBusy || !packetPreflight.canExport}>Export email draft</button><button class="btn" type="button" onclick={() => void copyEmail()} disabled={packetBusy || !packetPreflight.canExport}>Copy email draft</button></div>
+          {#if lastPacketExport}
+            <div class="delivery-handoff">
+              <p>The exported packet digest can be carried into the selected Case action. This prepares a record only; append a submitted event after actual delivery.</p>
+              <button class="btn" type="button" onclick={() => void continueToDeliveryRecord()}>Continue to record delivery</button>
+            </div>
+          {/if}
           <p class="wizard-status">{packetAuthorisationConfirmedAt && packetReviewIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
         </section>
       {/if}
@@ -453,6 +471,8 @@
   .privacy-review ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs)}
   .wizard-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
   .wizard-controls span,.wizard-status{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .delivery-handoff{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .delivery-handoff p{flex:1 1 280px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .authorisation>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .authorisation code{display:block;max-width:100%;padding:7px;background:var(--panel);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}

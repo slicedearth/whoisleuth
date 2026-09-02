@@ -228,8 +228,8 @@
     "canExport": true,
     "counts": {
       "block": 0,
-      "caution": 2,
-      "pass": 8
+      "caution": 3,
+      "pass": 7
     },
     "checks": [
       {
@@ -265,8 +265,8 @@
       {
         "id": "case_disposition",
         "label": "Case disposition",
-        "state": "pass",
-        "detail": "The case disposition is suspicious."
+        "state": "caution",
+        "detail": "The case disposition is suspicious, but no reviewed reason is recorded."
       },
       {
         "id": "evidence_freshness",
@@ -290,7 +290,7 @@
         "id": "action_tracking",
         "label": "Action tracking",
         "state": "pass",
-        "detail": "1 reviewed action is tracked; 1 overdue and 1 due for follow-up."
+        "detail": "1 reviewed or later-stage action is tracked; 1 overdue and 1 due for follow-up."
       }
     ],
     "actionSummary": {
@@ -381,6 +381,6 @@
     "algorithm": "SHA-256",
     "canonicalization": "sorted-json-v2",
     "scope": "packet excluding integrity",
-    "digestSha256": "d695814b5817407743034d275184cfdf184b7621188d4bad8c659e84682483be"
+    "digestSha256": "86d4d88d1d9fc969e6efa432061c64bf0725767d81c50b8655abd2d231dcc5b6"
   }
 }

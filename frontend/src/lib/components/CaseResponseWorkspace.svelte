@@ -115,13 +115,15 @@
     record.sightings.filter((sighting) =>
       sighting.state === 'not_reproduced' || sighting.state === 'expired').length,
   );
+  const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
+    decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
   const userObservedEffectSourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
 
   let mutationBusy = $state(false);
   const reviewNow = new Date().toISOString();
   let evidenceHandoffStage = $state<CaseResponseStage>({
     id: 'evidence_handoff',
-    number: 5,
+    number: 4,
     label: 'Evidence handoff',
     status: 'not_started',
     summary: 'Packet review has not started.',
@@ -161,15 +163,21 @@
   const responseStages = $derived<CaseResponseStage[]>([
     {
       id: 'observation', number: 1, label: 'Observation',
-      status: record.evidencePins.length && record.sightings.length ? 'complete' : record.evidencePins.length || record.sightings.length ? 'in_progress' : 'not_started',
+      status: record.evidencePins.length || record.sightings.length ? 'complete' : 'not_started',
       summary: `${countLabel(record.evidencePins.length, 'retained evidence pin')} and ${countLabel(record.sightings.length, 'source-qualified sighting')}.`,
-      nextRequirement: !record.evidencePins.length ? 'Pin a source-qualified observed fact with completeness and limitations.' : !record.sightings.length ? 'Record a source-qualified sighting or review conclusion.' : 'Review observation completeness before assessment.',
+      nextRequirement: record.evidencePins.length || record.sightings.length
+        ? 'Review the retained observation, its source, completeness, and limitations before assessment.'
+        : 'Pin an observed fact or record a source-qualified sighting with completeness and limitations.',
     },
     {
       id: 'assessment', number: 2, label: 'Assessment',
-      status: record.decisions.length && record.assertions.length ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.decisions.length, 'decision')}, ${countLabel(record.assertions.length, 'assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
-      nextRequirement: !record.decisions.length ? 'Record a bounded analyst decision and rationale.' : !record.assertions.length ? 'Structure facts, hypotheses, unknowns, and evidence relationships.' : 'Review the investigation trail and unresolved branches.',
+      status: evidenceLinkedDecisionCount ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
+      summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
+      nextRequirement: !record.decisions.length
+        ? 'Record a bounded analyst decision and rationale linked to retained evidence.'
+        : !evidenceLinkedDecisionCount
+          ? 'Link at least one analyst decision to a retained evidence pin.'
+          : 'Review the decision rationale and any unresolved assertions or branches.',
     },
     {
       id: 'response_decision', number: 3, label: 'Response decision',
@@ -177,13 +185,13 @@
       summary: `${countLabel(record.actions.length, 'append-only response action')}; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} follow-up due.`,
       nextRequirement: !record.actions.length ? 'Create a drafting action with recipient provenance and due dates.' : 'Review the next legal action transition without rewriting earlier events.',
     },
+    evidenceHandoffStage,
     {
-      id: 'outcome_tracking', number: 4, label: 'Outcome tracking',
+      id: 'outcome_tracking', number: 5, label: 'Outcome tracking',
       status: record.closures.records.length ? 'complete' : record.observedEffects.reviews.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.observedEffects.reviews.length, 'independent effect review')} and ${countLabel(record.closures.records.length, 'deliberate closure')}.`,
       nextRequirement: !record.observedEffects.reviews.length ? 'Keep provider outcomes separate and record an independently observed effect when reviewed.' : !record.closures.records.length ? 'Review follow-up and, when justified, record a deliberate closure reason.' : 'Review whether follow-up remains due.',
     },
-    evidenceHandoffStage,
   ]);
 
   function updateEvidenceHandoffStage(stage: CaseResponseStage): void {
@@ -523,6 +531,31 @@
     target.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     target.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
   }
+
+  async function preparePacketDeliveryRecord(exported: Readonly<{
+    actionId: string;
+    exportedAt: string;
+    digestSha256: string;
+  }>) {
+    const action = record.actions.find((item) => item.id === exported.actionId);
+    if (!action) {
+      onmessage('The packet was exported, but its selected Case action is no longer available. Reload before recording delivery.');
+      return;
+    }
+    selectAction(action.id);
+    transitionOccurredAt = localFromIso(exported.exportedAt);
+    transitionSourceClass = 'analyst';
+    transitionProvenance = 'local response-packet export';
+    transitionReference = `response-packet-sha256:${exported.digestSha256}`;
+    transitionLimitations = 'A local packet was exported. Confirm actual delivery before appending a submitted transition.';
+    if (action.state === 'authorised') transitionNextState = 'submitted';
+    await openAdvancedStage('response_decision');
+    await tick();
+    document.getElementById(`case-action-transition-reference-${record.id}`)?.focus({ preventScroll: true });
+    onmessage(action.state === 'authorised'
+      ? 'Prepared a submitted transition bound to the exported packet digest. Confirm actual delivery before appending it.'
+      : `Selected the packet action and retained its export digest. Its current state is ${action.state.replaceAll('_', ' ')}; choose a legal transition only after the corresponding event occurs.`);
+  }
 </script>
 
 <section id={sectionId || `case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
@@ -699,7 +732,7 @@
               <label class="field">Next state<select value={transitionNextState} onchange={(event) => setTransitionNextState(event.currentTarget.value)}>{#each legalTransitionStates as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
               <label class="field">Original event time<input type="datetime-local" bind:value={transitionOccurredAt}></label>
               <label class="field">Provenance<input bind:value={transitionProvenance} maxlength="80" required></label>
-              <label class="field">Bounded reference<input bind:value={transitionReference} maxlength="500"></label>
+              <label class="field">Bounded reference<input id={`case-action-transition-reference-${record.id}`} bind:value={transitionReference} maxlength="500"></label>
               <label class="field">Evidence pin<select bind:value={transitionEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>
               <label class="field">Typed provider outcome<select bind:value={transitionProviderOutcome} required={transitionNextState === 'terminal' && ['drafting', 'ready_for_review', 'reviewed', 'authorised'].includes(selectedAction.state)}><option value="">No provider outcome</option>{#each availableTransitionProviderOutcomes as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
             </div>
@@ -749,6 +782,15 @@
     {/if}
   </details>
 
+  {/if}
+  <CaseResponsePacketWorkspace
+    {record}
+    visible={presentationMode === 'advanced'}
+    {onmessage}
+    onstagechange={updateEvidenceHandoffStage}
+    onpacketexported={preparePacketDeliveryRecord}
+  />
+  {#if presentationMode === 'advanced'}
   <details id={`case-response-outcome-${record.id}`}>
     <summary>Verify remediation independently and close deliberately</summary>
     <div class="response-form remediation-review">
@@ -807,12 +849,6 @@
   </details>
 
   {/if}
-  <CaseResponsePacketWorkspace
-    {record}
-    visible={presentationMode === 'advanced'}
-    {onmessage}
-    onstagechange={updateEvidenceHandoffStage}
-  />
 </section>
 
 <style>
