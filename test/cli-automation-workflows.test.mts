@@ -350,7 +350,7 @@ describe('reproducible investigation manifest', () => {
       now: () => NOW,
       readDiffInput: async (source) => source.endsWith('lookup.json')
         ? '{"schema":"whoisleuth.cli.lookup","version":1}'
-        : '{"schema":"whoisleuth.cli.lookup-brief","version":2}',
+        : '{"schema":"whoisleuth.cli.lookup-brief","version":3}',
       runUnifiedLookup: async () => { lookupCalled = true; },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);

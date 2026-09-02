@@ -263,6 +263,8 @@ describe('canonical CLI command registry', () => {
     ]);
     assert.equal(commandOptionSpec('http', '--scenario'), null);
     assert.equal(commandOptionSpec('workflow-run', '--resume')?.valueKind, 'file');
+    assert.equal(commandOptionSpec('workflow-run', '--select')?.valueKind, 'text');
+    assert.equal(commandOptionSpec('workflow-run', '--select')?.occurrence, 'repeatable');
     assert.equal(commandOptionSpec('bulk', '--resume')?.valueKind, 'flag');
     assert.deepEqual(commandPositionalSpecs('manifest'), [
       { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: 16, values: [], inputSource: 'argv', requiredWhenOptions: [] },

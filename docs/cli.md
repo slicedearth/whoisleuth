@@ -78,7 +78,7 @@ application:
 | Group | Common commands |
 | --- | --- |
 | Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `brief` |
-| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` |
+| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` (local handoff from browser-created Cases) |
 | Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
 | Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
 

@@ -45,6 +45,37 @@ describe('fixed investigation execution', () => {
     assert.equal(result.completedSteps.length, 2);
   });
 
+  test('substitutes bounded analyst selections in placeholder order and completes the recipe', async () => {
+    const calls: Array<Readonly<{ command: string; arguments: readonly string[] }>> = [];
+    const result = await runInvestigationRecipe('historical-comparison', 'example.test', {
+      approveNetwork: true,
+      resumeInput: null,
+      selections: [
+        { stepId: 'diff', value: 'earlier.json' },
+        { stepId: 'diff', value: 'later.json' },
+        { stepId: 'timeline', value: 'oldest.json' },
+        { stepId: 'timeline', value: 'newer.json' },
+        { stepId: 'timeline', value: 'current.json' },
+      ],
+      generatedAt: NOW,
+      execute: async (command, args) => {
+        calls.push({ command, arguments: args });
+        return { exitCode: 0, stdout: commandOutput('historical-comparison', 'example.test', command) };
+      },
+    });
+    assert.equal(result.version, 2);
+    assert.equal(result.state, 'complete');
+    assert.deepEqual(calls.map((item) => item.arguments), [
+      ['example.test', '--deep', '--json'],
+      ['earlier.json', 'later.json', '--json'],
+      ['oldest.json', 'newer.json', 'current.json', '--json'],
+    ]);
+    assert.deepEqual(result.selections, [
+      { stepId: 'diff', values: ['earlier.json', 'later.json'] },
+      { stepId: 'timeline', values: ['oldest.json', 'newer.json', 'current.json'] },
+    ]);
+  });
+
   test('resumes a matching checkpoint without repeating completed steps', async () => {
     const first = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
       approveNetwork: false, resumeInput: null, generatedAt: NOW,
@@ -61,8 +92,8 @@ describe('fixed investigation execution', () => {
   });
 
   test('exposes explicit approval and resume arguments through the runner', async () => {
-    assert.deepEqual(parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--approve-network', '--resume', 'state.json', '--json']), {
-      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', approveNetwork: true, output: 'json', quiet: false, color: true,
+    assert.deepEqual(parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'export=saved.json', '--approve-network', '--resume', 'state.json', '--json']), {
+      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], approveNetwork: true, output: 'json', quiet: false, color: true,
     });
     let stdout = '';
     let calls = 0;
@@ -76,6 +107,30 @@ describe('fixed investigation execution', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(calls, 1);
     assert.equal(JSON.parse(stdout).state, 'awaiting_analyst_selection');
+  });
+
+  test('rejects unknown, excessive, and option-shaped analyst selections', async () => {
+    for (const selections of [
+      [{ stepId: 'unknown', value: 'input.json' }],
+      [{ stepId: 'export', value: '--output' }],
+      [{ stepId: 'export', value: 'one.json' }, { stepId: 'export', value: 'two.json' }],
+    ]) {
+      await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
+        approveNetwork: false,
+        resumeInput: null,
+        selections,
+        generatedAt: NOW,
+        execute: async () => ({ exitCode: 0, stdout: '{}' }),
+      }), /fixed recipe|invalid value|bounded/iu);
+    }
+    assert.throws(
+      () => parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'export=--output']),
+      /cannot start with a hyphen/iu,
+    );
+    assert.throws(
+      () => parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'not-a-selection']),
+      /step-id/iu,
+    );
   });
 
   test('reports resume read failures and renders an unapproved run without execution', async () => {
@@ -106,6 +161,33 @@ describe('fixed investigation execution', () => {
     await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
       approveNetwork: false, resumeInput: JSON.stringify(invalid), generatedAt: NOW, execute: async () => ({ exitCode: 0, stdout: '{}' }),
     }), /must match/iu);
+  });
+
+  test('reads version-1 checkpoints and retains version-2 selections across resume', async () => {
+    const plan = buildInvestigationPlan('lookalike-review', 'Example Brand', NOW);
+    const legacy = {
+      schema: 'whoisleuth.cli.investigation-run',
+      version: 1,
+      recipe: 'lookalike-review',
+      subject: 'example brand',
+      completedSteps: [{ ...plan.steps[0], exitCode: 0, result: { schema: plan.steps[0]?.produces } }],
+    };
+    const resumed = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
+      approveNetwork: true,
+      resumeInput: JSON.stringify(legacy),
+      selections: [{ stepId: 'inspect', value: 'candidate.example.test' }],
+      generatedAt: NOW,
+      execute: async (command) => ({ exitCode: 0, stdout: commandOutput('lookalike-review', 'Example Brand', command) }),
+    });
+    assert.equal(resumed.state, 'complete');
+    assert.deepEqual(resumed.selections, [{ stepId: 'inspect', values: ['candidate.example.test'] }]);
+
+    await assert.rejects(() => runInvestigationRecipe('lookalike-review', 'Example Brand', {
+      approveNetwork: false,
+      resumeInput: JSON.stringify({ ...legacy, selections: [] }),
+      generatedAt: NOW,
+      execute: async () => ({ exitCode: 0, stdout: '{}' }),
+    }), /version 1 cannot contain analyst selections/iu);
   });
 
   test('rejects forged, duplicate, out-of-order, and wrong-schema resume steps without execution', async () => {

@@ -119,6 +119,7 @@ async function runWorkflowRecipeCommand(
   }
   const document = await runInvestigationRecipe(args.recipe, args.subject, {
     approveNetwork: args.approveNetwork,
+    selections: args.selections,
     resumeInput,
     generatedAt: context.now(),
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),

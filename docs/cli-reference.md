@@ -135,14 +135,18 @@ evidence is accurate, current, safe to share or attributable to a person.
   control, activity, intent or maliciousness.
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
-- Respond commands prepare local Cases, packets and sharing reviews. They do not
-  submit, publish, notify or grant recipient authorisation.
+- Respond commands package browser-created Cases and prepare local packets,
+  reports and sharing reviews. They do not create durable Cases, submit,
+  publish, notify or grant recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.
 - `workflow-plan` lists fixed installed recipes without executing them.
   `workflow-run` executes only installed steps, requires approval for network
-  work and pauses for analyst-selection placeholders.
+  work and pauses at unresolved analyst selections. Repeat
+  `--select <step-id>=<path-or-value>` in placeholder order to resume a selected
+  step; version-1 checkpoints remain readable and version 2 retains the exact
+  selections in the local checkpoint.
 
 Use the installed focused help for positional inputs, exact ceilings, options,
 network effects, outputs and command-specific exit behaviour.

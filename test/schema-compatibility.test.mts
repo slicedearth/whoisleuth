@@ -373,6 +373,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.trust-store-comparison-review').schema, 'whoisleuth.trust-store-comparison.review');
     assert.equal(byId(inventory, 'cli.nameserver-preflight-review').schema, 'whoisleuth.nameserver-preflight.review');
     assert.equal(byId(inventory, 'cli.investigation-run').schema, 'whoisleuth.cli.investigation-run');
+    assert.equal(byId(inventory, 'cli.investigation-run').currentVersion, 2);
+    assert.deepEqual(byId(inventory, 'cli.investigation-run').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'cli.investigation-run').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'cli.collection-preflight').schema, 'whoisleuth.cli.collection-preflight');
     assert.equal(byId(inventory, 'cli.config').schema, 'whoisleuth.cli.config');
     assert.equal(byId(inventory, 'export.cli-case-pack').schema, 'whoisleuth.cli.case-pack');
@@ -382,7 +385,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.domain-control-review-input').schema, 'whoisleuth.cli.domain-control-review-input');
     assert.equal(byId(inventory, 'cli.domain-control-observation-review').schema, 'whoisleuth.cli.domain-control-review');
     assert.equal(byId(inventory, 'cli.domain-control-monitor').schema, 'whoisleuth.cli.domain-control-monitor');
-    assert.deepEqual(byId(inventory, 'cli.lookup-brief').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'cli.lookup-brief').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.registry-cohort').schema, 'whoisleuth.cli.registry-cohort');
     assert.deepEqual(byId(inventory, 'cli.registry-cohort').supportedVersions, [2]);
     assert.equal(byId(inventory, 'cli.domain-control-flight-recorder-input').schema, 'whoisleuth.domain-control-flight-recorder.input');

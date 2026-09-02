@@ -38,7 +38,7 @@ type CliInvocationNetworkEffect = 'offline' | 'network';
 type CliHelpGroup = 'investigate' | 'respond' | 'assure' | 'utilities';
 type CliDisclosureClass = 'none' | 'bounded_passive' | 'conditional_bounded_passive' | 'bounded_authorised_active';
 type CliOptionValueKind = 'enum' | 'file' | 'flag' | 'integer' | 'policy_list' | 'text';
-type CliOptionOccurrence = 'idempotent' | 'once';
+type CliOptionOccurrence = 'idempotent' | 'once' | 'repeatable';
 type CliOptionScope = 'command' | 'common';
 type CliPositionalValueKind = 'enum' | 'file' | 'text';
 type CliPositionalInputSource = 'argv' | 'argv_or_stdin';
@@ -294,6 +294,7 @@ const TEXT_OPTIONS = Object.freeze([
   '--observer',
   '--retired-selectors',
   '--search',
+  '--select',
   '--selectors',
   '--tlds',
   '--vantage',
@@ -306,6 +307,8 @@ const IDEMPOTENT_OPTIONS = Object.freeze([
   '--quiet',
   '--redactions-confirmed',
 ]);
+
+const REPEATABLE_OPTIONS = Object.freeze(['--select']);
 
 const INTEGER_RANGE_SEED: Readonly<Partial<Record<CliCommand, Readonly<Record<string, readonly CliOptionIntegerRange[]>>>>> = Object.freeze({
   bulk: Object.freeze({
@@ -382,7 +385,9 @@ function optionSpec(command: CliCommand, option: string, scope: CliOptionScope):
     valueKind,
     values: Object.freeze([...(VALUE_OPTIONS[option] ?? [])]),
     integerRanges: Object.freeze([...(INTEGER_RANGE_SEED[command]?.[option] ?? [])]),
-    occurrence: IDEMPOTENT_OPTIONS.includes(option) ? 'idempotent' : 'once',
+    occurrence: REPEATABLE_OPTIONS.includes(option)
+      ? 'repeatable'
+      : IDEMPOTENT_OPTIONS.includes(option) ? 'idempotent' : 'once',
     metaAction: option === '--help' ? 'help' : null,
   });
 }
@@ -1271,9 +1276,9 @@ const COMMAND_SEEDS = Object.freeze({
   "case-pack": commandSeed({
     reference: {
       usage: 'whoisleuth case-pack [cases.json] --audience <internal|trusted|public> --reviewed [--json] [--quiet] [--no-color]',
-      description: `Build a reviewed, audience-specific Case-pack v2 from an exact Case-schema-${CASE_SCHEMA_VERSION} export.`,
+      description: `Package browser-created Case-schema-${CASE_SCHEMA_VERSION} records as a reviewed, audience-specific Case-pack v2.`,
       example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
-      boundary: 'The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.',
+      boundary: 'The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.',
     },
     collection: { mode: 'offline', scope: `Reads one bounded Case-schema-${CASE_SCHEMA_VERSION} browser export and writes a separate audience-specific Case-pack v2.` },
     summary: 'Build a reviewed case package',
@@ -1435,14 +1440,14 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "workflow-run": commandSeed({
     reference: {
-      usage: 'whoisleuth workflow-run <recipe> <domain|brand> [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
-      description: 'Execute approved concrete steps from a fixed investigation recipe and emit a resumable checkpoint.',
-      example: 'whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json',
-      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation, and analyst-selection placeholders always pause without interpretation.',
+      usage: 'whoisleuth workflow-run <recipe> <domain|brand> [--select <step-id>=<path-or-value>]... [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
+      description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
+      example: 'whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json',
+      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.',
     },
-    collection: { mode: 'network', scope: 'Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.' },
+    collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
-    options: ['--approve-network', '--resume', '--json', '--quiet', '--no-color'],
+    options: ['--select', '--approve-network', '--resume', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
@@ -1461,9 +1466,9 @@ const COMMAND_SEEDS = Object.freeze({
   diff: commandSeed({
     reference: {
       usage: 'whoisleuth diff <left.json> <right.json> [--left-session <id> --right-session <id>] [--json] [--quiet] [--no-color]',
-      description: 'Compare two compatible retained Lookup, Bulk-session, or domain-portfolio artefacts.',
-      example: 'whoisleuth diff first.json second.json --json',
-      boundary: 'Comparison is offline. Multi-session Bulk exports require explicit session IDs, and missing, unavailable, equal, and different evidence remain separate states.',
+      description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
+      example: 'whoisleuth diff earlier.json later.json --json',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { mode: 'offline', scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',
