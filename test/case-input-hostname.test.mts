@@ -93,6 +93,15 @@ describe('Case v13 exact submitted hostname', () => {
     }, { caseDomain: 'example.test' }), null);
   });
 
+  test('rechecks the latest exact hostname without borrowing an older hostname when context is unknown', () => {
+    const first = model.createCase({
+      domain: 'example.test', source: 'lookup', evidence: retainedEvidence('login.example.test'),
+    }, FIRST);
+    assert.equal(model.caseLookupTarget(first), 'login.example.test');
+    const current = { ...first, evidenceHistory: [...first.evidenceHistory, { ...first.evidenceHistory[0]!, id: 'new', inputHostname: null, capturedAt: SECOND }] };
+    assert.equal(model.caseLookupTarget(current), 'example.test');
+  });
+
   test('rejects ambiguous unreleased Case v13 and never reconstructs a migrated hostname from Case domain or URL evidence', () => {
     assert.throws(() => model.normalizeCaseStore({
       version: 13,

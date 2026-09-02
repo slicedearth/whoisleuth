@@ -63,6 +63,7 @@ export interface LookupRouteAnalysisInput {
   profile: BrandProfile | null;
   profileSourceState?: ActiveBrandProfileSourceState;
   task: LookupTaskView;
+  hasReviewedCaseRecipient?: boolean;
   completedLookupDepth: LookupDepth | null;
   freshnessPolicy?: LookupFreshnessPolicyInput;
 }
@@ -483,6 +484,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasActiveProfile: hasActiveBrandProfile === true,
     profileSourceState,
     hasCaseSection,
+    ...(input.hasReviewedCaseRecipient === undefined ? {} : { hasReviewedCaseRecipient: input.hasReviewedCaseRecipient }),
     responseRecipientCount: abuseRecipientResolution.recipients.length,
     registryComparison: comparison,
     registrarPublicationComparison,

@@ -314,7 +314,7 @@ function buildSignals(
   if (typeof availability.privacyProtected === 'boolean') {
     pushSignal(signals, {
       label: formatPrivacyCell(availability.privacyProtected),
-      tone: availability.privacyProtected ? 'warn' : 'good',
+      tone: 'neutral',
     });
   }
 
@@ -328,11 +328,7 @@ function buildSignals(
         availability.hasSpf === true,
         availability.hasDmarc === true,
       ),
-      tone: activityStatus === 'active'
-        ? 'good'
-        : activityStatus === 'parked'
-          ? 'warn'
-          : 'neutral',
+      tone: 'neutral',
       ...(detail ? { detail } : {}),
     });
   }

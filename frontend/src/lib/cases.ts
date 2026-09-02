@@ -49,6 +49,7 @@ export {
   CASE_DISPOSITIONS,
   CASE_REVIEW_REASONS,
   CASE_STATUSES,
+  caseLookupTarget,
   compareCaseEvidence,
   dispositionLabel,
   latestCaseEvidence,

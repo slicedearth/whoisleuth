@@ -73,7 +73,7 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
   const openUnknowns = openAssertions(assertions, 'unknown');
   const openContradictions = openAssertions(assertions, 'contradiction');
   const openNextSteps = openAssertions(assertions, 'next_step');
-  const activeActions = actions.filter((item) => !['resolved', 'closed'].includes(String(item.state))).length;
+  const activeActions = actions.filter((item) => !['terminal', 'resolved', 'closed'].includes(String(item.state))).length;
   const supportedDecisions = decisions.filter((item) => (
     Array.isArray(item.evidencePinIds) && item.evidencePinIds.some((id) => pins.some((pin) => pin.id === id))
   )).length;

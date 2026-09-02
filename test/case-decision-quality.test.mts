@@ -36,8 +36,19 @@ test('case decision quality finds inconsistent dispositions and unsupported reas
   assert.equal(report.counts.inconsistent_disposition, 1);
   assert.equal(report.counts.disposition_without_reason, 2);
   assert.equal(report.counts.decision_without_evidence, 2);
+  assert.equal(report.counts.strong_disposition_without_evidence, 0);
   assert.equal(report.counts.assertion_without_evidence, 2);
   assert.equal(report.counts.assertion_predates_evidence, 2);
   assert.equal(JSON.stringify(records), before);
   assert.match(report.limitation, /does not decide/u);
+});
+
+test('flags strong or operational states that have no supporting decision path', () => {
+  const confirmed = caseRecord('confirmed', 'confirmed.example', 'confirmed_abuse');
+  const escalated = { ...caseRecord('escalated', 'escalated.example', 'suspicious'), status: 'escalated', reviewReasonCode: 'other' };
+  const monitoring = { ...caseRecord('monitoring', 'monitoring.example', 'suspicious'), status: 'monitoring', reviewReasonCode: 'other' };
+  const report = buildCaseDecisionQualityReport([confirmed, escalated, monitoring]);
+  assert.equal(report.counts.strong_disposition_without_evidence, 1);
+  assert.equal(report.counts.escalation_without_action, 1);
+  assert.equal(report.counts.monitoring_without_follow_up, 1);
 });

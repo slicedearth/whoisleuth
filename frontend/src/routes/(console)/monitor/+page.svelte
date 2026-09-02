@@ -555,6 +555,15 @@
   rules:detectionRulesSourceState==='ready'?customRuleCount:null,
   watchlists:watchlistsSourceState==='ready'?names.length:null,
   certificates:certificateReviewCount,
+}} countStates={{
+  inbox:[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,analystReviewStateSourceState,brandProfilesSourceState,detectionRulesSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':reviewInboxCount===null?'loading':'ready',
+  timeline:[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('loading')?'loading':'ready',
+  cases:casesSourceState,
+  campaigns:campaignsSourceState,
+  relationships:[casesSourceState,campaignsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':[casesSourceState,campaignsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('loading')?'loading':'ready',
+  rules:detectionRulesSourceState,
+  watchlists:watchlistsSourceState,
+  certificates:[casesSourceState,brandProfilesSourceState,analystReviewStateSourceState].includes('unavailable')?'unavailable':certificateReviewCount===null?'loading':'ready',
 }} preloadView={preloadMonitorView} setView={selectMonitorView} />
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 
@@ -677,10 +686,10 @@
     {#if watchlistsRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing watchlists while the last readable snapshot remains available.</p>{/if}
     <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
     <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,openCase:openWatchlistCase,formatDate:date}} />
-    <DeferredSurface load={()=>import('$lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
   {:else}
-    <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Browser-local watchlists could not be read, so their count, empty state, imports, hosted restore, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+    <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Browser-local watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
+  <DeferredSurface load={()=>import('$lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,localSourceState:watchlistsSourceState,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
 </div>
 {/if}
 

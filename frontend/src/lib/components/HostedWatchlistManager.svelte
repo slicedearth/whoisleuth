@@ -14,12 +14,14 @@
     capability,
     localWatchlists,
     localNames,
+    localSourceState,
     restoreHosted,
     formatDate,
   }: {
     capability: Capability | null;
     localWatchlists: Watchlists;
     localNames: string[];
+    localSourceState: 'loading' | 'ready' | 'unavailable';
     restoreHosted: (name: string, entry: WatchlistEntry) => Promise<void>;
     formatDate: (value: string) => string;
   } = $props();
@@ -191,7 +193,7 @@
     <div>
       <p class="eyebrow">Optional hosted monitoring</p>
       <h2 id="hosted-monitoring-title">Scheduled watchlists</h2>
-      <p>Ordinary watchlists stay in this browser. Only a watchlist you schedule here is copied as compact encrypted evidence to the hosted store.</p>
+      <p>Ordinary watchlists stay in this browser. Only a watchlist you schedule here is copied as compact encrypted evidence to the hosted store. Scheduled runs use Fast compact collection: registration-led RDAP and the bounded authoritative DNS fallback where required, without WHOIS, HTTP, TLS, page, or optional intelligence collection.</p>
     </div>
     {#if capability?.status === 'supported'}
       <button class="btn" onclick={refresh} disabled={loading || busy}>{loading ? 'Refreshing…' : 'Refresh'}</button>
@@ -214,7 +216,7 @@
 
     <div class="schedule-form">
       <label>Browser-local watchlist
-        <select bind:value={selectedLocal} disabled={loading || busy || !localNames.length}>
+        <select bind:value={selectedLocal} disabled={loading || busy || localSourceState !== 'ready' || !localNames.length}>
           <option value="">Choose a watchlist</option>
           {#each localNames as name}<option value={name}>{name} ({localWatchlists[name]?.results.length ?? 0})</option>{/each}
         </select>
@@ -227,11 +229,13 @@
           <option value={168}>Weekly</option>
         </select>
       </label>
-      <button class="primary" onclick={scheduleSelected} disabled={loading || busy || !selectedEntry}>
+      <button class="primary" onclick={scheduleSelected} disabled={loading || busy || localSourceState !== 'ready' || !selectedEntry}>
         {selectedHosted ? 'Replace hosted snapshot' : 'Schedule watchlist'}
       </button>
     </div>
-    {#if !localNames.length}<p class="hint">Save a Bulk result as a browser-local watchlist before scheduling it.</p>{/if}
+    {#if localSourceState === 'unavailable'}<p class="hint">Browser-local watchlists are unavailable. Hosted status, pause, resume, and deletion remain available; scheduling, replacement, and restore are disabled.</p>
+    {:else if localSourceState === 'loading'}<p class="hint">Browser-local watchlists are still loading. Hosted status remains available.</p>
+    {:else if !localNames.length}<p class="hint">Save a Bulk result as a browser-local watchlist before scheduling it.</p>{/if}
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if recoveryMessage}<p class="recovery" role="status" aria-live="polite">{recoveryMessage} No malformed values were included in this status or displayed.</p>{/if}
@@ -254,8 +258,8 @@
             {#if item.prunedHistoryEvents}<p class="hint">{item.prunedHistoryEvents} older hosted history event{item.prunedHistoryEvents === 1 ? '' : 's'} pruned.</p>{/if}
             <div class="toolbar actions">
               <button class="btn small" onclick={() => toggle(item)} disabled={loading || busy}>{item.enabled ? 'Pause' : 'Resume'}</button>
-              <button class="btn small" onclick={() => replace(item)} disabled={loading || busy || !localEntryFor(item.name)}>Replace from browser</button>
-              <button class="btn small" onclick={() => restore(item)} disabled={loading || busy}>Restore to browser</button>
+              <button class="btn small" onclick={() => replace(item)} disabled={loading || busy || localSourceState !== 'ready' || !localEntryFor(item.name)}>Replace from browser</button>
+              <button class="btn small" onclick={() => restore(item)} disabled={loading || busy || localSourceState !== 'ready'}>Restore to browser</button>
               <button class="btn small danger" onclick={() => remove(item)} disabled={loading || busy}>Delete hosted copy</button>
             </div>
           </article>

@@ -145,6 +145,11 @@ the Blob object. Disabling collection also leaves the object in place. Physical
 object deletion is a separate deployment-operator action through the hosting
 platform, as documented in the operations guide.
 
+Each scheduled run uses the Fast compact collection contract: registration-led
+RDAP and the bounded authoritative DNS fallback where required. It omits WHOIS,
+HTTP, TLS, page, and optional intelligence collection, so a scheduled result is
+not a current website or page-content check.
+
 When malformed, duplicate, excessive or inconsistent scheduled-monitor state
 is recovered, the authenticated management response can include an ephemeral
 bounded count by fixed recovery category. It never includes malformed targets,

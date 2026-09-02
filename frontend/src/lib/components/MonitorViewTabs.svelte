@@ -1,6 +1,7 @@
 <script lang="ts">
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules' | 'certificates';
   type Counts = Record<View, number | null>;
+  type CountStates = Record<View, 'loading' | 'ready' | 'unavailable'>;
   const groups: Array<{
     id: 'respond' | 'assure';
     label: string;
@@ -35,11 +36,13 @@
   let {
     view,
     counts,
+    countStates,
     preloadView,
     setView,
   }: {
     view: View;
     counts: Counts;
+    countStates: CountStates;
     preloadView: (view: View) => void;
     setView: (view: View) => void;
   } = $props();
@@ -70,7 +73,7 @@
       </header>
       <div class="views" role="presentation">
         {#each group.tabs as tab}
-          <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" aria-describedby={`monitor-${group.id}-views-detail`} tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onpointerenter={() => preloadView(tab.view)} onfocus={() => preloadView(tab.view)} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span aria-label={counts[tab.view] === null ? 'count unavailable' : `${counts[tab.view]} saved`}>{counts[tab.view] ?? '—'}</span></button>
+          <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" aria-describedby={`monitor-${group.id}-views-detail`} tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onpointerenter={() => preloadView(tab.view)} onfocus={() => preloadView(tab.view)} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span aria-label={counts[tab.view] === null ? countStates[tab.view] === 'loading' ? 'count loading' : 'count unavailable' : `${counts[tab.view]} saved`}>{counts[tab.view] ?? '—'}</span></button>
         {/each}
       </div>
     </div>

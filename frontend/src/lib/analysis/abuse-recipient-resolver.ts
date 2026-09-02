@@ -248,6 +248,16 @@ export function resolveAbuseRecipients(input: Readonly<{
       state: 'not_collected' as const,
       detail: 'security.txt was not requested for this lookup.',
     };
+    if (kind === 'security_txt' && securityTxt.state === 'present') return {
+      kind,
+      state: 'unavailable' as const,
+      detail: 'security.txt was fetched, but it contained no usable bounded contact route.',
+    };
+    if (kind === 'security_txt') return {
+      kind,
+      state: 'unavailable' as const,
+      detail: `security.txt was collected with state ${text(securityTxt.state, 40) || 'unknown'}; no usable route was available.`,
+    };
     if ((kind === 'registrar' || kind === 'registry') && registryInsights.version !== 1) return {
       kind,
       state: 'unavailable' as const,

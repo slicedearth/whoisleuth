@@ -460,6 +460,18 @@ export function latestCaseEvidence(
   return history.at(-1) ?? null;
 }
 
+/**
+ * Returns the exact hostname from the latest retained observation when it is
+ * available. The registrable Case identity is the conservative fallback; an
+ * older hostname is never substituted for a newer observation with unknown
+ * hostname context.
+ */
+export function caseLookupTarget(
+  record: { domain: string; evidenceHistory?: CaseEvidenceSnapshot[] },
+): string {
+  return latestCaseEvidence(record)?.inputHostname || record.domain;
+}
+
 // ---------------------------------------------------------------------------
 // Material-change comparison (pure; no Svelte, DOM, or persistence access)
 // ---------------------------------------------------------------------------

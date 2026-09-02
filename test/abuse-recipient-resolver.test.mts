@@ -120,4 +120,16 @@ describe('abuse recipient resolver', () => {
     assert.equal(coverage?.state, 'unavailable');
     assert.match(coverage?.detail ?? '', /incomplete/i);
   });
+
+  test('distinguishes an unrequested security.txt file from a fetched file without a usable contact', () => {
+    const present = resolveAbuseRecipients({
+      securityTxt: { securityTxtVersion: 1, state: 'present', contacts: ['not-a-route'] },
+    });
+    const absent = resolveAbuseRecipients({
+      securityTxt: { securityTxtVersion: 1, state: 'absent', contacts: [] },
+    });
+    assert.match(present.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /fetched.*no usable/iu);
+    assert.match(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /collected with state absent/iu);
+    assert.doesNotMatch(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /not requested/iu);
+  });
 });

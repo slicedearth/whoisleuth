@@ -176,6 +176,7 @@
     profile,
     profileSourceState,
     task:taskView,
+    hasReviewedCaseRecipient:Boolean(caseRecord?.actions.some((action)=>Boolean(action.recipient)&&Boolean(action.contactSource))),
     completedLookupDepth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
@@ -659,7 +660,7 @@
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
-<LookupTaskGuidance task={taskView} {lookupMode} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+<LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
 <LookupForm
   bind:query
   bind:lookupMode
@@ -698,10 +699,8 @@
     {#if evidenceExportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{evidenceExportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
-      task={taskView}
       allSectionsExpanded={allSectionDetailsVisible()}
       anySectionsExpanded={anySectionDetailsVisible()}
-      setTask={setTaskView}
       expandAll={expandAllSectionDetails}
       collapseAll={collapseAllSectionDetails}
     />

@@ -11,6 +11,7 @@
     CASE_DISPOSITIONS,
     CASE_REVIEW_REASONS,
     CASE_STATUSES,
+    caseLookupTarget,
     dispositionLabel,
     sourceLabel,
     statusLabel,
@@ -155,7 +156,7 @@
           {#key record.id}<DeferredCaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} openInitially={responseCaseId===record.id} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
-          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
+          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Look up {caseLookupTarget(record) === record.domain ? 'domain' : 'latest hostname'}</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
         </div>
       {/if}
     </article>

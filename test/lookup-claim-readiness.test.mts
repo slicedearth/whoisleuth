@@ -118,6 +118,18 @@ test('controlled-change readiness requires registry control evidence selected by
   assert.ok(controlled?.missingEvidence.includes('Registry control evidence selected by the availability authority'));
 });
 
+test('incident handoff requires an actually retained Case route, not merely a discovered contact', () => {
+  const base = {
+    targetType: 'domain', task: 'incident' as const,
+    coverage: ledger({ availability: 'complete', http: 'complete', tls: 'complete', 'page-identity': 'complete' }),
+    decisionSupport, availabilityState: 'registered', hasCaseSection: true, responseRecipientCount: 3,
+  };
+  const discoveredOnly = buildLookupClaimReadiness(base);
+  assert.equal(discoveredOnly.entries.find((entry) => entry.id === 'incident-response')?.state, 'limited');
+  const retained = buildLookupClaimReadiness({ ...base, hasReviewedCaseRecipient: true });
+  assert.equal(retained.entries.find((entry) => entry.id === 'incident-response')?.state, 'ready');
+});
+
 test('registration sources cannot bypass an incomplete or unsettled authority decision', () => {
   const incomplete = buildLookupClaimReadiness({
     targetType: 'domain',

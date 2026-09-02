@@ -1,31 +1,15 @@
 <script lang="ts">
-  import {
-    LOOKUP_GUIDANCE_TASKS,
-    lookupTaskGuidance,
-    type LookupGuidanceTask,
-  } from '$lib/analysis/lookup-task-guidance.ts';
-  import type { LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
+  import { lookupTaskGuidance } from '$lib/analysis/lookup-task-guidance.ts';
+  import { LOOKUP_TASK_VIEWS, type LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
 
-  let { task, lookupMode, onmode }: {
+  let { task, lookupMode, ontask, onmode }: {
     task: LookupTaskView;
     lookupMode: 'fast' | 'deep';
+    ontask: (task: LookupTaskView) => void;
     onmode: (mode: 'fast' | 'deep') => void;
   } = $props();
 
-  let selectedTask = $state<LookupGuidanceTask>('registration_authority');
-  let appliedRouteTask = $state('');
-  const guidance = $derived(lookupTaskGuidance(selectedTask));
-
-  $effect(() => {
-    if (task === appliedRouteTask) return;
-    appliedRouteTask = task;
-    if (task === 'acquisition') selectedTask = 'acquisition';
-    else if (task === 'brand' || task === 'incident' || task === 'owned') selectedTask = 'brand_impersonation';
-  });
-
-  function taskLabel(value: LookupGuidanceTask): string {
-    return lookupTaskGuidance(value).label;
-  }
+  const guidance = $derived(lookupTaskGuidance(task));
 
   function applyRecommendation() {
     if (guidance.recommendation === 'fast' || guidance.recommendation === 'deep') onmode(guidance.recommendation);
@@ -36,8 +20,8 @@
   <header>
     <div><p class="eyebrow">Task guidance</p><h2 id="lookup-task-guidance-title">Choose evidence depth for the question</h2></div>
     <label>Analyst question
-      <select bind:value={selectedTask}>
-        {#each LOOKUP_GUIDANCE_TASKS as option}<option value={option}>{taskLabel(option)}</option>{/each}
+      <select value={task} onchange={(event) => ontask(event.currentTarget.value as LookupTaskView)}>
+        {#each LOOKUP_TASK_VIEWS as option}<option value={option.id}>{option.label}</option>{/each}
       </select>
     </label>
   </header>
@@ -46,11 +30,7 @@
     <p class="limitation">{guidance.limitation}</p>
   </div>
   <div class="guidance-actions">
-    {#if guidance.recommendation === 'review_retained'}
-      <a class="btn" href="/monitor?view=timeline">Open retained change review</a>
-    {:else}
-      <button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>
-    {/if}
+    <button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>
     <span>You can still choose either depth below.</span>
   </div>
 </section>
