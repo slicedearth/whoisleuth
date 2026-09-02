@@ -322,7 +322,7 @@ export function buildLookupReplayCheckpointFacts(
       ]),
       sourceSchema: {
         collection: 'lookup_result' as const,
-        schema: LOOKUP_EVIDENCE_SCHEMA,
+        schema: LOOKUP_EVIDENCE_SCHEMA as CheckpointFact['sourceSchema']['schema'],
         version: replay.schemaVersion,
       },
     }];
