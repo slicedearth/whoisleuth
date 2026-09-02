@@ -143,7 +143,6 @@ const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
   ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', 1],
   ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure.mts', 1],
   ['whoisleuth.external-findings', 'cli/ct-event-intake.mts', 1],
-  ['whoisleuth.lookup-evidence', 'frontend/src/lib/analysis/case-evidence-checkpoint.ts', 1],
   ['whoisleuth.registry-standards-coverage', 'lib/registry-capability-catalogue.mts', 1],
   ['whoisleuth.shortlist', 'frontend/src/lib/browser-local-data-definitions.ts', 2],
   ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', 1],

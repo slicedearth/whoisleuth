@@ -2,7 +2,10 @@
 // analyst-selectable case facts. It performs no collection and stores only
 // the facts the analyst explicitly selects.
 
-import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from './evidence-export.ts';
+import {
+  LOOKUP_EVIDENCE_SCHEMA,
+  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+} from './evidence-export.ts';
 import {
   createLookupViewModel,
   isJsonObject,
@@ -42,7 +45,7 @@ export type CheckpointFact = Readonly<{
   limitations: string[];
   sourceSchema: {
     collection: 'lookup_result';
-    schema: 'whoisleuth.lookup-evidence';
+    schema: typeof LOOKUP_EVIDENCE_SCHEMA;
     version: number;
   };
 }>;
@@ -258,7 +261,7 @@ export function buildLookupCheckpointFacts(
     ...fact,
     sourceSchema: {
       collection: 'lookup_result',
-      schema: 'whoisleuth.lookup-evidence',
+      schema: LOOKUP_EVIDENCE_SCHEMA,
       version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     },
   })).slice(0, MAX_CHECKPOINT_FACTS);
@@ -319,7 +322,7 @@ export function buildLookupReplayCheckpointFacts(
       ]),
       sourceSchema: {
         collection: 'lookup_result' as const,
-        schema: 'whoisleuth.lookup-evidence' as const,
+        schema: LOOKUP_EVIDENCE_SCHEMA,
         version: replay.schemaVersion,
       },
     }];
