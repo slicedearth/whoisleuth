@@ -4,6 +4,11 @@ import { sectionedLookupFixture } from './lookup-design-fixtures';
 
 // Data-heavy Lookup evidence presentation and accessibility coverage.
 
+function analystQuestion(page: import('@playwright/test').Page) {
+  return page.getByRole('region', { name: 'Choose evidence depth for the question' })
+    .getByLabel('Analyst question');
+}
+
 test('a data-heavy Lookup result groups evidence into navigable sections', {
   tag: [
     '@analyst-journey',
@@ -280,8 +285,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(action.getAttribute('href') ?? '')
   )))).toBe(true);
 
-  const taskFocus = controls.getByLabel('Focus');
-  await taskFocus.selectOption('acquisition');
+  const taskQuestion = analystQuestion(page);
+  await taskQuestion.selectOption('acquisition');
   const acquisitionAction = nextReviewQueue.locator('[data-action-id="review-acquisition-dependencies"]');
   await expect(acquisitionAction).toHaveCount(1);
   await expect(acquisitionAction).toHaveAttribute('data-basis', 'task_context');
@@ -289,7 +294,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(acquisitionAction.locator('.contextual-note')).toContainText('no evidence fact or provenance is claimed');
   expect(lookupRequests).toHaveLength(1);
 
-  await taskFocus.selectOption('brand');
+  await taskQuestion.selectOption('brand');
   expect(lookupRequests).toHaveLength(1);
   const detailedAssessment = page.locator('details.detailed-assessment');
   await detailedAssessment.locator(':scope > summary').click();
@@ -365,7 +370,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   }))).toEqual({ ...impactStateBefore, writes: 0 });
   expect(lookupRequests).toHaveLength(1);
 
-  await taskFocus.selectOption('general');
+  await taskQuestion.selectOption('general');
   expect(lookupRequests).toHaveLength(1);
   const decisionSupport = detailedAssessment.locator('.decision-support');
   await expect(decisionSupport.getByRole('heading', { name: 'General investigation' })).toBeVisible();
@@ -457,9 +462,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
   }))).toEqual(presentationStateBefore);
 
-  const assessmentFocus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
-  await assessmentFocus.selectOption('acquisition');
-  await expect(assessmentFocus).toHaveValue('acquisition');
+  await taskQuestion.selectOption('acquisition');
+  await expect(taskQuestion).toHaveValue('acquisition');
   const acquisitionReview = page.locator('details.acquisition');
   await expect(acquisitionReview).toContainText('Acquisition due diligence');
   await expect(acquisitionReview).not.toHaveAttribute('open', '');

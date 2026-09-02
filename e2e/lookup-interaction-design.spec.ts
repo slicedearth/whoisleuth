@@ -3,7 +3,12 @@ import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 
-// Lookup response bounds, disclosure, focus and URL reconciliation coverage.
+// Lookup response bounds, disclosure, analyst-task and URL reconciliation coverage.
+
+function analystQuestion(page: import('@playwright/test').Page) {
+  return page.getByRole('region', { name: 'Choose evidence depth for the question' })
+    .getByLabel('Analyst question');
+}
 
 test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound success response', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
@@ -51,7 +56,7 @@ test('Lookup accepts exact HTTP evidence bounds and rejects an over-bound succes
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
-test('Lookup focus and disclosure controls change presentation without changing evidence', async ({ page }) => {
+test('Lookup analyst question and disclosure controls change presentation without changing evidence', async ({ page }) => {
   test.slow();
   const domain = 'presentation-options.invalid';
   const presentationFixture = sectionedLookupFixture(domain);
@@ -76,7 +81,7 @@ test('Lookup focus and disclosure controls change presentation without changing 
   expect(fixtureResponses).toBe(1);
 
   const controls = page.getByRole('region', { name: 'Choose what to review' });
-  const task = controls.getByLabel('Focus');
+  const task = analystQuestion(page);
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
@@ -294,7 +299,8 @@ test('Lookup focus and disclosure controls change presentation without changing 
   await page.reload();
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(analystQuestion(page)).toHaveValue('acquisition');
   await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
   expect(lookupRequests).toHaveLength(2);
   expect(fixtureResponses).toBe(2);
@@ -321,7 +327,8 @@ test('Lookup task query context is bounded, transient, and changes only result p
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(analystQuestion(page)).toHaveValue('acquisition');
   expect(lookupRequests).toHaveLength(1);
   expect(new URL(lookupRequests[0]!).searchParams.has('task')).toBe(false);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:lookup-presentation:v1') || '{}').task)).toBe('brand');
@@ -357,25 +364,26 @@ test('Lookup task query context is bounded, transient, and changes only result p
   await expect(nextActions.filter({ hasText: 'Review transfer dependencies' })).toHaveCount(1);
   await page.locator('details.detailed-assessment > summary').click();
   await expect(page.getByRole('heading', { name: 'Useful next actions' })).toHaveCount(0);
-  const focus = page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus');
+  const question = analystQuestion(page);
   for (const nonAcquisitionTask of ['general', 'brand', 'incident', 'owned']) {
-    await focus.selectOption(nonAcquisitionTask);
+    await question.selectOption(nonAcquisitionTask);
     await expect(page.locator('.availability .opportunity-band')).toHaveCount(0);
     await expect(page.locator('.availability .risk-band')).toHaveCount(1);
     await expect(page.locator('.detailed-assessment details.acquisition')).toHaveCount(0);
   }
-  await focus.selectOption('acquisition');
+  await question.selectOption('acquisition');
   await expect(page.locator('.availability .opportunity-band')).toHaveCount(1);
   await expect(page.locator('.detailed-assessment details.acquisition')).toBeVisible();
-  await focus.selectOption('brand');
+  await question.selectOption('brand');
   await page.evaluate(() => { window.location.hash = 'registry'; });
   await expect(page).toHaveURL(/task=acquisition#registry$/u);
-  await expect(focus).toHaveValue('brand');
+  await expect(question).toHaveValue('brand');
 
   await page.goto('/lookup?task=ACQUISITION');
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await expect(page.locator('#result')).toBeVisible();
+  await expect(analystQuestion(page)).toHaveValue('brand');
   const brandAssessment = page.locator('.availability');
   const brandRisk = brandAssessment.locator('.risk-band');
   await expect(brandRisk).toHaveCount(1);
@@ -505,13 +513,13 @@ test('same-route Lookup URL changes reconcile retained evidence, depth, and tran
   await expect(page.locator('#result')).toHaveCount(0);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.locator('#result')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('acquisition');
+  await expect(analystQuestion(page)).toHaveValue('acquisition');
 
   await navigate('/lookup?task=incident');
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('incident');
+  await expect(analystQuestion(page)).toHaveValue('incident');
   await navigate('/lookup');
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await expect(analystQuestion(page)).toHaveValue('brand');
 
   await page.getByRole('radio', { name: /Fast/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -522,19 +530,19 @@ test('same-route Lookup URL changes reconcile retained evidence, depth, and tran
   await expect(page.locator('#result')).toHaveCount(0);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.locator('#result')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+  await expect(analystQuestion(page)).toHaveValue('owned');
 
   await navigate('/lookup?q=%00ignored&depth=DEEP&task=OWNED');
   await expect(page.locator('#query')).toHaveValue('next-target.invalid');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await expect(analystQuestion(page)).toHaveValue('brand');
   await page.goBack();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+  await expect(analystQuestion(page)).toHaveValue('owned');
   await page.goBack();
   await expect(page).toHaveURL(/\/lookup$/u);
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('brand');
+  await expect(analystQuestion(page)).toHaveValue('brand');
   await page.goForward();
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Focus')).toHaveValue('owned');
+  await expect(analystQuestion(page)).toHaveValue('owned');
 
   for (const [genericTarget, targetType] of [['192.0.2.20', 'ipv4'], ['AS64497', 'asn']] as const) {
     for (const completedDepth of ['fast', 'deep'] as const) {

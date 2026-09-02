@@ -59,14 +59,14 @@
       );
       if (generation !== replayGeneration) return;
       replay = next;
+      statusState = 'success';
+      status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
       const existing = next.caseDomain
         ? await caseController.refresh(next.caseDomain)
         : { record: null, status: '' };
-      if (generation !== replayGeneration || replay !== next) return;
+      if (generation !== replayGeneration) return;
       caseRecord = existing.record;
       caseStatus = existing.status;
-      statusState = 'success';
-      status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
     } catch (cause) {
       if (generation !== replayGeneration) return;
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';

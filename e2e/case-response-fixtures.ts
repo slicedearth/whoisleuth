@@ -1,6 +1,12 @@
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { openCaseResponseWorkspace } from './case-test-fixtures';
+import type {
+  CaseActionEventSourceClass,
+  CaseActionRecord,
+  CaseActionType,
+  CaseProviderOutcome,
+} from '../frontend/src/lib/analysis/case-response-model.ts';
 
 // Shared Case response fixtures and status locators.
 
@@ -8,9 +14,10 @@ type CurrentActionTargetState = 'ready_for_review' | 'acknowledged' | 'terminal'
 
 function currentActionFixture(input: {
   id: string;
-  type: string;
+  type: CaseActionType;
   recipient: string;
   contactSource: string;
+  routeObservedAt: string | null;
   contactLimitations: string[];
   dueAt: string | null;
   targetState: CurrentActionTargetState;
@@ -19,7 +26,7 @@ function currentActionFixture(input: {
   outcome: string | null;
   createdAt: string;
   updatedAt: string;
-}) {
+}): CaseActionRecord {
   const { targetState, ...material } = input;
   const states = targetState === 'ready_for_review'
     ? ['drafting', 'ready_for_review'] as const
@@ -28,12 +35,12 @@ function currentActionFixture(input: {
       : ['drafting', 'ready_for_review', 'reviewed', 'authorised', 'submitted', 'terminal'] as const;
   const start = Date.parse(input.createdAt);
   const end = Date.parse(input.updatedAt);
-  const providerOutcome = targetState === 'acknowledged'
+  const providerOutcome: CaseProviderOutcome | null = targetState === 'acknowledged'
     ? 'accepted_for_review'
     : targetState === 'terminal' ? 'provider_reports_resolved' : null;
   const history = states.map((nextState, index) => {
     const final = index === states.length - 1;
-    const sourceClass = index === 0
+    const sourceClass: CaseActionEventSourceClass = index === 0
       ? 'browser_local'
       : nextState === 'acknowledged' || nextState === 'terminal' ? 'provider' : 'analyst';
     return {

@@ -2,6 +2,11 @@ import type { Page, Request } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
+import {
+  CASE_SCHEMA_VERSION,
+  PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_CASE_SCHEMA_VERSION,
+} from '../packages/contracts/case-portability.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { expect, test } from './fixtures';
@@ -260,7 +265,10 @@ test('keeps privacy detail on the policy page and links to it from resources', a
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
-  await expect(page.getByText(/Current Case schema 13.*Case schema 12 remains readable/iu)).toBeVisible();
+  await expect(page.getByText(new RegExp(
+    `Current Case schema ${CASE_SCHEMA_VERSION}.*Published v2 Case schema ${PUBLISHED_V2_CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+    'iu',
+  ))).toBeVisible();
   await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: 'Privacy' })).toHaveAttribute('aria-current', 'page');
 

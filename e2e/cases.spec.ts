@@ -135,6 +135,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
           actions: [currentActionFixture({
             id: 'action-prepared', type: 'registrar_report', recipient: 'Reviewed registrar route',
             contactSource: 'Published registrar policy', contactLimitations: ['Reachability was not tested.'],
+            routeObservedAt: actionCreatedAt,
             dueAt: overdueAt, targetState: 'ready_for_review', reference: null,
             followUpAt: null, outcome: null, createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
           })],
@@ -145,6 +146,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
           actions: [currentActionFixture({
             id: 'action-resolved', type: 'security_contact_report', recipient: 'Private response route',
             contactSource: 'Analyst supplied', contactLimitations: [], dueAt: null, targetState: 'terminal',
+            routeObservedAt: actionCreatedAt,
             reference: 'PRIVATE-CASE-7', followUpAt: null, outcome: 'Private analyst outcome text.',
             createdAt: actionCreatedAt, updatedAt: actionUpdatedAt,
           })],
@@ -204,6 +206,7 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
         actions: [currentActionFixture({
           id: 'response-layout-action', type: 'registrar_report', recipient: 'Reserved review route',
           contactSource: 'Reserved fixture source', contactLimitations: ['Reachability was not tested.'],
+          routeObservedAt: createdAt,
           dueAt: null, targetState: 'acknowledged', reference: 'CASE-EXAMPLE-LAYOUT', followUpAt: null,
           outcome: 'Acknowledged for bounded review.', createdAt, updatedAt: now,
         })],

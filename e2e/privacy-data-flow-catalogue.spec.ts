@@ -1,6 +1,14 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import {
+  CASE_SCHEMA_VERSION,
+  PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_CASE_SCHEMA_VERSION,
+  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_ARCHIVE_VERSION,
+} from '../packages/contracts/case-portability.mts';
 
 async function selectTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
   if (await page.locator('html').getAttribute('data-theme') === theme) return;
@@ -33,8 +41,14 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
     const sections = page.getByRole('navigation', { name: 'Privacy policy sections' });
     await expect(sections.getByRole('link')).toHaveCount(8);
-    await expect(page.getByText(/Current Case schema 13.*Case schema 12 remains readable/iu)).toBeVisible();
-    await expect(page.getByText(/current writer emits workspace archive version 6.*version 5 remains readable/iu)).toBeVisible();
+    await expect(page.getByText(new RegExp(
+      `Current Case schema ${CASE_SCHEMA_VERSION}.*Published v2 Case schema ${PUBLISHED_V2_CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+      'iu',
+    ))).toBeVisible();
+    await expect(page.getByText(new RegExp(
+      `current writer emits workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*Exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} and ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION} remain readable`,
+      'iu',
+    ))).toBeVisible();
     await expect(page.getByText(/IndexedDB as plaintext JSON/iu)).toBeVisible();
     const catalogueLink = page.getByRole('link', { name: /data-flow catalogue.*opens in a new tab/u });
     await expect(catalogueLink).toHaveAttribute('href', /docs\/privacy-data-flow-catalogue\.md$/u);

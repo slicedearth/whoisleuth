@@ -6,7 +6,7 @@ import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
-import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
+import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -485,7 +485,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
-  expect(archive.version).toBe(6);
+  expect(archive.version).toBe(WORKSPACE_ARCHIVE_VERSION);
   expect(archive.manifest.sectionCount).toBe(13);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
     'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview', 'analystReviewState', 'settings',

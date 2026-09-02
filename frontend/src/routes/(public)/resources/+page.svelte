@@ -143,7 +143,7 @@
 <section id="results" class="resource-section" aria-labelledby="results-title">
   <div class="section-intro"><p class="eyebrow">Read the result</p><h2 id="results-title">Source health is part of the evidence</h2><p>Registration status is authority-aware. DNS, certificates, websites and external intelligence add context, but do not override an authoritative registry answer.</p></div>
   <article class="result-layout card" aria-labelledby="result-layout-title">
-    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need</h3><p>At a glance separates complete, limited, disagreeing and unresolved evidence. Focus changes section order for the selected task; it does not change the evidence.</p></div>
+    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need</h3><p>At a glance separates complete, limited, disagreeing and unresolved evidence. The analyst question changes section order for the selected task; it does not change the evidence.</p></div>
     <ol>
       <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>

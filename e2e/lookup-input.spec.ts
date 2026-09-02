@@ -43,30 +43,30 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
 });
 
-test('task guidance recommends depth and retained review without submitting a lookup', async ({ page }) => {
+test('task guidance recommends evidence depth without submitting a lookup', async ({ page }) => {
   const lookupRequests: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
   });
   const guidance = page.locator('.task-guidance');
   const question = guidance.getByLabel('Analyst question');
-  await expect(question).toHaveValue('registration_authority');
+  await expect(question).toHaveValue('general');
   await expect(guidance).toContainText('Fast recommended');
   await expect(guidance.getByRole('button', { name: 'Use Fast recommendation' })).toBeDisabled();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
 
-  await question.selectOption('brand_impersonation');
+  await question.selectOption('brand');
   await expect(guidance).toContainText('Deep recommended');
   await expect(guidance).toContainText('Deep is broader, not complete or authoritative for every question');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
 
-  await question.selectOption('retained_comparison');
-  await expect(guidance).toContainText('Review retained evidence first');
-  await expect(guidance).toContainText('Retained evidence can be stale, partial, or unavailable');
-  await expect(guidance.getByRole('link', { name: 'Open retained change review' })).toHaveAttribute('href', '/monitor?view=timeline');
-  await expect(guidance.getByRole('listitem')).toHaveCount(0);
+  await question.selectOption('owned');
+  await expect(guidance).toContainText('Deep recommended');
+  await expect(guidance).toContainText('registration, DNS, TLS, mail, and web observations');
+  await expect(guidance).toContainText('does not by itself establish compromise, remediation, or control');
+  await expect(guidance.getByRole('button', { name: 'Use Deep recommendation' })).toBeDisabled();
   expect(lookupRequests).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
