@@ -69,8 +69,8 @@ describe('offline workspace archive inspection', () => {
     assert.ok(report.summary.sectionCount > 0);
     assert.ok(report.summary.recordCount >= 2);
     assert.match(report.summary.contentDigestSha256, /^sha256:[a-f0-9]{64}$/u);
-    assert.equal(report.archive.version, 6);
-    assert.equal(report.archive.readerVersion, 6);
+    assert.equal(report.archive.version, 7);
+    assert.equal(report.archive.readerVersion, 7);
     assert.equal(report.search.requested, false);
     const terminal = formatArchiveInspection(report);
     assert.doesNotMatch(terminal, new RegExp(DOMAIN, 'u'));

@@ -151,6 +151,7 @@ export class LookupCaseController {
           type: route.actionType,
           recipient: route.contact,
           contactSource: route.source,
+          routeObservedAt: route.observedAt,
           contactLimitations: [...route.limitations],
           state: 'planned',
         },

@@ -1997,7 +1997,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default."
+        "scope": "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default."
       },
       "inputs": [
         {
@@ -2029,7 +2029,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eworkspace-archive-inspection"
       ],
       "inputLimits": [
-        "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default.",
+        "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2658,7 +2658,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -2688,7 +2688,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

@@ -9,19 +9,24 @@ describe('abuse recipient resolver', () => {
     const result = resolveAbuseRecipients({
       registryInsights: {
         version: 1,
+        publications: [
+          { source: 'registry_rdap', observedAt: '2026-07-30T01:00:00.000Z' },
+          { source: 'whois', observedAt: '2026-07-30T01:01:00.000Z' },
+          { source: 'registrar_rdap', observedAt: '2026-07-30T01:02:00.000Z' },
+        ],
         abuseRouting: [
           {
             kind: 'registrar',
             channel: 'email',
             contact: 'Abuse@Example.test',
-            source: 'registrar RDAP entity',
+            source: 'registrar RDAP abuse entity',
             limitations: ['Mailbox monitoring is not verified.'],
           },
           {
             kind: 'registry',
             channel: 'url',
             contact: 'https://registry.example/report#form',
-            source: 'registry publication',
+            source: 'Registry RDAP abuse entity',
           },
         ],
       },
@@ -63,7 +68,9 @@ describe('abuse recipient resolver', () => {
       'security_txt',
     ]);
     assert.equal(result.recipients[0]?.contact, 'abuse@example.test');
+    assert.equal(result.recipients[0]?.observedAt, '2026-07-30T01:02:00.000Z');
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
+    assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
     assert.equal(result.recipients[3]?.contact, 'network-abuse@example.test');
     assert.equal(result.recipients[3]?.actionType, 'network_hosting_report');

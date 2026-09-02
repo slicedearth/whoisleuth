@@ -1,0 +1,233 @@
+{
+  "contract": "whoisleuth.case-response-review-inputs",
+  "version": 2,
+  "profile": {
+    "id": "registrar",
+    "label": "Registrar review",
+    "audience": "Domain registrar abuse or compliance team",
+    "subject": "Reviewed domain abuse report: response-history.example (Reserved fixture review)",
+    "checklist": [
+      "Confirm registrar of record",
+      "Include exact URLs and observation time",
+      "Review registrant-data necessity before sharing"
+    ],
+    "includedEvidence": [
+      "Exact URLs",
+      "Observation time",
+      "Case disposition",
+      "Selected evidence pins",
+      "Registrar contact provenance"
+    ],
+    "excludedEvidence": [
+      "Raw WHOIS or RDAP payloads",
+      "Unselected contacts",
+      "Provider secrets",
+      "Unrelated analyst notes"
+    ],
+    "redactions": [
+      "Remove unnecessary personal registration data",
+      "Credential-bearing URLs are rejected; review query strings and fragments for secrets before sharing"
+    ]
+  },
+  "case": {
+    "id": "case-v12-response",
+    "domain": "response-history.example",
+    "status": "reviewing",
+    "disposition": "suspicious",
+    "updatedAt": "2026-08-01T12:00:00.000Z"
+  },
+  "incident": {
+    "category": "Reserved fixture review",
+    "affectedParty": "Example service",
+    "abusiveUrls": [
+      "https://history.example.test/review"
+    ],
+    "observedHarm": "A reserved fixture condition was retained for review.",
+    "observedAt": "2026-08-22T00:00:00.000Z"
+  },
+  "contacts": [
+    {
+      "kind": "registrar",
+      "contact": "Reviewed registrar route",
+      "source": "Published registrar policy",
+      "observedAt": null,
+      "freshness": "unknown",
+      "limitations": [
+        "Route freshness was not retained."
+      ]
+    }
+  ],
+  "recipientRoute": {
+    "actionId": "action-v12-response",
+    "kind": "registrar",
+    "contact": "Reviewed registrar route",
+    "source": "Published registrar policy",
+    "observedAt": null,
+    "freshness": "unknown",
+    "limitations": [
+      "Route freshness was not retained."
+    ]
+  },
+  "actionBinding": {
+    "state": "selected",
+    "selectedActionId": "action-v12-response",
+    "lineageActionIds": [
+      "action-v12-response"
+    ],
+    "limitations": []
+  },
+  "selectedEvidence": [],
+  "contradictions": [],
+  "readiness": {
+    "profileId": "registrar",
+    "rows": [
+      {
+        "id": "observed_behaviour",
+        "label": "Observed behaviour",
+        "state": "complete",
+        "detail": "A bounded observed-behaviour description is present.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "exact_url",
+        "label": "Exact URL",
+        "state": "complete",
+        "detail": "1 exact HTTP(S) URL is selected.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "observation_time",
+        "label": "Observation time",
+        "state": "complete",
+        "detail": "The observation is under 24 hours.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "capture_provenance",
+        "label": "Capture provenance",
+        "state": "unavailable",
+        "detail": "No selected evidence is available for capture-provenance review.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "infrastructure_responsibility",
+        "label": "Infrastructure-responsibility evidence",
+        "state": "complete",
+        "detail": "Reserved fixture responsibility was reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "recipient_route",
+        "label": "Recipient-route provenance and freshness",
+        "state": "partial",
+        "detail": "The selected route provenance is Published registrar policy; freshness is unknown.",
+        "requiredForAuthorisation": true,
+        "limitations": [
+          "Route freshness was not retained."
+        ]
+      },
+      {
+        "id": "authority_review",
+        "label": "Authority review",
+        "state": "complete",
+        "detail": "Reserved fixture authority was reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "selected_evidence",
+        "label": "Selected evidence",
+        "state": "not_provided",
+        "detail": "No evidence pin is explicitly selected.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "contradictions",
+        "label": "Contradictions",
+        "state": "complete",
+        "detail": "Reserved fixture contradictions were reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      },
+      {
+        "id": "source_limitations",
+        "label": "Source limitations",
+        "state": "complete",
+        "detail": "Reserved fixture source limits were reviewed.",
+        "requiredForAuthorisation": true,
+        "limitations": []
+      }
+    ],
+    "counts": {
+      "complete": 7,
+      "partial": 1,
+      "stale": 0,
+      "unavailable": 1,
+      "not_provided": 1
+    },
+    "limitations": [
+      "Readiness describes the exact local draft inputs. It does not authorise or submit a response and does not promise a provider outcome.",
+      "Partial, stale, unavailable, and not-provided rows remain explicit and never become completeness by inference."
+    ]
+  },
+  "artefactReferences": [],
+  "escalationHistory": [
+    {
+      "actionId": "action-v12-response",
+      "type": "registrar_report",
+      "recipient": "Reviewed registrar route",
+      "contactSource": "Published registrar policy",
+      "routeObservedAt": null,
+      "state": "acknowledged",
+      "reference": "LEGACY-RESPONSE-42",
+      "providerOutcome": null,
+      "outcomeDetail": "A provider acknowledgement was recorded.",
+      "originActionId": null,
+      "historyOmitted": 0,
+      "historyLimitations": [],
+      "transitions": [
+        {
+          "id": "action-event-6tz7fd",
+          "previousState": null,
+          "nextState": "acknowledged",
+          "occurredAt": "2026-08-01T12:00:00.000Z",
+          "sourceClass": "migration",
+          "provenance": "case_v12_legacy_snapshot",
+          "reference": "LEGACY-RESPONSE-42",
+          "evidencePinId": null,
+          "limitations": [
+            "Migrated from the Case v12 current state \"acknowledged\"; pre-v13 transition history is unavailable.",
+            "Route freshness was not retained."
+          ],
+          "providerOutcome": null,
+          "outcomeDetail": "A provider acknowledgement was recorded.",
+          "originActionId": null,
+          "applied": true
+        }
+      ],
+      "createdAt": "2026-07-28T12:00:00.000Z",
+      "updatedAt": "2026-08-01T12:00:00.000Z"
+    }
+  ],
+  "escalationHistoryOmitted": 0,
+  "escalationHistoryLimitations": [],
+  "responseLifecycle": {
+    "providerOutcomeState": "missing",
+    "latestProviderOutcome": null,
+    "observedChangeState": "missing",
+    "latestObservedEffect": null,
+    "latestObservedChangeAt": null,
+    "closure": null,
+    "limitations": [
+      "Provider workflow outcomes and independently observed technical effects are separate point-in-time records.",
+      "A provider acknowledgement, terminal state, or reported resolution never becomes independently observed remediation, absence, or safety.",
+      "Times are withheld when the corresponding typed event is missing or ambiguous."
+    ]
+  }
+}

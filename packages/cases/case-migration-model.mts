@@ -26,6 +26,7 @@ import {
 } from './case-record-model.mts';
 import {
   CASE_REPORT_SCHEMA,
+  PUBLIC_CASE_SCHEMA_VERSION,
   caseReportVersionMatchesCase,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS,
@@ -153,13 +154,13 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
       throw new TypeError(`Unversioned Case stores are retired. Export or reset them explicitly before using Case schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
     if (!CASE_IMPORT_VERSIONS.includes(sourceVersion as typeof CASE_IMPORT_VERSIONS[number]) && sourceVersion < CASE_SCHEMA_VERSION) {
-      throw new TypeError(`Case schema ${sourceVersion} is not part of the public compatibility boundary. Only public schema 12 migrates to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+      throw new TypeError(`Case schema ${sourceVersion} is not part of the supported compatibility boundary. Exact published schemas 12 and 13 migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
     if (sourceVersion > CASE_SCHEMA_VERSION) {
       throw new TypeError(`Case schema ${sourceVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
     if (sourceVersion === CASE_SCHEMA_VERSION) {
-      assertCurrentEvidenceHostnameShape(raw);
+      assertCurrentCaseShape(raw);
     }
   }
   const byDomain = new Map<string, CaseRecord>();
@@ -183,14 +184,21 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
   return { version: CASE_SCHEMA_VERSION, cases };
 }
 
-function assertCurrentEvidenceHostnameShape(raw: unknown): void {
+function assertCurrentCaseShape(raw: unknown): void {
   for (const item of boundedCaseList(raw).items) {
-    const evidenceHistory = objectRecord(item).evidenceHistory;
-    if (!Array.isArray(evidenceHistory)) continue;
-    for (const snapshot of evidenceHistory) {
+    const itemRecord = objectRecord(item);
+    const evidenceHistory = itemRecord.evidenceHistory;
+    for (const snapshot of Array.isArray(evidenceHistory) ? evidenceHistory : []) {
       const record = objectRecord(snapshot);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'inputHostname')) {
         throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} evidence snapshots must declare their exact submitted hostname, including null; unreleased local Case checkpoints are not interpreted as the v2 format and no data was changed.`);
+      }
+    }
+    const actions = itemRecord.actions;
+    for (const action of Array.isArray(actions) ? actions : []) {
+      const record = objectRecord(action);
+      if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeObservedAt')) {
+        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route observation time, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
       }
     }
   }
@@ -538,7 +546,7 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
     const report = objectRecord(reportValue);
     assertOnlyEnvelopeKeys(
       report,
-      rootVersion === CASE_SCHEMA_VERSION ? CLI_CASE_PACK_REPORT_KEYS : CLI_CASE_PACK_PUBLIC_REPORT_KEYS,
+      rootVersion === PUBLIC_CASE_SCHEMA_VERSION ? CLI_CASE_PACK_PUBLIC_REPORT_KEYS : CLI_CASE_PACK_REPORT_KEYS,
       'CLI Case-pack report',
     );
     if (report.schema !== CASE_REPORT_SCHEMA
@@ -576,7 +584,7 @@ export function mergeCases(
   const importedVersion = parseStoreVersion(importedEnvelope);
   if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion < CASE_SCHEMA_VERSION
     && !CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])) {
-    throw new Error(`Case schema ${importedVersion} is not part of the public compatibility boundary. Only public schema 12 migrates to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    throw new Error(`Case schema ${importedVersion} is not part of the supported compatibility boundary. Exact published schemas 12 and 13 migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
   if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`Case schema ${importedVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
@@ -585,7 +593,7 @@ export function mergeCases(
     || !Array.isArray(importedEnvelope.cases)) {
     throw new Error(`Expected a well-formed WHOISleuth Case export using schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
-  if (importedVersion === CASE_SCHEMA_VERSION) assertCurrentEvidenceHostnameShape(importedEnvelope);
+  if (importedVersion === CASE_SCHEMA_VERSION) assertCurrentCaseShape(importedEnvelope);
   const local = normalizeCaseStore(localCases).cases;
   const supportedImportedVersion = importedVersion ?? 0;
   const byDomain = new Map(local.map((item) => [item.domain, item]));

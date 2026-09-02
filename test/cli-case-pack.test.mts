@@ -23,7 +23,7 @@ function exportedCases() {
       id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', reviewReasonCode: null, tags: [],
       brandProfileIds: ['Profile_A', 'profile-b'],
       notes: [{ id: 'note-1', body: 'private analyst note', createdAt: NOW }], source: 'lookup', evidenceHistory: [], evidencePins: [], decisions: [],
-      actions: [{ id: 'action-1', type: 'network_hosting_report', recipient: 'private recipient', contactSource: 'manual', contactLimitations: [], dueAt: null, state: 'planned', reference: null, followUpAt: null, outcome: null, createdAt: NOW, updatedAt: NOW }],
+      actions: [{ id: 'action-1', type: 'network_hosting_report', recipient: 'private recipient', contactSource: 'manual', routeObservedAt: null, contactLimitations: [], dueAt: null, state: 'planned', reference: null, followUpAt: null, outcome: null, createdAt: NOW, updatedAt: NOW }],
       assertions: [{ id: 'assertion-1', kind: 'hypothesis', statement: 'Needs review', rationale: null, evidencePinIds: [], evidenceRelations: [], state: 'open', createdAt: NOW, updatedAt: NOW }],
       manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed related host', target: 'private target', createdAt: NOW }], sightings: [],
       branches: [{ id: 'branch-1', name: 'Private branch name', state: 'active', evidencePinIds: [], checkpointIds: [], assertionIds: ['assertion-1'], actionIds: ['action-1'], createdAt: NOW, updatedAt: NOW }],
@@ -52,7 +52,7 @@ describe('CLI case pack', () => {
     assert.equal(pack.version, CASE_SCHEMA_VERSION);
     assert.equal(pack.cases.length, 1);
     assert.equal(pack.packet.reports[0]?.schema, 'whoisleuth.case-report');
-    assert.equal(pack.packet.reports[0]?.schemaVersion, 9);
+    assert.equal(pack.packet.reports[0]?.schemaVersion, 10);
     assert.deepEqual(pack.cases[0]?.notes, []);
     assert.deepEqual(pack.cases[0]?.brandProfileIds, []);
     assert.deepEqual(pack.cases[0]?.actions, []);
@@ -67,7 +67,7 @@ describe('CLI case pack', () => {
     assert.doesNotMatch(JSON.stringify(pack), /private analyst note|private recipient|private target|Private branch name/u);
   });
 
-  test('retains exact submitted hostnames in the Case collection without adding them to report v9', () => {
+  test('retains exact submitted hostnames in the Case collection without adding them to report v10', () => {
     const record = createCase({
       domain: 'example.test',
       source: 'lookup',
@@ -228,7 +228,7 @@ describe('CLI case pack', () => {
     assert.throws(() => verifyCliCasePack(resign(wrongReportVersion)), /invalid or mismatched Case report/iu);
 
     const futureReportVersion = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
-    ((futureReportVersion.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!.schemaVersion = 10;
+    ((futureReportVersion.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!.schemaVersion = 11;
     assert.throws(() => verifyCliCasePack(resign(futureReportVersion)), /invalid or mismatched Case report/iu);
 
     const wrongSourceCount = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
@@ -261,14 +261,14 @@ describe('CLI case pack', () => {
 
   });
 
-  test('rejects malformed schema 13 builder references before normalisation', () => {
+  test('rejects malformed schema 14 builder references before normalisation', () => {
     for (const value of [undefined, 'profile-a', ['profile-a', 'profile-a'], [' profile-a'], Array.from({ length: 9 }, (_, index) => `profile-${index}`)]) {
       const source = structuredClone(exportedCases()) as unknown as { version: number; cases: Array<Record<string, unknown>> };
       if (value === undefined) delete source.cases[0]!.brandProfileIds;
       else source.cases[0]!.brandProfileIds = value;
       assert.throws(
         () => buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW),
-        /schema 13 input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array/iu,
+        /schema 14 input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array/iu,
       );
     }
 

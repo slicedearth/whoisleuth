@@ -11,7 +11,6 @@ import {
   CASE_BROWSER_SUPPORTED_VERSIONS,
   CLI_CASE_PACK_VERSION,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -57,9 +56,18 @@ describe('durable Case supported-contract baseline', () => {
     assert.equal(new Set(baseline.commitments.contracts.map((contract) => contract.key)).size, baseline.commitments.contracts.length);
     assert.equal(new Set(baseline.commitments.fixtures.map((fixture) => fixture.id)).size, baseline.commitments.fixtures.length);
     assert.deepEqual(baseline.commitments.migrations.map(({ key, target }) => ({ key, target })), [
-      { key: `browser.cases@${CASE_BROWSER_SUPPORTED_VERSIONS[0]}`, target: { schema: 'whoisleuth.browser.case-store', version: CASE_SCHEMA_VERSION } },
-      { key: `export.cases@${CASE_BROWSER_SUPPORTED_VERSIONS[0]}`, target: { schema: 'whoisleuth.case-export', version: CASE_SCHEMA_VERSION } },
-      { key: `export.workspace-archive@${PUBLIC_WORKSPACE_ARCHIVE_VERSION}`, target: { schema: 'whoisleuth.workspace-archive', version: WORKSPACE_ARCHIVE_VERSION } },
+      ...CASE_BROWSER_SUPPORTED_VERSIONS.slice(0, -1).map((version) => ({
+        key: `browser.cases@${version}`,
+        target: { schema: 'whoisleuth.browser.case-store', version: CASE_SCHEMA_VERSION },
+      })),
+      ...CASE_BROWSER_SUPPORTED_VERSIONS.slice(0, -1).map((version) => ({
+        key: `export.cases@${version}`,
+        target: { schema: 'whoisleuth.case-export', version: CASE_SCHEMA_VERSION },
+      })),
+      ...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.slice(0, -1).map((version) => ({
+        key: `export.workspace-archive@${version}`,
+        target: { schema: 'whoisleuth.workspace-archive', version: WORKSPACE_ARCHIVE_VERSION },
+      })),
     ]);
     const compatibility = new Map(baseline.commitments.compatibility.map((item) => [item.id, item.supportedVersions]));
     assert.deepEqual(compatibility.get('browser.cases'), CASE_BROWSER_SUPPORTED_VERSIONS);

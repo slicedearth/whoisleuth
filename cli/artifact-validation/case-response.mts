@@ -4,8 +4,10 @@ import { canonicalArtifactJsonV2 } from '../../packages/evidence/artifact-integr
 import {
   CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSIVE_URLS,
   MAX_RESPONSE_ARTEFACT_REFERENCES,
   MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS,
@@ -57,7 +59,7 @@ import {
   type UnknownRecord,
 } from './structure-primitives.mts';
 
-const CASE_RESPONSE_PREFLIGHT_IDS = [
+const CASE_RESPONSE_PREFLIGHT_IDS_V6 = [
   'required_incident_fields',
   'evidence_pins',
   'analyst_decision',
@@ -68,8 +70,24 @@ const CASE_RESPONSE_PREFLIGHT_IDS = [
   'contradictory_evidence',
   'action_tracking',
 ] as const;
+const CASE_RESPONSE_PREFLIGHT_IDS_V7 = CASE_RESPONSE_PREFLIGHT_IDS_V6;
+const CASE_RESPONSE_PREFLIGHT_IDS_V8 = [
+  ...CASE_RESPONSE_PREFLIGHT_IDS_V7.slice(0, -1),
+  'packet_action',
+  'action_tracking',
+] as const;
 
 const PUBLIC_CASE_ACTION_STATES = ['planned', 'ready_for_review', 'submitted', 'acknowledged', 'resolved', 'closed'] as const;
+
+function legacyProfileRedactions(profileId: string): readonly string[] {
+  if (profileId === 'registrar' || profileId === 'registry') {
+    return ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'];
+  }
+  if (profileId === 'network_hosting') return ['Remove credentials, query secrets, fragments, cookies, and unrelated contacts'];
+  if (profileId === 'security_contact') return ['Remove credentials, tokens, personal data, and unrelated identifiers'];
+  if (profileId === 'browser_blocklist') return ['Remove credentials, tokens, URL fragments, and unrelated contacts'];
+  return ['Remove credentials, tokens, and personal data not required for the internal decision'];
+}
 
 function validatePublicActionSummary(value: unknown, label: string): void {
   const summary = exact(value, ['total', 'active', 'submitted', 'acknowledged', 'resolved', 'closed', 'overdue', 'followUpDue', 'withOutcome', 'latestOutcomes'], label);
@@ -132,7 +150,7 @@ function validateCaseResponsePacketV6(value: UnknownRecord): void {
     || !sameValues(profile.evidenceOrder as unknown[], selectedProfile.evidenceOrder)
     || !sameValues(profile.includedEvidence as unknown[], selectedProfile.includedEvidence)
     || !sameValues(profile.excludedEvidence as unknown[], selectedProfile.excludedEvidence)
-    || !sameValues(profile.redactions as unknown[], selectedProfile.redactions)
+    || !sameValues(profile.redactions as unknown[], legacyProfileRedactions(profileId))
     || !sameValues(profile.attachments as unknown[], selectedProfile.attachments)
     || !sameValues(profile.followUpFields as unknown[], selectedProfile.followUpFields)) fail('Case-response profile');
   const canonicalUrls = urls.map((item) => {
@@ -159,12 +177,12 @@ function validateCaseResponsePacketV6(value: UnknownRecord): void {
   }
   const preflight = exact(root.preflight, ['version', 'status', 'canExport', 'counts', 'checks', 'actionSummary'], 'Case-response preflight');
   if (preflight.version !== 1) fail('Case-response preflight');
-  const checks = array(preflight.checks, 'Case-response preflight checks', CASE_RESPONSE_PREFLIGHT_IDS.length, CASE_RESPONSE_PREFLIGHT_IDS.length);
+  const checks = array(preflight.checks, 'Case-response preflight checks', CASE_RESPONSE_PREFLIGHT_IDS_V6.length, CASE_RESPONSE_PREFLIGHT_IDS_V6.length);
   const actualCounts = { block: 0, caution: 0, pass: 0 };
   for (const [index, candidate] of checks.entries()) {
     const check = exact(candidate, ['id', 'label', 'state', 'detail'], 'Case-response preflight check');
     const id = text(check.id, 'Case-response preflight id', 80);
-    if (id !== CASE_RESPONSE_PREFLIGHT_IDS[index]) fail('Case-response preflight check order');
+    if (id !== CASE_RESPONSE_PREFLIGHT_IDS_V6[index]) fail('Case-response preflight check order');
     text(check.label, 'Case-response preflight label', 200);
     const state = enumeration(check.state, ['block', 'caution', 'pass'], 'Case-response preflight state');
     actualCounts[state] += 1;
@@ -238,14 +256,19 @@ function validateCurrentActionSummary(value: unknown, label: string): number {
   return total;
 }
 
-function validateCaseResponsePacketV7(value: UnknownRecord): void {
+function validateCaseResponsePacketV7OrV8(
+  value: UnknownRecord,
+  version: typeof PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION | typeof CASE_RESPONSE_PACKET_VERSION,
+): void {
+  const current = version === CASE_RESPONSE_PACKET_VERSION;
   const root = exact(value, [
     'schema', 'schemaVersion', 'generatedAt', 'reviewRequired', 'submissionPerformed', 'profile', 'case',
     'incident', 'contacts', 'selectedEvidence', 'contradictions', 'readiness', 'artefactReferences',
     'authorisation', 'preflight', 'escalationHistory', 'escalationHistoryOmitted',
     'escalationHistoryLimitations', 'responseLifecycle', 'provenance', 'integrity',
-  ], 'Case-response packet v7');
-  if (root.schemaVersion !== CASE_RESPONSE_PACKET_VERSION) fail('Case-response packet v7');
+    ...(current ? ['recipientRoute', 'actionBinding'] : []),
+  ], `Case-response packet v${version}`);
+  if (root.schemaVersion !== version) fail(`Case-response packet v${version}`);
   iso(root.generatedAt, 'Case-response packet generatedAt');
   if (root.reviewRequired !== true || root.submissionPerformed !== false) fail('Case-response packet review state');
 
@@ -256,6 +279,7 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
   text(profile.subject, 'Case-response profile subject', 500);
   for (const key of ['checklist', 'evidenceOrder', 'includedEvidence', 'excludedEvidence', 'redactions', 'attachments', 'followUpFields'] as const) strings(profile[key], `Case-response profile ${key}`, 24, 500);
   const selectedProfile = RESPONSE_PACKET_PROFILES.find((candidate) => candidate.id === profileId);
+  const expectedRedactions = current ? selectedProfile?.redactions : legacyProfileRedactions(profileId);
   if (!selectedProfile
     || profile.label !== selectedProfile.label
     || profile.audience !== selectedProfile.audience
@@ -263,7 +287,7 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     || !sameValues(profile.evidenceOrder as unknown[], selectedProfile.evidenceOrder)
     || !sameValues(profile.includedEvidence as unknown[], selectedProfile.includedEvidence)
     || !sameValues(profile.excludedEvidence as unknown[], selectedProfile.excludedEvidence)
-    || !sameValues(profile.redactions as unknown[], selectedProfile.redactions)
+    || !sameValues(profile.redactions as unknown[], expectedRedactions ?? [])
     || !sameValues(profile.attachments as unknown[], selectedProfile.attachments)
     || !sameValues(profile.followUpFields as unknown[], selectedProfile.followUpFields)) fail('Case-response profile');
 
@@ -309,6 +333,56 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     strings(contact.limitations, 'Case-response contact limitations', MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH);
   }
 
+  let recipientRoute: UnknownRecord | null = null;
+  let selectedActionId: string | null = null;
+  let lineageActionIds: string[] = [];
+  let lineageComplete = true;
+  if (current) {
+    if (root.recipientRoute !== null) {
+      recipientRoute = exact(root.recipientRoute, [
+        'actionId', 'kind', 'contact', 'source', 'observedAt', 'freshness', 'limitations',
+      ], 'Case-response recipient route');
+      text(recipientRoute.actionId, 'Case-response recipient action id', 64);
+      enumeration(recipientRoute.kind, [...RESPONSE_CONTACT_KINDS, 'manual'], 'Case-response recipient kind');
+      text(recipientRoute.contact, 'Case-response recipient value', MAX_RESPONSE_RECIPIENT_LENGTH);
+      text(recipientRoute.source, 'Case-response recipient source', 120);
+      iso(recipientRoute.observedAt, 'Case-response recipient observedAt', true);
+      const freshness = enumeration(recipientRoute.freshness, ['current', 'stale', 'unknown'], 'Case-response recipient freshness');
+      const routeAge = recipientRoute.observedAt === null
+        ? null
+        : Date.parse(root.generatedAt as string) - Date.parse(recipientRoute.observedAt as string);
+      const expectedFreshness = routeAge === null
+        ? 'unknown'
+        : routeAge < -MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS
+          || routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000 ? 'stale' : 'current';
+      if (freshness !== expectedFreshness) fail('Case-response recipient freshness');
+      strings(recipientRoute.limitations, 'Case-response recipient limitations', MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH);
+    }
+    const binding = exact(root.actionBinding, [
+      'state', 'selectedActionId', 'lineageActionIds', 'limitations',
+    ], 'Case-response action binding');
+    const state = enumeration(binding.state, ['selected', 'not_selected'], 'Case-response action binding state');
+    optionalText(binding.selectedActionId, 'Case-response selected action id', 64);
+    selectedActionId = binding.selectedActionId as string | null;
+    lineageActionIds = strings(binding.lineageActionIds, 'Case-response action lineage', MAX_RESPONSE_ACTION_HISTORY, 64);
+    const bindingLimitations = strings(binding.limitations, 'Case-response action-binding limitations', MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH);
+    lineageComplete = !bindingLimitations.some((item) => /lineage is incomplete/iu.test(item));
+    if ((state === 'selected') !== Boolean(selectedActionId)
+      || (selectedActionId && lineageActionIds[0] !== selectedActionId)
+      || new Set(lineageActionIds).size !== lineageActionIds.length
+      || (recipientRoute && recipientRoute.actionId !== selectedActionId)) fail('Case-response action binding');
+    if (recipientRoute?.kind === 'manual' && contacts.length !== 0) fail('Case-response manual recipient route');
+    if (recipientRoute && recipientRoute.kind !== 'manual') {
+      if (contacts.length !== 1) fail('Case-response selected contact projection');
+      const selectedContact = contacts[0] as UnknownRecord;
+      if (selectedContact.kind !== recipientRoute.kind
+        || selectedContact.contact !== recipientRoute.contact
+        || selectedContact.source !== recipientRoute.source
+        || selectedContact.observedAt !== recipientRoute.observedAt
+        || selectedContact.freshness !== recipientRoute.freshness) fail('Case-response selected contact projection');
+    }
+  }
+
   const evidence = array(root.selectedEvidence, 'Case-response selected evidence', MAX_RESPONSE_SELECTED_EVIDENCE);
   const evidenceIds = new Set<string>();
   for (const candidate of evidence) {
@@ -344,9 +418,11 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     ...(profileId === 'internal_soc' ? [] : ['recipient_route']),
     ...(['registrar', 'registry', 'network_hosting'].includes(profileId) ? ['infrastructure_responsibility'] : []),
   ]);
-  const requiredContact = selectedProfile?.requiredContactKind
-    ? contacts.find((candidate) => (candidate as UnknownRecord).kind === selectedProfile.requiredContactKind) as UnknownRecord | undefined
-    : contacts[0] as UnknownRecord | undefined;
+  const requiredContact = current
+    ? recipientRoute ?? undefined
+    : selectedProfile?.requiredContactKind
+      ? contacts.find((candidate) => (candidate as UnknownRecord).kind === selectedProfile.requiredContactKind) as UnknownRecord | undefined
+      : contacts[0] as UnknownRecord | undefined;
   const expectedReadinessStates: Partial<Record<typeof RESPONSE_READINESS_ROW_IDS[number], string>> = {
     observed_behaviour: 'complete',
     exact_url: 'complete',
@@ -428,12 +504,13 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     || (authorisationStatus === 'draft' && authorisation.confirmedAt !== null)) fail('Case-response authorisation');
 
   const preflight = exact(root.preflight, ['version', 'status', 'canExport', 'counts', 'checks', 'actionSummary'], 'Case-response preflight');
-  if (preflight.version !== 2) fail('Case-response preflight');
-  const checks = array(preflight.checks, 'Case-response preflight checks', CASE_RESPONSE_PREFLIGHT_IDS.length, CASE_RESPONSE_PREFLIGHT_IDS.length);
+  const preflightIds = current ? CASE_RESPONSE_PREFLIGHT_IDS_V8 : CASE_RESPONSE_PREFLIGHT_IDS_V7;
+  if (preflight.version !== (current ? 3 : 2)) fail('Case-response preflight');
+  const checks = array(preflight.checks, 'Case-response preflight checks', preflightIds.length, preflightIds.length);
   const actualCounts = { block: 0, caution: 0, pass: 0 };
   for (const [index, candidate] of checks.entries()) {
     const check = exact(candidate, ['id', 'label', 'state', 'detail'], 'Case-response preflight check');
-    if (check.id !== CASE_RESPONSE_PREFLIGHT_IDS[index]) fail('Case-response preflight check order');
+    if (check.id !== preflightIds[index]) fail('Case-response preflight check order');
     text(check.label, 'Case-response preflight label', 200);
     const state = enumeration(check.state, ['block', 'caution', 'pass'], 'Case-response preflight state');
     actualCounts[state] += 1;
@@ -448,10 +525,12 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
   const history = array(root.escalationHistory, 'Case-response escalation history', MAX_RESPONSE_ACTION_HISTORY);
   const escalationHistoryOmitted = integer(root.escalationHistoryOmitted, 'Case-response omitted actions', 0, MAX_CASE_ACTIONS);
   const escalationHistoryLimitations = strings(root.escalationHistoryLimitations, 'Case-response history limitations', 4, 600);
-  if (history.length !== Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY)
+  if ((!current && history.length !== Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
+    || (current && history.length > Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
     || escalationHistoryOmitted !== actionTotal - history.length
     || (escalationHistoryOmitted > 0) !== (escalationHistoryLimitations.length > 0)) fail('Case-response action-history bounds');
   const actionIds = new Set<string>();
+  const actionIdOrder: string[] = [];
   const providerEvents: Array<{
     actionId: string;
     eventId: string;
@@ -461,13 +540,20 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     applied: boolean;
   }> = [];
   for (const candidate of history) {
-    const action = exact(candidate, ['actionId', 'type', 'recipient', 'contactSource', 'state', 'reference', 'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted', 'historyLimitations', 'transitions', 'createdAt', 'updatedAt'], 'Case-response escalation action');
+    const action = exact(candidate, [
+      'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
+      'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
+      'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
+      ...(current ? ['routeObservedAt'] : []),
+    ], 'Case-response escalation action');
     const actionId = text(action.actionId, 'Case-response action id', 64);
     if (actionIds.has(actionId)) fail('Case-response action identity');
     actionIds.add(actionId);
+    actionIdOrder.push(actionId);
     enumeration(action.type, CASE_ACTION_TYPES, 'Case-response action type');
     text(action.recipient, 'Case-response action recipient', 320);
     text(action.contactSource, 'Case-response action source', 120);
+    if (current) iso(action.routeObservedAt, 'Case-response action route observedAt', true);
     enumeration(action.state, CASE_ACTION_STATES, 'Case-response action state');
     optionalText(action.reference, 'Case-response action reference', 500);
     if (action.providerOutcome !== null) enumeration(action.providerOutcome, CASE_PROVIDER_OUTCOMES, 'Case-response provider outcome');
@@ -550,6 +636,11 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     iso(action.createdAt, 'Case-response action createdAt');
     iso(action.updatedAt, 'Case-response action updatedAt');
   }
+  if (current) {
+    if (actionIds.size !== lineageActionIds.length
+      || actionIdOrder.some((id, index) => lineageActionIds[index] !== id)) fail('Case-response action lineage');
+    if (recipientRoute && !actionIds.has(recipientRoute.actionId as string)) fail('Case-response recipient action');
+  }
 
   const lifecycle = exact(root.responseLifecycle, ['providerOutcomeState', 'latestProviderOutcome', 'observedChangeState', 'latestObservedEffect', 'latestObservedChangeAt', 'closure', 'limitations'], 'Case-response lifecycle');
   const providerOutcomeState = enumeration(lifecycle.providerOutcomeState, ['available', 'missing', 'ambiguous'], 'Case-response lifecycle provider state');
@@ -582,11 +673,11 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
   const latestProviderEvents = latestProviderTime === null
     ? []
     : providerEvents.filter((event) => event.occurredAt === latestProviderTime);
-  const expectedLatestProvider = escalationHistoryOmitted === 0
+  const expectedLatestProvider = (current ? lineageComplete : escalationHistoryOmitted === 0)
     && latestProviderEvents.length === 1 && latestProviderEvents[0]!.applied
     ? latestProviderEvents[0]!
     : null;
-  const expectedProviderState = escalationHistoryOmitted > 0
+  const expectedProviderState = (current ? !lineageComplete : escalationHistoryOmitted > 0)
     ? 'ambiguous'
     : providerEvents.length === 0 ? 'missing' : expectedLatestProvider ? 'available' : 'ambiguous';
   if (providerOutcomeState !== expectedProviderState
@@ -620,7 +711,7 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
 
   const reviewedInputs = {
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
-    version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+    version: current ? CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
     profile: {
       id: profile.id,
       label: profile.label,
@@ -634,6 +725,7 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
     case: root.case,
     incident: root.incident,
     contacts: root.contacts,
+    ...(current ? { recipientRoute: root.recipientRoute, actionBinding: root.actionBinding } : {}),
     selectedEvidence: root.selectedEvidence,
     contradictions: root.contradictions,
     readiness: root.readiness,
@@ -667,11 +759,14 @@ function validateCaseResponsePacketV7(value: UnknownRecord): void {
 
 export function validateCaseResponsePacket(value: UnknownRecord): void {
   if (value.schemaVersion === PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateCaseResponsePacketV6(value);
+  if (value.schemaVersion === PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION) {
+    return validateCaseResponsePacketV7OrV8(value, PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION);
+  }
   if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) < CASE_RESPONSE_PACKET_VERSION) {
     throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is not part of the public compatibility boundary; no data was changed.`);
   }
   if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) > CASE_RESPONSE_PACKET_VERSION) {
     throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is newer than the supported version ${CASE_RESPONSE_PACKET_VERSION}; no data was changed.`);
   }
-  validateCaseResponsePacketV7(value);
+  validateCaseResponsePacketV7OrV8(value, CASE_RESPONSE_PACKET_VERSION);
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { type CaseActionRecord, type CaseRecord } from '$lib/cases';
+  import { type CaseRecord } from '$lib/cases';
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
@@ -9,12 +9,10 @@
     buildResponsePacketProfilePreview,
     CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE,
     caseResponsePacketFilename,
-    RESPONSE_CONTACT_KINDS,
     RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
     RESPONSE_PACKET_PROFILES,
     RESPONSE_READINESS_STATES,
     type CaseResponsePacketInput,
-    type ResponseContactKind,
     type ResponseAuthorisationConfirmationId,
     type ResponsePacketProfileId,
     type ResponseReadinessState,
@@ -39,30 +37,7 @@
   let packetUrls = $state('');
   let packetHarm = $state('');
   let packetObservedAt = $state('');
-  let packetContacts = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
-  let packetContactSources = $state<Record<ResponseContactKind, string>>({
-    registrar: 'RDAP or WHOIS',
-    registry: 'registry evidence',
-    network_hosting: 'network or hosting evidence',
-    security_txt: 'security.txt',
-  });
-  let packetContactLimitations = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
-  let packetContactObservedAt = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
+  let packetActionId = $state('');
   let packetSelectedEvidenceIds = $state<string[]>([]);
   let packetInfrastructureState = $state<ResponseReadinessState>('not_provided');
   let packetInfrastructureDetail = $state('');
@@ -111,6 +86,7 @@
   const packetProfilePreview = $derived(buildResponsePacketProfilePreview(record, packetInput()));
   const packetReadiness = $derived(buildCaseResponseReadiness(record, packetInput(), reviewNow));
   const packetReviewIsCurrent = $derived(Boolean(packetReviewDigest) && packetReviewSignature === packetMaterialSignature());
+  const selectedPacketAction = $derived(record.actions.find((action) => action.id === packetActionId) ?? null);
   const packetConfirmationsComplete = $derived(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.every((id) => packetConfirmations[id]));
   const packetAuthorisationReadinessComplete = $derived(
     packetReadiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
@@ -159,18 +135,6 @@
     return value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
   }
 
-  function packetContactsInput() {
-    return RESPONSE_CONTACT_KINDS.flatMap((kind) => packetContacts[kind].trim()
-      ? [{
-          kind,
-          contact: packetContacts[kind],
-          source: packetContactSources[kind],
-          observedAt: isoFromLocal(packetContactObservedAt[kind]),
-          limitations: list(packetContactLimitations[kind]),
-        }]
-      : []);
-  }
-
   function packetInput(includeAuthorisation = true): CaseResponsePacketInput {
     const artefactReferences = packetArtefactDigest.trim() ? [{
       label: packetArtefactLabel,
@@ -188,7 +152,7 @@
       abusiveUrls: packetUrls,
       observedHarm: packetHarm,
       observedAt: isoFromLocal(packetObservedAt),
-      contacts: packetContactsInput(),
+      actionId: packetActionId || null,
       selectedEvidencePinIds: packetSelectedEvidenceIds,
       readiness: {
         infrastructureResponsibility: {
@@ -288,38 +252,6 @@
     return buildCaseResponsePacket(record, packetInput(), generatedAt);
   }
 
-  function contactKind(action: CaseActionRecord): ResponseContactKind | null {
-    if (action.type === 'registrar_report') return 'registrar';
-    if (action.type === 'registry_report') return 'registry';
-    if (action.type === 'network_hosting_report') return 'network_hosting';
-    if (action.type === 'security_contact_report') return 'security_txt';
-    return null;
-  }
-
-  function useRecordedActionRoutes() {
-    let added = 0;
-    const contacts = { ...packetContacts };
-    const sources = { ...packetContactSources };
-    const limitations = { ...packetContactLimitations };
-    const observedAt = { ...packetContactObservedAt };
-    for (const action of [...record.actions].reverse()) {
-      const kind = contactKind(action);
-      if (!kind || contacts[kind]) continue;
-      contacts[kind] = action.recipient;
-      sources[kind] = action.contactSource;
-      limitations[kind] = action.contactLimitations.join('\n');
-      observedAt[kind] = localFromIso(action.metadataUpdatedAt);
-      added += 1;
-    }
-    packetContacts = contacts;
-    packetContactSources = sources;
-    packetContactLimitations = limitations;
-    packetContactObservedAt = observedAt;
-    onmessage(added
-      ? `Loaded ${added} recorded case contact route${added === 1 ? '' : 's'} into the local packet draft.`
-      : 'No unused external contact route was available in the recorded case actions.');
-  }
-
   async function downloadPacket(format: 'json' | 'md' | 'txt') {
     if (packetBusy) return;
     packetBusy = true;
@@ -401,13 +333,14 @@
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Exact selection</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>2 of 8</span></header>
           <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
-          <p class="notice">Selection includes only retained Case pins supported by response-packet v7. It does not collect, upload, or infer new evidence.</p>
+          <p class="notice">Selection includes only retained Case pins supported by response-packet v8. It does not collect, upload, or infer new evidence.</p>
         </section>
       {:else if packetWizardStep === 3}
         <section id={`packet-wizard-step-${record.id}-3`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-3`}>
-          <header><div><p class="eyebrow">Attributed routes</p><h4 id={`packet-wizard-title-${record.id}-3`}>Source and contact provenance</h4></div><span>3 of 8</span></header>
-          <fieldset class="contacts"><legend>Separately routed escalation contacts</legend>{#if record.actions.some((action) => contactKind(action))}<button class="btn small" type="button" onclick={useRecordedActionRoutes}>Use recorded case routes</button>{/if}{#each RESPONSE_CONTACT_KINDS as kind}<div class="contact-row"><strong>{kind.replaceAll('_', ' ')}</strong><label class="field">Contact<input aria-label={`${kind.replaceAll('_', ' ')} contact`} bind:value={packetContacts[kind]} maxlength="320"></label><label class="field">Source<input aria-label={`${kind.replaceAll('_', ' ')} source`} bind:value={packetContactSources[kind]} maxlength="120"></label><label class="field">Route observed<input aria-label={`${kind.replaceAll('_', ' ')} route observed`} type="datetime-local" bind:value={packetContactObservedAt[kind]}></label><label class="field">Limitations<input aria-label={`${kind.replaceAll('_', ' ')} limitations`} bind:value={packetContactLimitations[kind]} maxlength="240"></label></div>{/each}</fieldset>
-          <p class="notice">A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action. WHOISleuth does not test a recipient.</p>
+          <header><div><p class="eyebrow">Action-bound route</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>3 of 8</span></header>
+          <label class="field">Case action for this packet<select bind:value={packetActionId}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
+          {#if selectedPacketAction}<section class="profile-preview"><div><strong>{selectedPacketAction.recipient}</strong><span>{selectedPacketAction.type.replaceAll('_', ' ')}</span></div><p><strong>Source:</strong> {selectedPacketAction.contactSource}</p><p><strong>Route observed:</strong> {selectedPacketAction.routeObservedAt ?? 'Time unavailable'}</p>{#if selectedPacketAction.originActionId}<p><strong>Originating action:</strong> {selectedPacketAction.originActionId}</p>{/if}{#if selectedPacketAction.contactLimitations.length}<p><strong>Limitations:</strong> {selectedPacketAction.contactLimitations.join('; ')}</p>{/if}</section>{:else}<p class="notice">Create and review a Case action first. Browser and blocklist destinations use a manually entered internal-review action; other profiles require the matching typed route.</p>{/if}
+          <p class="notice">Only the selected action, its bounded origin lineage and its route are included. A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action.</p>
         </section>
       {:else if packetWizardStep === 4}
         <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
@@ -425,7 +358,7 @@
       {:else if packetWizardStep === 6}
         <section id={`packet-wizard-step-${record.id}-6`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-6`}>
           <header><div><p class="eyebrow">Bind current material</p><h4 id={`packet-wizard-title-${record.id}-6`}>Exact-input digest review</h4></div><span class:attention={!packetReviewIsCurrent}>{packetReviewIsCurrent ? 'current review' : packetReviewDigest ? 'review stale' : 'not reviewed'}</span></header>
-          <p>Review the selected evidence, recipient scope, contact provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v7 review digest.</p>
+          <p>Review the selected evidence, action-bound recipient scope, provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v8 review digest.</p>
           <button class="btn" type="button" onclick={() => void reviewPacketInputs()} disabled={packetBusy || !packetPreflight.canExport}>Review and bind exact inputs</button>
           {#if packetReviewDigest}<code>{packetReviewDigest}</code>{/if}
           {#if packetReviewDigest && !packetReviewIsCurrent}<p class="history-warning">Material inputs changed after review. The retained digest is stale; re-review before authorisation.</p>{/if}
@@ -525,8 +458,5 @@
   .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}
   .choice input{width:auto;margin-top:2px}
   .choice span{min-width:0;overflow-wrap:anywhere}
-  .contact-row{display:grid;grid-template-columns:130px repeat(4,minmax(0,1fr));gap:8px;align-items:end}
-  .contact-row>strong{padding-bottom:10px;font:700 var(--text-xs) var(--mono);text-transform:capitalize}
-  @media(max-width:1000px){.contact-row{grid-template-columns:repeat(2,minmax(0,1fr))}.contact-row>strong{grid-column:1/-1;padding:4px 0 0}}
-  @media(max-width:800px){.two-columns,.contact-row,.preflight li,.profile-columns,.readiness-editor,.privacy-review{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}th,td{min-width:135px}.packet-wizard-nav ol{grid-template-columns:repeat(8,minmax(108px,1fr))}.wizard-controls .btn{flex:1 1 120px}.wizard-controls span{order:-1;flex:1 0 100%;text-align:center}}
+  @media(max-width:800px){.two-columns,.preflight li,.profile-columns,.readiness-editor,.privacy-review{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}th,td{min-width:135px}.packet-wizard-nav ol{grid-template-columns:repeat(8,minmax(108px,1fr))}.wizard-controls .btn{flex:1 1 120px}.wizard-controls span{order:-1;flex:1 0 100%;text-align:center}}
 </style>

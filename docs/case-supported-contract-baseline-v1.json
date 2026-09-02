@@ -11,33 +11,33 @@
   },
   "startingCurrentProtection": {
     "browserCase": {
-      "version": 13,
+      "version": 14,
       "path": "read-write-exact-current"
     },
     "portableCase": {
-      "version": 13,
+      "version": 14,
       "path": "export-import-non-destructive-merge"
     },
     "caseReport": {
-      "version": 9,
+      "version": 10,
       "path": "current-writer"
     },
     "responsePacket": {
-      "version": 7,
+      "version": 8,
       "path": "current-writer-and-offline-verifier"
     },
     "cliCasePack": {
       "version": 2,
-      "caseVersion": 13,
+      "caseVersion": 14,
       "path": "current-writer-browser-import-and-offline-verifier"
     },
     "workspaceArchive": {
-      "version": 6,
+      "version": 7,
       "path": "current-writer-preview-and-non-destructive-merge"
     },
     "encryptedWorkspaceArchive": {
       "version": 1,
-      "workspaceVersion": 6,
+      "workspaceVersion": 7,
       "path": "current-encrypt-decrypt-and-verify"
     }
   },
@@ -47,10 +47,11 @@
         "id": "browser.cases",
         "kind": "browser_store",
         "schema": null,
-        "currentVersion": 13,
+        "currentVersion": 14,
         "supportedVersions": [
           12,
-          13
+          13,
+          14
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "preserve_without_write",
@@ -63,13 +64,14 @@
         "id": "derived.case-response-review-inputs",
         "kind": "derived",
         "schema": "whoisleuth.case-response-review-inputs",
-        "currentVersion": 1,
+        "currentVersion": 2,
         "supportedVersions": [
-          1
+          1,
+          2
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
-        "migration": "exact_current_only",
+        "migration": "read_only",
         "writeSemantics": "read_only",
         "byteBudget": null,
         "owner": "packages/contracts/case-portability.mts"
@@ -78,12 +80,13 @@
         "id": "export.case-report",
         "kind": "export",
         "schema": "whoisleuth.case-report",
-        "currentVersion": 9,
+        "currentVersion": 10,
         "supportedVersions": [
-          9
+          9,
+          10
         ],
         "acceptsUnversionedLegacy": false,
-        "futureVersionBehavior": "not_applicable",
+        "futureVersionBehavior": "reject",
         "migration": "read_only",
         "writeSemantics": "read_only",
         "byteBudget": null,
@@ -93,10 +96,11 @@
         "id": "export.case-response-packet",
         "kind": "export",
         "schema": "whoisleuth.case-response-packet",
-        "currentVersion": 7,
+        "currentVersion": 8,
         "supportedVersions": [
           6,
-          7
+          7,
+          8
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
@@ -109,10 +113,11 @@
         "id": "export.cases",
         "kind": "export",
         "schema": null,
-        "currentVersion": 13,
+        "currentVersion": 14,
         "supportedVersions": [
           12,
-          13
+          13,
+          14
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
@@ -155,10 +160,11 @@
         "id": "export.workspace-archive",
         "kind": "export",
         "schema": "whoisleuth.workspace-archive",
-        "currentVersion": 6,
+        "currentVersion": 7,
         "supportedVersions": [
           5,
-          6
+          6,
+          7
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
@@ -196,7 +202,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 13
+          "version": 14
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -208,6 +214,26 @@
         "key": "browser.cases@13",
         "compatibilityId": "browser.cases",
         "version": 13,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": false,
+        "extensionPolicy": "discard_bounded",
+        "futureVersionBehaviour": "preserve_without_write",
+        "migrationTarget": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 14
+        },
+        "canonicalisation": null,
+        "byteBudget": 4194304,
+        "fixtureIds": [
+          "browser-case-v13"
+        ]
+      },
+      {
+        "key": "browser.cases@14",
+        "compatibilityId": "browser.cases",
+        "version": 14,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -218,16 +244,16 @@
         "canonicalisation": null,
         "byteBudget": 4194304,
         "fixtureIds": [
-          "browser-case-v13"
+          "browser-case-v14"
         ]
       },
       {
         "key": "derived.case-response-review-inputs@1",
         "compatibilityId": "derived.case-response-review-inputs",
         "version": 1,
-        "lifecycle": "current",
+        "lifecycle": "legacy",
         "readable": true,
-        "emitted": true,
+        "emitted": false,
         "exactKeys": true,
         "extensionPolicy": "reject",
         "futureVersionBehaviour": "reject",
@@ -239,15 +265,49 @@
         ]
       },
       {
-        "key": "export.case-report@9",
-        "compatibilityId": "export.case-report",
-        "version": 9,
+        "key": "derived.case-response-review-inputs@2",
+        "compatibilityId": "derived.case-response-review-inputs",
+        "version": 2,
         "lifecycle": "current",
-        "readable": false,
+        "readable": true,
         "emitted": true,
         "exactKeys": true,
         "extensionPolicy": "reject",
-        "futureVersionBehaviour": "not_applicable",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-response-review-inputs-v2"
+        ]
+      },
+      {
+        "key": "export.case-report@10",
+        "compatibilityId": "export.case-report",
+        "version": 10,
+        "lifecycle": "current",
+        "readable": true,
+        "emitted": true,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": null,
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-report-v10"
+        ]
+      },
+      {
+        "key": "export.case-report@9",
+        "compatibilityId": "export.case-report",
+        "version": 9,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
         "migrationTarget": null,
         "canonicalisation": null,
         "byteBudget": null,
@@ -276,6 +336,23 @@
         "key": "export.case-response-packet@7",
         "compatibilityId": "export.case-response-packet",
         "version": 7,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": null,
+        "canonicalisation": "sorted-json-v2",
+        "byteBudget": null,
+        "fixtureIds": [
+          "case-response-packet-v7"
+        ]
+      },
+      {
+        "key": "export.case-response-packet@8",
+        "compatibilityId": "export.case-response-packet",
+        "version": 8,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -286,7 +363,7 @@
         "canonicalisation": "sorted-json-v2",
         "byteBudget": null,
         "fixtureIds": [
-          "case-response-packet-v7"
+          "case-response-packet-v8"
         ]
       },
       {
@@ -301,7 +378,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 13
+          "version": 14
         },
         "canonicalisation": null,
         "byteBudget": 2097152,
@@ -313,6 +390,26 @@
         "key": "export.cases@13",
         "compatibilityId": "export.cases",
         "version": 13,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.case-export",
+          "version": 14
+        },
+        "canonicalisation": null,
+        "byteBudget": 2097152,
+        "fixtureIds": [
+          "case-export-v13"
+        ]
+      },
+      {
+        "key": "export.cases@14",
+        "compatibilityId": "export.cases",
+        "version": 14,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -323,7 +420,7 @@
         "canonicalisation": null,
         "byteBudget": 2097152,
         "fixtureIds": [
-          "case-export-v13"
+          "case-export-v14"
         ]
       },
       {
@@ -341,7 +438,8 @@
         "byteBudget": 2097152,
         "fixtureIds": [
           "cli-case-pack-v2-case-v12-public",
-          "cli-case-pack-v2-case-v13"
+          "cli-case-pack-v2-case-v13",
+          "cli-case-pack-v2-case-v14"
         ]
       },
       {
@@ -373,7 +471,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 6
+          "version": 7
         },
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 10485760,
@@ -385,6 +483,26 @@
         "key": "export.workspace-archive@6",
         "compatibilityId": "export.workspace-archive",
         "version": 6,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 7
+        },
+        "canonicalisation": "workspace-section-sorted-json-v1",
+        "byteBudget": 10485760,
+        "fixtureIds": [
+          "workspace-archive-v6-empty-current"
+        ]
+      },
+      {
+        "key": "export.workspace-archive@7",
+        "compatibilityId": "export.workspace-archive",
+        "version": 7,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -395,7 +513,7 @@
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 10485760,
         "fixtureIds": [
-          "workspace-archive-v6-empty-current"
+          "workspace-archive-v7-empty-current"
         ]
       },
       {
@@ -421,21 +539,42 @@
         "key": "browser.cases@12",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 13
+          "version": 14
+        }
+      },
+      {
+        "key": "browser.cases@13",
+        "target": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 14
         }
       },
       {
         "key": "export.cases@12",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 13
+          "version": 14
+        }
+      },
+      {
+        "key": "export.cases@13",
+        "target": {
+          "schema": "whoisleuth.case-export",
+          "version": 14
         }
       },
       {
         "key": "export.workspace-archive@5",
         "target": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 6
+          "version": 7
+        }
+      },
+      {
+        "key": "export.workspace-archive@6",
+        "target": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 7
         }
       }
     ],
@@ -457,6 +596,16 @@
         "sha256": "d679030e52340ecc7795ac88de15316d88c8c07b94b34da60fd52589a0375712",
         "contentDigestSha256": null,
         "version": 13,
+        "expectation": "normalises_to_current_output",
+        "shapeId": "case.browser-store.v13"
+      },
+      {
+        "id": "browser-case-v14",
+        "path": "test/fixtures/case-lifecycle/browser-case-v14.json",
+        "bytes": 3131,
+        "sha256": "ece46f5d27a52a20196678af8236674836f3979c0d45f0ad5751c00677ec8bae",
+        "contentDigestSha256": null,
+        "version": 14,
         "expectation": "accepted_exact",
         "shapeId": "case.browser-store.current"
       },
@@ -477,8 +626,28 @@
         "sha256": "fd2aa7623c2aaea385b952727ad74cf5af0f1ee21dc478c0e5c820a332376a0d",
         "contentDigestSha256": null,
         "version": 13,
+        "expectation": "normalises_to_current_output",
+        "shapeId": "case.export.v13"
+      },
+      {
+        "id": "case-export-v14",
+        "path": "test/fixtures/case-lifecycle/case-export-v14.json",
+        "bytes": 3175,
+        "sha256": "50cf1df53c3558852b712844d588d9eb955af858e160969d9a6af613c257feaf",
+        "contentDigestSha256": null,
+        "version": 14,
         "expectation": "accepted_exact",
         "shapeId": "case.export.current"
+      },
+      {
+        "id": "case-report-v10",
+        "path": "test/fixtures/case-lifecycle/case-report-v10.json",
+        "bytes": 4606,
+        "sha256": "36c8b89bb1b335d923bd5035020ff47f89c88775e14d08af2d2eb2ee2f5cc03a",
+        "contentDigestSha256": null,
+        "version": 10,
+        "expectation": "accepted_exact",
+        "shapeId": "case.report.v10"
       },
       {
         "id": "case-report-v9",
@@ -511,6 +680,16 @@
         "shapeId": "case.response-packet.v7"
       },
       {
+        "id": "case-response-packet-v8",
+        "path": "test/fixtures/case-lifecycle/case-response-packet-v8.json",
+        "bytes": 12137,
+        "sha256": "1da602323453b10160cef5627664c99e893304894f7e02097a11998691d5ce66",
+        "contentDigestSha256": "sha256:d695814b5817407743034d275184cfdf184b7621188d4bad8c659e84682483be",
+        "version": 8,
+        "expectation": "accepted_exact",
+        "shapeId": "case.response-packet.v8"
+      },
+      {
         "id": "case-response-review-inputs-v1",
         "path": "test/fixtures/case-lifecycle/case-response-review-inputs-v1.json",
         "bytes": 5555,
@@ -519,6 +698,16 @@
         "version": 1,
         "expectation": "accepted_exact",
         "shapeId": "case.response-review-inputs.v1"
+      },
+      {
+        "id": "case-response-review-inputs-v2",
+        "path": "test/fixtures/case-lifecycle/case-response-review-inputs-v2.json",
+        "bytes": 7520,
+        "sha256": "dcc9aaa7cdbd79a33559095f4c212e4eea5ad635c8c36290456d8b1946845aa6",
+        "contentDigestSha256": null,
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.response-review-inputs.v2"
       },
       {
         "id": "cli-case-pack-v2-case-v12-public",
@@ -536,6 +725,16 @@
         "bytes": 9288,
         "sha256": "915ca7f3171ae48a2d3d06dc089f5840d4240b6a1fff1c050413b8bcca75fe26",
         "contentDigestSha256": "sha256:5991d0f4c04db2e846e078cb147668b2b4a14c6097490d2ebf09e41dfdb0fc9b",
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.cli-pack.current"
+      },
+      {
+        "id": "cli-case-pack-v2-case-v14",
+        "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v14.json",
+        "bytes": 9363,
+        "sha256": "3f45f35ff2d3876acb46e320d469258ff32eb186fd399e32cef980992f787a67",
+        "contentDigestSha256": "sha256:fc84f23c6a6f7f22a25bce721b0a010f18ff0a4c1c492cab66f6bf743abcbb8d",
         "version": 2,
         "expectation": "accepted_exact",
         "shapeId": "case.cli-pack.current"
@@ -567,8 +766,18 @@
         "sha256": "bca86a66043c88838f252358962ff5cdbc306373a2ad2d209ae90abdeff09aaa",
         "contentDigestSha256": null,
         "version": 6,
-        "expectation": "accepted_exact",
+        "expectation": "normalises_to_current_output",
         "shapeId": "case.workspace-archive.v6"
+      },
+      {
+        "id": "workspace-archive-v7-empty-current",
+        "path": "test/fixtures/case-lifecycle/workspace-archive-v7-empty-current.json",
+        "bytes": 7258,
+        "sha256": "892b0d321f42bfb34501019388da682071024af452a8263f138cc08221947f0a",
+        "contentDigestSha256": null,
+        "version": 7,
+        "expectation": "accepted_exact",
+        "shapeId": "case.workspace-archive.v7"
       },
       {
         "id": "workspace-settings-v1",
@@ -591,11 +800,27 @@
         "target": null
       },
       {
-        "id": "case.browser-store.current",
+        "id": "case.browser-store.v13",
         "versions": [
           13
         ],
         "normalisation": "project_known_fields",
+        "target": null
+      },
+      {
+        "id": "case.browser-store.current",
+        "versions": [
+          14
+        ],
+        "normalisation": "project_known_fields",
+        "target": null
+      },
+      {
+        "id": "case.export.v13",
+        "versions": [
+          13
+        ],
+        "normalisation": "preserve_document",
         "target": null
       },
       {
@@ -617,7 +842,7 @@
       {
         "id": "case.export.current",
         "versions": [
-          13
+          14
         ],
         "normalisation": "preserve_document",
         "target": null
@@ -631,6 +856,14 @@
         "target": null
       },
       {
+        "id": "case.report.v10",
+        "versions": [
+          10
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
         "id": "case.response-packet.v7",
         "versions": [
           7
@@ -639,9 +872,25 @@
         "target": null
       },
       {
+        "id": "case.response-packet.v8",
+        "versions": [
+          8
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
         "id": "case.response-review-inputs.v1",
         "versions": [
           1
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.response-review-inputs.v2",
+        "versions": [
+          2
         ],
         "normalisation": "preserve_signed_document",
         "target": null
@@ -666,6 +915,14 @@
         "id": "case.workspace-archive.v6",
         "versions": [
           6
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
+        "id": "case.workspace-archive.v7",
+        "versions": [
+          7
         ],
         "normalisation": "preserve_signed_document",
         "target": null
@@ -1017,9 +1274,9 @@
     ],
     "serialisation": [
       {
-        "id": "case.browser-store.json.v13",
+        "id": "case.browser-store.json.v14",
         "versions": [
-          13
+          14
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -1033,9 +1290,9 @@
         "verifierHookIds": []
       },
       {
-        "id": "case.export.json.v13",
+        "id": "case.export.json.v14",
         "versions": [
-          13
+          14
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -1049,9 +1306,10 @@
         "verifierHookIds": []
       },
       {
-        "id": "case.report.json.v9",
+        "id": "case.report.json.v10",
         "versions": [
-          9
+          9,
+          10
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -1065,10 +1323,11 @@
         "verifierHookIds": []
       },
       {
-        "id": "case.packet.json.v7",
+        "id": "case.packet.json.v8",
         "versions": [
           6,
-          7
+          7,
+          8
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -1084,9 +1343,9 @@
         ]
       },
       {
-        "id": "case.workspace.json.v6",
+        "id": "case.workspace.json.v7",
         "versions": [
-          6
+          7
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -1148,7 +1407,8 @@
             "compatibilityId": "browser.cases",
             "versions": [
               12,
-              13
+              13,
+              14
             ],
             "mode": "direct",
             "discriminator": null
@@ -1156,11 +1416,12 @@
         ],
         "emittedContract": {
           "compatibilityId": "browser.cases",
-          "version": 13,
+          "version": 14,
           "discriminator": null
         },
         "shapeIds": [
           "case.browser-store.public",
+          "case.browser-store.v13",
           "case.browser-store.current"
         ],
         "boundProfileIds": [
@@ -1171,7 +1432,7 @@
           "case.browser.normalise",
           "case.browser.serialise"
         ],
-        "serialisationProfileId": "case.browser-store.json.v13",
+        "serialisationProfileId": "case.browser-store.json.v14",
         "privacyProfileId": "case.privacy.browser-state",
         "retentionEffect": "browser_indexeddb",
         "requestMode": "none"
@@ -1185,7 +1446,8 @@
             "compatibilityId": "export.cases",
             "versions": [
               12,
-              13
+              13,
+              14
             ],
             "mode": "direct",
             "discriminator": null
@@ -1194,6 +1456,7 @@
         "emittedContract": null,
         "shapeIds": [
           "case.export.public",
+          "case.export.v13",
           "case.export.current"
         ],
         "boundProfileIds": [
@@ -1215,7 +1478,7 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.cases",
-          "version": 13,
+          "version": 14,
           "discriminator": null
         },
         "shapeIds": [
@@ -1229,9 +1492,40 @@
           "case.export.build",
           "case.portable.serialise"
         ],
-        "serialisationProfileId": "case.export.json.v13",
+        "serialisationProfileId": "case.export.json.v14",
         "privacyProfileId": "case.privacy.portable-output",
         "retentionEffect": "operator_controlled_output",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.report-pack-verify",
+        "plane": "cli",
+        "operation": "validate-embedded-report",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.case-report",
+            "versions": [
+              9,
+              10
+            ],
+            "mode": "embedded",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": null,
+        "shapeIds": [
+          "case.report.v9",
+          "case.report.v10"
+        ],
+        "boundProfileIds": [
+          "case.domain.bounds"
+        ],
+        "hookIds": [
+          "case.cli-pack.verify"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-input",
+        "retentionEffect": "deliberate_local_file",
         "requestMode": "none"
       },
       {
@@ -1241,11 +1535,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.case-report",
-          "version": 9,
+          "version": 10,
           "discriminator": null
         },
         "shapeIds": [
-          "case.report.v9"
+          "case.report.v10"
         ],
         "boundProfileIds": [
           "case.domain.bounds"
@@ -1254,7 +1548,7 @@
           "case.report.build",
           "case.portable.serialise"
         ],
-        "serialisationProfileId": "case.report.json.v9",
+        "serialisationProfileId": "case.report.json.v10",
         "privacyProfileId": "case.privacy.portable-output",
         "retentionEffect": "operator_controlled_output",
         "requestMode": "none"
@@ -1268,7 +1562,8 @@
             "compatibilityId": "export.case-response-packet",
             "versions": [
               6,
-              7
+              7,
+              8
             ],
             "mode": "direct",
             "discriminator": null
@@ -1277,7 +1572,8 @@
         "emittedContract": null,
         "shapeIds": [
           "case.response-packet.v6",
-          "case.response-packet.v7"
+          "case.response-packet.v7",
+          "case.response-packet.v8"
         ],
         "boundProfileIds": [
           "case.packet.bounds"
@@ -1299,7 +1595,8 @@
             "compatibilityId": "export.case-response-packet",
             "versions": [
               6,
-              7
+              7,
+              8
             ],
             "mode": "direct",
             "discriminator": null
@@ -1308,7 +1605,8 @@
         "emittedContract": null,
         "shapeIds": [
           "case.response-packet.v6",
-          "case.response-packet.v7"
+          "case.response-packet.v7",
+          "case.response-packet.v8"
         ],
         "boundProfileIds": [
           "case.packet.bounds"
@@ -1329,11 +1627,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.case-response-packet",
-          "version": 7,
+          "version": 8,
           "discriminator": null
         },
         "shapeIds": [
-          "case.response-packet.v7"
+          "case.response-packet.v8"
         ],
         "boundProfileIds": [
           "case.packet.bounds"
@@ -1342,7 +1640,7 @@
           "case.packet.build",
           "case.portable.serialise"
         ],
-        "serialisationProfileId": "case.packet.json.v7",
+        "serialisationProfileId": "case.packet.json.v8",
         "privacyProfileId": "case.privacy.portable-output",
         "retentionEffect": "operator_controlled_output",
         "requestMode": "none"
@@ -1355,7 +1653,8 @@
           {
             "compatibilityId": "derived.case-response-review-inputs",
             "versions": [
-              1
+              1,
+              2
             ],
             "mode": "direct",
             "discriminator": null
@@ -1363,7 +1662,8 @@
         ],
         "emittedContract": null,
         "shapeIds": [
-          "case.response-review-inputs.v1"
+          "case.response-review-inputs.v1",
+          "case.response-review-inputs.v2"
         ],
         "boundProfileIds": [
           "case.packet.bounds"
@@ -1383,11 +1683,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "derived.case-response-review-inputs",
-          "version": 1,
+          "version": 2,
           "discriminator": null
         },
         "shapeIds": [
-          "case.response-review-inputs.v1"
+          "case.response-review-inputs.v2"
         ],
         "boundProfileIds": [
           "case.packet.bounds"
@@ -1438,7 +1738,7 @@
           {
             "compatibilityId": "export.cases",
             "versions": [
-              13
+              14
             ],
             "mode": "direct",
             "discriminator": null
@@ -1476,7 +1776,8 @@
             "compatibilityId": "export.workspace-archive",
             "versions": [
               5,
-              6
+              6,
+              7
             ],
             "mode": "direct",
             "discriminator": null
@@ -1494,6 +1795,7 @@
         "shapeIds": [
           "case.workspace-archive.v5",
           "case.workspace-archive.v6",
+          "case.workspace-archive.v7",
           "case.workspace-settings.v1"
         ],
         "boundProfileIds": [
@@ -1514,11 +1816,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.workspace-archive",
-          "version": 6,
+          "version": 7,
           "discriminator": null
         },
         "shapeIds": [
-          "case.workspace-archive.v6"
+          "case.workspace-archive.v7"
         ],
         "boundProfileIds": [
           "case.workspace.bounds"
@@ -1527,7 +1829,7 @@
           "case.workspace.build",
           "case.portable.serialise"
         ],
-        "serialisationProfileId": "case.workspace.json.v6",
+        "serialisationProfileId": "case.workspace.json.v7",
         "privacyProfileId": "case.privacy.portable-output",
         "retentionEffect": "operator_controlled_output",
         "requestMode": "none"
@@ -1594,7 +1896,8 @@
             "compatibilityId": "export.workspace-archive",
             "versions": [
               5,
-              6
+              6,
+              7
             ],
             "mode": "direct",
             "discriminator": null
@@ -1608,6 +1911,7 @@
         "shapeIds": [
           "case.workspace-archive.v5",
           "case.workspace-archive.v6",
+          "case.workspace-archive.v7",
           "case.encrypted-workspace-archive.v1"
         ],
         "boundProfileIds": [
@@ -1640,6 +1944,7 @@
         "SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS",
         "CASE_RESPONSE_REVIEW_INPUTS_SCHEMA",
         "CASE_RESPONSE_REVIEW_INPUTS_VERSION",
+        "SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS",
         "CLI_CASE_PACK_SCHEMA",
         "CLI_CASE_PACK_VERSION",
         "SUPPORTED_CLI_CASE_PACK_VERSIONS",
@@ -1739,7 +2044,8 @@
           "versionField": "schemaVersion",
           "supportedVersions": [
             6,
-            7
+            7,
+            8
           ],
           "structureHookId": "case.packet.structure",
           "integrityHookId": "case.packet.verify"

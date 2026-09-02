@@ -42,6 +42,7 @@ function reviewedCase() {
       type: 'registrar_report',
       recipient: 'Registrar abuse desk',
       contactSource: 'RDAP entity role',
+      routeObservedAt: NOW,
     },
   }, NOW).record;
   const actionId = record.actions[0]!.id;
@@ -80,7 +81,7 @@ function reviewedCase() {
   }, '2026-07-28T02:20:00.000Z').record;
 }
 
-function packetInput() {
+function packetInput(caseRecord: ReturnType<typeof reviewedCase>) {
   return {
     profile: 'registrar',
     category: 'Credential phishing',
@@ -88,21 +89,7 @@ function packetInput() {
     abusiveUrls: ['https://report.example/sign-in?campaign=one'],
     observedHarm: 'The page requested account credentials.',
     observedAt: NOW,
-    contacts: [
-      {
-        kind: 'registrar',
-        contact: 'abuse@example.test',
-        source: 'registrar RDAP',
-        observedAt: NOW,
-        limitations: ['The mailbox has not been verified as monitored.'],
-      },
-      {
-        kind: 'security_txt',
-        contact: 'security@example.test',
-        source: 'security.txt',
-        observedAt: NOW,
-      },
-    ],
+    actionId: caseRecord.actions[0]!.id,
     selectedEvidencePinIds: [] as string[],
     readiness: {
       infrastructureResponsibility: {
@@ -141,8 +128,8 @@ function packetInput() {
 }
 
 describe('case response packet', () => {
-  test('refuses retired packet versions before current v7 output', async () => {
-    for (const version of [5, 6] as const) {
+  test('refuses malformed packet shells before current v8 output', async () => {
+    for (const version of [5, 6, 7] as const) {
       assert.equal(await verifyCaseResponsePacketIntegrity({
         schema: CASE_RESPONSE_PACKET_SCHEMA,
         schemaVersion: version,
@@ -152,7 +139,7 @@ describe('case response packet', () => {
 
   test('builds reviewable JSON, Markdown, and email without a submission action', async () => {
     const caseRecord = reviewedCase();
-    const input = packetInput();
+    const input = packetInput(caseRecord);
     input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
     const result = await buildCaseResponsePacket(caseRecord, input, NOW);
     assert.equal(result.json.schema, CASE_RESPONSE_PACKET_SCHEMA);
@@ -162,7 +149,11 @@ describe('case response packet', () => {
     assert.equal(result.json.authorisation.status, 'draft');
     assert.equal(result.json.profile.id, 'registrar');
     assert.match(result.json.profile.subject, /Reviewed domain abuse report/u);
-    assert.equal(result.json.contacts.length, 2);
+    assert.equal(result.json.contacts.length, 1);
+    assert.equal(result.json.recipientRoute?.actionId, caseRecord.actions[0]!.id);
+    assert.equal(result.json.recipientRoute?.source, 'RDAP entity role');
+    assert.equal(result.json.recipientRoute?.observedAt, NOW);
+    assert.deepEqual(result.json.actionBinding.lineageActionIds, [caseRecord.actions[0]!.id]);
     assert.equal(result.json.provenance.evidencePinCount, 1);
     assert.equal(result.json.provenance.decisionCount, 1);
     assert.equal(result.json.provenance.observationAge.band, 'under_24_hours');
@@ -185,16 +176,19 @@ describe('case response packet', () => {
     assert.equal(result.json.preflight.actionSummary.acknowledged, 1);
     assert.match(result.json.integrity.digestSha256, /^[a-f0-9]{64}$/u);
     assert.equal(await verifyCaseResponsePacketIntegrity(result.json), true);
-    assert.match(result.markdown, /Separately routed|Escalation contacts/u);
-    assert.match(result.markdown, /registrar RDAP/u);
+    assert.match(result.markdown, /Selected response route/u);
+    assert.match(result.markdown, /RDAP entity role/u);
     assert.match(result.markdown, /Canonical packet SHA-256/u);
     assert.match(result.email, /was not submitted automatically/u);
+    assert.match(result.email, /Selected evidence:/u);
+    assert.match(result.email, /Reviewed packet SHA-256:/u);
+    assert.match(result.email, /Attach the reviewed packet/u);
     assert.doesNotMatch(result.email, /mailto:/u);
   });
 
   test('binds every explicit authorisation confirmation to exact canonical reviewed inputs', async () => {
     const caseRecord = reviewedCase();
-    const input = packetInput();
+    const input = packetInput(caseRecord);
     input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
     const reviewedInputDigestSha256 = await buildCaseResponseReviewDigest(caseRecord, input, NOW);
     const confirmed = {
@@ -264,7 +258,7 @@ describe('case response packet', () => {
 
   test('uses only the five explicit readiness states for every profile-specific row', () => {
     const caseRecord = reviewedCase();
-    const input = packetInput();
+    const input = packetInput(caseRecord);
     input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
     const readiness = buildCaseResponseReadiness(caseRecord, input, NOW);
     assert.deepEqual(readiness.rows.map((row) => row.id), RESPONSE_READINESS_ROW_IDS);
@@ -276,22 +270,31 @@ describe('case response packet', () => {
     assert.equal(readiness.rows.find((row) => row.id === 'source_limitations')?.state, 'partial');
   });
 
-  test('reports bounded packet action omissions and withholds provider timing conservatively', async () => {
+  test('bounds selected action lineage and withholds provider timing when the lineage is incomplete', async () => {
     let caseRecord = reviewedCase();
+    let originActionId = caseRecord.actions[0]!.id;
     for (let index = caseRecord.actions.length; index <= MAX_RESPONSE_ACTION_HISTORY; index += 1) {
       caseRecord = updateCase([caseRecord], caseRecord.id, {
-        action: { type: 'internal_review', recipient: `Bounded local reviewer ${index}` },
+        action: {
+          type: 'registrar_report',
+          recipient: `Bounded registrar route ${index}`,
+          contactSource: 'Fixture route',
+          routeObservedAt: NOW,
+          originActionId,
+        },
       }, new Date(Date.parse(NOW) + index * 60_000).toISOString()).record;
+      originActionId = caseRecord.actions.at(-1)!.id;
     }
-    const input = packetInput();
+    const input = packetInput(caseRecord);
+    input.actionId = caseRecord.actions.at(-1)!.id;
     input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
     const result = await buildCaseResponsePacket(caseRecord, input, new Date(Date.parse(NOW) + 3_600_000).toISOString());
     assert.equal(result.json.escalationHistory.length, MAX_RESPONSE_ACTION_HISTORY);
     assert.equal(result.json.escalationHistoryOmitted, 1);
-    assert.match(result.json.escalationHistoryLimitations.join(' '), /earlier Case response action.*omitted/iu);
+    assert.match(result.json.escalationHistoryLimitations.join(' '), /origin lineage.*cycle/iu);
     assert.equal(result.json.responseLifecycle.providerOutcomeState, 'ambiguous');
     assert.equal(result.json.responseLifecycle.latestProviderOutcome, null);
-    assert.match(result.markdown, /Earlier actions omitted from packet projection: 1/iu);
+    assert.match(result.markdown, /Unrelated Case actions excluded from packet: 1/iu);
   });
 
   test('requires all incident facts and at least one exact safe URL', async () => {
@@ -306,15 +309,17 @@ describe('case response packet', () => {
     await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['https://user:secret@report.example/'] }, NOW), /required/u);
   });
 
-  test('bounds and deduplicates URLs and contact routes', async () => {
+  test('bounds URLs and excludes contact candidates not owned by the selected Case action', async () => {
+    const caseRecord = reviewedCase();
     const urls = Array.from({ length: MAX_ABUSIVE_URLS + 5 }, (_, index) => `https://report.example/path-${index}`);
     urls.push(urls[0] ?? '');
-    const result = await buildCaseResponsePacket(reviewedCase(), {
+    const result = await buildCaseResponsePacket(caseRecord, {
       category: 'Phishing',
       affectedParty: 'Example service',
       abusiveUrls: urls,
       observedHarm: 'A credential request was observed.',
       observedAt: NOW,
+      actionId: caseRecord.actions[0]!.id,
       contacts: [
         { kind: 'registry', contact: 'https://registry.example/report' },
         { kind: 'registry', contact: 'https://registry.example/report' },
@@ -323,16 +328,30 @@ describe('case response packet', () => {
     }, NOW);
     assert.equal(result.json.incident.abusiveUrls.length, MAX_ABUSIVE_URLS);
     assert.equal(result.json.contacts.length, 1);
+    assert.equal(result.json.contacts[0]?.contact, 'Registrar abuse desk');
+    assert.equal(JSON.stringify(result.json).includes('registry.example'), false);
   });
 
   test('removes every control character from packet fields and rendered drafts', async () => {
-    const result = await buildCaseResponsePacket(reviewedCase(), {
+    let caseRecord = reviewedCase();
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'security_contact_report',
+        recipient: 'security@example.test\r\n\u0007',
+        contactSource: 'security.txt\tpublication\u007f',
+        routeObservedAt: NOW,
+        contactLimitations: ['Monitoring\rstatus\nis\u0007unknown.'],
+      },
+    }, NOW).record;
+    const actionId = caseRecord.actions.at(-1)!.id;
+    const result = await buildCaseResponsePacket(caseRecord, {
       profile: 'security_contact',
       category: 'Credential\rphishing\nreview\u0007',
       affectedParty: 'Example\tservice\u007fteam',
       abusiveUrls: ['https://report.example/sign-in'],
       observedHarm: 'A credential\rform\nwas\u0007observed.',
       observedAt: NOW,
+      actionId,
       contacts: [{
         kind: 'registrar',
         contact: 'abuse@example.test\r\n\u0007',
@@ -360,12 +379,14 @@ describe('case response packet', () => {
   });
 
   test('marks old evidence for refresh and detects packet changes', async () => {
-    const result = await buildCaseResponsePacket(reviewedCase(), {
+    const caseRecord = reviewedCase();
+    const result = await buildCaseResponsePacket(caseRecord, {
       category: 'Phishing',
       affectedParty: 'Example service',
       abusiveUrls: ['https://report.example/sign-in'],
       observedHarm: 'A credential request was observed.',
       observedAt: '2026-07-01T00:00:00.000Z',
+      actionId: caseRecord.actions[0]!.id,
     }, NOW);
     assert.equal(result.json.provenance.observationAge.band, 'over_seven_days');
     assert.equal(result.json.provenance.observationAge.refreshRecommended, true);
@@ -382,6 +403,7 @@ describe('case response packet', () => {
 
   test('preflight blocks missing incident facts and keeps review gaps explicit', () => {
     const preflight = buildCaseResponsePreflight(reviewedCase(), {
+      profile: 'registrar',
       category: '',
       affectedParty: '',
       abusiveUrls: [],
@@ -391,8 +413,9 @@ describe('case response packet', () => {
     }, NOW);
     assert.equal(preflight.canExport, false);
     assert.equal(preflight.status, 'needs_input');
-    assert.equal(preflight.counts.block, 1);
-    assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'caution');
+    assert.equal(preflight.counts.block, 4);
+    assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'block');
+    assert.equal(preflight.checks.find((item) => item.id === 'packet_action')?.state, 'block');
   });
 
   test('keeps case-response preflight case-owned when transient Lookup facts are unavailable', () => {
@@ -431,11 +454,22 @@ describe('case response packet', () => {
       RESPONSE_PACKET_PROFILES.map((profile) => profile.id),
       ['registrar', 'registry', 'network_hosting', 'security_contact', 'browser_blocklist', 'internal_soc'],
     );
-    const preview = buildResponsePacketProfilePreview(reviewedCase(), {
+    let caseRecord = reviewedCase();
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'network_hosting_report',
+        recipient: 'Network abuse route',
+        contactSource: 'Network registration',
+        routeObservedAt: NOW,
+      },
+    }, NOW).record;
+    const actionId = caseRecord.actions.find((action) => action.type === 'network_hosting_report')!.id;
+    const preview = buildResponsePacketProfilePreview(caseRecord, {
       profile: 'network_hosting',
       category: 'Credential phishing',
       abusiveUrls: ['https://report.example/sign-in'],
       observedAt: NOW,
+      actionId,
       contacts: [],
     });
     assert.equal(preview.id, 'network_hosting');
@@ -445,10 +479,10 @@ describe('case response packet', () => {
     assert.ok(preview.redactions.length > 0);
     assert.ok(preview.attachments.length > 0);
     assert.ok(preview.followUpFields.length > 0);
-    assert.match(preview.missingEvidence.join(' '), /Network or hosting contact route/u);
+    assert.doesNotMatch(preview.missingEvidence.join(' '), /contact route/u);
   });
 
-  test('keeps fixed-recipient profile gaps visible without blocking local export', () => {
+  test('blocks an external packet when its selected action does not supply the required route', () => {
     const input = {
       profile: 'registry',
       category: 'Phishing',
@@ -459,11 +493,62 @@ describe('case response packet', () => {
       contacts: [{ kind: 'registrar', contact: 'abuse@example.test' }],
     };
     const preflight = buildCaseResponsePreflight(reviewedCase(), input, NOW);
-    assert.equal(preflight.canExport, true);
-    assert.equal(preflight.status, 'review_cautions');
+    assert.equal(preflight.canExport, false);
+    assert.equal(preflight.status, 'needs_input');
     assert.equal(
       preflight.checks.find((item) => item.id === 'profile_recipient')?.state,
-      'caution',
+      'block',
     );
+  });
+
+  test('requires a deliberately selected manual route for browser or blocklist packets', async () => {
+    let caseRecord = reviewedCase();
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'internal_review',
+        recipient: 'Reviewed provider submission form',
+        contactSource: 'Analyst-reviewed provider guidance',
+        routeObservedAt: NOW,
+      },
+    }, NOW).record;
+    const actionId = caseRecord.actions.find((action) => action.type === 'internal_review')!.id;
+    const input = {
+      ...packetInput(caseRecord),
+      profile: 'browser_blocklist',
+      actionId,
+      selectedEvidencePinIds: [caseRecord.evidencePins[0]!.id],
+    };
+    const result = await buildCaseResponsePacket(caseRecord, input, NOW);
+    assert.equal(result.json.preflight.canExport, true);
+    assert.equal(result.json.recipientRoute?.kind, 'manual');
+    assert.equal(result.json.recipientRoute?.actionId, actionId);
+    assert.deepEqual(result.json.contacts, []);
+  });
+
+  test('retains route observation time across later action metadata edits', async () => {
+    let caseRecord = reviewedCase();
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'registrar_report',
+        recipient: 'Draft registrar abuse desk',
+        contactSource: 'Reviewed registration source',
+        routeObservedAt: NOW,
+      },
+    }, '2026-07-28T02:30:00.000Z').record;
+    const actionId = caseRecord.actions.find((action) => action.recipient === 'Draft registrar abuse desk')!.id;
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      actionUpdate: {
+        id: actionId,
+        recipient: 'Updated registrar abuse desk',
+      },
+    }, '2026-07-28T03:00:00.000Z').record;
+    const result = await buildCaseResponsePacket(caseRecord, {
+      ...packetInput(caseRecord),
+      actionId,
+      selectedEvidencePinIds: [caseRecord.evidencePins[0]!.id],
+    }, '2026-07-28T03:00:00.000Z');
+    assert.equal(result.json.recipientRoute?.observedAt, NOW);
+    assert.equal(result.json.escalationHistory[0]?.routeObservedAt, NOW);
+    assert.equal(result.json.recipientRoute?.contact, 'Updated registrar abuse desk');
   });
 });

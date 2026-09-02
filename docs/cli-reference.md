@@ -109,7 +109,7 @@ Readers accept only their declared public and current versions. Unknown,
 unreleased historical and future schemas fail before partial interpretation;
 an invalid import is not treated as an empty document.
 
-`inspect-archive` reads current workspace archive v6 and exact public v5. It
+`inspect-archive` reads current workspace archive v7 and exact versions 5 and 6. It
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 

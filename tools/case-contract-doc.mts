@@ -9,6 +9,12 @@ import {
   CASE_REPORT_OUTPUT_VERSIONS,
   CASE_RESPONSE_PACKET_OUTPUT_VERSIONS,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
+  SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS,
   CLI_CASE_PACK_CASE_REPORT_EPOCHS,
   SUPPORTED_CLI_CASE_PACK_VERSIONS,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
@@ -30,6 +36,11 @@ const DISPLAY_NAMES = Object.freeze({
 
 function versions(values: readonly number[]): string {
   return values.length ? values.join(', ') : '—';
+}
+
+function proseVersions(values: readonly number[]): string {
+  if (values.length < 2) return versions(values);
+  return `${values.slice(0, -1).join(', ')} and ${values.at(-1)}`;
 }
 
 function code(value: string): string {
@@ -68,22 +79,25 @@ fixture remain. Every writer emits only the version shown in “Current writer�
 ${rows.join('\n')}
 
 Browser-local Case reading and portable Case import accept only schema
-${versions(CASE_BROWSER_SUPPORTED_VERSIONS)}. Case reports write schema
-${versions(CASE_REPORT_OUTPUT_VERSIONS)}; response packets write and verify only
-schema ${versions(CASE_RESPONSE_PACKET_OUTPUT_VERSIONS)}. Review-input digest
-material remains exact-current version ${CASE_RESPONSE_REVIEW_INPUTS_VERSION}.
+${versions(CASE_BROWSER_SUPPORTED_VERSIONS)}. The current writers emit Case report
+schema ${CASE_REPORT_OUTPUT_VERSIONS.at(-1)} and response-packet schema
+${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}; the compatible output epochs are
+listed above. Response-packet verification accepts schema
+${versions(CASE_RESPONSE_PACKET_OUTPUT_VERSIONS)}. Review-input digest material
+accepts exact versions ${versions(SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS)}
+and the current writer emits version ${CASE_RESPONSE_REVIEW_INPUTS_VERSION}.
 
 ## CLI Case/report epochs
 
-The Case-pack verifier accepts the exact public Case/report epoch and the
-current v2 epoch.
+The Case-pack verifier accepts the exact public v1, published v2, and current
+Case/report epochs.
 
 | Case versions | Matching report versions |
 | ---: | ---: |
 ${epochs.join('\n')}
 
 The durable CLI Case-pack envelope is version ${versions(SUPPORTED_CLI_CASE_PACK_VERSIONS)}.
-The durable workspace archive envelope supports versions ${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.join(' and ')};
+The durable workspace archive envelope supports versions ${proseVersions(SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS)};
 its embedded Case section consumes the supported Case contract shown above.
 The encrypted workspace envelope remains version ${ENCRYPTED_WORKSPACE_ARCHIVE_VERSION}
 and authenticates an ordinary workspace document without changing either the
@@ -91,14 +105,28 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release ${WHOISLEUTH_APPLICATION_VERSION} is the current public Case and workspace writer. It directly
-preserves the formats written by public release 1.47.4:
+Release ${WHOISLEUTH_APPLICATION_VERSION} is the latest public writer: Case schema
+${PUBLISHED_V2_CASE_SCHEMA_VERSION}, Case report schema
+${PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION}, response-packet schema
+${PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION}, review-input digest material version
+${PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace archive schema
+${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION}. This checkout's current writers advance
+those formats to Case schema ${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}, report
+schema ${CASE_REPORT_OUTPUT_VERSIONS.at(-1)}, response-packet schema
+${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}, review-input version
+${CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace archive schema
+${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.at(-1)}.
+
+Both the latest public formats and the current writers directly preserve the
+formats written by public release 1.47.4:
 browser and portable Case schema 12, Case report schema 8, response-packet schema 6,
 CLI Case-pack schema 2 with its Case 12/report 8 epoch, workspace archive schema
 5, workspace settings schema 1, and encrypted workspace archive schema 1.
-Case schema 12 migrates directly to schema 13, response packet 6 verifies
-directly alongside packet 7, and the public CLI epoch remains readable without
-passing through an unreleased checkpoint.
+Case schemas 12 and ${PUBLISHED_V2_CASE_SCHEMA_VERSION} migrate directly to schema
+${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}; response packets 6 and
+${PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION} verify alongside packet
+${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}. Every declared CLI epoch remains
+readable without passing through an unreleased checkpoint.
 
 Older formats accepted only by historical readers and formats produced only by
 unreleased local checkpoints are outside the v2 compatibility boundary.

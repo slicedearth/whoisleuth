@@ -18,7 +18,7 @@ function retainedEvidence(inputHostname: unknown) {
   };
 }
 
-describe('Case v13 exact submitted hostname', () => {
+describe('Case v14 exact submitted hostname', () => {
   test('normalises strict Unicode input to canonical lower-case A-label form and binds it to the Case parent', () => {
     assert.equal(
       model.normalizeEvidenceHostnameForCase('CAFÉ.Example.Test', 'example.test'),
@@ -102,8 +102,8 @@ describe('Case v13 exact submitted hostname', () => {
     assert.equal(model.caseLookupTarget(current), 'example.test');
   });
 
-  test('rejects ambiguous unreleased Case v13 and never reconstructs a migrated hostname from Case domain or URL evidence', () => {
-    assert.throws(() => model.normalizeCaseStore({
+  test('migrates published Case versions without reconstructing a hostname from the Case domain or URL evidence', () => {
+    const publishedV2 = model.normalizeCaseStore({
       version: 13,
       cases: [{
         domain: 'example.test',
@@ -117,7 +117,9 @@ describe('Case v13 exact submitted hostname', () => {
         createdAt: FIRST,
         updatedAt: FIRST,
       }],
-    }), /unreleased local Case checkpoints are not interpreted as the v2 format.*no data was changed/iu);
+    });
+    assert.equal(publishedV2.version, 14);
+    assert.equal(publishedV2.cases[0]?.evidenceHistory[0]?.inputHostname, null);
 
     const migrated = model.normalizeCaseStore({
       version: 12,
@@ -137,11 +139,11 @@ describe('Case v13 exact submitted hostname', () => {
         updatedAt: FIRST,
       }],
     });
-    assert.equal(migrated.version, 13);
+    assert.equal(migrated.version, 14);
     assert.equal(migrated.cases[0]?.evidenceHistory[0]?.inputHostname, null);
 
     const current = model.normalizeCaseStore({
-      version: 13,
+      version: 14,
       cases: [{
         domain: 'example.test',
         evidenceHistory: [{ ...retainedEvidence('login.example.test'), capturedAt: FIRST }],
@@ -152,7 +154,7 @@ describe('Case v13 exact submitted hostname', () => {
     assert.equal(current.cases[0]?.evidenceHistory[0]?.inputHostname, 'login.example.test');
   });
 
-  test('round-trips the field while report v9 excludes it and makes no environmental-change claim', () => {
+  test('round-trips the field while report v10 excludes it and makes no environmental-change claim', () => {
     const first = model.createCase({
       domain: 'example.test',
       source: 'lookup',

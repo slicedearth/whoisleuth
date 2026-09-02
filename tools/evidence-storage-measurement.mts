@@ -438,6 +438,7 @@ function scenarioCase(
       type: 'internal_review',
       recipient: 'Reviewed internal queue',
       contactSource: 'Analyst-selected workflow',
+      routeObservedAt: null,
       contactLimitations: ['No external submission was performed.'],
       dueAt: null,
       state: 'drafting',

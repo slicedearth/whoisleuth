@@ -64,6 +64,7 @@
   let actionType = $state('internal_review');
   let actionRecipient = $state('');
   let actionContactSource = $state('analyst supplied');
+  let actionRouteObservedAt = $state('');
   let actionLimitations = $state('');
   let actionDueAt = $state('');
   let actionFollowUpAt = $state('');
@@ -370,6 +371,7 @@
       type: actionType,
       recipient: actionRecipient,
       contactSource: actionContactSource,
+      routeObservedAt: isoFromLocal(actionRouteObservedAt),
       contactLimitations: list(actionLimitations),
       dueAt: isoFromLocal(actionDueAt),
       followUpAt: isoFromLocal(actionFollowUpAt),
@@ -382,6 +384,7 @@
     actionType = 'internal_review';
     actionRecipient = '';
     actionContactSource = 'analyst supplied';
+    actionRouteObservedAt = '';
     actionLimitations = '';
     actionDueAt = '';
     actionFollowUpAt = '';
@@ -399,6 +402,7 @@
     actionType = action.type;
     actionRecipient = action.recipient;
     actionContactSource = action.contactSource;
+    actionRouteObservedAt = localFromIso(action.routeObservedAt);
     actionLimitations = action.contactLimitations.join('\n');
     actionDueAt = localFromIso(action.dueAt);
     actionFollowUpAt = localFromIso(action.followUpAt);
@@ -677,6 +681,7 @@
           <label class="field">Action type<select bind:value={actionType} disabled={selectedActionIdentityLocked}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
           <label class="field">Recipient or internal owner<input bind:value={actionRecipient} maxlength="320" required disabled={selectedActionIdentityLocked}></label>
           <label class="field">Contact source<input bind:value={actionContactSource} maxlength="80" required disabled={selectedActionIdentityLocked}></label>
+          <label class="field">Route observed at<input type="datetime-local" bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
           <label class="field">Originating action<select bind:value={actionOriginId} disabled={selectedActionIdentityLocked}><option value="">No originating action</option>{#each record.actions.filter((action) => action.id !== selectedActionId) as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
           <label class="field">Due at<input type="datetime-local" bind:value={actionDueAt}></label>
           <label class="field">Follow-up at<input type="datetime-local" bind:value={actionFollowUpAt}></label>
@@ -717,6 +722,7 @@
             <strong>{action.type.replaceAll('_', ' ')} · {action.state.replaceAll('_', ' ')}</strong>
             <p>{action.recipient}</p>
             <small>Action ID {action.id} · {action.contactSource} · created {action.createdAt}</small>
+            <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
             {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
             {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
             {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}

@@ -86,15 +86,16 @@ handling.
 
 ### Retaining a Lookup
 
-Creating or refreshing a Case is deliberate. Case schema 13 retains the exact
+Creating or refreshing a Case is deliberate. Case schema 14 retains the exact
 normalised submitted hostname on the new point-in-time evidence snapshot while
 the Case remains keyed by canonical registrable domain. Different hostnames can
-therefore remain attached to different snapshots. A public schema-12 Case
-migrated to v2 may retain a null hostname; WHOISleuth does not reconstruct one
-from URLs, certificates, redirects or other weaker evidence.
+therefore remain attached to different snapshots. Published v2 schema-13 and
+public v1 schema-12 Cases migrate directly and may retain a null hostname;
+WHOISleuth does not reconstruct one from URLs, certificates, redirects or other
+weaker evidence.
 
-Ordinary transient Lookups create no hostname history. Case report v9 and
-response packet v7 do not add the snapshot hostname, while ordinary Case,
+Ordinary transient Lookups create no hostname history. Case report v10 and
+response packet v8 do not add the snapshot hostname, while ordinary Case,
 workspace and trusted Case-pack exports can contain it and require sharing
 review.
 
@@ -251,11 +252,12 @@ current browser profile. Failed reads, quota errors and unsupported versions
 remain explicit. Clearing site data removes the workspace; downloaded files
 remain under the user's control.
 
-Workspace archive version 6 is current and accepts exact public version 5.
-Version 5 contains public Case schema 12; version 6 accepts public Case 12 or
-current Case 13 and adds the bounded Analyst Review Item section. Import
-validates the full checksummed envelope before a non-destructive merge, and an
-omitted section never deletes local data.
+Workspace archive version 7 is current and accepts exact versions 5 and 6.
+Version 5 contains public Case schema 12 and gains an empty Analyst Review Item
+section during migration. Version 6 retains its existing sections, while the
+current writer stores Case schema 14 in version 7. Import validates the full
+checksummed envelope before a non-destructive merge, and an omitted section
+never deletes local data.
 
 The encrypted envelope remains version 1 and uses browser-local password-based
 authenticated encryption. It protects the downloaded file while locked, not an

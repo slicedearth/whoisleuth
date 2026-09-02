@@ -86,19 +86,19 @@
       "responseActions": 8,
       "responseActionEvents": 8,
       "browserLocal": {
-        "serializedCaseBytes": 42894,
-        "retainedEvidenceBytes": 35198,
+        "serializedCaseBytes": 43078,
+        "retainedEvidenceBytes": 35382,
         "evidenceHistoryBytes": 22006,
         "evidencePinBytes": 4824,
         "decisionHistoryBytes": 1696,
-        "responseActionHistoryBytes": 6736,
-        "indexedDbRecordPayloadBytes": 43070,
-        "indexedDbRecordEnvelopeBytes": 48518,
+        "responseActionHistoryBytes": 6920,
+        "indexedDbRecordPayloadBytes": 43254,
+        "indexedDbRecordEnvelopeBytes": 48718,
         "indexedDbManifestBytes": 283,
-        "indexedDbSerializedContractBytes": 48801,
-        "currentQuotaRatio": 0.010227,
-        "projectedContentAddressedBytes": 77550,
-        "projectedQuotaRatio": 0.018489
+        "indexedDbSerializedContractBytes": 49001,
+        "currentQuotaRatio": 0.010271,
+        "projectedContentAddressedBytes": 77734,
+        "projectedQuotaRatio": 0.018533
       },
       "duplication": {
         "eligiblePayloads": 40,
@@ -128,13 +128,13 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 48428,
-          "retainedEvidenceBytes": 35199
+          "totalBytes": 48612,
+          "retainedEvidenceBytes": 35383
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 113780,
-          "retainedEvidenceBytes": 84938,
+          "totalBytes": 114156,
+          "retainedEvidenceBytes": 85306,
           "caseLimitApplied": false
         }
       }
@@ -149,19 +149,19 @@
       "responseActions": 24,
       "responseActionEvents": 24,
       "browserLocal": {
-        "serializedCaseBytes": 128722,
-        "retainedEvidenceBytes": 105682,
+        "serializedCaseBytes": 129274,
+        "retainedEvidenceBytes": 106234,
         "evidenceHistoryBytes": 66008,
         "evidencePinBytes": 14500,
         "decisionHistoryBytes": 5116,
-        "responseActionHistoryBytes": 20250,
-        "indexedDbRecordPayloadBytes": 129298,
-        "indexedDbRecordEnvelopeBytes": 145656,
+        "responseActionHistoryBytes": 20802,
+        "indexedDbRecordPayloadBytes": 129850,
+        "indexedDbRecordEnvelopeBytes": 146256,
         "indexedDbManifestBytes": 285,
-        "indexedDbSerializedContractBytes": 145941,
-        "currentQuotaRatio": 0.03069,
-        "projectedContentAddressedBytes": 156199,
-        "projectedQuotaRatio": 0.037241
+        "indexedDbSerializedContractBytes": 146541,
+        "currentQuotaRatio": 0.030821,
+        "projectedContentAddressedBytes": 156751,
+        "projectedQuotaRatio": 0.037372
       },
       "duplication": {
         "eligiblePayloads": 120,
@@ -373,13 +373,13 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 134259,
-          "retainedEvidenceBytes": 105683
+          "totalBytes": 134811,
+          "retainedEvidenceBytes": 106235
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 339815,
-          "retainedEvidenceBytes": 254988,
+          "totalBytes": 340943,
+          "retainedEvidenceBytes": 256092,
           "caseLimitApplied": false
         }
       }
@@ -394,19 +394,19 @@
       "responseActions": 500,
       "responseActionEvents": 500,
       "browserLocal": {
-        "serializedCaseBytes": 1991524,
-        "retainedEvidenceBytes": 1512000,
+        "serializedCaseBytes": 2003024,
+        "retainedEvidenceBytes": 1523500,
         "evidenceHistoryBytes": 687500,
         "evidencePinBytes": 301500,
         "decisionHistoryBytes": 106000,
-        "responseActionHistoryBytes": 421000,
-        "indexedDbRecordPayloadBytes": 2004000,
-        "indexedDbRecordEnvelopeBytes": 2277390,
+        "responseActionHistoryBytes": 432500,
+        "indexedDbRecordPayloadBytes": 2015500,
+        "indexedDbRecordEnvelopeBytes": 2289890,
         "indexedDbManifestBytes": 287,
-        "indexedDbSerializedContractBytes": 2277677,
-        "currentQuotaRatio": 0.474816,
-        "projectedContentAddressedBytes": 977234,
-        "projectedQuotaRatio": 0.232991
+        "indexedDbSerializedContractBytes": 2290177,
+        "currentQuotaRatio": 0.477558,
+        "projectedContentAddressedBytes": 988734,
+        "projectedQuotaRatio": 0.235733
       },
       "duplication": {
         "eligiblePayloads": 2000,
@@ -498,13 +498,13 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 1997064,
-          "retainedEvidenceBytes": 1512001
+          "totalBytes": 2008564,
+          "retainedEvidenceBytes": 1523501
         },
         "cliCasePack": {
           "caseCount": 25,
-          "totalBytes": 276001,
-          "retainedEvidenceBytes": 187675,
+          "totalBytes": 277176,
+          "retainedEvidenceBytes": 188825,
           "caseLimitApplied": true
         }
       }
@@ -567,32 +567,32 @@
     },
     "postConsolidation": {
       "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 13,
-      "lifecycleContracts": 13,
-      "legacyContracts": 4,
+      "supportedVersionSlots": 19,
+      "lifecycleContracts": 19,
+      "legacyContracts": 10,
       "retiredOutputContracts": 0,
-      "migrations": 3,
-      "readerEdges": 10,
+      "migrations": 6,
+      "readerEdges": 11,
       "writerEdges": 9,
-      "readerVersionSlots": 17,
-      "lifecycleFixtures": 14,
-      "lifecycleFixtureBytes": 64903,
-      "legacyAndRetiredFixtures": 4,
-      "legacyAndRetiredFixtureBytes": 12947,
-      "lifecycleShapes": 13,
+      "readerVersionSlots": 26,
+      "lifecycleFixtures": 21,
+      "lifecycleFixtureBytes": 112093,
+      "legacyAndRetiredFixtures": 10,
+      "legacyAndRetiredFixtureBytes": 43056,
+      "lifecycleShapes": 19,
       "lifecycleBoundProfiles": 7,
       "lifecycleHooks": 18,
       "lifecycleSerialisationProfiles": 7,
       "lifecyclePrivacyProfiles": 3,
-      "lifecycleConsumerEdges": 16,
-      "versionSensitiveProductionLines": 215,
-      "versionSensitiveBranches": 51,
+      "lifecycleConsumerEdges": 17,
+      "versionSensitiveProductionLines": 221,
+      "versionSensitiveBranches": 53,
       "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 11,
+      "generatedDocumentationEntries": 12,
       "sourceMeasurement": {
         "sourceFiles": 15,
-        "versionSensitiveProductionLines": 215,
-        "versionSensitiveBranches": 51,
+        "versionSensitiveProductionLines": 221,
+        "versionSensitiveBranches": 53,
         "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
       }
     }

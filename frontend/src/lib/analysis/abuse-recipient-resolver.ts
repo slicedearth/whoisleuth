@@ -12,6 +12,7 @@ export type ResolvedAbuseRecipient = Readonly<{
   channel: AbuseRecipientChannel;
   contact: string;
   source: string;
+  observedAt: string | null;
   limitations: readonly string[];
   actionType:
     | 'network_hosting_report'
@@ -101,6 +102,7 @@ function recipient(
   contactRaw: unknown,
   sourceRaw: unknown,
   channelRaw: unknown,
+  observedAtRaw: unknown,
   limitations: readonly string[],
 ): ResolvedAbuseRecipient | null {
   const resolved = channelAndContact(contactRaw, channelRaw);
@@ -113,6 +115,9 @@ function recipient(
     channel: resolved.channel,
     contact: resolved.contact,
     source,
+    observedAt: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(text(observedAtRaw, 64))
+      ? new Date(String(observedAtRaw)).toISOString()
+      : null,
     limitations: [...new Set(limitations.map((item) => text(item, 240)).filter(Boolean))].slice(0, 8),
     actionType: actionType(kind),
   };
@@ -120,6 +125,18 @@ function recipient(
 
 function registryRecipients(registryInsightsRaw: unknown): ResolvedAbuseRecipient[] {
   const registryInsights = record(registryInsightsRaw);
+  const publications = records(registryInsights.publications);
+  const publicationTime = (source: unknown): unknown => {
+    const label = text(source, 120).toLowerCase();
+    const sourceId = label.startsWith('registry rdap')
+      ? 'registry_rdap'
+      : label.startsWith('registrar rdap')
+        ? 'registrar_rdap'
+        : label.startsWith('whois')
+          ? 'whois'
+          : '';
+    return publications.find((item) => item.source === sourceId)?.observedAt;
+  };
   return records(registryInsights.abuseRouting).slice(0, MAX_RECIPIENTS).flatMap((route) => {
     const kind = route.kind === 'registry' ? 'registry' : route.kind === 'registrar' ? 'registrar' : null;
     if (!kind) return [];
@@ -128,6 +145,7 @@ function registryRecipients(registryInsightsRaw: unknown): ResolvedAbuseRecipien
       route.contact,
       route.source,
       route.channel,
+      publicationTime(route.source),
       [
         ...records(route.limitations).map((item) => text(item.detail)),
         ...(Array.isArray(route.limitations) ? route.limitations.map((item) => text(item)) : []),
@@ -141,11 +159,11 @@ function registryRecipients(registryInsightsRaw: unknown): ResolvedAbuseRecipien
 function fallbackRegistrarRecipient(availabilityAbuseRaw: unknown): ResolvedAbuseRecipient[] {
   const abuse = record(availabilityAbuseRaw);
   return [
-    recipient('registrar', abuse.email, 'availability registrar abuse field', 'email', [
+    recipient('registrar', abuse.email, 'availability registrar abuse field', 'email', null, [
       'This compact field may duplicate a separately attributed RDAP or WHOIS route.',
       'Mailbox monitoring and incident scope are not verified.',
     ]),
-    recipient('registrar', abuse.phone, 'availability registrar abuse field', 'phone', [
+    recipient('registrar', abuse.phone, 'availability registrar abuse field', 'phone', null, [
       'Phone reachability and incident scope are not verified.',
     ]),
   ].filter((item): item is ResolvedAbuseRecipient => Boolean(item));
@@ -161,7 +179,7 @@ function securityTxtRecipients(securityTxtRaw: unknown): ResolvedAbuseRecipient[
   return (Array.isArray(securityTxt.contacts) ? securityTxt.contacts : [])
     .slice(0, MAX_RECIPIENTS)
     .flatMap((contact) => {
-      const resolved = recipient('security_txt', contact, source, '', [
+      const resolved = recipient('security_txt', contact, source, '', securityTxt.observedAt, [
         ...publishedLimitations,
         'security.txt expresses a disclosure route, not necessarily the correct destination for an abuse report.',
       ]);
@@ -184,6 +202,7 @@ function networkRecipients(networkContextRaw: unknown): ResolvedAbuseRecipient[]
       route.contact,
       route.source,
       route.channel,
+      route.observedAt,
       [
         ...routeLimitations,
         ...(selectedAddress ? [`Selected endpoint address: ${selectedAddress}.`] : []),

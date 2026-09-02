@@ -36,6 +36,6 @@ test('critical current profile and public-writer statements follow canonical ver
   assert.match(readme, publicWriter);
   assert.match(productBoundary, publicWriter);
   assert.match(portableContracts, publicWriter);
-  assert.match(caseContracts, new RegExp(`Release ${applicationVersion} is the current public Case and workspace writer`, 'u'));
+  assert.match(caseContracts, new RegExp(`Release ${applicationVersion} is the latest public writer`, 'u'));
   assert.doesNotMatch(productBoundary, /Once v2 is public/iu);
 });

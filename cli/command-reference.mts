@@ -9,9 +9,18 @@ import {
 } from '../packages/contracts/risk-calibration.mts';
 import {
   CASE_SCHEMA_VERSION,
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+
+const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
+  .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
+const LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION = LEGACY_WORKSPACE_ARCHIVE_VERSIONS
+  .map((version) => `version-${version}`)
+  .join(' and ');
+const LEGACY_WORKSPACE_ARCHIVE_SCOPE = LEGACY_WORKSPACE_ARCHIVE_VERSIONS
+  .map((version) => `v${version}`)
+  .join(' and ');
 
 type CliCommand = keyof typeof COMMAND_SEEDS;
 type CompletionShell = 'bash' | 'zsh' | 'fish' | 'powershell';
@@ -1051,11 +1060,11 @@ const COMMAND_SEEDS = Object.freeze({
   "inspect-archive": commandSeed({
     reference: {
       usage: 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
-      description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact public version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION} support and redacted output by default.`,
+      description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact ${LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION} support and redacted output by default.`,
       example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
       boundary: 'Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.',
     },
-    collection: { mode: 'offline', scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact v${PUBLIC_WORKSPACE_ARCHIVE_VERSION} compatibility, and redacts output by default.` },
+    collection: { mode: 'offline', scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact ${LEGACY_WORKSPACE_ARCHIVE_SCOPE} compatibility, and redacts output by default.` },
     summary: 'Inspect an archive locally',
     options: ['--passphrase-file', '--search', '--require-match', '--reveal', '--expect-content-digest', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,

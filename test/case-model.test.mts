@@ -193,7 +193,7 @@ describe('current Case Brand Profile references', () => {
       brandProfileIds: ['Profile_A', 'profile_a'],
     }, ISO);
     const exported = model.buildCaseExport(opened.cases, LATER);
-    assert.equal(exported.version, 13);
+    assert.equal(exported.version, model.CASE_SCHEMA_VERSION);
     assert.deepEqual(exported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
     const imported = model.mergeCases([], exported);
     assert.deepEqual(imported.cases[0]?.brandProfileIds, ['Profile_A', 'profile_a']);
@@ -1109,7 +1109,7 @@ describe('rejects unsupported Case contracts', () => {
     const local = localCases();
     assert.throws(
       () => model.mergeCases(local, { version: 999, cases: [{ domain: 'new.example' }] }),
-      /newer than the supported schema 13.*no data was changed/iu,
+      new RegExp(`newer than the supported schema ${model.CASE_SCHEMA_VERSION}.*no data was changed`, 'iu'),
     );
     // Local cases are untouched (nothing merged, nothing reset).
     assert.equal(local.length, 1);
@@ -1119,14 +1119,18 @@ describe('rejects unsupported Case contracts', () => {
 
   test('imports the exact public and current Case envelopes and rejects other inputs without mutation', () => {
     const local = localCases();
-    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /well-formed.*schema 13.*no data was changed/iu);
+    assert.throws(
+      () => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]),
+      new RegExp(`well-formed.*schema ${model.CASE_SCHEMA_VERSION}.*no data was changed`, 'iu'),
+    );
     for (const version of [2, 7, 11]) {
       assert.throws(
         () => model.mergeCases(local, { version, cases: [{ domain: `v${version}.example`, updatedAt: ISO }] }),
-        new RegExp(`schema ${version} is not part of the public compatibility boundary.*no data was changed`, 'iu'),
+        new RegExp(`schema ${version} is not part of the supported compatibility boundary.*no data was changed`, 'iu'),
       );
     }
     assert.equal(model.mergeCases(local, { version: 12, cases: [{ domain: 'public.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 13, cases: [{ domain: 'published-v2.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
     assert.equal(local.length, 1);
   });

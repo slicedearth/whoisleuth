@@ -145,6 +145,8 @@ async function rebindCaseResponseReview<T extends Record<string, unknown>>(value
     case: value.case,
     incident: value.incident,
     contacts: value.contacts,
+    recipientRoute: value.recipientRoute,
+    actionBinding: value.actionBinding,
     selectedEvidence: value.selectedEvidence,
     contradictions: value.contradictions,
     readiness: value.readiness,
@@ -896,7 +898,7 @@ describe('offline artifact verifier', () => {
     }
   });
 
-  test('rejects retired response packets and verifies current v7 with the exact review binding', async () => {
+  test('rejects retired response packets and verifies current v8 with the exact review binding', async () => {
     const { retired } = await unsupportedCaseContracts();
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify(retired.responsePacket)),
@@ -908,8 +910,13 @@ describe('offline artifact verifier', () => {
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: {
+        recipient: 'Reserved response desk', type: 'registrar_report',
+        contactSource: 'fixture_registry', routeObservedAt: '2026-07-15T00:00:00.000Z',
+      },
     }, '2026-07-15T00:00:00.000Z');
     const packet = (await buildCaseResponsePacket(caseRecord, {
+      actionId: caseRecord.actions[0]!.id,
       category: 'Reserved review',
       affectedParty: 'Reserved service',
       abusiveUrls: ['https://review-binding.example/review'],
@@ -918,7 +925,7 @@ describe('offline artifact verifier', () => {
     }, '2026-07-15T01:00:00.000Z')).json;
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.state, 'verified');
-    assert.equal(verified.artifact.version, 7);
+    assert.equal(verified.artifact.version, 8);
 
     const forged = structuredClone(packet) as unknown as Record<string, unknown>;
     const authorisation = forged.authorisation as Record<string, unknown>;
@@ -931,13 +938,16 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('reconstructs the v7 provider lifecycle projection instead of trusting a re-signed summary', async () => {
+  test('reconstructs the v8 provider lifecycle projection instead of trusting a re-signed summary', async () => {
     const base = createCase({
       domain: 'provider-lifecycle.example',
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
-      action: { recipient: 'Reserved response desk', type: 'registrar_report' },
+      action: {
+        recipient: 'Reserved response desk', type: 'registrar_report',
+        contactSource: 'fixture_registry', routeObservedAt: '2026-07-15T00:00:00.000Z',
+      },
     }, '2026-07-15T00:00:00.000Z');
     const actionId = base.actions[0]!.id;
     let actions = base.actions;
@@ -954,6 +964,7 @@ describe('offline artifact verifier', () => {
       outcomeDetail: 'A later response supplied procedural detail only.', provenance: 'provider_detail_only',
     }, '2026-07-15T01:30:00.000Z');
     const packet = (await buildCaseResponsePacket({ ...base, actions, updatedAt: '2026-07-15T01:30:00.000Z' }, {
+      actionId,
       category: 'Reserved review',
       affectedParty: 'Reserved service',
       abusiveUrls: ['https://provider-lifecycle.example/review'],
@@ -983,11 +994,17 @@ describe('offline artifact verifier', () => {
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
     }, '2026-07-15T00:00:00.000Z');
     let actions = base.actions;
+    let originActionId: string | null = null;
     for (let index = 0; index <= MAX_RESPONSE_ACTION_HISTORY; index += 1) {
-      actions = appendCaseAction(actions, { recipient: `Bounded local reviewer ${index}` },
+      actions = appendCaseAction(actions, {
+        recipient: `Bounded local reviewer ${index}`,
+        originActionId,
+      },
         new Date(Date.parse('2026-07-15T00:00:00.000Z') + index * 60_000).toISOString());
+      originActionId = actions.at(-1)!.id;
     }
     const packet = (await buildCaseResponsePacket({ ...base, actions }, {
+      actionId: originActionId,
       category: 'Reserved review', affectedParty: 'Reserved service',
       abusiveUrls: ['https://bounded-packet-actions.example/review'],
       observedHarm: 'A reserved synthetic observation.', observedAt: '2026-07-15T00:00:00.000Z',
@@ -1011,19 +1028,21 @@ describe('offline artifact verifier', () => {
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: {
+        type: 'registrar_report',
+        recipient: 'c'.repeat(320),
+        contactSource: 's'.repeat(80),
+        routeObservedAt: '2026-07-15T00:00:00.000Z',
+        contactLimitations: Array.from({ length: 8 }, (_, index) => `${String(index)}${'l'.repeat(239)}`),
+      },
     }, '2026-07-15T00:00:00.000Z');
     const packet = (await buildCaseResponsePacket(caseRecord, {
+      actionId: caseRecord.actions[0]!.id,
       category: 'Credential review',
       affectedParty: 'Example service',
       abusiveUrls: ['https://bounded-response.example/review'],
       observedHarm: 'A credential request was observed.',
       observedAt: '2026-07-15T00:00:00.000Z',
-      contacts: [{
-        kind: 'registrar',
-        contact: 'c'.repeat(320),
-        source: 's'.repeat(80),
-        limitations: Array.from({ length: 8 }, (_, index) => `${String(index)}${'l'.repeat(239)}`),
-      }],
     }, '2026-07-15T01:00:00.000Z')).json;
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.state, 'verified');
@@ -1076,7 +1095,7 @@ describe('offline artifact verifier', () => {
       },
       (value) => {
         const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
-        contact.freshness = 'current';
+        contact.freshness = 'stale';
       },
       (value) => {
         const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;

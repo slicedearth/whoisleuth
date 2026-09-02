@@ -46,7 +46,7 @@ import { WORKFLOW_COMMAND_HANDLERS } from '../cli/workflow-command-runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
 import {
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
 import {
@@ -852,10 +852,13 @@ describe('canonical CLI command registry', () => {
 
   test('derives workspace archive help from the canonical current and public versions', () => {
     const help = commandHelp('inspect-archive');
+    const legacyVersions = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
     assert.match(help, new RegExp(`current version-${WORKSPACE_ARCHIVE_VERSION}`, 'u'));
-    assert.match(help, new RegExp(`exact public version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION} support`, 'u'));
-    assert.match(help, new RegExp(`archive v${WORKSPACE_ARCHIVE_VERSION}.*exact v${PUBLIC_WORKSPACE_ARCHIVE_VERSION} compatibility`, 'su'));
-    assert.doesNotMatch(help, new RegExp(`current version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION}(?:\\D|$)`, 'u'));
+    for (const version of legacyVersions) {
+      assert.match(help, new RegExp(`(?:version-|v)${version}\\b`, 'u'));
+      assert.doesNotMatch(help, new RegExp(`current version-${version}(?:\\D|$)`, 'u'));
+    }
+    assert.match(help, new RegExp(`archive v${WORKSPACE_ARCHIVE_VERSION}.*exact ${legacyVersions.map((version) => `v${version}`).join(' and ')} compatibility`, 'su'));
   });
 
   test('keeps public CLI exit-status guidance aligned with executable ownership', () => {
