@@ -95,7 +95,7 @@
                 <p>No expected settings are configured for this domain. Use the editor below to record reviewed expectations.</p>
               {/if}
             </section>
-            <div class="checks">
+            <div class="checks independent-grid">
               {#each item.report.checks as check}
                 <details class={check.status}>
                   <summary><span>{check.label}</span><strong>{check.status}</strong></summary>
@@ -176,7 +176,7 @@
   .audit-results{display:grid;gap:12px;margin-top:18px}
   .audit-results>article{padding:16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .audit-results h3{margin:0 0 4px;font:700 var(--text-md) var(--mono);overflow-wrap:anywhere}
-  .checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
+  .checks{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
   .checks details{min-width:0;padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--radius-sm)}
   .checks details.danger{border-left-color:var(--danger)}.checks details.warning{border-left-color:var(--amber)}.checks details.pass{border-left-color:var(--accent2)}
   .checks summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:var(--text-xs)}

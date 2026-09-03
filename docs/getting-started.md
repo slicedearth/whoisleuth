@@ -53,12 +53,24 @@ Architecture checks enforce that direction.
 
 ## Verification
 
-Run focused tests while changing a bounded surface. Before pushing a clean
-commit, run the same maintained quality, unit and browser gates as hosted CI:
+Before pushing a clean commit, run the same maintained quality, unit and
+browser gates as hosted CI:
 
 ```bash
 npm run verification:ci
 ```
+
+While iterating, run the owned unit, static and browser checks for the current
+dirty diff. The focused command builds once and runs all selected browser specs
+in one process:
+
+```bash
+npm run verification:focused
+```
+
+Pass repository-relative paths after `--` to verify a smaller declared change,
+or add `--list` to inspect the plan without running it. This is an iteration
+boundary, not release evidence.
 
 The parity command requires the exact `.nvmrc` runtime, a Node 26 executable on
 `PATH` for the CLI compatibility lane, and a clean worktree. Set

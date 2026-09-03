@@ -49,7 +49,7 @@
   </div>
   <p class="coverage">{summary.snapshotsReviewed} saved observation{summary.snapshotsReviewed === 1 ? '' : 's'} across {summary.domainsReviewed} domain{summary.domainsReviewed === 1 ? '' : 's'} reviewed. Search, weighting, and grouping remain local to this browser.</p>
   {#if filtered.length}
-    <div class="cluster-grid">
+    <div class="cluster-grid independent-grid">
       {#each filtered as cluster}
         <article>
           <div class="cluster-head">
@@ -87,7 +87,7 @@
   .section-head>span{flex:none;padding:4px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
   .filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);gap:10px;margin-top:16px}
   .coverage,.empty{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .cluster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+  .cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
   .cluster-grid>article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .cluster-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .cluster-head span{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}

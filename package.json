@@ -74,6 +74,7 @@
     "verification:journeys:check": "node tools/analyst-journey-assurance.mts",
     "verification:ownership:check": "node tools/verification-ownership.mts --check",
     "verification:plan": "node tools/verification-ownership.mts",
+    "verification:focused": "node tools/focused-verification.mts",
     "verification:timing:check": "node tools/verification-timing-profile.mts --check",
     "verification:timing:candidate": "node tools/verification-timing-profile.mts --candidate",
     "verification:timing:update-candidate": "node tools/verification-timing-profile.mts --update-candidate",

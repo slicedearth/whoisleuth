@@ -61,6 +61,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
   const domain = 'presentation-options.invalid';
   const presentationFixture = sectionedLookupFixture(domain);
   presentationFixture.diagnostics.whois.status = 'unsupported';
+  Object.assign(presentationFixture, {
+    acceptedResponseDisplayProbe: `${'x'.repeat(70_000)}complete-response-tail`,
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   const lookupRequests: string[] = [];
   let fixtureResponses = 0;
@@ -104,7 +107,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   expect(glanceGeometry.sectionScrollWidth).toBeLessThanOrEqual(glanceGeometry.sectionClientWidth + 1);
   expect(glanceGeometry.introWidth).toBeGreaterThanOrEqual(230);
   expect(glanceGeometry.noteRight).toBeLessThanOrEqual(glanceGeometry.sectionRight + 1);
-  const glanceMetrics = atAGlance.locator('.metrics > details');
+  const glanceMetrics = atAGlance.locator('.metric-trigger');
   await expect(glanceMetrics).toHaveCount(4);
   expect(await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => metric.getAttribute('data-metric-id')))).toEqual([
     'complete',
@@ -112,7 +115,6 @@ test('Lookup analyst question and disclosure controls change presentation withou
     'disagreements',
     'unresolved',
   ]);
-  const metricSummaries = glanceMetrics.locator('summary');
   await expect(glanceMetrics.locator('.metric-label')).toHaveText([
     /complete checks?/u,
     /limited checks?/u,
@@ -121,7 +123,6 @@ test('Lookup analyst question and disclosure controls change presentation withou
   ]);
   await expect(glanceMetrics.locator('.metric-icon')).toHaveCount(4);
   const metricPresentation = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
-    const summary = metric.querySelector('summary');
     const label = metric.querySelector('.metric-label');
     const icon = metric.querySelector('.metric-icon');
     return {
@@ -129,7 +130,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
       label: label?.textContent?.trim() ?? '',
       icon: icon?.getAttribute('data-icon') ?? '',
       iconHidden: icon?.getAttribute('aria-hidden'),
-      accessibleExplanation: summary?.getAttribute('aria-label') ?? '',
+      accessibleExplanation: metric.getAttribute('aria-label') ?? '',
     };
   }));
   expect(metricPresentation.every((metric) => (
@@ -140,10 +141,15 @@ test('Lookup analyst question and disclosure controls change presentation withou
       && metric.accessibleExplanation.length > metric.label.length
   ))).toBe(true);
   await expect(atAGlance.getByText('Show what this count includes')).toHaveCount(0);
-  expect(await metricSummaries.evaluateAll((summaries) => summaries.every((summary) => {
-    const box = summary.getBoundingClientRect();
-    return summary.scrollWidth <= summary.clientWidth + 1 && box.height <= 48;
+  expect(await glanceMetrics.evaluateAll((metrics) => metrics.every((metric) => {
+    const box = metric.getBoundingClientRect();
+    return metric.scrollWidth <= metric.clientWidth + 1 && box.height <= 48;
   }))).toBe(true);
+  const metricPositions = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
+    const element = metric as HTMLElement;
+    return { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth };
+  }));
+  await expect(atAGlance.locator('.glance-grid')).toHaveCSS('align-items', 'start');
   const nextActionsBeforeDisclosure = await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
     actions.map((action) => ({
       href: action.getAttribute('href'),
@@ -157,20 +163,26 @@ test('Lookup analyst question and disclosure controls change presentation withou
     const displayedCount = Number(await metric.getAttribute('data-displayed-count'));
     const omittedCount = Number(await metric.getAttribute('data-omitted-count'));
     expect(count).toBe(displayedCount + omittedCount);
-    expect(await metric.locator('.metric-items > .metric-item').count()).toBe(displayedCount);
-    const summary = metric.locator('summary');
-    await summary.focus();
-    await expect(summary).toBeFocused();
+    await metric.focus();
+    await expect(metric).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(metric).toHaveAttribute('open', '');
-    await expect(metric.locator('.metric-detail > p').first()).toBeVisible();
+    await expect(metric).toHaveAttribute('aria-expanded', 'true');
+    const metricDetail = atAGlance.locator('.metric-detail');
+    await expect(metricDetail).toHaveAttribute('data-selected-metric-id', await metric.getAttribute('data-metric-id') ?? '');
+    await expect(metricDetail.locator('header > p')).toBeVisible();
+    await expect(metricDetail.locator('.metric-items > .metric-item')).toHaveCount(displayedCount);
+    expect(await glanceMetrics.evaluateAll((metrics) => metrics.map((item) => {
+      const element = item as HTMLElement;
+      return { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth };
+    }))).toEqual(metricPositions);
     if (omittedCount > 0) {
-      await expect(metric.locator('.metric-omitted')).toContainText(`${omittedCount} additional contributing`);
+      await expect(metricDetail.locator('.metric-omitted')).toContainText(`${omittedCount} additional contributing`);
     } else {
-      await expect(metric.locator('.metric-omitted')).toHaveCount(0);
+      await expect(metricDetail.locator('.metric-omitted')).toHaveCount(0);
     }
     await page.keyboard.press('Space');
-    await expect(metric).not.toHaveAttribute('open', '');
+    await expect(metric).toHaveAttribute('aria-expanded', 'false');
+    await expect(metricDetail).toHaveCount(0);
   }
   expect(await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
     actions.map((action) => ({
@@ -240,7 +252,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await expect(familyToggle).toHaveText('');
   await expect(familyToggle).toHaveCSS('width', '17px');
   await expect(familyToggle).toHaveCSS('height', '17px');
-  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toBeVisible();
@@ -248,15 +260,21 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
 
   const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
-  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toHaveCount(0);
   await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
   await localNav.getByRole('link', { name: 'Web & DNS' }).click();
   await expect(page.locator('#evidence-dns')).toBeVisible();
   await expect(page).toHaveURL(/#web-evidence$/);
   await visibility.getByRole('button', { name: 'Expand all' }).click();
-  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
-  await expect(page.locator('#raw-data details')).toBeVisible();
-  await expect(page.locator('#raw-data details')).toHaveJSProperty('open', false);
+  await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
+  const validatedResponseRegion = page.locator('#raw-data .raw-response-scroll');
+  const validatedResponse = validatedResponseRegion.locator('pre');
+  await expect(validatedResponseRegion).toHaveAttribute('tabindex', '0');
+  await expect(validatedResponseRegion).toHaveAttribute('aria-labelledby', 'raw-data-title');
+  await expect(validatedResponse).toBeVisible();
+  await expect(validatedResponse).toContainText('complete-response-tail');
+  await expect(validatedResponse).not.toContainText('[preview omitted]');
+  await expect(page.locator('#raw-data details')).toHaveCount(0);
   await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
@@ -282,19 +300,31 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await expect(page.getByRole('button', { name: 'Expand Registration evidence' })).toBeVisible();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Expand Source quality evidence' })).toBeVisible();
-  await page.setViewportSize({ width: 320, height: 700 });
-  await expectNoHorizontalOverflow(page);
-  const mobileMetricGeometry = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
-    const summary = metric.querySelector('summary')!;
-    const box = metric.getBoundingClientRect();
-    return {
-      top: Math.round(box.top),
-      summaryContained: summary.scrollWidth <= summary.clientWidth + 1,
-      summaryHeight: summary.getBoundingClientRect().height,
-    };
-  }));
-  expect(new Set(mobileMetricGeometry.map((metric) => metric.top)).size).toBe(4);
-  expect(mobileMetricGeometry.every((metric) => metric.summaryContained && metric.summaryHeight <= 48)).toBe(true);
+  for (const surface of [
+    { width: 1280, height: 720, theme: 'light' },
+    { width: 1280, height: 720, theme: 'dark' },
+    { width: 1024, height: 768, theme: 'light' },
+    { width: 1024, height: 768, theme: 'dark' },
+    { width: 390, height: 844, theme: 'light' },
+    { width: 390, height: 844, theme: 'dark' },
+    { width: 320, height: 700, theme: 'light' },
+    { width: 320, height: 700, theme: 'dark' },
+  ] as const) {
+    await page.setViewportSize({ width: surface.width, height: surface.height });
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, surface.theme);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', surface.theme);
+    await expectNoHorizontalOverflow(page);
+    const metricGeometry = await glanceMetrics.evaluateAll((metrics) => metrics.map((metric) => {
+      const box = metric.getBoundingClientRect();
+      return {
+        top: Math.round(box.top),
+        contained: metric.scrollWidth <= metric.clientWidth + 1,
+        height: box.height,
+      };
+    }));
+    if (surface.width <= 390) expect(new Set(metricGeometry.map((metric) => metric.top)).size).toBe(4);
+    expect(metricGeometry.every((metric) => metric.contained && metric.height <= 48)).toBe(true);
+  }
 
   await page.reload();
   await page.locator('#query').fill(domain);

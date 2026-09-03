@@ -13,7 +13,7 @@
       <div class="counts"><span><strong>{groups.length}</strong> retained</span><span><strong>{shared.length}</strong> cross-domain</span><span><strong>{wildcard.length}</strong> wildcard</span></div>
     </header>
     <p class="intro">Each group contains names observed together in one public certificate record. Verify shared issuance independently.</p>
-    <div class="group-grid">
+    <div class="group-grid independent-grid">
       {#each groups.slice(0, 12) as group, index (group.certificateKey)}
         <article>
           <div class="group-head"><strong>Certificate group {index + 1}</strong>{#if group.wildcardObserved}<span>Wildcard</span>{/if}</div>
@@ -35,7 +35,7 @@
   .counts span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .counts strong{color:var(--text);font-size:var(--text-sm)}
   .intro,.limit{margin:10px 0 0;max-width:920px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  .group-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+  .group-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
   article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .group-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .group-head strong{font-size:var(--text-xs)}

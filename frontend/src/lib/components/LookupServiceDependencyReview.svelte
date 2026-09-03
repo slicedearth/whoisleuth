@@ -140,7 +140,7 @@
       links={dependencyMap.links}
     />
     {#if review.dependencies.length}
-      <div class="dependency-grid">
+      <div class="dependency-grid independent-grid">
         {#each review.dependencies as dependency}
           <article class:attention={dependency.state === 'candidate' || dependency.state === 'unresolved'}>
             <header><span>{dependency.recordType}</span><strong>{dependencyStateLabel(dependency)}</strong></header>
@@ -200,7 +200,7 @@
   .scope-control textarea{min-width:0;width:100%;resize:vertical;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:var(--text-xs) var(--mono);line-height:1.5;padding:8px}
   .scope-control textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .scope-control>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .dependency-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .dependency-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   article.attention{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
   article header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}

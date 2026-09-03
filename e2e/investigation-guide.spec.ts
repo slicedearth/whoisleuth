@@ -219,7 +219,30 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(planToggle).toBeFocused();
   await planToggle.press('Enter');
   await expect(guide.getByRole('button', { name: 'Hide full plan' })).toHaveAttribute('aria-expanded', 'true');
-  await expect(guide.locator('#investigation-plan > li')).toHaveCount(5);
+  const fullPlan = guide.locator('#investigation-plan');
+  const planItems = fullPlan.locator(':scope > li');
+  await expect(planItems).toHaveCount(5);
+  await expect(fullPlan).toHaveCSS('align-items', 'start');
+  const fourthStepHeight = (await planItems.nth(3).boundingBox())?.height ?? 0;
+  await planItems.nth(2).locator('summary').click();
+  expect((await planItems.nth(3).boundingBox())?.height ?? 0).toBeCloseTo(fourthStepHeight, 0);
+  await expect(guide.locator('.secondary-details')).toHaveCSS('align-items', 'flex-start');
+  for (const surface of [
+    { width: 1280, height: 720, theme: 'light' },
+    { width: 1280, height: 720, theme: 'dark' },
+    { width: 1024, height: 768, theme: 'light' },
+    { width: 1024, height: 768, theme: 'dark' },
+    { width: 390, height: 844, theme: 'light' },
+    { width: 390, height: 844, theme: 'dark' },
+    { width: 320, height: 700, theme: 'light' },
+    { width: 320, height: 700, theme: 'dark' },
+  ] as const) {
+    await page.setViewportSize({ width: surface.width, height: surface.height });
+    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, surface.theme);
+    const stepRows = await planItems.evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)));
+    expect(new Set(stepRows).size).toBe(surface.width <= 900 ? 5 : 3);
+    await expectNoHorizontalOverflow(page);
+  }
   expect(analysisRequests).toEqual([]);
 
   const stored = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);

@@ -91,7 +91,7 @@
   </header>
 
   {#if records.length}
-    <ol>
+    <ol class="independent-grid">
       {#each visibleRecords as record (record.id)}
         <li id={`retained-${record.id}`} tabindex="-1" class:focused={record.id === focusId}>
           <div class="record-heading">
@@ -135,7 +135,7 @@
   .section-head>div>p:not(.eyebrow),.projection-note,.empty p,li>p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .section-head>div>p:not(.eyebrow){margin:6px 0 0}
   .section-head>span{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
-  ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:15px 0 0;padding:0;list-style:none}
+  ol{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:15px 0 0;padding:0;list-style:none}
   li{min-width:0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   li.focused{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accent-rgb) / .12)}
   .record-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}

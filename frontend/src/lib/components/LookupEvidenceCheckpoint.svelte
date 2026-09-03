@@ -88,7 +88,7 @@
       <input type="checkbox" checked={transitionMode} onchange={(event) => setTransitionMode(event.currentTarget.checked)}>
       <span><strong>Plan an acquisition transition</strong><small>Declare whether each selected fact should be preserved, changed, or manually reviewed. A later Lookup verifies only what its sources can observe.</small></span>
     </label>
-    <div class="fact-grid">
+    <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
         <label>
           <input type="checkbox" checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
@@ -159,7 +159,7 @@
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
   h4,header p{margin:0}h4{margin-top:3px;font:700 var(--text-md) var(--mono)}
   header p:not(.eyebrow){max-width:760px;margin-top:6px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .fact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .fact-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .fact-grid label{display:flex;gap:9px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);cursor:pointer}
   .fact-grid input{flex:0 0 auto;margin-top:2px}
   .fact-grid span,.fact-grid strong,.fact-grid small{display:block;min-width:0}

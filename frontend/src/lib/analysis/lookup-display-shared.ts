@@ -136,69 +136,6 @@ export const boundedTechnologyText = (value: unknown, maxLength = 240): string =
     .trim()
     .slice(0, maxLength);
 
-export function boundedJsonPreview(
-  value: unknown,
-  maximumCharacters = 65_536,
-): { text: string; truncated: boolean } {
-  let remainingValues = 2_000;
-  let remainingCharacters = Math.max(1_024, Math.trunc(maximumCharacters / 2));
-  let truncated = false;
-
-  const project = (current: unknown, depth: number): unknown => {
-    remainingValues -= 1;
-    if (remainingValues < 0 || depth > MAX_LOOKUP_DISPLAY_OBJECT_DEPTH) {
-      truncated = true;
-      return '[preview omitted]';
-    }
-    if (current === null || typeof current === 'boolean') return current;
-    if (typeof current === 'number') return Number.isFinite(current) ? current : '[invalid number]';
-    if (typeof current === 'string') {
-      const retained = current.slice(0, Math.max(0, remainingCharacters));
-      remainingCharacters -= retained.length;
-      if (retained.length < current.length) truncated = true;
-      return retained;
-    }
-    if (Array.isArray(current)) {
-      const output: unknown[] = [];
-      const maximumItems = Math.min(50, current.length);
-      for (let index = 0; index < maximumItems; index += 1) {
-        if (remainingValues <= 0 || remainingCharacters <= 0) break;
-        output.push(project(current[index], depth + 1));
-      }
-      if (output.length < current.length) {
-        truncated = true;
-        output.push(`[${current.length - output.length} array items omitted]`);
-      }
-      return output;
-    }
-    if (typeof current === 'object') {
-      const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-      let inspected = 0;
-      for (const key in current as Record<string, unknown>) {
-        if (!Object.prototype.hasOwnProperty.call(current, key)) continue;
-        if (inspected >= 50 || remainingValues <= 0 || remainingCharacters <= 0) {
-          truncated = true;
-          break;
-        }
-        inspected += 1;
-        const retainedKey = key.slice(0, 160);
-        remainingCharacters -= retainedKey.length;
-        output[retainedKey] = project((current as Record<string, unknown>)[key], depth + 1);
-      }
-      return output;
-    }
-    truncated = true;
-    return '[unsupported value]';
-  };
-
-  const serialized = JSON.stringify(project(value, 0), null, 2) ?? '';
-  if (serialized.length <= maximumCharacters) return { text: serialized, truncated };
-  return {
-    text: `${serialized.slice(0, Math.max(0, maximumCharacters - 20))}\n[preview omitted]`,
-    truncated: true,
-  };
-}
-
 export function formatDate(value: unknown): string {
   if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return '—';
   const source = String(value).slice(0, 128);

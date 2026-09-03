@@ -8,7 +8,6 @@ export { buildLookupRegistryDisplay } from './lookup-registry-display.ts';
 
 export {
   boundedTechnologyText,
-  boundedJsonPreview,
   dateTimeAttribute,
   formatDate,
   isRecord,

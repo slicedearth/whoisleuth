@@ -132,7 +132,7 @@
   <details class="contact-inventory">
     <summary>Published contacts · {populatedRoles.length} role{populatedRoles.length === 1 ? '' : 's'}{parsed.entitiesTruncated ? ' · capped' : ''}</summary>
     <div>
-      {#if parsed.entitiesTruncated}<p>{source} contact data exceeded local display limits. Review the raw response for the complete upstream payload.</p>{/if}
+      {#if parsed.entitiesTruncated}<p>{source} contact data exceeded local display limits. Review its data in the validated lookup response for the complete accepted upstream payload.</p>{/if}
       {#each populatedRoles as role}
         <section>
           <h4>{role}{truncatedEntityRoles.includes(role) ? ' · capped' : ''}</h4>

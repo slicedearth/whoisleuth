@@ -23,7 +23,7 @@
 
   <details class="reference-browser">
     <summary><span>Browse documentation</span><strong>{currentLabel}</strong></summary>
-    <nav aria-label="Documentation">
+    <nav class="independent-grid" aria-label="Documentation">
       {#each PUBLIC_REFERENCE_GROUPS as group}
         <section aria-labelledby={`mobile-reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>
           <h2 id={`mobile-reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>{group.label}</h2>
@@ -58,7 +58,7 @@
     .reference-browser[open]>summary::after{content:'−'}
     .reference-browser>summary span{color:var(--muted);font-size:var(--text-2xs)}
     .reference-browser>summary strong{margin-left:auto;color:var(--text);font-size:var(--text-xs);text-align:right}
-    .reference-browser>nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:16px;border-top:1px solid var(--border)}
+    .reference-browser>nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:16px;border-top:1px solid var(--border)}
     .reference-browser section{min-width:0}
     .reference-browser h2{margin-inline:0}
     .reference-browser section>a{display:block;padding:6px 0;color:var(--muted);font:650 var(--text-xs) var(--mono);line-height:1.4;overflow-wrap:anywhere}

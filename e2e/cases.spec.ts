@@ -164,6 +164,16 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
   await expect(report).toContainText('Denominator: 3 inspected Cases');
   await report.getByLabel('Time window').selectOption('all');
+  await report.getByText('Exact current-state and action-type counts', { exact: true }).click();
+  await report.getByText('Typed-event duration context', { exact: true }).click();
+  const exactSections = report.locator('.exact-grid > section');
+  const durationCards = report.locator('.duration-grid > article');
+  expect(new Set(await exactSections.evaluateAll((sections) => sections.map((section) => Math.round(section.getBoundingClientRect().top)))).size).toBe(2);
+  expect(new Set(await durationCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().top)))).size).toBe(2);
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(new Set(await exactSections.evaluateAll((sections) => sections.map((section) => Math.round(section.getBoundingClientRect().top)))).size).toBe(2);
+  expect(new Set(await durationCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().top)))).size).toBe(2);
+  await expectNoHorizontalOverflow(page);
 
   const pending = page.waitForEvent('download');
   await report.getByRole('button', { name: 'Export aggregate JSON' }).click();

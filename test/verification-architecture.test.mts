@@ -15,6 +15,10 @@ import {
 } from '../tools/playwright-execution-contract.mts';
 import { createTestDurationReport } from '../tools/test-duration-reporter.mts';
 import {
+  buildFocusedVerificationExecution,
+  parseFocusedVerificationOptions,
+} from '../tools/focused-verification.mts';
+import {
   buildBalancedBrowserShardPlan,
   buildVerificationTimingUpdateCandidate,
   MAX_TIMING_PROVENANCE,
@@ -305,6 +309,51 @@ describe('verification architecture contracts', () => {
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+  });
+
+  test('consolidates a user-interface change into one bounded focused execution plan', () => {
+    const ownership = buildVerificationOwnershipPlan([
+      'frontend/src/lib/components/LookupAtAGlance.svelte',
+      'e2e/lookup-interaction-design.spec.ts',
+    ]);
+    const execution = buildFocusedVerificationExecution(ownership);
+    const ids = execution.commands.map((command) => command.id);
+
+    assert.equal(ids.filter((id) => id === 'typecheck').length, 1);
+    assert.equal(ids.filter((id) => id === 'check').length, 1);
+    assert.equal(ids.filter((id) => id === 'build').length, 1);
+    assert.equal(ids.filter((id) => id === 'architecture:check').length, 1);
+    assert.ok(ids.includes('verification:journeys:check'));
+    assert.ok(ids.includes('verification:timing:check'));
+    assert.ok(ids.includes('diff-whitespace'));
+    assert.ok(execution.browserSpecs.includes('e2e/lookup-interaction-design.spec.ts'));
+    assert.ok(execution.browserSpecs.includes('e2e/accessibility.spec.ts'));
+    assert.ok(execution.browserSpecs.includes('e2e/design-system.spec.ts'));
+    assert.ok(!ids.includes('test:e2e:built'));
+    assert.ok(!ids.includes('verification:ci'));
+    assert.deepEqual(execution.deferredSpecialisedChecks, []);
+  });
+
+  test('retains delivery-only security checks outside dirty-tree verification', () => {
+    const ownership = buildVerificationOwnershipPlan(['lib/safe-fetch.mts']);
+    const execution = buildFocusedVerificationExecution(ownership);
+    assert.deepEqual(execution.deferredSpecialisedChecks, ['staged-security']);
+    assert.ok(execution.commands.some((command) => command.id === 'test:mutation'));
+  });
+
+  test('accepts automatic or explicit focused paths and rejects ambiguous options', () => {
+    assert.deepEqual(parseFocusedVerificationOptions([]), { list: false, changed: true, paths: [] });
+    assert.deepEqual(parseFocusedVerificationOptions(['--changed', '--list']), { list: true, changed: true, paths: [] });
+    assert.deepEqual(parseFocusedVerificationOptions(['frontend/src/app.css']), {
+      list: false,
+      changed: false,
+      paths: ['frontend/src/app.css'],
+    });
+    assert.throws(
+      () => parseFocusedVerificationOptions(['--changed', 'frontend/src/app.css']),
+      /Usage/u,
+    );
+    assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
   });
 
   test('binds every version-one analyst journey to enabled semantic mobile tests and one shard', () => {

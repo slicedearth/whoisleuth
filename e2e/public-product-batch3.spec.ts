@@ -67,10 +67,23 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.reference-body.has-sections')).toHaveCount(0);
   await expect(page.locator('.public-section-navigation.inline')).toBeVisible();
   expect((await page.locator('.reference-document-slot').boundingBox())?.width ?? 0).toBeGreaterThan(800);
+  const startNotes = page.locator('.start-notes');
+  await expect(startNotes).toHaveCSS('align-items', 'start');
+  const installedHelpNote = startNotes.locator(':scope > p');
+  const helpNoteHeight = (await installedHelpNote.boundingBox())?.height ?? 0;
+  await startNotes.locator('.update-instructions > summary').click();
+  expect((await installedHelpNote.boundingBox())?.height ?? 0).toBeCloseTo(helpNoteHeight, 0);
+  const behaviourDetails = page.locator('.additional-behaviour > details');
+  await expect(page.locator('.additional-behaviour')).toHaveCSS('align-items', 'start');
+  const closedBehaviourHeight = (await behaviourDetails.nth(1).boundingBox())?.height ?? 0;
+  await behaviourDetails.nth(0).locator(':scope > summary').click();
+  expect((await behaviourDetails.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(closedBehaviourHeight, 0);
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.locator('.reference-tree')).toBeHidden();
   await expect(page.locator('.reference-browser')).toBeVisible();
+  await page.locator('.reference-browser > summary').click();
+  await expect(page.locator('.reference-browser > nav')).toHaveCSS('align-items', 'start');
   expect((await page.locator('.reference-document-slot').boundingBox())?.width ?? 0).toBeGreaterThan(880);
   await expectNoHorizontalOverflow(page);
 
@@ -220,6 +233,13 @@ test('opens, filters and downloads a large synthetic example without workspace a
   expect(before.workspace).toBe(false);
 
   const gallery = page.getByTestId('public-example-gallery');
+  const exampleCards = gallery.locator('article[data-example]');
+  await expect(exampleCards).toHaveCount(4);
+  await expect(gallery.locator('.example-grid')).toHaveCSS('align-items', 'start');
+  const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
+  await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
+  await expect(exampleCards.nth(0).getByRole('textbox')).toBeVisible();
+  expect((await exampleCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(unchangedPeerHeight, 0);
   await gallery.getByLabel('Format').selectOption('JSON');
   await expect(gallery.locator('article[data-example]')).toHaveCount(1);
   const example = gallery.locator('article[data-example="case-handoff"]');

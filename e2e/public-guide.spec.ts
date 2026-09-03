@@ -217,8 +217,16 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await practice.getByLabel('Review the official domain and trusted allowlists before generating candidates.').check();
   await expect(practice.getByText('Defensible choice')).toBeVisible();
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
-  await expect(page.locator('.tool-guide article')).toHaveCount(5);
-  await expect(page.locator('.reference-guide article')).toHaveCount(1);
+  const toolCards = page.locator('.tool-guide article');
+  const referenceCards = page.locator('.reference-guide article');
+  await expect(toolCards).toHaveCount(5);
+  await expect(referenceCards).toHaveCount(1);
+  const desktopCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
+  expect(desktopCardWidths.at(-1) ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
+  expect((await referenceCards.first().boundingBox())?.width ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
+  const finalToolDefinitionRows = toolCards.last().locator('dl > div');
+  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBe(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
@@ -242,6 +250,13 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.reference-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  const mobileCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
+  expect(new Set(mobileCardWidths).size).toBe(1);
+  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBeLessThan(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   await expectNoHorizontalOverflow(page);
 });
 
