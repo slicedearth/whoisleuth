@@ -937,6 +937,97 @@ test('terminal IP and ASN registration renders only bounded normalized public fi
   assert.doesNotMatch(asn, /Reverse DNS|private-asn-contact/);
 });
 
+test('terminal network registration keeps one-sided ranges and malformed retained lists explicit', () => {
+  const ipv4StartOnly = lookupResult({
+    rdap: {
+      parsed: {
+        startAddress: '192.0.2.0',
+        cidrs: [{ privateValue: 'must-not-render' }],
+        statuses: [{ privateValue: 'must-not-render' }],
+      },
+    },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const startOutput = formatTerminalLookup(buildCliLookupDocument(
+    '192.0.2.8',
+    { type: 'ipv4', value: '192.0.2.8' },
+    ipv4StartOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(startOutput, /Address start\s+192\.0\.2\.0/u);
+  assert.match(startOutput, /CIDR prefixes\s+1 malformed retained entry omitted/u);
+  assert.match(startOutput, /Statuses\s+1 malformed retained entry omitted/u);
+  assert.doesNotMatch(startOutput, /must-not-render|\[object Object\]/u);
+
+  const ipv6EndOnly = lookupResult({
+    rdap: { parsed: { endAddress: '2001:db8::ffff' } },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'partial' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const endOutput = formatTerminalLookup(buildCliLookupDocument(
+    '2001:db8::1',
+    { type: 'ipv6', value: '2001:db8::1' },
+    ipv6EndOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(endOutput, /Address end\s+2001:db8::ffff/u);
+
+  const asnStartOnly = lookupResult({
+    rdap: { parsed: { startAutnum: 64496 } },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const asnOutput = formatTerminalLookup(buildCliLookupDocument(
+    'AS64496',
+    { type: 'asn', value: 'AS64496' },
+    asnStartOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(asnOutput, /ASN start\s+64496/u);
+});
+
+test('terminal deep-domain presentation omits malformed DNS records and URL relationships', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      confidence: 'high',
+      dns: {
+        source: 'dns',
+        status: 'partial',
+        complete: false,
+        records: { a: [{ privateValue: 'must-not-render' }] },
+      },
+      pageIdentity: {
+        source: 'html',
+        status: 'success',
+        complete: true,
+        canonical: { url: 'not a retained URL', privateValue: 'must-not-render' },
+      },
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'partial',
+        findings: [{ id: 'fixture-technology', name: 'Fixture technology', roles: ['application_platform'], evidence: [] }],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-13T00:00:00.000Z',
+    'deep',
+  ));
+
+  assert.match(output, /Technology\s+Partial · 1 indicator/u);
+  assert.match(output, /Indicators\s+Fixture technology/u);
+  assert.match(output, /Nameservers\s+Unavailable · identity does not establish operator or web-host ownership/u);
+  assert.doesNotMatch(output, /^A\s+|Canonical\s+|must-not-render|\[object Object\]/mu);
+});
+
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
   const result = lookupResult({
     availability: {
