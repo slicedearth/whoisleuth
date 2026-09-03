@@ -581,7 +581,8 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
-  await expect(pageComparison.getByText(/related matches cannot corroborate one another/i)).toBeVisible();
+  await expect(pageComparison.getByText(/page-identity matches remain review context and do not add Risk points/i)).toBeVisible();
+  await expect(pageComparison.getByText(/separately reviewed favicon and official-asset observations may contribute/i)).toBeVisible();
 
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
   await expect(snapshots.getByText(/Differences are review cues/)).toBeVisible();
