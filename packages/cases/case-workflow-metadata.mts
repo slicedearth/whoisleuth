@@ -11,7 +11,7 @@ import {
   MAX_TAGS_PER_CASE,
   type CaseRecord,
 } from './case-record-contracts.mts';
-import { caseInvestigationContext } from './case-investigation-context.mts';
+import { caseInvestigationContext } from './case-record-operations.mts';
 import { normalizeTags } from './case-record-core.mts';
 
 export const CASE_TYPE_TAG_PREFIX = 'case-type:';

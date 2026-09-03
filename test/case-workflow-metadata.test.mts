@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  caseInvestigationContextAssertion,
+  type CaseRecord,
+} from '../packages/cases/case-model.mts';
+import {
   CASE_TYPE_TAG_PREFIX,
   caseFreeformTags,
-  caseInvestigationContextAssertion,
   caseIncidentTargetAssertion,
   caseIncidentTargets,
   caseNumber,
@@ -14,8 +17,7 @@ import {
   caseTypeSummary,
   formattedCaseNumber,
   normalizeCaseIncidentTargetUrl,
-  type CaseRecord,
-} from '../packages/cases/case-model.mts';
+} from '../packages/cases/case-workflow-metadata.mts';
 
 const NOW = '2026-09-04T00:00:00.000Z';
 

@@ -54,6 +54,18 @@ export {
   CASE_DISPOSITIONS,
   CASE_REVIEW_REASONS,
   CASE_STATUSES,
+  caseLookupTarget,
+  compareCaseEvidence,
+  dispositionLabel,
+  latestCaseEvidence,
+  MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_BRAND_PROFILE_IDS,
+  caseInvestigationContext,
+  parseIncidentUrlContext,
+  sourceLabel,
+  statusLabel,
+} from './analysis/case-model.ts';
+export {
   CASE_TYPES,
   caseFreeformTags,
   caseIncidentTargetAssertion,
@@ -65,18 +77,8 @@ export {
   caseTypeRecords,
   caseTypeSummary,
   formattedCaseNumber,
-  caseLookupTarget,
-  compareCaseEvidence,
-  dispositionLabel,
-  latestCaseEvidence,
-  MAX_CASE_IMPORT_BYTES,
   MAX_CASE_INCIDENT_TARGETS,
-  MAX_CASE_BRAND_PROFILE_IDS,
-  caseInvestigationContext,
-  parseIncidentUrlContext,
-  sourceLabel,
-  statusLabel,
-} from './analysis/case-model.ts';
+} from '../../../packages/cases/case-workflow-metadata.mts';
 export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
@@ -131,8 +133,6 @@ export type {
   CaseInvestigationBranchState,
 } from './analysis/case-investigation-branch-model.ts';
 export type {
-  CaseIncidentTarget,
-  CaseTypeId,
   CaseConclusionEvidence,
   CaseConclusionInput,
   CaseInvestigationContext,
@@ -144,6 +144,10 @@ export type {
   EvidenceChange,
   EvidenceFactor,
 } from './analysis/case-model.ts';
+export type {
+  CaseIncidentTarget,
+  CaseTypeId,
+} from '../../../packages/cases/case-workflow-metadata.mts';
 export type {
   ExternalFinding,
   ExternalFindingsCaseMergeResult,
