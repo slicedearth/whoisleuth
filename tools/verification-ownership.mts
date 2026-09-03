@@ -39,7 +39,7 @@ export const FULL_BATCH_RELEASE_GATES = Object.freeze([
 ] as const);
 
 type FullGate = typeof FULL_BATCH_RELEASE_GATES[number];
-type SpecialisedCheck =
+export type SpecialisedCheck =
   | 'architecture'
   | 'capability-catalogue'
   | 'privacy-catalogue'
@@ -190,7 +190,7 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
   Object.freeze({
     id: 'verification-tooling', area: 'maintainer verification tooling', priority: 30,
     matches: (value: string) => value.startsWith('tools/'),
-    focusedUnit: unit('test/ci-workflow.test.mts'),
+    focusedUnit: unit('test/ci-workflow.test.mts', 'test/verification-architecture.test.mts'),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'workflow-closure'),
     browserRequired: false,

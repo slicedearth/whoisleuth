@@ -128,7 +128,7 @@
   {/if}
 
   {#if visible.length}
-    <div class="cluster-grid">
+    <div class="cluster-grid independent-grid">
       {#each visible as cluster (cluster.id)}
         <article class:common={cluster.confidence === 'shared_infrastructure'}>
           <header>
@@ -189,7 +189,7 @@
   .section-head h2{margin:0}.section-head p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .controls{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
   .partial{margin:0;color:var(--amber);font:650 var(--text-xs) var(--mono)}
-  .cluster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   article{display:grid;gap:10px;min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   article.common{border-color:color-mix(in srgb,var(--amber) 35%,var(--border))}
   article>header{display:flex;align-items:center;justify-content:space-between;gap:8px}

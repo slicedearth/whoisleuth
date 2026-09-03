@@ -710,7 +710,7 @@
     <button class="plan-toggle btn" type="button" aria-expanded={planOpen} aria-controls={planOpen?'investigation-plan':undefined} onclick={() => planOpen = !planOpen}>{planOpen ? 'Hide full plan' : `Show full plan (${stages.length} steps)`}</button>
 
     {#if planOpen}
-      <ol id="investigation-plan" aria-label="Investigation guide steps">
+      <ol id="investigation-plan" class="independent-grid" aria-label="Investigation guide steps">
         {#each stages as stage,index}
           {@const progress = guide.stages.find((candidate) => candidate.id === stage.id)}
           {@const isCurrent = currentStage?.id === stage.id}
@@ -843,7 +843,7 @@
   .guide-complete>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .compact{flex:none;padding:7px 10px;font-size:var(--text-2xs)}
   .plan-toggle{margin-top:10px}
-  #investigation-plan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
+  #investigation-plan{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
   #investigation-plan>li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   summary{cursor:pointer}
   #investigation-plan>li summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px 9px;align-items:start;padding:12px;list-style:none}
@@ -865,7 +865,7 @@
   dl div{display:grid;grid-template-columns:105px minmax(0,1fr);gap:8px}
   dt{color:var(--muted);font:700 var(--text-2xs) var(--mono)}
   dd{margin:0;font-size:var(--text-2xs);line-height:1.45}
-  .secondary-details{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .secondary-details{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:10px}
   .secondary-details>details{flex:1 1 300px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .secondary-details>details>summary{padding:9px 10px;font:700 var(--text-2xs) var(--mono)}
   .evidence-checkpoint p{margin:0;padding:0 10px 10px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}

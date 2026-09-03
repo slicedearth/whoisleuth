@@ -35,7 +35,7 @@
   } = $props();
 </script>
 
-<div class="summaries stat-grid" class:with-top={hasAssessment}>
+<div class="summaries stat-grid independent-grid" class:with-top={hasAssessment}>
   {#each facts as fact}
     <article>
       <small>{fact.label}</small>
@@ -62,7 +62,7 @@
   {/each}
 </div>
 
-<div class="diagnostics stat-grid" role="group" aria-label="Source diagnostics">
+<div class="diagnostics stat-grid independent-grid" role="group" aria-label="Source diagnostics">
   {#each diagnostics as diagnostic}
     <article>
       <small>{diagnostic.source}</small>

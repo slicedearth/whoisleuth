@@ -62,7 +62,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
   const sourceQualityColour = await page.locator('#source-quality-title').evaluate((heading) => getComputedStyle(heading).color);
   const caseResponseColour = await page.locator('#case-response-title').evaluate((heading) => getComputedStyle(heading).color);
@@ -582,14 +582,20 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage.getByLabel('Registration days')).toHaveValue('10');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
+  const summaryCards = page.locator('.summaries article');
+  await expect(page.locator('.summaries')).toHaveCSS('align-items', 'start');
+  const summaryPeerHeight = (await summaryCards.nth(1).boundingBox())?.height ?? 0;
   await registrationFact.getByText('Inspect evidence').click();
+  expect((await summaryCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(summaryPeerHeight, 0);
   await expect(registrationFact).toContainText('Registry RDAP');
   await expect(registrationFact).toContainText('Authority-aware registration evidence');
   await expect(registrationFact).toContainText('does not recalculate or override');
 
   const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
-  const diagnosticArticles = page.locator('.diagnostics article');
-  const diagnosticStates = page.locator('.diagnostics article > strong');
+  const diagnosticGrid = page.getByRole('group', { name: 'Source diagnostics' });
+  const diagnosticArticles = diagnosticGrid.locator('article');
+  const diagnosticStates = diagnosticGrid.locator('article > strong');
+  await expect(diagnosticGrid).toHaveCSS('align-items', 'start');
   expect(await diagnosticArticles.count()).toBeGreaterThan(0);
   expect(await diagnosticStates.count()).toBe(await diagnosticArticles.count());
   expect(await diagnosticStates.evaluateAll((states) => {
@@ -602,9 +608,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(rdapDiagnostic).toContainText('IANA RDAP bootstrap discovery');
   await expect(rdapDiagnostic).toContainText('Selected endpoint');
 
-  // Detailed registry and raw unified records stay collapsed and subordinate.
+  // Detailed registry records stay collapsed. The complete accepted response is
+  // available immediately within the explicitly opened Advanced family.
   await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
-  await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#raw-data pre')).toBeVisible();
+  await expect(page.locator('details.raw')).toHaveCount(0);
 
   // Keyboard operation: activating an anchor link moves to the section.
   const registryLink = localNav.getByRole('link', { name: 'Registration' });

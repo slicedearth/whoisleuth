@@ -469,6 +469,18 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .stat-grid strong { display: block; margin-top: 6px; font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
 .stat-grid p { margin: 5px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
 
+/* ---------- Content grids ----------
+   Repeated cards and disclosures often change height independently. Opt those
+   collections into intrinsic item sizing here instead of restating alignment in
+   route-scoped CSS. Grids that intentionally compare like-for-like values keep
+   the browser's default stretch behaviour. */
+.independent-grid {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+}
+.independent-grid > * { min-width: 0; }
+
 /* ---------- Cards, sections, disclosures ---------- */
 .card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(180deg,rgb(var(--panel-rgb) / .98),rgb(var(--panel-rgb) / .94)); box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / var(--card-shadow-alpha)),inset 0 1px rgb(var(--overlay-rgb) / .025); }
 a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }

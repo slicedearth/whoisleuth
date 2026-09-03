@@ -154,7 +154,7 @@
           <h3 id="recent-work-title">Recent saved work</h3>
           <p>Most recently observed items in the current bounded local index.</p>
         </div>
-        <ol class="result-list" aria-label="Recent local investigation work">
+        <ol class="result-list independent-grid" aria-label="Recent local investigation work">
           {#each recentResults as result (result.entityId)}
             <li>{@render resultCard(result)}</li>
           {/each}
@@ -163,7 +163,7 @@
     {/if}
 
     {#if response?.state === 'results'}
-      <ol class="result-list" aria-label="Local investigation search results">
+      <ol class="result-list independent-grid" aria-label="Local investigation search results">
         {#each response.results as result (result.entityId)}
           <li>{@render resultCard(result)}</li>
         {/each}
@@ -186,7 +186,7 @@
   .source-warning,.index-limitations,.limitations{margin-top:12px;color:var(--muted);font-size:var(--text-xs)}
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .source-warning ul,.index-limitations ul,.limitations ul{margin:8px 0 0;padding-left:20px;line-height:1.5}
-  .result-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
+  .result-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
   .recent-work{margin-top:18px;padding-top:15px;border-top:1px solid var(--border)}
   .recent-work>div h3{margin:0;font:700 var(--text-sm) var(--mono)}
   .recent-work>div p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}

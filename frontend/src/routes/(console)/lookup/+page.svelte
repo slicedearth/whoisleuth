@@ -31,7 +31,6 @@
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
   import {
-    boundedJsonPreview,
     boundedTechnologyText,
     dateTimeAttribute,
     formatDate,
@@ -100,7 +99,6 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
-  let rawEvidenceOpen=$state(false);
   let completedLookupTarget=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
   let profile=$state<BrandProfile|null>(null);
@@ -151,9 +149,7 @@
     try{const value=entries[0];if(!value)return false;const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
   });
   const lookupView=$derived(createLookupViewModel(result));
-  const rawEvidencePreview=$derived.by(()=>rawEvidenceOpen&&result
-    ? boundedJsonPreview(result)
-    : {text:'',truncated:false});
+  const validatedResponseJson=$derived.by(()=>result ? JSON.stringify(result, null, 2) : '');
   const availability=$derived(lookupView.availability);
   const rdap=$derived(lookupView.rdap);
   const registrarRdap=$derived(lookupView.registrarRdap);
@@ -389,7 +385,6 @@
   function clearCompletedLookupContext(){
     invalidateCaseActions();
     invalidateWatchlistActions();
-    rawEvidenceOpen=false;
     result=null;
     completedLookupTarget='';
     completedLookupDepth=null;
@@ -686,7 +681,7 @@
     if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!entries.length||loading)return;
     if(entries.length>1){
-      rawEvidenceOpen=false;result=null;error='';
+      result=null;error='';
       const handoffResult=saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
       if(!handoffResult.saved){error='This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';return;}
       await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
@@ -696,7 +691,7 @@
     invalidateCaseActions();
     invalidateWatchlistActions();
     lookupAnchorController?.stop();
-    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition='unreviewed';caseReviewReason='';linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition='unreviewed';caseReviewReason='';linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
@@ -1029,8 +1024,8 @@
       <h3 id="advanced-evidence-title">Advanced evidence</h3>
       <LookupFamilySummary
         label="Advanced evidence"
-        description="Open optional external intelligence and the bounded unified response only when the investigation requires their additional detail."
-        metrics={[`${threatIntelligenceProviders.length} external providers`, 'Raw response available']}
+        description="Open optional external intelligence and the full validated lookup response only when the investigation requires their additional detail."
+        metrics={[`${threatIntelligenceProviders.length} external providers`, 'Full response available']}
         expanded={sectionDetailVisible('advanced-evidence')}
         onpreload={()=>preloadLookupSection('advanced-evidence')}
         onshow={()=>void showSectionDetail('advanced-evidence')}
@@ -1050,14 +1045,14 @@
           </section>
         {/if}
         <section class="advanced-block" id="raw-data" aria-labelledby="raw-data-title">
-          <h4 id="raw-data-title">Raw evidence</h4>
-          <details class="raw card" ontoggle={(event)=>rawEvidenceOpen=(event.currentTarget as HTMLDetailsElement).open}>
-            <summary>Bounded raw-response preview</summary>
-            {#if rawEvidenceOpen}
-              <pre>{rawEvidencePreview.text}</pre>
-              {#if rawEvidencePreview.truncated}<p class="card-note">Preview capped for browser responsiveness. Use the deliberate bounded evidence export for the complete portable projection.</p>{/if}
-            {/if}
-          </details>
+          <h4 id="raw-data-title">Validated lookup response</h4>
+          <div class="raw card">
+            <p class="card-note">Full response returned to this browser after validation. Source-specific limits and unavailable fields remain explicit.</p>
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex (Safari requires a focusable scroll region.) -->
+            <div class="raw-response-scroll" role="group" tabindex="0" aria-labelledby="raw-data-title">
+              <pre>{validatedResponseJson}</pre>
+            </div>
+          </div>
         </section>
       {/if}
     </section>
@@ -1127,8 +1122,10 @@
   .finding-list span{display:block;margin-top:3px}
 
   .raw{padding:0;overflow:hidden}
-
-  .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
+  .raw>.card-note{margin:0;padding:10px var(--card-pad);border-bottom:1px solid var(--border)}
+  .raw-response-scroll{max-height:520px;overflow:auto}
+  .raw-response-scroll:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+  .raw pre{margin:0;padding:var(--card-pad);font-size:var(--text-xs)}
 
   @media(max-width:700px){
     .detailed-assessment>summary{align-items:flex-start;flex-direction:column;gap:10px}
