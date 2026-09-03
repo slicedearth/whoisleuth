@@ -111,7 +111,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@netlify/blobs": "11.0.2",
+    "@netlify/blobs": "11.0.3",
     "@peculiar/x509": "^2.0.0",
     "express": "^5.2.1",
     "fflate": "0.8.3",
