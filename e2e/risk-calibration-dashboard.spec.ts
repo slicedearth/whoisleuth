@@ -9,7 +9,7 @@ import {
   RISK_CALIBRATION_DATASET_VERSION,
 } from '../cli/risk-calibration.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
-import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
 
@@ -31,8 +31,8 @@ function reports() {
     generatedAt: NOW,
     modelVersion: RISK_MODEL_VERSION,
     reviewThreshold: RISK_REVIEW_THRESHOLD,
-    previousModelVersion: 6,
-    explainPreviousRiskScore: explainRiskScoreV6,
+    previousModelVersion: 7,
+    explainPreviousRiskScore: explainRiskScoreV7,
   });
   return { detailed, summary: buildRiskCalibrationSummaryReport(detailed) };
 }

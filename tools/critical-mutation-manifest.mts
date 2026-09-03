@@ -6,7 +6,7 @@ export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
 
 export type CriticalMutant = Readonly<{
   id: string;
-  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'public_address_enforcement' | 'artifact_structure_integrity';
+  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'unreviewed_evidence_scoring' | 'public_address_enforcement' | 'artifact_structure_integrity';
   file: string;
   line: number;
   search: string;
@@ -53,6 +53,16 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     line: 99,
     search: "  if (!coverage.length || depth === 'unknown') state = 'unknown';",
     replacement: "  if (depth === 'unknown') state = 'unknown';",
+    focusedTests: Object.freeze(['test/scoring.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'scoring-unreviewed-page-match-remains-neutral',
+    area: 'unreviewed_evidence_scoring',
+    file: 'lib/risk-scoring.mts',
+    line: 86,
+    search: '  includePageBaselineMatch: false,',
+    replacement: '  includePageBaselineMatch: true,',
     focusedTests: Object.freeze(['test/scoring.test.mts']),
     timeoutMs: 20_000,
   }),

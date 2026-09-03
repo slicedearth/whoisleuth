@@ -1,6 +1,6 @@
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
-import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import type { CliArguments } from './arguments.mts';
 import { buildCliCommandCatalogue, formatCliCommandCatalogue, selectCliCommands } from './command-catalogue.mts';
 import {
@@ -231,8 +231,8 @@ async function runRiskCalibrationCommand(
     modelVersion: dependencies.riskModelVersion || RISK_MODEL_VERSION,
     reviewThreshold: dependencies.riskReviewThreshold || RISK_REVIEW_THRESHOLD,
     ...(!dependencies.explainRiskScore ? {
-      previousModelVersion: 6,
-      explainPreviousRiskScore: explainRiskScoreV6,
+      previousModelVersion: 7,
+      explainPreviousRiskScore: explainRiskScoreV7,
     } : {}),
   });
   if (!args.quiet) {

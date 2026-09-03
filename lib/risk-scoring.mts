@@ -68,11 +68,27 @@ const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   registered: 'registered',
 });
 
-// Version 7 caps each independent evidence family, treats generic operational
-// properties as supporting context, and reports collection quality separately
-// from the heuristic score. Missing evidence never contributes points.
-export const RISK_MODEL_VERSION = 7;
+// Version 8 keeps unreviewed whole-page similarity as visible review context
+// without assigning it Risk points. Reviewed favicon and official-asset
+// observations remain bounded within the brand-presentation family, generic
+// operational properties remain supporting context, and missing evidence never
+// contributes points.
+export const RISK_MODEL_VERSION = 8;
 export const RISK_REVIEW_THRESHOLD = 70;
+
+type RiskModelOptions = Readonly<{
+  modelVersion: number;
+  includePageBaselineMatch: boolean;
+}>;
+
+const CURRENT_RISK_MODEL: RiskModelOptions = Object.freeze({
+  modelVersion: RISK_MODEL_VERSION,
+  includePageBaselineMatch: false,
+});
+const RISK_MODEL_V7: RiskModelOptions = Object.freeze({
+  modelVersion: 7,
+  includePageBaselineMatch: true,
+});
 
 const RISK_STATE_BASE: Readonly<Record<string, number>> = Object.freeze({
   registered: 6,
@@ -179,7 +195,11 @@ function scoreQuality(input: RiskInput): ScoreEvidenceQuality {
 
 // Risk prioritizes a registered lookalike/typosquat domain for analyst review.
 // It is a heuristic indicator, never a maliciousness or safety verdict.
-function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily | null): RiskExplanation | null {
+function explainRiskScoreInternal(
+  input: RiskInput,
+  excludedFamily: RiskFamily | null,
+  model: RiskModelOptions,
+): RiskExplanation | null {
   const state = input.availability ?? input.state;
   if (typeof state !== 'string' || !RISK_STATES.has(state)) return null;
 
@@ -204,7 +224,9 @@ function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily |
   if (input.faviconMatch === true) add('brand-presentation', 'Favicon matches an official Brand Profile site', 18);
   else if (input.faviconNearMatch === true) add('brand-presentation', 'Favicon resembles an official Brand Profile site', 14);
   if (input.reusesOfficialAssets === true) add('brand-presentation', 'Official asset-host relationship observed', 6);
-  if (input.pageBaselineMatch === true) add('brand-presentation', 'Multiple independently compared page-identity components match the official baseline', 14);
+  if (model.includePageBaselineMatch && input.pageBaselineMatch === true) {
+    add('brand-presentation', 'Multiple independently compared page-identity components match the official baseline', 14);
+  }
 
   if (typeof input.phishingLanguageMatch === 'string' && input.phishingLanguageMatch.trim()) {
     add('credential-lure', 'Suspicious urgency language observed', 8);
@@ -249,7 +271,7 @@ function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily |
     'external-intelligence', 'corroboration', 'operational-support',
   ];
   return {
-    modelVersion: RISK_MODEL_VERSION,
+    modelVersion: model.modelVersion,
     score,
     rawScore,
     capped: score !== rawScore,
@@ -262,16 +284,16 @@ function explainRiskScoreInternal(input: RiskInput, excludedFamily: RiskFamily |
 }
 
 export function explainRiskScore(input: RiskInput): RiskExplanation | null {
-  return explainRiskScoreInternal(input, null);
+  return explainRiskScoreInternal(input, null, CURRENT_RISK_MODEL);
 }
 
 export function buildRiskScoreSensitivity(input: RiskInput): RiskScoreSensitivity | null {
-  const baseline = explainRiskScoreInternal(input, null);
+  const baseline = explainRiskScoreInternal(input, null, CURRENT_RISK_MODEL);
   if (!baseline) return null;
   const removableFamilies = REMOVABLE_RISK_FAMILIES
     .filter((family) => baseline.families.some((item) => item.id === family && item.contribution > 0));
   const scenarios = removableFamilies.map((excludedFamily) => {
-    const result = explainRiskScoreInternal(input, excludedFamily);
+    const result = explainRiskScoreInternal(input, excludedFamily, CURRENT_RISK_MODEL);
     const score = result?.score ?? baseline.score;
     return Object.freeze({ excludedFamily, score, difference: score - baseline.score });
   }).sort((left, right) => left.score - right.score || left.excludedFamily.localeCompare(right.excludedFamily));
@@ -295,6 +317,12 @@ export function buildRiskScoreSensitivity(input: RiskInput): RiskScoreSensitivit
 
 export function computeRiskScore(input: RiskInput): number | null {
   return explainRiskScore(input)?.score ?? null;
+}
+
+// Retained only for deterministic offline comparison of reviewed calibration
+// datasets. Runtime lookups always use the current model above.
+export function explainRiskScoreV7(input: RiskInput): RiskExplanation | null {
+  return explainRiskScoreInternal(input, null, RISK_MODEL_V7);
 }
 
 // Retained only for deterministic offline comparison of reviewed calibration

@@ -43,7 +43,7 @@ import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
 import { buildLookupSummaryModel } from './lookup-summary-model.ts';
 import { createPageBaseline } from './page-baseline.ts';
-import { comparePageBaselines } from './page-similarity.ts';
+import { comparePageBaselines, hasStrongPageIdentityReviewMatch } from './page-similarity.ts';
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.ts';
 import {
   explainOpportunityScore,
@@ -66,20 +66,6 @@ export interface LookupRouteAnalysisInput {
   hasReviewedCaseRecipient?: boolean;
   completedLookupDepth: LookupDepth | null;
   freshnessPolicy?: LookupFreshnessPolicyInput;
-}
-
-function pageBaselineRiskMatch(comparison: ReturnType<typeof comparePageBaselines>): boolean {
-  if (!comparison || comparison.partial) return false;
-  const strongMatches = comparison.components.filter((component) => {
-    if (component.partial) return false;
-    if (component.id === 'normalized_html' || component.id === 'form_structure') return component.status === 'same';
-    if (component.id === 'dom_structure') return component.status === 'same' || component.status === 'overlap';
-    if (component.id === 'visible_text') {
-      return component.status === 'same' || (component.agreementPercent ?? 0) >= 90;
-    }
-    return false;
-  });
-  return strongMatches.length >= 2;
 }
 
 function hasPublicRegistrantContact(value: unknown): boolean {
@@ -426,7 +412,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)
       || entry.id.startsWith('external-'))
     .map((entry) => ({ source: entry.id, state: entry.state }));
-  const pageBaselineMatch = profileContextReady ? pageBaselineRiskMatch(pageComparison) : null;
+  const pageBaselineMatch = profileContextReady ? hasStrongPageIdentityReviewMatch(pageComparison) : null;
   const idnReferenceMatch = profileContextReady ? Boolean(idnAnalysis?.referenceMatches.length) : null;
   const scoredAvailability = {
     ...availability,

@@ -34,7 +34,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
       nameservers: ['ns1.example'],
       faviconHash: null,
       faviconPHash: null,
-      riskModelVersion: 7,
+      riskModelVersion: 8,
       riskScore: 75,
       riskFactors: [{ label: 'Observed review signal', points: 12 }],
       mutationTypes: ['dictionary'],
@@ -142,7 +142,7 @@ test('derives one transient comparable cohort and keeps incompatible Risk eviden
   const legacy = result({
     domain: 'legacy.example',
     risk: 92,
-    saved: { riskModelVersion: 6 } as ScanResult['saved'],
+    saved: { riskModelVersion: 7 } as ScanResult['saved'],
   });
   const comparison = buildBulkRiskComparison([comparable, peer, partial, legacy]);
   assert.equal(comparison.comparableCount, 2);
@@ -154,7 +154,7 @@ test('derives one transient comparable cohort and keeps incompatible Risk eviden
   assert.equal(buildBulkRiskPresentation(partial, comparison).label, 'Inconclusive');
   assert.match(buildBulkRiskPresentation(partial, comparison).summary, /partial or unavailable/u);
   assert.equal(buildBulkRiskPresentation(legacy, comparison).exactScore, 92);
-  assert.match(buildBulkRiskPresentation(legacy, comparison).summary, /model v6 is not comparable/u);
+  assert.match(buildBulkRiskPresentation(legacy, comparison).summary, /model v7 is not comparable/u);
 });
 
 test('builds triage and table rows without route-owned transformation logic', () => {
@@ -182,7 +182,7 @@ test('builds triage and table rows without route-owned transformation logic', ()
   assert.equal(display.shortlisted, true);
   assert.equal(display.mutationLabel, 'Dictionary term');
   assert.equal(display.reviewState, 'reviewing');
-  assert.equal(display.risk.modelLabel, 'Risk model v7');
+  assert.equal(display.risk.modelLabel, 'Risk model v8');
   assert.equal(display.risk.exactScore, 75);
   assert.match(display.risk.factors[0]?.label ?? '', /Observed review signal/u);
   assert.match(display.responseHref, /monitor\?case=/u);

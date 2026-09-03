@@ -292,3 +292,27 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
     counts,
   };
 }
+
+/**
+ * Identifies a bounded, complete multi-component page-identity match for review
+ * presentation. This is not a Risk factor or a conclusion about copying,
+ * ownership, intent, safety, or maliciousness.
+ */
+export function hasStrongPageIdentityReviewMatch(
+  comparison: ReturnType<typeof comparePageBaselines>,
+): boolean {
+  if (!comparison || comparison.partial) return false;
+  return comparison.components.filter((component) => {
+    if (component.partial) return false;
+    if (component.id === 'normalized_html' || component.id === 'form_structure') {
+      return component.status === 'same';
+    }
+    if (component.id === 'dom_structure') {
+      return component.status === 'same' || component.status === 'overlap';
+    }
+    if (component.id === 'visible_text') {
+      return component.status === 'same' || (component.agreementPercent ?? 0) >= 90;
+    }
+    return false;
+  }).length >= 2;
+}

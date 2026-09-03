@@ -40,7 +40,7 @@
         </article>
       {/each}
     </div>
-    <p class="callout warn page-comparison-note">Each component stands on its own and there is no overall page-similarity score. Two or more strong, complete component matches can add one bounded signal within the Risk model's capped brand-presentation family; related matches cannot corroborate one another. Shared templates, providers, libraries, or analytics can produce matches, which do not prove common ownership, copying, intent, or maliciousness.</p>
+    <p class="callout warn page-comparison-note">Each component stands on its own and there is no overall page-similarity score. Page-identity matches remain review context and do not add Risk points; separately reviewed favicon and official-asset observations may contribute under their own bounded rules. Shared templates, providers, libraries, or analytics can produce matches, which do not prove common ownership, copying, intent, or maliciousness.</p>
   </section>
 {:else if unavailable}
   <section class="page-comparison unavailable-comparison evidence-card card" aria-labelledby="page-comparison-title">

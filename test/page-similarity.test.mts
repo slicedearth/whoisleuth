@@ -54,6 +54,7 @@ describe('explainable page-baseline comparison', () => {
     assert.equal('similarity' in result, false);
     assert.equal(item(result, 'visible_text').agreementPercent, 100);
     assert.equal(item(result, 'visible_text').hammingDistance, 0);
+    assert.equal(comparison.hasStrongPageIdentityReviewMatch(result), true);
   });
 
   test('keeps exact component differences separate', () => {
@@ -154,6 +155,18 @@ describe('explainable page-baseline comparison', () => {
     assert.equal(item(result, 'normalized_html').partial, true);
     assert.equal(item(result, 'resource_hosts').partial, true);
     assert.match(item(result, 'resource_hosts').outcome, /partial evidence/i);
+    assert.equal(comparison.hasStrongPageIdentityReviewMatch(result), false);
+  });
+
+  test('requires two complete strong components for the shared review marker', () => {
+    const weak = requiredValue(comparison.comparePageBaselines(stored(), stored({
+      normalizedHtml: { algorithm: 'sha256', value: SHA_D, tokenCount: 20, truncated: false },
+      visibleText: { algorithm: 'simhash64-v1', value: 'ffffffffffffffff', tokenCount: 12, featureCount: 10, truncated: false },
+      domStructure: { algorithm: 'sha256', value: SHA_D, nodeCount: 15, parser: 'static-tag-sequence-v1', truncated: false },
+      formStructure: null,
+    })));
+    assert.equal(comparison.hasStrongPageIdentityReviewMatch(weak), false);
+    assert.equal(comparison.hasStrongPageIdentityReviewMatch(null), false);
   });
 
   test('fails closed for unsupported or malformed baseline contracts', () => {

@@ -60,7 +60,7 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   });
   expect(baseline?.results[0]).toMatchObject({
     risk: 6,
-    riskModelVersion: 7,
+    riskModelVersion: 8,
     trusted: null,
     faviconMatch: false,
     faviconNearMatch: false,

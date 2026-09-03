@@ -338,7 +338,7 @@ test('Lookup task query context is bounded, transient, and changes only result p
   const acquisitionOpportunity = acquisitionAssessment.locator('.opportunity-band');
   await expect(acquisitionRisk).toHaveCount(1);
   await expect(acquisitionRisk).toContainText('Secondary triage');
-  await expect(acquisitionRisk).toContainText(/Risk model v7/u);
+  await expect(acquisitionRisk).toContainText(/Risk model v8/u);
   await expect(acquisitionRisk).toContainText(/Evidence coverage:/u);
   await expect(acquisitionOpportunity).toHaveCount(1);
   await expect(acquisitionOpportunity).toContainText('Acquisition task only');

@@ -8,6 +8,7 @@ import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 import { createCase } from '../packages/cases/case-model.mts';
 import { buildCaseSightingStixExport } from '../packages/interchange/case-sighting-stix-export.mts';
 import { buildStixIndicatorExport } from '../packages/interchange/stix-indicator-export.mts';
+import { RISK_MODEL_VERSION } from '../lib/risk-scoring.mts';
 
 const SCHEMA_REVISION = 'c4f8d589acf2bdb3783655c89e0ffb6e150006ae';
 const SCHEMA_TREE_SHA256 = 'fe3b1997ce3ca562aa1ea60298dcc0d126448a9c295d76b8bbe0b81631d4747b';
@@ -157,7 +158,7 @@ function conformanceBundles(): string[] {
   const generatedAt = '2026-08-01T00:00:00.000Z';
   const indicators = buildStixIndicatorExport([{
     domain: 'candidate.example', availability: 'registered', risk: 80, status: 'complete',
-    saved: { scanDepth: 'deep', riskModelVersion: 7, observedAt: generatedAt },
+    saved: { scanDepth: 'deep', riskModelVersion: RISK_MODEL_VERSION, observedAt: generatedAt },
   }], { generatedAt, idFactory: idFactory() }).content;
   const caseRecord = createCase({
     domain: 'candidate.example',
