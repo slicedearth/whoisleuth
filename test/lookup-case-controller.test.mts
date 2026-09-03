@@ -366,6 +366,84 @@ describe('Lookup case controller', () => {
     assert.match(result.status, /linked comparison evidence/u);
   });
 
+  test('keeps replay, conclusion, Incident context, and recheck failures local and bounded', async () => {
+    const record = createCase({ domain: 'example.test' }, '2026-07-29T01:00:00.000Z');
+    const facts = [fixtureFact()];
+    const conclusion = [
+      { field: 'dns.mx', stance: 'supports' as const },
+    ];
+    const recheck = {
+      state: 'changed',
+      observedAt: '2026-07-30T01:00:00.000Z',
+      completeness: 'partial',
+      comparisonSummary: 'Mail evidence changed.',
+      source: 'Analyst-reviewed Lookup recheck',
+      followUpAt: null,
+      limitations: ['One source was unavailable.'],
+      collectionDepth: 'deep' as const,
+    };
+
+    assert.deepEqual(await new LookupCaseController(fixtureApi()).openReplay('', {}), { record: null, status: '' });
+    const replayError = await new LookupCaseController(fixtureApi({
+      open: async () => { throw new Error('Replay write denied.'); },
+    })).openReplay(record.domain, {});
+    assert.equal(replayError.status, 'Replay write denied.');
+    const replayFallback = await new LookupCaseController(fixtureApi({
+      open: async () => { throw null; },
+    })).openReplay(record.domain, {});
+    assert.equal(replayFallback.status, 'Could not save the replay evidence to a Case.');
+
+    const duplicateSelection = await new LookupCaseController(fixtureApi()).recordConclusion(
+      record,
+      facts,
+      'suspicious',
+      'insufficient_evidence',
+      'Review the retained observation.',
+      [...conclusion, ...conclusion],
+    );
+    assert.match(duplicateSelection.status, /selected only once/u);
+    const conclusionError = await new LookupCaseController(fixtureApi({
+      conclude: async () => { throw new Error('Conclusion write denied.'); },
+    })).recordConclusion(record, facts, 'suspicious', 'insufficient_evidence', 'Review the retained observation.', conclusion);
+    assert.equal(conclusionError.status, 'Conclusion write denied.');
+    const conclusionFallback = await new LookupCaseController(fixtureApi({
+      conclude: async () => { throw false; },
+    })).recordConclusion(record, facts, 'suspicious', 'insufficient_evidence', 'Review the retained observation.', conclusion);
+    assert.equal(conclusionFallback.status, 'Could not record the analyst conclusion.');
+
+    assert.match((await new LookupCaseController(fixtureApi()).recordInvestigationContext(null, {
+      objective: 'Review the exact page.',
+      incidentUrl: 'https://example.test/path',
+      retainExactUrl: true,
+    })).status, /Create or open/u);
+    const contextError = await new LookupCaseController(fixtureApi({
+      recordContext: async () => { throw new Error('Context write denied.'); },
+    })).recordInvestigationContext(record, {
+      objective: 'Review the exact page.',
+      incidentUrl: 'https://example.test/path',
+      retainExactUrl: true,
+    });
+    assert.equal(contextError.status, 'Context write denied.');
+    const contextFallback = await new LookupCaseController(fixtureApi({
+      recordContext: async () => { throw undefined; },
+    })).recordInvestigationContext(record, {
+      objective: 'Review the exact page.',
+      incidentUrl: 'https://example.test/path',
+      retainExactUrl: false,
+    });
+    assert.equal(contextFallback.status, 'Could not retain the Incident context.');
+
+    assert.match((await new LookupCaseController(fixtureApi()).recordRecheckOutcome(null, recheck)).status, /Create or open/u);
+    const recheckError = await new LookupCaseController(fixtureApi({
+      recordRecheck: async () => { throw new Error('Recheck write denied.'); },
+    })).recordRecheckOutcome(record, recheck);
+    assert.equal(recheckError.status, 'Recheck write denied.');
+    const recheckFallback = await new LookupCaseController(fixtureApi({
+      recordRecheck: async () => { throw 'unknown failure'; },
+    })).recordRecheckOutcome(record, recheck);
+    assert.equal(recheckFallback.status, 'Could not record the recheck outcome.');
+  });
+
   test('rejects incomplete or stale conclusion inputs before writing', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const controller = new LookupCaseController(fixtureApi());
