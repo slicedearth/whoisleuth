@@ -6,6 +6,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
 import { parseTestDurationData } from './test-duration-reporter.mts';
 
 export const VERIFICATION_TIMING_PROFILE_VERSION = 1;
@@ -257,7 +258,7 @@ export function buildBalancedBrowserShardPlan(
   if (!Number.isSafeInteger(shardCount) || shardCount < 1 || shardCount > 16) {
     throw new TypeError('Browser shard count must be between 1 and 16.');
   }
-  const browser = profile.files.filter((item) => item.lane === 'browser');
+  const browser = profile.files.filter((item) => item.lane === 'browser' && isPlaywrightFunctionalSpec(item.file));
   if (browser.length < shardCount) throw new TypeError('Browser inventory is smaller than the requested shard count.');
   const working = Array.from({ length: shardCount }, (_, index) => ({ shard: index + 1, files: [] as string[], weight: 0 }));
   for (const item of [...browser].sort((left, right) => right.weightMs - left.weightMs || left.file.localeCompare(right.file))) {
@@ -533,7 +534,7 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
   const inventory = readVerificationTestInventory();
   const expectedMeasurements = inventory.filter((file) => lane === 'unit'
     ? testLane(file) === 'unit'
-    : testLane(file) !== 'unit');
+    : testLane(file) === 'browser_setup' || isPlaywrightFunctionalSpec(file));
   const measuredIdentities = [...measurements.keys()].sort();
   if (JSON.stringify(measuredIdentities) !== JSON.stringify([...expectedMeasurements].sort())) {
     throw new TypeError(`Timing update does not cover the complete maintained ${lane} inventory.`);

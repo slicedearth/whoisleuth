@@ -1,14 +1,24 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { summarizePlaywrightResults } from './playwright-results-summary.mts';
+import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
+import {
+  aggregatePlaywrightShardTimings,
+  renderBrowserShardTimingSummary,
+} from './playwright-shard-aggregate.mts';
+import { summarizePlaywrightResults, type PlaywrightResultSummary } from './playwright-results-summary.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
-import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from './verification-timing-profile.mts';
+import {
+  buildBalancedBrowserShardPlan,
+  buildVerificationTimingUpdateCandidate,
+  readVerificationTimingProfile,
+} from './verification-timing-profile.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
@@ -131,10 +141,36 @@ function runEnvironment(port: number, kind: 'functional' | 'performance', shard?
   };
 }
 
-function resultSummary(environment: NodeJS.ProcessEnv) {
+function resultData(environment: NodeJS.ProcessEnv): unknown {
   const filename = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
-  const parsed: unknown = JSON.parse(readFileSync(filename, 'utf8')) as unknown;
+  return JSON.parse(readFileSync(filename, 'utf8')) as unknown;
+}
+
+function resultSummary(environment: NodeJS.ProcessEnv, parsed: unknown): PlaywrightResultSummary {
   return summarizePlaywrightResults(parsed, playwrightRunArtifacts(environment).identity);
+}
+
+function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
+  const result = aggregatePlaywrightShardTimings(reports);
+  const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-health-'));
+  const aggregatePath = path.join(directory, 'playwright-browser-aggregate.json');
+  try {
+    writeFileSync(aggregatePath, `${JSON.stringify(result.aggregate, null, 2)}\n`, 'utf8');
+    const candidate = buildVerificationTimingUpdateCandidate([
+      '--update-candidate',
+      '--lane=browser',
+      `--report=${aggregatePath}`,
+      `--provenance-id=browser-local-parity-${process.pid}-${Date.now()}`,
+      `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}`,
+      '--sample-basis=complete-four-shard-functional-run',
+    ]);
+    if (candidate.inventoryFingerprint !== result.aggregate.inventoryFingerprint) {
+      throw new TypeError('Local browser timing candidate does not match the executed test inventory.');
+    }
+    return renderBrowserShardTimingSummary(result.summary);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 function stopChildren(): void {
@@ -150,15 +186,11 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const ports = await selectPortRange(plan.shardCount + 1);
     const performanceEnvironment = runEnvironment(ports[plan.shardCount]!, 'performance');
-    const performanceExit = await runProcess('isolated performance authority', [
-      PLAYWRIGHT_CLI,
-      'test',
-      'e2e/console-loading.spec.ts',
-      'e2e/deferred-interactions.spec.ts',
-      '--project=performance-authority',
-      '--workers=1',
-      '--retries=0',
-    ], performanceEnvironment);
+    const performanceExit = await runProcess(
+      'isolated performance authority',
+      playwrightPerformanceAuthorityArguments(PLAYWRIGHT_CLI),
+      performanceEnvironment,
+    );
     if (performanceExit !== 0) {
       await requirePortRangeFree(ports);
       return performanceExit;
@@ -177,9 +209,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     await requirePortRangeFree(ports);
     if (exits.some((code) => code !== 0)) return 2;
 
+    const performanceResult = resultData(performanceEnvironment);
+    const functionalResults = functionalRuns.map((run) => resultData(run.environment));
+    process.stdout.write(verifyHostedBrowserHealth(functionalResults));
     const summaries = [
-      resultSummary(performanceEnvironment),
-      ...functionalRuns.map((run) => resultSummary(run.environment)),
+      resultSummary(performanceEnvironment, performanceResult),
+      ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
     ];
     const totals = summaries.reduce((summary, item) => ({
       total: summary.total + item.total,

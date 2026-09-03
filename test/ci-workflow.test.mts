@@ -6,9 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  isPlaywrightFunctionalSpec,
+  PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+  PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS,
+} from '../tools/playwright-execution-contract.mts';
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
+  CI_BROWSER_HEALTH_SCRIPTS,
   CI_BROWSER_PREREQUISITE_SCRIPTS,
+  CI_CLI_RUNTIME_NODE_MAJOR,
+  CI_CLI_RUNTIME_SCRIPTS,
   CI_HOSTED_ONLY_BROWSER_SCRIPTS,
   CI_QUALITY_SCRIPTS,
   CI_UNIT_SCRIPTS,
@@ -17,6 +25,7 @@ import {
   expectedHostedCiScriptPlan,
   formatLocalCiPlan,
   readHostedCiScriptPlan,
+  selectNodeRuntimeExecutable,
 } from '../tools/ci-verification.mts';
 import {
   buildToolchainCompatibilityReport,
@@ -38,6 +47,14 @@ const TEST_HEALTH_WORKFLOW = fs.readFileSync(
 );
 const PLAYWRIGHT_CONFIG = fs.readFileSync(
   path.join(__dirname, '..', 'playwright.config.ts'),
+  'utf8',
+);
+const BALANCED_SUITE_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'tools', 'playwright-balanced-suite.mts'),
+  'utf8',
+);
+const PERFORMANCE_RUNNER_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'tools', 'playwright-performance-authority.mts'),
   'utf8',
 );
 const E2E_FIXTURES_SOURCE = fs.readFileSync(
@@ -176,6 +193,10 @@ describe('continuous integration workflow', () => {
       '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run type checks',
     );
     assert.throws(() => assertHostedCiParity(workflowWithUnownedGate), /quality scripts have drifted/u);
+    const workflowWithoutBrowserCandidate = WORKFLOW.replace('          npm run --silent verification:timing:update-candidate -- \\\n', '');
+    assert.throws(() => assertHostedCiParity(workflowWithoutBrowserCandidate), /browserHealth scripts have drifted/u);
+    const workflowWithoutCliRuntime = WORKFLOW.replace('        run: npm run cli:package:check\n\n  verify:', '        run: npm run unowned:cli-check\n\n  verify:');
+    assert.throws(() => assertHostedCiParity(workflowWithoutCliRuntime), /cliRuntime scripts have drifted/u);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_HEAD_SHA: \$\{\{ github\.sha \}\}$/mu);
     assert.equal(
@@ -200,9 +221,10 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s{10}path: playwright-results\/$/mu);
     assert.match(WORKFLOW, /^\s{10}pattern: playwright-results-\*-of-4$/mu);
     assert.match(WORKFLOW, /^\s{10}merge-multiple: true$/mu);
-    assert.match(WORKFLOW, /npm run test:e2e:aggregate -- "\$\{reports\[@\]\}" > "\$RUNNER_TEMP\/playwright-browser-aggregate\.json"/u);
+    assert.match(WORKFLOW, /npm run --silent test:e2e:aggregate -- "\$\{reports\[@\]\}" > "\$RUNNER_TEMP\/playwright-browser-aggregate\.json"/u);
+    assert.match(WORKFLOW, /npm run --silent test:e2e:aggregate -- --summary "\$\{reports\[@\]\}" \| tee/u);
     assert.equal(PACKAGE_MANIFEST.scripts?.['test:e2e:aggregate'], 'node tools/playwright-shard-aggregate.mts');
-    assert.match(WORKFLOW, /npm run verification:timing:update-candidate --/u);
+    assert.match(WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
     assert.match(WORKFLOW, /^\s{10}node-version: 26$/mu);
     assert.match(WORKFLOW, /^\s+run: npm run cli:package:check$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
@@ -212,13 +234,13 @@ describe('continuous integration workflow', () => {
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
     assert.equal(shardPlan.shards.length, 4);
     assert.equal(new Set(assigned).size, assigned.length);
-    assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => item.lane === 'browser').map((item) => item.file).sort());
+    assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     const localPlan = formatLocalCiPlan();
     for (const script of [...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
-    assert.match(localPlan, /^test:e2e:built$/mu);
+    assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
     assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('locked install'));
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
@@ -228,6 +250,24 @@ describe('continuous integration workflow', () => {
       'test:e2e:summary',
       'verification:artifacts',
     ]);
+    assert.deepEqual(CI_BROWSER_HEALTH_SCRIPTS, [
+      'test:e2e:aggregate',
+      'test:e2e:aggregate',
+      'verification:timing:update-candidate',
+    ]);
+    assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
+    assert.deepEqual(CI_CLI_RUNTIME_SCRIPTS, ['cli:package:check']);
+    assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
+    assert.equal(
+      selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (
+        candidate.endsWith('node-26') ? '26' : '24'
+      )),
+      '/fixture/node-26',
+    );
+    assert.throws(
+      () => selectNodeRuntimeExecutable(26, ['/fixture/node-24'], () => '24'),
+      /requires a Node\.js 26 executable/u,
+    );
     assert.doesNotThrow(() => assertLocalCiRuntime('24.19.0', '24.19.0'));
     assert.throws(() => assertLocalCiRuntime('26.0.0', '24.19.0'), /requires Node\.js 24\.19\.0/u);
   });
@@ -244,17 +284,17 @@ describe('continuous integration workflow', () => {
   });
 
   test('keeps functional checks deterministic and isolates runtime ceilings in every environment', () => {
-    assert.match(E2E_FIXTURES_SOURCE, /export const PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';/u);
+    assert.match(E2E_FIXTURES_SOURCE, /export const PERFORMANCE_AUTHORITY_PROJECT = PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;/u);
     assert.match(
       E2E_FIXTURES_SOURCE,
       /export function enforcesMachineTimingBudgets\(projectName: string\): boolean \{\s+return projectName === PERFORMANCE_AUTHORITY_PROJECT;\s+\}/u,
     );
-    assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthoritySpecs = \/\(\?:console-loading\|deferred-interactions\)\\\.spec\\\.ts\/u;/u);
     assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthority = process\.env\.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';/u);
-    assert.match(PLAYWRIGHT_CONFIG, /testIgnore: performanceAuthoritySpecs,/u);
+    assert.match(PLAYWRIGHT_CONFIG, /testIgnore: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,/u);
     assert.match(PLAYWRIGHT_CONFIG, /dependencies: \['setup'\],/u);
-    assert.match(PLAYWRIGHT_CONFIG, /name: 'performance-authority',[\s\S]*?testMatch: performanceAuthoritySpecs,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
+    assert.match(PLAYWRIGHT_CONFIG, /name: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,[\s\S]*?testMatch: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
     assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(performanceAuthority \? \[performanceAuthorityProject\] : \[\]\)/u);
+    assert.doesNotMatch(PLAYWRIGHT_CONFIG, /console-loading|deferred-interactions/u);
     assert.match(WORKFLOW, /^\s+run: npm run frontend:authenticated-loading-report$/mu);
     assert.match(WORKFLOW, /^\s+if: \$\{\{ matrix\.kind == 'performance' \}\}$/mu);
     assert.equal(
@@ -267,8 +307,17 @@ describe('continuous integration workflow', () => {
     );
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
-      'WHOISLEUTH_PLAYWRIGHT_RUN_KIND=performance WHOISLEUTH_E2E_PERFORMANCE_FIRST=1 playwright test e2e/console-loading.spec.ts e2e/deferred-interactions.spec.ts --project=performance-authority --workers=1 --retries=0',
+      'node tools/playwright-performance-authority.mts',
     );
+    assert.match(PERFORMANCE_RUNNER_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
+    assert.match(BALANCED_SUITE_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
+    assert.match(BALANCED_SUITE_SOURCE, /aggregatePlaywrightShardTimings\(reports\)/u);
+    assert.match(BALANCED_SUITE_SOURCE, /buildVerificationTimingUpdateCandidate\(\[/u);
+    assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');
+    assert.deepEqual(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, [
+      'e2e/console-loading.spec.ts',
+      'e2e/deferred-interactions.spec.ts',
+    ]);
 
     const consoleAuthorityBlock = requiredValue(
       /if \(enforcesMachineTimingBudgets\(testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(CONSOLE_LOADING_SOURCE)?.[1],
@@ -355,6 +404,7 @@ describe('continuous integration workflow', () => {
     }
     assert.match(TEST_HEALTH_WORKFLOW, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
     assert.match(TEST_HEALTH_WORKFLOW, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
     assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
     assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /--sample-count=/u);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-report-\*\.txt$/mu);

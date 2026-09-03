@@ -46,10 +46,23 @@ export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
   'verification:artifacts',
 ] as const);
 
+export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
+  'test:e2e:aggregate',
+  'test:e2e:aggregate',
+  'verification:timing:update-candidate',
+] as const);
+
+export const CI_CLI_RUNTIME_NODE_MAJOR = 26;
+export const CI_CLI_RUNTIME_SCRIPTS = Object.freeze([
+  'cli:package:check',
+] as const);
+
 export type HostedCiScriptPlan = Readonly<{
   quality: readonly string[];
   unit: readonly string[];
   browser: readonly string[];
+  browserHealth: readonly string[];
+  cliRuntime: readonly string[];
 }>;
 
 function commandName(): string {
@@ -85,11 +98,11 @@ export function localCiRevisionRange(): string {
   return `${base}..${head}`;
 }
 
-function run(command: string, args: readonly string[]): void {
+function run(command: string, args: readonly string[], environment: NodeJS.ProcessEnv = process.env): void {
   process.stdout.write(`\n> ${command} ${args.join(' ')}\n`);
   const child = spawnSync(command, args, {
     cwd: REPOSITORY_ROOT,
-    env: { ...process.env, CI: '1' },
+    env: { ...environment, CI: '1' },
     stdio: 'inherit',
   });
   if (child.error) throw child.error;
@@ -100,6 +113,57 @@ function npmRun(script: string, extra: readonly string[] = []): void {
   run(commandName(), ['run', script, ...extra]);
 }
 
+function nodeVersion(executable: string): string | null {
+  const child = spawnSync(executable, ['--version'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (child.error || child.status !== 0) return null;
+  const match = /^v(\d+)\.\d+\.\d+$/u.exec(child.stdout.trim());
+  return match ? match[1] as string : null;
+}
+
+export function selectNodeRuntimeExecutable(
+  expectedMajor: number,
+  candidates: readonly string[],
+  readMajor: (candidate: string) => string | null = nodeVersion,
+): string {
+  if (!Number.isSafeInteger(expectedMajor) || expectedMajor < 1) {
+    throw new TypeError('CLI compatibility runtime major must be a positive integer.');
+  }
+  const unique = [...new Set(candidates.filter(Boolean).map((candidate) => path.resolve(candidate)))];
+  const selected = unique.find((candidate) => readMajor(candidate) === String(expectedMajor));
+  if (!selected) {
+    throw new Error(
+      `Local CI requires a Node.js ${expectedMajor} executable for the hosted CLI compatibility lane. `
+      + `Install that runtime or set WHOISLEUTH_CLI_RUNTIME_NODE to its absolute path.`,
+    );
+  }
+  return selected;
+}
+
+function cliRuntimeExecutable(): string {
+  const executableName = process.platform === 'win32' ? 'node.exe' : 'node';
+  const pathCandidates = (process.env.PATH || '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((directory) => path.join(directory, executableName));
+  return selectNodeRuntimeExecutable(CI_CLI_RUNTIME_NODE_MAJOR, [
+    process.env.WHOISLEUTH_CLI_RUNTIME_NODE || '',
+    process.execPath,
+    ...pathCandidates,
+  ]);
+}
+
+function runCliRuntimeCheck(executable: string): void {
+  const runtimePath = [path.dirname(executable), process.env.PATH].filter(Boolean).join(path.delimiter);
+  run(executable, [path.join(REPOSITORY_ROOT, 'tools', 'cli-package.mts')], {
+    ...process.env,
+    PATH: runtimePath,
+  });
+}
+
 function workflowJob(workflow: string, job: string): string {
   const match = new RegExp(`\\n  ${job}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|$)`, 'u').exec(workflow);
   if (!match?.[1]) throw new TypeError(`Hosted CI workflow is missing the ${job} job.`);
@@ -107,7 +171,7 @@ function workflowJob(workflow: string, job: string): string {
 }
 
 function npmScripts(job: string): readonly string[] {
-  return Object.freeze([...job.matchAll(/^\s+(?:run:\s+)?npm run ([a-z0-9:.-]+)(?:\s|$)/gmu)]
+  return Object.freeze([...job.matchAll(/^\s+(?:run:\s+)?npm run (?:--silent\s+)?([a-z0-9:.-]+)(?:\s|$)/gmu)]
     .map((match) => match[1] as string));
 }
 
@@ -117,6 +181,8 @@ export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
     quality: npmScripts(workflowJob(workflow, 'quality')),
     unit: npmScripts(workflowJob(workflow, 'unit')),
     browser: npmScripts(workflowJob(workflow, 'browser')),
+    browserHealth: npmScripts(workflowJob(workflow, 'browser-health')),
+    cliRuntime: npmScripts(workflowJob(workflow, 'cli-runtime')),
   });
 }
 
@@ -125,6 +191,8 @@ export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
     quality: Object.freeze(['security:staged', ...CI_QUALITY_SCRIPTS]),
     unit: Object.freeze([...CI_UNIT_SCRIPTS, 'verification:artifacts']),
     browser: Object.freeze([...CI_BROWSER_PREREQUISITE_SCRIPTS, ...CI_HOSTED_ONLY_BROWSER_SCRIPTS]),
+    browserHealth: CI_BROWSER_HEALTH_SCRIPTS,
+    cliRuntime: CI_CLI_RUNTIME_SCRIPTS,
   });
 }
 
@@ -133,7 +201,7 @@ export function assertHostedCiParity(
 ): void {
   const actual = readHostedCiScriptPlan(workflow);
   const expected = expectedHostedCiScriptPlan();
-  for (const lane of ['quality', 'unit', 'browser'] as const) {
+  for (const lane of ['quality', 'unit', 'browser', 'browserHealth', 'cliRuntime'] as const) {
     if (JSON.stringify(actual[lane]) !== JSON.stringify(expected[lane])) {
       throw new Error(
         `Hosted ${lane} scripts have drifted from the maintained local CI contract.\n`
@@ -151,7 +219,8 @@ export function formatLocalCiPlan(): string {
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_PREREQUISITE_SCRIPTS,
     'test:e2e:install',
-    'test:e2e:built',
+    'test:e2e:built (performance, functional shards, browser-health aggregation and timing candidate)',
+    `cli:package:check (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`,
     'verification:artifacts cleanup=all',
   ].join('\n');
 }
@@ -171,6 +240,7 @@ export function main(args = process.argv.slice(2)): number {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
     cleanup = true;
+    const cliRuntime = cliRuntimeExecutable();
     const range = localCiRevisionRange();
     npmRun('security:staged', ['--', '--range', range]);
     run(commandName(), ['ci', '--include=optional', '--ignore-scripts']);
@@ -179,6 +249,7 @@ export function main(args = process.argv.slice(2)): number {
     for (const script of CI_BROWSER_PREREQUISITE_SCRIPTS) npmRun(script);
     npmRun('test:e2e:install');
     npmRun('test:e2e:built');
+    runCliRuntimeCheck(cliRuntime);
   } catch (error) {
     failure = error;
   }

@@ -209,10 +209,10 @@ jobs:
             --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
             --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
           )
-          npm run test:e2e:aggregate -- "${reports[@]}" > "$RUNNER_TEMP/playwright-browser-aggregate.json"
-          npm run test:e2e:aggregate -- --summary "${reports[@]}" | tee "$RUNNER_TEMP/playwright-browser-health.md"
+          npm run --silent test:e2e:aggregate -- "${reports[@]}" > "$RUNNER_TEMP/playwright-browser-aggregate.json"
+          npm run --silent test:e2e:aggregate -- --summary "${reports[@]}" | tee "$RUNNER_TEMP/playwright-browser-health.md"
           cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
-          npm run verification:timing:update-candidate -- \
+          npm run --silent verification:timing:update-candidate -- \
             --lane=browser \
             --report="$RUNNER_TEMP/playwright-browser-aggregate.json" \
             --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}" \

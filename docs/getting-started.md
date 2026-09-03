@@ -60,9 +60,12 @@ commit, run the same maintained quality, unit and browser gates as hosted CI:
 npm run verification:ci
 ```
 
-The parity command requires the exact `.nvmrc` runtime and a clean worktree. It
-performs the locked install and changed-line security scan before the maintained
-quality, coverage, build and production-browser gates. Ordinary interactive
+The parity command requires the exact `.nvmrc` runtime, a Node 26 executable on
+`PATH` for the CLI compatibility lane, and a clean worktree. Set
+`WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime
+is installed outside `PATH`. The command performs the locked install and
+changed-line security scan before the maintained quality, coverage, build,
+production-browser and secondary CLI-runtime gates. Ordinary interactive
 browser work can use `npm run test:e2e`, which excludes machine-timing ceilings
 so a focused functional run cannot contend with its own performance
 measurement. Report exact failures, retries, flakes and skips rather than

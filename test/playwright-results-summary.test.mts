@@ -9,6 +9,7 @@ import {
   aggregatePlaywrightShardTimings,
   renderBrowserShardTimingSummary,
 } from '../tools/playwright-shard-aggregate.mts';
+import { PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS } from '../tools/playwright-execution-contract.mts';
 import type { VerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 
 function fixture() {
@@ -108,6 +109,9 @@ describe('Playwright result summary', () => {
       })]),
       files: Object.freeze([
         ...files,
+        ...PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.map((file) => Object.freeze({
+          file, lane: 'browser' as const, weightMs: 500, sampleCount: 1, provenanceId: 'browser',
+        })),
         Object.freeze({
           file: 'e2e/auth.setup.ts', lane: 'browser_setup' as const, weightMs: 10, sampleCount: 4, provenanceId: 'browser',
         }),
@@ -137,6 +141,9 @@ describe('Playwright result summary', () => {
     assert.deepEqual(result.summary.observedShardWeightsMs, [50, 50, 50, 50]);
     assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.sampleCount, 4);
     assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.weightMs, 12);
+    assert.ok(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.every((file) => (
+      result.aggregate.files.every((item) => item.file !== file)
+    )));
     assert.match(renderBrowserShardTimingSummary(result.summary), /0 failed, flaky, skipped, or retried/u);
 
     assert.throws(

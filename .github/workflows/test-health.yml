@@ -69,7 +69,7 @@ jobs:
           cat "$RUNNER_TEMP/test-duration-health.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Build a directly reviewable unit timing candidate
         run: |
-          npm run verification:timing:update-candidate -- \
+          npm run --silent verification:timing:update-candidate -- \
             --lane=unit \
             --report="$RUNNER_TEMP/test-duration-report-1.txt" \
             --report="$RUNNER_TEMP/test-duration-report-2.txt" \

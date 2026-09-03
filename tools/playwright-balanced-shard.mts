@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
 import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
@@ -45,7 +46,7 @@ export function main(args = process.argv.slice(2)): number {
         PLAYWRIGHT_CLI,
         'test',
         ...selection.shard.files,
-        '--project=chromium',
+        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
         '--workers=1',
         '--retries=0',
         ...(list ? ['--list'] : []),
