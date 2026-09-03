@@ -112,6 +112,61 @@ test('the default system preference follows the operating-system colour scheme',
   expect(navFontSizes.themeLabel).toBe(navFontSizes.navigation);
 });
 
+test('the scanline texture keeps one viewport-sized cadence on short and very tall routes', async ({ page }) => {
+  const surfaces = [
+    {
+      viewport: { width: 3440, height: 1440 },
+      theme: 'Light' as const,
+      routes: ['/', '/resources', '/resources/lookalike-domain-checker', '/privacy', '/dashboard'],
+    },
+    {
+      viewport: { width: 390, height: 844 },
+      theme: 'Dark' as const,
+      routes: ['/resources', '/dashboard'],
+    },
+  ];
+  let sawVeryTallDocument = false;
+
+  for (const surface of surfaces) {
+    await page.setViewportSize(surface.viewport);
+    await page.goto('/');
+    await chooseTheme(page, surface.theme);
+
+    for (const route of surface.routes) {
+      await page.goto(route);
+      const texture = await page.evaluate(() => {
+        const body = getComputedStyle(document.body);
+        const scanlines = getComputedStyle(document.body, '::before');
+        return {
+          bodyBackgroundImage: body.backgroundImage,
+          documentHeight: document.documentElement.scrollHeight,
+          viewportHeight: document.documentElement.clientHeight,
+          viewportWidth: document.documentElement.clientWidth,
+          scanlineBackgroundImage: scanlines.backgroundImage,
+          scanlineBackgroundRepeat: scanlines.backgroundRepeat,
+          scanlineBackgroundSize: scanlines.backgroundSize,
+          scanlineHeight: parseFloat(scanlines.height),
+          scanlinePointerEvents: scanlines.pointerEvents,
+          scanlinePosition: scanlines.position,
+          scanlineWidth: parseFloat(scanlines.width),
+        };
+      });
+
+      sawVeryTallDocument ||= texture.documentHeight > 8_192;
+      expect(texture.bodyBackgroundImage).not.toContain('repeating-linear-gradient');
+      expect(texture.scanlineBackgroundImage).toContain('linear-gradient');
+      expect(texture.scanlineBackgroundRepeat).toBe('repeat-y');
+      expect(texture.scanlineBackgroundSize).toBe('100% 3px');
+      expect(texture.scanlinePointerEvents).toBe('none');
+      expect(texture.scanlinePosition).toBe('fixed');
+      expect(texture.scanlineHeight).toBe(texture.viewportHeight);
+      expect(texture.scanlineWidth).toBe(texture.viewportWidth);
+    }
+  }
+
+  expect(sawVeryTallDocument).toBe(true);
+});
+
 test('light preference applies before reload and persists across public pages', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/');
