@@ -1,7 +1,6 @@
 import {
   DECISION_FACT_PRESENTATION_DESCRIPTORS,
-  DECISION_FACT_VERSION,
-  buildDecisionFacts,
+  canonicalDecisionFacts,
   type DecisionFact,
   type DecisionFactEvidenceState,
   type DecisionFactFreshness,
@@ -107,21 +106,6 @@ function freshnessPolicy(policy: LookupFreshnessPolicy): LookupFreshnessPolicy {
   });
 }
 
-function canonicalFacts(facts: readonly DecisionFact[]): readonly DecisionFact[] {
-  const canonical = buildDecisionFacts(facts);
-  if (canonical.length !== facts.length) {
-    throw new TypeError('Lookup evidence quality facts must not contain duplicate or over-limit identifiers.');
-  }
-  for (const fact of facts) {
-    if (fact.version !== DECISION_FACT_VERSION
-      || !Number.isSafeInteger(fact.contributorCount)
-      || fact.contributorCount !== fact.contributors.length) {
-      throw new TypeError('Lookup evidence quality facts must be canonical Decision Fact values.');
-    }
-  }
-  return canonical;
-}
-
 function contributorPresentation(
   contributor: DecisionFact['contributors'][number],
 ): LookupEvidenceQualityContributorPresentation {
@@ -212,7 +196,7 @@ export function buildLookupEvidenceQualityModel(input: Readonly<{
   if (input.matrix.version !== 1) {
     throw new TypeError('Lookup evidence quality matrix has an unsupported version.');
   }
-  const facts = canonicalFacts(input.facts);
+  const facts = canonicalDecisionFacts(input.facts);
   const coverageFacts = facts.filter((fact) => fact.id.startsWith(COVERAGE_FACT_PREFIX));
   const factsById = new Map(coverageFacts.map((fact) => [fact.id, fact]));
   const matrixIds = new Set<string>();

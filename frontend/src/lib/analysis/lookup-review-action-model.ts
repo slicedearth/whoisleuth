@@ -1,7 +1,6 @@
 import {
   DECISION_FACT_PRESENTATION_DESCRIPTORS,
-  DECISION_FACT_VERSION,
-  buildDecisionFacts,
+  canonicalDecisionFacts,
   type DecisionFact,
   type DecisionFactImportance,
   type DecisionFactNextAction,
@@ -104,59 +103,6 @@ const CONTEXT_ACTION_RULES: Readonly<Record<string, ContextActionRule>> = Object
   'review-owned-posture': Object.freeze({ basis: 'task_context', tasks: OWNED_TASK, href: '#web-evidence' }),
   'review-case-handoff': Object.freeze({ basis: 'case_context', tasks: ALL_TASKS, href: '#case-response' }),
 });
-
-function canonicalFactShape(fact: DecisionFact): string {
-  return JSON.stringify({
-    version: fact.version,
-    id: fact.id,
-    question: fact.question,
-    conclusion: fact.conclusion,
-    importance: fact.importance,
-    evidenceState: fact.evidenceState,
-    freshness: fact.freshness,
-    consistency: fact.consistency,
-    contributors: fact.contributors.map((contributor) => ({
-      id: contributor.id,
-      label: contributor.label,
-      provenance: contributor.provenance,
-      evidenceState: contributor.evidenceState,
-      references: [...contributor.references],
-      observedAt: contributor.observedAt,
-      limitations: [...contributor.limitations],
-    })),
-    contributorCount: fact.contributorCount,
-    references: [...fact.references],
-    contradictions: [...fact.contradictions],
-    limitations: [...fact.limitations],
-    nextActions: fact.nextActions.map((action) => ({
-      id: action.id,
-      label: action.label,
-      reason: action.reason,
-      expectedOutcome: action.expectedOutcome,
-      href: action.href,
-      importance: action.importance,
-    })),
-  });
-}
-
-function canonicalFacts(facts: readonly DecisionFact[]): readonly DecisionFact[] {
-  const canonical = buildDecisionFacts(facts);
-  if (canonical.length !== facts.length) {
-    throw new TypeError('Lookup review-action facts must not contain duplicate or over-limit identifiers.');
-  }
-  const canonicalById = new Map(canonical.map((fact) => [fact.id, fact]));
-  for (const fact of facts) {
-    const rebuilt = canonicalById.get(fact.id);
-    if (!rebuilt
-      || fact.version !== DECISION_FACT_VERSION
-      || !Number.isSafeInteger(fact.contributorCount)
-      || fact.contributorCount !== fact.contributors.length
-      || canonicalFactShape(fact) !== canonicalFactShape(rebuilt)) {
-      throw new TypeError('Lookup review-action facts must be canonical Decision Fact values.');
-    }
-  }
-  return canonical;
-}
 
 function canonicalText(value: unknown, maximum: number): value is string {
   return typeof value === 'string'
@@ -525,7 +471,7 @@ export function buildLookupReviewActionModel(input: Readonly<{
   evidenceImpact: LookupEvidenceImpactPlan;
 }>): LookupReviewActionModel {
   validateSupport(input.support);
-  const facts = canonicalFacts(input.facts);
+  const facts = canonicalDecisionFacts(input.facts);
   return Object.freeze({
     version: LOOKUP_REVIEW_ACTION_MODEL_VERSION,
     recommendedNextReviews: recommendedQueue(input.support, facts),
