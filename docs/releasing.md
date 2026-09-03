@@ -33,7 +33,15 @@ appropriate. `release:check` is offline and read-only. It verifies that:
 - `package.json`, `package-lock.json`, and the lockfile root package agree;
 - the version is a valid semantic version without an in-manifest `v` prefix;
 - the package remains private so npm cannot publish it accidentally; and
-- the corresponding tag name would be `v<version>`.
+- the corresponding tag name would be `v<version>`; and
+- an existing local tag with that name does not identify different application,
+  CLI, runtime, packaged-support, dependency, or deployment inputs.
+
+The identity check requires a non-shallow checkout with complete local tag
+history. Documentation, tests, and maintainer tooling that are not shipped in
+the application or CLI do not force a version change. Changes to a packaged CLI
+guide do, because republishing different package bytes under an existing version
+is not permitted.
 
 The command does not create a tag, commit, release, deployment, or package.
 
