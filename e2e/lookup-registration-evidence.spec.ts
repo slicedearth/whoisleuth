@@ -533,6 +533,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   );
   await expectNoHorizontalOverflow(page);
 
+  await page.getByLabel('Analyst question').selectOption('acquisition');
   await page.getByRole('button', { name: 'Create case' }).click();
   const checkpoint = page.locator('.checkpoint');
   await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalised facts' })).toBeVisible();

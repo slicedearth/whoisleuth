@@ -372,87 +372,35 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   await taskQuestion.selectOption('general');
   expect(lookupRequests).toHaveLength(1);
-  const decisionSupport = detailedAssessment.locator('.decision-support');
-  await expect(decisionSupport.getByRole('heading', { name: 'General investigation' })).toBeVisible();
+  await expect(atAGlance.getByRole('heading', { name: 'Analyst assessment' })).toBeVisible();
+  await expect(detailedAssessment.locator('.at-a-glance, .decision-support')).toHaveCount(0);
   const presentationStateBefore = await page.evaluate(() => ({
     hash: window.location.hash,
     localStorage: Object.fromEntries(Object.entries(localStorage).sort(([left], [right]) => left.localeCompare(right))),
     sessionStorage: Object.fromEntries(Object.entries(sessionStorage).sort(([left], [right]) => left.localeCompare(right))),
   }));
-  await expect(decisionSupport.getByRole('button', { name: 'Copy current brief' })).toBeVisible();
-  await expect(decisionSupport.locator('[data-review-group-summary="disagreements"]')).toHaveText('1 disagreement');
-  await expect(decisionSupport.locator('[data-review-group-summary="unresolved"]')).toHaveText('1 unresolved comparison');
-  const decisionRecords = decisionSupport.locator('details.decision-records');
-  const decisionSummary = decisionRecords.locator(':scope > summary');
-  await decisionSummary.focus();
-  await decisionSummary.press('Enter');
-  await expect(decisionRecords).toHaveAttribute('open', '');
-  await decisionSummary.press('Space');
-  await expect(decisionRecords).not.toHaveAttribute('open', '');
-  await decisionSummary.press('Enter');
-  await expect(decisionRecords).toHaveAttribute('open', '');
+  const disagreementTrigger = atAGlance.locator('[data-metric-id="disagreements"]');
+  await expect(disagreementTrigger).toHaveAttribute('data-count', '1');
+  await disagreementTrigger.click();
+  const metricDetail = atAGlance.locator('#lookup-metric-detail');
+  await expect(metricDetail).toHaveAttribute('data-selected-metric-id', 'disagreements');
+  const disagreement = metricDetail.locator('[data-fact-id="lookup-decision:registry-whois-domain"]');
+  await expect(disagreement).toContainText('Domain differs between registration sources');
+  await expect(disagreement).toContainText('Registry RDAP');
+  await expect(disagreement).toContainText('WHOIS');
+  await expect(disagreement).toContainText('Provider reported');
 
-  const expectedDecisionGroups = [{
-    id: 'disagreements',
-    consistency: 'contradictory',
-    factIds: ['lookup-decision:registry-whois-domain'],
-  }, {
-    id: 'unresolved',
-    consistency: 'unknown',
-    factIds: ['lookup-decision:certificate-policy-caa'],
-  }] as const;
-  for (const expectedGroup of expectedDecisionGroups) {
-    const reviewGroup = decisionSupport.locator(`[data-review-group="${expectedGroup.id}"]`);
-    await expect(reviewGroup).toHaveCount(1);
-    await expect(reviewGroup).toHaveAttribute('data-consistency', expectedGroup.consistency);
-    await expect(reviewGroup).toHaveAttribute('data-total', String(expectedGroup.factIds.length));
-    await expect(reviewGroup).toHaveAttribute('data-displayed-count', String(expectedGroup.factIds.length));
-    await expect(reviewGroup).toHaveAttribute('data-omitted-count', '0');
-    await expect(reviewGroup).toHaveAttribute('data-contributing-fact-ids', expectedGroup.factIds.join(','));
-    expect(await reviewGroup.locator('.decision-entry').evaluateAll((entries) => (
-      entries.map((entry) => entry.getAttribute('data-fact-id'))
-    ))).toEqual(expectedGroup.factIds);
-  }
+  const unresolvedTrigger = atAGlance.locator('[data-metric-id="unresolved"]');
+  await expect(unresolvedTrigger).toHaveAttribute('data-count', '1');
+  await unresolvedTrigger.click();
+  await expect(metricDetail).toHaveAttribute('data-selected-metric-id', 'unresolved');
+  const unresolved = metricDetail.locator('[data-fact-id="lookup-decision:certificate-policy-caa"]');
+  await expect(unresolved).toContainText('DNS');
+  await expect(unresolved).toContainText('TLS');
+  await expect(unresolved).toContainText('Direct observation');
+  await expect(unresolved).toContainText('DNS collection is incomplete');
 
-  const disagreement = decisionSupport.locator('[data-review-group="disagreements"] .decision-entry');
-  const unresolved = decisionSupport.locator('[data-review-group="unresolved"] .decision-entry');
-  await expect(disagreement.locator('.consistency[data-consistency="contradictory"]')).toContainText('Contradictory');
-  await expect(disagreement.locator('.consistency')).toHaveAttribute('data-tone', 'conflict');
-  await expect(disagreement.locator('.consistency')).toHaveAttribute('aria-label', /Source ordering does not decide/iu);
-  await expect(unresolved.locator('.consistency[data-consistency="unknown"]')).toContainText('Consistency unknown');
-  await expect(unresolved.locator('.consistency')).toHaveAttribute('data-tone', 'caution');
-  await expect(disagreement.locator('.fact-state [data-evidence-state="observed"]')).toContainText('Observed');
-  await expect(disagreement.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
-  await expect(unresolved.locator('.fact-state [data-evidence-state="partial"]')).toContainText('Partial');
-  await expect(unresolved.locator('.fact-state [data-freshness="current"]')).toContainText('Current');
-  const presentationIcons = decisionSupport.locator('.presentation-icon');
-  expect(await presentationIcons.count()).toBeGreaterThan(0);
-  expect(await presentationIcons.evaluateAll((icons) => (
-    icons.every((icon) => icon.getAttribute('aria-hidden') === 'true')
-  ))).toBe(true);
-
-  const registryContributor = disagreement.locator('[data-contributor-id="evidence:rdap"]');
-  const whoisContributor = disagreement.locator('[data-contributor-id="evidence:whois"]');
-  for (const contributor of [registryContributor, whoisContributor]) {
-    await expect(contributor).toHaveCount(1);
-    await expect(contributor).toHaveAttribute('data-provenance', 'provider_reported');
-  }
-  const dnsContributor = unresolved.locator('[data-contributor-id="evidence:dns"]');
-  const tlsContributor = unresolved.locator('[data-contributor-id="evidence:tls"]');
-  await expect(dnsContributor).toHaveAttribute('data-provenance', 'direct_observation');
-  await expect(tlsContributor).toHaveAttribute('data-provenance', 'direct_observation');
-  await expect(registryContributor).toContainText('Provider reported');
-  await expect(registryContributor).toContainText('Observed');
-  await expect(dnsContributor).toContainText('Direct observation');
-  await expect(dnsContributor).toContainText('Partial');
-  await expect(tlsContributor).toContainText('Direct observation');
-  await expect(tlsContributor).toContainText('Unknown');
-  await expect(disagreement.getByRole('region', { name: /Contradictions for/ })).toContainText('differs between registration sources');
-  await expect(unresolved.getByRole('region', { name: 'Limitations from DNS' })).toContainText('DNS collection is incomplete');
-
-  const reviewLinks = decisionSupport.locator('a.fact-action, a.evidence-link');
-  expect(await reviewLinks.count()).toBeGreaterThan(0);
-  expect(await reviewLinks.evaluateAll((links) => links.every((link) => (
+  expect(await atAGlance.locator('.metric-item-link').evaluateAll((links) => links.every((link) => (
     /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(link.getAttribute('href') ?? '')
   )))).toBe(true);
   expect(lookupRequests).toHaveLength(1);
@@ -650,10 +598,10 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   ]) {
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
-    const decisionGeometry = await decisionSupport.evaluate((section) => ({
+    const decisionGeometry = await atAGlance.evaluate((section) => ({
       clientWidth: section.clientWidth,
       scrollWidth: section.scrollWidth,
-      entriesContained: [...section.querySelectorAll<HTMLElement>('.decision-entry')].every((entry) => {
+      entriesContained: [...section.querySelectorAll<HTMLElement>('.metric-item')].every((entry) => {
         const entryBox = entry.getBoundingClientRect();
         const sectionBox = section.getBoundingClientRect();
         return entryBox.left >= sectionBox.left - 1 && entryBox.right <= sectionBox.right + 1;

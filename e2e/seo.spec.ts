@@ -5,6 +5,7 @@ import {
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation.ts';
+import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources.ts';
 
 type StructuredData = Record<string, unknown>;
 
@@ -61,7 +62,7 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
     if (path === '/resources') {
       const collection = schemaByType(schemas, 'CollectionPage');
       expect(collection).toMatchObject({ '@context': 'https://schema.org' });
-      expect(collection?.hasPart).toHaveLength(8);
+      expect(collection?.hasPart).toHaveLength(PUBLIC_RESOURCES.length);
       expect(schemaByType(schemas, 'FAQPage')).toBeUndefined();
     }
 

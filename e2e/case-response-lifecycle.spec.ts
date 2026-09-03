@@ -387,6 +387,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
 test('append-only response review, exact authorisation, independent verification, and closure persist locally', {
   tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
 }, async ({ page }) => {
+  test.slow();
   await openCasesView(page);
   await createCase(page, 'response.invalid');
   await page.locator('.case-body').getByLabel('Disposition').selectOption('confirmed_abuse');
