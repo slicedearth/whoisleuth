@@ -8,6 +8,7 @@
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import type { LookupVisualView } from '$lib/components/LookupVisualWorkspace.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
+  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
@@ -469,7 +470,6 @@
       loads.push(import('$lib/components/LookupEvidenceQuality.svelte'),import('$lib/components/LookupOverviewFacts.svelte'));
     }else if(sectionId==='case-response'){
       loads.push(import('$lib/components/LookupCaseResponse.svelte'));
-      if(caseRecord&&checkpointFacts.length)loads.push(import('$lib/components/LookupEvidenceCheckpoint.svelte'));
     }else if(sectionId==='advanced-evidence'&&threatIntelligenceProviders.length){
       loads.push(import('$lib/components/LookupExternalIntelligence.svelte'));
     }
@@ -1011,11 +1011,11 @@
           props={{domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,record:caseRecord,note:caseNote,caseStatus,caseDisposition,caseReviewReason,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(value==='unreviewed')caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,saveClassification:saveLookupClassification,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
         />
         {#if caseRecord && checkpointFacts.length}
-          <DeferredSurface
-            load={()=>import('$lib/components/LookupEvidenceCheckpoint.svelte')}
-            loadingLabel="Loading evidence checkpoint controls…"
-            unavailableLabel="Evidence checkpoint controls could not be loaded."
-            props={{facts:checkpointFacts,pins:caseRecord.evidencePins,onsave:saveEvidenceCheckpoint,actionBusy:caseActionBusy}}
+          <LookupEvidenceCheckpoint
+            facts={checkpointFacts}
+            pins={caseRecord.evidencePins}
+            onsave={saveEvidenceCheckpoint}
+            actionBusy={caseActionBusy}
           />
         {/if}
         {/if}

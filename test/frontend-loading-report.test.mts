@@ -27,6 +27,10 @@ const BULK_ROUTE_SOURCE = readFileSync(
   new URL('../frontend/src/routes/(console)/bulk/+page.svelte', import.meta.url),
   'utf8',
 );
+const LOOKUP_ROUTE_SOURCE = readFileSync(
+  new URL('../frontend/src/routes/(console)/lookup/+page.svelte', import.meta.url),
+  'utf8',
+);
 
 function fixtureManifest(publicImports: readonly string[] = ['_shared.js']) {
   return {
@@ -81,6 +85,17 @@ describe('frontend loading report', () => {
     );
     assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/stix-indicator-export\.ts'\)/u);
     assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/misp-indicator-export\.ts'\)/u);
+  });
+
+  test('does not defer checkpoint code already included by evidence replay', () => {
+    assert.match(
+      LOOKUP_ROUTE_SOURCE,
+      /import LookupEvidenceCheckpoint from '\$lib\/components\/LookupEvidenceCheckpoint\.svelte';/u,
+    );
+    assert.doesNotMatch(
+      LOOKUP_ROUTE_SOURCE,
+      /import\('\$lib\/components\/LookupEvidenceCheckpoint\.svelte'\)/u,
+    );
   });
 
   test('records how route ceilings were calibrated', () => {
