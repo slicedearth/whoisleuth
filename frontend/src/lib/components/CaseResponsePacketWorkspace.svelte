@@ -1,6 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { type CaseRecord } from '$lib/cases';
+  import {
+    caseInvestigationContext,
+    caseResponseIncidentUrls,
+    caseTypeSummary,
+    type CaseRecord,
+  } from '$lib/cases';
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
@@ -17,7 +22,10 @@
     type ResponsePacketProfileId,
     type ResponseReadinessState,
   } from '$lib/analysis/case-response-packet.ts';
-  import type { CaseResponseStage } from '$lib/components/CaseResponseStageGuide.svelte';
+  import {
+    CASE_RESPONSE_STAGE_DEFINITIONS,
+    type CaseResponseStage,
+  } from '$lib/analysis/case-response-stage.ts';
 
   let {
     record,
@@ -71,17 +79,15 @@
     evidenceFreshness: false,
   });
   const packetWizardSteps = Object.freeze([
-    'Recipient and scope',
-    'Evidence selection',
-    'Source and contact provenance',
-    'Privacy and redaction',
-    'Readiness limitations',
-    'Exact-input digest',
-    'Explicit authorisation',
-    'Local export',
+    'Prepare',
+    'Review',
+    'Export and record',
   ] as const);
   let packetWizardStep = $state(1);
   let packetBusy = $state(false);
+  let defaultsAppliedRecordId = $state('');
+  let packetCategoryEdited = $state(false);
+  let packetUrlsEdited = $state(false);
   let lastPacketExport = $state<Readonly<{ actionId: string; exportedAt: string; digestSha256: string }> | null>(null);
   const reviewNow = new Date().toISOString();
 
@@ -90,6 +96,7 @@
   const packetReadiness = $derived(buildCaseResponseReadiness(record, packetInput(), reviewNow));
   const packetReviewIsCurrent = $derived(Boolean(packetReviewDigest) && packetReviewSignature === packetMaterialSignature());
   const selectedPacketAction = $derived(record.actions.find((action) => action.id === packetActionId) ?? null);
+  const investigationContext = $derived(caseInvestigationContext(record));
   const packetConfirmationsComplete = $derived(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.every((id) => packetConfirmations[id]));
   const packetAuthorisationReadinessComplete = $derived(
     packetReadiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
@@ -97,8 +104,7 @@
   );
   const stage = $derived<CaseResponseStage>({
     id: 'evidence_handoff',
-    number: 4,
-    label: 'Evidence handoff',
+    ...CASE_RESPONSE_STAGE_DEFINITIONS.evidence_handoff,
     status: packetAuthorisationConfirmedAt && packetReviewIsCurrent
       ? 'complete'
       : packetReviewDigest && !packetReviewIsCurrent
@@ -119,6 +125,30 @@
   });
 
   $effect(() => onstagechange(stage));
+  $effect(() => {
+    if (!visible) return;
+    if (defaultsAppliedRecordId !== record.id) {
+      packetCategoryEdited = false;
+      packetUrlsEdited = false;
+    }
+    const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
+    if (!packetSelectedEvidenceIds.length && latestDecision) {
+      const retainedIds = new Set(record.evidencePins.map((pin) => pin.id));
+      packetSelectedEvidenceIds = latestDecision.evidencePinIds.filter((id) => retainedIds.has(id));
+    }
+    if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
+    if (!packetObservedAt) {
+      const latestObservedAt = [...record.evidencePins]
+        .map((pin) => pin.observedAt)
+        .filter((value) => Number.isFinite(Date.parse(value)))
+        .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
+      packetObservedAt = localFromIso(latestObservedAt);
+    }
+    const retainedIncidentUrls = caseResponseIncidentUrls(record);
+    if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
+    if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
+    defaultsAppliedRecordId = record.id;
+  });
 
   function isoFromLocal(value: string): string | null {
     if (!value) return null;
@@ -216,7 +246,7 @@
       };
       packetAuthorisationConfirmedAt = '';
       onmessage('Bound the current local draft inputs to a review digest. Confirm each authorisation statement after completing the review.');
-      await setPacketWizardStep(7);
+      await setPacketWizardStep(2);
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not bind the current packet inputs for review.');
     } finally {
@@ -242,7 +272,7 @@
       }
       packetAuthorisationConfirmedAt = localFromIso(new Date().toISOString());
       onmessage('Authorised the exact browser-local inputs bound to the retained review digest. Nothing was submitted.');
-      await setPacketWizardStep(8);
+      await setPacketWizardStep(3);
     } catch (cause) {
       packetAuthorisationConfirmedAt = '';
       onmessage(cause instanceof Error ? cause.message : 'Could not verify the exact packet review before authorisation.');
@@ -308,7 +338,8 @@
   async function setPacketWizardStep(value: number) {
     packetWizardStep = Math.max(1, Math.min(packetWizardSteps.length, Math.trunc(value)));
     await tick();
-    document.getElementById(`packet-wizard-step-${record.id}-${packetWizardStep}`)?.focus({ preventScroll: true });
+    const phaseTarget = [1, 4, 8][packetWizardStep - 1];
+    document.getElementById(`packet-wizard-step-${record.id}-${phaseTarget}`)?.focus({ preventScroll: true });
   }
 </script>
 
@@ -318,13 +349,13 @@
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">This prepares local drafts only; nothing is sent. Contact selection, review, authorisation and export remain explicit.</p>
       <p class="notice preflight-scope">{CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE.limitation}</p>
-      <nav class="packet-wizard-nav" aria-label="Response-packet handoff steps">
+      <nav class="packet-wizard-nav" aria-label="Response-packet phases">
         <ol>{#each packetWizardSteps as label, index}<li><button type="button" aria-current={packetWizardStep === index + 1 ? 'step' : undefined} onclick={() => void setPacketWizardStep(index + 1)}><span>{index + 1}</span>{label}</button></li>{/each}</ol>
       </nav>
 
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-1`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-1`}>
-          <header><div><p class="eyebrow">Purpose and audience</p><h4 id={`packet-wizard-title-${record.id}-1`}>Intended recipient and scope</h4></div><span>1 of 8</span></header>
+          <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-1`}>Intended recipient and incident</h4></div><span>Phase 1</span></header>
           <label class="field">Audience profile<select bind:value={packetProfile}>{#each RESPONSE_PACKET_PROFILES as profile}<option value={profile.id}>{profile.label}</option>{/each}</select></label>
           <section class="profile-preview" aria-labelledby={`profile-preview-title-${record.id}`}>
             <div><strong id={`profile-preview-title-${record.id}`}>{packetProfilePreview.label}</strong><span>{packetProfilePreview.audience}</span></div>
@@ -337,37 +368,43 @@
             </div>
             {#if packetProfilePreview.missingEvidence.length}<p class="profile-missing"><strong>Still needed:</strong> {packetProfilePreview.missingEvidence.join('; ')}</p>{/if}
           </section>
-          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" bind:value={packetObservedAt} required></label></div>
-          <label class="field">Exact abusive HTTP(S) URLs <small>one per line</small><textarea bind:value={packetUrls} maxlength="42000" rows="3" required></textarea></label>
+          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} oninput={() => packetCategoryEdited = true} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" bind:value={packetObservedAt} required></label></div>
+          <label class="field">Exact abusive HTTP(S) URLs <small>one per line</small><textarea bind:value={packetUrls} oninput={() => packetUrlsEdited = true} maxlength="42000" rows="3" required></textarea></label>
+          {#if investigationContext?.urlRetention === 'origin_only'}<p class="notice">This Case retained only the Incident origin. Review and paste the exact URL deliberately if it belongs in this packet.</p>{/if}
           <label class="field">Observed harm<textarea bind:value={packetHarm} maxlength="2000" rows="3" required></textarea></label>
         </section>
-      {:else if packetWizardStep === 2}
+      {/if}
+      {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
-          <header><div><p class="eyebrow">Exact selection</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>2 of 8</span></header>
+          <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
           <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
           <p class="notice">Selection includes only retained Case pins supported by response-packet v8. It does not collect, upload, or infer new evidence.</p>
         </section>
-      {:else if packetWizardStep === 3}
+      {/if}
+      {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-3`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-3`}>
-          <header><div><p class="eyebrow">Action-bound route</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>3 of 8</span></header>
+          <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>Delivery context</span></header>
           <label class="field">Case action for this packet<select bind:value={packetActionId}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
           {#if selectedPacketAction}<section class="profile-preview"><div><strong>{selectedPacketAction.recipient}</strong><span>{selectedPacketAction.type.replaceAll('_', ' ')}</span></div><p><strong>Source:</strong> {selectedPacketAction.contactSource}</p><p><strong>Route observed:</strong> {selectedPacketAction.routeObservedAt ?? 'Time unavailable'}</p>{#if selectedPacketAction.originActionId}<p><strong>Originating action:</strong> {selectedPacketAction.originActionId}</p>{/if}{#if selectedPacketAction.contactLimitations.length}<p><strong>Limitations:</strong> {selectedPacketAction.contactLimitations.join('; ')}</p>{/if}</section>{:else}<p class="notice">Create and review a Case action first. Browser and blocklist destinations use a manually entered internal-review action; other profiles require the matching typed route.</p>{/if}
           <p class="notice">Only the selected action, its bounded origin lineage and its route are included. A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action.</p>
         </section>
-      {:else if packetWizardStep === 4}
+      {/if}
+      {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
-          <header><div><p class="eyebrow">Minimise disclosure</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy and redaction review</h4></div><span>4 of 8</span></header>
+          <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy, redaction and optional capture</h4></div><span>Phase 2</span></header>
           <div class="privacy-review"><section><strong>Profile redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section><section><strong>Profile exclusions</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section></div>
           <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>
         </section>
-      {:else if packetWizardStep === 5}
+      {/if}
+      {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-5`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-5`}>
-          <header><div><p class="eyebrow">Preflight</p><h4 id={`packet-wizard-title-${record.id}-5`}>Readiness limitations</h4></div><span>5 of 8</span></header>
+          <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-5`}>Readiness and limitations</h4></div><span>Decision boundary</span></header>
           <section class="preflight" aria-labelledby={`preflight-title-${record.id}`}><div><strong id={`preflight-title-${record.id}`}>Response preflight</strong><span class={`preflight-state state-${packetPreflight.status}`}>{packetPreflight.status.replaceAll('_', ' ')}</span></div><p>{packetPreflight.counts.pass} pass · {packetPreflight.counts.caution} caution · {packetPreflight.counts.block} block</p><ul>{#each packetPreflight.checks as check}<li data-state={check.state}><strong>{check.label}</strong><span>{check.detail}</span></li>{/each}</ul></section>
           <fieldset class="readiness-inputs"><legend>Explicit review inputs</legend><div class="readiness-editor"><section><strong>Infrastructure responsibility</strong><label class="field">State<select bind:value={packetInfrastructureState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetInfrastructureDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetInfrastructureLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Analyst authority</strong><label class="field">State<select bind:value={packetAuthorityState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetAuthorityDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetAuthorityLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Contradiction review</strong><label class="field">State<select bind:value={packetContradictionsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetContradictionsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetContradictionsLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Source limitations review</strong><label class="field">State<select bind:value={packetSourceLimitationsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetSourceLimitationsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetSourceLimitations} maxlength="2000" rows="2"></textarea></label></section></div></fieldset>
           <section class="readiness-matrix" aria-labelledby={`readiness-title-${record.id}`}><div><strong id={`readiness-title-${record.id}`}>Profile-specific readiness matrix</strong><span>{packetReadiness.counts.complete} complete · {packetReadiness.counts.partial} partial · {packetReadiness.counts.stale} stale · {packetReadiness.counts.unavailable} unavailable · {packetReadiness.counts.not_provided} not provided</span></div><div class="table-wrap"><table><thead><tr><th scope="col">Review input</th><th scope="col">State</th><th scope="col">Detail and limitations</th></tr></thead><tbody>{#each packetReadiness.rows as row}<tr><th scope="row">{row.label}{row.requiredForAuthorisation ? ' *' : ''}</th><td><span class={`readiness-state state-${row.state}`}>{row.state.replaceAll('_', ' ')}</span></td><td>{row.detail}{#if row.limitations.length}<small>{row.limitations.join('; ')}</small>{/if}</td></tr>{/each}</tbody></table></div><small>* Required for authorisation. Partial and stale states remain visible and require deliberate freshness and limitation confirmation.</small></section>
         </section>
-      {:else if packetWizardStep === 6}
+      {/if}
+      {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-6`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-6`}>
           <header><div><p class="eyebrow">Bind current material</p><h4 id={`packet-wizard-title-${record.id}-6`}>Exact-input digest review</h4></div><span class:attention={!packetReviewIsCurrent}>{packetReviewIsCurrent ? 'current review' : packetReviewDigest ? 'review stale' : 'not reviewed'}</span></header>
           <p>Review the selected evidence, action-bound recipient scope, provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v8 review digest.</p>
@@ -375,18 +412,20 @@
           {#if packetReviewDigest}<code>{packetReviewDigest}</code>{/if}
           {#if packetReviewDigest && !packetReviewIsCurrent}<p class="history-warning">Material inputs changed after review. The retained digest is stale; re-review before authorisation.</p>{/if}
         </section>
-      {:else if packetWizardStep === 7}
+      {/if}
+      {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-7`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`authorisation-title-${record.id}`}>
           <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || !packetAuthorisationConfirmedAt}>{packetReviewIsCurrent && packetConfirmationsComplete && packetAuthorisationReadinessComplete && packetAuthorisationConfirmedAt ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
-          {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Return to step 6 before confirming authorisation.</p>{/if}
+          {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Bind the current inputs above before confirming authorisation.</p>{/if}
           <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
           <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
           <label class="field">Confirmation time<input type="datetime-local" bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
           <p class="notice">Authorisation applies only to the exact inputs bound to the current digest. It does not submit the packet or establish a provider outcome.</p>
         </section>
-      {:else}
+      {/if}
+      {#if packetWizardStep === 3}
         <section id={`packet-wizard-step-${record.id}-8`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-8`}>
-          <header><div><p class="eyebrow">Deliberate handoff</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local export</h4></div><span>8 of 8</span></header>
+          <header><div><p class="eyebrow">Export and record</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local handoff</h4></div><span>Phase 3</span></header>
           <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
           <div class="actions"><button class="btn" type="button" onclick={() => void downloadPacket('json')} disabled={packetBusy || !packetPreflight.canExport}>Export JSON draft or authorised packet</button><button class="btn" type="button" onclick={() => void downloadPacket('md')} disabled={packetBusy || !packetPreflight.canExport}>Export Markdown</button><button class="btn" type="button" onclick={() => void downloadPacket('txt')} disabled={packetBusy || !packetPreflight.canExport}>Export email draft</button><button class="btn" type="button" onclick={() => void copyEmail()} disabled={packetBusy || !packetPreflight.canExport}>Copy email draft</button></div>
           {#if lastPacketExport}
@@ -399,7 +438,7 @@
         </section>
       {/if}
 
-      <div class="wizard-controls"><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep - 1)} disabled={packetWizardStep === 1}>Previous step</button><span>Step {packetWizardStep} of {packetWizardSteps.length}</span><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep + 1)} disabled={packetWizardStep === packetWizardSteps.length}>Next step</button></div>
+      <div class="wizard-controls"><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep - 1)} disabled={packetWizardStep === 1}>Previous phase</button><span>Phase {packetWizardStep} of {packetWizardSteps.length}</span><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep + 1)} disabled={packetWizardStep === packetWizardSteps.length}>Next phase</button></div>
     </form>
   </details>
 {/if}
@@ -457,7 +496,7 @@
   .readiness-state.state-partial,.readiness-state.state-stale{color:var(--amber)}
   .readiness-state.state-unavailable,.readiness-state.state-not_provided{color:var(--muted)}
   .packet-wizard-nav{max-width:100%;overflow-x:auto;padding-bottom:3px}
-  .packet-wizard-nav ol{display:grid;grid-template-columns:repeat(8,minmax(118px,1fr));gap:5px;margin:0;padding:0;list-style:none}
+  .packet-wizard-nav ol{display:grid;grid-template-columns:repeat(3,minmax(118px,1fr));gap:5px;margin:0;padding:0;list-style:none}
   .packet-wizard-nav button{display:grid;width:100%;min-height:58px;gap:3px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);text-align:left;font:650 var(--text-2xs) var(--mono);cursor:pointer}
   .packet-wizard-nav button span{color:var(--accent)}
   .packet-wizard-nav button[aria-current='step']{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--text)}
@@ -478,5 +517,5 @@
   .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}
   .choice input{width:auto;margin-top:2px}
   .choice span{min-width:0;overflow-wrap:anywhere}
-  @media(max-width:800px){.two-columns,.preflight li,.profile-columns,.readiness-editor,.privacy-review{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}th,td{min-width:135px}.packet-wizard-nav ol{grid-template-columns:repeat(8,minmax(108px,1fr))}.wizard-controls .btn{flex:1 1 120px}.wizard-controls span{order:-1;flex:1 0 100%;text-align:center}}
+  @media(max-width:800px){.two-columns,.preflight li,.profile-columns,.readiness-editor,.privacy-review{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}th,td{min-width:135px}.packet-wizard-nav ol{grid-template-columns:repeat(3,minmax(108px,1fr))}.wizard-controls .btn{flex:1 1 120px}.wizard-controls span{order:-1;flex:1 0 100%;text-align:center}}
 </style>

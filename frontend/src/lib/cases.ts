@@ -10,17 +10,22 @@ import {
   mergeCases,
   normalizeDomain,
   openOrCreateCase,
+  recordCaseConclusion as recordCaseConclusionModel,
+  recordCaseInvestigationContext as recordCaseInvestigationContextModel,
+  recordCaseRecheckOutcome as recordCaseRecheckOutcomeModel,
   removeCaseBrandProfileId,
   updateCase,
 } from './analysis/case-model.ts';
 import type {
   CaseInput,
+  CaseConclusionInput,
   CasePatch,
   CaseRecord,
 } from './analysis/case-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import {
+  mergeExternalFindingsIntoCase,
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
@@ -49,12 +54,26 @@ export {
   CASE_DISPOSITIONS,
   CASE_REVIEW_REASONS,
   CASE_STATUSES,
+  CASE_TYPES,
+  caseFreeformTags,
+  caseIncidentTargetAssertion,
+  caseIncidentTargets,
+  caseNumber,
+  caseResponseIncidentUrls,
+  caseTagsWithTypes,
+  caseTypeIds,
+  caseTypeRecords,
+  caseTypeSummary,
+  formattedCaseNumber,
   caseLookupTarget,
   compareCaseEvidence,
   dispositionLabel,
   latestCaseEvidence,
   MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_INCIDENT_TARGETS,
   MAX_CASE_BRAND_PROFILE_IDS,
+  caseInvestigationContext,
+  parseIncidentUrlContext,
   sourceLabel,
   statusLabel,
 } from './analysis/case-model.ts';
@@ -112,15 +131,22 @@ export type {
   CaseInvestigationBranchState,
 } from './analysis/case-investigation-branch-model.ts';
 export type {
+  CaseIncidentTarget,
+  CaseTypeId,
+  CaseConclusionEvidence,
+  CaseConclusionInput,
+  CaseInvestigationContext,
   CaseEvidenceSnapshot,
   CaseInput,
   CaseNote,
   CasePatch,
   CaseRecord,
+  EvidenceChange,
   EvidenceFactor,
 } from './analysis/case-model.ts';
 export type {
   ExternalFinding,
+  ExternalFindingsCaseMergeResult,
   ExternalFindingsDocument,
   ExternalFindingsMergeResult,
 } from './analysis/external-findings-import.ts';
@@ -175,6 +201,42 @@ export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; 
 export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = updateCase(current, id, patch);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === id) ?? result.record;
+    return { document: cases, result: { record, cases, pruned } };
+  });
+}
+
+export async function recordCaseConclusion(
+  id: string,
+  input: CaseConclusionInput,
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
+    const result = recordCaseConclusionModel(current, id, input);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === id) ?? result.record;
+    return { document: cases, result: { record, cases, pruned } };
+  });
+}
+
+export async function recordCaseInvestigationContext(
+  id: string,
+  input: Readonly<{ objective: string; incidentUrl: string; retainExactUrl: boolean }>,
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
+    const result = recordCaseInvestigationContextModel(current, id, input);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === id) ?? result.record;
+    return { document: cases, result: { record, cases, pruned } };
+  });
+}
+
+export async function recordCaseRecheckOutcome(
+  id: string,
+  input: Parameters<typeof recordCaseRecheckOutcomeModel>[2],
+): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => {
+    const result = recordCaseRecheckOutcomeModel(current, id, input);
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === id) ?? result.record;
     return { document: cases, result: { record, cases, pruned } };
@@ -296,6 +358,33 @@ export async function importExternalFindings(
         cases,
         casesCreated: merged.casesCreated,
         casesUpdated: merged.casesUpdated,
+        findingsAdded: merged.findingsAdded,
+        duplicatesSkipped: merged.duplicatesSkipped,
+        pruned,
+      },
+    };
+  });
+}
+
+export async function importExternalFindingsIntoCase(
+  caseId: string,
+  document: ExternalFindingsDocument,
+): Promise<{
+  record: CaseRecord;
+  findingsAdded: number;
+  duplicatesSkipped: number;
+  cases: CaseRecord[];
+  pruned: number;
+}> {
+  return updateBrowserLocalData('cases', (current) => {
+    const merged = mergeExternalFindingsIntoCase(current, caseId, document);
+    const { cases, pruned } = boundedCases(merged.cases);
+    const record = cases.find((item) => item.id === caseId) ?? merged.record;
+    return {
+      document: cases,
+      result: {
+        record,
+        cases,
         findingsAdded: merged.findingsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
         pruned,

@@ -246,6 +246,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     availabilityAbuse: availability.abuse,
     securityTxt,
     networkContext: observedNetworkContext,
+    technologyProfile,
   });
   const sourceOnlyCount = comparison.counts.rdap_only + comparison.counts.whois_only;
   const redactedComparisonCount = comparison.counts.rdap_redacted + comparison.counts.whois_redacted;

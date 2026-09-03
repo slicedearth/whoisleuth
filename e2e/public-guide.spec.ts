@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
   await page.goto('/');
@@ -137,7 +138,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guides for common investigation tasks sections' })).toBeVisible();
-  await expect(page.locator('.resource-grid article')).toHaveCount(8);
+  await expect(page.locator('.resource-grid article')).toHaveCount(PUBLIC_RESOURCES.length);
   await page.locator('.resource-grid').getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources' })).toHaveAttribute('aria-current', 'location');
@@ -182,6 +183,16 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await articleSections.locator(':scope > summary').click();
   await expect(articleSections.getByRole('link')).toHaveCount(5);
   expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
+  await expectNoHorizontalOverflow(page);
+
+  await page.goto('/resources/reporting-and-takedown-guidance');
+  await expect(page.getByRole('heading', { name: 'Prepare and track an abuse or infringement report' })).toBeVisible();
+  const reportingReferences = page.locator('#primary-references');
+  await expect(reportingReferences.getByRole('heading', { name: 'Official reporting guidance' })).toBeVisible();
+  await expect(reportingReferences).toContainText('verify the current reporting route, eligibility and disclosure terms');
+  await expect(reportingReferences.getByRole('link')).toHaveCount(6);
+  await expect(reportingReferences.getByRole('link', { name: /TikTok report form/u })).toHaveAttribute('href', 'https://www.tiktok.com/legal/report/feedback');
+  await expect(reportingReferences.getByRole('link', { name: /Telegram reporting guidance/u })).toHaveAttribute('href', /telegram\.org\/faq/iu);
   await expectNoHorizontalOverflow(page);
 });
 

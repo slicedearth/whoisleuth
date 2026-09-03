@@ -22,6 +22,7 @@ import {
   normalizeCaseSightings,
   updateCaseAction,
   updateCaseAssertion,
+  type CaseEvidenceRelationStance,
 } from './case-response-model.mts';
 import {
   CASE_SCHEMA_VERSION,
@@ -62,6 +63,11 @@ import {
   normalizeCaseInvestigationBranches,
   updateCaseInvestigationBranch,
 } from './case-investigation-branch-model.mts';
+import {
+  caseInvestigationContext,
+  caseInvestigationContextAssertion,
+  parseIncidentUrlContext,
+} from './case-investigation-context.mts';
 
 // ---------------------------------------------------------------------------
 // Case normalization
@@ -415,4 +421,195 @@ export function updateCase(
   const next = [...cases];
   next[index] = record;
   return { cases: next, record };
+}
+
+export type CaseConclusionEvidence = Readonly<{
+  pin: unknown;
+  stance: CaseEvidenceRelationStance;
+}>;
+
+export type CaseConclusionInput = Readonly<{
+  disposition: unknown;
+  reviewReasonCode: unknown;
+  summary: unknown;
+  rationale: unknown;
+  evidence: readonly CaseConclusionEvidence[];
+}>;
+
+/**
+ * Records one reviewed conclusion as a single pure Case mutation. The selected
+ * observations become bounded Case pins before the decision is created, so the
+ * decision cannot point at absent evidence. Counterevidence is retained as a
+ * separate resolved contradiction assertion rather than being hidden inside a
+ * favourable disposition.
+ */
+export function recordCaseConclusion(
+  cases: CaseRecord[],
+  id: string,
+  input: CaseConclusionInput,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
+  const disposition = normalizeDisposition(input.disposition);
+  const reviewReasonCode = normalizeReviewReasonCode(input.reviewReasonCode);
+  if (disposition === 'unreviewed') {
+    throw new Error('Select a reviewed disposition before recording a conclusion.');
+  }
+  if (!reviewReasonCode) {
+    throw new Error('Select the reviewed reason before recording a conclusion.');
+  }
+  if (!Array.isArray(input.evidence) || !input.evidence.length) {
+    throw new Error('Select at least one observed fact for this conclusion.');
+  }
+  const invalidStance = input.evidence.find((item) => (
+    !item || !['supports', 'contradicts', 'unresolved'].includes(item.stance)
+  ));
+  if (invalidStance) throw new Error('A conclusion evidence relationship is invalid.');
+  if (!input.evidence.some((item) => item.stance === 'supports')) {
+    throw new Error('A conclusion requires at least one observed fact that supports it. Record only contradictory or unresolved material as an assertion instead.');
+  }
+
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const existingPinIds = new Set(current.evidencePins.map((pin) => pin.id));
+  const withPins = updateCase(cases, id, {
+    evidencePins: input.evidence.map((item) => item.pin),
+  }, now);
+  const addedPins = withPins.record.evidencePins.filter((pin) => !existingPinIds.has(pin.id));
+  if (addedPins.length !== input.evidence.length) {
+    throw new Error('The selected conclusion evidence could not be retained completely.');
+  }
+
+  const supportingPinIds = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'supports' ? [pin.id] : []
+  ));
+  let concluded = updateCase(withPins.cases, id, {
+    disposition,
+    reviewReasonCode,
+    decision: {
+      summary: input.summary,
+      rationale: input.rationale,
+      evidencePinIds: supportingPinIds,
+    },
+  }, now);
+
+  const contradictionRelations = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'contradicts'
+      ? [{ evidencePinId: pin.id, stance: 'contradicts' as const }]
+      : []
+  ));
+  if (contradictionRelations.length) {
+    const retainedSummary = concluded.record.decisions.at(-1)?.summary ?? 'Analyst conclusion';
+    concluded = updateCase(concluded.cases, id, {
+      assertion: {
+        kind: 'contradiction',
+        statement: `Counterevidence considered for: ${retainedSummary}`,
+        rationale: input.rationale,
+        evidenceRelations: contradictionRelations,
+        state: 'resolved',
+      },
+    }, now);
+  }
+  const unresolvedRelations = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'unresolved'
+      ? [{ evidencePinId: pin.id, stance: 'unresolved' as const }]
+      : []
+  ));
+  if (unresolvedRelations.length) {
+    const retainedSummary = concluded.record.decisions.at(-1)?.summary ?? 'Analyst conclusion';
+    concluded = updateCase(concluded.cases, id, {
+      assertion: {
+        kind: 'unknown',
+        statement: `Unresolved evidence considered for: ${retainedSummary}`,
+        rationale: input.rationale,
+        evidenceRelations: unresolvedRelations,
+        state: 'open',
+      },
+    }, now);
+  }
+  return concluded;
+}
+
+export function recordCaseInvestigationContext(
+  cases: CaseRecord[],
+  id: string,
+  input: Readonly<{ objective: unknown; incidentUrl: unknown; retainExactUrl: boolean }>,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const parsed = parseIncidentUrlContext(input.incidentUrl);
+  if (!parsed || parsed.registrableDomain !== current.domain) {
+    throw new Error(`The Incident URL must belong to the Case domain ${current.domain}.`);
+  }
+  const context = caseInvestigationContextAssertion(input);
+  const existing = caseInvestigationContext(current);
+  return updateCase(cases, id, existing
+    ? {
+        assertionUpdate: {
+          id: existing.assertionId,
+          statement: context.statement,
+          rationale: context.rationale,
+          state: 'open',
+        },
+      }
+    : {
+        assertion: {
+          kind: 'next_step',
+          statement: context.statement,
+          rationale: context.rationale,
+          evidenceRelations: [],
+          state: 'open',
+        },
+      }, nowIso);
+}
+
+export function recordCaseRecheckOutcome(
+  cases: CaseRecord[],
+  id: string,
+  input: Readonly<{
+    state: unknown;
+    observedAt: unknown;
+    completeness: unknown;
+    comparisonSummary: unknown;
+    source: unknown;
+    followUpAt?: unknown;
+    limitations?: unknown;
+    collectionDepth?: unknown;
+  }>,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const beforePinIds = new Set(current.evidencePins.map((pin) => pin.id));
+  const withPin = updateCase(cases, id, {
+    evidencePin: {
+      field: 'case.recheck_comparison',
+      category: 'recheck',
+      label: 'Recheck comparison',
+      value: input.comparisonSummary,
+      source: input.source,
+      sourceState: 'reviewed',
+      observedAt: input.observedAt,
+      collectionDepth: input.collectionDepth,
+      completeness: input.completeness,
+      truncated: false,
+      limitations: input.limitations,
+    },
+  }, now);
+  const comparisonPin = withPin.record.evidencePins.find((pin) => !beforePinIds.has(pin.id));
+  if (!comparisonPin) throw new Error('The recheck comparison could not be retained.');
+  return updateCase(withPin.cases, id, {
+    observedEffectReview: {
+      state: input.state,
+      observedAt: input.observedAt,
+      sourceClass: 'analyst',
+      source: input.source,
+      completeness: input.completeness,
+      evidencePinId: comparisonPin.id,
+      followUpAt: input.followUpAt,
+      limitations: input.limitations,
+    },
+  }, now);
 }

@@ -154,6 +154,18 @@ test('opens a directly linked CLI command without loading unrelated command deta
   expect(investigationRequests).toEqual([]);
 });
 
+test('opens a directly linked CLI workflow section after the responsive layout settles', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/cli#browser-handoff');
+  const handoff = page.locator('#browser-handoff');
+  await expect(handoff).toBeVisible();
+  await expect.poll(async () => {
+    const box = await handoff.boundingBox();
+    return box ? box.y >= 0 && box.y < 220 : false;
+  }).toBe(true);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('reveals related CLI commands even when the current filters exclude them', async ({ page }) => {
   await page.goto('/cli');
   const catalogue = page.getByTestId('public-cli-catalogue');

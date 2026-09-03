@@ -11,7 +11,10 @@
     CASE_DISPOSITIONS,
     CASE_REVIEW_REASONS,
     CASE_STATUSES,
+    caseFreeformTags,
     caseLookupTarget,
+    caseNumber,
+    caseTypeRecords,
     dispositionLabel,
     sourceLabel,
     statusLabel,
@@ -128,11 +131,11 @@
         Include in offline Risk calibration export
       </label>
       <button id={`case-head-${record.id}`} class="case-head" aria-expanded={expandedId === record.id} aria-controls={`case-body-${record.id}`} onclick={() => expand(record)}>
-        <span class="case-domain"><strong>{record.domain}</strong>{#if record.notes.length}<small>{record.notes.length} note{record.notes.length === 1 ? '' : 's'}</small>{/if}</span>
+        <span class="case-domain"><strong>{record.domain}</strong><small><span title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}</span>{#if record.notes.length} · {record.notes.length} note{record.notes.length === 1 ? '' : 's'}{/if}</small></span>
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
         <span class="updated">{formatDate(record.updatedAt)}</span>
       </button>
-      {#if record.tags.length}<div class="tag-row">{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
+      {#if caseTypeRecords(record.tags).length || caseFreeformTags(record.tags).length}<div class="tag-row">{#each caseTypeRecords(record.tags) as type}<span class="tag case-type">{type.label}</span>{/each}{#each caseFreeformTags(record.tags) as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
       {#if expandedId === record.id}
         <div class="case-body" id={`case-body-${record.id}`}>
           <div class="field-grid">
@@ -142,8 +145,8 @@
           </div>
           <CaseBrandAssociations {record} profiles={brandProfiles} profilesUnavailable={brandProfilesUnavailable} addAssociation={addBrandProfileAssociation} removeAssociation={removeBrandProfileAssociation} />
           <form class="tags-edit" onsubmit={(event) => { event.preventDefault(); saveTags(record); }}>
-            <label class="field" for={`tags-${record.id}`}>Tags <small>comma separated</small></label>
-            <div><input id={`tags-${record.id}`} value={tagDraft} oninput={(event) => setTagDraft(event.currentTarget.value)} placeholder="phishing, active-campaign" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>
+            <label class="field" for={`tags-${record.id}`}>Additional tags <small>comma separated; Case types are managed below</small></label>
+            <div><input id={`tags-${record.id}`} value={tagDraft} oninput={(event) => setTagDraft(event.currentTarget.value)} placeholder="campaign-name, priority" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>
           </form>
           <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(record); }}>
             <label class="field" for={`note-${record.id}`}>Add note</label>
@@ -186,6 +189,7 @@
   .badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
   .tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}
   .tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .tag.case-type{border-color:rgb(var(--interface-accent-rgb) / .42);color:var(--interface-accent)}
   .case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .tags-edit>div{display:flex;gap:8px;margin-top:6px}
@@ -202,5 +206,10 @@
     .case-head{grid-template-columns:1fr;gap:7px}
     .updated{order:3}
     .field-grid{grid-template-columns:1fr}
+  }
+  @media(max-width:480px){
+    .calibration-select,.case-head{padding-left:12px;padding-right:12px}
+    .tag-row{padding-left:12px;padding-right:12px}
+    .case-body{padding:12px}
   }
 </style>

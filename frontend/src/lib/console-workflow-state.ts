@@ -14,6 +14,8 @@ export type LookupMode = 'fast' | 'deep';
 export type LookupWorkflowState = {
   query: string;
   completedTarget: string;
+  /** Exact Incident URL retained only in this in-memory navigation state. */
+  completedIncidentUrl?: string;
   /** Optional only for compatibility with workflow state created before exact completed depth was retained. */
   completedLookupDepth?: LookupMode | null;
   lookupMode: LookupMode;

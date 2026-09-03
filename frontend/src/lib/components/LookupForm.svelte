@@ -6,6 +6,7 @@
 
   let {
     query = $bindable(),
+    task,
     lookupMode = $bindable(),
     loading,
     loadingElapsedMs,
@@ -30,6 +31,7 @@
     onquerychange,
   }: {
     query: string;
+    task: 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
     lookupMode: 'fast' | 'deep';
     loading: boolean;
     loadingElapsedMs: number;
@@ -116,7 +118,7 @@
     <p class="feature-disabled" role="note">Some lookup sources are disabled by deployment policy: {lookupLimitations.map((item) => item.id.replaceAll('_', ' ')).join(', ')}. Results will identify unevaluated evidence.</p>
   {/if}
 
-  <label class="search-label" for="query">Domain, IP address, ASN, or domain list</label>
+  <label class="search-label" for="query">{task === 'incident' ? 'Incident URL, domain, IP address, or ASN' : 'Domain, IP address, ASN, or domain list'}</label>
   <div class="input-row">
     <div class="query-field">
       <textarea id="query" bind:value={query} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
@@ -132,6 +134,9 @@
       : 'Separate multiple domains with commas, semicolons, tabs, or new lines.'}
     <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
+  {#if task === 'incident'}
+    <p class="incident-input-note">An absolute HTTP(S) URL is parsed locally and only its hostname is sent into Lookup. Its path, query and fragment stay only in this tab's current workflow unless you deliberately retain the URL in a Case.</p>
+  {/if}
   {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
@@ -205,6 +210,7 @@
   .clear{position:absolute;right:7px;top:9px;width:34px;height:34px;border:0;background:none;font-size:1.25rem}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .input-help span{display:inline-block;margin-left:6px;color:var(--muted);font-family:var(--mono)}
+  .incident-input-note{margin:8px 0 0;padding:8px 10px;border-left:3px solid var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .06);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .lookup-mode{margin:14px 0 0;padding:0;border:0}
   .lookup-mode legend{margin-bottom:8px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:520px}

@@ -43,6 +43,61 @@ async function runDeepLookup(page: Page): Promise<void> {
   await expandLookupFamilies(page);
 }
 
+test('an Incident URL sends only its hostname and retains exact Case context only by choice', async ({ page }) => {
+  const incidentUrl = 'https://login.incident.invalid/sign-in?reference=fixture,secondary;third#review';
+  const lookupTarget = 'login.incident.invalid';
+  const caseDomain = 'incident.invalid';
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    requests.push(requestUrl.searchParams.get('q') ?? '');
+    const base = sectionedLookupFixture(caseDomain);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...base,
+        ...lookupDomainIdentity(lookupTarget),
+        availability: { ...base.availability, domain: caseDomain, deepScanComplete: true },
+        rdap: { ...base.rdap, parsed: { ...base.rdap.parsed, domain: caseDomain } },
+      }),
+    });
+  });
+
+  await page.goto('/lookup?task=incident&depth=deep');
+  await page.locator('#query').fill(incidentUrl);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expect(page.getByRole('heading', { name: caseDomain, exact: true })).toBeVisible();
+  expect(requests).toEqual([lookupTarget]);
+  await expect(page.locator('#query')).toHaveValue(incidentUrl);
+  await expandLookupFamilies(page);
+
+  const caseCard = page.locator('.case-card');
+  await caseCard.getByRole('button', { name: 'Create case' }).click();
+  const incidentContext = caseCard.locator('.incident-context-tool');
+  await expect(incidentContext).toContainText(`Lookup sent only ${lookupTarget}`);
+  await expect(incidentContext).toContainText('query and a fragment');
+  await incidentContext.getByLabel('Investigation objective').fill('Review the observed page and preserve only the evidence needed for response preparation.');
+  await incidentContext.getByRole('button', { name: 'Save Incident context' }).click();
+
+  const originOnly = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(JSON.stringify(originOnly.records[0]?.value)).not.toContain('reference=fixture');
+  expect(originOnly.records[0]?.value?.assertions).toEqual([
+    expect.objectContaining({ statement: 'Investigate incident URL: https://login.incident.invalid' }),
+  ]);
+
+  await incidentContext.getByRole('checkbox', { name: /Retain the exact URL/ }).check();
+  await incidentContext.getByRole('button', { name: 'Save Incident context' }).click();
+  const exact = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: originOnly.manifest.revision + 1,
+  });
+  expect(exact.records[0]?.value?.assertions).toEqual([
+    expect.objectContaining({ statement: `Investigate incident URL: ${incidentUrl}` }),
+  ]);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('partial Lookup evidence can be classified, monitored, rechecked, and reviewed on mobile', {
   tag: ['@analyst-journey', '@journey-response-monitoring-recheck'],
 }, async ({ page }) => {
@@ -68,14 +123,21 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
   await caseCard.getByRole('button', { name: 'Create case' }).click();
   await caseCard.locator('#lookup-case-disposition').selectOption('suspicious');
   await caseCard.locator('#lookup-case-review-reason').selectOption('insufficient_evidence');
-  await caseCard.getByRole('button', { name: 'Save classification' }).click();
-  await expect(caseCard).toContainText('Saved the analyst disposition and review reason.');
+  await caseCard.locator('#lookup-case-conclusion-rationale').fill('The collected sources remain incomplete and require monitored follow-up.');
+  const conclusionEvidence = caseCard.locator('.conclusion-evidence');
+  await conclusionEvidence.locator(':scope > summary').click();
+  const conclusionFacts = conclusionEvidence.locator('.conclusion-facts input[type="checkbox"]');
+  await expect(conclusionFacts.first()).toBeVisible();
+  await conclusionFacts.first().check();
+  await caseCard.getByRole('button', { name: 'Record evidence-linked conclusion' }).click();
+  await expect(caseCard).toContainText('Recorded an evidence-linked analyst conclusion');
 
   const classifiedCases = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(classifiedCases.records[0]?.value).toEqual(expect.objectContaining({
     domain: CASE_DOMAIN,
     disposition: 'suspicious',
     reviewReasonCode: 'insufficient_evidence',
+    decisions: [expect.objectContaining({ evidencePinIds: [expect.any(String)] })],
   }));
 
   await caseCard.getByRole('link', { name: 'Open in Monitor →' }).click();

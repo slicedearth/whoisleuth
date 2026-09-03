@@ -4,6 +4,7 @@ const PUBLIC_RESOURCE_SLUGS = Object.freeze([
   'lookalike-domain-checker',
   'certificate-transparency-brand-protection',
   'domain-investigation-workflow',
+  'reporting-and-takedown-guidance',
   'bulk-domain-comparison',
   'ip-asn-investigation',
   'local-first-osint',

@@ -26,6 +26,12 @@ test('public resources expose a bounded unique set of useful investigation topic
     'www.rfc-editor.org',
     'www.unicode.org',
     'www.w3.org',
+    'www.linkedin.com',
+    'www.meta.com',
+    'www.tiktok.com',
+    'help.x.com',
+    'support.google.com',
+    'telegram.org',
   ]);
   assert.ok(PUBLIC_RESOURCES.length > 0 && PUBLIC_RESOURCES.length <= 32);
   assert.deepEqual(PUBLIC_RESOURCE_SLUGS, PUBLIC_RESOURCES.map((resource) => resource.slug));
@@ -37,7 +43,9 @@ test('public resources expose a bounded unique set of useful investigation topic
     assert.equal(resource.steps.length, 3);
     assert.equal(resource.evidence.length, 3);
     assert.equal(resource.questions.length, 3);
-    assert.ok(resource.references.length >= 2 && resource.references.length <= 3);
+    const maximumReferences = resource.slug === 'reporting-and-takedown-guidance' ? 6 : 3;
+    assert.ok(resource.references.length >= 2 && resource.references.length <= maximumReferences);
+    if (resource.slug === 'reporting-and-takedown-guidance') assert.equal(resource.references.length, 6);
     assert.equal(new Set(resource.references.map((reference) => reference.href)).size, resource.references.length);
     assert.ok(`${resource.seoTitle} | WHOISleuth`.length <= 60);
     assert.doesNotMatch(resource.seoTitle, /WHOISleuth|\|/u);

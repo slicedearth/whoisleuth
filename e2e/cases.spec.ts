@@ -4,6 +4,7 @@ import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHo
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
+import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 
 // Monitor workflows, retained evidence and local control coverage.
 
@@ -202,7 +203,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await expectNoHorizontalOverflow(page);
 });
 
-test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 in light and dark themes', async ({ page }) => {
+test('response lifecycle surfaces remain accessible at major desktop and mobile viewports in both themes', async ({ page }) => {
   test.slow();
   const now = new Date().toISOString();
   const createdAt = new Date(Date.parse(now) - 5_000).toISOString();
@@ -227,8 +228,12 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
   for (const surface of [
     { width: 1440, height: 1000, theme: 'light' },
     { width: 1440, height: 1000, theme: 'dark' },
+    { width: 1024, height: 768, theme: 'light' },
+    { width: 1024, height: 768, theme: 'dark' },
     { width: 390, height: 844, theme: 'light' },
     { width: 390, height: 844, theme: 'dark' },
+    { width: 320, height: 700, theme: 'light' },
+    { width: 320, height: 700, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });
     await page.evaluate((theme) => localStorage.setItem('whoisleuth:theme:v1', theme), surface.theme);
@@ -250,7 +255,7 @@ test('response lifecycle surfaces remain accessible at 1440×1000 and 390×844 i
     await expect(remediation).toContainText('Independently observed change time');
     const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
     await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
-    await openPacketWizardStep(packet, 'Readiness limitations');
+    await openPacketWizardStep(packet, 'Review');
     await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
     await expect(packet).toContainText('Partial and stale states remain visible and require deliberate freshness and limitation confirmation');
     await expect(page.locator('html')).toHaveAttribute('data-theme', surface.theme);
@@ -271,6 +276,59 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await expect(page.locator('.case-head', { hasText: 'tracked.invalid' })).toBeVisible();
+});
+
+test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'reported-content.invalid');
+  const initial = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const stored = requiredValue(initial.records[0], 'The created Case is missing.').value;
+  const expectedNumber = caseNumber(stored.id);
+  const head = page.locator('.case-head', { hasText: 'reported-content.invalid' });
+  await expect(head).toContainText(`Case …${expectedNumber.slice(-8)}`);
+
+  const workspace = await openCaseResponseWorkspace(page);
+  await expect(workspace.locator('.case-number code')).toHaveText(formattedCaseNumber(stored.id), { useInnerText: true });
+  await workspace.getByRole('checkbox', { name: /^Phishing/u }).check();
+  await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
+  await workspace.getByRole('checkbox', { name: /^Copyright infringement/u }).check();
+  await workspace.getByRole('button', { name: 'Save Case types' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
+  await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
+  await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
+
+  const incidentUrl = 'https://www.tiktok.com/@example/video/7';
+  await workspace.getByLabel('Exact HTTP(S) URL').fill(incidentUrl);
+  await workspace.getByRole('button', { name: 'Add incident link' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Added an exact incident target');
+  const routes = workspace.locator('.reporting-routes');
+  await expect(routes).toContainText('TikTok');
+  await expect(routes).toContainText('Report an account or content');
+  await expect(routes).toContainText('Submit a trademark or counterfeit report');
+  await routes.locator('.route', { hasText: 'Report an account or content' }).getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await expect(packet.getByLabel('Abuse category')).toHaveValue('Phishing, Trademark infringement and 1 more');
+  await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue(incidentUrl);
+
+  await page.getByLabel('Additional tags').fill('priority-review');
+  await page.getByRole('button', { name: 'Save tags' }).click();
+  const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: initial.manifest.revision + 4 });
+  const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
+  expect(updatedCase.tags).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
+  expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
+  expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'security_contact_report', recipient: 'https://www.tiktok.com/legal/report/feedback' })]));
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.getByLabel('Search').fill('copyright infringement');
+  const restoredHead = page.locator('.case-head', { hasText: 'reported-content.invalid' });
+  if (await restoredHead.getAttribute('aria-expanded') !== 'true') await restoredHead.click();
+  await expect(page.locator('.tag.case-type', { hasText: 'Phishing' })).toBeVisible();
+  await expect(page.getByLabel('Additional tags')).toHaveValue('priority-review');
+  await expectNoHorizontalOverflow(page);
 });
 
 test('the evidence-gap inbox filters and dismisses a stale failed source on mobile', async ({ page }) => {
@@ -313,7 +371,10 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
     },
   });
 
-  const detailFilters = page.getByRole('group', { name: 'Review inbox detail filters' });
+  const reviewInbox = page.locator('.review-inbox');
+  await expect(reviewInbox).toBeVisible();
+  await reviewInbox.locator('details.advanced-filters > summary').click();
+  const detailFilters = reviewInbox.getByRole('group', { name: 'Advanced review filters' });
   await detailFilters.getByRole('combobox', { name: 'Source', exact: true }).selectOption('whois');
   await detailFilters.getByRole('combobox', { name: 'Age', exact: true }).selectOption('stale');
   await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');

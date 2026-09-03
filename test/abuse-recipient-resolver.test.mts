@@ -10,6 +10,8 @@ describe('abuse recipient resolver', () => {
     assert.equal(abuseRecipientKindLabel('registrar'), 'Registrar contact');
     assert.equal(abuseRecipientKindLabel('registry'), 'Registry contact');
     assert.equal(abuseRecipientKindLabel('security_txt'), 'security.txt contact');
+    assert.equal(abuseRecipientKindLabel('application_platform'), 'Application-platform reporting route');
+    assert.equal(abuseRecipientKindLabel('observed_edge'), 'Observed edge-service reporting route');
     assert.equal(
       abuseRecipientKindLabel('network_hosting'),
       'Observed endpoint network-registration contact',
@@ -69,12 +71,25 @@ describe('abuse recipient resolver', () => {
           limitations: ['Network registration is not hosting attribution.'],
         }],
       },
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'success',
+        observedAt: '2026-07-30T01:03:00.000Z',
+        findings: [
+          { id: 'netlify', confidence: 'medium', roles: ['application_platform'] },
+          { id: 'cloudflare', confidence: 'medium', roles: ['observed_edge'] },
+        ],
+      },
+      now: new Date('2026-09-04T00:00:00.000Z'),
     });
 
     assert.deepEqual(result.recipients.map((item) => item.kind), [
       'registrar',
       'registry',
       'security_txt',
+      'application_platform',
+      'observed_edge',
       'network_hosting',
       'security_txt',
     ]);
@@ -83,10 +98,14 @@ describe('abuse recipient resolver', () => {
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
     assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
-    assert.equal(result.recipients[3]?.contact, 'network-abuse@example.test');
+    assert.equal(result.recipients[3]?.kind, 'application_platform');
     assert.equal(result.recipients[3]?.actionType, 'network_hosting_report');
-    assert.match(result.recipients[3]?.limitations.join(' ') ?? '', /selected endpoint address: 192\.0\.2\.1/i);
-    assert.match(result.recipients[3]?.limitations.join(' ') ?? '', /rdap observed at 2026-07-30/i);
+    assert.equal(result.recipients[4]?.kind, 'observed_edge');
+    assert.match(result.recipients[4]?.limitations.join(' ') ?? '', /does not identify the origin host/i);
+    assert.equal(result.recipients[5]?.contact, 'network-abuse@example.test');
+    assert.equal(result.recipients[5]?.actionType, 'network_hosting_report');
+    assert.match(result.recipients[5]?.limitations.join(' ') ?? '', /selected endpoint address: 192\.0\.2\.1/i);
+    assert.match(result.recipients[5]?.limitations.join(' ') ?? '', /rdap observed at 2026-07-30/i);
     assert.equal(result.coverage.find((item) => item.kind === 'network_hosting')?.state, 'found');
   });
 
@@ -149,5 +168,21 @@ describe('abuse recipient resolver', () => {
     assert.match(present.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /fetched.*no usable/iu);
     assert.match(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /collected with state absent/iu);
     assert.doesNotMatch(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /not requested/iu);
+  });
+
+  test('withholds stale provider routes and keeps edge evidence separate from origin hosting', () => {
+    const result = resolveAbuseRecipients({
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'success',
+        observedAt: '2027-03-03T01:00:00.000Z',
+        findings: [{ id: 'cloudflare', confidence: 'medium', roles: ['observed_edge'] }],
+      },
+      now: new Date('2027-03-04T00:00:00.000Z'),
+    });
+    assert.equal(result.recipients.some((item) => item.kind === 'observed_edge'), false);
+    assert.equal(result.coverage.find((item) => item.kind === 'observed_edge')?.state, 'stale');
+    assert.match(result.limitations.join(' '), /neither establishes the origin host/u);
   });
 });

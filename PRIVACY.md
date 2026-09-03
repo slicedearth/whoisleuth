@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 2 September 2026.
+Last updated: 4 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -45,8 +45,9 @@ Depending on the selected operation, WHOISleuth can process:
   certificate, security.txt and provider evidence;
 - registry-published contact names, organisations, addresses, email addresses
   and telephone numbers where the source exposes them;
-- analyst-supplied Brand Profiles, watchlists, Cases, notes, assertions,
-  response actions, desired state and review decisions;
+- analyst-supplied Brand Profiles, watchlists, Cases, classifications, exact
+  incident links, notes, assertions, response actions, desired state and review
+  decisions;
 - imported evidence files and their bounded provenance;
 - authentication and operation-control metadata; and
 - local output files selected by the operator.
@@ -84,6 +85,12 @@ observation time of a reviewed response route. Published v2 Case schema 13 and
 exact public v1 Case schema 12 remain readable and migrate directly; migrated
 fields can remain null because WHOISleuth does not reconstruct them from weaker
 evidence. Case report v10 JSON and Markdown do not add the snapshot hostname.
+
+A Case can also retain controlled classifications and exact HTTP(S) incident
+links as browser-local Case metadata. Exact links can contain public paths,
+queries and fragments, so they can be sensitive even when embedded credentials
+are rejected. They remain local until the analyst opens, exports or otherwise
+shares them.
 
 Public CLI Case packs clear identifiers, actions, observed-effect reviews and
 closure records for the public audience. Trusted and internal Case packs and
@@ -186,6 +193,12 @@ no attachment.
 The public deployment contains no individual user-account database and no
 advertising or behavioural audience measurement.
 
+Opening an official platform reporting route is deliberate external navigation.
+WHOISleuth does not prefetch the route or submit Case data. The destination or
+local mail application receives only what ordinary navigation and the analyst's
+later form or email entry provides, under that provider's own terms and privacy
+notice.
+
 ## Local CLI and active operations
 
 The CLI runs on the operator's machine and does not use the hosted application
@@ -263,6 +276,11 @@ page-reflected path or query until the operator deletes it. Captures remain
 local, are not uploaded to WHOISleuth and persist until the operator deletes
 them. Bounded text and tag-sequence digests are comparison aids, not exact DOM,
 visibility or page-identity claims.
+
+When an analyst selects a local capture manifest for one Case, the browser
+validates it before preview and imports only sanitised manifest metadata and
+declared digests. Screenshot, DOM-digest and other capture artefact bytes stay
+outside WHOISleuth and are not verified by that import.
 
 ## Retention and deletion
 

@@ -36,9 +36,9 @@
 <section class="at-a-glance card" aria-labelledby="lookup-at-a-glance-title">
   <header class="glance-header">
     <div class="glance-intro">
-      <p class="eyebrow">Start here</p>
-      <h4 id="lookup-at-a-glance-title">At a glance</h4>
-      <p>Review the strongest observations and unresolved evidence before opening source detail.</p>
+      <p class="eyebrow">Analyst synthesis</p>
+      <h4 id="lookup-at-a-glance-title">Analyst assessment</h4>
+      <p>Use one evidence-led view of the current observations, disagreements, unknowns and next review. Record the analyst's conclusion separately.</p>
     </div>
     <div class="metrics" role="group" aria-label="Evidence coverage and review cues">
       {#each metricGroups as metric (metric.id)}
@@ -122,7 +122,7 @@
 
   <div class="glance-grid independent-grid">
     <section aria-labelledby="lookup-key-findings-title">
-      <h5 id="lookup-key-findings-title">Key observations</h5>
+      <h5 id="lookup-key-findings-title">Current observations</h5>
       {#if notableSignals.length}
         <ul class="signals">
           {#each notableSignals as signal}
@@ -138,7 +138,7 @@
     </section>
 
     <section aria-labelledby="lookup-next-review-title">
-      <h5 id="lookup-next-review-title">Recommended next reviews</h5>
+      <h5 id="lookup-next-review-title">Next review</h5>
       {#if nextReviews.displayedItems.length}
         <p class="action-counts" data-action-counts>
           Showing <strong>{nextReviews.displayedCount}</strong> of <strong>{nextReviews.total}</strong> ranked review action{nextReviews.total === 1 ? '' : 's'}.

@@ -84,5 +84,5 @@
   .response-disclosure[open]>summary{border-bottom:1px solid var(--border);background:var(--panel-raised)}
   .response-disclosure[open]>summary span:last-child::before{content:'−'}
   .response-body{min-width:0;padding:14px;overflow-wrap:anywhere}
-  @media(max-width:620px){.response-disclosure>summary{align-items:flex-start;flex-direction:column;gap:10px}.response-disclosure>summary span:last-child{white-space:normal}}
+  @media(max-width:620px){.response-disclosure>summary{align-items:flex-start;flex-direction:column;gap:10px}.response-disclosure>summary span:last-child{white-space:normal}.response-body{padding:0}}
 </style>

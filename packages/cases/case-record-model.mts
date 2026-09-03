@@ -8,3 +8,5 @@ export * from './case-brand-profile-references.mts';
 export * from './case-evidence-model.mts';
 export * from './case-record-operations.mts';
 export * from './case-investigation-branch-model.mts';
+export * from './case-investigation-context.mts';
+export * from './case-workflow-metadata.mts';
