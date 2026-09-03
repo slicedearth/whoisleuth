@@ -274,8 +274,8 @@ Exports are deliberate local actions. Review them before sharing:
 - a full saved Lookup can include target, endpoints, raw RDAP publications,
   WHOIS bodies and publicly published contact data;
 - normalised Lookup evidence excludes raw registration payloads and expanded
-  contacts, but exact public schema 26 can contain fields removed from current
-  schema 27;
+  contacts. Current schema 28 and published v2 schema 27 retain that boundary;
+  exact v1 schema 26 can contain public contact fields;
 - Case, workspace and trusted Case-pack files can identify investigated
   hostnames and contain analyst records;
 - graph, campaign and defensive exports identify their selected scope; and

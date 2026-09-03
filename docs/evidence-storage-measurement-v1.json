@@ -428,7 +428,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:55e36a38a7b98b2373059e81877cdb327a0630e1bdb46d442a0ab9a42b16393b",
+            "payloadDigest": "sha256:783a36653bdbc63cca24760db57f8755f84bf0a3f83c40525e5102d295064e2f",
             "occurrences": 500,
             "payloadBytes": 601,
             "grossDuplicateBytes": 299899
@@ -461,7 +461,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:58ba7bcec1a940b88a932d9d4cdcf7bb817984184ce1cc0648c3ea43a0a55fae",
+            "payloadDigest": "sha256:c5770b4c2caf0f408758e871c38b30f4fc883ac98b548de2cc7a89fe2933907c",
             "occurrences": 500,
             "exactForms": 1,
             "payloadBytes": 601,

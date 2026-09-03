@@ -147,6 +147,121 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expectNoHorizontalOverflow(page);
 });
 
+test('registrar standing keeps accreditation and official compliance evidence separate', async ({ page }) => {
+  const lookupOrigin = new URL(page.url()).origin;
+  const thirdPartyRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.origin !== lookupOrigin && !['data:', 'blob:'].includes(url.protocol)) {
+      thirdPartyRequests.push(request.url());
+    }
+  });
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'standing.example',
+      type: 'domain',
+      inputHostname: 'standing.example',
+      registrableDomain: 'standing.example',
+      isSubdomain: false,
+      availability: { state: 'registered', confidence: 'high', domain: 'standing.example' },
+      registrarStanding: {
+        schema: 'whoisleuth.registrar-standing',
+        version: 1,
+        ianaId: '999',
+        accreditation: {
+          state: 'accredited',
+          sourceUrl: 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv',
+          observedAt: '2026-09-03T06:51:00.000Z',
+          sourceHealth: 'current',
+        },
+        compliance: {
+          state: 'matching_actions',
+          sourceUrl: 'https://www.icann.org/compliance/notices',
+          reviewedAt: '2026-09-03T06:51:00.000Z',
+          catalogueYear: 2026,
+          sourceHealth: 'current',
+          actions: [{
+            noticeId: 'notice-999',
+            type: 'termination',
+            issuedOn: '2026-08-27',
+            sourceUrl: 'https://www.icann.org/uploads/compliance_notice/attachment/999/notice.pdf',
+            indexOutcome: null,
+          }],
+          truncated: false,
+        },
+        assessment: {
+          state: 'notice_present',
+          label: 'Official termination notice found',
+          detail: 'The reviewed IANA catalogue records the registrar as accredited while the current-year ICANN index contains a termination notice. Review the notice dates, scope and current outcome.',
+        },
+        limitations: [
+          'Registrar standing describes the provider, not whether this domain is malicious.',
+          'The notice catalogue is not a complete historical enforcement record.',
+        ],
+        nextActions: [
+          'Open the official notice and verify its dates, scope, and current outcome before acting.',
+          'Recheck the registrar IANA ID and domain transfer status during follow-up.',
+        ],
+      },
+      rdap: {
+        upstreamStatus: 200,
+        rdapServer: 'https://rdap.example/domain/standing.example',
+        parsed: {
+          domain: 'STANDING.EXAMPLE',
+          registrar: { name: 'Example Registrar' },
+          registrarIanaId: '999',
+          entitiesByRole: {},
+        },
+      },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        version: 7,
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('standing.example');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+
+  const standing = page.locator('section.registrar-standing');
+  await expect(standing).toBeVisible();
+  await expect(standing.getByRole('heading', { name: 'Registrar standing' })).toBeVisible();
+  await expect(standing.getByText('Official termination notice found', { exact: true })).toBeVisible();
+  await expect(standing.getByText('accredited', { exact: true })).toBeVisible();
+  await expect(standing.getByText('matching actions', { exact: true })).toBeVisible();
+  await expect(standing.getByText('IANA ID 999 · source current', { exact: true })).toBeVisible();
+  await expect(standing.getByText('1 matching 2026 action · source current', { exact: true })).toBeVisible();
+  const ianaLink = standing.getByRole('link', { name: /Open IANA registrar catalogue/u });
+  const indexLink = standing.getByRole('link', { name: /Open ICANN notice index/u });
+  const noticeLink = standing.getByRole('link', { name: /Open notice/u });
+  await expect(ianaLink).toHaveAttribute('href', 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv');
+  await expect(indexLink).toHaveAttribute('href', 'https://www.icann.org/compliance/notices');
+  await expect(noticeLink).toHaveAttribute('href', 'https://www.icann.org/uploads/compliance_notice/attachment/999/notice.pdf');
+  for (const link of [ianaLink, indexLink, noticeLink]) {
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  }
+
+  const reviewSteps = standing.locator('details.standing-follow-up');
+  await reviewSteps.locator(':scope > summary').focus();
+  await reviewSteps.locator(':scope > summary').press('Enter');
+  await expect(reviewSteps).toHaveAttribute('open', '');
+  await expect(reviewSteps.getByText(/Recheck the registrar IANA ID/u)).toBeVisible();
+  const sourceLimits = standing.locator('details.standing-scope');
+  await sourceLimits.locator(':scope > summary').click();
+  await expect(sourceLimits.getByText(/not whether this domain is malicious/u)).toBeVisible();
+
+  expect(thirdPartyRequests).toEqual([]);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('deep Lookup presents registrar and observed network RDAP as separate sources', async ({ page }) => {
   test.slow();
   const lookupOrigin = new URL(page.url()).origin;

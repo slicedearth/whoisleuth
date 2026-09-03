@@ -30,6 +30,7 @@ type LookupEvidenceReport = {
   query: ReportField[];
   assessment: ReportField[];
   registryGroups: ReportGroup[];
+  registrarStanding: ReportField[];
   registryInterpretation: ReportField[];
   comparison: { health: ReportField[]; fields: ComparisonField[]; omitted: number };
   registrarComparison: { health: ReportField[]; fields: PublicationComparisonField[]; omitted: number };
@@ -172,6 +173,22 @@ function buildLookupEvidenceReport(
   const rdapComparisonHealth = objectOrEmpty(comparisonHealth.rdap);
   const whoisComparisonHealth = objectOrEmpty(comparisonHealth.whois);
   const registrarComparison = objectOrEmpty(analysis.registrarPublicationComparison);
+  const registrarStanding = objectOrEmpty(analysis.registrarStanding);
+  const registrarAccreditation = objectOrEmpty(registrarStanding.accreditation);
+  const registrarCompliance = objectOrEmpty(registrarStanding.compliance);
+  const registrarStandingAssessment = objectOrEmpty(registrarStanding.assessment);
+  const registrarActions = Array.isArray(registrarCompliance.actions)
+    ? registrarCompliance.actions.slice(0, 5).map(objectOrEmpty)
+    : [];
+  const registrarNoticeSummary = registrarCompliance.state === 'reviewed_no_match'
+    ? `None in the reviewed ${cleanReportText(registrarCompliance.catalogueYear, 'current-year')} catalogue`
+    : registrarCompliance.state === 'not_applicable'
+      ? 'Not assessed without one unambiguous registrar IANA ID'
+      : registrarCompliance.state === 'stale'
+        ? 'No matching action retained; the reviewed catalogue is stale'
+        : registrarCompliance.state === 'unavailable'
+          ? 'Unavailable because the retained catalogue could not be validated'
+          : 'No matching action was represented';
   const registrarComparisonHealth = objectOrEmpty(registrarComparison.sourceHealth);
   const registryPublicationHealth = objectOrEmpty(registrarComparisonHealth.registry);
   const registrarPublicationHealth = objectOrEmpty(registrarComparisonHealth.registrar);
@@ -391,6 +408,27 @@ function buildLookupEvidenceReport(
       ...(Object.keys(registrarRdap).length ? [groups.registrarRdap] : []),
       groups.whois,
     ],
+    registrarStanding: registrarStanding.version === 1 ? [
+      reportField('Assessment', displayLabel(registrarStandingAssessment.label || registrarStandingAssessment.state)),
+      reportField('Detail', registrarStandingAssessment.detail),
+      reportField('Registrar IANA ID', registrarStanding.ianaId),
+      reportField('IANA accreditation', displayLabel(registrarAccreditation.state)),
+      reportField('IANA source health', displayLabel(registrarAccreditation.sourceHealth)),
+      reportField('IANA source', registrarAccreditation.sourceUrl),
+      reportField('IANA catalogue reviewed', registrarAccreditation.observedAt),
+      reportField('ICANN notice state', displayLabel(registrarCompliance.state)),
+      reportField('ICANN source health', displayLabel(registrarCompliance.sourceHealth)),
+      reportField('ICANN source', registrarCompliance.sourceUrl),
+      reportField('ICANN catalogue reviewed', registrarCompliance.reviewedAt),
+      ...(registrarActions.length
+        ? registrarActions.map((action, index) => reportField(
+            `Official notice ${index + 1}`,
+            `${displayLabel(action.type)} issued ${cleanReportText(action.issuedOn)}; source ${cleanReportText(action.sourceUrl)}${action.indexOutcome ? `; index outcome ${cleanReportText(action.indexOutcome)}` : ''}`,
+          ))
+        : [reportField('Matching official notices', registrarNoticeSummary)]),
+      reportField('Standing limitations', listText(registrarStanding.limitations)),
+      reportField('Review steps', listText(registrarStanding.nextActions)),
+    ] : [],
     registryInterpretation: registryInsights.version === 1 ? [
       reportField('Lifecycle', displayLabel(registryLifecycle.label)),
       reportField('Raw lifecycle statuses', listText(registryLifecycle.rawStatuses)),

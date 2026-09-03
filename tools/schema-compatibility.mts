@@ -396,6 +396,11 @@ import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycl
 import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
 import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
 import {
+  REGISTRAR_STANDING_AUDIT_COMPATIBILITY,
+  REGISTRAR_STANDING_CATALOGUE_COMPATIBILITY,
+} from '../lib/registrar-standing-catalogue-contract.mts';
+import { REGISTRAR_STANDING_COMPATIBILITY } from '../lib/registrar-standing-contract.mts';
+import {
   DNSSEC_EVIDENCE_SCHEMA,
   DNSSEC_EVIDENCE_VERSION,
 } from '../lib/dnssec-evidence-validation.mts';
@@ -527,6 +532,9 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.source-health', kind: 'cli_document', schema: SOURCE_HEALTH_SCHEMA, currentVersion: SOURCE_HEALTH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/source-health.mts', note: 'Offline composition of checked-in retained-source health and reviewed evaluation readiness without refreshing or querying any source.' }),
   entry({ id: 'maintainer.schema-compatibility-inventory', kind: 'cli_document', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
   entry(SSLBL_SNAPSHOT_COMPATIBILITY),
+  entry(REGISTRAR_STANDING_CATALOGUE_COMPATIBILITY),
+  entry(REGISTRAR_STANDING_AUDIT_COMPATIBILITY),
+  entry(REGISTRAR_STANDING_COMPATIBILITY),
   entry({ id: 'maintainer.synthetic-analyst-result', kind: 'cli_document', schema: SYNTHETIC_ANALYST_RESULT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SYNTHETIC_ANALYST_INPUT_BYTES, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Bounded explicitly synthetic journey result consumed without live target evidence.' }),
   entry({ id: 'maintainer.synthetic-analyst-report', kind: 'cli_document', schema: SYNTHETIC_ANALYST_REPORT_SCHEMA, currentVersion: SYNTHETIC_ANALYST_RESULT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/synthetic-analyst-journeys.mts', note: 'Target-free aggregate of explicitly synthetic journey fixtures.' }),
   entry({ id: 'maintainer.technology-example-review', kind: 'cli_document', schema: TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA, currentVersion: TECHNOLOGY_EXAMPLE_REVIEW_VERSION, supportedVersions: [5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/technology-example-review.mts', note: 'Offline reviewed-fixture evidence report for bounded technology signatures.' }),

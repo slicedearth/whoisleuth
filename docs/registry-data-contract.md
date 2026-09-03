@@ -737,13 +737,13 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, with exact public
-version 26 and current version 27 as its complete durable reader boundary.
-Version 26 binds RDAP, WHOIS, network-registration, and reverse-DNS
-publications to their retained source states. Version 27 is the single v2
-successor: it adds bounded homepage publication and delivery/cache metadata
-when represented and applies the privacy-minimised registration projection.
-Other historical reader shapes and unreleased checkpoints are unsupported.
+Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
+published v2 version 27, and current version 28 form its complete durable reader
+boundary. Version 27 added bounded homepage publication and delivery/cache
+metadata and the privacy-minimised registration projection. Version 28 adds a
+bounded registrar-standing projection from the checked-in IANA registrar-ID and
+current-year ICANN compliance-notice catalogues. Other historical reader shapes
+and unreleased checkpoints are unsupported.
 
 The document can contain query context, explicitly projected diagnostics,
 normalised sources, registry comparison, separately attributed authoritative
@@ -754,15 +754,21 @@ HTTPS service-binding, page, HTTP, DNS, and TLS evidence when the selected
 Lookup represented them. Missing, partial, unavailable, direct no-data, and
 failed observations remain distinct and do not change availability or Risk.
 
-Current version 27 excludes raw RDAP payloads, expanded RDAP and WHOIS
+Versions 27 and 28 exclude raw RDAP payloads, expanded RDAP and WHOIS
 contacts, vCards, entity inventories, attributed contact routes, request and
 response headers, cookies, session and credential fields, URL credentials,
 queries, and fragments. Positive source allowlists retain only reviewed
 publication fields, while `registryContactsExcluded: true` records deliberate
 contact omission without asserting that the source published no contact. Exact
-public version 26 may contain public registry contact data and should be
+v1 version 26 may contain public registry contact data and should be
 reviewed before sharing. The file is generated locally and remains the user's
 responsibility after download.
+
+Registrar standing is keyed only when the normalised registration publications
+provide one unambiguous numeric IANA ID. IANA accreditation status and ICANN
+compliance actions remain separately attributed, dated and source-health aware.
+They are operational provider context, not a registrar reputation score or
+evidence that the target is malicious, safe, owned or controlled.
 
 The IDN analysis carries its own `mappingVersion`. Mapping version
 `tr39-17.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode

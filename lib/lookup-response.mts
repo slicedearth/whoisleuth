@@ -22,6 +22,8 @@ import {
 import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from './threat-intelligence-types.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
+import { buildRegistrarStanding } from './registrar-standing.mts';
+import { resolveRegistrarIanaId } from './registrar-standing-contract.mts';
 import { securityTxtUnavailable } from './security-txt.mts';
 import { parseWhoisChain } from './whois.mts';
 import type { checkDomainAvailability } from './availability.mts';
@@ -466,12 +468,18 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
         registrarRdapFetchedAt: registrarRdap?.fetchedAt,
       })
     : null;
+  const registrarStanding = classified.type === 'domain' && !compact
+    ? buildRegistrarStanding({
+        registrarIanaId: resolveRegistrarIanaId(rdapRecord?.parsed, whois.parsed),
+      })
+    : null;
   return {
     rdap,
     whois,
     availability,
     diagnostics,
     ...(registryInsights ? { registryInsights } : {}),
+    ...(registrarStanding ? { registrarStanding } : {}),
     ...(reverseDns ? { reverseDns } : {}),
     ...(networkContext ? { networkContext } : {}),
     ...(securityTxt ? { securityTxt } : {}),

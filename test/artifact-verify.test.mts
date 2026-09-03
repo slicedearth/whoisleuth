@@ -58,6 +58,7 @@ import {
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
 import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
@@ -661,9 +662,21 @@ describe('offline artifact verifier', () => {
     assert.deepEqual(report.artifact, {
       kind: 'lookup_evidence',
       schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
-      version: lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      version: lookupEvidenceModule.V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
     assert.equal(report.state, 'structure_valid');
+  });
+
+  test('keeps the frozen published-v2 schema-27 Lookup export readable after schema 28 becomes current', async () => {
+    const report = await verifyOfflineArtifact(await loadLookupEvidenceV27Fixture());
+    assert.deepEqual(report.artifact, {
+      kind: 'lookup_evidence',
+      schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
+      version: lookupEvidenceModule.PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    });
+    assert.equal(report.state, 'structure_valid');
+    assert.equal(report.checks.structure, 'verified');
+    assert.equal(report.checks.contentIntegrity, 'not_checked');
   });
 
   test('accepts exact current homepage metadata while rejecting malformed and pre-homepage injection', async () => {
@@ -929,7 +942,7 @@ describe('offline artifact verifier', () => {
       /limited to 5 MiB/iu,
     );
 
-    for (const schemaVersion of [lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
+    for (const schemaVersion of [lookupEvidenceModule.V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
       const unsupported = { ...lookupEvidenceArtifact(), schemaVersion };
       await assert.rejects(
         verifyOfflineArtifact(JSON.stringify(unsupported)),

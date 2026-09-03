@@ -5,7 +5,8 @@ import {
   assertLookupEvidencePortableTree,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
   projectLookupEvidenceAvailabilityPublic,
   projectLookupEvidenceQuery,
@@ -14,6 +15,11 @@ import {
   projectLookupEvidenceWhoisPublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from '../../lib/evidence-export.mts';
+import {
+  registrarStandingObservedBy,
+  resolveRegistrarIanaId,
+  validRegistrarStanding,
+} from '../../lib/registrar-standing-contract.mts';
 import { compareRegistrySources } from '../../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../../lib/registry-insights.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../lib/project-metadata.mts';
@@ -106,7 +112,7 @@ function validateLookupEvidenceHomepageMetadata(
     : record(http.response, 'Lookup evidence HTTP response');
   const publicationPresent = Boolean(pageIdentity && Object.hasOwn(pageIdentity, 'publicationMetadata'));
   const deliveryPresent = Boolean(response && Object.hasOwn(response, 'deliveryMetadata'));
-  if (version < LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
+  if (version < PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION && (publicationPresent || deliveryPresent)) {
     fail('Lookup evidence homepage metadata epoch');
   }
   if (publicationPresent && !validPagePublicationMetadata(pageIdentity?.publicationMetadata)) {
@@ -296,7 +302,7 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     });
     return 'error';
   }
-  const complete = exact(source, version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  const complete = exact(source, version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed']
     : ['status', 'endpoint', 'transportSecurity', 'httpStatus', 'fetchedAt', 'attempts', 'parsed', 'raw'], 'Lookup evidence RDAP source');
   const status = enumeration(complete.status, ['success', 'partial', 'not_found', 'unsupported', 'skipped', 'disabled'], 'Lookup evidence RDAP status');
@@ -311,14 +317,14 @@ function validateLookupEvidenceRdap(value: unknown, version: number): string {
     validateLookupEvidenceRdapAttempt(item, `Lookup evidence RDAP attempt ${index + 1}`);
   });
   nullableRecord(complete.parsed, 'Lookup evidence RDAP parsed data');
-  if (version < LOOKUP_EVIDENCE_SCHEMA_VERSION) nullableRecord(complete.raw, 'Lookup evidence RDAP raw data');
-  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (version < PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION) nullableRecord(complete.raw, 'Lookup evidence RDAP raw data');
+  if (version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceRdapPublication(complete.parsed))) {
     fail('Lookup evidence RDAP portable publication');
   }
   if (status === 'success' && complete.parsed === null) fail('Lookup evidence RDAP publication');
   if (!['success', 'partial'].includes(status)
-    && (complete.parsed !== null || (version < LOOKUP_EVIDENCE_SCHEMA_VERSION && complete.raw !== null))) fail('Lookup evidence RDAP unavailable publication');
+    && (complete.parsed !== null || (version < PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION && complete.raw !== null))) fail('Lookup evidence RDAP unavailable publication');
   return status;
 }
 
@@ -336,7 +342,7 @@ function validateLookupEvidenceWhois(value: unknown, version: number): string {
   optionalText(complete.failedHop, 'Lookup evidence WHOIS failed hop', 253);
   optionalText(complete.conflictingHop, 'Lookup evidence WHOIS conflicting hop', 253);
   nullableRecord(complete.parsed, 'Lookup evidence WHOIS parsed data');
-  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceWhoisPublication(complete.parsed))) {
     fail('Lookup evidence WHOIS portable publication');
   }
@@ -565,7 +571,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'application', 'query', 'diagnostics', 'sources', 'analysis'], 'Lookup evidence');
   if (root.schema !== LOOKUP_EVIDENCE_SCHEMA
     || !SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.includes(Number(root.schemaVersion))) fail('Lookup evidence');
-  const version = integer(root.schemaVersion, 'Lookup evidence version', PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+  const version = integer(root.schemaVersion, 'Lookup evidence version', V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION, LOOKUP_EVIDENCE_SCHEMA_VERSION);
   iso(root.generatedAt, 'Lookup evidence generatedAt');
 
   const application = exact(root.application, ['name', 'version', 'projectUrl'], 'Lookup evidence application');
@@ -610,9 +616,19 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
   validateLookupEvidenceSecurityTxt(sources.securityTxt);
   validateLookupEvidenceSslbl(sources.sslbl);
 
-  const analysis = exact(root.analysis, ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison'], 'Lookup evidence analysis');
+  const analysis = exact(root.analysis, version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    ? ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison', 'registrarStanding']
+    : ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison'], 'Lookup evidence analysis');
+  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && analysis.registrarStanding !== null
+    && !validRegistrarStanding(analysis.registrarStanding)) fail('Lookup evidence registrar standing');
+  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && analysis.registrarStanding !== null
+    && !registrarStandingObservedBy(analysis.registrarStanding, root.generatedAt)) {
+    fail('Lookup evidence registrar standing observation time');
+  }
   if (analysis.availability !== null) {
-    const currentAvailability = version >= LOOKUP_EVIDENCE_SCHEMA_VERSION;
+    const currentAvailability = version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION;
     const availability = exactOptional(
       analysis.availability,
       currentAvailability ? ['registryContactsExcluded'] : [],
@@ -641,6 +657,11 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     const whois = record(sources.whois, 'Lookup evidence WHOIS source');
     const rdapParsed = ['success', 'partial'].includes(rdapDiagnosticStatus) ? rdap.parsed : null;
     const whoisParsed = ['complete', 'partial'].includes(whoisDiagnosticStatus) ? whois.parsed : null;
+    if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+      && validRegistrarStanding(analysis.registrarStanding)
+      && analysis.registrarStanding.ianaId !== resolveRegistrarIanaId(rdapParsed, whoisParsed)) {
+      fail('Lookup evidence registrar standing source binding');
+    }
     const expectedComparison = compareRegistrySources(rdapParsed, whoisParsed, {
       rdapStatus: rdapDiagnosticStatus,
       whoisStatus: whoisDiagnosticStatus,
@@ -655,7 +676,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       whoisStatus: whoisDiagnosticStatus,
       whoisQueriedAt: whois.queriedAt,
     });
-    const expectedInsights = version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    const expectedInsights = version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
       ? projectLookupEvidenceRegistryInsights(rebuiltInsights)
       : rebuiltInsights;
     if (!isDeepStrictEqual(registryInsights, expectedInsights)) fail('Lookup evidence registry insight derivation');

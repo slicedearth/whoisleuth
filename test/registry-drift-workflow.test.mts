@@ -38,11 +38,16 @@ describe('official registry drift workflow', () => {
     );
     assert.match(
       WORKFLOW,
-      /if: steps\.audit\.outputs\.exit_code != '0' \|\| steps\.fixtures\.outputs\.exit_code != '0'[\s\S]+actions\/upload-artifact@/u,
+      /npm run --silent registrar:standing:check -- --json > registrar-standing-report\.json/u,
+    );
+    assert.match(
+      WORKFLOW,
+      /if: steps\.audit\.outputs\.exit_code != '0' \|\| steps\.fixtures\.outputs\.exit_code != '0' \|\| steps\.registrar_standing\.outputs\.exit_code != '0'[\s\S]+actions\/upload-artifact@/u,
     );
     assert.match(WORKFLOW, /name: registry-maintenance-reports/u);
     assert.match(WORKFLOW, /registry-drift-report\.json/u);
     assert.match(WORKFLOW, /registry-fixture-freshness-report\.json/u);
+    assert.match(WORKFLOW, /registrar-standing-report\.json/u);
     assert.match(WORKFLOW, /retention-days: 7/u);
     assert.match(WORKFLOW, /name: Require manual review[\s\S]+run: exit 1/u);
     assert.doesNotMatch(WORKFLOW, /\b(?:gh issue|git commit|git push)\b/u);

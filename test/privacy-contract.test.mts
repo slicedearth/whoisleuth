@@ -16,7 +16,8 @@ import {
 } from '../packages/contracts/case-portability.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../lib/evidence-export.mts';
 
 const ROOT_NOTICE_URL = new URL('../PRIVACY.md', import.meta.url);
@@ -56,7 +57,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'download-deletion', pattern: /Deleting browser data does not delete separately downloaded files/iu },
   { id: 'direct-dns-records', pattern: /query A, AAAA, CAA,? and MX once through one selected\s+public address per nameserver/iu },
   { id: 'direct-dns-retention', pattern: /retaining at most sixteen normalised values\s+for each record type/iu },
-  { id: 'lookup-evidence-compatibility', pattern: new RegExp(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}.*exact public schema ${PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remains readable`, 'iu') },
+  { id: 'lookup-evidence-compatibility', pattern: new RegExp(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}.*published v2 schema ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION}.*v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'registrar-standing-network', pattern: /Registrar standing is matched locally using only the numeric IANA ID.*Lookup makes no additional IANA or ICANN request/iu },
   { id: 'integrity-limits', pattern: /Checksums and signatures.*do not prove evidence accuracy, authorship, signer identity/iu },
   { id: 'capture-disclosure', pattern: /executes remote page JavaScript.*exact requested URL, including its path and query/iu },
   { id: 'no-automatic-action', pattern: /does not automatically submit reports, contact recipients, acquire domains, apply.*controls,? or change.*infrastructure/iu },

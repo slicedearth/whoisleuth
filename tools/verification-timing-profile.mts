@@ -396,7 +396,7 @@ function median(values: readonly number[]): number {
   const ordered = [...values].sort((left, right) => left - right);
   const middle = Math.floor(ordered.length / 2);
   return ordered.length % 2 === 1
-    ? ordered[middle] as number
+    ? Math.round(ordered[middle] as number)
     : Math.round(((ordered[middle - 1] as number) + (ordered[middle] as number)) / 2);
 }
 

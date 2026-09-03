@@ -84,7 +84,7 @@ describe('verification architecture contracts', () => {
     const replacedProvenance = new Set(unitFiles.map((file) => file.provenanceId));
     assert.ok(unitFiles.length > 0 && replacedProvenance.size > 0);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
-    const reports = [10, 12, 20].map((durationMs, index) => {
+    const reports = [10.4, 12.6, 20.2].map((durationMs, index) => {
       const report = path.join(directory, `unit-${index + 1}.txt`);
       writeFileSync(report, createTestDurationReport(
         unitFiles.map((file) => ({ name: 'catalogue', file: file.file, durationMs, failed: false })),
@@ -117,7 +117,7 @@ describe('verification architecture contracts', () => {
         {
           file: unitFiles[0]!.file,
           lane: 'unit',
-          weightMs: 12,
+          weightMs: 13,
           sampleCount: 3,
           provenanceId: 'unit-local-provenance-replacement-test',
         },

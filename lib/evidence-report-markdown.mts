@@ -50,6 +50,10 @@ function formatLookupEvidenceMarkdown(
   appendFields(lines, report.assessment);
   lines.push('', '## Registry sources');
   appendGroups(lines, report.registryGroups);
+  if (report.registrarStanding.length) {
+    lines.push('', '## Registrar standing');
+    appendFields(lines, report.registrarStanding);
+  }
   if (report.registryInterpretation.length) {
     lines.push('', '## Registry interpretation');
     appendFields(lines, report.registryInterpretation);

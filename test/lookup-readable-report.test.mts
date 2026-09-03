@@ -14,6 +14,7 @@ import {
   type JsonObject,
   type LookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 
 function lookupResponse(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -298,6 +299,46 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /# Lookup evidence report/u);
     assert.match(report, /Generator:\*\* WHOISleuth 1\\\.35\\\.0/u);
     assert.doesNotMatch(report, /Generated with WHOISleuth/u);
+  });
+
+  test('retains direct official notice evidence without turning provider standing into a domain verdict', () => {
+    const report = buildLookupReadableReport(lookupResponse({
+      rdap: {
+        parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' },
+      },
+      whois: {
+        parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '4318' },
+        chain: [],
+      },
+      registrarStanding: buildRegistrarStanding({
+        registrarIanaId: '4318',
+        now: new Date('2026-09-03T12:00:00.000Z'),
+      }) as unknown as JsonObject,
+    }), {
+      generatedAt: '2026-09-03T12:00:00.000Z',
+      decisionFacts: reportFacts,
+    });
+
+    assert.match(report, /Official notice 1/u);
+    assert.match(report, /Termination issued 2026\\-08\\-27/u);
+    assert.ok(report.includes('www\\.icann\\.org/uploads/compliance\\_notice/attachment/1367'));
+    assert.match(report, /not whether this domain is malicious/iu);
+    assert.doesNotMatch(report, /proves? (?:the )?domain (?:is )?malicious/iu);
+
+    const unavailable = buildLookupReadableReport(lookupResponse({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      whois: { parsed: {}, chain: [] },
+      registrarStanding: buildRegistrarStanding({
+        registrarIanaId: '4318',
+        catalogue: {},
+        now: new Date('2026-09-03T12:00:00.000Z'),
+      }) as unknown as JsonObject,
+    }), {
+      generatedAt: '2026-09-03T12:00:00.000Z',
+      decisionFacts: reportFacts,
+    });
+    assert.match(unavailable, /Unavailable because the retained catalogue could not be validated/u);
+    assert.doesNotMatch(unavailable, /None in the reviewed current-year catalogue/u);
   });
 
   test('requires the already-built canonical facts for domain reports', () => {

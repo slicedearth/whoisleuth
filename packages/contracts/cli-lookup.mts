@@ -38,6 +38,7 @@ export const CLI_LOOKUP_OPTIONAL_ROOT_KEYS = Object.freeze([
   'whois',
   'availability',
   'registryInsights',
+  'registrarStanding',
   'reverseDns',
   'networkContext',
   'securityTxt',
@@ -62,7 +63,7 @@ export const CLI_LOOKUP_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_CLI_LOOKUP_BYTES,
   owner: 'packages/contracts/cli-lookup.mts',
-  note: 'Saved Lookup documents preserve version 1 domain, IP and ASN compatibility while version 2 can additionally retain bounded Deep homepage metadata.',
+  note: 'Saved Lookup documents preserve version 1 domain, IP and ASN compatibility while version 2 can additionally retain bounded Deep homepage metadata and optional official registrar-standing context.',
 });
 
 export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
@@ -238,7 +239,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.sensitive-collection.v1',
         classification: 'analyst_authored_sensitive',
         projection: 'full_manifest',
-        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'collection-context'],
+        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context'],
         excludedCategories: ['credentials', 'cookies', 'sessions', 'authorisation-material'],
         notePolicy: 'not_applicable',
         retention: 'operator_controlled_output',
@@ -249,7 +250,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.sensitive-file.v1',
         classification: 'analyst_authored_sensitive',
         projection: 'full_manifest',
-        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'collection-context'],
+        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context'],
         excludedCategories: ['credentials', 'cookies', 'sessions', 'authorisation-material'],
         notePolicy: 'not_applicable',
         retention: 'deliberate_local_file',

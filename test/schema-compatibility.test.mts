@@ -438,7 +438,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
     assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [3]);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27, 28]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [4]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');

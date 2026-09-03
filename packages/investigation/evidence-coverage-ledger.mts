@@ -51,6 +51,7 @@ export type LookupEvidenceCoverageInput = Readonly<{
   clientBehaviorProfile?: unknown;
   rdapParsed?: unknown;
   registrarRdap?: unknown;
+  registrarStanding?: unknown;
   reverseDns?: unknown;
   securityPosture?: unknown;
   securityTxt?: unknown;
@@ -219,6 +220,9 @@ export function buildLookupEvidenceCoverageLedger(
   const rdapDiagnostic = record(diagnostics.rdap);
   const whoisDiagnostic = record(diagnostics.whois);
   const registrarRdap = record(input.registrarRdap);
+  const registrarStanding = record(input.registrarStanding);
+  const registrarStandingAccreditation = record(registrarStanding.accreditation);
+  const registrarStandingCompliance = record(registrarStanding.compliance);
   const reverseDns = record(input.reverseDns);
   const observedNetworkContext = record(input.observedNetworkContext);
   const dnsEvidence = record(input.dnsEvidence);
@@ -268,6 +272,24 @@ export function buildLookupEvidenceCoverageLedger(
       category: 'registry',
       status: registrarRdap.status,
       limitations: stringList(registrarRdap.limitations),
+    });
+  }
+  if (registrarStanding.version === 1) {
+    const health = [registrarStandingAccreditation.sourceHealth, registrarStandingCompliance.sourceHealth];
+    items.push({
+      id: 'registrar-standing',
+      label: 'Registrar standing',
+      category: 'registry',
+      status: health.includes('unavailable')
+        ? 'unavailable'
+        : health.includes('stale')
+          ? 'partial'
+          : registrarStandingAccreditation.state === 'unknown'
+            ? 'unknown'
+            : 'complete',
+      complete: health.every((state) => state === 'current'),
+      truncated: registrarStandingCompliance.truncated,
+      limitations: stringList(registrarStanding.limitations),
     });
   }
   if (reverseDns.source === 'reverse_dns' || record(diagnostics.reverseDns).status) {

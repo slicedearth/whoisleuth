@@ -15,6 +15,7 @@ import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/termi
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -296,7 +297,7 @@ describe('CLI argument parsing', () => {
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
-    assert.match(exportStdout.value(), /exact public schema \d+ remains readable/u);
+    assert.match(exportStdout.value(), /published v2 schema \d+ and exact v1 schema \d+ remain readable/u);
     assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });
@@ -745,6 +746,51 @@ test('terminal lookup separately attributes represented registrar RDAP diagnosti
   assert.match(terminal, /Registrar RDAP Success/);
   assert.match(terminal, /Registrar source https:\/\/registrar\.invalid\/domain\/example\.com/);
   assert.doesNotMatch(terminal, /raw-registrar-payload|private-contact-marker/);
+});
+
+test('terminal lookup surfaces official registrar standing without classifying the domain', () => {
+  const result = lookupResult({
+    rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+    registrarStanding: buildRegistrarStanding({
+      registrarIanaId: '4318',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    }),
+  });
+  const document = buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-09-03T12:00:00.000Z',
+    'deep',
+  );
+
+  const summary = formatTerminalLookup(document, { detail: 'summary' });
+  const verbose = formatTerminalLookup(document, { detail: 'verbose' });
+  assert.match(summary, /Registrar standing Official termination notice found/u);
+  assert.doesNotMatch(summary, /malicious|safe/u);
+  assert.match(verbose, /Registrar ID\s+4318/u);
+  assert.match(verbose, /Accreditation\s+Accredited · source Current/u);
+  assert.match(verbose, /Official notice Termination · 2026-08-27/u);
+  assert.doesNotMatch(verbose, /effective/u);
+  assert.match(verbose, /Notice source\s+https:\/\/www\.icann\.org\/uploads\/compliance_notice\/attachment\/1367\//u);
+  assert.match(verbose, /Standing scope Provider standing is context, not a classification of this domain/u);
+
+  const unavailable = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    lookupResult({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      registrarStanding: buildRegistrarStanding({
+        registrarIanaId: '4318',
+        catalogue: {},
+        now: new Date('2026-09-03T12:00:00.000Z'),
+      }),
+    }),
+    '2026-09-03T12:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+  assert.match(unavailable, /Compliance\s+Unavailable · source Unavailable/u);
+  assert.doesNotMatch(unavailable, /0 matching unavailable/iu);
 });
 
 test('terminal lookup summarizes bounded registry interpretation without publishing contacts', () => {

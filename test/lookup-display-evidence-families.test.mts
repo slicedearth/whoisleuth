@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   buildLookupNetworkDisplay,
   buildLookupPageDisplay,
-} from '../../frontend/src/lib/analysis/lookup-display-model.ts';
+} from '../frontend/src/lib/analysis/lookup-display-model.ts';
 
 function emptyNetworkInput() {
   return {

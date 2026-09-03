@@ -134,6 +134,10 @@ The checked-in SSLBL certificate projection is local and digest-checked. Lookup
 does not send its target or certificate to SSLBL. Opening a separately labelled
 matching-record link is ordinary deliberate navigation to that provider.
 
+Registrar standing is matched locally using only the numeric IANA ID already
+present in registration evidence. Lookup makes no additional IANA or ICANN
+request for it.
+
 Optional scheduled monitoring is disabled by default. When configured, the
 worker retains only the bounded application-encrypted compact watchlist
 projection and ordinary object metadata needed to operate it. The hosting
@@ -230,9 +234,10 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 27 excludes raw registration payloads,
-  expanded contacts, credentials and complete query-bearing URLs, while exact
-  public schema 26 remains readable and may contain public contact fields;
+- current Lookup evidence schema 28 excludes raw registration payloads,
+  expanded contacts, credentials and complete query-bearing URLs. Published v2
+  schema 27 and exact v1 schema 26 remain readable; schema 26 may contain public
+  contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
 - defensive exports contain reviewed selected domains and rollback metadata but

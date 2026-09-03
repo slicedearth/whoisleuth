@@ -362,6 +362,9 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
     isSubdomain: response.isSubdomain === true,
     availability: projectedAvailability(view.availability),
     registryInsights,
+    ...(response.registrarStanding !== undefined
+      ? { registrarStanding: response.registrarStanding }
+      : {}),
     diagnostics: projectedDiagnostics(view.diagnostics),
     rdap: {
       ...selectedObjectValues(rdap, [

@@ -60,6 +60,7 @@ import {
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
 import { classifyQuery } from '../lib/classify.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 
 const THREAT_TARGET = Object.freeze({
   type: 'domain',
@@ -855,8 +856,38 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(view.reverseDns, {});
     assert.deepEqual(view.reverseDnsRecords, {});
     assert.deepEqual(view.securityTxt, {});
+    assert.deepEqual(view.registrarStanding, {});
     assert.deepEqual(view.threatIntelligenceProviders, []);
     assert.equal(view.timing, null);
+  });
+
+  test('accepts only the bounded official registrar-standing projection', () => {
+    const standing = buildRegistrarStanding({
+      registrarIanaId: '4318',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    });
+    const represented = {
+      registrarStanding: standing,
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '04318' }, chain: [] },
+    };
+    const parsed = parseLookupHttpResponse(response(represented));
+    assert.equal(parsed.ok, true);
+    assert.equal(createLookupViewModel(parsed.value).registrarStanding, standing);
+
+    const offOrigin = structuredClone(standing) as unknown as {
+      compliance: { actions: Array<{ sourceUrl: string }> };
+    };
+    offOrigin.compliance.actions[0]!.sourceUrl = 'https://untrusted.example/notice.pdf';
+    assert.equal(parseLookupHttpResponse(response({ ...represented, registrarStanding: offOrigin })).ok, false);
+    assert.equal(parseLookupHttpResponse(response({
+      ...represented,
+      registrarStanding: { ...standing, unowned: true },
+    })).ok, false);
+    assert.equal(parseLookupHttpResponse(response({
+      ...represented,
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '2' } },
+    })).ok, false);
   });
 
   test('normalizes bounded deep timing without mutating raw diagnostics', () => {

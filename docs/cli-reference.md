@@ -114,10 +114,11 @@ reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
 `export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 27. Exact public schema 26 remains readable and can contain
-public contact fields; current schema 27 excludes raw registration payloads,
-expanded contacts, credentials, complete query-bearing URLs and provider
-payloads.
+evidence schema 28. Published v2 schema 27 and exact v1 schema 26 remain
+readable. Versions 27 and 28 exclude raw registration payloads, expanded
+contacts, credentials, complete query-bearing URLs and provider payloads;
+schema 28 can also retain the bounded, separately attributed registrar-standing
+projection shown by Lookup.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.

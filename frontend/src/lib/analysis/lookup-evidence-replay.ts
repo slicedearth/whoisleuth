@@ -6,6 +6,7 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
   projectLookupEvidenceRdapPublication,
   projectLookupEvidenceRdapSourcePublication,
@@ -14,6 +15,11 @@ import {
   projectLookupEvidenceWhoisSourcePublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
+import {
+  registrarStandingObservedBy,
+  resolveRegistrarIanaId,
+  validRegistrarStanding,
+} from '../../../../lib/registrar-standing-contract.mts';
 import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
 import {
   buildLookupAssetGraph,
@@ -403,7 +409,7 @@ export async function parseLookupEvidenceReplay(
     || (!whoisPublicationAvailable && Object.keys(retainedWhoisParsed).length > 0)) {
     throw new Error('Lookup evidence WHOIS publication state is inconsistent with its retained data.');
   }
-  const replayRdap = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  const replayRdap = schemaVersion >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? rdapSourceState === 'error'
       ? { status: rdapDiagnosticState, error: rdap.error, attempts: rdap.attempts }
       : {
@@ -421,7 +427,7 @@ export async function parseLookupEvidenceReplay(
         parsed: rdapPublicationAvailable ? rdap.parsed ?? null : null,
         raw: rdapPublicationAvailable ? rdap.raw ?? null : null,
       };
-  const replayWhois = schemaVersion >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  const replayWhois = schemaVersion >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? whoisSourceState === 'error'
       ? { status: whoisDiagnosticState, error: whois.error }
       : {
@@ -446,7 +452,7 @@ export async function parseLookupEvidenceReplay(
   const httpResponse = record(http.response);
   const pagePublicationValue = pageIdentity.publicationMetadata;
   const httpDeliveryValue = httpResponse.deliveryMetadata;
-  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (schemaVersion < PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && (pagePublicationValue !== undefined || httpDeliveryValue !== undefined)) {
     throw new Error('Legacy Lookup evidence cannot contain homepage metadata introduced by a newer schema.');
   }
@@ -467,6 +473,26 @@ export async function parseLookupEvidenceReplay(
   const technology = record(availability.technologyProfile);
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
+  const registrarStandingValue = analysis.registrarStanding;
+  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && registrarStandingValue !== undefined) {
+    throw new Error('Legacy Lookup evidence cannot contain registrar standing introduced by a newer schema.');
+  }
+  if (schemaVersion === LOOKUP_EVIDENCE_SCHEMA_VERSION
+    && registrarStandingValue !== null
+    && !validRegistrarStanding(registrarStandingValue)) {
+    throw new Error('Lookup evidence registrar standing is malformed or unsupported.');
+  }
+  const registrarStanding = validRegistrarStanding(registrarStandingValue) ? registrarStandingValue : null;
+  if (registrarStanding && !registrarStandingObservedBy(registrarStanding, exportedAt)) {
+    throw new Error('Lookup evidence registrar standing was observed after the export time.');
+  }
+  if (registrarStanding
+    && registrarStanding.ianaId !== resolveRegistrarIanaId(rdapParsed, whoisParsed)) {
+    throw new Error('Lookup evidence registrar standing does not match its retained registration sources.');
+  }
+  const registrarAccreditation = registrarStanding ? registrarStanding.accreditation : null;
+  const registrarCompliance = registrarStanding ? registrarStanding.compliance : null;
   const sourceDescriptors: SourceDescriptor[] = [
     { id: 'submitted-query', label: 'Submitted query', value: { state: 'provided', complete: true, observedAt: exportedAt } },
     { id: 'rdap', label: 'Registry RDAP', value: replayRdap, fallbackObservedAt: record(diagnostics.rdap).fetchedAt },
@@ -481,11 +507,35 @@ export async function parseLookupEvidenceReplay(
     { id: 'security-posture', label: 'Passive security posture', value: securityPosture },
     { id: 'security-txt', label: 'security.txt', value: sources.securityTxt },
     { id: 'sslbl', label: 'SSLBL snapshot comparison', value: sources.sslbl },
+    ...(registrarAccreditation ? [{
+      id: 'registrar-accreditation',
+      label: 'IANA registrar accreditation',
+      value: {
+        state: registrarAccreditation.sourceHealth === 'current' && registrarAccreditation.state !== 'unknown'
+          ? 'success'
+          : registrarAccreditation.sourceHealth,
+        observedAt: registrarAccreditation.observedAt,
+        complete: registrarAccreditation.sourceHealth === 'current',
+        limitations: registrarStanding?.limitations ?? [],
+      },
+    }] : []),
+    ...(registrarCompliance ? [{
+      id: 'registrar-compliance',
+      label: 'ICANN registrar compliance notices',
+      value: {
+        state: registrarCompliance.sourceHealth === 'current'
+          ? 'success'
+          : registrarCompliance.sourceHealth,
+        observedAt: registrarCompliance.reviewedAt,
+        complete: registrarCompliance.sourceHealth === 'current',
+        limitations: registrarStanding?.limitations ?? [],
+      },
+    }] : []),
   ];
   const replaySources = sourceDescriptors
     .map((item) => source(item))
     .slice(0, MAX_SOURCES);
-  if (schemaVersion === LOOKUP_EVIDENCE_SCHEMA_VERSION) {
+  if (schemaVersion >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
     validateCurrentPrivacyBoundary(
       rdap,
       whois,
@@ -518,6 +568,16 @@ export async function parseLookupEvidenceReplay(
     { value: whoisParsed.nameservers, sourceId: 'whois' },
     { value: availability.nameservers, sourceId: 'dns' },
   ], replaySourcesById);
+  if (registrarStanding && registrarAccreditation && registrarCompliance) {
+    addFact(facts, 'registration.registrar-accreditation', 'Registrar accreditation', [{
+      value: registrarAccreditation.state,
+      sourceId: 'registrar-accreditation',
+    }], replaySourcesById);
+    addFact(facts, 'registration.registrar-compliance', 'Registrar compliance context', [{
+      value: registrarStanding.assessment.label,
+      sourceId: 'registrar-compliance',
+    }], replaySourcesById);
+  }
   addFact(facts, 'website.activity', 'Website activity', [{ value: availability.activityStatus, sourceId: 'http' }], replaySourcesById);
   addFact(facts, 'website.final-url', 'Final website URL', [{ value: http.finalUrl ?? record(http.response).finalUrl, sourceId: 'http' }], replaySourcesById);
   addFact(facts, 'tls.connected-address', 'Connected address', [{ value: tls.connectedAddress, sourceId: 'tls' }], replaySourcesById);

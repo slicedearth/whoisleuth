@@ -164,6 +164,7 @@
   const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess);
   const registryInsights=$derived(lookupView.registryInsights);
+  const registrarStanding=$derived(lookupView.registrarStanding);
   const reverseDns=$derived(lookupView.reverseDns);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
@@ -910,7 +911,7 @@
         loadingLabel="Loading registration evidence…"
         unavailableLabel="Registration evidence could not be loaded."
         onready={restoreDeferredLookupTarget}
-        props={{comparisonSummary:`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,comparisonRows:registryDisplay.comparisonRows,comparisonHasConflicts:comparison.counts.conflict>0,rdapError:boundedTechnologyText(rdap.error,240),resultType:String(result?.type||''),rdapParsed,rdapPartialDetail:registryDisplay.rdapPartialDetail,rdapRows:registryDisplay.rdapRows,whoisError:boundedTechnologyText(whois.error,240),whoisRows:registryDisplay.whoisRows,whoisContactRoles:registryDisplay.whoisContactRoles,whoisTruncatedFields:stringList(whoisParsed.fieldsTruncated,64,80),insights:registryInsights,registrar:registryDisplay.registrarRdap}}
+        props={{comparisonSummary:`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,comparisonRows:registryDisplay.comparisonRows,comparisonHasConflicts:comparison.counts.conflict>0,rdapError:boundedTechnologyText(rdap.error,240),resultType:String(result?.type||''),rdapParsed,rdapPartialDetail:registryDisplay.rdapPartialDetail,rdapRows:registryDisplay.rdapRows,whoisError:boundedTechnologyText(whois.error,240),whoisRows:registryDisplay.whoisRows,whoisContactRoles:registryDisplay.whoisContactRoles,whoisTruncatedFields:stringList(whoisParsed.fieldsTruncated,64,80),insights:registryInsights,standing:registrarStanding,registrar:registryDisplay.registrarRdap}}
       /></div>
 
       {#if result?.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}

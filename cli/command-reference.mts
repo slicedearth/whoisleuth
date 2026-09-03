@@ -1,7 +1,8 @@
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../lib/evidence-export.mts';
 import {
   RISK_CALIBRATION_DATASET_SCHEMA,
@@ -1538,7 +1539,7 @@ const COMMAND_SEEDS = Object.freeze({
       usage: 'whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]',
       description: 'Convert one saved lookup into a versioned evidence report.',
       example: 'whoisleuth export lookup.json --markdown',
-      boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; exact public schema ${PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remains readable with its strict source/publication binding, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
+      boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; published v2 schema ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION} and exact v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
     },
     collection: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
     summary: 'Convert a lookup to an evidence report',

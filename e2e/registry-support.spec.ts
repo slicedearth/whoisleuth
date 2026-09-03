@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { buildSourceReliabilityReport } from '../cli/source-reliability.mts';
+import { lookupCapabilityRows } from '../frontend/src/lib/analysis/lookup-capability-matrix.ts';
 
 const SOURCE_REPORT_TIME = '2026-08-05T10:00:00.000Z';
 
@@ -279,17 +280,17 @@ test('the lookup matrix makes profile and target differences explicit without ne
 
   const matrix = page.getByRole('region', { name: 'Field-level collection matrix' });
   await expect(matrix.getByText('Matrix v1')).toBeVisible();
-  await expect(matrix.locator('tbody tr')).toHaveCount(18);
+  await expect(matrix.locator('tbody tr')).toHaveCount(lookupCapabilityRows('all').length);
   await expect(matrix.getByText('Page identity, forms and fingerprints')).toBeVisible();
   await expect(matrix.getByText('Static evidence only; referenced resources are not fetched and JavaScript is not executed.')).toBeVisible();
 
   await matrix.getByLabel('IP address').check();
-  await expect(matrix.locator('tbody tr')).toHaveCount(2);
+  await expect(matrix.locator('tbody tr')).toHaveCount(lookupCapabilityRows('ip').length);
   await expect(matrix.getByText('IP network registration')).toBeVisible();
   await expect(matrix.getByText('Page identity, forms and fingerprints')).toHaveCount(0);
 
   await matrix.getByLabel('ASN').check();
-  await expect(matrix.locator('tbody tr')).toHaveCount(1);
+  await expect(matrix.locator('tbody tr')).toHaveCount(lookupCapabilityRows('asn').length);
   await expect(matrix.getByText('ASN registration and lifecycle')).toBeVisible();
   expect(unexpectedApiRequests).toEqual([]);
 });

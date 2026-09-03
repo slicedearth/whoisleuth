@@ -15,6 +15,7 @@ import { buildCatalogStatus } from './cisa-kev-catalog-status.mts';
 import { buildRegistryFixtureFreshnessReport } from './registry-fixture-freshness.mts';
 import { buildReviewedAccuracyStatus } from './reviewed-accuracy-status.mts';
 import { auditServiceDependencySignatures } from './service-dependency-signature-audit.mts';
+import { registrarStandingCatalogueHealth } from '../lib/registrar-standing.mts';
 
 export const SOURCE_HEALTH_SCHEMA = 'whoisleuth.source-health';
 export const SOURCE_HEALTH_VERSION = 1;
@@ -41,6 +42,7 @@ type SourceHealthBuilders = Readonly<{
   registryFixtures: (now: Date) => ReturnType<typeof buildRegistryFixtureFreshnessReport>;
   reviewedAccuracy: (now: Date) => ReturnType<typeof buildReviewedAccuracyStatus>;
   serviceDependencies: (now: Date) => ReturnType<typeof auditServiceDependencySignatures>;
+  registrarStanding: (now: Date) => ReturnType<typeof registrarStandingCatalogueHealth>;
 }>;
 type BuildOptions = Readonly<{
   now?: Date;
@@ -73,6 +75,7 @@ const DEFAULT_BUILDERS: SourceHealthBuilders = Object.freeze({
   registryFixtures: (now) => buildRegistryFixtureFreshnessReport({ now: () => now }),
   reviewedAccuracy: (now) => buildReviewedAccuracyStatus(now),
   serviceDependencies: (now) => auditServiceDependencySignatures({ now: () => now }),
+  registrarStanding: (now) => registrarStandingCatalogueHealth(now),
 });
 
 function entry(value: SourceHealthEntry): SourceHealthEntry {
@@ -253,6 +256,22 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
         limitation: report.limitations[0] ?? 'This local status does not establish live service state.',
         action: state === 'current' ? 'No local maintenance action is currently indicated.' : 'Review the bounded catalogue metadata and digest before changing a signature.',
         strictCommand: 'npm run service-dependencies:audit',
+      });
+    }),
+    observedEntry('registrar_standing_catalogue', 'Registrar standing catalogue', 'retained_dataset', 'npm run registrar:standing:check', async () => {
+      const report = await builders.registrarStanding(now);
+      return entry({
+        id: 'registrar_standing_catalogue',
+        label: 'Registrar standing catalogue',
+        kind: 'retained_dataset',
+        state: report.state,
+        sourceObservedAt: report.sourceObservedAt,
+        ageDays: report.ageDays,
+        itemCount: report.itemCount,
+        detail: report.detail,
+        limitation: 'This checked-in projection separates IANA accreditation from current-year ICANN notices. It is not a registrar reputation score or evidence that a domain is malicious.',
+        action: report.state === 'current' ? 'No local maintenance action is currently indicated.' : 'Run the bounded official-source drift check and review any source change before updating the catalogue.',
+        strictCommand: 'npm run registrar:standing:check',
       });
     }),
   ]);

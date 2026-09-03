@@ -50,6 +50,10 @@ import {
   validPagePublicationMetadata,
 } from './homepage-metadata-contract.mts';
 import {
+  resolveRegistrarIanaId,
+  validRegistrarStanding,
+} from './registrar-standing-contract.mts';
+import {
   LOOKUP_CONTROL_CHAR_RE as CONTROL_CHAR_RE,
   isJsonObject,
   normalizedDomain,
@@ -110,6 +114,7 @@ type LookupHttpResponse = JsonObject & {
   readonly sslbl?: JsonObject;
   readonly threatIntelligence?: JsonObject;
   readonly registryInsights?: JsonObject;
+  readonly registrarStanding?: JsonObject;
 };
 
 type CompactLookupAvailabilityState =
@@ -166,6 +171,7 @@ type LookupViewModel = {
   readonly timing: LookupTiming | null;
   readonly registryAccess: JsonObject;
   readonly registryInsights: JsonObject;
+  readonly registrarStanding: JsonObject;
   readonly reverseDns: JsonObject;
   readonly reverseDnsRecords: JsonObject;
   readonly observedNetworkContext: JsonObject;
@@ -968,11 +974,17 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     return invalidLookupResponse();
   }
 
-  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'sslbl', 'threatIntelligence', 'registryInsights']) {
+  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'sslbl', 'threatIntelligence', 'registryInsights', 'registrarStanding']) {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
   const lookupResponse = sanitizeLookupChildProfiles(value as LookupHttpResponse);
+  if (lookupResponse.registrarStanding !== undefined
+    && (!validRegistrarStanding(lookupResponse.registrarStanding)
+      || lookupResponse.registrarStanding.ianaId !== resolveRegistrarIanaId(
+        lookupResponse.rdap.parsed,
+        lookupResponse.whois.parsed,
+      ))) return invalidLookupResponse();
   if (!validAvailabilityScalars(lookupResponse.availability)
     || !validLookupDomainIdentity(lookupResponse)
     || !validRegistrationEvidence(lookupResponse)) return invalidLookupResponse();
@@ -1133,6 +1145,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const reverseDns = record(response?.reverseDns);
   const observedNetworkContext = record(response?.networkContext);
   const registryInsights = record(response?.registryInsights);
+  const registrarStanding = record(response?.registrarStanding);
   const securityTxt = record(response?.securityTxt);
   const sslbl = record(response?.sslbl);
   const rawThreatIntelligence = record(response?.threatIntelligence);
@@ -1181,6 +1194,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     timing: normalizeLookupTiming(diagnostics.timing),
     registryAccess: record(diagnostics.registryAccess),
     registryInsights,
+    registrarStanding,
     reverseDns,
     reverseDnsRecords: record(reverseDns.records),
     observedNetworkContext,

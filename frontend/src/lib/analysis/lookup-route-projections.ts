@@ -22,6 +22,7 @@ export function buildLookupObservationProjection(
   const {
     diagnostics,
     registrarRdap,
+    registrarStanding,
     reverseDns,
     observedNetworkContext,
     observedNetworkRdap,
@@ -67,6 +68,10 @@ export function buildLookupObservationProjection(
     whois: whoisDiagnostic.queriedAt,
     availability: latestLookupTimestamp(dnsEvidence.observedAt, httpEvidence.observedAt, tlsEvidence.observedAt),
     'registrar-rdap': registrarRdap.fetchedAt,
+    'registrar-standing': latestLookupTimestamp(
+      rec(registrarStanding.accreditation).observedAt,
+      rec(registrarStanding.compliance).reviewedAt,
+    ),
     'reverse-dns': reverseDns.observedAt,
     'network-context': latestLookupTimestamp(observedNetworkContext.observedAt, observedNetworkRdap.fetchedAt),
     dns: dnsEvidence.observedAt,

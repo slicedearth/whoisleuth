@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import './support/lookup-display-evidence-families.mts';
 
 import {
   buildLookupLifecycleDates,

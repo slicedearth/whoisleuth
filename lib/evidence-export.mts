@@ -9,12 +9,23 @@ import {
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { defineSchemaCompatibility } from '../packages/contracts/schema-compatibility.mts';
 import { isValidAsciiHostname } from './hostname.mts';
+import {
+  REGISTRAR_STANDING_SCHEMA,
+  REGISTRAR_STANDING_VERSION,
+  registrarIanaIds,
+  registrarStandingObservedBy,
+  resolveRegistrarIanaId,
+  validRegistrarStanding,
+} from './registrar-standing-contract.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
+export const V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION = 26;
+export const PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION = 27;
+export const PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION = PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 28;
 export const SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS = Object.freeze([
-  PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
 ]);
 export const LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES = 5 * 1024 * 1024;
@@ -36,7 +47,7 @@ export const LOOKUP_EVIDENCE_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'read_only',
   byteBudget: LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES,
   owner: 'lib/evidence-export.mts',
-  note: 'Exact v1.47.4 version 26 remains replayable; version 27 is the single v2 successor with bounded homepage and privacy-minimised registration projections.',
+  note: 'Exact v1.47.4 version 26 and published v2.0.1 version 27 remain replayable; version 28 adds a bounded official-source registrar-standing projection.',
 });
 
 type UnknownRecord = Record<string, unknown>;
@@ -1572,6 +1583,40 @@ function registrarPublicationComparison(body: UnknownRecord, registryParsed: Unk
   });
 }
 
+function projectRegistrarStanding(value: unknown, rdapParsed: unknown, whoisParsed: unknown, generatedAt: string) {
+  if (value === undefined || value === null) return null;
+  if (!validRegistrarStanding(value)) throw new TypeError('Lookup registrar standing is malformed or unsupported.');
+  if (!registrarStandingObservedBy(value, generatedAt)) {
+    throw new TypeError('Lookup registrar standing was observed after the evidence export time.');
+  }
+  const retainedIanaIds = registrarIanaIds(rdapParsed, whoisParsed);
+  const retainedIanaId = resolveRegistrarIanaId(rdapParsed, whoisParsed);
+  // A partial/error source can leave a valid response-level interpretation
+  // whose identifying publication is deliberately omitted from the portable
+  // export. Do not create an orphaned claim in that case. A contradictory
+  // retained identifier remains a hard failure.
+  if (value.ianaId !== null && retainedIanaIds.length === 0) return null;
+  if (retainedIanaIds.length > 1) {
+    throw new TypeError('Lookup registrar standing cannot be exported with conflicting retained registrar identifiers.');
+  }
+  if (value.ianaId !== retainedIanaId) {
+    throw new TypeError('Lookup registrar standing does not match the retained registration sources.');
+  }
+  return {
+    schema: REGISTRAR_STANDING_SCHEMA,
+    version: REGISTRAR_STANDING_VERSION,
+    ianaId: value.ianaId,
+    accreditation: { ...value.accreditation },
+    compliance: {
+      ...value.compliance,
+      actions: value.compliance.actions.map((action) => ({ ...action })),
+    },
+    assessment: { ...value.assessment },
+    limitations: [...value.limitations],
+    nextActions: [...value.nextActions],
+  };
+}
+
 export function buildLookupEvidence(response: unknown, options: LookupEvidenceOptions = {}) {
   assertBoundedJsonStructure(response, 'Lookup response');
   const { generatedAt: generatedAtValue = new Date().toISOString(), idnAnalysis = null, applicationVersion = null } = options;
@@ -1647,6 +1692,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
       registrarPublicationComparison: projectLookupEvidencePrivacySafeTree(
         registrarPublicationComparison(body, rdapParsed),
       ),
+      registrarStanding: projectRegistrarStanding(body.registrarStanding, rdapParsed, whoisParsed, generatedAt),
     },
   };
   assertLookupEvidencePortableTree(evidence);

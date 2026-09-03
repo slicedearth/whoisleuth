@@ -28,16 +28,16 @@ function writer() {
 describe('offline source-health composition', () => {
   test('composes retained datasets and reviewed evaluations without network work', async () => {
     const report = await buildSourceHealthReport({
-      now: new Date('2026-09-01T12:00:00.000Z'),
+      now: new Date('2026-09-03T12:00:00.000Z'),
     });
 
     assert.equal(report.schema, SOURCE_HEALTH_SCHEMA);
     assert.equal(report.version, SOURCE_HEALTH_VERSION);
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
-    assert.equal(report.summary.entries, 9);
+    assert.equal(report.summary.entries, 10);
     assert.deepEqual(report.summary.states, {
-      current: 4,
+      current: 5,
       limited: 0,
       measured: 1,
       unproven: 4,
@@ -71,7 +71,7 @@ describe('offline source-health composition', () => {
     assert.equal(unavailable?.itemCount, null);
     assert.equal(unavailable?.ageDays, null);
     assert.doesNotMatch(unavailable?.detail ?? '', /private|fixture\/path/u);
-    assert.equal(report.summary.strictFailures, 3);
+    assert.equal(report.summary.strictFailures, 4);
 
     const formatted = formatSourceHealthReport(report);
     assert.match(formatted, /UNAVAILABLE\s+Registry compatibility fixtures/u);
@@ -124,7 +124,7 @@ describe('offline source-health composition', () => {
   });
 
   test('emits no annotation when retained datasets are current and evaluations are limited or unproven', async () => {
-    const report = await buildSourceHealthReport({ now: new Date('2026-09-01T12:00:00.000Z') });
+    const report = await buildSourceHealthReport({ now: new Date('2026-09-03T12:00:00.000Z') });
     assert.equal(formatSourceHealthAnnotations(report), '');
   });
 });

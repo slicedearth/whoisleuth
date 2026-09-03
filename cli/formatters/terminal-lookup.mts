@@ -123,6 +123,18 @@ function positiveSourceStatus(value: unknown): boolean {
   return value === 'success' || value === 'partial';
 }
 
+function registrarComplianceSummary(compliance: TerminalRecord, actionCount: number): string {
+  const health = titleCase(compliance.sourceHealth);
+  const year = safeTerminalValue(compliance.catalogueYear || 'current-year');
+  if (compliance.state === 'matching_actions') {
+    return `${actionCount} matching ${year} action${actionCount === 1 ? '' : 's'} · source ${health}`;
+  }
+  if (compliance.state === 'reviewed_no_match') return `No matching ${year} action · source ${health}`;
+  if (compliance.state === 'not_applicable') return `Not assessed without one registrar IANA ID · source ${health}`;
+  if (compliance.state === 'stale') return `No matching action retained · source ${health}`;
+  return `${titleCase(compliance.state)} · source ${health}`;
+}
+
 function lifecycleDate(value: TerminalRecord, field: 'createdDate' | 'updatedDate'): unknown {
   const lifecycle = terminalRecord(value.lifecycle);
   return lifecycle[`${field}Iso`] ?? lifecycle[field];
@@ -284,6 +296,27 @@ function formatTerminalLookup(
     registrationLines.push(`Disclosure     RDAP ${titleCase(registryDisclosure.state)} · WHOIS ${titleCase(whoisDisclosure.state)}`);
     registrationLines.push(`Reconciliation ${titleCase(reconciliation.state)}`);
     registrationLines.push(`Publications   ${publicationCounts.complete} complete · ${publicationCounts.partial} partial · ${publicationCounts.unavailable} unavailable`);
+  }
+  const registrarStanding = terminalRecord(document.registrarStanding);
+  if (registrarStanding.version === 1) {
+    const accreditation = terminalRecord(registrarStanding.accreditation);
+    const compliance = terminalRecord(registrarStanding.compliance);
+    const assessment = terminalRecord(registrarStanding.assessment);
+    const actions = Array.isArray(compliance.actions)
+      ? compliance.actions.map(terminalRecord).slice(0, 5)
+      : [];
+    registrationLines.push(`Registrar standing ${safeTerminalValue(assessment.label || assessment.state || 'Unavailable')}`);
+    if (detail !== 'summary') {
+      registrationLines.push(`Registrar ID   ${safeTerminalValue(registrarStanding.ianaId || 'Unavailable')}`);
+      registrationLines.push(`Accreditation  ${titleCase(accreditation.state)} · source ${titleCase(accreditation.sourceHealth)}`);
+      registrationLines.push(`Compliance     ${registrarComplianceSummary(compliance, actions.length)}`);
+      for (const action of actions) {
+        registrationLines.push(`Official notice ${titleCase(action.type)} · ${safeTerminalValue(action.issuedOn)}`);
+        if (action.sourceUrl) registrationLines.push(`Notice source  ${safeTerminalValue(action.sourceUrl)}`);
+      }
+      if (assessment.detail) registrationLines.push(`Standing detail ${safeTerminalValue(assessment.detail)}`);
+      registrationLines.push('Standing scope Provider standing is context, not a classification of this domain.');
+    }
   }
 
   const dnsLines: string[] = [];
