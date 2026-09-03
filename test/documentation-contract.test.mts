@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { TECHNOLOGY_PROFILE_VERSION } from '../lib/lookup-child-profile-contract.mts';
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
+import { LATEST_PUBLIC_APPLICATION_VERSION } from '../packages/contracts/case-portability.mts';
 
 async function documentation(pathname: string): Promise<string> {
   return readFile(new URL(`../${pathname}`, import.meta.url), 'utf8');
@@ -31,7 +31,7 @@ test('critical current profile and public-writer statements follow canonical ver
   assert.match(registryContract, /lookup-network-evidence-bounds\.mts/u);
   assert.equal((registryContract.match(/Current profile version/gu) ?? []).length, 1);
 
-  const applicationVersion = WHOISLEUTH_APPLICATION_VERSION.replaceAll('.', '\\.');
+  const applicationVersion = LATEST_PUBLIC_APPLICATION_VERSION.replaceAll('.', '\\.');
   const publicWriter = new RegExp(`(?:[Pp]ublic release|[Rr]elease|[Aa]pplication release) ${applicationVersion}[^\\n]*current public writer`, 'u');
   assert.match(readme, publicWriter);
   assert.match(productBoundary, publicWriter);

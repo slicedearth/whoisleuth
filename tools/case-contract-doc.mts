@@ -19,8 +19,8 @@ import {
   SUPPORTED_CLI_CASE_PACK_VERSIONS,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
+  LATEST_PUBLIC_APPLICATION_VERSION,
 } from '../packages/contracts/case-portability.mts';
-import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 const DISPLAY_NAMES = Object.freeze({
   'browser.cases': 'Browser-local Cases',
@@ -105,7 +105,7 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release ${WHOISLEUTH_APPLICATION_VERSION} is the latest public writer: Case schema
+Release ${LATEST_PUBLIC_APPLICATION_VERSION} is the latest public writer: Case schema
 ${PUBLISHED_V2_CASE_SCHEMA_VERSION}, Case report schema
 ${PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION}, response-packet schema
 ${PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION}, review-input digest material version

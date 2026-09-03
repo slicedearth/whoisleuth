@@ -72,6 +72,9 @@ describe('production coverage policy', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/analysis/lookup-page-profile-display.ts'], {
       lines: 95, branches: 70, functions: 100,
     });
+    assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['packages/investigation/investigation-capsule.mts'], {
+      lines: 98, branches: 75, functions: 100,
+    });
   });
 
   test('aggregates executable records and enforces global, ownership-area, and critical-file thresholds', () => {

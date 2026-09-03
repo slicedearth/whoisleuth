@@ -99,7 +99,7 @@
         "generatedAt": "2026-08-22T00:00:00.000Z",
         "application": {
           "name": "WHOISleuth",
-          "version": "2.0.1",
+          "version": "2.1.0",
           "projectUrl": "https://github.com/slicedearth/whoisleuth"
         },
         "case": {
@@ -217,6 +217,6 @@
   "integrity": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-json-v2",
-    "digestSha256": "sha256:fc84f23c6a6f7f22a25bce721b0a010f18ff0a4c1c492cab66f6bf743abcbb8d"
+    "digestSha256": "sha256:82b88b1251c773a01823fccac9baf3e95f752570f091559c58dd0b1664444655"
   }
 }

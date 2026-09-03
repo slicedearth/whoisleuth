@@ -6,7 +6,7 @@ export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
 
 export type CriticalMutant = Readonly<{
   id: string;
-  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'public_address_enforcement';
+  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'public_address_enforcement' | 'artifact_structure_integrity';
   file: string;
   line: number;
   search: string;
@@ -64,6 +64,16 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     search: '  return true; // not a recognizable IP literal - fail closed',
     replacement: '  return false; // mutant must be killed by fail-closed regression coverage',
     focusedTests: Object.freeze(['test/safe-fetch.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'artifact-projection-count-matches-items',
+    area: 'artifact_structure_integrity',
+    file: 'cli/artifact-validation/investigation-capsule.mts',
+    line: 151,
+    search: '  if (displayed > total || omitted !== total - displayed || items.length !== displayed) fail(label);',
+    replacement: '  if (displayed > total || omitted !== total - displayed) fail(label);',
+    focusedTests: Object.freeze(['test/artifact-verify.test.mts']),
     timeoutMs: 20_000,
   }),
 ]);

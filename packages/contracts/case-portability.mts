@@ -4,8 +4,10 @@ import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 import type { SchemaLifecycleFamilyWithMetadataV4 } from './schema-lifecycle.mts';
 
 export const CASE_CONTRACT_OWNER = 'packages/contracts/case-portability.mts';
+export const LATEST_PUBLIC_APPLICATION_VERSION = '2.0.1';
 
 export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
+  'LATEST_PUBLIC_APPLICATION_VERSION',
   'CASE_BROWSER_STORE_LIFECYCLE_SCHEMA',
   'CASE_EXPORT_LIFECYCLE_SCHEMA',
   'CASE_SCHEMA_VERSION',
@@ -615,8 +617,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     id: 'cli-case-pack-v2-case-v14',
     path: 'test/fixtures/case-lifecycle/cli-case-pack-v2-case-v14.json',
     bytes: 9363,
-    sha256: '3f45f35ff2d3876acb46e320d469258ff32eb186fd399e32cef980992f787a67',
-    contentDigestSha256: 'sha256:fc84f23c6a6f7f22a25bce721b0a010f18ff0a4c1c492cab66f6bf743abcbb8d',
+    sha256: 'b51f23bca2dc91715f2aeeb931b79e4f990d59c3564d7cd60a9abac7e0d687a6',
+    contentDigestSha256: 'sha256:82b88b1251c773a01823fccac9baf3e95f752570f091559c58dd0b1664444655',
     schema: CLI_CASE_PACK_SCHEMA,
     version: CLI_CASE_PACK_VERSION,
     role: 'current' as const,

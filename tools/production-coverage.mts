@@ -114,6 +114,7 @@ export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
     'frontend/src/lib/analysis/lookup-page-identity-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),
     'frontend/src/lib/analysis/lookup-page-network-display.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
     'frontend/src/lib/analysis/lookup-page-profile-display.ts': Object.freeze({ lines: 95, branches: 70, functions: 100 }),
+    'packages/investigation/investigation-capsule.mts': Object.freeze({ lines: 98, branches: 75, functions: 100 }),
   }),
   requiredAreas: Object.freeze([
     'runtime entry points',
