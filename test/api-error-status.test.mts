@@ -39,7 +39,7 @@ before(() => {
 
 function authedEvent(query: string) {
   return {
-    headers: { cookie: cookieHeader },
+    headers: { cookie: cookieHeader, host: 'console.example', 'sec-fetch-site': 'same-origin' },
     queryStringParameters: { q: query },
   };
 }
@@ -99,7 +99,7 @@ describe('unified lookup error codes', () => {
   });
 
   test('reports a missing query with a stable code', async () => {
-    const res = await lookupHandler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    const res = await lookupHandler({ headers: { cookie: cookieHeader, host: 'console.example', 'sec-fetch-site': 'same-origin' }, queryStringParameters: {} });
     assert.equal(res.statusCode, 400);
     assert.equal(JSON.parse(requiredValue(res.body)).errorCode, 'MISSING_QUERY');
   });
@@ -107,7 +107,7 @@ describe('unified lookup error codes', () => {
 
 describe('Certificate Transparency query errors', () => {
   test('reports a missing query with a stable code', async () => {
-    const res = await ctSearchHandler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    const res = await ctSearchHandler({ headers: { cookie: cookieHeader, host: 'console.example', 'sec-fetch-site': 'same-origin' }, queryStringParameters: {} });
     assert.equal(res.statusCode, 400);
     assert.equal(JSON.parse(requiredValue(res.body)).errorCode, 'MISSING_QUERY');
   });

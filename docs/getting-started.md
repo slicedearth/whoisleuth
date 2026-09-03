@@ -7,7 +7,7 @@ tasks.
 
 ## Requirements
 
-- Node.js 24 or later
+- Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
 
@@ -53,34 +53,31 @@ Architecture checks enforce that direction.
 
 ## Verification
 
-Run focused tests while changing a bounded surface. Before a major local commit
-or release candidate, run the complete relevant gate:
+Run focused tests while changing a bounded surface. Before pushing a clean
+commit, run the same maintained quality, unit and browser gates as hosted CI:
 
 ```bash
-npm test
-npm run test:properties
-npm run test:mutation
-npm run typecheck
-npm run check
-npm run build
-npm run architecture:check
-npm run capabilities:check
-npm run public-product:check
-npm run privacy:check
-npm run schema:inventory
-npm run compatibility:check
-npm run licenses:check
-npm run cli:package:check
-npm run release:check
-npm run test:e2e:built
-npm run dependencies:audit
-npm run security:staged
-git diff --check
+npm run verification:ci
 ```
 
-The required delivery sequence includes `npm run test:e2e:built`; ordinary
-interactive browser work can use `npm run test:e2e`. Report exact failures,
-retries, flakes and skips rather than describing a retried run as clean.
+The parity command requires the exact `.nvmrc` runtime, a Node 26 executable on
+`PATH` for the CLI compatibility lane, and a clean worktree. Set
+`WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime
+is installed outside `PATH`. The command performs the locked install and
+changed-line security scan before the maintained quality, coverage, build,
+production-browser and secondary CLI-runtime gates. Ordinary interactive
+browser work can use `npm run test:e2e`, which excludes machine-timing ceilings
+so a focused functional run cannot contend with its own performance
+measurement. Report exact failures, retries, flakes and skips rather than
+describing a retried run as clean.
+
+The coverage gate measures all loaded production TypeScript, enforces the
+global line, branch and function floors, and retains stricter per-file floors
+for critical artefact I/O. Its inventory check also rejects any newly omitted
+source file. Type-only modules, compatibility re-exports, browser adapters,
+framework entries and executable entry points remain visible as a small,
+explicit list with an owning type, build, browser or process check; they are
+not silently counted as covered.
 
 Some checks deliberately read the repository, dependency graph, fixtures or
 generated contracts. They do not contact live investigation targets. Commands
@@ -126,17 +123,25 @@ The less common commands below each have one narrow purpose:
 | `npm run privacy:check` | Verify the generated privacy/data-flow catalogue. |
 | `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
+| `npm run test:duration-health -- --report=/absolute/path` | Compare medians from exactly three complete unit profiles (repeat `--report` three times) without rewriting the retained timing baseline. |
 | `npm run frontend:loading-report` | Measure route closures against loading budgets. |
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |
 | `npm run unicode:confusables` | Audit the local confusable catalogue and labelled corpus. |
-| `npm run registry:fixtures` | Check fixture freshness metadata without live registry collection. |
+| `npm run sources:health` | Compose retained-dataset and evaluation health offline; add `-- --strict` for maintenance enforcement. |
 | `npm run registry:drift` | Deliberately compare the fixed official registry catalogues; this is a manual network operation. |
 | `npm run providers:policy-check` | Review retained provider-policy freshness metadata. |
 | `npm run deployment:self-check` | Run the bounded operator deployment check when explicitly configured. |
 | `npm run security:codeql` | Run the local CodeQL wrapper under its documented prerequisites. |
 | `npm run security:retire` | Scan a built frontend for retired browser libraries. |
-| `npm run maintenance:duplication` | Produce a bounded static maintainer duplication report. |
+| `npm run maintenance:duplication` | Review exact clones and the static call graph across bounded maintained TypeScript sources. |
+
+`npm run sources:health` distinguishes current, stale, unavailable, malformed,
+limited, measured and unproven local states and reports unavailable counts as
+unavailable rather than zero. It reads checked-in assets only, performs no
+refresh or network request, and does not fail an ordinary run merely because an
+optional retained source has aged. Use `npm run sources:health -- --strict` for
+the explicit maintenance gate; each entry names its narrower strict command.
 
 Candidate-acceptance, catalogue-update, staging-evidence, first-use-study and
 release-publication commands are deliberate maintainer actions rather than

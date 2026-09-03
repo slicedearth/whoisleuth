@@ -12,6 +12,7 @@ frontend/build/
 .DS_Store
 playwright-report/
 playwright-results.json
+playwright-results/
 test-coverage.lcov
 playwright/.auth/
 test-results/

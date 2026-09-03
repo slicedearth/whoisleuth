@@ -13,6 +13,7 @@ import {
   MAX_SCHEDULED_WATCHLIST_INPUTS,
   MAX_SCHEDULED_WATCHLISTS,
   normalizeScheduledMonitorState,
+  normalizeScheduledMonitorStateWithRecovery,
   normalizeScheduledWatchlistName,
   nextScheduledMonitorRevision,
   pruneScheduledMonitorHistoryToStaticBudget,
@@ -147,10 +148,102 @@ test('bounds collection recovery and removes duplicate identifiers and names', (
   }));
   candidates[1] = { ...requiredValue(candidates[1]), id: requiredValue(candidates[0]).id };
   candidates[2] = { ...requiredValue(candidates[2]), name: requiredValue(candidates[0]).name.toUpperCase() };
-  const result = normalizeScheduledMonitorState(state(candidates));
+  const { state: result, recovery } = normalizeScheduledMonitorStateWithRecovery(state(candidates));
   assert.equal(result.watchlists.length, MAX_SCHEDULED_WATCHLISTS);
   assert.equal(new Set(result.watchlists.map((item) => item.id)).size, MAX_SCHEDULED_WATCHLISTS);
   assert.equal(new Set(result.watchlists.map((item) => item.name.toLowerCase())).size, MAX_SCHEDULED_WATCHLISTS);
+  assert.deepEqual(recovery, {
+    version: 1,
+    recoveredItems: 70,
+    categories: {
+      invalidWatchlists: 0,
+      duplicateIdentifiers: 1,
+      duplicateNames: 1,
+      truncatedInputs: 68,
+      normalisedWatchlists: 0,
+      invalidActiveRuns: 0,
+      releasedMalformedLeases: 0,
+      resetInconsistentStatuses: 0,
+    },
+  });
+});
+
+test('reports corruption and active-run recovery without retaining malformed values', () => {
+  const storedWatchlist = { ...watchlist(), status: 'running', unknown: 'private value' };
+  const malformedRun = {
+    id: RUN_ID,
+    watchlistId: WATCHLIST_ID,
+    watchlistRevision: 99,
+    lease: { token: 'placeholder' },
+  };
+  const recovered = normalizeScheduledMonitorStateWithRecovery(state([
+    storedWatchlist,
+    { name: 'malformed', target: 'private-target.invalid' },
+  ], malformedRun));
+  assert.equal(recovered.state.activeRun, null);
+  assert.equal(required(recovered.state.watchlists[0]).status, 'idle');
+  assert.deepEqual(recovered.recovery, {
+    version: 1,
+    recoveredItems: 4,
+    categories: {
+      invalidWatchlists: 1,
+      duplicateIdentifiers: 0,
+      duplicateNames: 0,
+      truncatedInputs: 0,
+      normalisedWatchlists: 1,
+      invalidActiveRuns: 1,
+      releasedMalformedLeases: 0,
+      resetInconsistentStatuses: 1,
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(recovered), /private value|private-target|placeholder/u);
+
+  const validWatchlist = watchlist();
+  const validRunWithMalformedLease = {
+    id: RUN_ID,
+    watchlistId: validWatchlist.id,
+    watchlistRevision: validWatchlist.revision,
+    cursor: 0,
+    sources: structuredClone(validWatchlist.sources),
+    results: [],
+    errorCount: 0,
+    startedAt: NOW,
+    updatedAt: NOW,
+    lease: { token: 'placeholder', cursor: 1, expiresAt: NOW },
+  };
+  const released = normalizeScheduledMonitorStateWithRecovery(
+    state([validWatchlist], validRunWithMalformedLease),
+  );
+  assert.ok(released.state.activeRun);
+  assert.equal(released.state.activeRun.lease, null);
+  assert.equal(released.recovery?.categories.releasedMalformedLeases, 1);
+  assert.equal(released.recovery?.recoveredItems, 1);
+  assert.doesNotMatch(JSON.stringify(released.recovery), /placeholder/u);
+});
+
+test('counts multiple recovery corrections on one retained watchlist without implying distinct records', () => {
+  const recovered = normalizeScheduledMonitorStateWithRecovery(state([{
+    ...watchlist(),
+    status: 'running',
+    unknownRetainedValue: 'must not survive',
+  }]));
+  assert.equal(recovered.state.watchlists.length, 1);
+  assert.equal(required(recovered.state.watchlists[0]).status, 'idle');
+  assert.deepEqual(recovered.recovery, {
+    version: 1,
+    recoveredItems: 2,
+    categories: {
+      invalidWatchlists: 0,
+      duplicateIdentifiers: 0,
+      duplicateNames: 0,
+      truncatedInputs: 0,
+      normalisedWatchlists: 1,
+      invalidActiveRuns: 0,
+      releasedMalformedLeases: 0,
+      resetInconsistentStatuses: 1,
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(recovered), /must not survive/u);
 });
 
 test('keeps only bounded recent history and discloses newly omitted relevant changes', () => {

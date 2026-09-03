@@ -1,6 +1,7 @@
 import { expect, test as setup } from '@playwright/test';
 import { BASE_URL, TEST_SITE_PASSWORD } from './constants';
 import { isAllowedRequestOrigin } from './fixtures';
+import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
 
 // Authenticates once via the API (not the UI - the login *form* itself is
 // covered by the one visible test in auth.spec.ts) and saves the resulting
@@ -10,7 +11,7 @@ import { isAllowedRequestOrigin } from './fixtures';
 // This runs outside the 'chromium' project, so it doesn't get fixtures.ts's
 // automatic per-page network guard - it checks its own single request
 // locally instead, deliberately, rather than relying on that shared fixture.
-const authFile = 'playwright/.auth/user.json';
+const authFile = playwrightRunArtifacts().authFile;
 
 setup('authenticate', async ({ request }) => {
   // maxRedirects: 0 so a redirect can't quietly change where this actually

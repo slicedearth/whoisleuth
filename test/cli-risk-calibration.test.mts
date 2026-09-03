@@ -23,7 +23,7 @@ import {
   parseRiskCalibrationDataset,
   readRiskCalibrationInputBounded,
 } from '../cli/risk-calibration.mts';
-import { explainRiskScore, explainRiskScoreV6, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import {
   buildRiskCalibrationSummaryReport,
   parseRiskCalibrationSummaryReport,
@@ -218,7 +218,7 @@ describe('offline Risk calibration report', () => {
     assert.equal(report.schema, 'whoisleuth.cli.risk-calibration');
     assert.equal(report.version, 3);
     assert.equal(report.mode, 'detailed');
-    assert.equal(report.riskModelVersion, 7);
+    assert.equal(report.riskModelVersion, 8);
     assert.deepEqual(report.summary, {
       total: 4,
       positive: 1,
@@ -249,7 +249,7 @@ describe('offline Risk calibration report', () => {
     assert.deepEqual(report.modelComparison, {
       available: false,
       previousModelVersion: null,
-      currentModelVersion: 7,
+      currentModelVersion: 8,
       scoresChanged: 0,
       bandsChanged: 0,
       thresholdClassificationsChanged: 0,
@@ -318,13 +318,13 @@ describe('offline Risk calibration report', () => {
     const report = buildRiskCalibrationReport(parsed, explainRiskScore, {
       modelVersion: RISK_MODEL_VERSION,
       reviewThreshold: RISK_REVIEW_THRESHOLD,
-      previousModelVersion: 6,
-      explainPreviousRiskScore: explainRiskScoreV6,
+      previousModelVersion: 7,
+      explainPreviousRiskScore: explainRiskScoreV7,
     });
     assert.equal(report.modelComparison.available, true);
-    assert.equal(report.modelComparison.previousModelVersion, 6);
-    assert.equal(report.modelComparison.currentModelVersion, 7);
-    assert.equal(report.modelComparison.scoresChanged, 2);
+    assert.equal(report.modelComparison.previousModelVersion, 7);
+    assert.equal(report.modelComparison.currentModelVersion, 8);
+    assert.equal(report.modelComparison.scoresChanged, 0);
     assert.equal(report.summary.positive, 1);
     assert.equal(report.summary.negative, 1);
   });
@@ -341,8 +341,8 @@ describe('offline Risk calibration report', () => {
       generatedAt: '2026-08-10T00:00:00.000Z',
       modelVersion: RISK_MODEL_VERSION,
       reviewThreshold: RISK_REVIEW_THRESHOLD,
-      previousModelVersion: 6,
-      explainPreviousRiskScore: explainRiskScoreV6,
+      previousModelVersion: 7,
+      explainPreviousRiskScore: explainRiskScoreV7,
     });
     const summary = buildRiskCalibrationSummaryReport(full);
     const encoded = JSON.stringify(summary);

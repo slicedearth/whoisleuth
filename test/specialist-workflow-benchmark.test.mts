@@ -73,7 +73,7 @@ describe('offline specialist workflow benchmark', () => {
     assert.equal(byId(report, 'partial-source-states').status, 'pass');
     assert.equal(byId(report, 'benign-shared-infrastructure').status, 'pass');
     assert.equal(report.metrics.benignSharedInfrastructure.automaticRuleMatches, 0);
-    assert.equal(report.metrics.decisionQuality.findingKindsExercised, 5);
+    assert.equal(report.metrics.decisionQuality.findingKindsExercised, 8);
     assert.equal(report.metrics.decisionQuality.cleanControlFindings, 0);
     assert.equal(report.metrics.decisionQuality.truncated, false);
     assert.ok(report.limitations.some((value) => /do not prove ownership, intent, safety, or maliciousness/i.test(value)));

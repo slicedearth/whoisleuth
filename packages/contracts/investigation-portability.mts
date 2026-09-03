@@ -285,7 +285,7 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
       ] },
     ],
     hooks: [
-      { id: 'investigation.offline.structure', role: 'structure_validator', runtime: 'cli', module: 'cli/artifact-structure.mts', exportName: 'validateOfflineArtifactStructure' },
+      { id: 'investigation.offline.structure', role: 'structure_validator', runtime: 'cli', module: 'cli/offline-artifact-validation.mts', exportName: 'validateOfflineArtifactStructure' },
       { id: 'investigation.offline.verify', role: 'integrity_verifier', runtime: 'cli', module: 'cli/artifact-verify.mts', exportName: 'verifyOfflineArtifact' },
       { id: 'investigation.acquisition.build', role: 'builder', runtime: 'shared', module: 'packages/investigation/acquisition-decision-packet.mts', exportName: 'buildAcquisitionDecisionPacket' },
       { id: 'investigation.passport.build', role: 'builder', runtime: 'shared', module: 'packages/investigation/lookup-claim-passport.mts', exportName: 'buildLookupClaimPassport' },

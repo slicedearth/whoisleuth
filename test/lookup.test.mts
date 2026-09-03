@@ -167,7 +167,7 @@ describe('runUnifiedLookup', () => {
       transportSecurity: 'https',
       upstreamStatus: 200,
       data: { ldhName: 'EXAMPLE.COM' },
-      parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
+      parsed: { domain: 'EXAMPLE.COM', registrarIanaId: '2', statuses: [], nameservers: [], events: [] },
       attempts: [
         { endpoint: 'https://first.example/domain/example.com', outcome: 'rate_limited', selected: false },
         { endpoint: 'https://rdap.example/domain/example.com', outcome: 'success', selected: true },
@@ -215,6 +215,34 @@ describe('runUnifiedLookup', () => {
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
     assert.equal(result.diagnostics.whois.status, 'complete');
     assert.equal(result.diagnostics.availability.status, 'complete');
+    const registrarStanding = requiredValue(result.registrarStanding);
+    assert.equal(registrarStanding.ianaId, '2');
+    assert.equal(registrarStanding.accreditation.state, 'accredited');
+    assert.equal(registrarStanding.assessment.state, 'accredited');
+  });
+
+  test('normalises matching registrar IDs and refuses conflicting source identities', async () => {
+    const run = (rdapIanaId: string, whoisIanaId: string) => runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://rdap.example/domain/example.com',
+        transportSecurity: 'https',
+        upstreamStatus: 200,
+        data: { ldhName: 'EXAMPLE.COM' },
+        parsed: { domain: 'EXAMPLE.COM', registrarIanaId: rdapIanaId, statuses: [], nameservers: [], events: [] },
+        attempts: [],
+      }),
+      buildWhoisChain: async () => [{
+        server: 'whois.example',
+        response: `Domain Name: EXAMPLE.COM\nRegistrar IANA ID: ${whoisIanaId}\n`,
+      }],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+
+    const matching = await run('0002', '2');
+    assert.equal(requiredValue(matching.registrarStanding).ianaId, '2');
+    const conflicting = await run('2', '3');
+    assert.equal(requiredValue(conflicting.registrarStanding).ianaId, null);
+    assert.equal(requiredValue(conflicting.registrarStanding).assessment.state, 'unknown');
   });
 
   test('keeps a usable WHOIS result when RDAP fails', async () => {
@@ -425,6 +453,7 @@ describe('runUnifiedLookup', () => {
 
     assert.equal(Object.hasOwn(result.availability, 'bulkComparison'), false);
     assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
+    assert.equal(Object.hasOwn(result, 'registrarStanding'), false);
   });
 
   test('adds an exact local SSLBL comparison only to deep non-compact domain lookups', async () => {

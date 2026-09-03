@@ -1,6 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
+import { isRecord as isUnknownRecord } from '../../../../lib/json-record.mts';
 
 type JsonRecord = Record<string, unknown>;
 type CaptureAvailabilityState = 'available' | 'expiring' | 'for_sale' | 'registered' | 'unknown';
@@ -110,9 +111,7 @@ const SPF_BRANCH_RELATIONS = new Set(['include', 'redirect', 'root']);
 const DMARC_AUTHORIZATION_STATES = new Set(['authorized', 'invalid_destination', 'not_found', 'self', 'unavailable']);
 const POSTURE_DEPENDENCY_KINDS = new Set(['dmarc_reporting', 'mail_exchange', 'nameserver', 'spf_include', 'spf_redirect']);
 
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
+const isRecord = isUnknownRecord as (value: unknown) => value is JsonRecord;
 
 function boundedText(value: unknown, maximum: number, allowEmpty = false): value is string {
   return typeof value === 'string'

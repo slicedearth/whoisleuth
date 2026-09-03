@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
 import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
@@ -45,13 +46,18 @@ export function main(args = process.argv.slice(2)): number {
         PLAYWRIGHT_CLI,
         'test',
         ...selection.shard.files,
-        '--project=chromium',
+        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
+        '--workers=1',
+        '--retries=0',
         ...(list ? ['--list'] : []),
       ],
       {
         cwd: REPOSITORY_ROOT,
         env: {
           ...process.env,
+          CI: '1',
+          WHOISLEUTH_E2E_USE_BUILD: '1',
+          WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
           WHOISLEUTH_PLAYWRIGHT_SHARD: `${selection.shard.shard}/${selection.plan.shardCount}`,
           WHOISLEUTH_PLAYWRIGHT_PLANNED_WEIGHT_MS: String(selection.shard.plannedWeightMs),
         },

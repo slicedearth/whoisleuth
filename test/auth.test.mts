@@ -41,83 +41,142 @@ function withSessionTestSecrets(run: () => void): void {
 }
 
 describe('isTrustedOrigin', () => {
-  test('accepts a matching Origin/Host pair', () => {
-    assert.equal(isTrustedOrigin({ origin: 'https://example.com', host: 'example.com' }), true);
+  test('accepts a matching HTTPS Origin/Host pair', () => {
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://example.com', host: 'example.com' },
+      { protocol: 'https' },
+    ), true);
   });
 
-  test('ignores the scheme, matching on host only', () => {
-    assert.equal(isTrustedOrigin({ origin: 'http://example.com', host: 'example.com' }), true);
+  test('rejects HTTP Origin on the same host as an HTTPS deployment', () => {
+    assert.equal(isTrustedOrigin(
+      { origin: 'http://example.com', host: 'example.com' },
+      { protocol: 'https' },
+    ), false);
   });
 
   test('is case-insensitive', () => {
-    assert.equal(isTrustedOrigin({ origin: 'https://Example.com', host: 'example.COM' }), true);
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://Example.com', host: 'example.COM' },
+      { protocol: 'HTTPS:' },
+    ), true);
   });
 
-  test('accepts a matching non-default port', () => {
-    assert.equal(isTrustedOrigin({ origin: 'http://localhost:3000', host: 'localhost:3000' }), true);
+  test('accepts matching ordinary HTTP localhost and rejects a port mismatch', () => {
+    assert.equal(isTrustedOrigin(
+      { origin: 'http://localhost:3000', host: 'localhost:3000' },
+      { protocol: 'http' },
+    ), true);
+    assert.equal(isTrustedOrigin(
+      { origin: 'http://localhost:3001', host: 'localhost:3000' },
+      { protocol: 'http' },
+    ), false);
+  });
+
+  test('uses only an explicitly trusted, singular forwarded protocol', () => {
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://example.com', host: 'example.com', 'x-forwarded-proto': 'https' },
+      { protocol: 'http', trustForwardedProtocol: true },
+    ), true);
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://example.com', host: 'example.com', 'x-forwarded-proto': 'https' },
+      { protocol: 'http' },
+    ), false);
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://example.com', host: 'example.com', 'x-forwarded-proto': 'http, https' },
+      { protocol: 'http', trustForwardedProtocol: true },
+    ), false);
   });
 
   test('rejects a mismatched origin (cross-site request)', () => {
-    assert.equal(isTrustedOrigin({ origin: 'https://attacker.example', host: 'example.com' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://attacker.example', host: 'example.com' }, { protocol: 'https' }), false);
   });
 
   test('rejects a subdomain that is not an exact host match', () => {
-    assert.equal(isTrustedOrigin({ origin: 'https://evil.example.com', host: 'example.com' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://evil.example.com', host: 'example.com' }, { protocol: 'https' }), false);
   });
 
   test('rejects when either header is missing', () => {
-    assert.equal(isTrustedOrigin({ host: 'example.com' }), false);
-    assert.equal(isTrustedOrigin({ origin: 'https://example.com' }), false);
-    assert.equal(isTrustedOrigin({}), false);
+    assert.equal(isTrustedOrigin({ host: 'example.com' }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com' }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({}, { protocol: 'https' }), false);
   });
 
   test('fails closed on a malformed Origin value', () => {
-    assert.equal(isTrustedOrigin({ origin: 'not-a-url', host: 'example.com' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'not-a-url', host: 'example.com' }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com/path', host: 'example.com' }, { protocol: 'https' }), false);
   });
 
   test('fails closed on repeated Origin or Host headers', () => {
-    assert.equal(isTrustedOrigin({ origin: ['https://example.com'], host: 'example.com' }), false);
-    assert.equal(isTrustedOrigin({ origin: 'https://example.com', host: ['example.com'] }), false);
+    assert.equal(isTrustedOrigin({ origin: ['https://example.com'], host: 'example.com' }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com', host: ['example.com'] }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com', Origin: 'https://example.com', host: 'example.com' }, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com', host: 'example.com', Host: 'example.com' }, { protocol: 'https' }), false);
+  });
+
+  test('fails closed on non-canonical Host and contradictory untrusted protocol metadata', () => {
+    assert.equal(isTrustedOrigin(
+      { origin: 'https://example.com', host: '%65xample.com' },
+      { protocol: 'https' },
+    ), false);
+    assert.equal(isTrustedOrigin(
+      { origin: 'http://example.com', host: 'example.com', 'x-forwarded-proto': 'http' },
+      { protocol: 'https' },
+    ), false);
   });
 
   test('fails closed when headers is null/undefined', () => {
-    assert.equal(isTrustedOrigin(null), false);
-    assert.equal(isTrustedOrigin(undefined), false);
+    assert.equal(isTrustedOrigin(null, { protocol: 'https' }), false);
+    assert.equal(isTrustedOrigin(undefined, { protocol: 'https' }), false);
   });
 });
 
 describe('isTrustedLoginOrigin', () => {
   test('rejects a present cross-site Origin', () => {
-    assert.equal(isTrustedLoginOrigin({ origin: 'https://attacker.example', host: 'example.com' }), false);
+    assert.equal(isTrustedLoginOrigin({ origin: 'https://attacker.example', host: 'example.com' }, { protocol: 'https' }), false);
   });
 
-  test('accepts a matching browser Origin and an omitted non-browser Origin', () => {
-    assert.equal(isTrustedLoginOrigin({ origin: 'https://example.com', host: 'example.com' }), true);
-    assert.equal(isTrustedLoginOrigin({ host: 'example.com' }), true);
-    assert.equal(isTrustedLoginOrigin(undefined), true);
+  test('accepts a matching browser Origin and an originless client with an unambiguous request origin', () => {
+    assert.equal(isTrustedLoginOrigin({ origin: 'https://example.com', host: 'example.com' }, { protocol: 'https' }), true);
+    assert.equal(isTrustedLoginOrigin({ host: 'example.com' }, { protocol: 'https' }), true);
+    assert.equal(isTrustedLoginOrigin(undefined, { protocol: 'https' }), false);
   });
 });
 
 describe('authenticated network request admission', () => {
-  test('permits same-origin browser requests, deliberate navigation, and clients that omit browser metadata', () => {
+  test('permits same-origin browser requests and deliberate browser navigation', () => {
     assert.equal(isPermittedAuthenticatedNetworkRequest({
       host: 'example.com',
       origin: 'https://example.com',
       'sec-fetch-site': 'same-origin',
-    }), true);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'none' }), true);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com' }), true);
-    assert.equal(isPermittedAuthenticatedNetworkRequest(undefined), true);
+    }, { protocol: 'https' }), true);
+    assert.equal(isPermittedAuthenticatedNetworkRequest(
+      { host: 'example.com', 'sec-fetch-site': 'none' },
+      { protocol: 'https' },
+    ), true);
+    assert.equal(isPermittedAuthenticatedNetworkRequest(
+      { host: 'example.com', origin: 'https://example.com' },
+      { protocol: 'https' },
+    ), true);
+  });
+
+  test('rejects metadata-free browser-reachable collection requests', () => {
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com' }, { protocol: 'https' }), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest(undefined, { protocol: 'https' }), false);
   });
 
   test('rejects cross-site, malformed, repeated, and mismatched browser metadata', () => {
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'cross-site' }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', 'sec-fetch-site': 'same-site' }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', origin: 'https://sibling.example.com', 'sec-fetch-site': 'same-site' }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'future-state' }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': ['same-origin'] }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: 'https://attacker.example' }), false);
-    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: ['https://example.com'] }), false);
+    const https = { protocol: 'https' } as const;
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'cross-site' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', 'sec-fetch-site': 'same-site' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'app.example.com', origin: 'https://sibling.example.com', 'sec-fetch-site': 'same-site' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'future-state' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': ['same-origin'] }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: 'https://attacker.example' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', origin: ['https://example.com'] }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'same-origin, cross-site' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', Host: 'example.com', 'sec-fetch-site': 'same-origin' }, https), false);
+    assert.equal(isPermittedAuthenticatedNetworkRequest({ host: 'example.com', 'sec-fetch-site': 'same-origin', 'x-forwarded-proto': ['https'] }, https), false);
   });
 });
 

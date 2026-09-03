@@ -63,6 +63,7 @@ export type LookupSummaryInput = Readonly<{
   profileSignals?: unknown;
   rdapParsed?: unknown;
   registrarRdap?: unknown;
+  registrarStanding?: unknown;
   registryComparison?: unknown;
   registrarPublicationComparison?: unknown;
   resultObservedAt?: unknown;
@@ -256,6 +257,7 @@ function buildSignals(
   availability: JsonRecord,
   profileSignals: JsonRecord,
   idnAnalysis: JsonRecord,
+  registrarStanding: JsonRecord,
 ): LookupSummarySignal[] {
   const signals: LookupSummarySignal[] = [];
   const trusted = boundedText(profileSignals.trusted, 80);
@@ -294,6 +296,18 @@ function buildSignals(
     });
   }
 
+  const standingAssessment = record(registrarStanding.assessment);
+  const standingState = boundedText(standingAssessment.state, 64);
+  if (['notice_present', 'terminated'].includes(standingState)) {
+    const label = boundedText(standingAssessment.label, 80);
+    const detail = boundedText(standingAssessment.detail, MAX_PROVENANCE_TEXT);
+    pushSignal(signals, {
+      label: label || 'Registrar standing requires review',
+      tone: 'warn',
+      detail: `${detail || 'Official registrar standing context requires review.'} Provider standing does not classify this domain.`,
+    });
+  }
+
   const domainAgeDays = typeof availability.domainAgeDays === 'number'
     ? availability.domainAgeDays
     : null;
@@ -314,7 +328,7 @@ function buildSignals(
   if (typeof availability.privacyProtected === 'boolean') {
     pushSignal(signals, {
       label: formatPrivacyCell(availability.privacyProtected),
-      tone: availability.privacyProtected ? 'warn' : 'good',
+      tone: 'neutral',
     });
   }
 
@@ -328,11 +342,7 @@ function buildSignals(
         availability.hasSpf === true,
         availability.hasDmarc === true,
       ),
-      tone: activityStatus === 'active'
-        ? 'good'
-        : activityStatus === 'parked'
-          ? 'warn'
-          : 'neutral',
+      tone: 'neutral',
       ...(detail ? { detail } : {}),
     });
   }
@@ -435,6 +445,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
       availability,
       record(input.profileSignals),
       record(input.idnAnalysis),
+      record(input.registrarStanding),
     ),
     facts: [
       {

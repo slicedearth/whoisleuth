@@ -82,7 +82,7 @@ type CliAction =
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -259,7 +259,7 @@ function parseLookupArguments(
       includeAttribution = false;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(lookupArguments[++index]);
+      failOn = parseCliFailPolicies(lookupArguments[++index], 'lookup');
     } else if (argument === '--observer' || argument === '--vantage') {
       const isObserver = argument === '--observer';
       if (isObserver ? observerLabel !== null : vantageLabel !== null) {
@@ -492,7 +492,7 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
       plan = true;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'bulk');
     } else if (argument === '--registered-only' || argument === '--inconclusive-only' || argument === '--errors-only') {
       if (filter !== 'all') throw new CliUsageError('Bulk output filters are mutually exclusive and may be supplied only once.');
       filter = argument === '--registered-only'
@@ -721,7 +721,7 @@ function parseDiscoverScanArguments(argv: string[]): Extract<CliArguments, { act
       plan = true;
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'discover-scan');
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -1041,7 +1041,7 @@ function parseMonitorOnceArguments(argv: string[]): Extract<CliArguments, { acti
       }
     } else if (argument === '--fail-on') {
       if (failOn !== null) throw new CliUsageError('--fail-on may be supplied only once.');
-      failOn = parseCliFailPolicies(argv[++index]);
+      failOn = parseCliFailPolicies(argv[++index], 'monitor-once');
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -1168,6 +1168,7 @@ function parseWorkflowPlanArguments(argv: string[]): Extract<CliArguments, { act
 
 function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { action: 'workflow-run' }> {
   const positional: string[] = [];
+  const selections: Array<Readonly<{ stepId: string; value: string }>> = [];
   let resumeSource: string | null = null;
   let approveNetwork = false;
   let output: 'terminal' | 'json' = 'terminal';
@@ -1179,6 +1180,19 @@ function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { acti
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';
+    } else if (argument === '--select') {
+      const value = argv[++index];
+      if (!value) throw new CliUsageError('--select requires <step-id>=<path-or-value>.');
+      const separator = value.indexOf('=');
+      const stepId = separator === -1 ? '' : value.slice(0, separator);
+      const selection = separator === -1 ? '' : value.slice(separator + 1);
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(stepId) || !selection.trim()) {
+        throw new CliUsageError('--select requires <step-id>=<path-or-value>.');
+      }
+      if (selection.startsWith('-')) {
+        throw new CliUsageError('--select values cannot start with a hyphen; prefix a file path with ./ when needed.');
+      }
+      selections.push(Object.freeze({ stepId, value: selection }));
     } else if (argument === '--resume') {
       if (resumeSource !== null) throw new CliUsageError('--resume may be supplied only once.');
       const value = argv[++index];
@@ -1198,7 +1212,7 @@ function parseWorkflowRunArguments(argv: string[]): Extract<CliArguments, { acti
     throw new CliUsageError(`workflow-run recipe must be one of: ${RUNNABLE_INVESTIGATION_PLAN_RECIPES.join(', ')}.`);
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'workflow-run', recipe: recipe as RunnableInvestigationPlanRecipe, subject: positional[1]!, resumeSource, approveNetwork, output, quiet, color };
+  return { action: 'workflow-run', recipe: recipe as RunnableInvestigationPlanRecipe, subject: positional[1]!, resumeSource, selections: Object.freeze(selections), approveNetwork, output, quiet, color };
 }
 
 function parseDiffArguments(argv: string[]): Extract<CliArguments, { action: 'diff' }> {

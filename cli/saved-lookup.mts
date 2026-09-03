@@ -12,6 +12,11 @@ import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
 } from '../lib/homepage-metadata-contract.mts';
+import {
+  registrarStandingObservedBy,
+  resolveRegistrarIanaId,
+  validRegistrarStanding,
+} from '../lib/registrar-standing-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   CLI_LOOKUP_SCHEMA as SAVED_LOOKUP_SCHEMA,
@@ -383,9 +388,10 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   const httpResponse = objectOrNull(http?.response);
   const publicationMetadata = pageIdentity?.publicationMetadata;
   const deliveryMetadata = httpResponse?.deliveryMetadata;
+  const registrarStanding = document.registrarStanding;
   if (document.version === PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION
-    && (publicationMetadata !== undefined || deliveryMetadata !== undefined)) {
-    throw new TypeError(`${label} version ${PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} homepage metadata.`);
+    && (publicationMetadata !== undefined || deliveryMetadata !== undefined || registrarStanding !== undefined)) {
+    throw new TypeError(`${label} version ${PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} evidence fields.`);
   }
   if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
     && (publicationMetadata !== undefined && (
@@ -398,6 +404,16 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
       ))) {
     throw new TypeError(`${label} contains invalid homepage metadata.`);
   }
+  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+    && registrarStanding !== undefined
+    && !validRegistrarStanding(registrarStanding)) {
+    throw new TypeError(`${label} contains invalid registrar standing.`);
+  }
+  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+    && registrarStanding !== undefined
+    && !registrarStandingObservedBy(registrarStanding, generatedAt)) {
+    throw new TypeError(`${label} registrar standing was observed after the saved Lookup time.`);
+  }
   const rdapParsed = objectOrNull(rdap?.parsed);
   const whoisParsed = objectOrNull(whois?.parsed);
   if (rdapStatus === 'success' && !rdapParsed) {
@@ -405,6 +421,11 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   }
   if ((whoisStatus === 'complete' || whoisStatus === 'partial') && !whoisParsed) {
     throw new TypeError('Successful WHOIS input is missing normalised parsed data.');
+  }
+  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+    && validRegistrarStanding(registrarStanding)
+    && registrarStanding.ianaId !== resolveRegistrarIanaId(rdapParsed, whoisParsed)) {
+    throw new TypeError(`${label} registrar standing does not match its retained registration sources.`);
   }
   return generatedAt;
 }

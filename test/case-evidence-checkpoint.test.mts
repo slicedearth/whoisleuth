@@ -3,10 +3,12 @@ import { describe, test } from 'node:test';
 
 import {
   buildLookupCheckpointFacts,
+  buildLookupReplayCheckpointFacts,
   compareAcquisitionTransitionPins,
   checkpointPinInputs,
   compareCheckpointPins,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
+import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { normalizeCaseEvidencePins } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
@@ -43,6 +45,8 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
       mxHosts: ['mx.checkpoint.example'],
       pageTitle: 'Checkpoint page',
       hasPasswordField: true,
+      hasExternalFormAction: true,
+      phishingLanguageMatch: 'Account access language observed',
       dns: {
         status: 'success',
         observedAt: OBSERVED_AT,
@@ -130,6 +134,8 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('network.cidrs')?.value, '192.0.2.0/24');
     assert.equal(byField.get('http.final_origin')?.value, 'https://checkpoint.example');
     assert.equal(byField.get('page.password_field')?.value, 'Observed');
+    assert.equal(byField.get('page.external_form_action')?.value, 'Observed');
+    assert.equal(byField.get('page.phishing_language')?.value, 'Account access language observed');
     assert.equal(byField.get('page.title')?.value, 'Checkpoint page');
     assert.equal(byField.get('tls.protocol')?.completeness, 'partial');
     assert.equal(byField.get('tls.valid_to')?.value, '2026-12-01T00:00:00.000Z');
@@ -137,6 +143,45 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('disclosure.security_txt_contacts')?.value, 'mailto:security@checkpoint.example');
     assert.equal(byField.get('registration.registrar')?.sourceSchema.version, LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(JSON.stringify(facts).includes('secret=discard'), false);
+  });
+
+  test('maps historical replay facts without inventing source timestamps or scan depth', () => {
+    const replay = {
+      version: 1,
+      schemaVersion: 26,
+      digestSha256: 'a'.repeat(64),
+      digestVerified: true,
+      exportedAt: OBSERVED_AT,
+      generatorVersion: '1.47.4',
+      target: 'login.example.test',
+      caseDomain: 'example.test',
+      targetType: 'domain',
+      availability: 'registered',
+      confidence: 'high',
+      sources: [
+        { id: 'rdap', label: 'Registry RDAP', state: 'success', complete: true, observedAt: OBSERVED_AT, limitations: [] },
+        { id: 'http', label: 'HTTP', state: 'partial', complete: false, observedAt: null, limitations: ['Observation time unavailable.'] },
+      ],
+      facts: [
+        { id: 'registration.registrar', label: 'Registrar', value: 'Example Registrar', sourceId: 'rdap', source: 'Registry RDAP', sourceState: 'success', sourceComplete: true },
+        { id: 'website.final-url', label: 'Final website URL', value: 'https://login.example.test/path?private=yes', sourceId: 'http', source: 'HTTP', sourceState: 'partial', sourceComplete: false },
+      ],
+      contradictions: [],
+      unknowns: [],
+      recommendedSteps: [],
+      pagePublicationMetadata: null,
+      httpDeliveryMetadata: null,
+      graph: { version: 2, targetId: 'target', nodes: [], edges: [], sources: [], truncated: false, limitations: [] },
+      limitations: [],
+    } as LookupEvidenceReplay;
+    const facts = buildLookupReplayCheckpointFacts(replay);
+
+    assert.equal(facts.length, 1);
+    assert.equal(facts[0]?.field, 'registration.registrar');
+    assert.equal(facts[0]?.collectionDepth, 'unknown');
+    assert.equal(facts[0]?.observedAt, OBSERVED_AT);
+    assert.equal(facts[0]?.sourceSchema.version, 26);
+    assert.equal(JSON.stringify(facts).includes('private=yes'), false);
   });
 
   test('creates pins only for explicit observed selections with one checkpoint identity', () => {

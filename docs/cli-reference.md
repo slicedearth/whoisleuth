@@ -12,7 +12,9 @@ contains the exhaustive recipient, retention and export metadata.
 
 ## Installation
 
-Public releases require Node.js 24 or later:
+Public releases require Node.js 24 or later. Release verification uses the
+exact Node.js 24 maintainer runtime and separately exercises the installed
+package on Node.js 26:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
@@ -107,15 +109,16 @@ Readers accept only their declared public and current versions. Unknown,
 unreleased historical and future schemas fail before partial interpretation;
 an invalid import is not treated as an empty document.
 
-`inspect-archive` reads current workspace archive v6 and exact public v5. It
+`inspect-archive` reads current workspace archive v7 and exact versions 5 and 6. It
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
 `export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 27. Exact public schema 26 remains readable and can contain
-public contact fields; current schema 27 excludes raw registration payloads,
-expanded contacts, credentials, complete query-bearing URLs and provider
-payloads.
+evidence schema 28. Published v2 schema 27 and exact v1 schema 26 remain
+readable. Versions 27 and 28 exclude raw registration payloads, expanded
+contacts, credentials, complete query-bearing URLs and provider payloads;
+schema 28 can also retain the bounded, separately attributed registrar-standing
+projection shown by Lookup.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.
@@ -133,14 +136,18 @@ evidence is accurate, current, safe to share or attributable to a person.
   control, activity, intent or maliciousness.
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
-- Respond commands prepare local Cases, packets and sharing reviews. They do not
-  submit, publish, notify or grant recipient authorisation.
+- Respond commands package browser-created Cases and prepare local packets,
+  reports and sharing reviews. They do not create durable Cases, submit,
+  publish, notify or grant recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.
 - `workflow-plan` lists fixed installed recipes without executing them.
   `workflow-run` executes only installed steps, requires approval for network
-  work and pauses for analyst-selection placeholders.
+  work and pauses at unresolved analyst selections. Repeat
+  `--select <step-id>=<path-or-value>` in placeholder order to resume a selected
+  step; version-1 checkpoints remain readable and version 2 retains the exact
+  selections in the local checkpoint.
 
 Use the installed focused help for positional inputs, exact ceilings, options,
 network effects, outputs and command-specific exit behaviour.

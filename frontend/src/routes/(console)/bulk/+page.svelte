@@ -20,11 +20,15 @@
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { BULK_SCORE_CSV_HEADERS, bulkScoreCsvFields, ctCsvFields } from '$lib/analysis/bulk-export.ts';
-  import { prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
+  import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
   import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
   import { fetchCompactBulkLookup } from '$lib/analysis/bulk-lookup-controller.ts';
+  import {
+    executeBulkScan,
+    type BulkScanProfileSnapshot,
+  } from '$lib/controllers/bulk-scan-controller.ts';
   import {
     bulkSessionInputDigest,
     bulkProfileContextsMatch,
@@ -66,11 +70,12 @@
   import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
   import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
+  import { loadDeferredModule } from '$lib/deferred-module';
   import type { BulkSession } from '$lib/bulk-sessions';
   import type { BulkReviewFilter, BulkReviewPreset, BulkReviewPresetView, BulkReviewState, BulkReviewStore } from '$lib/bulk-review';
   import { BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
   import { buildBulkDomainComparison, buildBulkDomainComparisonExport } from '$lib/analysis/bulk-domain-comparison.ts';
-  import { buildBulkRetryPlan, preservePriorBulkResult } from '$lib/analysis/bulk-retry-plan.ts';
+  import { buildBulkRetryPlan } from '$lib/analysis/bulk-retry-plan.ts';
   import {
     BULK_PACING_OPTIONS,
     buildBulkProgressEstimate,
@@ -91,10 +96,11 @@
   } from '$lib/analysis/bulk-mail-exposure.ts';
   import type { BulkReviewCockpitRow } from '$lib/analysis/bulk-review-cockpit.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
+  const moduleController = new AbortController();
+  const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
 
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
-  const RESULT_PUBLISH_MS = 100;
   type ShortlistApi = typeof import('$lib/shortlist');
   type CasesApi = typeof import('$lib/cases');
   type ShortlistSelectionResult = Awaited<ReturnType<ShortlistApi['setShortlistSelection']>>;
@@ -103,13 +109,6 @@
   type BulkSessionsApi = typeof import('$lib/bulk-sessions');
   type BulkReviewApi = typeof import('$lib/bulk-review');
   type RelationshipApi = typeof import('$lib/relationship-observations');
-  type BulkScanProfileSnapshot = Readonly<{
-    mode: ScanMode;
-    sourceState: Exclude<ActiveBrandProfileSourceState, 'loading'>;
-    profile: BrandProfile | null;
-    provenance: BulkProfileContextProvenance;
-  }>;
-
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
   let pacing = $state<BulkPacing>('standard'); let scanElapsedMs = $state(0);
@@ -266,7 +265,7 @@
   async function ensureBulkSessionsContext(){
     if(bulkSessionsSourceState==='ready'||bulkSessionsSourceState==='loading')return bulkSessionLoad??Promise.resolve();
     bulkSessionsSourceState='loading';
-    bulkSessionLoad=import('$lib/bulk-sessions')
+    bulkSessionLoad=loadDeferredModule(()=>import('$lib/bulk-sessions'),{signal:moduleController.signal})
       .then(async(module)=>{bulkSessionsApi=module;bulkSessions=await module.loadBulkSessions();bulkSessionsSourceState='ready';})
       .catch(()=>{bulkSessions=[];bulkSessionsSourceState='unavailable';})
       .finally(()=>{bulkSessionLoad=null;});
@@ -276,7 +275,7 @@
   async function ensureBulkReviewContext(){
     if(bulkReviewSourceState==='ready'||bulkReviewSourceState==='loading')return bulkReviewLoad??Promise.resolve();
     bulkReviewSourceState='loading';
-    bulkReviewLoad=import('$lib/bulk-review')
+    bulkReviewLoad=loadDeferredModule(()=>import('$lib/bulk-review'),{signal:moduleController.signal})
       .then(async(module)=>{bulkReviewApi=module;bulkReviewStore=await module.loadBulkReviewStore();bulkReviewSourceState='ready';})
       .catch(()=>{bulkReviewSourceState='unavailable';reviewStateFilter='';})
       .finally(()=>{bulkReviewLoad=null;});
@@ -286,7 +285,7 @@
   async function ensureRelationshipContext(){
     if(relationshipsSourceState==='ready'||relationshipsSourceState==='loading')return relationshipLoad??Promise.resolve();
     relationshipsSourceState='loading';
-    relationshipLoad=import('$lib/relationship-observations')
+    relationshipLoad=loadDeferredModule(()=>import('$lib/relationship-observations'),{signal:moduleController.signal})
       .then(async(module)=>{relationshipApi=module;const observations=await module.loadRelationshipObservations();retainedRelationshipIds=new Set(observations.map((item)=>item.id));relationshipsSourceState='ready';})
       .catch(()=>{relationshipsSourceState='unavailable';})
       .finally(()=>{relationshipLoad=null;});
@@ -298,16 +297,19 @@
     if(primaryResultContextLoad)return primaryResultContextLoad;
     shortlistSourceState='loading';
     casesSourceState='loading';
-    primaryResultContextLoad=Promise.allSettled([
+    primaryResultContextLoad=loadDeferredModule(()=>Promise.allSettled([
       import('$lib/shortlist').then(async(module)=>{shortlistApi=module;shortlist=await module.loadShortlist();shortlistSourceState='ready';}),
       import('$lib/cases').then(async(module)=>{casesApi=module;cases=await module.loadCases();caseOptions=module.CASE_DISPOSITIONS;casesSourceState='ready';}),
-    ]).then((settled)=>{
+    ]),{signal:moduleController.signal}).then((settled)=>{
       if(settled[0]?.status==='rejected')shortlistSourceState='unavailable';
       if(settled[1]?.status==='rejected'){casesSourceState='unavailable';caseDispositionFilter='';caseOptions=[];}
       const unavailable=[];
       if(shortlistSourceState==='unavailable')unavailable.push('shortlist');
       if(casesSourceState==='unavailable')unavailable.push('case');
       if(unavailable.length)localContextStatus=`Some browser-local result context could not be loaded (${unavailable.join(', ')}). Collected results remain available; reload to retry the missing context.`;
+    }).catch(()=>{
+      shortlistSourceState='unavailable';casesSourceState='unavailable';caseDispositionFilter='';caseOptions=[];
+      localContextStatus='Browser-local result modules are unavailable. Collected results remain available; reload to recover the missing context.';
     }).finally(()=>{primaryResultContextLoad=null;});
     return primaryResultContextLoad;
   }
@@ -330,19 +332,19 @@
     if(next==='review')void ensureBulkReviewContext();
   }
   function preloadWorkspaceTool(next:WorkspaceTool){
-    if(next==='sessions')preloadBestEffort(()=>import('$lib/components/BulkSessions.svelte'));
-    else preloadBestEffort(()=>import('$lib/components/BulkReviewWorkspace.svelte'));
+    if(next==='sessions')preloadModule(()=>import('$lib/components/BulkSessions.svelte'));
+    else preloadModule(()=>import('$lib/components/BulkReviewWorkspace.svelte'));
   }
   function preloadResultView(next:MobileResultView){
-    if(next==='review')preloadBestEffort(()=>import('$lib/components/BulkReviewCockpit.svelte'));
-    else if(next==='list')preloadBestEffort(()=>import('$lib/components/BulkResultsTable.svelte'));
+    if(next==='review')preloadModule(()=>import('$lib/components/BulkReviewCockpit.svelte'));
+    else if(next==='list')preloadModule(()=>import('$lib/components/BulkResultsTable.svelte'));
     else{
       const loads:Array<Promise<unknown>>=[import('$lib/components/BulkMailExposureReview.svelte'),import('$lib/components/BulkPeerOutliers.svelte')];
       if(domainComparison)loads.push(import('$lib/components/BulkDomainComparison.svelte'));
       if(groupBy)loads.push(import('$lib/components/BulkGroupSummary.svelte'));
       if(relationshipSummary.groups.length||relationshipSummary.limitations.length)loads.push(import('$lib/components/BulkRelationships.svelte'));
       if(coverage)loads.push(import('$lib/components/BulkCoverage.svelte'));
-      preloadBestEffort(()=>Promise.all(loads));
+      preloadModule(()=>Promise.all(loads));
     }
   }
   $effect(()=>{if(results.length)preloadResultView(mobileResultView);});
@@ -388,6 +390,7 @@
       restoreBulkSessionsTarget();
     });
     return()=>{
+      moduleController.abort();
       resume();
       controller?.abort();
       const retainedResults=activeScanSnapshot?.()||results;
@@ -549,33 +552,23 @@
     const scanController=new AbortController();
     const generation=++scanGeneration;
     const ownsScan=()=>generation===scanGeneration&&controller===scanController;
-    const targetDomains=new Set(domains);
-    const priorByDomain=new Map(results.filter((row)=>targetDomains.has(row.domain)).map((row)=>[
-      row.domain,
-      reconcileBulkResultProfileContext(row,scanProfile.provenance),
-    ]));
-    const baseResults=replace?[]:results.filter((row)=>!targetDomains.has(row.domain));
-    const pendingResults:Array<ScanResult|undefined>=preservePrior?domains.map((domain)=>priorByDomain.get(domain)):new Array(domains.length);
-    const preservedReasons:string[]=[];
-    let cursor=0;
-    let localCompleted=0;
-    let publishTimer:ReturnType<typeof setTimeout>|null=null;
-    const snapshot=()=>[...baseResults,...pendingResults.filter((row):row is ScanResult=>Boolean(row))];
-    activeScanSnapshot=snapshot;
-    const publish=()=>{if(publishTimer){clearTimeout(publishTimer);publishTimer=null;}if(ownsScan())results=snapshot();};
-    const schedulePublish=()=>{if(ownsScan()&&!publishTimer)publishTimer=setTimeout(publish,RESULT_PUBLISH_MS);};
+    const currentResults=results;
     controller=scanController;running=true;paused=false;completed=0;total=domains.length;page=1;scanElapsedMs=0;
     if(replace)results=[];
     status=`Scanning ${total} domain${total===1?'':'s'}…${scanProfile.sourceState==='unavailable'?' Brand Profile-derived trust, allowlist, match, and contextual Risk evidence will remain inconclusive.':''}`;
-    const concurrency=bulkConcurrency(mode,pacing);
-    const startedAt=performance.now();
-    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted||!ownsScan())break;const index=cursor++,domain=domains[index];if(domain===undefined)break;let next:ScanResult;try{const body=await fetchLookup(domain,scanController.signal);next=normalize(domain,body,scanProfile);if(scanProfile.mode==='deep'&&body.availability?.deepScanComplete===false)next.saved.scanDepth='fast';}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;next=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed',scanProfile);}if(!ownsScan())break;const prior=priorByDomain.get(domain);if(preservePrior&&prior){const decision=preservePriorBulkResult(toBulkSessionResult(prior),toBulkSessionResult(next));if(decision.preserve){pendingResults[index]=prior;preservedReasons.push(`${domain}: ${decision.reason}`);}else pendingResults[index]=next;}else pendingResults[index]=next;localCompleted+=1;completed=localCompleted;scanElapsedMs=performance.now()-startedAt;schedulePublish();}};
-    await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));
-    if(!ownsScan()){if(publishTimer)clearTimeout(publishTimer);return preservedReasons;}
-    publish();activeScanSnapshot=null;running=false;controller=null;
-    if(scanController.signal.aborted)return preservedReasons;
-    status=`Completed ${completed} of ${total} lookups.${scanProfile.sourceState==='unavailable'?' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.':''}${preservedReasons.length?` Retained ${preservedReasons.length} stronger prior result${preservedReasons.length===1?'':'s'}.`:''}`;
-    return preservedReasons;
+    const execution=await executeBulkScan({
+      domains,currentResults,replace,preservePrior,profile:scanProfile,
+      controller:scanController,concurrency:bulkConcurrency(mode,pacing),ownsScan,waitWhilePaused,
+      fetchLookup,normalizeResult:normalize,failedResult,
+      onSnapshot:(snapshot)=>activeScanSnapshot=snapshot,
+      onPublish:(nextResults)=>results=nextResults,
+      onProgress:(nextCompleted,elapsedMs)=>{completed=nextCompleted;scanElapsedMs=elapsedMs;},
+    });
+    if(!execution.owned)return [...execution.preservedReasons];
+    running=false;controller=null;
+    if(execution.aborted)return [...execution.preservedReasons];
+    status=`Completed ${completed} of ${total} lookups.${scanProfile.sourceState==='unavailable'?' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.':''}${execution.preservedReasons.length?` Retained ${execution.preservedReasons.length} stronger prior result${execution.preservedReasons.length===1?'':'s'}.`:''}`;
+    return [...execution.preservedReasons];
   }
   async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(parsedInput.tooLarge){status='The pasted domain list exceeds the bounded input limit.';return;}if(profileSourceState==='loading'){status='Wait for browser-local Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
   async function retryErrors(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}const domains=results.filter(r=>r.status==='error').map(r=>r.domain);if(!domains.length||running)return;const plan=buildBulkRetryPlan(results.filter((row)=>domains.includes(row.domain)).map(toBulkSessionResult),mode,scanStartedAt);if(!confirm(`Retry ${plan.lookupRequests} failed lookup${plan.lookupRequests===1?'':'s'} using the ${mode} profile? Destinations: ${plan.destinations.join(', ')}.`))return;retryStatus=`Running ${plan.lookupRequests} reviewed retry${plan.lookupRequests===1?'':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
@@ -603,19 +596,22 @@
   async function exportDefensiveIndicators(){
     if(profileSourceState!=='ready'){indicatorStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before exporting defensive indicators.';return;}
     const reviewOptions={selectedDomains:[...shortlistedDomains],officialDomains:profile?.officialDomains||[],allowlistedDomains:profile?.allowlistedDomains||[],includeWildcards:indicatorWildcards};
-    const {buildDefensiveIndicatorExport}=await import('$lib/analysis/defensive-indicator-export.ts');
-    const reviewed=buildDefensiveIndicatorExport(reviewedIndicatorRows,{...reviewOptions,format:indicatorFormat==='stix'||indicatorFormat==='misp'?'domains':indicatorFormat});
-    if(!reviewed.domains.length){indicatorStatus='Shortlist an eligible domain and mark its case Suspicious or Confirmed abuse before exporting.';return;}
-    const sources=reviewed.entries.map((entry)=>entry.source);
-    const exported=indicatorFormat==='stix'
-      ?(await import('$lib/analysis/stix-indicator-export.ts')).buildStixIndicatorExport(sources)
-      :indicatorFormat==='misp'
-        ?(await import('$lib/analysis/misp-indicator-export.ts')).buildMispIndicatorExport(sources)
-        :reviewed;
-    downloadText(exported.content,exported.filename,exported.mimeType);
-    downloadText(reviewed.manifestContent,reviewed.manifestFilename,'application/json');
-    downloadText(reviewed.rollbackContent,reviewed.rollbackFilename,'application/json');
-    indicatorStatus=`Exported ${reviewed.domains.length} reviewed indicator${reviewed.domains.length===1?'':'s'}, a provenance manifest, and a rollback set${reviewed.exclusions.length?`; preflight excluded ${reviewed.exclusions.length} other selection${reviewed.exclusions.length===1?'':'s'}`:''}.`;
+    try{
+      const reviewed=buildDefensiveIndicatorExport(reviewedIndicatorRows,{...reviewOptions,format:indicatorFormat==='stix'||indicatorFormat==='misp'?'domains':indicatorFormat});
+      if(!reviewed.domains.length){indicatorStatus='Shortlist an eligible domain and mark its case Suspicious or Confirmed abuse before exporting.';return;}
+      const sources=reviewed.entries.map((entry)=>entry.source);
+      const exported=indicatorFormat==='stix'
+        ?(await loadDeferredModule(()=>import('$lib/analysis/stix-indicator-export.ts'),{signal:moduleController.signal})).buildStixIndicatorExport(sources)
+        :indicatorFormat==='misp'
+          ?(await loadDeferredModule(()=>import('$lib/analysis/misp-indicator-export.ts'),{signal:moduleController.signal})).buildMispIndicatorExport(sources)
+          :reviewed;
+      downloadText(exported.content,exported.filename,exported.mimeType);
+      downloadText(reviewed.manifestContent,reviewed.manifestFilename,'application/json');
+      downloadText(reviewed.rollbackContent,reviewed.rollbackFilename,'application/json');
+      indicatorStatus=`Exported ${reviewed.domains.length} reviewed indicator${reviewed.domains.length===1?'':'s'}, a provenance manifest, and a rollback set${reviewed.exclusions.length?`; preflight excluded ${reviewed.exclusions.length} other selection${reviewed.exclusions.length===1?'':'s'}`:''}.`;
+    }catch{
+      indicatorStatus='Indicator export modules are unavailable. Reload the page before exporting.';
+    }
   }
   async function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}if(profileSourceState!=='ready'){saveStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before saving these results to Monitor.';return;}const blocked=results.filter((row)=>row.saved.profileContext.sourceState!=='ready').length;if(blocked){saveStatus=`Nothing was saved. ${blocked} target row${blocked===1?' has':'s have'} unevaluated Brand Profile context, so this Monitor update was blocked atomically until every target is rescanned.`;return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=await saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material change${changes.length===1?'':'s'}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} result${findings.length===1?'':'s'} to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
   async function saveSelectedResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}if(profileSourceState!=='ready'){saveStatus='Brand Profile context is unavailable, so selected results cannot be classified against trusted or allowlisted domains. Reload before saving.';return;}const blocked=selectedRows.filter((row)=>row.saved.profileContext.sourceState!=='ready').length;if(blocked){saveStatus=`Nothing was saved. ${blocked} selected row${blocked===1?' has':'s have'} unevaluated Brand Profile context, so this Monitor update was blocked atomically until every target is rescanned.`;return;}const findings=selectedRows.filter((row)=>!row.trusted);if(!findings.length){saveStatus='Select at least one non-trusted result before saving to Monitor.';return;}try{await saveWatchlist(name,findings.map((row)=>row.saved),mode);saveStatus=`Saved ${findings.length} explicitly selected result${findings.length===1?'':'s'} to ${name}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the selected results.';}}
@@ -700,7 +696,7 @@
 
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
-    <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkTriageControls.svelte'))}>
+    <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkTriageControls.svelte'))}>
       <DeferredSurface
         load={()=>import('$lib/components/BulkTriageControls.svelte')}
         props={{counts,filter,setFilter,running,retryErrors,exportCsv,indicatorFormat,setIndicatorFormat:(value:'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp')=>indicatorFormat=value,exportIndicators:exportDefensiveIndicators,indicatorCount,indicatorEligibilityAvailable,indicatorProfileContextUnavailableCount,indicatorWildcards,setIndicatorWildcards:(value:boolean)=>indicatorWildcards=value,selectedIndicatorCount,mutationFilter,setMutationFilter:(value:string)=>{mutationFilter=value;page=1;},mutationOptions:mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')})),signalFilters,toggleSignal,sourceFilter,reviewFilter:reviewStateFilter,setSourceFilter:(value:BulkSourceFilter)=>{sourceFilter=value;page=1;},lifecycleFilter,setLifecycleFilter:(value:string)=>{lifecycleFilter=value;page=1;},ageFilter,setAgeFilter:(value:BulkAgeFilter)=>{ageFilter=value;page=1;},mailFilter,setMailFilter:(value:BulkMailFilter)=>{mailFilter=value;page=1;},registrarFilter,setRegistrarFilter:(value:string)=>{registrarFilter=value;page=1;},caseDispositionFilter,setCaseDispositionFilter:(value:string)=>{caseDispositionFilter=value;page=1;},groupBy,setGroupBy:(value:BulkGroupBy)=>groupBy=value,advancedFilterOptions,clearFilters,sortKey,sortDirection,setSortKey,setSortDirection,indicatorStatus,riskComparisonSummary:riskComparison.summary,matchedCount:filtered.length,resultCount:results.length,visibleCount:visibleResults.length,currentPage,pageCount,watchlistName,setWatchlistName:(value:string)=>watchlistName=value,saveResults,saveSelectedResults,saveStatus,selectedCount:selectedRows.length,monitorAllBlockedCount,monitorSelectedBlockedCount,selectFiltered,clearFilteredSelection,exportSelectedCsv,deepRescanSelected,createCasesSelected,setSelectedDisposition,caseMutationBusy,caseOptions,profileContextState:profileSourceState,shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
@@ -738,7 +734,7 @@
 
     <div id="bulk-analysis-panel" class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel analysis-result-panel">
       {#if mobileResultView==='analysis'}
-      <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkMailExposureReview.svelte'))}>
+      <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture." onpreload={()=>preloadModule(()=>import('$lib/components/BulkMailExposureReview.svelte'))}>
         <DeferredSurface
           load={()=>import('$lib/components/BulkMailExposureReview.svelte')}
           props={{report:mailExposureReport,selectedDomains:shortlistedDomains,selectionAvailable:shortlistSourceState==='ready',selectDomains,exportReport:exportMailExposure,exportDisabled:profileSourceState!=='ready'}}
@@ -747,12 +743,12 @@
         />
       </BulkMobileDisclosure>
       {#if domainComparison}
-        <BulkMobileDisclosure title="Domain comparison" description="Compare two selected or settled domains." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkDomainComparison.svelte'))}>
+        <BulkMobileDisclosure title="Domain comparison" description="Compare two selected or settled domains." onpreload={()=>preloadModule(()=>import('$lib/components/BulkDomainComparison.svelte'))}>
           <DeferredSurface load={()=>import('$lib/components/BulkDomainComparison.svelte')} props={{comparison:domainComparison,exportComparison:exportDomainComparison,openSettledRow:()=>selectResultView('list')}} loadingLabel="Loading the domain comparison." unavailableLabel="The domain comparison could not be loaded." />
         </BulkMobileDisclosure>
       {/if}
       {#if groupBy}
-        <BulkMobileDisclosure title="Group summary" description="Review the grouping selected in the filters." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkGroupSummary.svelte'))}>
+        <BulkMobileDisclosure title="Group summary" description="Review the grouping selected in the filters." onpreload={()=>preloadModule(()=>import('$lib/components/BulkGroupSummary.svelte'))}>
           <DeferredSurface
             load={()=>import('$lib/components/BulkGroupSummary.svelte')}
             props={{groupBy,groups:groupSummary.groups,excluded:groupSummary.excluded,truncated:groupSummary.truncated,overlapping:groupSummary.overlapping,selectedDomains:shortlistedDomains,selectionAvailable:shortlistSourceState==='ready',selectDomains}}
@@ -761,7 +757,7 @@
           />
         </BulkMobileDisclosure>
       {/if}
-      <BulkMobileDisclosure title="Cohort outliers" description="Find uncommon evidence within this result set." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkPeerOutliers.svelte'))}>
+      <BulkMobileDisclosure title="Cohort outliers" description="Find uncommon evidence within this result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkPeerOutliers.svelte'))}>
         <DeferredSurface load={()=>import('$lib/components/BulkPeerOutliers.svelte')} props={{matrix:peerOutlierMatrix,exportMatrix:exportPeerOutliers}} loadingLabel="Loading the cohort-outlier matrix." unavailableLabel="The cohort-outlier matrix could not be loaded." />
       </BulkMobileDisclosure>
       {/if}
@@ -771,7 +767,7 @@
   <div class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel extended-analysis-panel">
     {#if mobileResultView==='analysis'}
     {#if relationshipSummary.groups.length || relationshipSummary.limitations.length}
-      <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
+      <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
         <DeferredSurface
           load={()=>import('$lib/components/BulkRelationships.svelte')}
           props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',observedAt:scanStartedAt,sourceIdentities:relationshipSourceIdentities}}
@@ -781,7 +777,7 @@
       </BulkMobileDisclosure>
     {/if}
     {#if coverage}
-      <BulkMobileDisclosure title="Profile listing" description="Review which generated candidates are listed in the active profile and which need evidence review." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkCoverage.svelte'))}>
+      <BulkMobileDisclosure title="Profile listing" description="Review which generated candidates are listed in the active profile and which need evidence review." onpreload={()=>preloadModule(()=>import('$lib/components/BulkCoverage.svelte'))}>
         <DeferredSurface load={()=>import('$lib/components/BulkCoverage.svelte')} props={{coverage,exportCoverage,loadDomains}} loadingLabel="Loading profile-listing coverage." unavailableLabel="Profile-listing coverage could not be loaded." />
       </BulkMobileDisclosure>
     {/if}
@@ -789,7 +785,7 @@
   </div>
 {/if}
 
-<BulkMobileDisclosure title="Shortlist" description="Review and manage the browser-local shortlist." onpreload={()=>preloadBestEffort(()=>import('$lib/components/BulkShortlist.svelte'))} onopen={ensurePrimaryResultContext}>
+<BulkMobileDisclosure title="Shortlist" description="Review and manage the browser-local shortlist." onpreload={()=>preloadModule(()=>import('$lib/components/BulkShortlist.svelte'))} onopen={ensurePrimaryResultContext}>
   <DeferredSurface load={()=>import('$lib/components/BulkShortlist.svelte')} props={{domains:shortlist.map((item)=>item.domain),status:shortlistStatus,sourceState:shortlistSourceState,loadShortlisted,downloadShortlist,importShortlistFile,removeAllShortlisted}} loadingLabel="Loading the browser-local shortlist." unavailableLabel="The shortlist workspace could not be loaded." />
 </BulkMobileDisclosure>
 

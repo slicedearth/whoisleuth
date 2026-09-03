@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
 import {
   buildCatalogStatus,
   main,
   parseArguments,
 } from '../tools/cisa-kev-catalog-status.mts';
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const daysAfterRelease = (days: number) => new Date(Date.parse(SOURCE_RELEASED_AT) + (days * DAY_MS));
+
 describe('pinned CISA KEV catalogue status', () => {
   test('reports age locally without implying that the upstream feed was checked', () => {
-    const current = buildCatalogStatus(new Date('2026-08-04T18:55:09.067Z'), 30);
-    const stale = buildCatalogStatus(new Date('2026-09-04T18:55:09.067Z'), 30);
+    const current = buildCatalogStatus(daysAfterRelease(1), 30);
+    const stale = buildCatalogStatus(daysAfterRelease(32), 30);
     assert.equal(current.state, 'current');
     assert.equal(current.ageDays, 1);
     assert.equal(stale.state, 'stale');
@@ -24,7 +28,7 @@ describe('pinned CISA KEV catalogue status', () => {
     let stdout = '';
     let stderr = '';
     const code = await main(['--json'], {
-      now: new Date('2026-10-04T18:55:09.067Z'),
+      now: daysAfterRelease(32),
       stdout: { write: (value) => { stdout += value; } },
       stderr: { write: (value) => { stderr += value; } },
     });

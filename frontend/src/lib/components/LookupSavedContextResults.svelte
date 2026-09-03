@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    DEFERRED_MODULE_RECOVERY_DETAIL,
+    isDeferredModuleLoadError,
+    loadDeferredModule,
+    reloadDeferredModulePage,
+  } from '$lib/deferred-module';
+  import {
     projectInvestigationContextPreview,
     type InvestigationContextPreview,
   } from '$lib/analysis/investigation-context-preview.ts';
@@ -12,6 +18,7 @@
   let { query } = $props<{ query: string }>();
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let index = $state<InvestigationSearchIndex | null>(null);
+  let moduleUnavailable = $state(false);
   const preview = $derived<InvestigationContextPreview | null>(index
     ? projectInvestigationContextPreview(index, query)
     : null);
@@ -50,22 +57,38 @@
   }
 
   onMount(() => {
+    let active = true;
+    const controller = new AbortController();
     void (async () => {
       try {
-        const module = await import('$lib/investigation-search');
-        index = await module.loadLocalInvestigationSearchIndex();
+        const module = await loadDeferredModule(
+          () => import('$lib/investigation-search'),
+          { signal: controller.signal },
+        );
+        const loaded = await module.loadLocalInvestigationSearchIndex();
+        if (!active) return;
+        index = loaded;
         loadState = 'ready';
-      } catch {
+      } catch (cause) {
+        if (!active) return;
+        moduleUnavailable = isDeferredModuleLoadError(cause) && cause.code !== 'aborted';
         loadState = 'unavailable';
       }
     })();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   });
 </script>
 
 {#if loadState === 'loading'}
   <p class="state" role="status">Reading bounded saved context from this browser…</p>
 {:else if loadState === 'unavailable'}
-  <p class="state unavailable" role="alert">Saved context is unavailable because one or more browser-local collections could not be read.</p>
+  <div class="state unavailable" role="alert">
+    <p>{moduleUnavailable ? 'The saved-context module is unavailable.' : 'Saved context is unavailable because one or more browser-local collections could not be read.'}</p>
+    {#if moduleUnavailable}<small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>{/if}
+  </div>
 {:else if preview}
   <p class="state state-{preview.state}" role="status" aria-live="polite">{preview.detail}</p>
   {#if preview.limitations.length}
@@ -98,6 +121,7 @@
   .state{margin:0;padding:9px;border-left:2px solid var(--accent);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .state-partial{border-color:var(--amber)}
   .unavailable{border-color:var(--muted);border-left-style:dotted}
+  .unavailable p,.unavailable small{display:block;margin:0;overflow-wrap:anywhere}.unavailable small{margin-top:3px}.unavailable button{margin-top:9px}
   details{margin-top:10px;color:var(--muted);font-size:var(--text-xs)}
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   details ul{margin:8px 0 0;padding-left:20px;line-height:1.5}

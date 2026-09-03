@@ -5,21 +5,9 @@
 // stops that form from attaching the victim's session cookie, but the
 // request still arrives), and requiring an existing valid session.
 //
-// The session requirement is kept as defense in depth alongside the origin
-// check, not a replacement for it - each closes a gap the other doesn't:
-// - The origin check alone has a scheme blind spot: it compares host, not
-//   scheme, so in isolation it would treat a request that genuinely
-//   originated from a plain-HTTP version of the site as trustworthy. What
-//   actually stops that in a modern browser is schemeful SameSite: an
-//   HTTP-origin document and its HTTPS-origin cookie are treated as
-//   different "sites", so a Lax cookie set on HTTPS isn't sent on a
-//   cross-scheme POST from the HTTP page - not the cookie's Secure
-//   attribute, which governs the *destination* request's scheme, not the
-//   initiating page's.
-// - The session check alone doesn't stop a same-origin, differently-scoped
-//   forged request (e.g. a valid session token an attacker obtained some
-//   other way, replayed from a page that isn't this site at all) - the
-//   origin check still blocks that.
+// The session requirement is defense in depth alongside the exact
+// scheme/host/port Origin comparison; neither cookie policy nor transport
+// headers substitute for request admission.
 
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -90,6 +78,15 @@ describe('logout handler', () => {
     const res = await handler({
       httpMethod: 'POST',
       headers: { origin: 'https://attacker.example', host: 'example.com', cookie },
+    });
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.headers['Set-Cookie'], undefined);
+  });
+
+  test('rejects an HTTP Origin for the same HTTPS deployment host', async () => {
+    const res = await handler({
+      httpMethod: 'POST',
+      headers: { origin: 'http://example.com', host: 'example.com', cookie },
     });
     assert.equal(res.statusCode, 403);
     assert.equal(res.headers['Set-Cookie'], undefined);

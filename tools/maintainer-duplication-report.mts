@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +12,12 @@ import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 import { compareCodeUnits } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
-type FunctionNode = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+type AssignedFunctionNode = ts.ArrowFunction | ts.FunctionExpression;
+type NamedFunctionNode = ts.FunctionDeclaration
+  | AssignedFunctionNode
+  | ts.MethodDeclaration
+  | ts.GetAccessorDeclaration
+  | ts.SetAccessorDeclaration;
 type FunctionCandidate = Readonly<{
   id: string;
   file: string;
@@ -21,7 +26,7 @@ type FunctionCandidate = Readonly<{
   lineCount: number;
   tokenCount: number;
   signature: string;
-  node: FunctionNode;
+  node: NamedFunctionNode;
 }>;
 type ReportOptions = Readonly<{
   repositoryRoot?: string;
@@ -33,17 +38,37 @@ type MainOptions = ReportOptions & Readonly<{
 
 export const MAINTAINER_DUPLICATION_REPORT_SCHEMA = 'whoisleuth.maintainer-duplication-report';
 export const MAINTAINER_DUPLICATION_REPORT_VERSION = 1;
-export const MAX_MAINTAINER_TOOL_FILES = 64;
-export const MAX_MAINTAINER_TOOL_FILE_BYTES = 512 * 1024;
-export const MAX_MAINTAINER_TOOL_TOTAL_BYTES = 8 * 1024 * 1024;
-export const MAX_MAINTAINER_TOOL_AST_NODES = 200_000;
-export const MAX_MAINTAINER_TOOL_FUNCTIONS = 2_000;
-export const MAX_MAINTAINER_TOOL_CALL_EDGES = 8_000;
-export const MAX_MAINTAINER_DUPLICATE_CLUSTERS = 256;
-export const MAX_MAINTAINER_DUPLICATE_MEMBERS = 32;
-export const MAX_MAINTAINER_DUPLICATION_REPORT_BYTES = 2 * 1024 * 1024;
+export const MAINTAINED_SOURCE_ROOTS = Object.freeze([
+  'bin',
+  'cli',
+  'frontend/src/lib',
+  'frontend/src/routes',
+  'lib',
+  'netlify/functions',
+  'packages',
+  'tools',
+]);
+export const MAINTAINED_ROOT_SOURCE_FILES = Object.freeze(['server.mts']);
+export const MAX_MAINTAINED_SOURCE_FILES = 1_024;
+export const MAX_MAINTAINED_SOURCE_FILE_BYTES = 512 * 1024;
+export const MAX_MAINTAINED_SOURCE_TOTAL_BYTES = 16 * 1024 * 1024;
+export const MAX_MAINTAINED_SOURCE_AST_NODES = 3_000_000;
+export const MAX_MAINTAINED_SOURCE_FUNCTIONS = 20_000;
+export const MAX_MAINTAINED_SOURCE_CALL_EDGES = 40_000;
+export const MAX_MAINTAINER_DUPLICATE_CLUSTERS = 512;
+export const MAX_MAINTAINER_DUPLICATE_MEMBERS = 128;
+export const MAX_MAINTAINER_DUPLICATION_REPORT_BYTES = 8 * 1024 * 1024;
 
-const TOOL_NAME_RE = /^[a-z0-9][a-z0-9.-]*\.mts$/u;
+// Retain the original exported limits for callers that used the first report
+// version. Their values now describe the broader maintained-source scope.
+export const MAX_MAINTAINER_TOOL_FILES = MAX_MAINTAINED_SOURCE_FILES;
+export const MAX_MAINTAINER_TOOL_FILE_BYTES = MAX_MAINTAINED_SOURCE_FILE_BYTES;
+export const MAX_MAINTAINER_TOOL_TOTAL_BYTES = MAX_MAINTAINED_SOURCE_TOTAL_BYTES;
+export const MAX_MAINTAINER_TOOL_AST_NODES = MAX_MAINTAINED_SOURCE_AST_NODES;
+export const MAX_MAINTAINER_TOOL_FUNCTIONS = MAX_MAINTAINED_SOURCE_FUNCTIONS;
+export const MAX_MAINTAINER_TOOL_CALL_EDGES = MAX_MAINTAINED_SOURCE_CALL_EDGES;
+
+const SOURCE_NAME_RE = /\.(?:m)?ts$/u;
 const MIN_DUPLICATE_TOKENS = 12;
 
 function sourceLine(source: ts.SourceFile, position: number): number {
@@ -70,14 +95,15 @@ function functionCandidate(
   file: string,
   source: ts.SourceFile,
   name: string,
-  node: FunctionNode,
+  node: NamedFunctionNode,
+  includeLineInId: boolean,
 ): FunctionCandidate | null {
   if (!node.body) return null;
   const normalized = normalizedBody(node.body, source);
   const line = sourceLine(source, node.getStart(source));
   const endLine = sourceLine(source, node.end);
   return Object.freeze({
-    id: `${file}#${name}`,
+    id: `${file}#${name}${includeLineInId ? `@${line}` : ''}`,
     file,
     name,
     line,
@@ -88,11 +114,42 @@ function functionCandidate(
   });
 }
 
+function staticMemberName(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name)
+    || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  return null;
+}
+
+function namedFunctions(file: string, source: ts.SourceFile): readonly FunctionCandidate[] {
+  const candidates: FunctionCandidate[] = [];
+  const add = (name: string | null, node: NamedFunctionNode) => {
+    if (!name) return;
+    const candidate = functionCandidate(file, source, name, node, true);
+    if (candidate) candidates.push(candidate);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node)) {
+      add(node.name?.text ?? null, node);
+    } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+      && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+      add(node.name.text, node.initializer);
+    } else if ((ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node))
+      && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+      add(staticMemberName(node.name), node.initializer);
+    } else if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+      add(staticMemberName(node.name), node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return Object.freeze(candidates.sort((left, right) => left.line - right.line || compareCodeUnits(left.name, right.name)));
+}
+
 function topLevelFunctions(file: string, source: ts.SourceFile): readonly FunctionCandidate[] {
   const candidates: FunctionCandidate[] = [];
   for (const statement of source.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
-      const candidate = functionCandidate(file, source, statement.name.text, statement);
+      const candidate = functionCandidate(file, source, statement.name.text, statement, false);
       if (candidate) candidates.push(candidate);
       continue;
     }
@@ -100,7 +157,7 @@ function topLevelFunctions(file: string, source: ts.SourceFile): readonly Functi
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer
         || (!ts.isArrowFunction(declaration.initializer) && !ts.isFunctionExpression(declaration.initializer))) continue;
-      const candidate = functionCandidate(file, source, declaration.name.text, declaration.initializer);
+      const candidate = functionCandidate(file, source, declaration.name.text, declaration.initializer, false);
       if (candidate) candidates.push(candidate);
     }
   }
@@ -141,7 +198,7 @@ function importedBindings(file: string, source: ts.SourceFile): Readonly<{
   return Object.freeze({
     names,
     namespaces,
-    imports: Object.freeze([...imports].sort()),
+    imports: Object.freeze([...imports].sort(compareCodeUnits)),
   });
 }
 
@@ -185,90 +242,139 @@ function collectCallEdges(
     || compareCodeUnits(left.callee, right.callee)
     || compareCodeUnits(left.kind, right.kind)
   ));
-  if (calls.length > MAX_MAINTAINER_TOOL_CALL_EDGES) {
-    throw new TypeError(`Maintainer-tool call graph exceeds ${MAX_MAINTAINER_TOOL_CALL_EDGES} static edges.`);
-  }
   return Object.freeze({ calls: Object.freeze(calls), imports: bindings.imports });
 }
 
-function packageToolEntrypoints(packageDocument: Record<string, unknown>): ReadonlySet<string> {
+function packageEntrypoints(packageDocument: Record<string, unknown>): ReadonlySet<string> {
   const scripts = packageDocument.scripts;
   if (!scripts || typeof scripts !== 'object' || Array.isArray(scripts)) return new Set();
   const output = new Set<string>();
   for (const value of Object.values(scripts)) {
     if (typeof value !== 'string' || value.length > 2_000) continue;
-    for (const match of value.matchAll(/(?:^|[\s'"=])(tools\/[a-z0-9][a-z0-9.-]*\.mts)(?=$|[\s'";])/gu)) {
+    for (const match of value.matchAll(/(?:^|[\s'"=])((?:bin|tools)\/[a-z0-9][a-z0-9./-]*\.mts)(?=$|[\s'";])/gu)) {
       if (match[1]) output.add(match[1]);
     }
   }
   return output;
 }
 
-export async function buildMaintainerDuplicationReport(options: ReportOptions = {}) {
-  const repositoryRoot = path.resolve(options.repositoryRoot ?? path.resolve(fileURLToPath(new URL('..', import.meta.url))));
-  const toolRoot = path.join(repositoryRoot, 'tools');
-  const directory = await readdir(toolRoot, { withFileTypes: true });
-  const toolEntries = directory.filter((entry) => entry.name.endsWith('.mts'));
-  if (!toolEntries.length || toolEntries.length > MAX_MAINTAINER_TOOL_FILES) {
-    throw new TypeError(`Maintainer-tool inventory must contain 1-${MAX_MAINTAINER_TOOL_FILES} modules.`);
-  }
-  for (const entry of toolEntries) {
-    if (!entry.isFile() || !TOOL_NAME_RE.test(entry.name)) {
-      throw new TypeError('Maintainer-tool inventory contains a non-regular or unsupported module name.');
+function isGeneratedSource(file: string): boolean {
+  return file.split('/').includes('generated') || /\.generated\.(?:m)?ts$/u.test(file);
+}
+
+async function discoverMaintainedSourceFiles(repositoryRoot: string): Promise<readonly string[]> {
+  const files: string[] = [];
+  const walk = async (relativeDirectory: string): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(path.join(repositoryRoot, relativeDirectory), { withFileTypes: true });
+    } catch (reason) {
+      if ((reason as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw reason;
+    }
+    for (const entry of entries.sort((left, right) => compareCodeUnits(left.name, right.name))) {
+      const relative = path.posix.join(relativeDirectory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new TypeError(`Maintained-source inventory must not traverse symbolic links: ${relative}`);
+      }
+      if (entry.isDirectory()) {
+        if (!isGeneratedSource(relative)) await walk(relative);
+        continue;
+      }
+      if (!entry.isFile() || !SOURCE_NAME_RE.test(entry.name) || isGeneratedSource(relative)) continue;
+      files.push(relative);
+      if (files.length > MAX_MAINTAINED_SOURCE_FILES) {
+        throw new TypeError(`Maintained-source inventory exceeds ${MAX_MAINTAINED_SOURCE_FILES} modules.`);
+      }
+    }
+  };
+  for (const root of MAINTAINED_SOURCE_ROOTS) await walk(root);
+  for (const file of MAINTAINED_ROOT_SOURCE_FILES) {
+    try {
+      const metadata = await lstat(path.join(repositoryRoot, file));
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        throw new TypeError(`Maintained root source must be a regular file: ${file}`);
+      }
+      files.push(file);
+    } catch (reason) {
+      if ((reason as NodeJS.ErrnoException).code !== 'ENOENT') throw reason;
     }
   }
+  const unique = [...new Set(files)].sort(compareCodeUnits);
+  if (!unique.length) throw new TypeError('Maintained-source inventory must contain at least one module.');
+  if (unique.length > MAX_MAINTAINED_SOURCE_FILES) {
+    throw new TypeError(`Maintained-source inventory exceeds ${MAX_MAINTAINED_SOURCE_FILES} modules.`);
+  }
+  return Object.freeze(unique);
+}
+
+export async function buildMaintainerDuplicationReport(options: ReportOptions = {}) {
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? path.resolve(fileURLToPath(new URL('..', import.meta.url))));
+  const sourceFiles = await discoverMaintainedSourceFiles(repositoryRoot);
   const packageRaw = await readBoundedRegularTextFile(path.join(repositoryRoot, 'package.json'), {
-    maximumBytes: MAX_MAINTAINER_TOOL_FILE_BYTES,
+    maximumBytes: MAX_MAINTAINED_SOURCE_FILE_BYTES,
     minimumBytes: 2,
     label: 'Package manifest',
   });
   const packageDocument = parseBoundedJsonObject(packageRaw, {
     label: 'Package manifest',
-    maximumBytes: MAX_MAINTAINER_TOOL_FILE_BYTES,
+    maximumBytes: MAX_MAINTAINED_SOURCE_FILE_BYTES,
   });
-  const scriptedEntrypoints = packageToolEntrypoints(packageDocument);
-  const files: Array<Readonly<{ file: string; bytes: number; entrypoint: boolean; functionCount: number; directLocalImports: readonly string[] }>> = [];
+  const scriptedEntrypoints = packageEntrypoints(packageDocument);
+  const files: Array<Readonly<{
+    file: string;
+    bytes: number;
+    entrypoint: boolean;
+    functionCount: number;
+    topLevelFunctionCount: number;
+    directLocalImports: readonly string[];
+  }>> = [];
   const allFunctions: FunctionCandidate[] = [];
+  const allTopLevelFunctions: FunctionCandidate[] = [];
   const allCalls: Array<Readonly<{ caller: string; callee: string; kind: 'local' | 'imported' }>> = [];
   let totalBytes = 0;
   let astNodes = 0;
 
-  for (const entry of toolEntries.sort((left, right) => compareCodeUnits(left.name, right.name))) {
-    const file = `tools/${entry.name}`;
-    const text = await readBoundedRegularTextFile(path.join(toolRoot, entry.name), {
-      maximumBytes: MAX_MAINTAINER_TOOL_FILE_BYTES,
+  for (const file of sourceFiles) {
+    const text = await readBoundedRegularTextFile(path.join(repositoryRoot, ...file.split('/')), {
+      maximumBytes: MAX_MAINTAINED_SOURCE_FILE_BYTES,
       minimumBytes: 1,
       label: file,
     });
     const bytes = new TextEncoder().encode(text).byteLength;
     totalBytes += bytes;
-    if (totalBytes > MAX_MAINTAINER_TOOL_TOTAL_BYTES) {
-      throw new TypeError(`Maintainer-tool source exceeds the ${MAX_MAINTAINER_TOOL_TOTAL_BYTES}-byte aggregate limit.`);
+    if (totalBytes > MAX_MAINTAINED_SOURCE_TOTAL_BYTES) {
+      throw new TypeError(`Maintained source exceeds the ${MAX_MAINTAINED_SOURCE_TOTAL_BYTES}-byte aggregate limit.`);
     }
     const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const parseDiagnostics = (source as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
+    if (parseDiagnostics.length) throw new TypeError(`Maintained source could not be parsed: ${file}`);
     const countNode = (node: ts.Node): void => {
       astNodes += 1;
-      if (astNodes > MAX_MAINTAINER_TOOL_AST_NODES) {
-        throw new TypeError(`Maintainer-tool syntax exceeds ${MAX_MAINTAINER_TOOL_AST_NODES} AST nodes.`);
+      if (astNodes > MAX_MAINTAINED_SOURCE_AST_NODES) {
+        throw new TypeError(`Maintained-source syntax exceeds ${MAX_MAINTAINED_SOURCE_AST_NODES} AST nodes.`);
       }
       ts.forEachChild(node, countNode);
     };
     countNode(source);
-    const functions = topLevelFunctions(file, source);
+    const functions = namedFunctions(file, source);
+    const topLevel = topLevelFunctions(file, source);
     allFunctions.push(...functions);
-    if (allFunctions.length > MAX_MAINTAINER_TOOL_FUNCTIONS) {
-      throw new TypeError(`Maintainer-tool inventory exceeds ${MAX_MAINTAINER_TOOL_FUNCTIONS} top-level functions.`);
+    allTopLevelFunctions.push(...topLevel);
+    if (allFunctions.length > MAX_MAINTAINED_SOURCE_FUNCTIONS) {
+      throw new TypeError(`Maintained-source inventory exceeds ${MAX_MAINTAINED_SOURCE_FUNCTIONS} named functions.`);
     }
-    const graph = collectCallEdges(file, source, functions);
+    const graph = collectCallEdges(file, source, topLevel);
     allCalls.push(...graph.calls);
-    if (allCalls.length > MAX_MAINTAINER_TOOL_CALL_EDGES) {
-      throw new TypeError(`Maintainer-tool call graph exceeds ${MAX_MAINTAINER_TOOL_CALL_EDGES} static edges.`);
+    if (allCalls.length > MAX_MAINTAINED_SOURCE_CALL_EDGES) {
+      throw new TypeError(`Maintained-source call graph exceeds ${MAX_MAINTAINED_SOURCE_CALL_EDGES} static edges.`);
     }
     files.push(Object.freeze({
       file,
       bytes,
       entrypoint: text.startsWith('#!/usr/bin/env node') || scriptedEntrypoints.has(file),
       functionCount: functions.length,
+      topLevelFunctionCount: topLevel.length,
       directLocalImports: graph.imports,
     }));
   }
@@ -313,12 +419,15 @@ export async function buildMaintainerDuplicationReport(options: ReportOptions = 
     schema: MAINTAINER_DUPLICATION_REPORT_SCHEMA,
     version: MAINTAINER_DUPLICATION_REPORT_VERSION,
     scope: Object.freeze({
-      root: 'tools/*.mts',
+      root: 'maintained TypeScript source roots',
+      roots: Object.freeze([...MAINTAINED_SOURCE_ROOTS, ...MAINTAINED_ROOT_SOURCE_FILES]),
+      generatedSourcesExcluded: true,
       fileCount: files.length,
       entrypointCount: files.filter((file) => file.entrypoint).length,
       totalBytes,
       astNodeCount: astNodes,
-      topLevelFunctionCount: allFunctions.length,
+      namedFunctionCount: allFunctions.length,
+      topLevelFunctionCount: allTopLevelFunctions.length,
     }),
     files: Object.freeze(files),
     callGraph: Object.freeze({
@@ -332,23 +441,24 @@ export async function buildMaintainerDuplicationReport(options: ReportOptions = 
       exactClusters: Object.freeze(exactClusters),
     }),
     limitations: Object.freeze([
+      'The inventory covers maintained TypeScript modules in the declared roots. Generated modules, Svelte component script blocks, tests, workflows, configuration, and non-TypeScript source remain outside this bounded report.',
       'The call graph resolves direct calls to top-level local functions and statically imported bindings. Method dispatch, callbacks, computed properties, and runtime imports remain outside this bounded report.',
-      'Repeated implementations are exact comment-free token matches. Similar intent with different tokens is not labelled duplicate, and a match is evidence for review rather than automatic consolidation.',
+      'Repeated implementations are exact comment-free token matches between named functions. Similar intent with different tokens is not labelled duplicate, and a match is evidence for review rather than automatic consolidation.',
       'The report contains repository-relative module and function metadata only. It does not retain source text, literals, environment values, absolute paths, or runtime data.',
     ]),
   });
   const reportBytes = new TextEncoder().encode(JSON.stringify(report)).byteLength;
   if (reportBytes > MAX_MAINTAINER_DUPLICATION_REPORT_BYTES) {
-    throw new TypeError(`Maintainer-tool report exceeds ${MAX_MAINTAINER_DUPLICATION_REPORT_BYTES} bytes.`);
+    throw new TypeError(`Maintainer report exceeds ${MAX_MAINTAINER_DUPLICATION_REPORT_BYTES} bytes.`);
   }
   return report;
 }
 
 export function formatMaintainerDuplicationReport(report: Awaited<ReturnType<typeof buildMaintainerDuplicationReport>>): string {
   const lines = [
-    'WHOISleuth maintainer-tool duplication report',
-    `Scope: ${report.scope.fileCount} modules · ${report.scope.entrypointCount} entry points · ${report.scope.topLevelFunctionCount} top-level functions · ${report.scope.totalBytes} bytes`,
-    `Static call graph: ${report.callGraph.staticEdgeCount} resolved edges`,
+    'WHOISleuth maintained-source duplication report',
+    `Scope: ${report.scope.fileCount} modules · ${report.scope.entrypointCount} entry points · ${report.scope.namedFunctionCount} named functions · ${report.scope.totalBytes} bytes`,
+    `Static top-level call graph: ${report.callGraph.staticEdgeCount} resolved edges`,
     `Exact repeated implementations: ${report.repeatedImplementations.exactClusterCount} clusters · ${report.repeatedImplementations.repeatedFunctionCount} repeated functions · ${report.repeatedImplementations.repeatedLineCount} repeated lines`,
   ];
   for (const cluster of report.repeatedImplementations.exactClusters) {
@@ -372,7 +482,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       : formatMaintainerDuplicationReport(report));
     return 0;
   } catch (reason) {
-    (options.stderr ?? process.stderr).write(`${reason instanceof Error ? reason.message : 'Maintainer-tool report failed.'}\n`);
+    (options.stderr ?? process.stderr).write(`${reason instanceof Error ? reason.message : 'Maintained-source report failed.'}\n`);
     return 2;
   }
 }

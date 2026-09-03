@@ -22,7 +22,8 @@
   } = $props();
 </script>
 
-<section class="case-toolbar card">
+<section class="case-workspace-controls" aria-label="Case workspace controls">
+<div class="case-toolbar card">
   <form class="track" onsubmit={(event) => { event.preventDefault(); trackDomain(); }}>
     <label for="new-case">Track a domain</label>
     <div><input id="new-case" value={domain} oninput={(event) => setDomain(event.currentTarget.value)} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!domain.trim()}>Open or create case</button></div>
@@ -32,12 +33,14 @@
     <button class="btn" onclick={() => void reviewCalibrationDataset()} disabled={!calibrationSelectedCount}>Review calibration export ({calibrationSelectedCount})</button>
     <label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label>
   </div>
-</section>
+</div>
 <p class="calibration-note">Calibration export includes only explicitly selected reviewed cases and a bounded subset of their latest normalised evidence. It excludes notes and does not change Risk.</p>
-{#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+{#if message}<p class="message" role="status" aria-label="Case workspace action status" aria-live="polite" aria-atomic="true">{message}</p>{/if}
+</section>
 
 <style>
   .case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}
+  .case-workspace-controls{min-width:0}
   .track>label{display:block;margin-bottom:6px;color:var(--text);font:600 var(--text-xs) var(--mono)}
   .track>div{display:flex;gap:8px}
   .track input{min-width:230px;min-height:42px}

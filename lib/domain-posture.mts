@@ -53,6 +53,19 @@ type MtaStsPolicyFetch = {
   error: string | null;
 };
 
+type DomainPostureTimerHandle = unknown;
+type DomainPostureCollectorDependencies = Readonly<{
+  resolveTxt: (name: string) => Promise<unknown[]>;
+  resolveMx: (name: string) => Promise<unknown[]>;
+  resolveNs: (name: string) => Promise<unknown[]>;
+  resolveCaa: (name: string) => Promise<unknown[]>;
+  fetchRdapRecord: typeof fetchRdapRecord;
+  fetchMtaStsPolicy: (domain: string) => Promise<MtaStsPolicyFetch>;
+  now: () => Date;
+  setTimer: (callback: () => void, milliseconds: number) => DomainPostureTimerHandle;
+  clearTimer: (handle: DomainPostureTimerHandle) => void;
+}>;
+
 type DkimQuery = DnsQuery & { selector: string; retired?: boolean };
 type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
 type RegistryPostureEvidence = {
@@ -139,12 +152,20 @@ function normalizeMailProtectionProfile(value: unknown): MailProtectionProfile {
   return value === 'defensive_no_mail' || value === 'parked' ? value : 'standard';
 }
 
-function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = DNS_TIMEOUT_MS): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  label: string,
+  timeoutMs = DNS_TIMEOUT_MS,
+  timers: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'> = {
+    setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
+    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  },
+): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    const timeout = timers.setTimer(() => reject(new Error(`${label} timed out`)), timeoutMs);
     promise.then(
-      (value) => { clearTimeout(timeout); resolve(value); },
-      (err) => { clearTimeout(timeout); reject(err); }
+      (value) => { timers.clearTimer(timeout); resolve(value); },
+      (err) => { timers.clearTimer(timeout); reject(err); }
     );
   });
 }
@@ -153,9 +174,10 @@ async function resolveDns(
   label: string,
   factory: () => Promise<unknown[]>,
   timeoutMs = DNS_TIMEOUT_MS,
+  timers?: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'>,
 ): Promise<DnsQuery> {
   try {
-    return { records: await withTimeout(factory(), label, timeoutMs), error: null };
+    return { records: await withTimeout(factory(), label, timeoutMs, timers), error: null };
   } catch (err) {
     const error = errorRecord(err);
     if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
@@ -656,7 +678,10 @@ function registrationLockCheck(registry: RegistryPostureEvidence): PostureCheck 
 
 function nameserverCheck(query: DnsQuery, registry: RegistryPostureEvidence): PostureCheck {
   if (query.error) return queryFailureCheck('nameservers', 'Nameserver delegation', query.error);
-  const records = query.records.map((record) => String(record || '').toLowerCase().replace(/\.+$/u, '')).filter(Boolean);
+  const records = [...new Set(query.records
+    .map((record) => String(record || '').toLowerCase().replace(/\.+$/u, ''))
+    .filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
   if (records.length === 0) {
     return check('nameservers', 'Nameserver delegation', 'warning', 'No nameserver delegation returned', {
       detail: 'A missing answer may reflect resolver or publication state and is not proof that a provider account or zone is absent.',
@@ -749,6 +774,17 @@ async function checkDomainPosture(
     retiredDkimSelectors?: unknown[];
     mailProtectionProfile?: unknown;
   } = {},
+  dependencies: DomainPostureCollectorDependencies = {
+    resolveTxt: (name) => dns.resolveTxt(name),
+    resolveMx: (name) => dns.resolveMx(name),
+    resolveNs: (name) => dns.resolveNs(name),
+    resolveCaa: (name) => dns.resolveCaa(name),
+    fetchRdapRecord,
+    fetchMtaStsPolicy: (name) => fetchMtaStsPolicy(name),
+    now: () => new Date(),
+    setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
+    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  },
 ) {
   const normalizedDomain = normalizeAuditDomain(domain);
   if (!normalizedDomain) throw new Error('Invalid domain name for posture audit.');
@@ -759,40 +795,48 @@ async function checkDomainPosture(
     .slice(0, Math.max(0, MAX_DKIM_SELECTORS - selectors.length));
   const normalizedMailProfile = normalizeMailProtectionProfile(mailProtectionProfile);
   const [spf, dmarc, mx, nameservers, caa, mtaStsDns, tlsRpt, bimi, dkim, rdap] = await Promise.all([
-    resolveDns(`TXT ${domain}`, () => dns.resolveTxt(domain)),
-    resolveDns(`TXT _dmarc.${domain}`, () => dns.resolveTxt(`_dmarc.${domain}`)),
-    resolveDns(`MX ${domain}`, () => dns.resolveMx(domain)),
-    resolveDns(`NS ${domain}`, () => dns.resolveNs(domain)),
-    resolveDns(`CAA ${domain}`, () => dns.resolveCaa(domain)),
-    resolveDns(`TXT _mta-sts.${domain}`, () => dns.resolveTxt(`_mta-sts.${domain}`)),
-    resolveDns(`TXT _smtp._tls.${domain}`, () => dns.resolveTxt(`_smtp._tls.${domain}`)),
-    resolveDns(`TXT default._bimi.${domain}`, () => dns.resolveTxt(`default._bimi.${domain}`)),
+    resolveDns(`TXT ${domain}`, () => dependencies.resolveTxt(domain), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`TXT _dmarc.${domain}`, () => dependencies.resolveTxt(`_dmarc.${domain}`), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`MX ${domain}`, () => dependencies.resolveMx(domain), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`NS ${domain}`, () => dependencies.resolveNs(domain), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`CAA ${domain}`, () => dependencies.resolveCaa(domain), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`TXT _mta-sts.${domain}`, () => dependencies.resolveTxt(`_mta-sts.${domain}`), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`TXT _smtp._tls.${domain}`, () => dependencies.resolveTxt(`_smtp._tls.${domain}`), DNS_TIMEOUT_MS, dependencies),
+    resolveDns(`TXT default._bimi.${domain}`, () => dependencies.resolveTxt(`default._bimi.${domain}`), DNS_TIMEOUT_MS, dependencies),
     Promise.all([
       ...selectors.map(async (selector) => ({
         selector,
         retired: false,
-        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
+        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dependencies.resolveTxt(`${selector}._domainkey.${domain}`), DNS_TIMEOUT_MS, dependencies),
       })),
       ...retiredSelectors.map(async (selector) => ({
         selector,
         retired: true,
-        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
+        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dependencies.resolveTxt(`${selector}._domainkey.${domain}`), DNS_TIMEOUT_MS, dependencies),
       })),
     ]),
-    fetchRdapRecord('domain', domain).catch((err: unknown) => ({
+    dependencies.fetchRdapRecord('domain', domain).catch((err: unknown) => ({
       error: nonEmptyErrorMessage(err, String(err)),
     })),
   ]);
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
-  const enrichmentDeadline = Date.now() + POSTURE_ENRICHMENT_DEADLINE_MS;
+  const enrichmentStartedAt = dependencies.now();
+  if (!(enrichmentStartedAt instanceof Date) || !Number.isFinite(enrichmentStartedAt.getTime())) {
+    throw new TypeError('Domain-posture collection time must be valid.');
+  }
+  const enrichmentDeadline = enrichmentStartedAt.getTime() + POSTURE_ENRICHMENT_DEADLINE_MS;
   const resolveEnrichmentTxt = (name: string) => {
-    const remaining = Math.max(1, enrichmentDeadline - Date.now());
+    const observedAt = dependencies.now();
+    if (!(observedAt instanceof Date) || !Number.isFinite(observedAt.getTime())) {
+      return Promise.resolve({ records: [], error: 'The bounded posture-enrichment clock was unavailable.' });
+    }
+    const remaining = Math.max(1, enrichmentDeadline - observedAt.getTime());
     if (remaining <= 1) return Promise.resolve({ records: [], error: 'The bounded posture-enrichment deadline was reached.' });
-    return resolveDns(`TXT ${name}`, () => dns.resolveTxt(name), Math.min(DNS_TIMEOUT_MS, remaining));
+    return resolveDns(`TXT ${name}`, () => dependencies.resolveTxt(name), Math.min(DNS_TIMEOUT_MS, remaining), dependencies);
   };
   const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all([
-    parsedMtaDns?.valid ? fetchMtaStsPolicy(domain) : Promise.resolve(null),
+    parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain) : Promise.resolve(null),
     expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
     validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
   ]);
@@ -844,9 +888,13 @@ async function checkDomainPosture(
     dmarcAuthorizations,
     mailProtectionProfile: normalizedMailProfile,
   });
+  const checkedAt = dependencies.now();
+  if (!(checkedAt instanceof Date) || !Number.isFinite(checkedAt.getTime())) {
+    throw new TypeError('Domain-posture completion time must be valid.');
+  }
   return {
     ...report,
-    checkedAt: new Date().toISOString(),
+    checkedAt: checkedAt.toISOString(),
     dkimSelectors: selectors,
     retiredDkimSelectors: retiredSelectors,
     mailProtectionProfile: normalizedMailProfile,
@@ -864,4 +912,8 @@ export {
   fetchMtaStsPolicy,
   buildPostureReport,
   checkDomainPosture,
+};
+
+export type {
+  DomainPostureCollectorDependencies,
 };

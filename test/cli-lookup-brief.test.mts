@@ -21,13 +21,38 @@ describe('CLI Lookup brief', () => {
   test('separates facts from incomplete sources without copying raw evidence', () => {
     const brief = buildCliLookupBrief(JSON.stringify({ ...lookup(), rawWhois: 'private raw value' }), NOW);
     assert.equal(brief.target, 'example.test');
-    assert.ok(brief.facts.some((item) => item.label === 'Registrar' && item.value === 'Example Registrar'));
+    assert.equal(brief.version, 3);
+    const registrar = brief.facts.find((item) => item.label === 'Registrar' && item.value === 'Example Registrar');
+    assert.equal(registrar?.source.label, 'Registry RDAP');
+    assert.equal(registrar?.source.observedAt, NOW);
     assert.ok(brief.unknowns.includes('whois: partial'));
     assert.ok(brief.unknowns.includes('tls: unavailable'));
     assert.ok(brief.actionPlan.every((item) => item.expectedOutcome.length > 20));
     assert.match(brief.actionPlan.find((item) => item.id === 'source-state-review')?.expectedOutcome ?? '', /transient|persistent/u);
     assert.doesNotMatch(JSON.stringify(brief), /private raw value/u);
+    assert.match(formatCliLookupBrief(brief), /Source-attributed facts/u);
+    assert.doesNotMatch(formatCliLookupBrief(brief), /Verified facts/u);
     assert.match(formatCliLookupBrief(brief), /Recommended manual actions/u);
+  });
+
+  test('retains conflicting publication values with separate source states and times', () => {
+    const source = lookup();
+    source.diagnostics.rdap = { status: 'success', observedAt: NOW };
+    source.diagnostics.whois = { status: 'complete', observedAt: '2026-08-05T01:59:00.000Z' };
+    source.rdap.parsed.registrar = { name: 'Registry Registrar' };
+    Object.assign(source.whois.parsed, { registrar: 'WHOIS Registrar' });
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    assert.deepEqual(brief.contradictions[0], {
+      field: 'Registrar',
+      detail: 'Registry RDAP and WHOIS publish different values for Registrar.',
+      observations: [
+        { source: brief.sourceHealth[0], state: 'value', value: 'Registry Registrar' },
+        { source: brief.sourceHealth[2], state: 'value', value: 'WHOIS Registrar' },
+      ],
+    });
+    const rendered = formatCliLookupBrief(brief);
+    assert.match(rendered, new RegExp(`Registry Registrar.*observed ${NOW.replaceAll('.', '\\.')}`, 'u'));
+    assert.match(rendered, /WHOIS Registrar.*observed 2026-08-05T01:59:00.000Z/u);
   });
 
   test('sanitises retained page identity before building and presenting a brief', () => {
@@ -37,6 +62,29 @@ describe('CLI Lookup brief', () => {
     const pageTitle = brief.facts.find((item) => item.label === 'Page title');
     assert.equal(pageTitle?.value, 'Account centre');
     assert.doesNotMatch(formatCliLookupBrief(brief), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+  });
+
+  test('surfaces local certificate warning data as a review lead rather than a verdict', () => {
+    const source = lookup();
+    Object.assign(source, {
+      sslbl: {
+        sslblVersion: 1,
+        source: 'sslbl',
+        status: 'success',
+        verdict: 'listed',
+        complete: true,
+        observedAt: NOW,
+        fingerprintSha1: 'ab'.repeat(20),
+        snapshot: { sourceUpdatedAt: '2026-08-04T00:00:00.000Z' },
+      },
+    });
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    const warningFact = brief.facts.find((item) => item.id === 'certificate-warning-data');
+    assert.equal(warningFact?.value, 'Listed certificate review lead');
+    assert.equal(warningFact?.source.label, 'Local SSLBL certificate snapshot');
+    assert.equal(warningFact?.source.observedAt, NOW);
+    assert.match(brief.actionPlan.find((item) => item.id === 'certificate-warning-review')?.expectedOutcome ?? '', /without treating it alone as a maliciousness verdict/u);
+    assert.match(formatCliLookupBrief(brief), /Certificate warning data: Listed certificate review lead/u);
   });
 
   test('routes the offline command without collecting', async () => {

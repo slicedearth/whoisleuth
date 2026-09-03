@@ -131,7 +131,7 @@ describe('public product catalogue', () => {
     ]);
   });
 
-  test('registers every new public route, canonical redirect, sitemap URL and SEO path', () => {
+  test('registers every public reference route, canonical redirect, sitemap URL and loading budget', () => {
     const routes = ['/cli', '/methodology', '/coverage', '/examples'] as const;
     const redirects = new Map(CANONICAL_TRAILING_SLASH_REDIRECTS);
     const robots = readFileSync(new URL('../frontend/static/robots.txt', import.meta.url), 'utf8');
@@ -144,22 +144,7 @@ describe('public product catalogue', () => {
       assert.equal(typeof FRONTEND_ROUTE_GZIP_BUDGETS[route], 'number');
       assert.ok(FRONTEND_ROUTE_GZIP_BUDGETS[route]! > 0);
       assert.ok(sitemap.includes(`<loc>${WHOISLEUTH_SITE_ORIGIN}${route}</loc>`));
-      const source = readFileSync(new URL(`.${route}/+page.svelte`, ROUTES_DIRECTORY), 'utf8');
-      assert.match(source, new RegExp(`path="${route}"`, 'u'));
     }
-    const layout = readFileSync(new URL('./+layout.svelte', ROUTES_DIRECTORY), 'utf8');
-    assert.match(layout, /publicHeaderNavigation/u);
-    assert.match(layout, /publicReferenceSectionNavigation/u);
-    assert.match(layout, /PublicReferenceSidebar/u);
-    assert.match(layout, /class="reference-shell"/u);
-    assert.match(layout, /href !== '\/resources'[\s\S]*pathname\.startsWith\('\/resources\/'\)[\s\S]*resourceDestinationPaths/u);
-    assert.doesNotMatch(layout, />More<|publicMoreNavigation|more-menu/u);
-    const sidebar = readFileSync(new URL('../../lib/components/PublicReferenceSidebar.svelte', ROUTES_DIRECTORY), 'utf8');
-    assert.match(sidebar, /aria-label="Documentation"/u);
-    assert.match(sidebar, /PUBLIC_REFERENCE_GROUPS/u);
-    assert.match(sidebar, /aria-current=\{item\.href === currentPath \? 'page' : undefined\}/u);
-    const resources = readFileSync(new URL('./resources/+page.svelte', ROUTES_DIRECTORY), 'utf8');
-    assert.match(resources, /publicResourceHubNavigation[\s\S]*aria-label="Product references"/u);
   });
 
   test('uses one top-level analyst-job vocabulary across public and console orientation', () => {

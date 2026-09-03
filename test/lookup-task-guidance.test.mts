@@ -8,22 +8,23 @@ import {
 
 describe('Lookup task guidance', () => {
   test('recommends existing request modes without changing their contracts', () => {
-    assert.equal(lookupTaskGuidance('registration_authority').recommendation, 'fast');
-    assert.equal(lookupTaskGuidance('brand_impersonation').recommendation, 'deep');
+    assert.equal(lookupTaskGuidance('general').recommendation, 'fast');
+    assert.equal(lookupTaskGuidance('brand').recommendation, 'deep');
     assert.equal(lookupTaskGuidance('acquisition').recommendation, 'deep');
-    assert.equal(lookupTaskGuidance('retained_comparison').recommendation, 'review_retained');
-    assert.match(lookupTaskGuidance('registration_authority').requestExplanation, /omits WHOIS, DNS, HTTP, TLS/iu);
-    assert.match(lookupTaskGuidance('retained_comparison').requestExplanation, /zero target requests/iu);
+    assert.equal(lookupTaskGuidance('incident').recommendation, 'deep');
+    assert.equal(lookupTaskGuidance('owned').recommendation, 'deep');
+    assert.match(lookupTaskGuidance('general').requestExplanation, /omits WHOIS, DNS, HTTP, TLS/iu);
   });
 
   test('is bounded, deterministic, and defaults unknown input without starting work', () => {
     assert.deepEqual(LOOKUP_GUIDANCE_TASKS, [
-      'registration_authority',
-      'brand_impersonation',
+      'general',
       'acquisition',
-      'retained_comparison',
+      'brand',
+      'incident',
+      'owned',
     ]);
-    assert.deepEqual(lookupTaskGuidance({ task: 'acquisition' }), lookupTaskGuidance('registration_authority'));
-    assert.equal(lookupTaskGuidance('brand_impersonation'), lookupTaskGuidance('brand_impersonation'));
+    assert.deepEqual(lookupTaskGuidance({ task: 'acquisition' }), lookupTaskGuidance('general'));
+    assert.equal(lookupTaskGuidance('brand'), lookupTaskGuidance('brand'));
   });
 });

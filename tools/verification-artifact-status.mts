@@ -17,6 +17,7 @@ const GROUPS = Object.freeze({
     'playwright/.auth',
     'playwright-report',
     'playwright-results.json',
+    'playwright-results',
     'test-results',
   ]),
 });
@@ -52,6 +53,7 @@ async function portIsFree(): Promise<boolean> {
 
 export async function inspectVerificationArtifacts(
   cleanup: 'none' | 'unit' | 'browser' | 'all' = 'none',
+  checkPort = true,
 ) {
   const selected = cleanup === 'all'
     ? [...GROUPS.unit, ...GROUPS.browser]
@@ -65,25 +67,34 @@ export async function inspectVerificationArtifacts(
     removed: cleanup === 'none' ? Object.freeze([]) : Object.freeze(before),
     remaining: Object.freeze(remaining),
     playwrightPort: PLAYWRIGHT_PORT,
-    portFree: await portIsFree(),
+    portFree: checkPort ? await portIsFree() : null,
   });
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
-    const value = args.length === 0 || args[0] === '--check'
-      ? 'none'
-      : args[0]?.startsWith('--cleanup=') ? args[0].slice('--cleanup='.length) : '';
-    if (args.length > 1 || (value !== 'none' && value !== 'unit' && value !== 'browser' && value !== 'all')) {
-      throw new TypeError('Usage: node tools/verification-artifact-status.mts [--check|--cleanup=unit|browser|all]');
+    const cleanupOptions = args.filter((arg) => arg.startsWith('--cleanup='));
+    const checks = args.filter((arg) => arg === '--check');
+    const skipPortChecks = args.filter((arg) => arg === '--skip-port-check');
+    const supported = args.every((arg) => arg === '--check' || arg === '--skip-port-check' || arg.startsWith('--cleanup='));
+    const value = cleanupOptions.length === 1 ? cleanupOptions[0]!.slice('--cleanup='.length) : 'none';
+    if (!supported || cleanupOptions.length > 1 || checks.length > 1 || skipPortChecks.length > 1
+      || (checks.length && cleanupOptions.length)
+      || (value !== 'none' && value !== 'unit' && value !== 'browser' && value !== 'all')) {
+      throw new TypeError('Usage: node tools/verification-artifact-status.mts [--check|--cleanup=unit|browser|all] [--skip-port-check]');
     }
-    const result = await inspectVerificationArtifacts(value as 'none' | 'unit' | 'browser' | 'all');
+    const result = await inspectVerificationArtifacts(
+      value as 'none' | 'unit' | 'browser' | 'all',
+      skipPortChecks.length === 0,
+    );
     process.stdout.write(
       `Verification artifacts: ${result.removed.length} removed, ${result.remaining.length} generated paths remain; `
-      + `port ${result.playwrightPort} ${result.portFree ? 'free' : 'occupied'}.\n`,
+      + (result.portFree === null
+        ? `port ${result.playwrightPort} not checked.\n`
+        : `port ${result.playwrightPort} ${result.portFree ? 'free' : 'occupied'}.\n`),
     );
     if (result.remaining.length) process.stdout.write(`Remaining generated paths: ${result.remaining.join(', ')}.\n`);
-    return result.portFree ? 0 : 2;
+    return result.portFree === false ? 2 : 0;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Verification artifact status failed.'}\n`);
     return 2;

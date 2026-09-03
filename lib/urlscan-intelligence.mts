@@ -14,6 +14,7 @@ import {
 } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { isRecord } from './json-record.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type AdapterDependencies = {
@@ -58,10 +59,6 @@ const URLSCAN_PROVIDER = defineThreatIntelligenceProvider({
     monthlyRequests: URLSCAN_MONTHLY_REQUESTS,
   },
 });
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function enabledValue(value: unknown): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());

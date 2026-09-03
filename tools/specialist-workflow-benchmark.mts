@@ -429,12 +429,14 @@ function benignInfrastructureScenario(): ScenarioResult<Record<string, unknown>>
 function decisionQualityScenario(): ScenarioResult<Record<string, unknown>> {
   const unsupported = [
     caseRecord('decision-a', 'decision-a.invalid', [snapshot()], {
+      status: 'monitoring',
       disposition: 'expected',
       decisions: [{ id: 'decision-a', summary: 'Reviewed', rationale: 'Controlled fixture rationale', evidencePinIds: [], createdAt: EARLIER }],
       assertions: [{ id: 'assertion-a', kind: 'hypothesis', statement: 'Controlled fixture hypothesis', evidencePinIds: [], state: 'open', createdAt: EARLIER, updatedAt: EARLIER }],
     }),
     caseRecord('decision-b', 'decision-b.invalid', [snapshot()], {
-      disposition: 'suspicious',
+      status: 'escalated',
+      disposition: 'confirmed_abuse',
       decisions: [{ id: 'decision-b', summary: 'Reviewed', rationale: 'Controlled fixture rationale', evidencePinIds: [], createdAt: EARLIER }],
       assertions: [{ id: 'assertion-b', kind: 'verified_fact', statement: 'Controlled fixture statement', evidencePinIds: [], state: 'open', createdAt: EARLIER, updatedAt: EARLIER }],
     }),
@@ -469,6 +471,9 @@ function decisionQualityScenario(): ScenarioResult<Record<string, unknown>> {
     inconsistent_disposition: 1,
     disposition_without_reason: 2,
     decision_without_evidence: 2,
+    strong_disposition_without_evidence: 1,
+    escalation_without_action: 1,
+    monitoring_without_follow_up: 1,
     assertion_without_evidence: 2,
     assertion_predates_evidence: 2,
   });

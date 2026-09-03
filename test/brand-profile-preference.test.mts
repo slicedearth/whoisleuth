@@ -6,6 +6,13 @@ import {
   activeProfileId,
   setActiveProfile,
 } from '../frontend/src/lib/brand-profiles.ts';
+import {
+  parseProfileList,
+  profileDomainKind,
+  profileSignals,
+  type BrandProfileSignalProfile,
+} from '../frontend/src/lib/analysis/brand-profile-signals.ts';
+import { MAX_PROFILE_VALUES } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 
 type ProfilePreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -56,4 +63,71 @@ test('active profile preference fails closed when browser storage is unavailable
     assert.throws(() => activeProfileId(), /Could not read the active-profile preference/u);
     assert.throws(() => setActiveProfile('profile_3-valid'), /storage may be full or unavailable/u);
   });
+});
+
+test('normalizes explicit profile domain roles without treating unrelated domains as trusted', () => {
+  const profile: BrandProfileSignalProfile = {
+    officialDomains: ['Official.Example.'],
+    approvedPartnerDomains: ['partner.example'],
+    allowlistedDomains: ['allowed.example.'],
+    officialFaviconHash: 'sha256:fixture',
+    officialFaviconPHash: '0f0f0f0f0f0f0f0f',
+  };
+  assert.equal(profileDomainKind(' official.example ', profile), 'official');
+  assert.equal(profileDomainKind('PARTNER.EXAMPLE.', profile), 'partner');
+  assert.equal(profileDomainKind('allowed.example', profile), 'allowlisted');
+  assert.equal(profileDomainKind('unrelated.example', profile), null);
+  assert.equal(profileDomainKind('', profile), null);
+  assert.equal(profileDomainKind('official.example', null), null);
+});
+
+test('keeps exact, perceptual, and reused-asset profile signals independently explainable', () => {
+  const profile: BrandProfileSignalProfile = {
+    officialDomains: ['assets.example'],
+    approvedPartnerDomains: [],
+    allowlistedDomains: [],
+    officialFaviconHash: 'sha256:fixture',
+    officialFaviconPHash: '0f0f0f0f0f0f0f0f',
+  };
+  assert.deepEqual(profileSignals('candidate.example', {
+    faviconHash: 'sha256:fixture',
+    faviconPHash: '0f0f0f0f0f0f0f0e',
+    externalAssetHosts: ['ASSETS.EXAMPLE.'],
+  }, profile), {
+    trusted: null,
+    faviconMatch: true,
+    faviconNearMatch: false,
+    reusesOfficialAssets: true,
+  });
+  assert.deepEqual(profileSignals('candidate.example', {
+    faviconHash: 'sha256:other',
+    faviconPHash: '0f0f0f0f0f0f0f0e',
+    externalAssetHosts: 'not-an-array',
+  }, profile), {
+    trusted: null,
+    faviconMatch: false,
+    faviconNearMatch: true,
+    reusesOfficialAssets: false,
+  });
+  assert.deepEqual(profileSignals('assets.example', {}, profile), {
+    trusted: 'official',
+    faviconMatch: false,
+    faviconNearMatch: false,
+    reusesOfficialAssets: false,
+  });
+  assert.deepEqual(profileSignals('candidate.example', {}, null), {
+    trusted: null,
+    faviconMatch: false,
+    faviconNearMatch: false,
+    reusesOfficialAssets: false,
+  });
+});
+
+test('parses bounded profile lists with stable deduplication and optional casing', () => {
+  assert.deepEqual(parseProfileList(' One,Two\none\n, THREE ', true), ['one', 'two', 'three']);
+  assert.deepEqual(parseProfileList(' One,one ', false), ['One', 'one']);
+  assert.equal(
+    parseProfileList(Array.from({ length: MAX_PROFILE_VALUES + 3 }, (_, index) => `value-${index}`).join(',')).length,
+    MAX_PROFILE_VALUES,
+  );
 });

@@ -1,8 +1,7 @@
 import {
   DECISION_FACT_PRESENTATION_DESCRIPTORS,
   DECISION_FACT_PRESENTATION_LABELS,
-  DECISION_FACT_VERSION,
-  buildDecisionFacts,
+  canonicalDecisionFacts,
   type DecisionFact,
   type DecisionFactConsistency,
   type DecisionFactEvidenceState,
@@ -148,59 +147,6 @@ function guidanceProjection(guidance: LookupTaskGuidance): LookupTaskGuidance {
     questions: Object.freeze([...guidance.questions]),
     prioritySections: Object.freeze([...guidance.prioritySections]),
   });
-}
-
-function canonicalFactShape(fact: DecisionFact): string {
-  return JSON.stringify({
-    version: fact.version,
-    id: fact.id,
-    question: fact.question,
-    conclusion: fact.conclusion,
-    importance: fact.importance,
-    evidenceState: fact.evidenceState,
-    freshness: fact.freshness,
-    consistency: fact.consistency,
-    contributors: fact.contributors.map((contributor) => ({
-      id: contributor.id,
-      label: contributor.label,
-      provenance: contributor.provenance,
-      evidenceState: contributor.evidenceState,
-      references: [...contributor.references],
-      observedAt: contributor.observedAt,
-      limitations: [...contributor.limitations],
-    })),
-    contributorCount: fact.contributorCount,
-    references: [...fact.references],
-    contradictions: [...fact.contradictions],
-    limitations: [...fact.limitations],
-    nextActions: fact.nextActions.map((action) => ({
-      id: action.id,
-      label: action.label,
-      reason: action.reason,
-      expectedOutcome: action.expectedOutcome,
-      href: action.href,
-      importance: action.importance,
-    })),
-  });
-}
-
-function canonicalFacts(facts: readonly DecisionFact[]): readonly DecisionFact[] {
-  const canonical = buildDecisionFacts(facts);
-  if (canonical.length !== facts.length) {
-    throw new TypeError('Lookup decision-review facts must not contain duplicate or over-limit identifiers.');
-  }
-  const canonicalById = new Map(canonical.map((fact) => [fact.id, fact]));
-  for (const fact of facts) {
-    const rebuilt = canonicalById.get(fact.id);
-    if (!rebuilt
-      || fact.version !== DECISION_FACT_VERSION
-      || !Number.isSafeInteger(fact.contributorCount)
-      || fact.contributorCount !== fact.contributors.length
-      || canonicalFactShape(fact) !== canonicalFactShape(rebuilt)) {
-      throw new TypeError('Lookup decision-review facts must be canonical Decision Fact values.');
-    }
-  }
-  return canonical;
 }
 
 function validateSupport(support: LookupDecisionSupport): void {
@@ -393,7 +339,7 @@ export function buildLookupDecisionReviewModel(input: Readonly<{
   facts: readonly DecisionFact[];
 }>): LookupDecisionReviewModel {
   validateSupport(input.support);
-  const facts = canonicalFacts(input.facts);
+  const facts = canonicalDecisionFacts(input.facts);
   const decisionFacts = facts.filter((fact) => fact.id.startsWith(DECISION_FACT_PREFIX));
   if (decisionFacts.length !== input.support.entries.length) {
     throw new TypeError('Lookup decision support entries and canonical decision facts do not reconcile.');

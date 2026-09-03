@@ -4,7 +4,7 @@ import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.m
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
 import { createPageBaseline } from './page-baseline.ts';
-import { comparePageBaselines } from './page-similarity.ts';
+import { comparePageBaselines, hasStrongPageIdentityReviewMatch } from './page-similarity.ts';
 import { entityDisplayName } from './utils.ts';
 import { explainOpportunityScore, explainRiskScore, formatActivityCell } from './scoring.ts';
 import { relationshipObservation } from './relationship-evidence.ts';
@@ -58,17 +58,6 @@ export function canonicalBulkTargets(values: readonly string[]): string[] {
   return targets;
 }
 
-function pageBaselineRiskMatch(value: ReturnType<typeof comparePageBaselines>): boolean {
-  if (!value || value.partial) return false;
-  return value.components.filter((component) => {
-    if (component.partial) return false;
-    if (component.id === 'normalized_html' || component.id === 'form_structure') return component.status === 'same';
-    if (component.id === 'dom_structure') return component.status === 'same' || component.status === 'overlap';
-    if (component.id === 'visible_text') return component.status === 'same' || (component.agreementPercent ?? 0) >= 90;
-    return false;
-  }).length >= 2;
-}
-
 /**
  * Converts the compact HTTP lookup contract into the bounded result retained by
  * Bulk. Raw registration payloads and expanded contacts never cross this
@@ -99,7 +88,7 @@ export function normalizeBulkScanResult(
   const pageComparison = profileContextReady
     ? comparePageBaselines(context.profile?.pageBaseline, createPageBaseline(domain, availability))
     : null;
-  const pageBaselineMatch = profileContextReady ? pageBaselineRiskMatch(pageComparison) : null;
+  const pageBaselineMatch = profileContextReady ? hasStrongPageIdentityReviewMatch(pageComparison) : null;
   const idnReferenceMatch = profileContextReady ? Boolean(idn?.referenceMatches.length) : null;
   const scoring = {
     ...availability,

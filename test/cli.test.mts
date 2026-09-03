@@ -15,10 +15,12 @@ import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/termi
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -295,7 +297,7 @@ describe('CLI argument parsing', () => {
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
-    assert.match(exportStdout.value(), /exact public schema \d+ remains readable/u);
+    assert.match(exportStdout.value(), /published v2 schema \d+ and exact v1 schema \d+ remain readable/u);
     assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });
@@ -746,6 +748,51 @@ test('terminal lookup separately attributes represented registrar RDAP diagnosti
   assert.doesNotMatch(terminal, /raw-registrar-payload|private-contact-marker/);
 });
 
+test('terminal lookup surfaces official registrar standing without classifying the domain', () => {
+  const result = lookupResult({
+    rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+    registrarStanding: buildRegistrarStanding({
+      registrarIanaId: '4318',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    }),
+  });
+  const document = buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-09-03T12:00:00.000Z',
+    'deep',
+  );
+
+  const summary = formatTerminalLookup(document, { detail: 'summary' });
+  const verbose = formatTerminalLookup(document, { detail: 'verbose' });
+  assert.match(summary, /Registrar standing Official termination notice found/u);
+  assert.doesNotMatch(summary, /malicious|safe/u);
+  assert.match(verbose, /Registrar ID\s+4318/u);
+  assert.match(verbose, /Accreditation\s+Accredited · source Current/u);
+  assert.match(verbose, /Official notice Termination · 2026-08-27/u);
+  assert.doesNotMatch(verbose, /effective/u);
+  assert.match(verbose, /Notice source\s+https:\/\/www\.icann\.org\/uploads\/compliance_notice\/attachment\/1367\//u);
+  assert.match(verbose, /Standing scope Provider standing is context, not a classification of this domain/u);
+
+  const unavailable = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    lookupResult({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      registrarStanding: buildRegistrarStanding({
+        registrarIanaId: '4318',
+        catalogue: {},
+        now: new Date('2026-09-03T12:00:00.000Z'),
+      }),
+    }),
+    '2026-09-03T12:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+  assert.match(unavailable, /Compliance\s+Unavailable · source Unavailable/u);
+  assert.doesNotMatch(unavailable, /0 matching unavailable/iu);
+});
+
 test('terminal lookup summarizes bounded registry interpretation without publishing contacts', () => {
   const result = lookupResult({
     registryInsights: {
@@ -936,6 +983,97 @@ test('terminal IP and ASN registration renders only bounded normalized public fi
   assert.doesNotMatch(asn, /Reverse DNS|private-asn-contact/);
 });
 
+test('terminal network registration keeps one-sided ranges and malformed retained lists explicit', () => {
+  const ipv4StartOnly = lookupResult({
+    rdap: {
+      parsed: {
+        startAddress: '192.0.2.0',
+        cidrs: [{ privateValue: 'must-not-render' }],
+        statuses: [{ privateValue: 'must-not-render' }],
+      },
+    },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const startOutput = formatTerminalLookup(buildCliLookupDocument(
+    '192.0.2.8',
+    { type: 'ipv4', value: '192.0.2.8' },
+    ipv4StartOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(startOutput, /Address start\s+192\.0\.2\.0/u);
+  assert.match(startOutput, /CIDR prefixes\s+1 malformed retained entry omitted/u);
+  assert.match(startOutput, /Statuses\s+1 malformed retained entry omitted/u);
+  assert.doesNotMatch(startOutput, /must-not-render|\[object Object\]/u);
+
+  const ipv6EndOnly = lookupResult({
+    rdap: { parsed: { endAddress: '2001:db8::ffff' } },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'partial' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const endOutput = formatTerminalLookup(buildCliLookupDocument(
+    '2001:db8::1',
+    { type: 'ipv6', value: '2001:db8::1' },
+    ipv6EndOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(endOutput, /Address end\s+2001:db8::ffff/u);
+
+  const asnStartOnly = lookupResult({
+    rdap: { parsed: { startAutnum: 64496 } },
+    availability: { applicable: false },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' }, availability: { status: 'not_applicable' } },
+  });
+  const asnOutput = formatTerminalLookup(buildCliLookupDocument(
+    'AS64496',
+    { type: 'asn', value: 'AS64496' },
+    asnStartOnly,
+    '2026-08-13T00:00:00.000Z',
+  ));
+  assert.match(asnOutput, /ASN start\s+64496/u);
+});
+
+test('terminal deep-domain presentation omits malformed DNS records and URL relationships', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      confidence: 'high',
+      dns: {
+        source: 'dns',
+        status: 'partial',
+        complete: false,
+        records: { a: [{ privateValue: 'must-not-render' }] },
+      },
+      pageIdentity: {
+        source: 'html',
+        status: 'success',
+        complete: true,
+        canonical: { url: 'not a retained URL', privateValue: 'must-not-render' },
+      },
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'partial',
+        findings: [{ id: 'fixture-technology', name: 'Fixture technology', roles: ['application_platform'], evidence: [] }],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-13T00:00:00.000Z',
+    'deep',
+  ));
+
+  assert.match(output, /Technology\s+Partial · 1 indicator/u);
+  assert.match(output, /Indicators\s+Fixture technology/u);
+  assert.match(output, /Nameservers\s+Unavailable · identity does not establish operator or web-host ownership/u);
+  assert.doesNotMatch(output, /^A\s+|Canonical\s+|must-not-render|\[object Object\]/mu);
+});
+
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
   const result = lookupResult({
     availability: {
@@ -1076,6 +1214,19 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         })),
       },
     },
+    sslbl: {
+      sslblVersion: 1,
+      source: 'sslbl',
+      status: 'success',
+      verdict: 'listed',
+      complete: true,
+      observedAt: '2026-07-24T00:00:00.000Z',
+      fingerprintSha1: 'ab'.repeat(20),
+      referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'ab'.repeat(20)}/`,
+      snapshot: { sourceUpdatedAt: '2026-07-23T00:00:00.000Z' },
+      detail: 'Fingerprint matched the retained snapshot.',
+      limitations: ['One retained snapshot match requires independent review.'],
+    },
   });
   const document = buildCliLookupDocument(
     'example.com',
@@ -1094,6 +1245,9 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /HTTP evidence\s+Success/);
   assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
   assert.match(terminal, /TLS and certificate:\nEvidence\s+Success/);
+  assert.match(terminal, /Certificate warning data:\nSource\s+Local SSLBL certificate snapshot/);
+  assert.match(terminal, /Result\s+Listed certificate review lead/);
+  assert.match(terminal, /Interpretation Review lead only; not a maliciousness verdict/);
   assert.match(terminal, /Completeness\s+Complete/);
   assert.match(terminal, /Protocol\s+TLSv1\.3/);
   assert.match(terminal, /Public key\s+rsa 2048 bits/);
@@ -1113,7 +1267,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Publication\s+Complete · robots Observed · card Observed/);
   assert.match(terminal, /Static page\s+headings 2 · images 2 · blocking candidates 2/);
   assert.match(terminal, /Content cue\s+Account access language observed · static review label/);
-  assert.match(terminal, /Primary role\s+Authentication · High/);
+  assert.match(terminal, /Primary role\s+Authentication · High indicator strength/);
   assert.match(terminal, /Scripts\s+6 elements · 3 referenced · 3 inline · 1 modules/);
   assert.match(terminal, /Credential UI\s+Success · 3 classified inputs/);
   assert.match(terminal, /Form surface\s+2 forms · 4 inputs · 1 external action/);
@@ -1121,13 +1275,15 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Structured ID\s+Success · 1 declared entity/);
   assert.match(terminal, /Declarations\s+Example publisher \(Organization\/WebSite\)/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
-  assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
+  assert.match(terminal, /Example Commerce \(commerce platform, high signature strength\)/);
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
   assert.match(verbose, /Alt names\s+example\.com, www\.example\.com, 192\.0\.2\.44/);
   assert.match(verbose, /Purposes\s+TLS Web Server Authentication/);
   assert.match(verbose, /Findings\s+Wildcard certificate/);
+  assert.match(verbose, /Snapshot date\s+2026-07-23T00:00:00\.000Z/);
+  assert.match(verbose, /SHA-1\s+abababababababababababababababababababab/);
   assert.match(verbose, /Posture labels\s+.*\+1 more/);
   assert.match(verbose, /Client labels\s+.*\+2 more/);
   assert.match(verbose, /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/);
@@ -1135,8 +1291,134 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.doesNotMatch(summary, /Page title|Language\s+en-AU|Canonical|Primary role|Scripts\s+6|Public key|SAN summary/);
   assert.doesNotMatch(summary, /Publication|Delivery\s+/);
   assert.equal(formatTerminalLookup(document, { detail: 'verbose' }), verbose);
+  assert.doesNotMatch(terminal, /Fingerprint matched the retained snapshot|ssl-certificates\/sha1/);
   assert.doesNotMatch(`${terminal}${verbose}`, /private-marker|private-posture-detail|credential-private-marker|must-not-render|private-resource|private-frame|private-contact|private-download|PRIVATE-TRACKING|private-html|private-role-evidence|private-client-explanation|private-tls-detail|private-chain/);
   assert.doesNotMatch(`${terminal}${verbose}`, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/);
+});
+
+test('terminal distinguishes complete negative certificate-warning evidence from inconclusive evidence', () => {
+  const formatCertificateWarning = (sslbl: Record<string, unknown>, detail: 'standard' | 'verbose' = 'standard') => formatTerminalLookup(
+    buildCliLookupDocument(
+      'example.test',
+      classifiedDomain('example.test'),
+      lookupResult({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+        },
+        sslbl,
+      }),
+      '2026-07-24T00:00:00.000Z',
+      'deep',
+    ),
+    { detail },
+  );
+
+  const completeNegative = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'success',
+    verdict: 'not_listed',
+    complete: true,
+    truncated: false,
+  });
+  assert.match(completeNegative, /Result\s+No match in retained snapshot/);
+  assert.match(completeNegative, /Completeness\s+Complete/);
+
+  const incompleteNegative = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'partial',
+    verdict: 'not_listed',
+    complete: false,
+    limitations: ['First bound', 'Second bound', 'Third bound', 'Fourth bound'],
+  }, 'verbose');
+  assert.match(incompleteNegative, /Result\s+Inconclusive/);
+  assert.match(incompleteNegative, /Completeness\s+Incomplete/);
+  assert.match(incompleteNegative, /Limitation\s+\+1 more retained limitation/);
+  assert.doesNotMatch(incompleteNegative, /No match in retained snapshot/);
+
+  const unavailable = formatCertificateWarning({
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: 'unavailable',
+    verdict: 'unavailable',
+  });
+  assert.match(unavailable, /Result\s+Inconclusive/);
+  assert.doesNotMatch(unavailable, /Completeness\s+/);
+});
+
+test('terminal projects v10 resource-only delivery evidence as embedded rather than edge', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      technologyProfile: {
+        profileVersion: 10,
+        source: 'derived',
+        status: 'success',
+        findings: [{
+          id: 'fixture-embedded-delivery',
+          name: 'Fixture embedded delivery asset',
+          category: 'delivery platform',
+          confidence: 'medium',
+          evidence: [{
+            source: 'resource origin',
+            description: 'A retained resource origin uses fixture delivery infrastructure.',
+          }],
+        }],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-31T00:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+
+  assert.match(output, /Observed edge\s+None retained/u);
+  assert.match(output, /Embedded deps\s+Fixture embedded delivery asset/u);
+  assert.doesNotMatch(output, /Observed edge\s+Fixture embedded delivery asset/u);
+});
+
+test('terminal preserves role-aware technology and nameserver non-inference semantics', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      nameservers: ['ns1.example.test'],
+      technologyProfile: {
+        profileVersion: 11,
+        source: 'derived',
+        status: 'partial',
+        findings: [
+          { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'], evidence: [] },
+          { id: 'fixture-platform', name: 'Fixture Platform', category: 'content management', confidence: 'medium', roles: ['application_platform'], evidence: [] },
+          { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [] },
+        ],
+      },
+    },
+  });
+  const output = formatTerminalLookup(buildCliLookupDocument(
+    'example.test',
+    classifiedDomain('example.test'),
+    result,
+    '2026-08-31T00:00:00.000Z',
+    'deep',
+  ), { detail: 'verbose' });
+
+  assert.match(output, /Nameservers\s+ns1\.example\.test · identity does not establish operator or web-host ownership/u);
+  assert.match(output, /Observed edge\s+Fixture Edge/u);
+  assert.match(output, /App platform\s+Fixture Platform/u);
+  assert.match(output, /Framework\/run\s+Fixture Runtime/u);
+  assert.match(output, /Embedded deps\s+None retained/u);
+  assert.match(output, /Origin host\s+Not established from retained evidence/u);
 });
 
 test('terminal page relationships use the registrable collection target and preserve producer counts', () => {
@@ -1352,6 +1634,7 @@ test('repository CLI handles service termination while waiting for standard inpu
     });
   `)}`;
   const child = spawn(process.execPath, ['--import', readinessModule, entryPoint, 'lookup'], {
+    env: environmentWithoutV8Coverage(),
     stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
   });
   assert.ok(child.stdout);
@@ -1386,4 +1669,38 @@ test('repository CLI handles service termination while waiting for standard inpu
   assert.equal(code, 143);
   assert.equal(stdout, '');
   assert.equal(stderr, 'Cancelled by analyst.\n');
+});
+
+test('review-family readers fail through bounded command-specific usage errors', async () => {
+  const commands = [
+    ['verify-artifact', 'artefact.json'],
+    ['interchange-report', 'artefact.json'],
+    ['source-report', 'lookups.json'],
+    ['compare', 'lookup.json'],
+    ['page-compare', 'left.json', 'right.json'],
+    ['mail-review', 'mail.json'],
+    ['review-evidence', 'evidence.json'],
+    ['brief', 'lookup.json'],
+    ['case-pack', 'cases.json', '--audience', 'internal', '--reviewed'],
+  ] as const;
+  for (const argv of commands) {
+    const stdout = capture();
+    const stderr = capture();
+    const failRead = async () => {
+      throw new Error('Reader failed\nadditional detail');
+    };
+    const code = await runCli([...argv], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      readArtifactInput: failRead,
+      readSourceReliabilityInput: failRead,
+      readCompareInput: failRead,
+      readDiffInput: failRead,
+      readMailReviewInput: failRead,
+    });
+    assert.equal(code, EXIT_CODES.USAGE, argv[0]);
+    assert.equal(stdout.value(), '', argv[0]);
+    assert.match(stderr.value(), /^Usage error: Could not read/u, argv[0]);
+    assert.doesNotMatch(stderr.value(), /[\r\n].*[\r\n]/u, argv[0]);
+  }
 });

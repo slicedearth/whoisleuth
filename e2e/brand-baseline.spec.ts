@@ -806,6 +806,11 @@ test('owned-domain baseline feedback reflects the committed browser-local write'
   });
   await openBrandWorkbench(page, 'baselines');
   const baseline = page.locator('#desired-posture-baseline');
+  const consumers = baseline.getByRole('complementary', { name: 'Where these expectations are reviewed' });
+  await expect(consumers).toContainText('owned-domain posture matrix currently marks DS comparison unsupported');
+  await expect(consumers).toContainText('certificate-policy review');
+  await expect(consumers).toContainText('SAN patterns are not a posture-matrix column');
+  await expect(consumers).toContainText('DNS change rehearsal');
   await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('ns1.stored.example');
   await failNextBrowserLocalManifestWrite(page, 'brand_profiles');
   await baseline.getByRole('button', { name: 'Save expected settings' }).click();

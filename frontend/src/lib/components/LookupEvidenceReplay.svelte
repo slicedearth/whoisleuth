@@ -2,11 +2,16 @@
   import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
   import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
   import {
+    buildLookupReplayCaseEvidence,
     LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
     parseLookupEvidenceReplay,
     type LookupEvidenceReplay,
   } from '$lib/analysis/lookup-evidence-replay.ts';
+  import { buildLookupReplayCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
+  import { LookupCaseController } from '$lib/controllers/lookup-case-controller.ts';
+  import type { CaseRecord, CaseTransitionExpectation } from '$lib/cases';
   import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
+  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
   import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
 
@@ -19,7 +24,12 @@
   let comparisonStatus = $state('');
   let comparisonLoading = $state(false);
   let comparisonState = $state<'idle' | 'success' | 'error'>('idle');
+  let caseRecord = $state<CaseRecord | null>(null);
+  let caseStatus = $state('');
+  let caseBusy = $state(false);
   const replayAvailability = $derived(availabilityStatusDisplay(replay?.availability));
+  const replayCheckpointFacts = $derived(replay ? buildLookupReplayCheckpointFacts(replay) : []);
+  const caseController = new LookupCaseController();
   let replayGeneration = 0;
   let comparisonGeneration = 0;
 
@@ -35,6 +45,9 @@
     statusState = 'idle';
     replay = null;
     comparison = null;
+    caseRecord = null;
+    caseStatus = '';
+    caseBusy = false;
     try {
       if (file.size > LOOKUP_EVIDENCE_REPLAY_MAX_BYTES) {
         throw new Error('Lookup evidence replay files are limited to 5 MB.');
@@ -48,6 +61,12 @@
       replay = next;
       statusState = 'success';
       status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
+      const existing = next.caseDomain
+        ? await caseController.refresh(next.caseDomain)
+        : { record: null, status: '' };
+      if (generation !== replayGeneration) return;
+      caseRecord = existing.record;
+      caseStatus = existing.status;
     } catch (cause) {
       if (generation !== replayGeneration) return;
       status = cause instanceof Error ? cause.message : 'The evidence file could not be replayed.';
@@ -55,6 +74,44 @@
     } finally {
       if (generation === replayGeneration) loading = false;
       control.value = '';
+    }
+  }
+
+  async function saveReplayToCase() {
+    const caseDomain = replay?.caseDomain;
+    if (!replay || !caseDomain || caseBusy) return;
+    const current = replay;
+    const generation = replayGeneration;
+    caseBusy = true;
+    const result = await caseController.openReplay(
+      caseDomain,
+      buildLookupReplayCaseEvidence(current),
+    );
+    if (generation === replayGeneration && replay === current) {
+      caseRecord = result.record;
+      caseStatus = result.status;
+      caseBusy = false;
+    }
+  }
+
+  async function saveReplayCheckpoint(
+    fields: string[],
+    expectations: Readonly<Record<string, CaseTransitionExpectation>> = {},
+  ) {
+    if (!replay || !caseRecord || caseBusy) return;
+    const current = replay;
+    const generation = replayGeneration;
+    caseBusy = true;
+    const result = await caseController.recordCheckpoint(
+      caseRecord,
+      replayCheckpointFacts,
+      fields,
+      expectations,
+    );
+    if (generation === replayGeneration && replay === current) {
+      caseRecord = result.record;
+      caseStatus = result.status;
+      caseBusy = false;
     }
   }
 
@@ -121,6 +178,29 @@
           <small>File SHA-256 · {replay.digestVerified ? 'verified against supplied checksum' : 'calculated locally; no expected checksum supplied'}</small>
           <code>{replay.digestSha256}</code>
         </div>
+
+        {#if replay.caseDomain}
+          <section class="case-handoff" aria-labelledby="replay-case-title">
+            <div>
+              <p class="eyebrow">Browser-local handoff</p>
+              <h3 id="replay-case-title">Continue this historical review in a Case</h3>
+              <p class="note">The Case uses {replay.caseDomain} as its registrable identity, retains {replay.target} as the observed hostname, and preserves the export time and imported provenance. This action does not refresh evidence or contact a source.</p>
+            </div>
+            <button class="btn" type="button" disabled={caseBusy} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create browser-local Case'}</button>
+            <p class="case-status" role="status" aria-live="polite" aria-atomic="true">{caseStatus}</p>
+            {#if caseRecord}<a class="case-link" href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open Case in Respond →</a>{/if}
+          </section>
+
+          {#if caseRecord && replayCheckpointFacts.length}
+            <LookupEvidenceCheckpoint
+              facts={replayCheckpointFacts}
+              pins={caseRecord.evidencePins}
+              onsave={saveReplayCheckpoint}
+              actionBusy={caseBusy}
+              headingId="replay-checkpoint-title"
+            />
+          {/if}
+        {/if}
 
         <div class="source-grid" role="group" aria-label="Replayed source health">
           {#each replay.sources as source (source.id)}
@@ -221,6 +301,8 @@
   .digest{display:grid;gap:4px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .digest small{color:var(--muted)}
   .digest code{font-size:var(--text-2xs);overflow-wrap:anywhere}
+  .case-handoff{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px 14px;padding:11px;border:1px solid color-mix(in srgb,var(--accent2) 38%,var(--border));border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .case-handoff h3,.case-handoff p{margin:0}.case-handoff .note{margin-top:5px}.case-status{grid-column:1/-1;margin:0;color:var(--muted);font-size:var(--text-xs)}.case-status:empty{display:none}.case-link{grid-column:1/-1;width:max-content;font:680 var(--text-xs) var(--mono)}
   .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   .source-grid article{display:grid;gap:3px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .source-grid strong{font-size:var(--text-xs)}
@@ -247,5 +329,6 @@
   @media(max-width:760px){
     .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}
     .replay-result>header{display:grid}
+    .case-handoff{grid-template-columns:minmax(0,1fr)}.case-handoff .btn{width:100%}.case-status,.case-link{grid-column:1}
   }
 </style>

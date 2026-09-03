@@ -120,6 +120,20 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(replay.getByRole('region', { name: 'Retained homepage metadata' })).toHaveCount(0);
   expect(lookupRequests).toBe(requestBaseline);
 
+  await replay.locator('input[type="file"]').first().setInputFiles({
+    name: 'lookup-evidence-v27.json',
+    mimeType: 'application/json',
+    buffer: readFileSync(resolve(process.cwd(), 'test/fixtures/lookup-evidence-v27.json')),
+  });
+  await expect(replay.getByText(/Loaded lookup-evidence-v27\.json locally/u)).toBeVisible();
+  const registrarFact = replay.locator('.replay-result > dl > div', {
+    has: page.locator('dt', { hasText: /^Registrar$/u }),
+  });
+  await expect(registrarFact).toHaveCount(1);
+  await expect(registrarFact.locator('dd')).toContainText('Example Registrar');
+  await expect(replay.getByText(/registrar accreditation/iu)).toHaveCount(0);
+  expect(lookupRequests).toBe(requestBaseline);
+
   const comparisonEvidence = structuredClone(replayEvidence('example.test'));
   (comparisonEvidence.application as Record<string, unknown>).version = '1.35.0';
   await replay.locator('input[type="file"]').last().setInputFiles({

@@ -1,6 +1,5 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -30,65 +29,33 @@ import {
   type CliNetworkEffect,
 } from '../cli/command-reference.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
+import {
+  runDiscriminatedCommandHandler,
+  type DiscriminatedCommandHandlerMap,
+} from '../cli/discriminated-command-handlers.mts';
 import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES } from '../cli/investigation-plan.mts';
 import { buildCliManual } from '../cli/manual.mts';
+import { ASSURANCE_COMMAND_HANDLERS } from '../cli/assurance-command-runner.mts';
+import { EVIDENCE_COMMAND_HANDLERS } from '../cli/evidence-command-runner.mts';
+import { HISTORY_COMMAND_HANDLERS } from '../cli/history-command-runner.mts';
+import { FAMILY_COMMANDS } from '../cli/inline-command-runner.mts';
+import { REVIEW_COMMAND_HANDLERS } from '../cli/review-command-runner.mts';
 import { INLINE_CLI_COMMANDS } from '../cli/runner.mts';
+import { SUPPORT_COMMAND_HANDLERS } from '../cli/support-command-runner.mts';
+import { WORKFLOW_COMMAND_HANDLERS } from '../cli/workflow-command-runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
 import {
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import {
+  prepareBashCompletionBatch,
+  preparePowerShellCompletionBatch,
+  prepareZshCompletionBatch,
+} from './support/shell-completion-harness.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
-
-function bashCandidates(script: string, words: readonly string[]): string[] {
-  const invocation = `${script}\nCOMP_WORDS=(${words.map((word) => JSON.stringify(word)).join(' ')}); COMP_CWORD=${words.length - 1}; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`;
-  const result = spawnSync('bash', ['-c', invocation], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim().split(/\r?\n/gu).filter(Boolean);
-}
-
-function zshCandidates(script: string, words: readonly string[]): string[] {
-  const invocation = `compdef() { :; }
-_describe() { :; }
-_files() { print -r -- __FILES__; }
-_message() { print -r -- __MESSAGE__; }
-compadd() {
-  local after_separator=0 value
-  for value in "$@"; do
-    if [[ "$value" == "--" ]]; then after_separator=1; continue; fi
-    (( after_separator )) && print -r -- "$value"
-  done
-}
-${script}
-words=(${words.map((word) => JSON.stringify(word)).join(' ')})
-CURRENT=${words.length}
-_whoisleuth`;
-  const result = spawnSync('zsh', ['-c', invocation], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim().split(/\r?\n/gu).filter(Boolean);
-}
-
-function powershellCandidates(script: string, line: string): string[] {
-  const invocation = `${script}
-function global:whoisleuth { & node bin/whoisleuth.mts @args }
-$line = ${JSON.stringify(line)}
-$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)
-$result.CompletionMatches | ForEach-Object { $_.CompletionText }`;
-  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', invocation], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim().split(/\r?\n/gu).filter(Boolean);
-}
 
 const MINIMUM_ARGUMENTS: Readonly<Record<CliCommand, readonly string[]>> = Object.freeze({
   completion: ['completion', 'bash'],
@@ -206,6 +173,25 @@ function referencedConstraintOptions(constraint: CliGrammarConstraint): readonly
 }
 
 describe('canonical CLI command registry', () => {
+  test('keeps each command\'s maintained metadata in one typed seed', () => {
+    const source = readFileSync(new URL('../cli/command-reference.mts', import.meta.url), 'utf8');
+    assert.equal([...source.matchAll(/: commandSeed\(\{/gu)].length, CLI_COMMAND_REGISTRY.length);
+    for (const retiredParallelMap of [
+      'COMMAND_USAGE_SEED',
+      'COMMAND_DETAILS_SEED',
+      'COMMAND_COLLECTION_SEED',
+      'OPTIONS_BY_COMMAND_SEED',
+      'POSITIONALS_BY_COMMAND_SEED',
+      'GRAMMAR_CONSTRAINTS_SEED',
+      'COMMAND_DESCRIPTIONS_SEED',
+      'HANDLER_OWNER_BY_COMMAND',
+      'NETWORK_EFFECT_BY_COMMAND',
+      'COMMON_COMMANDS',
+      'SCHEMA_IDENTIFIERS_BY_COMMAND',
+      'PRIMARY_ARTEFACTS_BY_COMMAND',
+    ]) assert.doesNotMatch(source, new RegExp(`\\b${retiredParallelMap}\\b`, 'u'));
+  });
+
   test('keeps one ordered, unique, deeply immutable command contract', () => {
     assert.ok(CLI_COMMAND_REGISTRY.length > 0);
     assert.deepEqual(CLI_COMMANDS, CLI_COMMAND_REGISTRY.map((definition) => definition.command));
@@ -277,6 +263,8 @@ describe('canonical CLI command registry', () => {
     ]);
     assert.equal(commandOptionSpec('http', '--scenario'), null);
     assert.equal(commandOptionSpec('workflow-run', '--resume')?.valueKind, 'file');
+    assert.equal(commandOptionSpec('workflow-run', '--select')?.valueKind, 'text');
+    assert.equal(commandOptionSpec('workflow-run', '--select')?.occurrence, 'repeatable');
     assert.equal(commandOptionSpec('bulk', '--resume')?.valueKind, 'flag');
     assert.deepEqual(commandPositionalSpecs('manifest'), [
       { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: 16, values: [], inputSource: 'argv', requiredWhenOptions: [] },
@@ -511,6 +499,30 @@ describe('canonical CLI command registry', () => {
       CLI_COMMAND_REGISTRY.filter((definition) => definition.execution.handlerOwner === 'inline')
         .map((definition) => definition.command),
     );
+    const familyCommands = FAMILY_COMMANDS.flatMap(({ commands }) => commands);
+    assert.equal(new Set(familyCommands).size, familyCommands.length);
+    assert.deepEqual([...familyCommands].sort(), [...INLINE_CLI_COMMANDS].sort());
+    assert.deepEqual(FAMILY_COMMANDS.map(({ family }) => family), [
+      'support', 'review', 'assurance', 'workflow', 'history',
+    ]);
+    const inlineHandlerMaps = {
+      support: SUPPORT_COMMAND_HANDLERS,
+      review: REVIEW_COMMAND_HANDLERS,
+      assurance: ASSURANCE_COMMAND_HANDLERS,
+      workflow: WORKFLOW_COMMAND_HANDLERS,
+      history: HISTORY_COMMAND_HANDLERS,
+    } as const;
+    for (const { family, commands } of FAMILY_COMMANDS) {
+      assert.deepEqual(Object.keys(inlineHandlerMaps[family]), commands, `${family} handler ownership`);
+      assert.equal(Object.isFrozen(inlineHandlerMaps[family]), true, `${family} handler map`);
+    }
+    assert.deepEqual(
+      Object.keys(EVIDENCE_COMMAND_HANDLERS),
+      CLI_COMMAND_REGISTRY
+        .filter((definition) => definition.execution.handlerOwner === 'evidence')
+        .map((definition) => definition.command),
+    );
+    assert.equal(Object.isFrozen(EVIDENCE_COMMAND_HANDLERS), true);
 
     const effects = Object.fromEntries(CLI_COMMAND_REGISTRY.map((definition) => [
       definition.command,
@@ -538,6 +550,35 @@ describe('canonical CLI command registry', () => {
       assert.equal(Object.hasOwn(entry, 'grammar'), false);
       assert.equal(Object.hasOwn(entry, 'execution'), false);
     }
+  });
+
+  test('dispatches typed command families and rejects impossible runtime actions', async () => {
+    type TestArguments =
+      | Readonly<{ action: 'increment'; value: number }>
+      | Readonly<{ action: 'label'; value: string }>;
+    const handlers = Object.freeze({
+      increment: async (args: Extract<TestArguments, { action: 'increment' }>, amount: number) => args.value + amount,
+      label: async (args: Extract<TestArguments, { action: 'label' }>, amount: number) => args.value.length + amount,
+    } satisfies DiscriminatedCommandHandlerMap<TestArguments, [number], number>);
+
+    assert.equal(await runDiscriminatedCommandHandler<TestArguments, [number], number>(
+      handlers,
+      { action: 'increment', value: 2 },
+      3,
+    ), 5);
+    assert.equal(await runDiscriminatedCommandHandler<TestArguments, [number], number>(
+      handlers,
+      { action: 'label', value: 'test' },
+      1,
+    ), 5);
+    assert.throws(
+      () => runDiscriminatedCommandHandler<TestArguments, [number], number>(
+        handlers,
+        { action: 'missing', value: 0 } as unknown as TestArguments,
+        0,
+      ),
+      /No command handler is registered for missing/u,
+    );
   });
 
   test('selects the canonical catalogue with deterministic intersection filters', () => {
@@ -624,12 +665,87 @@ describe('canonical CLI command registry', () => {
     const zsh = buildShellCompletion('zsh');
     const fish = buildShellCompletion('fish');
     const powershell = buildShellCompletion('powershell');
+    const fileWordCases = [
+      [['whoisleuth', 'verify-artifact', ''], true],
+      [['whoisleuth', 'verify-artifact', '--json', ''], true],
+      [['whoisleuth', 'verify-artifact', 'package.json', ''], false],
+      [['whoisleuth', 'verify-artifact', '--deep', ''], false],
+      [['whoisleuth', 'page-compare', 'package.json', ''], true],
+      [['whoisleuth', 'page-compare', 'package.json', 'package-lock.json', ''], false],
+    ] as const;
+    const forbiddenBashCases = [
+      [['whoisleuth', 'http', '--scenario', ''], ['registered', 'not_found', 'inconclusive']],
+      [['whoisleuth', 'http', '--concurrency', ''], ['1', '2', '3', '4', '5', '6', '7', '8']],
+      [['whoisleuth', 'http', '--private-key-file', ''], ['package.json']],
+    ] as const;
+    const bashWordCases: readonly (readonly string[])[] = [
+      ['whoisleuth', 'monitor-once', '--concurrency', ''],
+      ['whoisleuth', 'bulk', '--deep', '--concurrency', ''],
+      ['whoisleuth', 'bulk', '--fast', '--concurrency', ''],
+      ['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', ''],
+      ['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', ''],
+      ['whoisleuth', 'discover-scan', 'example.test', '--chunk-size', ''],
+      ['whoisleuth', 'monitor-once', '--limit', ''],
+      ['whoisleuth', 'workflow-run', ''],
+      ['whoisleuth', 'completion', '--'],
+      ['whoisleuth', 'workflow-plan', '--'],
+      ['whoisleuth', 'verify-artifact', '--manifest-entry', ''],
+      ['whoisleuth', 'lookup', 'example.test', '--fail-on', ''],
+      ['whoisleuth', 'monitor-once', '--fail-on', ''],
+      ...forbiddenBashCases.map(([words]) => words),
+      ...fileWordCases.map(([words]) => words),
+    ];
+    const zshWordCases: readonly (readonly string[])[] = [
+      ...fileWordCases.map(([words]) => words),
+      ['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', ''],
+      ['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', ''],
+      ['whoisleuth', 'completion', '--'],
+      ['whoisleuth', 'workflow-run', '--'],
+    ];
+    const powershellCountCases = [
+      ['whoisleuth discover-scan example.test --scan-limit ', 500, '500'],
+      ['whoisleuth discover-scan example.test --deep --scan-limit ', 50, '50'],
+      ['whoisleuth discover-scan example.test --tlds --deep --scan-limit ', 500, '500'],
+      ['whoisleuth discover-scan example.test --chunk-size ', 100, '100'],
+      ['whoisleuth monitor-once --limit ', 20, '20'],
+    ] as const;
+    const powershellFileCases = [
+      ['whoisleuth verify-artifact ', true],
+      ['whoisleuth verify-artifact --json ', true],
+      ['whoisleuth verify-artifact package.json ', false],
+      ['whoisleuth verify-artifact --deep ', false],
+      ['whoisleuth page-compare package.json ', true],
+      ['whoisleuth page-compare package.json package-lock.json ', false],
+    ] as const;
+    const powershellRejectedCases = [
+      'whoisleuth verify-artifact package.json p',
+      'whoisleuth verify-artifact --deep p',
+      'whoisleuth http example.test p',
+    ] as const;
+    const powershellLines: readonly string[] = [
+      ...powershellCountCases.map(([line]) => line),
+      'whoisleuth lookup example.test --observer ',
+      'whoisleuth completion --palette ',
+      'whoisleuth completion --',
+      'whoisleuth workflow-plan --',
+      "whoisleuth 'example.test' --de",
+      'whoisleuth ',
+      'whoisleuth not-a-command ',
+      'whoisleuth not-a-command -',
+      ...powershellFileCases.map(([line]) => line),
+      ...powershellRejectedCases,
+    ];
+    const bashCandidates = prepareBashCompletionBatch(bash, bashWordCases, REPOSITORY_ROOT);
+    const zshCandidates = prepareZshCompletionBatch(zsh, zshWordCases, REPOSITORY_ROOT);
+    const powershellCandidates = preparePowerShellCompletionBatch(powershell, powershellLines, REPOSITORY_ROOT);
     for (const script of [bash, zsh, fish, powershell]) {
       assert.match(script, /workflow-run/u);
       for (const recipe of ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']) {
         assert.match(script, new RegExp(recipe, 'u'));
       }
-      assert.match(script, /source-failure[\s\S]*inconclusive[\s\S]*danger[\s\S]*material-drift/u);
+      for (const policy of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
+        assert.match(script, new RegExp(policy, 'u'));
+      }
       assert.match(script, /artifact-1[\s\S]*artifact-16/u);
       assert.match(script, /(?:--help|-l help)/u);
       assert.match(script, /(?:-h|-s h)/u);
@@ -647,100 +763,68 @@ describe('canonical CLI command registry', () => {
     assert.equal(fish.split('\n').some((line) => line.includes('registry-scaffold') && line.includes('-l config')), false);
     assert.equal(fish.split('\n').filter((line) => line.includes('registry-scaffold') && line.includes('-l profile')).length, 1);
 
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'monitor-once', '--concurrency', '']), ['1', '2', '3']);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'bulk', '--deep', '--concurrency', '']), ['1', '2', '3']);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'bulk', '--fast', '--concurrency', '']), ['1', '2', '3', '4', '5', '6', '7', '8']);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', '']).length, 50);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'discover-scan', 'example.test', '--chunk-size', '']).length, 100);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'monitor-once', '--limit', '']).length, 20);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'workflow-run', '']), [
+    assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--concurrency', '']), ['1', '2', '3']);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'bulk', '--deep', '--concurrency', '']), ['1', '2', '3']);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'bulk', '--fast', '--concurrency', '']), ['1', '2', '3', '4', '5', '6', '7', '8']);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', '']).length, 50);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--chunk-size', '']).length, 100);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--limit', '']).length, 20);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'workflow-run', '']), [
       'domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison',
     ]);
-    assert.ok(bashCandidates(bash, ['whoisleuth', 'completion', '--']).includes('--help'));
-    assert.ok(bashCandidates(bash, ['whoisleuth', 'workflow-plan', '--']).includes('--json'));
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'verify-artifact', '--manifest-entry', '']).length, 16);
-    assert.deepEqual(bashCandidates(bash, ['whoisleuth', 'lookup', 'example.test', '--fail-on', '']), [
-      'source-failure', 'inconclusive', 'danger', 'material-drift',
+    assert.ok(bashCandidates(['whoisleuth', 'completion', '--']).includes('--help'));
+    assert.ok(bashCandidates(['whoisleuth', 'workflow-plan', '--']).includes('--json'));
+    assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']).length, 16);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'lookup', 'example.test', '--fail-on', '']), [
+      'source-failure', 'inconclusive', 'danger',
     ]);
-    for (const [words, forbidden] of [
-      [['whoisleuth', 'http', '--scenario', ''], ['registered', 'not_found', 'inconclusive']],
-      [['whoisleuth', 'http', '--concurrency', ''], ['1', '2', '3', '4', '5', '6', '7', '8']],
-      [['whoisleuth', 'http', '--private-key-file', ''], ['package.json']],
-    ] as const) {
-      const candidates = bashCandidates(bash, words);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--fail-on', '']), [
+      'source-failure', 'inconclusive', 'material-drift',
+    ]);
+    for (const [words, forbidden] of forbiddenBashCases) {
+      const candidates = bashCandidates(words);
       for (const value of forbidden) assert.equal(candidates.some((candidate) => candidate.endsWith(value)), false, `${words.join(' ')} ${value}`);
     }
 
-    for (const [words, offersFiles] of [
-      [['whoisleuth', 'verify-artifact', ''], true],
-      [['whoisleuth', 'verify-artifact', '--json', ''], true],
-      [['whoisleuth', 'verify-artifact', 'package.json', ''], false],
-      [['whoisleuth', 'verify-artifact', '--deep', ''], false],
-      [['whoisleuth', 'page-compare', 'package.json', ''], true],
-      [['whoisleuth', 'page-compare', 'package.json', 'package-lock.json', ''], false],
-    ] as const) {
+    for (const [words, offersFiles] of fileWordCases) {
       assert.equal(
-        bashCandidates(bash, words).some((candidate) => candidate.endsWith('package.json')),
+        bashCandidates(words).some((candidate) => candidate.endsWith('package.json')),
         offersFiles,
         words.join(' '),
       );
     }
 
-    for (const [words, offersFiles] of [
-      [['whoisleuth', 'verify-artifact', ''], true],
-      [['whoisleuth', 'verify-artifact', '--json', ''], true],
-      [['whoisleuth', 'verify-artifact', 'package.json', ''], false],
-      [['whoisleuth', 'verify-artifact', '--deep', ''], false],
-      [['whoisleuth', 'page-compare', 'package.json', ''], true],
-      [['whoisleuth', 'page-compare', 'package.json', 'package-lock.json', ''], false],
-    ] as const) {
-      assert.equal(zshCandidates(zsh, words).includes('__FILES__'), offersFiles, words.join(' '));
+    for (const [words, offersFiles] of fileWordCases) {
+      assert.equal(zshCandidates(words).includes('__FILES__'), offersFiles, words.join(' '));
     }
-    assert.equal(zshCandidates(zsh, ['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', '']).length, 50);
-    assert.equal(zshCandidates(zsh, ['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
-    assert.ok(zshCandidates(zsh, ['whoisleuth', 'completion', '--']).includes('--help'));
-    assert.ok(zshCandidates(zsh, ['whoisleuth', 'workflow-run', '--']).includes('--json'));
+    assert.equal(zshCandidates(['whoisleuth', 'discover-scan', 'example.test', '--deep', '--scan-limit', '']).length, 50);
+    assert.equal(zshCandidates(['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
+    assert.ok(zshCandidates(['whoisleuth', 'completion', '--']).includes('--help'));
+    assert.ok(zshCandidates(['whoisleuth', 'workflow-run', '--']).includes('--json'));
 
-    for (const [line, expectedLength, finalValue] of [
-      ['whoisleuth discover-scan example.test --scan-limit ', 500, '500'],
-      ['whoisleuth discover-scan example.test --deep --scan-limit ', 50, '50'],
-      ['whoisleuth discover-scan example.test --tlds --deep --scan-limit ', 500, '500'],
-      ['whoisleuth discover-scan example.test --chunk-size ', 100, '100'],
-      ['whoisleuth monitor-once --limit ', 20, '20'],
-    ] as const) {
-      const candidates = powershellCandidates(powershell, line);
+    for (const [line, expectedLength, finalValue] of powershellCountCases) {
+      const candidates = powershellCandidates(line);
       assert.equal(candidates.length, expectedLength, line);
       assert.equal(candidates.at(-1), finalValue, line);
     }
-    assert.deepEqual(powershellCandidates(powershell, 'whoisleuth lookup example.test --observer '), []);
-    assert.deepEqual(powershellCandidates(powershell, 'whoisleuth completion --palette '), ['auto', 'light', 'dark']);
-    assert.ok(powershellCandidates(powershell, 'whoisleuth completion --').includes('--help'));
-    assert.ok(powershellCandidates(powershell, 'whoisleuth workflow-plan --').includes('--json'));
-    assert.deepEqual(powershellCandidates(powershell, "whoisleuth 'example.test' --de"), ['--deep']);
-    assert.ok(powershellCandidates(powershell, 'whoisleuth ').includes('--version'));
-    assert.deepEqual(powershellCandidates(powershell, 'whoisleuth not-a-command '), ['--help', '-h']);
-    assert.deepEqual(powershellCandidates(powershell, 'whoisleuth not-a-command -'), ['--help', '-h']);
-    for (const [line, offersFiles] of [
-      ['whoisleuth verify-artifact ', true],
-      ['whoisleuth verify-artifact --json ', true],
-      ['whoisleuth verify-artifact package.json ', false],
-      ['whoisleuth verify-artifact --deep ', false],
-      ['whoisleuth page-compare package.json ', true],
-      ['whoisleuth page-compare package.json package-lock.json ', false],
-    ] as const) {
+    assert.deepEqual(powershellCandidates('whoisleuth lookup example.test --observer '), []);
+    assert.deepEqual(powershellCandidates('whoisleuth completion --palette '), ['auto', 'light', 'dark']);
+    assert.ok(powershellCandidates('whoisleuth completion --').includes('--help'));
+    assert.ok(powershellCandidates('whoisleuth workflow-plan --').includes('--json'));
+    assert.deepEqual(powershellCandidates("whoisleuth 'example.test' --de"), ['--deep']);
+    assert.ok(powershellCandidates('whoisleuth ').includes('--version'));
+    assert.deepEqual(powershellCandidates('whoisleuth not-a-command '), ['--help', '-h']);
+    assert.deepEqual(powershellCandidates('whoisleuth not-a-command -'), ['--help', '-h']);
+    for (const [line, offersFiles] of powershellFileCases) {
       assert.equal(
-        powershellCandidates(powershell, line).some((candidate) => candidate.endsWith('package.json')),
+        powershellCandidates(line).some((candidate) => candidate.endsWith('package.json')),
         offersFiles,
         line,
       );
     }
-    for (const line of [
-      'whoisleuth verify-artifact package.json p',
-      'whoisleuth verify-artifact --deep p',
-      'whoisleuth http example.test p',
-    ]) {
-      assert.deepEqual(powershellCandidates(powershell, line), [], line);
+    for (const line of powershellRejectedCases) {
+      assert.deepEqual(powershellCandidates(line), [], line);
     }
 
     assert.match(fish, /function __whoisleuth_seen/u);
@@ -752,9 +836,13 @@ describe('canonical CLI command registry', () => {
     assert.match(fish, /__whoisleuth_integer_values 1 100/u);
     assert.match(fish, /__whoisleuth_integer_values 1 20/u);
 
-    for (const value of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
+    for (const value of ['source-failure', 'inconclusive', 'danger']) {
       assert.equal(parseCliArguments(['lookup', 'example.test', '--fail-on', value]).action, 'lookup');
     }
+    assert.throws(
+      () => parseCliArguments(['lookup', 'example.test', '--fail-on', 'material-drift']),
+      /for lookup supports/iu,
+    );
     for (const value of ['artifact-1', 'artifact-16']) {
       assert.equal(parseCliArguments(['verify-artifact', '--manifest', 'manifest.json', '--manifest-entry', value]).action, 'verify-artifact');
     }
@@ -776,10 +864,13 @@ describe('canonical CLI command registry', () => {
 
   test('derives workspace archive help from the canonical current and public versions', () => {
     const help = commandHelp('inspect-archive');
+    const legacyVersions = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
     assert.match(help, new RegExp(`current version-${WORKSPACE_ARCHIVE_VERSION}`, 'u'));
-    assert.match(help, new RegExp(`exact public version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION} support`, 'u'));
-    assert.match(help, new RegExp(`archive v${WORKSPACE_ARCHIVE_VERSION}.*exact v${PUBLIC_WORKSPACE_ARCHIVE_VERSION} compatibility`, 'su'));
-    assert.doesNotMatch(help, new RegExp(`current version-${PUBLIC_WORKSPACE_ARCHIVE_VERSION}(?:\\D|$)`, 'u'));
+    for (const version of legacyVersions) {
+      assert.match(help, new RegExp(`(?:version-|v)${version}\\b`, 'u'));
+      assert.doesNotMatch(help, new RegExp(`current version-${version}(?:\\D|$)`, 'u'));
+    }
+    assert.match(help, new RegExp(`archive v${WORKSPACE_ARCHIVE_VERSION}.*exact ${legacyVersions.map((version) => `v${version}`).join(' and ')} compatibility`, 'su'));
   });
 
   test('keeps public CLI exit-status guidance aligned with executable ownership', () => {

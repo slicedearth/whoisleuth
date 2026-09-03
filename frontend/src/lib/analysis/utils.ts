@@ -6,6 +6,7 @@ import {
   isInformativePerceptualHash,
   isPerceptualHash,
 } from '../../../../lib/perceptual-hash-comparison.mts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
@@ -27,11 +28,7 @@ export function isValidEmailAddress(value: unknown): value is string {
 // calling String() on an entity would persist "[object Object]" and hide real
 // registrar changes. The backend already bounds these values, but this client
 // boundary revalidates the API response before retaining it.
-function plainRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const plainRecord = recordOrNull;
 
 export function entityDisplayName(value: unknown): string | null {
   let candidate = value;

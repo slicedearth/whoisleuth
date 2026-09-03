@@ -1,4 +1,4 @@
-import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } from '../../lib/auth.mts';
+import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader, NETLIFY_REQUEST_ORIGIN_CONTEXT } from '../../lib/auth.mts';
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
@@ -9,7 +9,7 @@ const handleLogout: NetlifyFunctionHandler = async (event) => {
   if (!isAuthenticatedFromCookieHeader(event.headers && event.headers.cookie)) {
     return json(401, { error: 'Authentication required' });
   }
-  if (!isTrustedOrigin(event.headers)) {
+  if (!isTrustedOrigin(event.headers, NETLIFY_REQUEST_ORIGIN_CONTEXT)) {
     return json(403, { error: 'Cross-site request blocked' });
   }
 

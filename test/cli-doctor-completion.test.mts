@@ -8,10 +8,14 @@ import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completio
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
+import {
+  assertSuccessfulShellProcess,
+  prepareBashCompletionBatch,
+  preparePowerShellCompletionBatch,
+  prepareZshCompletionBatch,
+} from './support/shell-completion-harness.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const posixCliFunction = 'whoisleuth() { node bin/whoisleuth.mts "$@"; }';
-const powershellCliFunction = 'function global:whoisleuth { & node bin/whoisleuth.mts @args }';
 
 function capture() {
   let value = '';
@@ -22,6 +26,14 @@ function capture() {
 }
 
 describe('CLI shell completion', () => {
+  test('reports an unavailable shell with its bounded process diagnostic', () => {
+    const unavailable = spawnSync('whoisleuth-unavailable-shell-fixture', [], { encoding: 'utf8' });
+    assert.throws(
+      () => assertSuccessfulShellProcess(unavailable, 'Fixture shell'),
+      /Fixture shell failed to start: .*ENOENT/u,
+    );
+  });
+
   test('generates bounded static scripts for each supported shell', () => {
     for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       const script = buildShellCompletion(shell);
@@ -45,7 +57,7 @@ describe('CLI shell completion', () => {
     }
     const bash = buildShellCompletion('bash');
     const syntax = spawnSync('bash', ['-n'], { input: bash, encoding: 'utf8' });
-    assert.equal(syntax.status, 0, syntax.stderr);
+    assertSuccessfulShellProcess(syntax, 'Bash completion syntax check');
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
     assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
@@ -54,12 +66,8 @@ describe('CLI shell completion', () => {
     assert.match(bash, /COMPREPLY=.*compgen -f/u);
     assert.equal((bash.match(/completion:0\).*COMPREPLY=.*bash zsh fish powershell/gu) || []).length, 1);
     assert.doesNotMatch(bash, /^\s+completion\) COMPREPLY/gmu);
-    for (const target of ['example.test', '192.0.2.10', '2001:db8::10', 'AS64496']) {
-      const direct = spawnSync('bash', ['-c', `${posixCliFunction}\n${bash}\nCOMP_WORDS=(whoisleuth "$1" --de); COMP_CWORD=2; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`, 'bash', target], { encoding: 'utf8', cwd: REPOSITORY_ROOT });
-      assert.equal(direct.status, 0, direct.stderr);
-      assert.match(direct.stdout, /^--deep$/mu, target);
-    }
-    for (const target of [
+    const acceptedTargets = ['example.test', '192.0.2.10', '2001:db8::10', 'AS64496'] as const;
+    const rejectedTargets = [
       'not-a-command',
       'report.json',
       'bad_label.example',
@@ -73,14 +81,18 @@ describe('CLI shell completion', () => {
       'service.onion',
       'router.home.arpa',
       '1.0.0.127.in-addr.arpa',
-    ]) {
-      const rejected = spawnSync('bash', ['-c', `${posixCliFunction}\n${bash}\nCOMP_WORDS=(whoisleuth "$1" --de); COMP_CWORD=2; _whoisleuth_completion; printf '%s\\n' "\${COMPREPLY[@]}"`, 'bash', target], { encoding: 'utf8', cwd: REPOSITORY_ROOT });
-      assert.equal(rejected.status, 0, rejected.stderr);
-      assert.doesNotMatch(rejected.stdout, /--deep/u, target);
+    ] as const;
+    const directTargetCases = [...acceptedTargets, ...rejectedTargets].map((target) => ['whoisleuth', target, '--de'] as const);
+    const bashCandidates = prepareBashCompletionBatch(bash, directTargetCases, REPOSITORY_ROOT);
+    for (const target of acceptedTargets) {
+      assert.deepEqual(bashCandidates(['whoisleuth', target, '--de']), ['--deep'], target);
+    }
+    for (const target of rejectedTargets) {
+      assert.equal(bashCandidates(['whoisleuth', target, '--de']).includes('--deep'), false, target);
     }
     const zsh = buildShellCompletion('zsh');
     const zshSyntax = spawnSync('zsh', ['-n'], { input: zsh, encoding: 'utf8' });
-    assert.equal(zshSyntax.status, 0, zshSyntax.stderr);
+    assertSuccessfulShellProcess(zshSyntax, 'Zsh completion syntax check');
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
     assert.match(zsh, /command="lookup"/u);
     assert.match(zsh, /--plan --json/u);
@@ -90,11 +102,12 @@ describe('CLI shell completion', () => {
       assert.match(zsh, new RegExp(pattern, 'u'));
     }
     assert.match(zsh, /\) _files; return/u);
-    for (const [target, expected] of [['example.test', 'accepted'], ['report.json', 'rejected']] as const) {
-      const completed = spawnSync('zsh', ['-c', `${posixCliFunction}\ncompdef() { :; }\n${zsh}\nwords=(whoisleuth "$1" --de); if _whoisleuth_direct_lookup_target "$1"; then print accepted; else print rejected; fi`, 'zsh', target], { encoding: 'utf8', cwd: REPOSITORY_ROOT });
-      assert.equal(completed.status, 0, completed.stderr);
-      assert.equal(completed.stdout.trim(), expected, target);
-    }
+    const zshCandidates = prepareZshCompletionBatch(zsh, [
+      ['whoisleuth', 'example.test', '--de'],
+      ['whoisleuth', 'report.json', '--de'],
+    ], REPOSITORY_ROOT);
+    assert.equal(zshCandidates(['whoisleuth', 'example.test', '--de']).includes('--deep'), true);
+    assert.equal(zshCandidates(['whoisleuth', 'report.json', '--de']).includes('--deep'), false);
     const fish = buildShellCompletion('fish');
     assert.match(fish, /-l output -r -F/u);
     assert.match(fish, /-l save-lookup -r -F/u);
@@ -128,31 +141,10 @@ describe('CLI shell completion', () => {
       '-Command',
       '$code = [Console]::In.ReadToEnd(); [void][scriptblock]::Create($code)',
     ], { input: powershell, encoding: 'utf8' });
-    assert.equal(powershellSyntax.status, 0, powershellSyntax.stderr);
-    for (const [target, expected] of [['example.test', '--deep'], ['report.json', '']] as const) {
-      const invocation = `${powershell}\n${powershellCliFunction}\n$target = [Environment]::GetEnvironmentVariable('WHOISLEUTH_COMPLETION_TARGET')\n$line = "whoisleuth $target --de"\n$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n$result.CompletionMatches | ForEach-Object { $_.CompletionText }`;
-      assert.equal(invocation.includes(REPOSITORY_ROOT), false);
-      const completed = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', invocation], {
-        encoding: 'utf8',
-        cwd: REPOSITORY_ROOT,
-        env: {
-          ...process.env,
-          WHOISLEUTH_COMPLETION_TARGET: target,
-        },
-      });
-      assert.equal(completed.status, 0, completed.stderr);
-      assert.equal(completed.stdout.trim(), expected, target);
-    }
-    const completePowerShell = (line: string) => {
-      const invocation = `${powershell}\n${powershellCliFunction}\n$line = '${line}'\n$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n$result.CompletionMatches | ForEach-Object { $_.CompletionText }`;
-      const completed = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', invocation], {
-        encoding: 'utf8',
-        cwd: REPOSITORY_ROOT,
-      });
-      assert.equal(completed.status, 0, completed.stderr);
-      return completed.stdout.trim().split(/\r?\n/gu).filter(Boolean);
-    };
-    for (const [line, expected] of [
+    assertSuccessfulShellProcess(powershellSyntax, 'PowerShell completion syntax check');
+    const powershellExpectedCases = [
+      ['whoisleuth example.test --de', ['--deep']],
+      ['whoisleuth report.json --de', []],
       ['whoisleuth case-pack package.json --audience ', ['internal', 'trusted', 'public']],
       ['whoisleuth sharing-review package.json --marking ', ['clear', 'green', 'amber', 'amber-strict', 'red']],
       ['whoisleuth sharing-review package.json --recipient-scope ', ['public', 'community', 'organization', 'named-recipients']],
@@ -161,14 +153,24 @@ describe('CLI shell completion', () => {
       ['whoisleuth workflow-plan ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison', 'campaign-review', 'certificate-anomaly', 'registry-disagreement', 'evidence-handoff', 'planned-domain-change', 'post-change-verification']],
       ['whoisleuth workflow-run ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
       ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
-    ] as const) {
-      assert.deepEqual(completePowerShell(line), expected, line);
-    }
-    for (const [line, expected] of [
       ['whoisleuth case-pack package.json --audience p', ['public']],
       ['whoisleuth sharing-review package.json --marking am', ['amber', 'amber-strict']],
       ['whoisleuth sharing-review package.json --recipient-scope org', ['organization']],
-    ] as const) {
+    ] as const;
+    const powershellBoundaryLines = [
+      'whoisleuth http ',
+      'whoisleuth http --scenario ',
+      'whoisleuth http --concurrency ',
+      'whoisleuth http --private-key-file ',
+      'whoisleuth verify-artifact package.json --manifest ',
+      'whoisleuth verify-artifact ',
+    ] as const;
+    const completePowerShell = preparePowerShellCompletionBatch(
+      powershell,
+      [...powershellExpectedCases.map(([line]) => line), ...powershellBoundaryLines],
+      REPOSITORY_ROOT,
+    );
+    for (const [line, expected] of powershellExpectedCases) {
       assert.deepEqual(completePowerShell(line), expected, line);
     }
     const httpOptions = completePowerShell('whoisleuth http ');

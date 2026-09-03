@@ -101,7 +101,8 @@ function websiteSnapshot(
     savedAt: observedAt,
     complete: true,
     truncated: false,
-    technologies: [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high' }],
+    profileProvenance: { technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
+    technologies: [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high', roles: ['framework_runtime'] }],
     posture: [{ id: 'headers', state: 'present' }],
     identity: identity(),
     identityValues: { resourceHosts: ['assets.reservation.invalid'], trackingIdentifiers: [], formActionOrigins: [] },
@@ -118,7 +119,7 @@ function builderWebsiteSnapshot(
   options: Readonly<{
     complete?: boolean;
     diagnostics?: JsonRecord;
-    technologies?: readonly { id: string; name: string; category: string; confidence: string }[];
+    technologies?: readonly { id: string; name: string; category: string; confidence: string; roles: readonly string[] }[];
   }> = {},
 ) {
   const complete = options.complete ?? true;
@@ -128,11 +129,11 @@ function builderWebsiteSnapshot(
     observedAt,
     savedAt: observedAt,
     lookupEvidenceDepth: 'deep',
-    technologyProfile: { complete, truncated: false },
-    securityPosture: { complete: true, truncated: false },
+    technologyProfile: { profileVersion: 11, complete, truncated: false },
+    securityPosture: { postureVersion: 2, complete: true, truncated: false },
     tlsEvidence: {},
     baseline: complete ? PAGE_BASELINE : { ...PAGE_BASELINE, complete: false },
-    technologyFindings: options.technologies ?? [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high' }],
+    technologyFindings: options.technologies ?? [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high', roles: ['framework_runtime'] }],
     securityPostureFindings: [],
     diagnostics: options.diagnostics ?? { rdap: { status: 'success' }, whois: { status: 'partial' } },
   });
@@ -630,8 +631,8 @@ describe('retained comparison adapters', () => {
       complete: false,
       diagnostics: { http: { status: 'partial' } },
       technologies: [
-        { id: 'cms', name: 'Changed CMS', category: 'framework', confidence: 'high' },
-        { id: 'widget', name: 'Added widget', category: 'widget', confidence: 'medium' },
+        { id: 'cms', name: 'Changed CMS', category: 'framework', confidence: 'high', roles: ['framework_runtime'] },
+        { id: 'widget', name: 'Added widget', category: 'widget', confidence: 'medium', roles: ['embedded_dependency'] },
       ],
     });
     const input = { websiteSnapshots: [earlier, later] };

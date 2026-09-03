@@ -24,7 +24,8 @@ import {
   validateCasePortabilitySourceSnapshot,
   validateWorkspacePortabilitySourceSnapshot,
   validateSchemaLifecycleDefinitionCoverage,
-  validateSchemaLifecycleRepository,
+  prepareSchemaLifecycleRepositorySnapshot,
+  validatePreparedSchemaLifecycleRepository,
 } from '../tools/schema-lifecycle-repository.mts';
 import { discoverSchemaSources } from '../tools/schema-source-coverage.mts';
 
@@ -559,58 +560,57 @@ describe('schema lifecycle repository closure', () => {
 
   test('verifies every registered fixture, hook and canonical definition in the checkout', async () => {
     const discovery = await discoverSchemaSources();
-    await assert.doesNotReject(
-      validateSchemaLifecycleRepository(SCHEMA_LIFECYCLE_REGISTRY, discovery),
-    );
+    const snapshot = await prepareSchemaLifecycleRepositorySnapshot(SCHEMA_LIFECYCLE_REGISTRY, discovery);
+    assert.doesNotThrow(() => validatePreparedSchemaLifecycleRepository(SCHEMA_LIFECYCLE_REGISTRY, snapshot));
 
     const missingFixture = cloneRegistry();
     firstFixture(missingFixture).path = 'test/fixtures/missing-schema-lifecycle-fixture.json';
-    await assert.rejects(
-      validateSchemaLifecycleRepository(missingFixture as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(missingFixture as unknown as SchemaLifecycleRegistry, snapshot),
       /fixture/u,
     );
 
     const wrongFixtureBytes = cloneRegistry();
     firstFixture(wrongFixtureBytes).bytes = Number(firstFixture(wrongFixtureBytes).bytes) + 1;
-    await assert.rejects(
-      validateSchemaLifecycleRepository(wrongFixtureBytes as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(wrongFixtureBytes as unknown as SchemaLifecycleRegistry, snapshot),
       /fixture/u,
     );
 
     const wrongFixtureDigest = cloneRegistry();
     firstFixture(wrongFixtureDigest).sha256 = '0'.repeat(64);
-    await assert.rejects(
-      validateSchemaLifecycleRepository(wrongFixtureDigest as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(wrongFixtureDigest as unknown as SchemaLifecycleRegistry, snapshot),
       /does not match its registered SHA-256/u,
     );
 
     const missingModule = cloneRegistry();
     firstHook(missingModule).module = 'lib/missing-lifecycle-hook.mts';
-    await assert.rejects(
-      validateSchemaLifecycleRepository(missingModule as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(missingModule as unknown as SchemaLifecycleRegistry, snapshot),
       /hook module is not statically bound/u,
     );
 
     const missingExport = cloneRegistry();
     firstHook(missingExport).exportName = 'missingLifecycleHook';
-    await assert.rejects(
-      validateSchemaLifecycleRepository(missingExport as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(missingExport as unknown as SchemaLifecycleRegistry, snapshot),
       /hook export is missing or is not callable/u,
     );
 
     const nonFunctionExport = cloneRegistry();
     firstHook(nonFunctionExport).module = 'lib/domain-control-manifest.mts';
     firstHook(nonFunctionExport).exportName = 'DOMAIN_CONTROL_MANIFEST_SCHEMA';
-    await assert.rejects(
-      validateSchemaLifecycleRepository(nonFunctionExport as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(nonFunctionExport as unknown as SchemaLifecycleRegistry, snapshot),
       /hook export is missing or is not callable/u,
     );
 
     const oversizedFixtures = cloneRegistry();
     firstFixture(oversizedFixtures).path = 'test/fixtures/missing-schema-lifecycle-fixture.json';
     firstFixture(oversizedFixtures).bytes = MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES;
-    await assert.rejects(
-      validateSchemaLifecycleRepository(oversizedFixtures as unknown as SchemaLifecycleRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(oversizedFixtures as unknown as SchemaLifecycleRegistry, snapshot),
       /fixtures exceed their aggregate byte ceiling/u,
     );
 
@@ -628,8 +628,8 @@ describe('schema lifecycle repository closure', () => {
     const swappedRegistry = defineSchemaLifecycleRegistry(
       swappedOwners as unknown as SchemaLifecycleRegistry,
     );
-    await assert.rejects(
-      validateSchemaLifecycleRepository(swappedRegistry, discovery),
+    assert.throws(
+      () => validatePreparedSchemaLifecycleRepository(swappedRegistry, snapshot),
       /runtime family owner does not match registry entry/u,
     );
   });

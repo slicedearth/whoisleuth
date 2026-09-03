@@ -63,7 +63,7 @@
         id,
         label: technology.name,
         kind: 'technology',
-        detail: `${technology.category} · ${technology.confidence} confidence`,
+        detail: `${technology.category} · ${technology.confidence} signature strength`,
       });
       links.push({
         id: `technology-link-${index}`,

@@ -28,6 +28,7 @@ import {
   MAX_RESPONSE_REFERENCE_LENGTH,
   MAX_RESPONSE_VALUE_LENGTH,
   MAX_TRAIL_TARGET_LENGTH,
+  CASE_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
 
@@ -275,6 +276,7 @@ export type CaseActionRecord = {
   type: CaseActionType;
   recipient: string;
   contactSource: string;
+  routeObservedAt: string | null;
   contactLimitations: string[];
   dueAt: string | null;
   state: CaseActionState;
@@ -452,8 +454,8 @@ function currentActionNormalizationOptions(
   validEvidencePinIds?: ReadonlySet<string>,
 ): CaseResponseTimestampOptions {
   return validEvidencePinIds
-    ? { sourceVersion: 13, validEvidencePinIds }
-    : { sourceVersion: 13 };
+    ? { sourceVersion: CASE_SCHEMA_VERSION, validEvidencePinIds }
+    : { sourceVersion: CASE_SCHEMA_VERSION };
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -1074,6 +1076,9 @@ function normalizeAction(
       : 'internal_review',
     recipient,
     contactSource: text(item.contactSource, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_supplied',
+    routeObservedAt: options.sourceVersion != null && options.sourceVersion < 14
+      ? null
+      : optionalIso(item.routeObservedAt, options),
     contactLimitations: limitations(item.contactLimitations),
     dueAt: optionalIso(item.dueAt, options),
     state: history.state,
@@ -1106,7 +1111,7 @@ function mergeNormalizedActions(left: CaseActionRecord, right: CaseActionRecord,
     history: [...left.history, ...right.history],
     historyOmitted: Math.max(left.historyOmitted, right.historyOmitted),
     historyLimitations: [...left.historyLimitations, ...right.historyLimitations],
-  }, fallback, { sourceVersion: 13 })!;
+  }, fallback, { sourceVersion: CASE_SCHEMA_VERSION })!;
 }
 
 function boundActionCollection(actions: CaseActionRecord[], fallback: string): CaseActionRecord[] {
@@ -1125,7 +1130,7 @@ function boundActionCollection(actions: CaseActionRecord[], fallback: string): C
   let bounded = actions.map((action) => {
     const history = action.history.filter((event) => keep.has(`${action.id}\u0000${event.id}`));
     const omitted = action.historyOmitted + action.history.length - history.length;
-    return normalizeAction({ ...action, history, historyOmitted: omitted }, fallback, { sourceVersion: 13 })!;
+    return normalizeAction({ ...action, history, historyOmitted: omitted }, fallback, { sourceVersion: CASE_SCHEMA_VERSION })!;
   });
   while (bytes(bounded) > MAX_CASE_ACTION_HISTORY_BYTES_PER_CASE) {
     const candidate = bounded
@@ -1139,7 +1144,7 @@ function boundActionCollection(actions: CaseActionRecord[], fallback: string): C
           ...action,
           history: action.history.filter((event) => event.id !== candidate.event.id),
           historyOmitted: action.historyOmitted + 1,
-        }, fallback, { sourceVersion: 13 })!);
+        }, fallback, { sourceVersion: CASE_SCHEMA_VERSION })!);
   }
   if (bytes(bounded) > MAX_CASE_ACTION_HISTORY_BYTES_PER_CASE && bounded.length > 1) {
     const byteOmissionPattern = /^(\d+) earlier response actions? omitted by the per-Case response-history byte bound\.$/u;
@@ -1271,9 +1276,9 @@ export function appendCaseAction(
     historyOmitted: 0,
     createdAt: now,
     metadataUpdatedAt: now,
-  }, now, { sourceVersion: 13 });
+  }, now, { sourceVersion: CASE_SCHEMA_VERSION });
   if (!created) throw new Error('An action requires a recipient or internal owner.');
-  return normalizeCaseActions([...current, created], now, { sourceVersion: 13 });
+  return normalizeCaseActions([...current, created], now, { sourceVersion: CASE_SCHEMA_VERSION });
 }
 
 export function appendCaseActionTransition(
@@ -1352,6 +1357,7 @@ export function updateCaseAction(
     type: Object.hasOwn(patch, 'type') ? patch.type : existing.type,
     recipient: Object.hasOwn(patch, 'recipient') ? patch.recipient : existing.recipient,
     contactSource: Object.hasOwn(patch, 'contactSource') ? patch.contactSource : existing.contactSource,
+    routeObservedAt: Object.hasOwn(patch, 'routeObservedAt') ? patch.routeObservedAt : existing.routeObservedAt,
     contactLimitations: Object.hasOwn(patch, 'contactLimitations') ? patch.contactLimitations : existing.contactLimitations,
     dueAt: Object.hasOwn(patch, 'dueAt') ? patch.dueAt : existing.dueAt,
     followUpAt: Object.hasOwn(patch, 'followUpAt') ? patch.followUpAt : existing.followUpAt,
@@ -1364,7 +1370,7 @@ export function updateCaseAction(
   }
   let updated = normalizeAction(metadata, now, currentActionNormalizationOptions(validPinIds));
   if (!updated) throw new Error('An action requires a recipient or internal owner.');
-  const materialChanged = ['type', 'recipient', 'contactSource', 'contactLimitations', 'originActionId']
+  const materialChanged = ['type', 'recipient', 'contactSource', 'routeObservedAt', 'contactLimitations', 'originActionId']
     .some((key) => Object.hasOwn(patch, key) && JSON.stringify(record(existing)[key]) !== JSON.stringify(record(updated)[key]));
   if (materialChanged && ['submitted', 'acknowledged', 'terminal'].includes(existing.state)) {
     throw new Error('Submitted or terminal action identity and recipient metadata cannot be rewritten; create a linked follow-on action instead.');

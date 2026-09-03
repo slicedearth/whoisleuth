@@ -8,6 +8,9 @@ export type CaseDecisionQualityFindingKind =
   | 'inconsistent_disposition'
   | 'disposition_without_reason'
   | 'decision_without_evidence'
+  | 'strong_disposition_without_evidence'
+  | 'escalation_without_action'
+  | 'monitoring_without_follow_up'
   | 'assertion_without_evidence'
   | 'assertion_predates_evidence';
 
@@ -70,6 +73,37 @@ export function buildCaseDecisionQualityReport(rawRecords: readonly CaseRecord[]
         caseIds: [record.id], domains: [record.domain], href: caseHref(record.id),
       });
     }
+    const evidenceLinkedDecisions = record.decisions.filter((decision) => decision.evidencePinIds.length > 0);
+    if (record.disposition === 'confirmed_abuse' && evidenceLinkedDecisions.length === 0) {
+      add(findings, {
+        id: `strong-disposition:${record.id}`,
+        kind: 'strong_disposition_without_evidence',
+        severity: 'high',
+        title: `Link the confirmed-abuse disposition for ${record.domain} to evidence`,
+        detail: 'The strongest disposition is retained without an evidence-linked decision. The disposition remains analyst-authored and should be reviewed before handoff.',
+        caseIds: [record.id], domains: [record.domain], href: caseHref(record.id),
+      });
+    }
+    if (record.status === 'escalated' && record.actions.length === 0) {
+      add(findings, {
+        id: `escalation:${record.id}`,
+        kind: 'escalation_without_action',
+        severity: 'medium',
+        title: `Record the escalation path for ${record.domain}`,
+        detail: 'The Case is marked escalated but has no retained response action. Record the actual route or return the status to a state supported by the record.',
+        caseIds: [record.id], domains: [record.domain], href: caseHref(record.id),
+      });
+    }
+    if (record.status === 'monitoring' && record.actions.length === 0 && record.observedEffects.reviews.length === 0) {
+      add(findings, {
+        id: `monitoring:${record.id}`,
+        kind: 'monitoring_without_follow_up',
+        severity: 'medium',
+        title: `Record the monitoring intent for ${record.domain}`,
+        detail: 'The Case is marked monitoring without a retained response action or observed-effect review. Confirm the follow-up path before relying on this status.',
+        caseIds: [record.id], domains: [record.domain], href: caseHref(record.id),
+      });
+    }
     for (const decision of record.decisions) {
       if (decision.evidencePinIds.length) continue;
       add(findings, {
@@ -127,6 +161,9 @@ export function buildCaseDecisionQualityReport(rawRecords: readonly CaseRecord[]
     inconsistent_disposition: 0,
     disposition_without_reason: 0,
     decision_without_evidence: 0,
+    strong_disposition_without_evidence: 0,
+    escalation_without_action: 0,
+    monitoring_without_follow_up: 0,
     assertion_without_evidence: 0,
     assertion_predates_evidence: 0,
   };

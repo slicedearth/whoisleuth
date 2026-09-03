@@ -6,6 +6,9 @@ import { test } from 'node:test';
 import {
   BrowserLocalDataError,
   BrowserLocalDataProvider,
+  MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS,
+  isExpectedBrowserLocalDataFailure,
+  plaintextJsonCodec,
   type AnyLocalDataCollectionDefinition,
   type BrowserLocalCollectionManifest,
   type BrowserLocalStoredRecord,
@@ -428,6 +431,67 @@ function readyEmptyCollectionsFactory(
     },
   } as unknown as IDBFactory;
 }
+
+test('bounds provider configuration and classifies only expected browser-local failures', () => {
+  assert.equal(isExpectedBrowserLocalDataFailure(new BrowserLocalDataError('FIXTURE', 'fixture')), true);
+  assert.equal(isExpectedBrowserLocalDataFailure(new DOMException('denied', 'SecurityError')), true);
+  assert.equal(isExpectedBrowserLocalDataFailure(new Error('unrelated')), false);
+  for (const timeoutMs of [0, -1, 1.5, MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS + 1]) {
+    assert.throws(() => new BrowserLocalDataProvider({
+      databaseName: 'fixture-invalid-timeout',
+      indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION]),
+      storage: NULL_STORAGE,
+      timeoutMs,
+    }), (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_TIMEOUT');
+  }
+  assert.throws(() => new BrowserLocalDataProvider({
+    databaseName: '../invalid\u0000',
+    indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION]),
+    storage: NULL_STORAGE,
+  }), (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_ID');
+});
+
+test('round-trips bounded plaintext records and rejects mismatched or malformed payloads', async () => {
+  const encoded = await plaintextJsonCodec.encode({
+    collection: 'fixture',
+    id: ' record-1 ',
+    value: { retained: true },
+  });
+  assert.deepEqual(encoded, {
+    lookupKey: 'record-1',
+    payload: '{"id":"record-1","value":{"retained":true}}',
+  });
+  assert.deepEqual(await plaintextJsonCodec.decode({
+    collection: 'fixture',
+    lookupKey: 'record-1',
+    payload: encoded.payload,
+  }), { id: 'record-1', value: { retained: true } });
+  await assert.rejects(
+    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-2', payload: encoded.payload }),
+    (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_INTEGRITY',
+  );
+  await assert.rejects(
+    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-1', payload: '{' }),
+  );
+});
+
+test('rejects invalid collection sets and returns no-op update results without writing', async () => {
+  const provider = new BrowserLocalDataProvider({
+    databaseName: 'fixture-definition-bounds',
+    indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]),
+    storage: NULL_STORAGE,
+  });
+  await assert.rejects(provider.initialize([]), /between 1 and 16/u);
+  await assert.rejects(provider.initialize([WRITE_DEFINITION, WRITE_DEFINITION]), /identifiers must be unique/u);
+  const ready = await provider.initialize([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]);
+  assert.equal(ready.state, 'ready');
+  assert.equal(await provider.update(WRITE_DEFINITION, (document) => ({ document, result: 'unchanged' })), 'unchanged');
+  assert.equal(await provider.updateMany([WRITE_DEFINITION, SECOND_WRITE_DEFINITION], (documents) => ({
+    documents,
+    result: 'unchanged-many',
+  })), 'unchanged-many');
+  await provider.close();
+});
 
 test('preserves a concurrent legacy value when a later rollback-copy write fails', async () => {
   const restoreKeyRange = installKeyRangeStub();

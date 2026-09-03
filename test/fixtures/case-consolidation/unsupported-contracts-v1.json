@@ -30,20 +30,20 @@
   },
   "future": {
     "browserCase": {
-      "version": 14,
+      "version": 15,
       "cases": []
     },
     "portableCase": {
-      "version": 14,
+      "version": 15,
       "exportedAt": "2026-08-22T00:00:00.000Z",
       "cases": []
     },
     "responsePacket": {
       "schema": "whoisleuth.case-response-packet",
-      "schemaVersion": 8
+      "schemaVersion": 9
     },
     "cliCasePack": {
-      "version": 14,
+      "version": 15,
       "cases": [],
       "packet": {
         "schema": "whoisleuth.cli.case-pack",
@@ -52,7 +52,7 @@
     },
     "workspaceArchive": {
       "schema": "whoisleuth.workspace-archive",
-      "version": 7
+      "version": 8
     }
   }
 }

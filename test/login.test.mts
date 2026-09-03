@@ -62,6 +62,12 @@ describe('login handler origin enforcement', () => {
     assert.equal(response.headers['Set-Cookie'], undefined);
   });
 
+  test('rejects an HTTP Origin for the same HTTPS deployment host', async () => {
+    const response = await request({ origin: 'http://example.com', host: 'example.com' });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.headers['Set-Cookie'], undefined);
+  });
+
   test('allows non-browser login clients without an Origin header', async () => {
     const response = await request({ host: 'example.com' });
     assert.equal(response.statusCode, 200);

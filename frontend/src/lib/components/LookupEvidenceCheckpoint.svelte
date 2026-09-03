@@ -15,6 +15,7 @@
     pins,
     onsave,
     actionBusy = false,
+    headingId = 'lookup-checkpoint-title',
   }: {
     facts: readonly CheckpointFact[];
     pins: readonly CaseEvidencePin[];
@@ -23,6 +24,7 @@
       transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>,
     ) => void | Promise<void>;
     actionBusy?: boolean;
+    headingId?: string;
   } = $props();
 
   let selectedFields = $state<string[]>([]);
@@ -71,11 +73,11 @@
   }
 </script>
 
-<section class="checkpoint card" aria-labelledby="lookup-checkpoint-title">
+<section class="checkpoint card" aria-labelledby={headingId}>
   <header>
     <div>
       <p class="eyebrow">Field checkpoint</p>
-      <h4 id="lookup-checkpoint-title">Retain selected normalised facts</h4>
+      <h4 id={headingId}>Retain selected normalised facts</h4>
       <p>Choose only the facts needed for later review. Raw registry payloads, contacts, scripts, and unselected fields are not stored by this action.</p>
     </div>
     <button class="btn" type="button" disabled={actionBusy || !selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>

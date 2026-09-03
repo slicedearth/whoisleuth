@@ -41,13 +41,18 @@ describe('reviewed accuracy programme tooling', () => {
     ]);
     const technology = report.corpora.find((corpus) => corpus.key === 'technology-detection');
     assert.ok(technology);
-    assert.equal(technology.readiness, 'limited');
+    assert.equal(technology.readiness, 'measured');
     assert.equal(technology.reviewedPositiveCases, 76);
-    assert.equal(technology.reviewedBenignCases, 2);
-    assert.ok(report.corpora.filter((corpus) => corpus.key !== 'technology-detection')
-      .every((corpus) => corpus.readiness === 'unproven'));
-    assert.equal(report.summary.limited, 1);
+    assert.equal(technology.reviewedBenignCases, 69);
+    const unproven = report.corpora.filter((corpus) => corpus.key !== 'technology-detection');
+    assert.ok(unproven.every((corpus) => corpus.readiness === 'unproven'));
+    assert.ok(unproven.every((corpus) => corpus.reviewedCases === 0
+      && corpus.reviewedPositiveCases === 0
+      && corpus.reviewedBenignCases === 0));
+    assert.equal(report.summary.measured, 1);
+    assert.equal(report.summary.limited, 0);
     assert.equal(report.summary.unproven, 4);
+    assert.match(report.limitation, /mixed case can contribute to both class counts/iu);
     assert.match(report.limitation, /do not establish general accuracy/iu);
   });
 
@@ -79,7 +84,8 @@ describe('reviewed accuracy programme tooling', () => {
     const human = writer();
     assert.equal(await statusMain([], { stdout: human.stream }), 0);
     assert.match(human.read(), /Reviewed accuracy status/iu);
-    assert.match(human.read(), /Technology detection: limited \(78 reviewed cases\)/iu);
+    assert.match(human.read(), /Technology detection: measured \(78 reviewed cases\)/iu);
+    assert.match(human.read(), /Class coverage: 76 positive, 69 benign or collision cases/iu);
     const json = writer();
     assert.equal(await statusMain(['--json'], { stdout: json.stream }), 0);
     assert.equal((JSON.parse(json.read()) as { schema: string }).schema, REVIEWED_ACCURACY_STATUS_SCHEMA);

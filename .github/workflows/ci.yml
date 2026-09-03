@@ -35,6 +35,8 @@ jobs:
         run: npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts
+      - name: Verify development toolchain compatibility
+        run: npm run toolchain:check
       - name: Verify release version
         run: npm run release:check
       - name: Verify retained timing and balanced browser plan
@@ -108,10 +110,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: 1/2
-            label: 1-of-2
-          - shard: 2/2
-            label: 2-of-2
+          - kind: functional
+            shard: 1/4
+            label: 1-of-4
+          - kind: functional
+            shard: 2/4
+            label: 2-of-4
+          - kind: functional
+            shard: 3/4
+            label: 3-of-4
+          - kind: functional
+            shard: 4/4
+            label: 4-of-4
+          - kind: performance
+            label: performance
+    env:
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: ${{ matrix.kind }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,8 +146,12 @@ jobs:
         run: npm run security:retire
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
-      - name: Run Playwright e2e shard
+      - name: Run Playwright functional shard
+        if: ${{ matrix.kind == 'functional' }}
         run: npm run test:e2e:shard -- --run=${{ matrix.shard }}
+      - name: Run isolated authenticated loading authority
+        if: ${{ matrix.kind == 'performance' }}
+        run: npm run frontend:authenticated-loading-report
       - name: Summarize Playwright result data
         if: always()
         env:
@@ -145,7 +163,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-results-${{ matrix.label }}
-          path: playwright-results.json
+          path: playwright-results/
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload Playwright failure report
@@ -162,12 +180,82 @@ jobs:
         if: always()
         run: npm run verification:artifacts -- --cleanup=browser
 
+  browser-health:
+    needs:
+      - browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Download functional shard results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: playwright-results-*-of-4
+          path: ${{ runner.temp }}/playwright-functional-results
+          merge-multiple: true
+      - name: Verify exact browser inventory and observed balance
+        run: |
+          reports=(
+            --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
+            --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
+            --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
+            --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          )
+          npm run --silent test:e2e:aggregate -- "${reports[@]}" > "$RUNNER_TEMP/playwright-browser-aggregate.json"
+          npm run --silent test:e2e:aggregate -- --summary "${reports[@]}" | tee "$RUNNER_TEMP/playwright-browser-health.md"
+          cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
+          npm run --silent verification:timing:update-candidate -- \
+            --lane=browser \
+            --report="$RUNNER_TEMP/playwright-browser-aggregate.json" \
+            --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --environment=linux-x64-chromium-node24-ci \
+            --sample-basis=complete-four-shard-functional-run \
+            > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
+      - name: Upload browser timing evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-timing-health
+          path: |
+            ${{ runner.temp }}/playwright-browser-aggregate.json
+            ${{ runner.temp }}/playwright-browser-health.md
+            ${{ runner.temp }}/verification-timing-browser-candidate.json
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up current public runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts
+      - name: Exercise the installed CLI package boundary
+        run: npm run cli:package:check
+
   verify:
     if: ${{ always() }}
     needs:
       - quality
       - unit
       - browser
+      - browser-health
+      - cli-runtime
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -176,7 +264,11 @@ jobs:
           QUALITY_RESULT: ${{ needs.quality.result }}
           UNIT_RESULT: ${{ needs.unit.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
+          BROWSER_HEALTH_RESULT: ${{ needs.browser-health.result }}
+          CLI_RUNTIME_RESULT: ${{ needs.cli-runtime.result }}
         run: |
           test "$QUALITY_RESULT" = success
           test "$UNIT_RESULT" = success
           test "$BROWSER_RESULT" = success
+          test "$BROWSER_HEALTH_RESULT" = success
+          test "$CLI_RUNTIME_RESULT" = success

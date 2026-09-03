@@ -5,6 +5,7 @@ import {
   RDAP_NAMESERVER_SEARCH_VERSION,
   type RdapNameserverSearchState,
 } from '../../../../packages/contracts/rdap-nameserver-search.mts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 
 export {
   MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
@@ -44,11 +45,7 @@ export type RdapNameserverSearchView = {
   limitations: string[];
 };
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const record = recordOrNull;
 
 function bounded(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string' || value.length > maxLength || /[\u0000-\u001f\u007f]/u.test(value)) return null;

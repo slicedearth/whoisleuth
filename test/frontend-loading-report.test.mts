@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,14 @@ export const dictionary = {
   "/(console)/dashboard": [5,[2]]
 };
 `);
+const BULK_ROUTE_SOURCE = readFileSync(
+  new URL('../frontend/src/routes/(console)/bulk/+page.svelte', import.meta.url),
+  'utf8',
+);
+const LOOKUP_ROUTE_SOURCE = readFileSync(
+  new URL('../frontend/src/routes/(console)/lookup/+page.svelte', import.meta.url),
+  'utf8',
+);
 
 function fixtureManifest(publicImports: readonly string[] = ['_shared.js']) {
   return {
@@ -65,6 +74,30 @@ function report(publicImports?: readonly string[]) {
 }
 
 describe('frontend loading report', () => {
+  test('keeps optional Bulk serializers behind effective module boundaries', () => {
+    assert.match(
+      BULK_ROUTE_SOURCE,
+      /import \{ buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport \} from '\$lib\/analysis\/defensive-indicator-export\.ts';/u,
+    );
+    assert.doesNotMatch(
+      BULK_ROUTE_SOURCE,
+      /import\('\$lib\/analysis\/defensive-indicator-export\.ts'\)/u,
+    );
+    assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/stix-indicator-export\.ts'\)/u);
+    assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/misp-indicator-export\.ts'\)/u);
+  });
+
+  test('does not defer checkpoint code already included by evidence replay', () => {
+    assert.match(
+      LOOKUP_ROUTE_SOURCE,
+      /import LookupEvidenceCheckpoint from '\$lib\/components\/LookupEvidenceCheckpoint\.svelte';/u,
+    );
+    assert.doesNotMatch(
+      LOOKUP_ROUTE_SOURCE,
+      /import\('\$lib\/components\/LookupEvidenceCheckpoint\.svelte'\)/u,
+    );
+  });
+
   test('records how route ceilings were calibrated', () => {
     assert.deepEqual(FRONTEND_ROUTE_BUDGET_BASIS, {
       measuredBuilds: 3,

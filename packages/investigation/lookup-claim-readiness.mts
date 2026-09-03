@@ -249,6 +249,7 @@ export function buildLookupClaimReadiness(input: Readonly<{
   hasActiveProfile?: boolean;
   profileSourceState?: 'loading' | 'ready' | 'unavailable';
   hasCaseSection?: boolean;
+  hasReviewedCaseRecipient?: boolean;
   responseRecipientCount?: number;
   registryComparison?: unknown;
   registrarPublicationComparison?: unknown;
@@ -340,8 +341,8 @@ export function buildLookupClaimReadiness(input: Readonly<{
           requirement('http-observation', coverage),
           requirement('page-identity-observation', coverage),
           requirement('reviewed-case-recipient', coverage, {
-            state: input.hasCaseSection === true && (input.responseRecipientCount ?? 0) > 0 ? 'complete' : 'unknown',
-            ...(input.hasCaseSection === true && (input.responseRecipientCount ?? 0) > 0
+            state: input.hasReviewedCaseRecipient === true ? 'complete' : 'unknown',
+            ...(input.hasReviewedCaseRecipient === true
               ? {}
               : { limitation: 'A reviewed case and recipient route are not both available.' }),
           }),

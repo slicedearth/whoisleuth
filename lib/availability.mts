@@ -24,6 +24,10 @@ import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligenc
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
 import {
+  analyzeWebsiteTechnology,
+  captureTechnologyResponseHeaders,
+} from './website-technology.mts';
+import {
   analyzeResponsePolicyHeaders,
   qualifyResponsePolicyWithCspMeta,
 } from './response-policy.mts';
@@ -346,15 +350,7 @@ async function fetchHomepage(
           status: 'fetched',
           detail: `Homepage responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
           responsePolicy: analyzeResponsePolicyHeaders(res.headers),
-          technologyHeaders: {
-            'cf-ray': res.headers.get('cf-ray') || '',
-            'x-drupal-cache': res.headers.get('x-drupal-cache') || '',
-            'x-served-by': res.headers.get('x-served-by') || '',
-            'x-powered-by': res.headers.get('x-powered-by') || '',
-            'x-shopify-stage': res.headers.get('x-shopify-stage') || '',
-            'x-sorting-hat-podid': res.headers.get('x-sorting-hat-podid') || '',
-            'x-vercel-id': res.headers.get('x-vercel-id') || '',
-          },
+          technologyHeaders: captureTechnologyResponseHeaders(res.headers),
           http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
             previousAttempts: failures,
             capturedBodyBytes: body.bytesRead,
@@ -376,6 +372,7 @@ async function fetchHomepage(
         status: 'responded',
         detail: `Web server responded over ${scheme.toUpperCase()} (HTTP ${res.status}); homepage content was not available for inspection.`,
         responsePolicy: analyzeResponsePolicyHeaders(res.headers),
+        technologyHeaders: captureTechnologyResponseHeaders(res.headers),
         http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
           previousAttempts: failures,
           capturedBodyBytes: 0,
@@ -779,6 +776,16 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
           : {}),
       });
     }
+  }
+
+  if (options.includeTechnologyProfile !== false && htmlSignals.technologyProfile === null
+    && ['fetched', 'responded'].includes(homepage.status)) {
+    htmlSignals.technologyProfile = analyzeWebsiteTechnology({
+      htmlAvailable: false,
+      httpServer: homepage.http?.response?.server,
+      responseHeaders: homepage.technologyHeaders,
+      observedAt: homepage.http?.observedAt,
+    });
   }
 
   const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);

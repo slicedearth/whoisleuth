@@ -78,6 +78,7 @@ async function runWriterChild(expected: AnchoredArtifactIdentity, expectedUid: n
 
   const owned = new Map<string, AnchoredArtifactIdentity>();
   const controllers = new Map<number, AbortController>();
+  const cancelled = new Set<number>();
   let keepArtifacts = false;
   let queue = Promise.resolve();
   const respond = (response: ChildResponse) => new Promise<void>((resolve) => {
@@ -100,6 +101,9 @@ async function runWriterChild(expected: AnchoredArtifactIdentity, expectedUid: n
       const controller = new AbortController();
       controllers.set(message.id, controller);
       try {
+        if (cancelled.delete(message.id)) {
+          throw new Error('Capture artefact write was cancelled.');
+        }
         const file = await open(message.fileName, 'wx', 0o600);
         let created: AnchoredArtifactIdentity;
         try {
@@ -114,6 +118,7 @@ async function runWriterChild(expected: AnchoredArtifactIdentity, expectedUid: n
         await respond({ type: 'result', id: message.id, ok: true, identity: created });
       } finally {
         controllers.delete(message.id);
+        cancelled.delete(message.id);
       }
       return;
     }
@@ -125,7 +130,11 @@ async function runWriterChild(expected: AnchoredArtifactIdentity, expectedUid: n
 
   process.on('message', (message: ChildRequest) => {
     if (message?.type === 'cancel') {
-      controllers.get(message.id)?.abort(new Error('Capture artefact write was cancelled.'));
+      const controller = controllers.get(message.id);
+      if (controller) controller.abort(new Error('Capture artefact write was cancelled.'));
+      else if (Number.isSafeInteger(message.id) && message.id > 0 && cancelled.size < 64) {
+        cancelled.add(message.id);
+      }
       return;
     }
     queue = queue.then(() => handle(message)).catch(async (error) => {
@@ -216,11 +225,16 @@ export async function startAnchoredArtifactWriter(
     const id = nextId++;
     const result = new Promise<Extract<ChildResponse, { type: 'result'; ok: true }>>((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      child.send({ ...message, id } as ChildRequest, (error) => {
-        if (!error) return;
+      try {
+        child.send({ ...message, id } as ChildRequest, (error) => {
+          if (!error) return;
+          pending.delete(id);
+          reject(error);
+        });
+      } catch (error) {
         pending.delete(id);
-        reject(error);
-      });
+        reject(error instanceof Error ? error : new Error('Anchored capture artefact writer IPC failed.'));
+      }
     });
     return operationDeadline(result, child);
   };
@@ -229,7 +243,16 @@ export async function startAnchoredArtifactWriter(
     async write(fileName, value, signal, onCreated) {
       const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value);
       const id = nextId;
-      const cancel = () => child.connected && child.send({ type: 'cancel', id } satisfies ChildRequest);
+      const cancel = () => {
+        if (!child.connected) return;
+        try {
+          child.send({ type: 'cancel', id } satisfies ChildRequest, (error) => {
+            if (error) child.kill();
+          });
+        } catch {
+          child.kill();
+        }
+      };
       if (signal.aborted) throw signal.reason;
       signal.addEventListener('abort', cancel, { once: true });
       try {

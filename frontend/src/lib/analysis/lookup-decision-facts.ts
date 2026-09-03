@@ -48,7 +48,7 @@ const DERIVED_EVIDENCE_IDS = new Set([
   'security-posture',
   'technology',
 ]);
-const REGISTRATION_EVIDENCE_IDS = new Set(['rdap', 'whois', 'registrar-rdap']);
+const REGISTRATION_EVIDENCE_IDS = new Set(['rdap', 'whois', 'registrar-rdap', 'registrar-standing']);
 const NETWORK_EVIDENCE_IDS = new Set(['availability', 'dns', 'reverse-dns', 'network-context']);
 const WEB_EVIDENCE_IDS = new Set([
   'client-behavior',
@@ -75,6 +75,7 @@ const COVERAGE_DESTINATIONS: Readonly<Record<string, `#${string}`>> = Object.fre
   rdap: '#registry',
   whois: '#registry',
   'registrar-rdap': '#registry',
+  'registrar-standing': '#registry',
   availability: '#overview',
   dns: '#evidence-dns',
   'reverse-dns': '#evidence-dns',

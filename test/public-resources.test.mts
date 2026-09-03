@@ -21,6 +21,7 @@ function allStrings(value: unknown): string[] {
 test('public resources expose a bounded unique set of useful investigation topics', () => {
   const referenceHosts = new Set([
     'certificate.transparency.dev',
+    'www.icann.org',
     'www.iana.org',
     'www.rfc-editor.org',
     'www.unicode.org',

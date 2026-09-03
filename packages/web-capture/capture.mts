@@ -52,6 +52,16 @@ type CaptureFetchResource = (
   addresses: readonly PublicAddressRecord[],
 ) => Promise<Response>;
 
+type CaptureDeadlineScheduler = Readonly<{
+  schedule(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  cancel(timer: ReturnType<typeof setTimeout>): void;
+}>;
+
+const SYSTEM_CAPTURE_DEADLINE_SCHEDULER: CaptureDeadlineScheduler = Object.freeze({
+  schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+  cancel: (timer) => clearTimeout(timer),
+});
+
 type CaptureArguments = Readonly<{
   targetUrl: string;
   outputDirectory: string;
@@ -65,6 +75,7 @@ type CaptureDependencies = Readonly<{
   readResponse?: typeof readBytesCapped;
   writeArtifact?: typeof privateWrite;
   now?: () => string;
+  deadlineScheduler?: CaptureDeadlineScheduler;
 }>;
 
 type DomProjection = Readonly<{
@@ -86,13 +97,17 @@ type CaptureDeadline = Readonly<{
   clear(): void;
 }>;
 
-function createCaptureDeadline(timeoutMs: number, onTimeout: () => void | Promise<void>): CaptureDeadline {
+function createCaptureDeadline(
+  timeoutMs: number,
+  onTimeout: () => void | Promise<void>,
+  scheduler: CaptureDeadlineScheduler = SYSTEM_CAPTURE_DEADLINE_SCHEDULER,
+): CaptureDeadline {
   let didExpire = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const controller = new AbortController();
   const timeoutError = new Error(`Rendered capture exceeded its ${timeoutMs} ms total-run deadline.`);
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
+    timer = scheduler.schedule(() => {
       didExpire = true;
       controller.abort(timeoutError);
       void Promise.resolve(onTimeout()).catch(() => {});
@@ -103,7 +118,7 @@ function createCaptureDeadline(timeoutMs: number, onTimeout: () => void | Promis
     run<T>(operation: Promise<T>) { return Promise.race([operation, timeout]); },
     signal: controller.signal,
     expired() { return didExpire; },
-    clear() { if (timer) clearTimeout(timer); timer = null; },
+    clear() { if (timer) scheduler.cancel(timer); timer = null; },
   });
 }
 
@@ -757,7 +772,7 @@ export async function captureRenderedPage(
       context?.close(),
       browser?.close(),
     ].filter((operation): operation is Promise<void> => Boolean(operation)));
-  });
+  }, dependencies.deadlineScheduler);
   async function writeArtifact(fileName: string, value: string | Buffer): Promise<void> {
     if (!dependencies.writeArtifact) await assertPublishedDirectoryIdentity(targetDirectory, reservation);
     const operation = dependencies.writeArtifact

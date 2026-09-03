@@ -29,25 +29,8 @@
     type CaseActionEventSourceClass,
   } from '$lib/analysis/case-response-model.ts';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
-  import {
-    buildCaseResponsePacket,
-    buildCaseResponsePreflight,
-    buildCaseResponseReadiness,
-    buildCaseResponseReviewDigest,
-    buildResponsePacketProfilePreview,
-    CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE,
-    caseResponsePacketFilename,
-    RESPONSE_CONTACT_KINDS,
-    RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
-    RESPONSE_PACKET_PROFILES,
-    RESPONSE_READINESS_STATES,
-    type CaseResponsePacketInput,
-    type ResponseContactKind,
-    type ResponseAuthorisationConfirmationId,
-    type ResponsePacketProfileId,
-    type ResponseReadinessState,
-  } from '$lib/analysis/case-response-packet.ts';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
+  import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
   import CaseResponseStageGuide, { type CaseResponseStage, type CaseResponseStageId } from '$lib/components/CaseResponseStageGuide.svelte';
 
   let {
@@ -81,6 +64,7 @@
   let actionType = $state('internal_review');
   let actionRecipient = $state('');
   let actionContactSource = $state('analyst supplied');
+  let actionRouteObservedAt = $state('');
   let actionLimitations = $state('');
   let actionDueAt = $state('');
   let actionFollowUpAt = $state('');
@@ -131,82 +115,20 @@
     record.sightings.filter((sighting) =>
       sighting.state === 'not_reproduced' || sighting.state === 'expired').length,
   );
+  const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
+    decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
   const userObservedEffectSourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
 
-  let packetCategory = $state('');
-  let packetProfile = $state<ResponsePacketProfileId>('internal_soc');
-  let packetAffectedParty = $state('');
-  let packetUrls = $state('');
-  let packetHarm = $state('');
-  let packetObservedAt = $state('');
-  let packetContacts = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
-  let packetContactSources = $state<Record<ResponseContactKind, string>>({
-    registrar: 'RDAP or WHOIS',
-    registry: 'registry evidence',
-    network_hosting: 'network or hosting evidence',
-    security_txt: 'security.txt',
-  });
-  let packetContactLimitations = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
-  let packetContactObservedAt = $state<Record<ResponseContactKind, string>>({
-    registrar: '',
-    registry: '',
-    network_hosting: '',
-    security_txt: '',
-  });
-  let packetSelectedEvidenceIds = $state<string[]>([]);
-  let packetInfrastructureState = $state<ResponseReadinessState>('not_provided');
-  let packetInfrastructureDetail = $state('');
-  let packetInfrastructureLimitations = $state('');
-  let packetAuthorityState = $state<ResponseReadinessState>('not_provided');
-  let packetAuthorityDetail = $state('');
-  let packetAuthorityLimitations = $state('');
-  let packetContradictionsState = $state<ResponseReadinessState>('not_provided');
-  let packetContradictionsDetail = $state('');
-  let packetContradictionsLimitations = $state('');
-  let packetSourceLimitationsState = $state<ResponseReadinessState>('not_provided');
-  let packetSourceLimitationsDetail = $state('');
-  let packetSourceLimitations = $state('');
-  let packetArtefactLabel = $state('');
-  let packetArtefactMediaType = $state('image/png');
-  let packetArtefactCapturedAt = $state('');
-  let packetArtefactSource = $state('Analyst-supplied capture metadata');
-  let packetArtefactDigest = $state('');
-  let packetArtefactByteLength = $state('');
-  let packetArtefactLimitations = $state('');
-  let packetReviewDigest = $state('');
-  let packetReviewSignature = $state('');
-  let packetAuthorisationConfirmedAt = $state('');
-  let packetConfirmations = $state<Record<ResponseAuthorisationConfirmationId, boolean>>({
-    selectedEvidence: false,
-    recipientScope: false,
-    privacyRedactions: false,
-    analystAuthority: false,
-    evidenceFreshness: false,
-  });
-  const packetWizardSteps = Object.freeze([
-    'Recipient and scope',
-    'Evidence selection',
-    'Source and contact provenance',
-    'Privacy and redaction',
-    'Readiness limitations',
-    'Exact-input digest',
-    'Explicit authorisation',
-    'Local export',
-  ] as const);
-  let packetWizardStep = $state(1);
-  let packetBusy = $state(false);
   let mutationBusy = $state(false);
   const reviewNow = new Date().toISOString();
+  let evidenceHandoffStage = $state<CaseResponseStage>({
+    id: 'evidence_handoff',
+    number: 4,
+    label: 'Evidence handoff',
+    status: 'not_started',
+    summary: 'Packet review has not started.',
+    nextRequirement: 'Open the evidence handoff to review recipient, evidence, privacy, readiness, and authorisation inputs.',
+  });
   const actionSummary = $derived(buildCaseActionOutcomeSummary(record.actions, reviewNow));
   const selectedAction = $derived(record.actions.find((action) => action.id === selectedActionId) ?? null);
   const selectedActionIdentityLocked = $derived(Boolean(selectedAction
@@ -230,15 +152,6 @@
           && !(value === 'no_response' && transitionSourceClass === 'provider'))
         : [],
   );
-  const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
-  const packetProfilePreview = $derived(buildResponsePacketProfilePreview(record, packetInput()));
-  const packetReadiness = $derived(buildCaseResponseReadiness(record, packetInput(), reviewNow));
-  const packetReviewIsCurrent = $derived(Boolean(packetReviewDigest) && packetReviewSignature === packetMaterialSignature());
-  const packetConfirmationsComplete = $derived(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.every((id) => packetConfirmations[id]));
-  const packetAuthorisationReadinessComplete = $derived(
-    packetReadiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
-      && packetReadiness.rows.find((row) => row.id === 'authority_review')?.state === 'complete',
-  );
   const closureNeedsReview = $derived(closureReason === 'independently_not_reproduced' || closureReason === 'infrastructure_changed');
   const closureNeedsAction = $derived(closureReason === 'provider_reported_resolution_not_independently_checked');
   const eligibleClosureReviews = $derived(record.observedEffects.reviews.filter((review) =>
@@ -250,15 +163,21 @@
   const responseStages = $derived<CaseResponseStage[]>([
     {
       id: 'observation', number: 1, label: 'Observation',
-      status: record.evidencePins.length && record.sightings.length ? 'complete' : record.evidencePins.length || record.sightings.length ? 'in_progress' : 'not_started',
+      status: record.evidencePins.length || record.sightings.length ? 'complete' : 'not_started',
       summary: `${countLabel(record.evidencePins.length, 'retained evidence pin')} and ${countLabel(record.sightings.length, 'source-qualified sighting')}.`,
-      nextRequirement: !record.evidencePins.length ? 'Pin a source-qualified observed fact with completeness and limitations.' : !record.sightings.length ? 'Record a source-qualified sighting or review conclusion.' : 'Review observation completeness before assessment.',
+      nextRequirement: record.evidencePins.length || record.sightings.length
+        ? 'Review the retained observation, its source, completeness, and limitations before assessment.'
+        : 'Pin an observed fact or record a source-qualified sighting with completeness and limitations.',
     },
     {
       id: 'assessment', number: 2, label: 'Assessment',
-      status: record.decisions.length && record.assertions.length ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.decisions.length, 'decision')}, ${countLabel(record.assertions.length, 'assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
-      nextRequirement: !record.decisions.length ? 'Record a bounded analyst decision and rationale.' : !record.assertions.length ? 'Structure facts, hypotheses, unknowns, and evidence relationships.' : 'Review the investigation trail and unresolved branches.',
+      status: evidenceLinkedDecisionCount ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
+      summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
+      nextRequirement: !record.decisions.length
+        ? 'Record a bounded analyst decision and rationale linked to retained evidence.'
+        : !evidenceLinkedDecisionCount
+          ? 'Link at least one analyst decision to a retained evidence pin.'
+          : 'Review the decision rationale and any unresolved assertions or branches.',
     },
     {
       id: 'response_decision', number: 3, label: 'Response decision',
@@ -266,19 +185,18 @@
       summary: `${countLabel(record.actions.length, 'append-only response action')}; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} follow-up due.`,
       nextRequirement: !record.actions.length ? 'Create a drafting action with recipient provenance and due dates.' : 'Review the next legal action transition without rewriting earlier events.',
     },
+    evidenceHandoffStage,
     {
-      id: 'outcome_tracking', number: 4, label: 'Outcome tracking',
+      id: 'outcome_tracking', number: 5, label: 'Outcome tracking',
       status: record.closures.records.length ? 'complete' : record.observedEffects.reviews.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.observedEffects.reviews.length, 'independent effect review')} and ${countLabel(record.closures.records.length, 'deliberate closure')}.`,
       nextRequirement: !record.observedEffects.reviews.length ? 'Keep provider outcomes separate and record an independently observed effect when reviewed.' : !record.closures.records.length ? 'Review follow-up and, when justified, record a deliberate closure reason.' : 'Review whether follow-up remains due.',
     },
-    {
-      id: 'evidence_handoff', number: 5, label: 'Evidence handoff',
-      status: packetAuthorisationConfirmedAt && packetReviewIsCurrent ? 'complete' : packetReviewDigest && !packetReviewIsCurrent ? 'attention' : packetPreflight.canExport ? 'in_progress' : 'not_started',
-      summary: `${packetPreflight.counts.pass} preflight pass, ${packetPreflight.counts.caution} caution, and ${packetPreflight.counts.block} block.`,
-      nextRequirement: !packetPreflight.canExport ? 'Complete the next blocked packet input.' : !packetReviewDigest ? 'Review the exact packet inputs and bind their digest.' : !packetReviewIsCurrent ? 'Material inputs changed; bind and review the current inputs again.' : !packetAuthorisationConfirmedAt ? 'Complete explicit confirmations and authorise the exact bound inputs.' : 'Export locally only when the intended recipient and scope remain correct.',
-    },
   ]);
+
+  function updateEvidenceHandoffStage(stage: CaseResponseStage): void {
+    evidenceHandoffStage = stage;
+  }
 
   function isoFromLocal(value: string): string | null {
     if (!value) return null;
@@ -461,6 +379,7 @@
       type: actionType,
       recipient: actionRecipient,
       contactSource: actionContactSource,
+      routeObservedAt: isoFromLocal(actionRouteObservedAt),
       contactLimitations: list(actionLimitations),
       dueAt: isoFromLocal(actionDueAt),
       followUpAt: isoFromLocal(actionFollowUpAt),
@@ -473,6 +392,7 @@
     actionType = 'internal_review';
     actionRecipient = '';
     actionContactSource = 'analyst supplied';
+    actionRouteObservedAt = '';
     actionLimitations = '';
     actionDueAt = '';
     actionFollowUpAt = '';
@@ -490,6 +410,7 @@
     actionType = action.type;
     actionRecipient = action.recipient;
     actionContactSource = action.contactSource;
+    actionRouteObservedAt = localFromIso(action.routeObservedAt);
     actionLimitations = action.contactLimitations.join('\n');
     actionDueAt = localFromIso(action.dueAt);
     actionFollowUpAt = localFromIso(action.followUpAt);
@@ -594,215 +515,6 @@
     closureLimitations = '';
   }
 
-  function packetContactsInput() {
-    return RESPONSE_CONTACT_KINDS.flatMap((kind) => packetContacts[kind].trim()
-      ? [{
-          kind,
-          contact: packetContacts[kind],
-          source: packetContactSources[kind],
-          observedAt: isoFromLocal(packetContactObservedAt[kind]),
-          limitations: list(packetContactLimitations[kind]),
-        }]
-      : []);
-  }
-
-  function packetInput(includeAuthorisation = true): CaseResponsePacketInput {
-    const artefactReferences = packetArtefactDigest.trim() ? [{
-      label: packetArtefactLabel,
-      mediaType: packetArtefactMediaType,
-      capturedAt: isoFromLocal(packetArtefactCapturedAt),
-      source: packetArtefactSource,
-      digestSha256: packetArtefactDigest,
-      byteLength: packetArtefactByteLength ? Number(packetArtefactByteLength) : null,
-      limitations: list(packetArtefactLimitations),
-    }] : [];
-    return {
-      profile: packetProfile,
-      category: packetCategory,
-      affectedParty: packetAffectedParty,
-      abusiveUrls: packetUrls,
-      observedHarm: packetHarm,
-      observedAt: isoFromLocal(packetObservedAt),
-      contacts: packetContactsInput(),
-      selectedEvidencePinIds: packetSelectedEvidenceIds,
-      readiness: {
-        infrastructureResponsibility: {
-          state: packetInfrastructureState,
-          detail: packetInfrastructureDetail,
-          limitations: list(packetInfrastructureLimitations),
-        },
-        authorityReview: {
-          state: packetAuthorityState,
-          detail: packetAuthorityDetail,
-          limitations: list(packetAuthorityLimitations),
-        },
-        contradictionsReview: {
-          state: packetContradictionsState,
-          detail: packetContradictionsDetail,
-          limitations: list(packetContradictionsLimitations),
-        },
-        sourceLimitations: {
-          state: packetSourceLimitationsState,
-          detail: packetSourceLimitationsDetail,
-          limitations: list(packetSourceLimitations),
-        },
-      },
-      artefactReferences,
-      ...(includeAuthorisation ? {
-        authorisation: {
-          reviewedInputDigestSha256: packetReviewDigest,
-          confirmedAt: isoFromLocal(packetAuthorisationConfirmedAt),
-          confirmations: packetConfirmations,
-        },
-      } : {}),
-    };
-  }
-
-  function packetMaterialSignature(): string {
-    return JSON.stringify({ record, input: packetInput(false) });
-  }
-
-  async function reviewPacketInputs() {
-    if (packetBusy) return;
-    packetBusy = true;
-    try {
-      const signature = packetMaterialSignature();
-      const digest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
-      if (signature !== packetMaterialSignature()) {
-        packetAuthorisationConfirmedAt = '';
-        onmessage('The local packet inputs changed while the review digest was being prepared. Review and bind the current inputs again.');
-        return;
-      }
-      packetReviewDigest = digest;
-      packetReviewSignature = signature;
-      packetConfirmations = {
-        selectedEvidence: false,
-        recipientScope: false,
-        privacyRedactions: false,
-        analystAuthority: false,
-        evidenceFreshness: false,
-      };
-      packetAuthorisationConfirmedAt = '';
-      onmessage('Bound the current local draft inputs to a review digest. Confirm each authorisation statement after completing the review.');
-      await setPacketWizardStep(7);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not bind the current packet inputs for review.');
-    } finally {
-      packetBusy = false;
-    }
-  }
-
-  function setPacketConfirmation(id: ResponseAuthorisationConfirmationId, checked: boolean) {
-    packetConfirmations = { ...packetConfirmations, [id]: checked };
-    packetAuthorisationConfirmedAt = '';
-  }
-
-  async function authorisePacketInputs() {
-    if (!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete) return;
-    if (packetBusy) return;
-    packetBusy = true;
-    try {
-      const signature = packetMaterialSignature();
-      const currentDigest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
-      if (signature !== packetMaterialSignature() || signature !== packetReviewSignature || currentDigest !== packetReviewDigest) {
-        packetAuthorisationConfirmedAt = '';
-        onmessage('The reviewed inputs or their freshness state changed. Review and bind the current packet again before authorisation.');
-        return;
-      }
-      packetAuthorisationConfirmedAt = localFromIso(new Date().toISOString());
-      onmessage('Authorised the exact browser-local inputs bound to the retained review digest. Nothing was submitted.');
-      await setPacketWizardStep(8);
-    } catch (cause) {
-      packetAuthorisationConfirmedAt = '';
-      onmessage(cause instanceof Error ? cause.message : 'Could not verify the exact packet review before authorisation.');
-    } finally {
-      packetBusy = false;
-    }
-  }
-
-  function packet(generatedAt: string = new Date().toISOString()) {
-    return buildCaseResponsePacket(record, packetInput(), generatedAt);
-  }
-
-  function contactKind(action: CaseActionRecord): ResponseContactKind | null {
-    if (action.type === 'registrar_report') return 'registrar';
-    if (action.type === 'registry_report') return 'registry';
-    if (action.type === 'network_hosting_report') return 'network_hosting';
-    if (action.type === 'security_contact_report') return 'security_txt';
-    return null;
-  }
-
-  function useRecordedActionRoutes() {
-    let added = 0;
-    const contacts = { ...packetContacts };
-    const sources = { ...packetContactSources };
-    const limitations = { ...packetContactLimitations };
-    const observedAt = { ...packetContactObservedAt };
-    for (const action of [...record.actions].reverse()) {
-      const kind = contactKind(action);
-      if (!kind || contacts[kind]) continue;
-      contacts[kind] = action.recipient;
-      sources[kind] = action.contactSource;
-      limitations[kind] = action.contactLimitations.join('\n');
-      observedAt[kind] = localFromIso(action.metadataUpdatedAt);
-      added += 1;
-    }
-    packetContacts = contacts;
-    packetContactSources = sources;
-    packetContactLimitations = limitations;
-    packetContactObservedAt = observedAt;
-    onmessage(added
-      ? `Loaded ${added} recorded case contact route${added === 1 ? '' : 's'} into the local packet draft.`
-      : 'No unused external contact route was available in the recorded case actions.');
-  }
-
-  async function downloadPacket(format: 'json' | 'md' | 'txt') {
-    if (packetBusy) return;
-    packetBusy = true;
-    try {
-      const generatedAt = new Date().toISOString();
-      const built = await packet(generatedAt);
-      const content = format === 'json'
-        ? JSON.stringify(built.json, null, 2)
-        : format === 'md'
-          ? built.markdown
-          : built.email;
-      const url = URL.createObjectURL(new Blob([content], {
-        type: format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain',
-      }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = caseResponsePacketFilename(record.domain, format, generatedAt);
-      anchor.click();
-      URL.revokeObjectURL(url);
-      onmessage(`Exported a ${built.json.authorisation.status} ${format === 'txt' ? 'plain-text email draft' : format.toUpperCase()} response packet. Nothing was submitted.`);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the response packet.');
-    } finally {
-      packetBusy = false;
-    }
-  }
-
-  async function copyEmail() {
-    if (packetBusy) return;
-    packetBusy = true;
-    try {
-      const built = await packet();
-      await navigator.clipboard.writeText(built.email);
-      onmessage(`Copied the ${built.json.authorisation.status} response email draft. Nothing was submitted.`);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Clipboard access was unavailable.');
-    } finally {
-      packetBusy = false;
-    }
-  }
-
-  async function setPacketWizardStep(value: number) {
-    packetWizardStep = Math.max(1, Math.min(packetWizardSteps.length, Math.trunc(value)));
-    await tick();
-    document.getElementById(`packet-wizard-step-${record.id}-${packetWizardStep}`)?.focus({ preventScroll: true });
-  }
-
   async function openAdvancedStage(stage: CaseResponseStageId) {
     presentationMode = 'advanced';
     await tick();
@@ -818,6 +530,31 @@
     target.open = true;
     target.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     target.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
+  }
+
+  async function preparePacketDeliveryRecord(exported: Readonly<{
+    actionId: string;
+    exportedAt: string;
+    digestSha256: string;
+  }>) {
+    const action = record.actions.find((item) => item.id === exported.actionId);
+    if (!action) {
+      onmessage('The packet was exported, but its selected Case action is no longer available. Reload before recording delivery.');
+      return;
+    }
+    selectAction(action.id);
+    transitionOccurredAt = localFromIso(exported.exportedAt);
+    transitionSourceClass = 'analyst';
+    transitionProvenance = 'local response-packet export';
+    transitionReference = `response-packet-sha256:${exported.digestSha256}`;
+    transitionLimitations = 'A local packet was exported. Confirm actual delivery before appending a submitted transition.';
+    if (action.state === 'authorised') transitionNextState = 'submitted';
+    await openAdvancedStage('response_decision');
+    await tick();
+    document.getElementById(`case-action-transition-reference-${record.id}`)?.focus({ preventScroll: true });
+    onmessage(action.state === 'authorised'
+      ? 'Prepared a submitted transition bound to the exported packet digest. Confirm actual delivery before appending it.'
+      : `Selected the packet action and retained its export digest. Its current state is ${action.state.replaceAll('_', ' ')}; choose a legal transition only after the corresponding event occurs.`);
   }
 </script>
 
@@ -977,6 +714,7 @@
           <label class="field">Action type<select bind:value={actionType} disabled={selectedActionIdentityLocked}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
           <label class="field">Recipient or internal owner<input bind:value={actionRecipient} maxlength="320" required disabled={selectedActionIdentityLocked}></label>
           <label class="field">Contact source<input bind:value={actionContactSource} maxlength="80" required disabled={selectedActionIdentityLocked}></label>
+          <label class="field">Route observed at<input type="datetime-local" bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
           <label class="field">Originating action<select bind:value={actionOriginId} disabled={selectedActionIdentityLocked}><option value="">No originating action</option>{#each record.actions.filter((action) => action.id !== selectedActionId) as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
           <label class="field">Due at<input type="datetime-local" bind:value={actionDueAt}></label>
           <label class="field">Follow-up at<input type="datetime-local" bind:value={actionFollowUpAt}></label>
@@ -994,7 +732,7 @@
               <label class="field">Next state<select value={transitionNextState} onchange={(event) => setTransitionNextState(event.currentTarget.value)}>{#each legalTransitionStates as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
               <label class="field">Original event time<input type="datetime-local" bind:value={transitionOccurredAt}></label>
               <label class="field">Provenance<input bind:value={transitionProvenance} maxlength="80" required></label>
-              <label class="field">Bounded reference<input bind:value={transitionReference} maxlength="500"></label>
+              <label class="field">Bounded reference<input id={`case-action-transition-reference-${record.id}`} bind:value={transitionReference} maxlength="500"></label>
               <label class="field">Evidence pin<select bind:value={transitionEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>
               <label class="field">Typed provider outcome<select bind:value={transitionProviderOutcome} required={transitionNextState === 'terminal' && ['drafting', 'ready_for_review', 'reviewed', 'authorised'].includes(selectedAction.state)}><option value="">No provider outcome</option>{#each availableTransitionProviderOutcomes as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
             </div>
@@ -1017,6 +755,7 @@
             <strong>{action.type.replaceAll('_', ' ')} · {action.state.replaceAll('_', ' ')}</strong>
             <p>{action.recipient}</p>
             <small>Action ID {action.id} · {action.contactSource} · created {action.createdAt}</small>
+            <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
             {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
             {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
             {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
@@ -1043,6 +782,15 @@
     {/if}
   </details>
 
+  {/if}
+  <CaseResponsePacketWorkspace
+    {record}
+    visible={presentationMode === 'advanced'}
+    {onmessage}
+    onstagechange={updateEvidenceHandoffStage}
+    onpacketexported={preparePacketDeliveryRecord}
+  />
+  {#if presentationMode === 'advanced'}
   <details id={`case-response-outcome-${record.id}`}>
     <summary>Verify remediation independently and close deliberately</summary>
     <div class="response-form remediation-review">
@@ -1100,88 +848,6 @@
     </div>
   </details>
 
-  <details id={`case-response-preflight-${record.id}`}>
-    <summary>Prepare a reviewed abuse evidence packet</summary>
-    <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
-      <p class="notice">This prepares local drafts only; nothing is sent. Contact selection, review, authorisation and export remain explicit.</p>
-      <p class="notice preflight-scope">{CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE.limitation}</p>
-      <nav class="packet-wizard-nav" aria-label="Response-packet handoff steps">
-        <ol>{#each packetWizardSteps as label, index}<li><button type="button" aria-current={packetWizardStep === index + 1 ? 'step' : undefined} onclick={() => void setPacketWizardStep(index + 1)}><span>{index + 1}</span>{label}</button></li>{/each}</ol>
-      </nav>
-
-      {#if packetWizardStep === 1}
-        <section id={`packet-wizard-step-${record.id}-1`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-1`}>
-          <header><div><p class="eyebrow">Purpose and audience</p><h4 id={`packet-wizard-title-${record.id}-1`}>Intended recipient and scope</h4></div><span>1 of 8</span></header>
-          <label class="field">Audience profile<select bind:value={packetProfile}>{#each RESPONSE_PACKET_PROFILES as profile}<option value={profile.id}>{profile.label}</option>{/each}</select></label>
-          <section class="profile-preview" aria-labelledby={`profile-preview-title-${record.id}`}>
-            <div><strong id={`profile-preview-title-${record.id}`}>{packetProfilePreview.label}</strong><span>{packetProfilePreview.audience}</span></div>
-            <p><strong>Suggested subject:</strong> {packetProfilePreview.subject}</p>
-            <div class="profile-columns">
-              <section><strong>Included</strong><ul>{#each packetProfilePreview.includedEvidence as item}<li>{item}</li>{/each}</ul></section>
-              <section><strong>Excluded</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section>
-              <section><strong>Redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section>
-              <section><strong>Attachments and follow-up</strong><ul>{#each packetProfilePreview.attachments as item}<li>{item}</li>{/each}{#each packetProfilePreview.followUpFields as item}<li>{item}</li>{/each}</ul></section>
-            </div>
-            {#if packetProfilePreview.missingEvidence.length}<p class="profile-missing"><strong>Still needed:</strong> {packetProfilePreview.missingEvidence.join('; ')}</p>{/if}
-          </section>
-          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" bind:value={packetObservedAt} required></label></div>
-          <label class="field">Exact abusive HTTP(S) URLs <small>one per line</small><textarea bind:value={packetUrls} maxlength="42000" rows="3" required></textarea></label>
-          <label class="field">Observed harm<textarea bind:value={packetHarm} maxlength="2000" rows="3" required></textarea></label>
-        </section>
-      {:else if packetWizardStep === 2}
-        <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
-          <header><div><p class="eyebrow">Exact selection</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>2 of 8</span></header>
-          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
-          <p class="notice">Selection includes only retained Case pins supported by response-packet v7. It does not collect, upload, or infer new evidence.</p>
-        </section>
-      {:else if packetWizardStep === 3}
-        <section id={`packet-wizard-step-${record.id}-3`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-3`}>
-          <header><div><p class="eyebrow">Attributed routes</p><h4 id={`packet-wizard-title-${record.id}-3`}>Source and contact provenance</h4></div><span>3 of 8</span></header>
-          <fieldset class="contacts"><legend>Separately routed escalation contacts</legend>{#if record.actions.some((action) => contactKind(action))}<button class="btn small" type="button" onclick={useRecordedActionRoutes}>Use recorded case routes</button>{/if}{#each RESPONSE_CONTACT_KINDS as kind}<div class="contact-row"><strong>{kind.replaceAll('_', ' ')}</strong><label class="field">Contact<input aria-label={`${kind.replaceAll('_', ' ')} contact`} bind:value={packetContacts[kind]} maxlength="320"></label><label class="field">Source<input aria-label={`${kind.replaceAll('_', ' ')} source`} bind:value={packetContactSources[kind]} maxlength="120"></label><label class="field">Route observed<input aria-label={`${kind.replaceAll('_', ' ')} route observed`} type="datetime-local" bind:value={packetContactObservedAt[kind]}></label><label class="field">Limitations<input aria-label={`${kind.replaceAll('_', ' ')} limitations`} bind:value={packetContactLimitations[kind]} maxlength="240"></label></div>{/each}</fieldset>
-          <p class="notice">A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action. WHOISleuth does not test a recipient.</p>
-        </section>
-      {:else if packetWizardStep === 4}
-        <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
-          <header><div><p class="eyebrow">Minimise disclosure</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy and redaction review</h4></div><span>4 of 8</span></header>
-          <div class="privacy-review"><section><strong>Profile redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section><section><strong>Profile exclusions</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section></div>
-          <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>
-        </section>
-      {:else if packetWizardStep === 5}
-        <section id={`packet-wizard-step-${record.id}-5`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-5`}>
-          <header><div><p class="eyebrow">Preflight</p><h4 id={`packet-wizard-title-${record.id}-5`}>Readiness limitations</h4></div><span>5 of 8</span></header>
-          <section class="preflight" aria-labelledby={`preflight-title-${record.id}`}><div><strong id={`preflight-title-${record.id}`}>Response preflight</strong><span class={`preflight-state state-${packetPreflight.status}`}>{packetPreflight.status.replaceAll('_', ' ')}</span></div><p>{packetPreflight.counts.pass} pass · {packetPreflight.counts.caution} caution · {packetPreflight.counts.block} block</p><ul>{#each packetPreflight.checks as check}<li data-state={check.state}><strong>{check.label}</strong><span>{check.detail}</span></li>{/each}</ul></section>
-          <fieldset class="readiness-inputs"><legend>Explicit review inputs</legend><div class="readiness-editor"><section><strong>Infrastructure responsibility</strong><label class="field">State<select bind:value={packetInfrastructureState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetInfrastructureDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetInfrastructureLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Analyst authority</strong><label class="field">State<select bind:value={packetAuthorityState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetAuthorityDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetAuthorityLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Contradiction review</strong><label class="field">State<select bind:value={packetContradictionsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetContradictionsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetContradictionsLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Source limitations review</strong><label class="field">State<select bind:value={packetSourceLimitationsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetSourceLimitationsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetSourceLimitations} maxlength="2000" rows="2"></textarea></label></section></div></fieldset>
-          <section class="readiness-matrix" aria-labelledby={`readiness-title-${record.id}`}><div><strong id={`readiness-title-${record.id}`}>Profile-specific readiness matrix</strong><span>{packetReadiness.counts.complete} complete · {packetReadiness.counts.partial} partial · {packetReadiness.counts.stale} stale · {packetReadiness.counts.unavailable} unavailable · {packetReadiness.counts.not_provided} not provided</span></div><div class="table-wrap"><table><thead><tr><th scope="col">Review input</th><th scope="col">State</th><th scope="col">Detail and limitations</th></tr></thead><tbody>{#each packetReadiness.rows as row}<tr><th scope="row">{row.label}{row.requiredForAuthorisation ? ' *' : ''}</th><td><span class={`readiness-state state-${row.state}`}>{row.state.replaceAll('_', ' ')}</span></td><td>{row.detail}{#if row.limitations.length}<small>{row.limitations.join('; ')}</small>{/if}</td></tr>{/each}</tbody></table></div><small>* Required for authorisation. Partial and stale states remain visible and require deliberate freshness and limitation confirmation.</small></section>
-        </section>
-      {:else if packetWizardStep === 6}
-        <section id={`packet-wizard-step-${record.id}-6`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-6`}>
-          <header><div><p class="eyebrow">Bind current material</p><h4 id={`packet-wizard-title-${record.id}-6`}>Exact-input digest review</h4></div><span class:attention={!packetReviewIsCurrent}>{packetReviewIsCurrent ? 'current review' : packetReviewDigest ? 'review stale' : 'not reviewed'}</span></header>
-          <p>Review the selected evidence, recipient scope, contact provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v7 review digest.</p>
-          <button class="btn" type="button" onclick={() => void reviewPacketInputs()} disabled={packetBusy || !packetPreflight.canExport}>Review and bind exact inputs</button>
-          {#if packetReviewDigest}<code>{packetReviewDigest}</code>{/if}
-          {#if packetReviewDigest && !packetReviewIsCurrent}<p class="history-warning">Material inputs changed after review. The retained digest is stale; re-review before authorisation.</p>{/if}
-        </section>
-      {:else if packetWizardStep === 7}
-        <section id={`packet-wizard-step-${record.id}-7`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`authorisation-title-${record.id}`}>
-          <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || !packetAuthorisationConfirmedAt}>{packetReviewIsCurrent && packetConfirmationsComplete && packetAuthorisationReadinessComplete && packetAuthorisationConfirmedAt ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
-          {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Return to step 6 before confirming authorisation.</p>{/if}
-          <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
-          <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
-          <label class="field">Confirmation time<input type="datetime-local" bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
-          <p class="notice">Authorisation applies only to the exact inputs bound to the current digest. It does not submit the packet or establish a provider outcome.</p>
-        </section>
-      {:else}
-        <section id={`packet-wizard-step-${record.id}-8`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-8`}>
-          <header><div><p class="eyebrow">Deliberate handoff</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local export</h4></div><span>8 of 8</span></header>
-          <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
-          <div class="actions"><button class="btn" type="button" onclick={() => void downloadPacket('json')} disabled={packetBusy || !packetPreflight.canExport}>Export JSON draft or authorised packet</button><button class="btn" type="button" onclick={() => void downloadPacket('md')} disabled={packetBusy || !packetPreflight.canExport}>Export Markdown</button><button class="btn" type="button" onclick={() => void downloadPacket('txt')} disabled={packetBusy || !packetPreflight.canExport}>Export email draft</button><button class="btn" type="button" onclick={() => void copyEmail()} disabled={packetBusy || !packetPreflight.canExport}>Copy email draft</button></div>
-          <p class="wizard-status">{packetAuthorisationConfirmedAt && packetReviewIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
-        </section>
-      {/if}
-
-      <div class="wizard-controls"><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep - 1)} disabled={packetWizardStep === 1}>Previous step</button><span>Step {packetWizardStep} of {packetWizardSteps.length}</span><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep + 1)} disabled={packetWizardStep === packetWizardSteps.length}>Next step</button></div>
-    </form>
-  </details>
   {/if}
 </section>
 
@@ -1196,19 +862,12 @@
   textarea,input,select{width:100%}.field small{color:var(--muted)}
   .records{display:grid;gap:8px;margin:0;padding:0 12px 12px;list-style:none}.records li{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .records strong,.records small{display:block}.records p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}.records small{color:var(--muted);font-size:var(--text-2xs)}
-  .transition-form,.remediation-review .stack{display:grid;gap:10px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.transition-form>div:first-child,.readiness-matrix>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px}.transition-form>div:first-child span,.readiness-matrix>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}
+  .transition-form,.remediation-review .stack{display:grid;gap:10px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.transition-form>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px}.transition-form>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}
   .transition-timeline{display:grid;gap:7px;margin:9px 0 0;padding:0;list-style:none}.transition-timeline li{min-width:0;padding:8px;border-left:3px solid var(--accent);background:var(--panel)}.transition-timeline li[data-applied="false"]{border-color:var(--amber)}.transition-timeline span,.transition-timeline small{display:block;overflow-wrap:anywhere}.history-warning{margin:7px 0;padding:8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .remediation-review{gap:12px}.separate-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.separate-times div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.separate-times dt{color:var(--muted);font-size:var(--text-2xs)}.separate-times dd{margin:4px 0 0;font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere}.embedded-records{padding:0}.closure-form{border-color:rgb(var(--amber-rgb) / .35)!important}
   .chronology{display:grid;gap:8px;margin:0 12px 12px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.chronology>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}.chronology>div>span,.chronology>p,.chronology>small{color:var(--muted);font-size:var(--text-2xs)}.chronology>p{margin:0;line-height:1.5}.chronology ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:7px;margin:0;padding:0;list-style:none}.chronology li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.chronology li>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px}.chronology li>div>strong{font:700 var(--text-xs) var(--mono);text-transform:capitalize}.chronology li>div>span,.chronology li>small{color:var(--muted);font-size:var(--text-2xs)}.chronology li>p{margin:6px 0;overflow-wrap:anywhere}.chronology dl{display:grid;gap:3px;margin:0}.chronology dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px}.chronology dt,.chronology dd{margin:0;font-size:var(--text-2xs)}.chronology dt{color:var(--muted)}.chronology dd{font-family:var(--mono);overflow-wrap:anywhere}
-  .pin-references,.contacts,.readiness-inputs,.artefact-reference,.confirmations{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
+  .pin-references{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
-  .preflight{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.preflight>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.preflight>p{margin:0;color:var(--muted);font-size:var(--text-2xs)}.preflight-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.preflight .state-ready_for_review{color:var(--success);border-color:rgb(var(--accent2-rgb) / .4)}.preflight .state-review_cautions{color:var(--amber);border-color:rgb(var(--amber-rgb) / .4)}.preflight .state-needs_input{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}.preflight ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.preflight li{display:grid;grid-template-columns:minmax(110px,.35fr) minmax(0,1fr);gap:8px;padding:7px;border-left:3px solid var(--border);font-size:var(--text-2xs)}.preflight li[data-state="pass"]{border-color:var(--success)}.preflight li[data-state="caution"]{border-color:var(--amber)}.preflight li[data-state="block"]{border-color:var(--danger)}.preflight li span{color:var(--muted);line-height:1.45}
-  .profile-preview{display:grid;gap:9px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.profile-preview>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:5px 12px}.profile-preview>div:first-child>strong{font:700 var(--text-sm) var(--mono)}.profile-preview>div:first-child>span,.profile-preview>p{color:var(--muted);font-size:var(--text-2xs)}.profile-preview>p{margin:0;overflow-wrap:anywhere}.profile-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.profile-columns section{padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.profile-columns strong{font:700 var(--text-2xs) var(--mono)}.profile-columns ul{margin:6px 0 0;padding-left:17px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.profile-missing{padding:7px 8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06)}
-  .readiness-editor{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.readiness-editor section{display:grid;min-width:0;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.readiness-editor strong{font:700 var(--text-2xs) var(--mono)}.readiness-matrix{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.table-wrap{max-width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:var(--text-2xs)}th,td{min-width:0;padding:7px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;overflow-wrap:anywhere}td small{display:block;margin-top:4px;color:var(--muted)}.readiness-state{display:inline-block;padding:3px 5px;border:1px solid var(--border);border-radius:999px;font:650 var(--text-2xs) var(--mono);white-space:nowrap}.readiness-state.state-complete{color:var(--success)}.readiness-state.state-partial,.readiness-state.state-stale{color:var(--amber)}.readiness-state.state-unavailable,.readiness-state.state-not_provided{color:var(--muted)}
-  .packet-wizard-nav{max-width:100%;overflow-x:auto;padding-bottom:3px}.packet-wizard-nav ol{display:grid;grid-template-columns:repeat(8,minmax(118px,1fr));gap:5px;margin:0;padding:0;list-style:none}.packet-wizard-nav button{display:grid;width:100%;min-height:58px;gap:3px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);text-align:left;font:650 var(--text-2xs) var(--mono);cursor:pointer}.packet-wizard-nav button span{color:var(--accent)}.packet-wizard-nav button[aria-current='step']{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--text)}
-  .wizard-panel{display:grid;min-width:0;gap:10px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);scroll-margin-top:20px}.wizard-panel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.wizard-panel header h4,.wizard-panel header p{margin:0}.wizard-panel header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.wizard-panel header>span.attention{color:var(--amber)}.privacy-review{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.privacy-review section{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm)}.privacy-review ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs)}.wizard-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}.wizard-controls span,.wizard-status{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  .authorisation>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.authorisation code{display:block;max-width:100%;padding:7px;background:var(--panel);font-size:var(--text-2xs);overflow-wrap:anywhere}.choice{display:flex;align-items:flex-start;gap:7px;min-width:0}.choice input{width:auto;margin-top:2px}.choice span{min-width:0;overflow-wrap:anywhere}
-  .contact-row{display:grid;grid-template-columns:130px repeat(4,minmax(0,1fr));gap:8px;align-items:end}.contact-row>strong{padding-bottom:10px;font:700 var(--text-xs) var(--mono);text-transform:capitalize}
-  @media(max-width:1000px){.contact-row{grid-template-columns:repeat(2,minmax(0,1fr))}.contact-row>strong{grid-column:1/-1;padding:4px 0 0}}
-  @media(max-width:800px){.two-columns,.contact-row,.preflight li,.profile-columns,.readiness-editor,.separate-times,.privacy-review{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}th,td{min-width:135px}.response-workspace{padding:10px}.packet-wizard-nav ol{grid-template-columns:repeat(8,minmax(108px,1fr))}.wizard-controls .btn{flex:1 1 120px}.wizard-controls span{order:-1;flex:1 0 100%;text-align:center}}
+  .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}.choice input{width:auto;margin-top:2px}.choice span{min-width:0;overflow-wrap:anywhere}
+  @media(max-width:800px){.two-columns,.separate-times{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}.response-workspace{padding:10px}}
 </style>

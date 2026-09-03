@@ -89,14 +89,14 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'A disagreement is not automatically an error. It is a review prompt. WHOISleuth preserves the source, authority, time, query path and normalised field used in each comparison.',
     ]),
     steps: Object.freeze([
-      Object.freeze({ title: 'Identify authority', body: 'Registry evidence controls domain-existence decisions. Registrar RDAP can enrich the record, but it cannot silently override the authoritative registry result.' }),
+      Object.freeze({ title: 'Identify authority', body: 'Registry evidence controls domain-existence decisions. Registrar publication can enrich the record, while IANA accreditation and ICANN compliance notices remain separately dated provider context rather than evidence about the domain.' }),
       Object.freeze({ title: 'Compare normalised fields', body: 'Review status values, lifecycle dates, registrar identity and nameservers after normalisation while keeping the original source labels available.' }),
       Object.freeze({ title: 'Explain the conflict', body: 'Check collection time, redaction, referral path, source completeness and parsing limitations before treating different values as a material change.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Registry RDAP', usefulFor: 'Structured authoritative registration evidence where supported.', limitation: 'Some registries limit access, omit fields or use extensions.' }),
       Object.freeze({ source: 'Registry WHOIS', usefulFor: 'Registry text publication and referral context.', limitation: 'Formats and query rules vary by domain ending and can change without notice.' }),
-      Object.freeze({ source: 'Registrar publication', usefulFor: 'Additional customer-facing registration context.', limitation: 'It is not authoritative for whether the registry currently contains the domain.' }),
+      Object.freeze({ source: 'Registrar publication and standing', usefulFor: 'Additional registration context plus separately attributed IANA accreditation and current-year ICANN notices.', limitation: 'It cannot decide registry existence or domain intent, and checked-in official-source context can become stale.' }),
     ]),
     questions: Object.freeze([
       'Did both sources answer for the same canonical domain?',
@@ -105,8 +105,8 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     references: Object.freeze([
       Object.freeze({ label: 'IETF RFC 3912: WHOIS protocol', href: 'https://www.rfc-editor.org/rfc/rfc3912', description: 'Defines the text-based WHOIS query and response protocol.' }),
-      Object.freeze({ label: 'IETF RFC 9082: RDAP query format', href: 'https://www.rfc-editor.org/rfc/rfc9082', description: 'Defines structured RDAP queries for domains, nameservers and networks.' }),
       Object.freeze({ label: 'IETF RFC 9083: RDAP response format', href: 'https://www.rfc-editor.org/rfc/rfc9083', description: 'Defines RDAP response objects and their common metadata.' }),
+      Object.freeze({ label: 'ICANN contractual-compliance notices', href: 'https://www.icann.org/compliance/notices', description: 'Publishes breach, suspension, termination and non-renewal notices.' }),
     ]),
     demoHref: '/demo',
     demoLabel: 'Inspect synthetic registration evidence',

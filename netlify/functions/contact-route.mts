@@ -45,7 +45,7 @@ async function runContactRouteRequest(request: Request): Promise<Response> {
   }
 
   const headers = Object.fromEntries(request.headers.entries());
-  if (!isTrustedOrigin(headers)) {
+  if (!isTrustedOrigin(headers, { protocol: new URL(request.url).protocol })) {
     return netlifyJsonToResponse(json(403, { error: 'Cross-site request blocked' }));
   }
   const rate = checkContactRouteRateLimit(getClientIp(headers));

@@ -1,4 +1,5 @@
 import { parseBoundedJson } from '../bounded-json.ts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
 export type LookupDepth = 'fast' | 'deep';
@@ -57,11 +58,7 @@ function lookupUrlDepth(value: string | null): LookupDepth | null {
   return value === 'fast' || value === 'deep' ? value : null;
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+const record = recordOrNull;
 
 export function lookupResultDepth(value: unknown, fallback: LookupDepth | null = null): LookupDepth | null {
   const result = record(value);

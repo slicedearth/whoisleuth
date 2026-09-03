@@ -10,6 +10,10 @@ type HeaderInput = Readonly<Record<string, string | readonly string[] | undefine
 type CookieOptions = { secure?: boolean };
 type SigningSecret = string | Buffer;
 type SessionConfigurationEnvironment = Readonly<Record<string, string | undefined>>;
+type RequestOriginContext = Readonly<{
+  protocol: string;
+  trustForwardedProtocol?: boolean;
+}>;
 
 const COOKIE_NAME = 'wrt_session';
 const SESSION_MAX_AGE_ENV = 'SESSION_MAX_AGE_DAYS';
@@ -172,63 +176,135 @@ function buildClearCookie({ secure = true }: CookieOptions = {}): string {
   return attrs.join('; ');
 }
 
-// Logout doesn't need to read the existing session cookie to clear it - it
-// just unconditionally emits a clearing Set-Cookie. Restricting the request
-// to POST closes the plain cross-site-GET path (e.g. an <img> tag), but a
-// hostile page can still auto-submit a cross-site <form method="POST"> to
-// this endpoint; SameSite=Lax stops that form from attaching the victim's
-// session cookie, but the request still arrives, and the browser will honor
-// the Set-Cookie in the response regardless of what the request sent. This
-// compares the Origin header (sent by every modern browser on same-origin
-// POST/PUT/DELETE/PATCH requests, not just cross-origin ones) against the
-// request's own Host header - no hardcoded domain needed, so it works the
-// same on any deployment (custom domain, Netlify preview URL, localhost).
-function isTrustedOrigin(headers: HeaderInput | null | undefined): boolean {
-  if (!headers) return false;
-  const origin = headers.origin || headers.Origin;
-  const host = headers.host || headers.Host;
-  if (typeof origin !== 'string' || typeof host !== 'string') return false;
+type StrictHeader = Readonly<{
+  state: 'missing' | 'invalid' | 'valid';
+  value?: string;
+}>;
+
+const NETLIFY_REQUEST_ORIGIN_CONTEXT: RequestOriginContext = Object.freeze({
+  protocol: 'https',
+});
+
+function strictHeader(headers: HeaderInput | null | undefined, name: string): StrictHeader {
+  if (!headers) return { state: 'missing' };
+  const matches = Object.entries(headers).filter(([key, value]) => (
+    key.toLowerCase() === name && value !== undefined
+  ));
+  if (matches.length === 0) return { state: 'missing' };
+  if (matches.length !== 1) return { state: 'invalid' };
+  const value = matches[0]?.[1];
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.length > 2_048
+    || value !== value.trim()
+    || /[\u0000-\u001f\u007f,]/u.test(value)) return { state: 'invalid' };
+  return { state: 'valid', value };
+}
+
+function normalProtocol(value: string): 'http' | 'https' | null {
+  const normalized = value.toLowerCase().replace(/:$/u, '');
+  return normalized === 'http' || normalized === 'https' ? normalized : null;
+}
+
+function requestProtocol(
+  headers: HeaderInput | null | undefined,
+  context: RequestOriginContext,
+): 'http' | 'https' | null {
+  const direct = normalProtocol(context.protocol);
+  if (!direct) return null;
+  const forwarded = strictHeader(headers, 'x-forwarded-proto');
+  if (forwarded.state === 'invalid') return null;
+  if (forwarded.state === 'missing') return direct;
+  const forwardedProtocol = normalProtocol(forwarded.value ?? '');
+  if (!forwardedProtocol) return null;
+  return context.trustForwardedProtocol ? forwardedProtocol : direct;
+}
+
+function canonicalRequestOrigin(
+  headers: HeaderInput | null | undefined,
+  context: RequestOriginContext,
+): string | null {
+  const protocol = requestProtocol(headers, context);
+  const host = strictHeader(headers, 'host');
+  if (!protocol || host.state !== 'valid' || !host.value
+    || /[\s\\/@?#]/u.test(host.value)) return null;
   try {
-    return new URL(origin).host.toLowerCase() === String(host).toLowerCase();
+    const parsed = new URL(`${protocol}://${host.value}`);
+    const suppliedHost = host.value.toLowerCase();
+    const parsedHost = parsed.host.toLowerCase();
+    const defaultPortHost = `${parsedHost}:${protocol === 'https' ? '443' : '80'}`;
+    return parsed.username
+      || parsed.password
+      || !parsed.hostname
+      || (suppliedHost !== parsedHost && suppliedHost !== defaultPortHost)
+      ? null
+      : parsed.origin;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// Browser form/fetch POSTs include Origin, so a present mismatch is enough
-// to block login CSRF. Non-browser clients often omit Origin entirely; login
-// keeps supporting those clients while logout remains deliberately fail-closed
-// through isTrustedOrigin().
-function isTrustedLoginOrigin(headers: HeaderInput | null | undefined): boolean {
-  if (!headers) return true;
-  const origin = headers.origin || headers.Origin;
-  if (!origin) return true;
-  return isTrustedOrigin({
-    origin,
-    host: headers.host || headers.Host,
-  });
+function canonicalOriginHeader(headers: HeaderInput | null | undefined): StrictHeader {
+  const origin = strictHeader(headers, 'origin');
+  if (origin.state !== 'valid' || !origin.value) return origin;
+  if (!/^[a-z][a-z0-9+.-]*:\/\/[^/?#]+$/iu.test(origin.value)) return { state: 'invalid' };
+  try {
+    const parsed = new URL(origin.value);
+    if (!['http:', 'https:'].includes(parsed.protocol)
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== '/'
+      || parsed.search
+      || parsed.hash) return { state: 'invalid' };
+    return { state: 'valid', value: parsed.origin };
+  } catch {
+    return { state: 'invalid' };
+  }
 }
 
-// Authenticated GET endpoints can initiate bounded third-party collection.
-// SameSite=Lax still attaches a session cookie to some top-level GETs, and a
-// sibling site can send same-site requests without an Origin header. Accept
-// only same-origin browser requests or deliberate user/browser navigations.
-// Non-browser clients commonly omit Fetch Metadata and Origin; that absence is
-// retained for CLI compatibility, while any present Origin must be same-host.
-function isPermittedAuthenticatedNetworkRequest(headers: HeaderInput | null | undefined): boolean {
-  if (!headers) return true;
-  const fetchSite = headers['sec-fetch-site'] || headers['Sec-Fetch-Site'];
-  if (fetchSite !== undefined) {
-    if (typeof fetchSite !== 'string') return false;
-    const normalized = fetchSite.trim().toLowerCase();
-    if (!['same-origin', 'none'].includes(normalized)) return false;
-  }
-  const origin = headers.origin || headers.Origin;
-  return !origin || isTrustedOrigin(headers);
+// Same origin is the canonical scheme, host, and port derived from the
+// request transport (or an explicitly trusted proxy protocol) plus Host.
+function isTrustedOrigin(
+  headers: HeaderInput | null | undefined,
+  context: RequestOriginContext,
+): boolean {
+  const requestOrigin = canonicalRequestOrigin(headers, context);
+  const origin = canonicalOriginHeader(headers);
+  return Boolean(requestOrigin && origin.state === 'valid' && origin.value === requestOrigin);
+}
+
+// Login remains available to non-browser clients, but even an originless
+// request must carry an unambiguous Host and deployment protocol.
+function isTrustedLoginOrigin(
+  headers: HeaderInput | null | undefined,
+  context: RequestOriginContext,
+): boolean {
+  if (!canonicalRequestOrigin(headers, context)) return false;
+  const origin = canonicalOriginHeader(headers);
+  return origin.state === 'missing' || isTrustedOrigin(headers, context);
+}
+
+// Authenticated collection is a browser-owned website contract. A matching
+// Origin or acceptable Fetch Metadata is required; metadata-free requests are
+// not silently treated as a supported non-browser API.
+function isPermittedAuthenticatedNetworkRequest(
+  headers: HeaderInput | null | undefined,
+  context: RequestOriginContext,
+): boolean {
+  if (!canonicalRequestOrigin(headers, context)) return false;
+  const fetchSite = strictHeader(headers, 'sec-fetch-site');
+  const origin = canonicalOriginHeader(headers);
+  if (fetchSite.state === 'invalid' || origin.state === 'invalid') return false;
+  if (fetchSite.state === 'missing' && origin.state === 'missing') return false;
+  if (fetchSite.state === 'valid'
+    && fetchSite.value !== 'same-origin'
+    && fetchSite.value !== 'none') return false;
+  return origin.state === 'missing' || isTrustedOrigin(headers, context);
 }
 
 export {
   COOKIE_NAME,
+  NETLIFY_REQUEST_ORIGIN_CONTEXT,
   checkPassword,
   createSessionToken,
   isValidSessionToken,
@@ -244,4 +320,4 @@ export {
   reportSessionSecretConfigurationWarning,
 };
 
-export type { CookieOptions, HeaderInput, SessionConfigurationEnvironment, SigningSecret };
+export type { CookieOptions, HeaderInput, RequestOriginContext, SessionConfigurationEnvironment, SigningSecret };

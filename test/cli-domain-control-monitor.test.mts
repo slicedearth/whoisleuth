@@ -72,6 +72,62 @@ describe('CLI one-shot domain control monitor', () => {
     assert.equal(privacy?.excludedCategories.includes('raw-upstream-payloads'), true);
   });
 
+  test('preserves terminal, JUnit, quiet, prior-snapshot, and failure-policy paths', async () => {
+    const previous = await runDomainControlMonitor(JSON.stringify(manifest()), null, {
+      executeLookup: async (classified) => result(classified.registrableDomain || 'example.test'),
+      now: () => NOW,
+      limit: 1,
+      concurrency: 1,
+    });
+    const outputs = [
+      { argv: ['monitor-once', '--limit', '1', '--concurrency', '1', '--no-color'], match: /One-shot domain control review/iu },
+      { argv: ['monitor-once', '--limit', '1', '--concurrency', '1', '--junit'], match: /<testsuite/u },
+      { argv: ['monitor-once', '--limit', '1', '--concurrency', '1', '--quiet'], match: null },
+    ] as const;
+    for (const { argv, match } of outputs) {
+      let stdout = '';
+      const code = await runCli(argv, {
+        stdout: { write(value) { stdout += value; } },
+        stderr: { write() {} },
+        now: () => '2026-08-06T04:00:00.000Z',
+        readArtifactInput: async () => JSON.stringify(manifest()),
+        runUnifiedLookup: async (classified) => result(classified.registrableDomain || 'example.test'),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      if (match) assert.match(stdout, match);
+      else assert.equal(stdout, '');
+    }
+
+    let previousRead = false;
+    assert.equal(await runCli([
+      'monitor-once', '--previous', 'previous.json', '--limit', '1', '--concurrency', '1', '--quiet',
+    ], {
+      stdout: { write() {} },
+      stderr: { write() {} },
+      now: () => '2026-08-06T04:00:00.000Z',
+      readArtifactInput: async () => JSON.stringify(manifest()),
+      readDiffInput: async () => { previousRead = true; return JSON.stringify(previous); },
+      runUnifiedLookup: async (classified) => result(classified.registrableDomain || 'example.test'),
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(previousRead, true);
+
+    let policyNotice = '';
+    assert.equal(await runCli([
+      'monitor-once', '--limit', '2', '--concurrency', '1', '--fail-on', 'source-failure', '--quiet',
+    ], {
+      stdout: { write() {} },
+      stderr: { write(value) { policyNotice += value; } },
+      now: () => NOW,
+      readArtifactInput: async () => JSON.stringify(manifest()),
+      runUnifiedLookup: async (classified) => {
+        const domain = classified.registrableDomain || 'example.test';
+        if (domain === 'beta.test') throw new Error('Fixture collection failure');
+        return result(domain);
+      },
+    }), EXIT_CODES.PARTIAL_FAILURE);
+    assert.match(policyNotice, /source-failure/iu);
+  });
+
   test('propagates cancellation and stops admitting monitor lookups', async () => {
     const controller = new AbortController();
     let calls = 0;

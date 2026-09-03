@@ -5,6 +5,7 @@
 // never enter this profile.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import { CREDENTIAL_SURFACE_PROFILE_VERSION } from './lookup-child-profile-contract.mts';
 import {
   MAX_STATIC_FORMS,
   MAX_STATIC_INPUTS,
@@ -19,8 +20,6 @@ type CredentialSurfaceProfileInput = {
   observedAt?: unknown;
   sourceTruncated?: unknown;
 };
-
-const CREDENTIAL_SURFACE_PROFILE_VERSION = 1;
 
 function analyzeCredentialSurfaceProfile(input: CredentialSurfaceProfileInput = {}) {
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html, { baseUrl: input.baseUrl });

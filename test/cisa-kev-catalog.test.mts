@@ -22,7 +22,7 @@ describe('pinned CISA KEV projection', () => {
     assert.equal(CISA_KEV_CATALOG.catalogVersion, SOURCE_VERSION);
     assert.equal(CISA_KEV_CATALOG.releasedAt, SOURCE_RELEASED_AT);
     assert.equal(CISA_KEV_CATALOG.sourceSha256, SOURCE_SHA256);
-    assert.equal(CISA_KEV_CATALOG.identifiers.length, 1_657);
+    assert.equal(CISA_KEV_CATALOG.identifiers.length, 1_687);
   });
 
   test('projects only unique valid identifiers in deterministic order', () => {

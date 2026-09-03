@@ -8,7 +8,8 @@ import {
   buildMaintainerDuplicationReport,
   formatMaintainerDuplicationReport,
   main,
-  MAX_MAINTAINER_TOOL_FILE_BYTES,
+  MAX_MAINTAINED_SOURCE_FILE_BYTES,
+  MAX_MAINTAINED_SOURCE_FILES,
 } from '../tools/maintainer-duplication-report.mts';
 import {
   boundedControlFreeText,
@@ -32,6 +33,7 @@ import {
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'whoisleuth-maintainer-report-'));
   await mkdir(path.join(root, 'tools'));
+  await mkdir(path.join(root, 'lib', 'generated'), { recursive: true });
   await writeFile(path.join(root, 'package.json'), JSON.stringify({
     name: 'fixture',
     scripts: { alpha: 'node tools/alpha.mts' },
@@ -46,10 +48,16 @@ void main();
 function second(value: number) { if (!Number.isSafeInteger(value)) throw new TypeError('invalid'); return Number(value); }
 export function shared() { return second(1); }
 `);
+  await writeFile(path.join(root, 'lib', 'gamma.mts'), `
+export function third(value: string) { return value.trim(); }
+`);
+  await writeFile(path.join(root, 'lib', 'generated', 'ignored.mts'), `
+export function hidden(value: string) { return value.trim(); }
+`);
   return root;
 }
 
-describe('maintainer-tool duplication report', () => {
+describe('maintained-source duplication report', () => {
   test('builds a deterministic value-free call and exact-clone inventory', async () => {
     const root = await fixture();
     try {
@@ -57,12 +65,25 @@ describe('maintainer-tool duplication report', () => {
       const second = await buildMaintainerDuplicationReport({ repositoryRoot: root });
       assert.deepEqual(first, second);
       assert.deepEqual(first.scope, {
-        root: 'tools/*.mts',
-        fileCount: 2,
+        root: 'maintained TypeScript source roots',
+        roots: [
+          'bin',
+          'cli',
+          'frontend/src/lib',
+          'frontend/src/routes',
+          'lib',
+          'netlify/functions',
+          'packages',
+          'tools',
+          'server.mts',
+        ],
+        generatedSourcesExcluded: true,
+        fileCount: 3,
         entrypointCount: 1,
         totalBytes: first.scope.totalBytes,
         astNodeCount: first.scope.astNodeCount,
-        topLevelFunctionCount: 4,
+        namedFunctionCount: 5,
+        topLevelFunctionCount: 5,
       });
       assert.equal(first.callGraph.edges.some((edge) => (
         edge.caller === 'tools/alpha.mts#main' && edge.callee === 'tools/beta.mts#shared'
@@ -80,7 +101,8 @@ describe('maintainer-tool duplication report', () => {
       const serialized = JSON.stringify(first);
       assert.doesNotMatch(serialized, new RegExp(root.replaceAll('\\', '\\\\'), 'u'));
       assert.doesNotMatch(serialized, /Number\.isSafeInteger/u);
-      assert.match(formatMaintainerDuplicationReport(first), /2 modules · 1 entry points/u);
+      assert.doesNotMatch(serialized, /ignored\.mts|hidden/u);
+      assert.match(formatMaintainerDuplicationReport(first), /3 modules · 1 entry points/u);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -89,7 +111,7 @@ describe('maintainer-tool duplication report', () => {
   test('fails closed on oversized modules and malformed command arguments', async () => {
     const root = await fixture();
     try {
-      await writeFile(path.join(root, 'tools/oversized.mts'), 'x'.repeat(MAX_MAINTAINER_TOOL_FILE_BYTES + 1));
+      await writeFile(path.join(root, 'tools/oversized.mts'), 'x'.repeat(MAX_MAINTAINED_SOURCE_FILE_BYTES + 1));
       await assert.rejects(
         buildMaintainerDuplicationReport({ repositoryRoot: root }),
         /exceeds its .*byte maximum/iu,
@@ -102,13 +124,17 @@ describe('maintainer-tool duplication report', () => {
     }
   });
 
-  test('measures the checked-out maintainer-tool inventory without source values', async () => {
+  test('measures the checked-out maintained-source inventory without source values', async () => {
     const report = await buildMaintainerDuplicationReport();
-    assert.equal(report.scope.fileCount, 64);
-    assert.equal(report.scope.entrypointCount, 53);
-    assert.ok(report.callGraph.staticEdgeCount > 500);
-    assert.equal(report.repeatedImplementations.exactClusterCount, 0);
-    assert.equal(report.repeatedImplementations.repeatedLineCount, 0);
+    assert.equal(report.scope.fileCount, report.files.length);
+    assert.ok(report.scope.fileCount > 700 && report.scope.fileCount <= MAX_MAINTAINED_SOURCE_FILES);
+    assert.equal(report.scope.entrypointCount, report.files.filter((file) => file.entrypoint).length);
+    assert.equal(report.files.some((file) => file.file === 'tools/toolchain-compatibility.mts'), true);
+    assert.equal(report.files.some((file) => file.file === 'lib/bounded-contract-normalizers.mts'), true);
+    assert.equal(report.files.some((file) => file.file.includes('/generated/')), false);
+    assert.ok(report.callGraph.staticEdgeCount > 5_000);
+    assert.ok(report.repeatedImplementations.exactClusterCount > 0);
+    assert.ok(report.repeatedImplementations.repeatedLineCount > 0);
     assert.doesNotMatch(JSON.stringify(report), /\/Users\/|Documents\/GitHub/u);
   });
 

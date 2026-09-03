@@ -9,9 +9,11 @@ import type { ObservationStatus } from '../packages/evidence/observation.mts';
 import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
+  THREAT_INTELLIGENCE_CONFIDENCES,
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
   THREAT_INTELLIGENCE_SCHEMA,
+  THREAT_INTELLIGENCE_SEVERITIES,
 } from './threat-intelligence-types.mts';
 import {
   assertCuratedConnectorDefinition,
@@ -78,8 +80,8 @@ const TERMINAL_STATES_WITHOUT_FINDINGS = new Set<ThreatIntelligenceResultState>(
   'error',
 ]);
 const CATEGORIES = new Set<ThreatIntelligenceCategory>(THREAT_INTELLIGENCE_CATEGORIES);
-const SEVERITIES = new Set<ThreatIntelligenceSeverity>(['critical', 'high', 'medium', 'low', 'unknown']);
-const CONFIDENCES = new Set<ThreatIntelligenceConfidence>(['high', 'medium', 'low', 'unknown']);
+const SEVERITIES = new Set<ThreatIntelligenceSeverity>(THREAT_INTELLIGENCE_SEVERITIES);
+const CONFIDENCES = new Set<ThreatIntelligenceConfidence>(THREAT_INTELLIGENCE_CONFIDENCES);
 const CONNECTOR_RELATIONSHIP_TYPES = new Set<CuratedConnectorRelationshipType>([
   'domain_resolves_to_ip',
   'domain_uses_nameserver',

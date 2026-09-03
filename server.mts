@@ -24,6 +24,7 @@ import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, norma
 import { capabilityReport } from './lib/capabilities.mts';
 import {
   COOKIE_NAME,
+  type RequestOriginContext,
   checkPassword,
   createSessionToken,
   isPermittedAuthenticatedNetworkRequest,
@@ -43,6 +44,7 @@ import {
   checkPrerenderedHtmlRateLimit,
   getClientIp,
   getForwardedProtocol,
+  trustsForwardedHeaders,
 } from './lib/rate-limit.mts';
 import type { RateLimitChecker } from './lib/rate-limit.mts';
 import {
@@ -208,6 +210,12 @@ function usesSecureCookies(req: RequestLike): boolean {
   return isHttps(req) || (typeof forwarded === 'string' && forwarded.toLowerCase() === 'https');
 }
 
+function requestOriginContext(req: RequestLike): RequestOriginContext {
+  return trustsForwardedHeaders()
+    ? { protocol: req.protocol, trustForwardedProtocol: true }
+    : { protocol: req.protocol };
+}
+
 function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
   const cookies = parseCookies(req.headers.cookie);
   if (!isValidSessionToken(cookies[COOKIE_NAME])) {
@@ -217,7 +225,7 @@ function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
 }
 
 function requireNetworkRequestAdmission(req: RequestLike, res: ResponseLike, next: Next) {
-  if (!isPermittedAuthenticatedNetworkRequest(req.headers)) {
+  if (!isPermittedAuthenticatedNetworkRequest(req.headers, requestOriginContext(req))) {
     return res.status(403).json({ error: 'Cross-site network request blocked', errorCode: 'CROSS_SITE_REQUEST_BLOCKED' });
   }
   next();
@@ -270,7 +278,7 @@ async function withExpressOperationBudget<T>(
 }
 
 app.post('/api/login', (req: RequestLike, res: ResponseLike, next: Next) => {
-  if (!isTrustedLoginOrigin(req.headers)) return res.status(403).json({ error: 'Cross-site request blocked' });
+  if (!isTrustedLoginOrigin(req.headers, requestOriginContext(req))) return res.status(403).json({ error: 'Cross-site request blocked' });
   next();
 }, loginRateLimit, parseApiJson, (req: RequestLike, res: ResponseLike) => {
   const password = recordValue(req.body, 'password') || '';
@@ -286,7 +294,7 @@ app.get('/api/contact-route', (_req: RequestLike, res: ResponseLike) => {
 });
 
 app.post('/api/contact-route', contactRouteRateLimit, (req: RequestLike, res: ResponseLike, next: Next) => {
-  if (!isTrustedOrigin(req.headers)) {
+  if (!isTrustedOrigin(req.headers, requestOriginContext(req))) {
     return res.status(403).json({ error: 'Cross-site request blocked' });
   }
   next();
@@ -308,7 +316,7 @@ app.post('/api/contact-route', contactRouteRateLimit, (req: RequestLike, res: Re
 });
 
 app.post('/api/logout', requireAuth, (req: RequestLike, res: ResponseLike) => {
-  if (!isTrustedOrigin(req.headers)) {
+  if (!isTrustedOrigin(req.headers, requestOriginContext(req))) {
     return res.status(403).json({ error: 'Cross-site request blocked' });
   }
   res.setHeader('Set-Cookie', buildClearCookie({ secure: isHttps(req) }));
@@ -568,5 +576,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
 export type { NetworkRouteServices };

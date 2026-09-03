@@ -37,7 +37,7 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Profile version 4 uses one
+  curated software and delivery indicators. Current profile version 11 uses one
   standards-compliant bounded HTML tokenization pass and expands the curated
   generator, element, attribute, static-asset, and resource-origin catalogue
   for common content, commerce, site-building, framework, and static-site
@@ -50,11 +50,13 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   bounded projected catalogue; retained advisory identifiers and weakness
   classes remain capped independently. A KEV match is prioritisation context,
   not evidence that the observed page exposes or executes affected code.
-  Maintainers can run `npm run catalog:kev:status` to report the pinned
-  catalogue's local age with a non-zero stale state. This makes no network
-  request and does not claim that the projection is the newest upstream
-  release; source replacement still requires an explicitly supplied pinned
-  file and digest review through `npm run catalog:kev`.
+  The accepted/current versions and bounds come from the
+  [browser-safe child-profile contract](../lib/lookup-child-profile-contract.mts).
+  Maintainers can run `npm run sources:health` for the single offline status
+  report covering this pinned catalogue and the other retained datasets and
+  evaluation assets. A stale state does not claim that the projection is the
+  newest upstream release; source replacement still requires an explicitly
+  supplied pinned file and digest review through `npm run catalog:kev`.
 - `availability.structuredDataIdentity`: for eligible deep non-compact domain
   results with captured HTML, a version-1 projection of publisher-declared
   JSON-LD. It retains only curated schema types, bounded labels, declared
@@ -103,8 +105,8 @@ or rendering evidence. Nested source records remain separately attributed and
 additive; an HTTP 200 response with a malformed envelope is reported as an
 invalid response rather than being interpreted as partial evidence.
 
-The version-5 technology profile retains only curated finding identifiers,
-names, categories, confidence levels, evidence classes, and fixed
+The current technology profile retains only curated finding identifiers,
+names, categories, signature-strength levels, evidence classes, and fixed
 explanations. Platform-specific resource origins can corroborate retained page
 or generator evidence but cannot identify a site-builder or commerce platform
 on their own; delivery-origin findings remain separately attributed. The
@@ -115,10 +117,11 @@ changes availability, Risk, or compact evidence.
 
 Reviewed registry fixtures have a separate versioned provenance manifest. Each
 record identifies the bounded fixture file, official source reference, source
-review date, and expected SHA-256 digest. `npm run registry:fixtures` verifies
-local integrity and review age without contacting the registry. A changed,
-stale, or unverifiable record fails the maintainer check but does not change
-runtime registry support, availability, or source-health conclusions.
+review date, and expected SHA-256 digest. `npm run sources:health` includes
+their local integrity and review-age state without contacting the registry;
+its entry names `npm run registry:fixtures` as the strict drill-down. A changed,
+stale, or unverifiable record fails that strict maintainer check but does not
+change runtime registry support, availability, or source-health conclusions.
 
 `npm run registry:fixture-scaffold` emits a reserved-value, sanitised fixture
 template for contributors. It deliberately does not accept a raw registry
@@ -249,8 +252,8 @@ availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
 browser-local stores. A published PTR name is routing context, not proof of
 hosting control, ownership, intent, or maliciousness.
 
-The version-2 deep TLS profile extends the retained leaf-certificate projection
-with the signature algorithm and OID, a capped extended-key-usage purpose list,
+The current deep TLS profile, version 3, extends the retained leaf-certificate
+projection with the signature algorithm and OID, a capped extended-key-usage purpose list,
 fixed subject-alternative-name class counts, and classified Authority
 Information Access presence counts. It retains at most 100 SAN entries, 16
 purpose OIDs, and 32 AIA locations. DNS and IP SAN values remain separately
@@ -259,7 +262,8 @@ unclassified SAN values are counted but never retained. AIA locations are
 classified as HTTP, HTTPS, or other and immediately discarded without being
 followed. Missing metadata stays neutral and does not by itself make the TLS
 observation partial. Version-1 TLS observations remain valid inputs for
-scan-local certificate relationships.
+scan-local certificate relationships. The current version and bounds come from
+the [network-evidence contract](../lib/lookup-network-evidence-bounds.mts).
 
 After deep availability collection completes, Lookup prefers the public address
 used by the successful TLS connection. If no eligible TLS address was retained,
@@ -733,13 +737,13 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, with exact public
-version 26 and current version 27 as its complete durable reader boundary.
-Version 26 binds RDAP, WHOIS, network-registration, and reverse-DNS
-publications to their retained source states. Version 27 is the single v2
-successor: it adds bounded homepage publication and delivery/cache metadata
-when represented and applies the privacy-minimised registration projection.
-Other historical reader shapes and unreleased checkpoints are unsupported.
+Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
+published v2 version 27, and current version 28 form its complete durable reader
+boundary. Version 27 added bounded homepage publication and delivery/cache
+metadata and the privacy-minimised registration projection. Version 28 adds a
+bounded registrar-standing projection from the checked-in IANA registrar-ID and
+current-year ICANN compliance-notice catalogues. Other historical reader shapes
+and unreleased checkpoints are unsupported.
 
 The document can contain query context, explicitly projected diagnostics,
 normalised sources, registry comparison, separately attributed authoritative
@@ -750,15 +754,21 @@ HTTPS service-binding, page, HTTP, DNS, and TLS evidence when the selected
 Lookup represented them. Missing, partial, unavailable, direct no-data, and
 failed observations remain distinct and do not change availability or Risk.
 
-Current version 27 excludes raw RDAP payloads, expanded RDAP and WHOIS
+Versions 27 and 28 exclude raw RDAP payloads, expanded RDAP and WHOIS
 contacts, vCards, entity inventories, attributed contact routes, request and
 response headers, cookies, session and credential fields, URL credentials,
 queries, and fragments. Positive source allowlists retain only reviewed
 publication fields, while `registryContactsExcluded: true` records deliberate
 contact omission without asserting that the source published no contact. Exact
-public version 26 may contain public registry contact data and should be
+v1 version 26 may contain public registry contact data and should be
 reviewed before sharing. The file is generated locally and remains the user's
 responsibility after download.
+
+Registrar standing is keyed only when the normalised registration publications
+provide one unambiguous numeric IANA ID. IANA accreditation status and ICANN
+compliance actions remain separately attributed, dated and source-health aware.
+They are operational provider context, not a registrar reputation score or
+evidence that the target is malicious, safe, owned or controlled.
 
 The IDN analysis carries its own `mappingVersion`. Mapping version
 `tr39-17.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode

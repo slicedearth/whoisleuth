@@ -36,6 +36,7 @@ function caseRecord(): CaseRecord {
       type: 'registrar_report',
       recipient: 'Registrar abuse desk',
       contactSource: 'RDAP',
+      routeObservedAt: null,
       contactLimitations: ['Role address not independently verified.'],
       dueAt: '2026-07-27T08:00:00.000Z',
       state: 'ready_for_review',

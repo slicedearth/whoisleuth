@@ -14,6 +14,7 @@ import {
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -93,7 +94,7 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.evidenceTopologyTarget.label, 'example.test');
     assert.equal(analysis.evidenceTopologyTarget.detail, 'domain · fast lookup');
     assert.equal(analysis.caseEvidence.availability, 'registered');
-    assert.equal(analysis.risk?.modelVersion, 7);
+    assert.equal(analysis.risk?.modelVersion, 8);
     assert.equal(analysis.opportunity?.modelVersion, 2);
     assert.equal(analysis.risk?.evidenceQuality.scanDepth, 'fast');
     assert.equal(analysis.risk?.evidenceQuality.state, 'partial');
@@ -129,6 +130,32 @@ describe('Lookup route analysis', () => {
         + analysis.lookupInvestigationBrief.decisionFacts.omitted,
     );
     assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
+  });
+
+  test('keeps registrar standing outside Risk and Opportunity scoring', () => {
+    const baseline = response();
+    const withStanding = response({
+      registrarStanding: buildRegistrarStanding({
+        registrarIanaId: '4318',
+        now: new Date('2026-09-03T12:00:00.000Z'),
+      }) as unknown as NonNullable<LookupHttpResponse['registrarStanding']>,
+    });
+    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({
+      result,
+      lookupView: createLookupViewModel(result),
+      profile: null,
+      task: 'general',
+      completedLookupDepth: 'deep',
+    });
+    const baselineAnalysis = analyse(baseline);
+    const standingAnalysis = analyse(withStanding);
+    assert.deepEqual(standingAnalysis.risk, baselineAnalysis.risk);
+    assert.deepEqual(standingAnalysis.opportunity, baselineAnalysis.opportunity);
+    assert.ok(standingAnalysis.lookupSummary.signals.some((signal) => (
+      signal.label === 'Official termination notice found'
+      && signal.tone === 'warn'
+      && signal.detail?.includes('does not classify this domain')
+    )));
   });
 
   test('does not infer Case hostname context from registrable or availability domains', () => {

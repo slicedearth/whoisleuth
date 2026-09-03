@@ -36,22 +36,22 @@ describe('shared Case domain facades', () => {
   });
 
   test('preserve exact-current Node and browser-facade normalisation, ordering, and refusal semantics', async () => {
-    const current = await fixture('browser-case-v13');
+    const current = await fixture('browser-case-v14');
     assert.deepEqual(browserCase.normalizeCaseStore(current), sharedCase.normalizeCaseStore(current));
 
-    const portable = await fixture('case-export-v13');
+    const portable = await fixture('case-export-v14');
     assert.deepEqual(browserCase.mergeCases([], portable), sharedCase.mergeCases([], portable));
     assert.equal(sharedResponse.isLegalCaseActionTransition('drafting', 'ready_for_review', 'analyst'), true);
     assert.equal(sharedResponse.isLegalCaseActionTransition('acknowledged', 'submitted', 'analyst'), false);
 
     for (const owner of [browserCase, sharedCase]) {
-      assert.throws(() => owner.normalizeCaseStore({ version: 11, cases: [] }), /schema 11 is not part of the public compatibility boundary/iu);
-      assert.throws(() => owner.normalizeCaseStore({ version: 14, cases: [] }), /newer than the supported schema 13/iu);
+      assert.throws(() => owner.normalizeCaseStore({ version: 11, cases: [] }), /schema 11 is not part of the supported compatibility boundary/iu);
+      assert.throws(() => owner.normalizeCaseStore({ version: 15, cases: [] }), /newer than the supported schema 14/iu);
     }
-    assert.equal(sharedCase.parseStoreVersion({ version: 14 }), 14);
+    assert.equal(sharedCase.parseStoreVersion({ version: 15 }), 15);
     assert.throws(
-      () => sharedCase.mergeCases([], { version: 14, cases: [] }),
-      /newer than the supported schema 13/iu,
+      () => sharedCase.mergeCases([], { version: 15, cases: [] }),
+      /newer than the supported schema 14/iu,
     );
   });
 
@@ -67,14 +67,14 @@ describe('shared Case domain facades', () => {
       (_, index) => ({ ...seed,
         id: `action-${index}`,
       }),
-    ), '2026-08-22T00:00:00.000Z', { sourceVersion: 13 });
+    ), '2026-08-22T00:00:00.000Z', { sourceVersion: 14 });
     assert.equal(oversized.length, sharedResponse.MAX_CASE_ACTIONS);
 
-    const packet = await fixture<Record<string, unknown>>('case-response-packet-v7');
+    const packet = await fixture<Record<string, unknown>>('case-response-packet-v8');
     assert.equal(await sharedPacket.verifyCaseResponsePacketIntegrity(packet as never), true);
     assert.equal(await browserPacket.verifyCaseResponsePacketIntegrity(packet as never), true);
 
-    const currentStore = await fixture('browser-case-v13');
+    const currentStore = await fixture('browser-case-v14');
     const currentCase = sharedCase.normalizeCaseStore(currentStore).cases[0];
     assert.ok(currentCase);
     assert.deepEqual(

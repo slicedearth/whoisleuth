@@ -23,6 +23,7 @@ import {
 import { interchangeContractFor } from '../lib/interchange-fidelity-registry.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
 import {
   MAX_BOUNDED_JSON_DEPTH,
   MAX_BOUNDED_JSON_KEYS,
@@ -206,13 +207,23 @@ describe('interchange fidelity report', () => {
     assert.equal(unsupported.compatibility.fidelity, 'unsupported');
   });
 
-  test('recognises the frozen strict schema-26 Lookup evidence contract after schema 27 becomes current', async () => {
+  test('recognises the frozen strict schema-26 Lookup evidence contract after later schemas become current', async () => {
     const report = await buildInterchangeFidelityReport(await loadLookupEvidenceV26Fixture(), { generatedAt: NOW });
     assert.equal(report.artifact.id, 'lookup_evidence');
-    assert.equal(report.artifact.version, lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(report.artifact.version, lookupEvidenceModule.V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION);
     assert.equal(report.verification.state, 'structure_valid');
     assert.equal(report.verification.assuranceSatisfied, true);
     assert.equal(report.compatibility.browser?.import, 'supported');
+  });
+
+  test('recognises the frozen published-v2 schema-27 Lookup evidence contract after schema 28 becomes current', async () => {
+    const report = await buildInterchangeFidelityReport(await loadLookupEvidenceV27Fixture(), { generatedAt: NOW });
+    assert.equal(report.artifact.id, 'lookup_evidence');
+    assert.equal(report.artifact.version, lookupEvidenceModule.PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(report.verification.state, 'structure_valid');
+    assert.equal(report.verification.assuranceSatisfied, true);
+    assert.equal(report.compatibility.browser?.import, 'supported');
+    assert.equal(report.compatibility.cli?.verify, 'supported');
   });
 
   test('reports exact browser and CLI passport compatibility without values', async () => {

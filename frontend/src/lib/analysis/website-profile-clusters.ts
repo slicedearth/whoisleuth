@@ -331,7 +331,7 @@ export function buildWebsiteProfileClusters(
         kind: 'technology',
         key: `technology:${technology.id}`,
         label: technology.name,
-        evidence: `${technology.category} · ${technology.confidence} confidence`,
+        evidence: `${technology.category} · ${technology.confidence} signature strength`,
       }, snapshot);
     }
     for (const [field, label] of Object.entries(IDENTITY_LABELS) as Array<[keyof WebsiteIdentityDigests, string]>) {

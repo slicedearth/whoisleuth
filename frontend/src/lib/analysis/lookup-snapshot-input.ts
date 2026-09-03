@@ -101,11 +101,26 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
       || securityPosture.truncated
       || baseline?.truncated,
     ),
-    technologies: input.technologyFindings.map(({ id, name, category, confidence }) => ({
+    profileProvenance: {
+      technology: {
+        version: Number.isSafeInteger(technologyProfile.profileVersion)
+          ? Number(technologyProfile.profileVersion)
+          : null,
+        state: Number.isSafeInteger(technologyProfile.profileVersion) ? 'known' : 'legacy_unknown',
+      },
+      securityPosture: {
+        version: Number.isSafeInteger(securityPosture.postureVersion)
+          ? Number(securityPosture.postureVersion)
+          : null,
+        state: Number.isSafeInteger(securityPosture.postureVersion) ? 'known' : 'legacy_unknown',
+      },
+    },
+    technologies: input.technologyFindings.map(({ id, name, category, confidence, roles }) => ({
       id,
       name,
       category,
       confidence,
+      roles,
     })),
     posture: input.securityPostureFindings.map(({ id, state }) => ({ id, state })),
     identity: {

@@ -208,6 +208,50 @@ describe('provider-neutral scheduled monitoring repository', () => {
     assert.equal(rawStore.value?.includes('discard me'), false);
   });
 
+  test('returns ephemeral recovery with a subsequent write without storing the diagnostic', async () => {
+    type Recovery = { version: 1; recoveredItems: number };
+    const rawStore = new MemoryVersionedTextStore();
+    rawStore.value = encryptScheduledMonitorState(
+      { version: 1, count: 999, privateTarget: 'private-target.invalid' },
+      key,
+      namespace,
+    );
+    rawStore.version = '1';
+    const repo = new ScheduledMonitorRepository<MonitorState, Recovery>({
+      rawStore,
+      encryptionKey: key,
+      namespace,
+      emptyState,
+      normalizeState,
+      inspectState: (value) => {
+        const state = normalizeState(value);
+        const candidate = recordValue(value);
+        return {
+          state,
+          recovery: candidate.count === state.count
+            ? null
+            : { version: 1, recoveredItems: 1 },
+        };
+      },
+    });
+
+    assert.deepEqual(await repo.readWithRecovery(), {
+      state: { version: 1, count: 0 },
+      recovery: { version: 1, recoveredItems: 1 },
+    });
+    const outcome = await repo.update((state) => ({
+      state: { ...state, count: 1 },
+      result: 'committed',
+    }));
+    assert.equal(outcome.result, 'committed');
+    assert.deepEqual(outcome.recovery, { version: 1, recoveredItems: 1 });
+    assert.equal(rawStore.value?.includes('private-target.invalid'), false);
+    assert.deepEqual(await repo.readWithRecovery(), {
+      state: { version: 1, count: 1 },
+      recovery: null,
+    });
+  });
+
   test('rejects a non-boolean compare-and-set response without treating it as success', async () => {
     const rawStore = new MemoryVersionedTextStore();
     rawStore.compareAndSet = async () => 'yes' as unknown as boolean;

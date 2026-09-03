@@ -4,6 +4,7 @@ import { analyzeDomainIdn } from './idn-confusables.ts';
 import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
+import { recordOrNull } from '../../../../lib/json-record.mts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   normalizeBulkProfileContext,
@@ -97,11 +98,7 @@ export interface ScanResult {
   sourceCoverage: BulkSessionSourceCoverage[];
 }
 
-export function plainRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+export const plainRecord = recordOrNull;
 
 export function boundedText(
   value: unknown,

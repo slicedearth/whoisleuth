@@ -2,7 +2,10 @@
 // analyst-selectable case facts. It performs no collection and stores only
 // the facts the analyst explicitly selects.
 
-import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from './evidence-export.ts';
+import {
+  LOOKUP_EVIDENCE_SCHEMA,
+  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+} from './evidence-export.ts';
 import {
   createLookupViewModel,
   isJsonObject,
@@ -13,9 +16,10 @@ import type {
   CaseEvidencePin,
   CaseTransitionExpectation,
 } from './case-response-model.ts';
+import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
-export const MAX_CHECKPOINT_FACTS = 26;
+export const MAX_CHECKPOINT_FACTS = 28;
 export const MAX_CHECKPOINT_LIMITATIONS = 6;
 
 export type CheckpointComparisonState =
@@ -41,8 +45,8 @@ export type CheckpointFact = Readonly<{
   limitations: string[];
   sourceSchema: {
     collection: 'lookup_result';
-    schema: 'whoisleuth.lookup-evidence';
-    version: typeof LOOKUP_EVIDENCE_SCHEMA_VERSION;
+    schema: typeof LOOKUP_EVIDENCE_SCHEMA;
+    version: number;
   };
 }>;
 
@@ -246,6 +250,8 @@ export function buildLookupCheckpointFacts(
     { field: 'http.response_status', category: 'http', label: 'HTTP response status', value: factValue(httpResponse.status), source: 'HTTP', sourceState: httpState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(httpState), truncated: http.truncated === true ? true : null, limitations: sourceLimitations(http.limitations) },
     { field: 'page.title', category: 'page_identity', label: 'Page title', value: factValue(availability.pageTitle), source: 'static homepage observation', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: sourceLimitations(http.limitations) },
     { field: 'page.password_field', category: 'page_identity', label: 'Password field', value: factValue(availability.hasPasswordField), source: 'static homepage observation', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: ['Static HTML evidence does not execute JavaScript and may not represent the rendered page.'] },
+    { field: 'page.external_form_action', category: 'page_identity', label: 'External form action', value: factValue(availability.hasExternalFormAction), source: 'static homepage observation', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: ['An external form destination is a review lead. It does not establish collection, intent, or maliciousness.'] },
+    { field: 'page.phishing_language', category: 'page_identity', label: 'Phishing-language cue', value: factValue(availability.phishingLanguageMatch), source: 'bounded page-language analysis', sourceState: pageState, observedAt: httpObservedAt, collectionDepth: depth, completeness: completeness(pageState), truncated: http.truncated === true ? true : null, limitations: ['A wording match is a review lead. It does not establish intent or maliciousness.'] },
     { field: 'disclosure.security_txt_expires', category: 'disclosure', label: 'security.txt expiry', value: factValue(securityTxt.expiresAt), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: sourceLimitations(securityTxt.limitations) },
     { field: 'disclosure.security_txt_contacts', category: 'disclosure', label: 'security.txt contacts', value: factValue(securityTxt.contacts), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: ['Publication does not prove that a contact is monitored, appropriate, responsive, or responsible.', ...sourceLimitations(securityTxt.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
   ];
@@ -255,10 +261,72 @@ export function buildLookupCheckpointFacts(
     ...fact,
     sourceSchema: {
       collection: 'lookup_result',
-      schema: 'whoisleuth.lookup-evidence',
+      schema: LOOKUP_EVIDENCE_SCHEMA,
       version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
     },
   })).slice(0, MAX_CHECKPOINT_FACTS);
+}
+
+const REPLAY_CHECKPOINT_FIELDS = Object.freeze({
+  'registration.registrar': Object.freeze({ field: 'registration.registrar', category: 'registration' as const }),
+  'registration.created': Object.freeze({ field: 'registration.created', category: 'registration' as const }),
+  'registration.expires': Object.freeze({ field: 'registration.expires', category: 'registration' as const }),
+  'registration.nameservers': Object.freeze({ field: 'dns.nameservers', category: 'dns' as const }),
+  'website.activity': Object.freeze({ field: 'page.activity', category: 'page_identity' as const }),
+  'website.final-url': Object.freeze({ field: 'http.final_origin', category: 'http' as const }),
+  'tls.connected-address': Object.freeze({ field: 'network.selected_address', category: 'network' as const }),
+  'tls.certificate-fingerprint': Object.freeze({ field: 'tls.certificate_sha256', category: 'tls' as const }),
+  'page.title': Object.freeze({ field: 'page.title', category: 'page_identity' as const }),
+  'page.password-field': Object.freeze({ field: 'page.password_field', category: 'page_identity' as const }),
+  'page.external-form-action': Object.freeze({ field: 'page.external_form_action', category: 'page_identity' as const }),
+  'page.phishing-language': Object.freeze({ field: 'page.phishing_language', category: 'page_identity' as const }),
+  'technology.detected': Object.freeze({ field: 'page.technology', category: 'page_identity' as const }),
+});
+
+function replayCompleteness(
+  state: string,
+  complete: boolean | null,
+): CheckpointFact['completeness'] {
+  if (complete === false || state === 'partial') return 'partial';
+  if (CONFLICT_STATES.has(state)) return 'inconclusive';
+  if (complete === true || ['complete', 'provided', 'success'].includes(state)) return 'complete';
+  return 'unknown';
+}
+
+export function buildLookupReplayCheckpointFacts(
+  replay: LookupEvidenceReplay,
+): CheckpointFact[] {
+  const sources = new Map(replay.sources.map((item) => [item.id, item]));
+  return replay.facts.flatMap((fact) => {
+    const specification = REPLAY_CHECKPOINT_FIELDS[fact.id as keyof typeof REPLAY_CHECKPOINT_FIELDS];
+    const source = sources.get(fact.sourceId);
+    if (!specification || !source?.observedAt) return [];
+    const normalizedState = sourceState(fact.sourceState);
+    const value = fact.id === 'website.final-url' ? origin(fact.value) : factValue(fact.value);
+    if (value === null) return [];
+    return [{
+      version: 1 as const,
+      field: specification.field,
+      category: specification.category,
+      label: fact.label,
+      value,
+      source: fact.source,
+      sourceState: normalizedState,
+      observedAt: source.observedAt,
+      collectionDepth: 'unknown' as const,
+      completeness: replayCompleteness(normalizedState, fact.sourceComplete),
+      truncated: null,
+      limitations: sourceLimitations([
+        ...source.limitations,
+        'This fact came from a validated historical evidence export and was not refreshed during replay.',
+      ]),
+      sourceSchema: {
+        collection: 'lookup_result' as const,
+        schema: LOOKUP_EVIDENCE_SCHEMA as CheckpointFact['sourceSchema']['schema'],
+        version: replay.schemaVersion,
+      },
+    }];
+  }).slice(0, MAX_CHECKPOINT_FACTS);
 }
 
 function checkpointId(): string {

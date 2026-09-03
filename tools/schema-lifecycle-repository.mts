@@ -4,7 +4,7 @@ import { types as utilTypes } from 'node:util';
 
 import ts from 'typescript';
 
-import * as artifactStructureModule from '../cli/artifact-structure.mts';
+import * as offlineArtifactValidationModule from '../cli/offline-artifact-validation.mts';
 import * as artifactVerifyModule from '../cli/artifact-verify.mts';
 import * as casePackModule from '../cli/case-pack.mts';
 import * as domainControlMonitorModule from '../cli/domain-control-monitor.mts';
@@ -123,7 +123,7 @@ const LIFECYCLE_CODE_EXTENSIONS = new Set([
 ]);
 
 export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
-  'cli/artifact-structure.mts': artifactStructureModule,
+  'cli/offline-artifact-validation.mts': offlineArtifactValidationModule,
   'cli/artifact-verify.mts': artifactVerifyModule,
   'cli/case-pack.mts': casePackModule,
   'cli/domain-control-monitor.mts': domainControlMonitorModule,
@@ -1163,10 +1163,29 @@ export async function validateSchemaLifecycleRepository(
   registry: SchemaLifecycleRegistry,
   discovery: SchemaSourceDiscovery,
 ): Promise<void> {
+  const snapshot = await prepareSchemaLifecycleRepositorySnapshot(registry, discovery);
+  validatePreparedSchemaLifecycleRepository(registry, snapshot);
+}
+
+type PreparedFixture = Readonly<{
+  bytes: number;
+  contentBase64: string;
+  sha256: string;
+}>;
+
+export type PreparedSchemaLifecycleRepository = Readonly<{
+  bindings: SchemaLifecycleSourceBindings;
+  discoveryFiles: ReadonlySet<string>;
+  fixtureByPath: ReadonlyMap<string, PreparedFixture>;
+  hookModules: ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+}>;
+
+function validatePreparedSchemaLifecycleStructure(
+  registry: SchemaLifecycleRegistry,
+  snapshot: PreparedSchemaLifecycleRepository,
+): void {
   buildSchemaLifecycleCompatibilityMatrix(registry);
-  await validateCasePortabilitySourceClosure(discovery);
-  await validateWorkspacePortabilitySourceClosure(discovery);
-  const bindings = await repositoryLifecycleBindings(discovery);
+  const { bindings, discoveryFiles, hookModules } = snapshot;
   validateSchemaLifecycleDefinitionCoverage(bindings);
   if (bindings.registryEntries.length !== registry.length) {
     throw new TypeError('Schema lifecycle source registry and runtime registry lengths do not match.');
@@ -1177,8 +1196,6 @@ export async function validateSchemaLifecycleRepository(
     }
   }
 
-  const discoveryFiles = new Set(discovery.files);
-  const hookModules = snapshotHookModules(SCHEMA_LIFECYCLE_HOOK_MODULES as HookModuleMap);
   const declaredHookModules = [...hookModules.keys()].sort(ordinalCompare);
   const sourceHookModules = bindings.hookModules.map((binding) => binding.module).sort(ordinalCompare);
   if (declaredHookModules.length !== sourceHookModules.length
@@ -1222,7 +1239,26 @@ export async function validateSchemaLifecycleRepository(
     throw new TypeError('Schema lifecycle static hook-module bindings are stale or incomplete.');
   }
 
-  let actualFixtureBytes = 0;
+}
+
+export async function prepareSchemaLifecycleRepositorySnapshot(
+  registry: SchemaLifecycleRegistry,
+  discovery: SchemaSourceDiscovery,
+): Promise<PreparedSchemaLifecycleRepository> {
+  await validateCasePortabilitySourceClosure(discovery);
+  await validateWorkspacePortabilitySourceClosure(discovery);
+  const bindings = await repositoryLifecycleBindings(discovery);
+  const hookModules = snapshotHookModules(SCHEMA_LIFECYCLE_HOOK_MODULES as HookModuleMap);
+  const fixtureByPath = new Map<string, PreparedFixture>();
+  const snapshot = Object.freeze({
+    bindings,
+    discoveryFiles: new Set(discovery.files),
+    fixtureByPath,
+    hookModules,
+  });
+  validatePreparedSchemaLifecycleStructure(registry, snapshot);
+
+  let fixtureBytes = 0;
   for (const family of registry) {
     for (const fixture of family.fixtures) {
       const raw = await readBoundedRegularFileWithin(discovery.repositoryRoot, fixture.path, {
@@ -1230,12 +1266,40 @@ export async function validateSchemaLifecycleRepository(
         minimumBytes: fixture.bytes,
         label: `Schema lifecycle fixture ${fixture.id}`,
       });
-      actualFixtureBytes += raw.byteLength;
+      fixtureBytes += raw.byteLength;
+      if (fixtureBytes > MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES) {
+        throw new TypeError('Schema lifecycle fixtures exceed their aggregate byte ceiling.');
+      }
+      fixtureByPath.set(fixture.path, Object.freeze({
+        bytes: raw.byteLength,
+        contentBase64: raw.toString('base64'),
+        sha256: createHash('sha256').update(raw).digest('hex'),
+      }));
+    }
+  }
+  return snapshot;
+}
+
+export function validatePreparedSchemaLifecycleRepository(
+  registry: SchemaLifecycleRegistry,
+  snapshot: PreparedSchemaLifecycleRepository,
+): void {
+  validatePreparedSchemaLifecycleStructure(registry, snapshot);
+  let actualFixtureBytes = 0;
+  for (const family of registry) {
+    for (const fixture of family.fixtures) {
+      const prepared = snapshot.fixtureByPath.get(fixture.path);
+      if (!prepared) {
+        throw new TypeError(`Schema lifecycle fixture ${fixture.id} is not present in the prepared repository snapshot.`);
+      }
+      if (prepared.bytes !== fixture.bytes) {
+        throw new TypeError(`Schema lifecycle fixture ${fixture.id} does not match its registered byte length.`);
+      }
+      actualFixtureBytes += prepared.bytes;
       if (actualFixtureBytes > MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES) {
         throw new TypeError('Schema lifecycle fixtures exceed their aggregate byte ceiling.');
       }
-      const sha256 = createHash('sha256').update(raw).digest('hex');
-      if (sha256 !== fixture.sha256) {
+      if (prepared.sha256 !== fixture.sha256) {
         throw new TypeError(`Schema lifecycle fixture ${fixture.id} does not match its registered SHA-256.`);
       }
       if ('metadata' in family && fixture.shapeId) {
@@ -1246,7 +1310,7 @@ export async function validateSchemaLifecycleRepository(
         if (shape.discriminator) {
           const label = `Schema lifecycle fixture ${fixture.id}`;
           assertSchemaLifecycleFixtureDiscriminator(
-            decodeBoundedUtf8(raw, label),
+            decodeBoundedUtf8(Buffer.from(prepared.contentBase64, 'base64'), label),
             fixture.bytes,
             shape.discriminator.path,
             shape.discriminator.value,

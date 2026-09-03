@@ -3,6 +3,10 @@ import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
 } from './portable-generator.mts';
+import {
+  technologyEvidenceRoles,
+  type TechnologyEvidenceRole,
+} from './technology-evidence-role.mts';
 
 const MAX_REPORT_VALUE_LENGTH = 300;
 const MAX_REPORT_LIST_ITEMS = 50;
@@ -26,6 +30,7 @@ type LookupEvidenceReport = {
   query: ReportField[];
   assessment: ReportField[];
   registryGroups: ReportGroup[];
+  registrarStanding: ReportField[];
   registryInterpretation: ReportField[];
   comparison: { health: ReportField[]; fields: ComparisonField[]; omitted: number };
   registrarComparison: { health: ReportField[]; fields: PublicationComparisonField[]; omitted: number };
@@ -37,6 +42,13 @@ type LookupEvidenceReport = {
 
 function objectOrEmpty(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function reportTechnologyNames(findings: unknown[], role: TechnologyEvidenceRole): string {
+  return listText(findings
+    .filter((finding) => technologyEvidenceRoles(finding).includes(role))
+    .map((finding) => objectOrEmpty(finding).name)
+    .filter((name): name is string => typeof name === 'string' && name.length > 0));
 }
 
 function cleanReportText(value: unknown, fallback = 'Not reported'): string {
@@ -161,6 +173,22 @@ function buildLookupEvidenceReport(
   const rdapComparisonHealth = objectOrEmpty(comparisonHealth.rdap);
   const whoisComparisonHealth = objectOrEmpty(comparisonHealth.whois);
   const registrarComparison = objectOrEmpty(analysis.registrarPublicationComparison);
+  const registrarStanding = objectOrEmpty(analysis.registrarStanding);
+  const registrarAccreditation = objectOrEmpty(registrarStanding.accreditation);
+  const registrarCompliance = objectOrEmpty(registrarStanding.compliance);
+  const registrarStandingAssessment = objectOrEmpty(registrarStanding.assessment);
+  const registrarActions = Array.isArray(registrarCompliance.actions)
+    ? registrarCompliance.actions.slice(0, 5).map(objectOrEmpty)
+    : [];
+  const registrarNoticeSummary = registrarCompliance.state === 'reviewed_no_match'
+    ? `None in the reviewed ${cleanReportText(registrarCompliance.catalogueYear, 'current-year')} catalogue`
+    : registrarCompliance.state === 'not_applicable'
+      ? 'Not assessed without one unambiguous registrar IANA ID'
+      : registrarCompliance.state === 'stale'
+        ? 'No matching action retained; the reviewed catalogue is stale'
+        : registrarCompliance.state === 'unavailable'
+          ? 'Unavailable because the retained catalogue could not be validated'
+          : 'No matching action was represented';
   const registrarComparisonHealth = objectOrEmpty(registrarComparison.sourceHealth);
   const registryPublicationHealth = objectOrEmpty(registrarComparisonHealth.registry);
   const registrarPublicationHealth = objectOrEmpty(registrarComparisonHealth.registrar);
@@ -176,6 +204,8 @@ function buildLookupEvidenceReport(
   const tlsHostname = objectOrEmpty(tls.hostname);
   const tlsValidity = objectOrEmpty(tls.validity);
   const tlsCertificate = objectOrEmpty(tls.certificate);
+  const technology = objectOrEmpty(availability.technologyProfile);
+  const technologyFindings = Array.isArray(technology.findings) ? technology.findings : [];
   const risk = riskReport(options.risk);
   const titleTarget = query.registrableDomain || query.submitted || 'Unknown domain';
   const registryAccessSuffix = [5, 6, 7, 8].includes(Number(diagnostics.version)) && registryAccess.authority === 'context_only'
@@ -276,6 +306,12 @@ function buildLookupEvidenceReport(
         reportField('Redirects', http.redirectCount),
         reportField('Page title', availability.pageTitle),
         reportField('Password field observed', yesNoUnknown(availability.hasPasswordField)),
+        reportField('Authoritative nameserver evidence', listText(availability.nameservers)),
+        reportField('Observed edge, CDN, reverse proxy or WAF', reportTechnologyNames(technologyFindings, 'observed_edge')),
+        reportField('Application-platform indicators', reportTechnologyNames(technologyFindings, 'application_platform')),
+        reportField('Framework or runtime indicators', reportTechnologyNames(technologyFindings, 'framework_runtime')),
+        reportField('Embedded or third-party dependencies', reportTechnologyNames(technologyFindings, 'embedded_dependency')),
+        reportField('Origin host', 'Not established from retained evidence'),
       ],
     },
     tls: {
@@ -372,6 +408,27 @@ function buildLookupEvidenceReport(
       ...(Object.keys(registrarRdap).length ? [groups.registrarRdap] : []),
       groups.whois,
     ],
+    registrarStanding: registrarStanding.version === 1 ? [
+      reportField('Assessment', displayLabel(registrarStandingAssessment.label || registrarStandingAssessment.state)),
+      reportField('Detail', registrarStandingAssessment.detail),
+      reportField('Registrar IANA ID', registrarStanding.ianaId),
+      reportField('IANA accreditation', displayLabel(registrarAccreditation.state)),
+      reportField('IANA source health', displayLabel(registrarAccreditation.sourceHealth)),
+      reportField('IANA source', registrarAccreditation.sourceUrl),
+      reportField('IANA catalogue reviewed', registrarAccreditation.observedAt),
+      reportField('ICANN notice state', displayLabel(registrarCompliance.state)),
+      reportField('ICANN source health', displayLabel(registrarCompliance.sourceHealth)),
+      reportField('ICANN source', registrarCompliance.sourceUrl),
+      reportField('ICANN catalogue reviewed', registrarCompliance.reviewedAt),
+      ...(registrarActions.length
+        ? registrarActions.map((action, index) => reportField(
+            `Official notice ${index + 1}`,
+            `${displayLabel(action.type)} issued ${cleanReportText(action.issuedOn)}; source ${cleanReportText(action.sourceUrl)}${action.indexOutcome ? `; index outcome ${cleanReportText(action.indexOutcome)}` : ''}`,
+          ))
+        : [reportField('Matching official notices', registrarNoticeSummary)]),
+      reportField('Standing limitations', listText(registrarStanding.limitations)),
+      reportField('Review steps', listText(registrarStanding.nextActions)),
+    ] : [],
     registryInterpretation: registryInsights.version === 1 ? [
       reportField('Lifecycle', displayLabel(registryLifecycle.label)),
       reportField('Raw lifecycle statuses', listText(registryLifecycle.rawStatuses)),
@@ -426,6 +483,7 @@ function buildLookupEvidenceReport(
       ...(networkContext.contextVersion === 1 ? [
         'Observed network registration describes one point-in-time public endpoint. It may identify an edge or shared network rather than the origin host and does not prove control, ownership, intent, or maliciousness.',
       ] : []),
+      'Nameserver identity does not establish operator or web-host ownership. Edge and application-platform indicators do not establish concealed origin infrastructure.',
       ...(registryAccessFields.length ? [
         'Registry access constraints describe collection reachability only. They do not decide registration, availability, ownership, safety, or maliciousness.',
       ] : []),

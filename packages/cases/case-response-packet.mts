@@ -22,8 +22,10 @@ import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
   MAX_AFFECTED_PARTY_LENGTH,
@@ -50,8 +52,10 @@ export {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
   MAX_AFFECTED_PARTY_LENGTH,
@@ -176,7 +180,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Incident facts', 'Registration evidence', 'Selected observations', 'Action history'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Case disposition', 'Selected evidence pins', 'Registrar contact provenance'],
     excludedEvidence: ['Raw WHOIS or RDAP payloads', 'Unselected contacts', 'Provider secrets', 'Unrelated analyst notes'],
-    redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
+    redactions: ['Remove unnecessary personal registration data', 'Credential-bearing URLs are rejected; review query strings and fragments for secrets before sharing'],
     attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Registrar reference', 'Acknowledgement time', 'Resolution or transfer outcome'],
   },
@@ -190,7 +194,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Incident facts', 'Registry publication', 'Prior escalation', 'Selected observations'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Registry contact provenance', 'Selected evidence pins', 'Prior action references'],
     excludedEvidence: ['Raw registry payloads', 'Unselected contacts', 'Secrets', 'Unsupported ownership claims'],
-    redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
+    redactions: ['Remove unnecessary personal registration data', 'Credential-bearing URLs are rejected; review query strings and fragments for secrets before sharing'],
     attachments: ['Reviewed response packet', 'Optional normalised case report', 'Optional registrar reference'],
     followUpFields: ['Registry reference', 'Registrar referral', 'Delegation or status outcome'],
   },
@@ -204,7 +208,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Incident facts', 'Observed endpoint context', 'Selected web evidence', 'Action history'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Selected HTTP, TLS, DNS, or page-identity pins', 'Contact provenance'],
     excludedEvidence: ['Raw response bodies', 'Cookies', 'Secrets', 'Unproven origin-host claims'],
-    redactions: ['Remove credentials, query secrets, fragments, cookies, and unrelated contacts'],
+    redactions: ['Credential-bearing URLs are rejected; review query strings, fragments, cookies, and unrelated contacts before sharing'],
     attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Provider ticket', 'Content status', 'Infrastructure change outcome'],
   },
@@ -218,7 +222,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Incident facts', 'Selected observations', 'Analyst reasoning', 'Action history'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Selected evidence pins', 'Contact source and limitations'],
     excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected case notes', 'Legal conclusions'],
-    redactions: ['Remove credentials, tokens, personal data, and unrelated identifiers'],
+    redactions: ['Credential-bearing URLs are rejected; review query strings, fragments, tokens, personal data, and unrelated identifiers before sharing'],
     attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Security reference', 'Triage acknowledgement', 'Remediation outcome'],
   },
@@ -232,7 +236,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Exact URLs', 'Observed behaviour', 'Selected corroborating evidence', 'Limitations'],
     includedEvidence: ['Exact URLs', 'Observation time', 'Observed harm', 'Selected evidence pins', 'Contradictions and cautions'],
     excludedEvidence: ['Raw provider payloads', 'Secrets', 'Unselected personal data', 'Automated maliciousness claims'],
-    redactions: ['Remove credentials, tokens, URL fragments, and unrelated contacts'],
+    redactions: ['Credential-bearing URLs are rejected; review query strings, fragments, tokens, and unrelated contacts before sharing'],
     attachments: ['Reviewed response packet', 'Optional normalised case report'],
     followUpFields: ['Submission reference', 'Review state', 'Listing or delisting outcome'],
   },
@@ -246,7 +250,7 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     evidenceOrder: ['Decision packet', 'Selected evidence', 'Incident facts', 'Action and investigation trail'],
     includedEvidence: ['Case disposition', 'Selected evidence pins', 'Analyst decisions and assertions', 'Action history', 'Exact URLs when relevant'],
     excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected personal data', 'Unsupported attribution'],
-    redactions: ['Remove credentials, tokens, and personal data not required for the internal decision'],
+    redactions: ['Credential-bearing URLs are rejected; review query strings, fragments, tokens, and unnecessary personal data before sharing'],
     attachments: ['Reviewed response packet', 'Normalised case report when required by internal policy'],
     followUpFields: ['Internal owner', 'Due date', 'Decision', 'Control or escalation outcome'],
   },
@@ -268,6 +272,7 @@ export type CaseResponsePacketInput = {
   observedHarm?: unknown;
   observedAt?: unknown;
   contacts?: unknown;
+  actionId?: unknown;
   selectedEvidencePinIds?: unknown;
   readiness?: ResponseReadinessInput | unknown;
   artefactReferences?: readonly ResponseArtefactReferenceInput[] | unknown;
@@ -282,7 +287,7 @@ export type CaseResponsePreflightCheck = Readonly<{
 }>;
 
 export type CaseResponsePreflight = Readonly<{
-  version: 2;
+  version: 3;
   status: 'needs_input' | 'ready_for_review' | 'review_cautions';
   canExport: boolean;
   counts: Readonly<{ block: number; caution: number; pass: number }>;
@@ -351,6 +356,21 @@ export type CaseResponsePacket = {
     freshness: 'current' | 'stale' | 'unknown';
     limitations: string[];
   }>;
+  recipientRoute: {
+    actionId: string;
+    kind: ResponseContactKind | 'manual';
+    contact: string;
+    source: string;
+    observedAt: string | null;
+    freshness: 'current' | 'stale' | 'unknown';
+    limitations: string[];
+  } | null;
+  actionBinding: {
+    state: 'selected' | 'not_selected';
+    selectedActionId: string | null;
+    lineageActionIds: string[];
+    limitations: string[];
+  };
   selectedEvidence: Array<{
     id: string;
     label: string;
@@ -388,6 +408,7 @@ export type CaseResponsePacket = {
     type: string;
     recipient: string;
     contactSource: string;
+    routeObservedAt: string | null;
     state: string;
     reference: string | null;
     providerOutcome: string | null;
@@ -523,38 +544,115 @@ function normalizeLimitations(value: unknown): string[] {
   return [...unique];
 }
 
-function normalizeContacts(value: unknown, generatedAt?: string): CaseResponsePacket['contacts'] {
-  if (!Array.isArray(value)) return [];
+function actionContactKind(type: string): ResponseContactKind | 'manual' {
+  if (type === 'registrar_report') return 'registrar';
+  if (type === 'registry_report') return 'registry';
+  if (type === 'network_hosting_report') return 'network_hosting';
+  if (type === 'security_contact_report') return 'security_txt';
+  return 'manual';
+}
+
+function routeFreshness(observedAt: string | null, generatedAt: string): 'current' | 'stale' | 'unknown' {
+  if (!observedAt) return 'unknown';
+  const routeAge = Date.parse(generatedAt) - Date.parse(observedAt);
+  return routeAge < -MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS
+    || routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000
+    ? 'stale'
+    : 'current';
+}
+
+function selectedPacketAction(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
+  const actionId = typeof input.actionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.actionId)
+    ? input.actionId
+    : null;
+  return actionId ? caseRecord.actions.find((action) => action.id === actionId) ?? null : null;
+}
+
+function packetActionLineage(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
+  const selected = selectedPacketAction(caseRecord, input);
+  if (!selected) return { selected: null, actions: [], ids: [], complete: true } as const;
+  const byId = new Map(caseRecord.actions.map((action) => [action.id, action]));
+  const ids: string[] = [];
   const seen = new Set<string>();
-  const contacts: CaseResponsePacket['contacts'] = [];
-  for (const raw of value.slice(0, MAX_RESPONSE_CONTACTS * 2)) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-    const item = raw as Record<string, unknown>;
-    const kind = typeof item.kind === 'string' && CONTACT_KINDS.has(item.kind)
-      ? item.kind as ResponseContactKind
-      : null;
-    const contact = text(item.contact, 320);
-    if (!kind || !contact) continue;
-    const key = `${kind}\u0000${contact.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const observedAt = timestamp(item.observedAt);
-    const routeAge = observedAt && generatedAt ? Date.parse(generatedAt) - Date.parse(observedAt) : null;
-    contacts.push({
-      kind,
-      contact,
-      source: text(item.source, 120) || 'analyst supplied',
-      observedAt,
-      freshness: routeAge === null
-        ? 'unknown'
-        : routeAge < -300_000 || routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000
-          ? 'stale'
-          : 'current',
-      limitations: normalizeLimitations(item.limitations),
-    });
-    if (contacts.length >= MAX_RESPONSE_CONTACTS) break;
+  let current: typeof selected | undefined = selected;
+  while (current && ids.length < MAX_RESPONSE_ACTION_HISTORY && !seen.has(current.id)) {
+    ids.push(current.id);
+    seen.add(current.id);
+    current = current.originActionId ? byId.get(current.originActionId) : undefined;
   }
-  return contacts;
+  const complete = !current;
+  return {
+    selected,
+    actions: ids.map((id) => byId.get(id)!).filter(Boolean),
+    ids,
+    complete,
+  } as const;
+}
+
+function bindPacketRoute(
+  caseRecord: CaseRecord,
+  input: CaseResponsePacketInput,
+  generatedAt: string,
+): Readonly<{
+  actionBinding: CaseResponsePacket['actionBinding'];
+  recipientRoute: CaseResponsePacket['recipientRoute'];
+  contacts: CaseResponsePacket['contacts'];
+}> {
+  const profile = responsePacketProfile(input.profile);
+  const lineage = packetActionLineage(caseRecord, input);
+  const action = lineage.selected;
+  if (!action) {
+    return {
+      actionBinding: {
+        state: 'not_selected', selectedActionId: null, lineageActionIds: [],
+        limitations: ['No retained Case action is selected for this packet.'],
+      },
+      recipientRoute: null,
+      contacts: [],
+    };
+  }
+  const kind = actionContactKind(action.type);
+  const compatible = profile.requiredContactKind
+    ? kind === profile.requiredContactKind
+    : profile.id === 'browser_blocklist'
+      ? kind === 'manual'
+      : true;
+  if (!compatible) {
+    return {
+      actionBinding: {
+        state: 'selected', selectedActionId: action.id, lineageActionIds: [...lineage.ids],
+        limitations: [`The selected action does not match the ${profile.label.toLowerCase()} route requirement.`],
+      },
+      recipientRoute: null,
+      contacts: [],
+    };
+  }
+  const observedAt = timestamp(action.routeObservedAt);
+  const recipientRoute: NonNullable<CaseResponsePacket['recipientRoute']> = {
+    actionId: action.id,
+    kind,
+    contact: text(action.recipient, 320),
+    source: text(action.contactSource, 120) || 'analyst supplied',
+    observedAt,
+    freshness: routeFreshness(observedAt, generatedAt),
+    limitations: normalizeLimitations(action.contactLimitations),
+  };
+  const contacts: CaseResponsePacket['contacts'] = kind === 'manual' ? [] : [{
+    kind,
+    contact: recipientRoute.contact,
+    source: recipientRoute.source,
+    observedAt,
+    freshness: recipientRoute.freshness,
+    limitations: [...recipientRoute.limitations],
+  }];
+  return {
+    actionBinding: {
+      state: 'selected', selectedActionId: action.id, lineageActionIds: [...lineage.ids],
+      limitations: lineage.complete ? [] : ['The origin-action lineage exceeded the packet action bound or contained a cycle.'],
+    },
+    recipientRoute,
+    contacts,
+  };
 }
 
 function normalizeSelectedEvidence(caseRecord: CaseRecord, value: unknown): CaseResponsePacket['selectedEvidence'] {
@@ -614,6 +712,7 @@ function buildResponseReadiness(
   input: CaseResponsePacketInput,
   generatedAt: string,
   contacts: CaseResponsePacket['contacts'],
+  recipientRoute: CaseResponsePacket['recipientRoute'],
   selectedEvidence: CaseResponsePacket['selectedEvidence'],
   contradictions: CaseResponsePacket['contradictions'],
 ): CaseResponsePacket['readiness'] {
@@ -621,9 +720,6 @@ function buildResponseReadiness(
   const urls = normalizeUrls(input.abusiveUrls);
   const observedAt = timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null;
   const age = observedAt ? observationAge(observedAt, generatedAt) : null;
-  const requiredContact = profile.requiredContactKind
-    ? contacts.find((contact) => contact.kind === profile.requiredContactKind) ?? null
-    : contacts[0] ?? null;
   const infrastructure = readinessOverride(input.readiness, 'infrastructureResponsibility');
   const authority = readinessOverride(input.readiness, 'authorityReview');
   const contradictionReview = readinessOverride(input.readiness, 'contradictionsReview');
@@ -666,10 +762,10 @@ function buildResponseReadiness(
     },
     {
       id: 'recipient_route', label: 'Recipient-route provenance and freshness',
-      state: !requiredContact ? 'not_provided' : requiredContact.freshness === 'stale' ? 'stale' : requiredContact.freshness === 'current' && requiredContact.source ? 'complete' : 'partial',
-      detail: !requiredContact ? 'No profile-appropriate recipient route is selected.' : `The selected route provenance is ${requiredContact.source}; freshness is ${requiredContact.freshness}.`,
+      state: !recipientRoute ? 'not_provided' : recipientRoute.freshness === 'stale' ? 'stale' : recipientRoute.freshness === 'current' && recipientRoute.source ? 'complete' : 'partial',
+      detail: !recipientRoute ? 'No profile-appropriate recipient route is selected.' : `The selected route provenance is ${recipientRoute.source}; freshness is ${recipientRoute.freshness}.`,
       requiredForAuthorisation: external,
-      limitations: requiredContact?.limitations ?? [],
+      limitations: recipientRoute?.limitations ?? [],
     },
     {
       id: 'authority_review', label: 'Authority review',
@@ -726,13 +822,14 @@ export function buildCaseResponseReadiness(
   generatedAt: string = new Date().toISOString(),
 ): CaseResponsePacket['readiness'] {
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
-  const contacts = normalizeContacts(input.contacts, normalizedGeneratedAt);
+  const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   return buildResponseReadiness(
     caseRecord,
     input,
     normalizedGeneratedAt,
-    contacts,
+    binding.contacts,
+    binding.recipientRoute,
     selectedEvidence,
     normalizeContradictions(caseRecord),
   );
@@ -783,13 +880,16 @@ export function buildResponsePacketProfilePreview(
   input: CaseResponsePacketInput,
 ): CaseResponsePacket['profile'] & { missingEvidence: string[] } {
   const profile = responsePacketProfile(input.profile);
-  const contacts = normalizeContacts(input.contacts);
+  const binding = bindPacketRoute(caseRecord, input, caseRecord.updatedAt);
   const missingEvidence = [
     ...(!normalizeUrls(input.abusiveUrls).length ? ['At least one exact HTTP(S) URL'] : []),
     ...(!timestamp(input.observedAt) && !caseRecord.evidenceHistory.at(-1)?.capturedAt ? ['Observation time'] : []),
     ...(!normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds).length ? ['Explicitly selected evidence pin'] : []),
-    ...(profile.requiredContactKind && !contacts.some((contact) => contact.kind === profile.requiredContactKind)
-      ? [`${contactLabel(profile.requiredContactKind)} contact route`]
+    ...(profile.id !== 'internal_soc' && binding.actionBinding.state !== 'selected'
+      ? ['Selected retained Case action']
+      : []),
+    ...(profile.id !== 'internal_soc' && !binding.recipientRoute
+      ? [`${profile.requiredContactKind ? contactLabel(profile.requiredContactKind) : 'Manual submission'} contact route`]
       : []),
   ];
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH) || 'domain activity';
@@ -817,7 +917,7 @@ export function buildCaseResponsePreflight(
   const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
   const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
-  const contacts = normalizeContacts(input.contacts, normalizedGeneratedAt);
+  const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
   const urls = normalizeUrls(input.abusiveUrls);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   const requiredComplete = Boolean(
@@ -832,6 +932,12 @@ export function buildCaseResponsePreflight(
     .filter((item) => item.kind === 'contradiction' && item.state === 'open')
     .length;
   const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
+  const retainedPinIds = new Set(caseRecord.evidencePins.map((pin) => pin.id));
+  const evidenceLinkedDecisionCount = caseRecord.decisions.filter((decision) =>
+    decision.evidencePinIds.some((evidencePinId) => retainedPinIds.has(evidencePinId))).length;
+  const responseDisposition = ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition);
+  const reviewedActionCount = caseRecord.actions.filter((action) =>
+    ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;
   const profile = responsePacketProfile(input.profile);
   const checks: CaseResponsePreflightCheck[] = [
     {
@@ -853,38 +959,48 @@ export function buildCaseResponsePreflight(
     {
       id: 'analyst_decision',
       label: 'Analyst decision',
-      state: caseRecord.decisions.length ? 'pass' : 'caution',
-      detail: caseRecord.decisions.length
-        ? `${caseRecord.decisions.length} analyst decision${caseRecord.decisions.length === 1 ? '' : 's'} record the escalation rationale.`
-        : 'No explicit analyst decision explains why external reporting is appropriate.',
+      state: evidenceLinkedDecisionCount ? 'pass' : 'caution',
+      detail: evidenceLinkedDecisionCount
+        ? `${evidenceLinkedDecisionCount} analyst decision${evidenceLinkedDecisionCount === 1 ? '' : 's'} cite retained evidence and record the escalation rationale.`
+        : caseRecord.decisions.length
+          ? 'Analyst decisions are recorded, but none cites a retained evidence pin.'
+          : 'No explicit analyst decision explains why external reporting is appropriate.',
     },
     {
       id: 'recipient_route',
       label: 'Recipient route',
-      state: contacts.length ? 'pass' : 'caution',
-      detail: contacts.length
-        ? `${contacts.length} separately attributed contact route${contacts.length === 1 ? ' is' : 's are'} included.`
+      state: binding.recipientRoute ? 'pass' : profile.id === 'internal_soc' ? 'caution' : 'block',
+      detail: binding.recipientRoute
+        ? `The selected ${contactLabel(binding.recipientRoute.kind)} route is bound to action ${binding.recipientRoute.actionId}.`
         : 'No contact route is included; identify and review the intended recipient before sending.',
     },
     {
       id: 'profile_recipient',
       label: 'Audience-specific recipient',
-      state: profile.requiredContactKind
-        ? contacts.some((contact) => contact.kind === profile.requiredContactKind) ? 'pass' : 'caution'
-        : 'pass',
+      state: profile.id === 'internal_soc'
+        ? 'pass'
+        : binding.recipientRoute ? 'pass' : 'block',
       detail: profile.requiredContactKind
-        ? contacts.some((contact) => contact.kind === profile.requiredContactKind)
+        ? binding.recipientRoute?.kind === profile.requiredContactKind
           ? `The ${contactLabel(profile.requiredContactKind)} route required by the ${profile.label.toLowerCase()} is present.`
           : `The ${profile.label.toLowerCase()} expects a separately attributed ${contactLabel(profile.requiredContactKind)} route.`
-        : `${profile.label} has no fixed external contact-kind requirement; confirm the intended manual destination.`,
+        : profile.id === 'browser_blocklist'
+          ? binding.recipientRoute
+            ? 'A manually reviewed submission destination is bound to the selected Case action.'
+            : 'The browser or blocklist profile requires a manually reviewed submission destination recorded as a Case action.'
+          : `${profile.label} has no fixed external contact-kind requirement.`,
     },
     {
       id: 'case_disposition',
       label: 'Case disposition',
-      state: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition) ? 'pass' : 'caution',
-      detail: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition)
-        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}.`
-        : `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`,
+      state: responseDisposition && caseRecord.reviewReasonCode && evidenceLinkedDecisionCount ? 'pass' : 'caution',
+      detail: responseDisposition && caseRecord.reviewReasonCode && evidenceLinkedDecisionCount
+        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')} with the reviewed reason ${caseRecord.reviewReasonCode.replaceAll('_', ' ')} and an evidence-linked decision.`
+        : !responseDisposition
+          ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`
+          : !caseRecord.reviewReasonCode
+            ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}, but no reviewed reason is recorded.`
+            : 'The case disposition and reason are recorded, but no analyst decision cites retained evidence.',
     },
     {
       id: 'evidence_freshness',
@@ -905,12 +1021,22 @@ export function buildCaseResponsePreflight(
         : 'No open contradictory-evidence assertion is recorded.',
     },
     {
+      id: 'packet_action',
+      label: 'Packet action',
+      state: binding.actionBinding.state === 'selected' ? 'pass' : profile.id === 'internal_soc' ? 'caution' : 'block',
+      detail: binding.actionBinding.state === 'selected'
+        ? `Action ${binding.actionBinding.selectedActionId} owns this packet and its retained origin lineage.`
+        : 'Select the retained Case action this packet prepares or documents.',
+    },
+    {
       id: 'action_tracking',
       label: 'Action tracking',
-      state: actionSummary.total ? 'pass' : 'caution',
-      detail: actionSummary.total
-        ? `${actionSummary.total} reviewed action${actionSummary.total === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
-        : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
+      state: reviewedActionCount ? 'pass' : 'caution',
+      detail: reviewedActionCount
+        ? `${reviewedActionCount} reviewed or later-stage action${reviewedActionCount === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
+        : actionSummary.total
+          ? `${actionSummary.total} action${actionSummary.total === 1 ? ' remains' : 's remain'} before reviewed state.`
+          : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
     },
   ];
   const counts = {
@@ -919,7 +1045,7 @@ export function buildCaseResponsePreflight(
     pass: checks.filter((item) => item.state === 'pass').length,
   };
   return {
-    version: 2,
+    version: 3,
     status: counts.block ? 'needs_input' : counts.caution ? 'review_cautions' : 'ready_for_review',
     canExport: counts.block === 0,
     counts,
@@ -928,20 +1054,23 @@ export function buildCaseResponsePreflight(
   };
 }
 
-function normalizeActionHistory(caseRecord: CaseRecord): Readonly<{
+function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacketInput): Readonly<{
   actions: CaseResponsePacket['escalationHistory'];
   omitted: number;
   limitations: string[];
+  actionBinding: CaseResponsePacket['actionBinding'];
+  lineageComplete: boolean;
 }> {
-  const omitted = Math.max(0, caseRecord.actions.length - MAX_RESPONSE_ACTION_HISTORY);
+  const lineage = packetActionLineage(caseRecord, input);
+  const omitted = Math.max(0, caseRecord.actions.length - lineage.actions.length);
   return {
-    actions: caseRecord.actions
-    .slice(-MAX_RESPONSE_ACTION_HISTORY)
+    actions: lineage.actions
     .map((action) => ({
       actionId: action.id,
       type: text(action.type, 80),
       recipient: text(action.recipient, 320),
       contactSource: text(action.contactSource, 120),
+      routeObservedAt: timestamp(action.routeObservedAt),
       state: text(action.state, 80),
       reference: text(action.reference, 500) || null,
       providerOutcome: text(action.providerOutcome, 80) || null,
@@ -968,22 +1097,42 @@ function normalizeActionHistory(caseRecord: CaseRecord): Readonly<{
       updatedAt: timestamp(action.updatedAt) ?? caseRecord.updatedAt,
     })),
     omitted,
-    limitations: omitted ? [
-      `${omitted} earlier Case response action${omitted === 1 ? '' : 's'} omitted from this bounded packet projection.`,
-      'Provider-outcome time is withheld because an omitted action could contain a later or concurrent typed event.',
-    ] : [],
+    limitations: [
+      ...(omitted ? [`${omitted} Case response action${omitted === 1 ? '' : 's'} outside the retained selected-action lineage ${omitted === 1 ? 'was' : 'were'} excluded from this packet.`] : []),
+      ...(!lineage.complete ? ['The selected action origin lineage exceeded the packet bound or contained a cycle; provider-outcome time is withheld.'] : []),
+    ],
+    actionBinding: lineage.selected ? {
+      state: 'selected',
+      selectedActionId: lineage.selected.id,
+      lineageActionIds: [...lineage.ids],
+      limitations: lineage.complete ? [] : ['The origin-action lineage is incomplete.'],
+    } : {
+      state: 'not_selected', selectedActionId: null, lineageActionIds: [],
+      limitations: ['No retained Case action is selected for this packet.'],
+    },
+    lineageComplete: lineage.complete,
   };
 }
 
 function normalizeResponseLifecycle(
   caseRecord: CaseRecord,
-  escalationHistoryOmitted: number,
+  actionIds: readonly string[],
+  lineageComplete: boolean,
 ): CaseResponsePacket['responseLifecycle'] {
-  const summary = buildCaseResponseLifecycleSummary(caseRecord);
-  const providerOutcomeState = escalationHistoryOmitted ? 'ambiguous' : summary.providerOutcomeState;
+  const scopedIds = new Set(actionIds);
+  const scopedRecord = {
+    ...caseRecord,
+    actions: caseRecord.actions.filter((action) => scopedIds.has(action.id)),
+    closures: {
+      ...caseRecord.closures,
+      records: caseRecord.closures.records.filter((closure) => closure.actionId !== null && scopedIds.has(closure.actionId)),
+    },
+  };
+  const summary = buildCaseResponseLifecycleSummary(scopedRecord);
+  const providerOutcomeState = lineageComplete ? summary.providerOutcomeState : 'ambiguous';
   return {
     providerOutcomeState,
-    latestProviderOutcome: !escalationHistoryOmitted && summary.latestProviderOutcome ? { ...summary.latestProviderOutcome } : null,
+    latestProviderOutcome: lineageComplete && summary.latestProviderOutcome ? { ...summary.latestProviderOutcome } : null,
     observedChangeState: summary.observedChangeState,
     latestObservedEffect: summary.latestObservedEffect ? { ...summary.latestObservedEffect } : null,
     latestObservedChangeAt: summary.latestObservedChangeAt,
@@ -997,7 +1146,7 @@ function normalizeResponseLifecycle(
       'Provider workflow outcomes and independently observed technical effects are separate point-in-time records.',
       'A provider acknowledgement, terminal state, or reported resolution never becomes independently observed remediation, absence, or safety.',
       'Times are withheld when the corresponding typed event is missing or ambiguous.',
-      ...(escalationHistoryOmitted ? ['Provider-outcome time is withheld because the bounded packet omits earlier response actions.'] : []),
+      ...(!lineageComplete ? ['Provider-outcome time is withheld because the selected action origin lineage is incomplete.'] : []),
     ],
   };
 }
@@ -1029,11 +1178,11 @@ export function buildCaseResponseReviewInputs(
 ) {
   const profile = buildResponsePacketProfilePreview(caseRecord, input);
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH);
-  const contacts = normalizeContacts(input.contacts, generatedAt);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   const contradictions = normalizeContradictions(caseRecord);
-  const readiness = buildResponseReadiness(caseRecord, input, generatedAt, contacts, selectedEvidence, contradictions);
-  const escalation = normalizeActionHistory(caseRecord);
+  const binding = bindPacketRoute(caseRecord, input, generatedAt);
+  const readiness = buildResponseReadiness(caseRecord, input, generatedAt, binding.contacts, binding.recipientRoute, selectedEvidence, contradictions);
+  const escalation = normalizeActionHistory(caseRecord, input);
   return {
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
     version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
@@ -1061,7 +1210,9 @@ export function buildCaseResponseReviewInputs(
       observedHarm: text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH),
       observedAt: timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null,
     },
-    contacts,
+    contacts: binding.contacts,
+    recipientRoute: binding.recipientRoute,
+    actionBinding: escalation.actionBinding,
     selectedEvidence,
     contradictions,
     readiness,
@@ -1069,7 +1220,7 @@ export function buildCaseResponseReviewInputs(
     escalationHistory: escalation.actions,
     escalationHistoryOmitted: escalation.omitted,
     escalationHistoryLimitations: escalation.limitations,
-    responseLifecycle: normalizeResponseLifecycle(caseRecord, escalation.omitted),
+    responseLifecycle: normalizeResponseLifecycle(caseRecord, escalation.actionBinding.lineageActionIds, escalation.lineageComplete),
   };
 }
 
@@ -1080,6 +1231,8 @@ const CASE_RESPONSE_REVIEW_INPUT_KEYS = Object.freeze([
   'case',
   'incident',
   'contacts',
+  'recipientRoute',
+  'actionBinding',
   'selectedEvidence',
   'contradictions',
   'readiness',
@@ -1089,6 +1242,9 @@ const CASE_RESPONSE_REVIEW_INPUT_KEYS = Object.freeze([
   'escalationHistoryLimitations',
   'responseLifecycle',
 ] as const);
+const PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS = Object.freeze(
+  CASE_RESPONSE_REVIEW_INPUT_KEYS.filter((key) => key !== 'recipientRoute' && key !== 'actionBinding'),
+);
 
 function exactReviewRecord(
   value: unknown,
@@ -1207,12 +1363,24 @@ function recursivelyFreezeReviewValue<T>(value: T): T {
 }
 
 export function validateCaseResponseReviewInputs(value: unknown): Readonly<Record<string, unknown>> {
-  const source = exactReviewRecord(value, CASE_RESPONSE_REVIEW_INPUT_KEYS, 'Case-response review inputs');
-  if (source.contract !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA
-    || source.version !== CASE_RESPONSE_REVIEW_INPUTS_VERSION) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Case-response review inputs must be an exact object.');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (!descriptors.contract || !Object.hasOwn(descriptors.contract, 'value')
+    || !descriptors.version || !Object.hasOwn(descriptors.version, 'value')) {
+    throw new TypeError('Case-response review inputs must not contain accessors.');
+  }
+  const current = descriptors.version.value === CASE_RESPONSE_REVIEW_INPUTS_VERSION;
+  const publishedV2 = descriptors.version.value === PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
+  if (descriptors.contract.value !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA || (!current && !publishedV2)) {
     throw new TypeError('Case-response review inputs contain an unsupported version, shape, or bound.');
   }
-
+  const source = exactReviewRecord(
+    value,
+    current ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS,
+    'Case-response review inputs',
+  );
   const profile = exactReviewRecord(source.profile, [
     'id', 'label', 'audience', 'subject', 'checklist', 'includedEvidence',
     'excludedEvidence', 'redactions',
@@ -1258,6 +1426,40 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewText(contact.source, 120, 'Case-response contact source');
     reviewText(contact.observedAt, 64, 'Case-response contact observation time', true);
     reviewStrings(contact.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response contact limitations');
+  }
+
+  if (current && source.recipientRoute !== null) {
+    const route = exactReviewRecord(source.recipientRoute, [
+      'actionId', 'kind', 'contact', 'source', 'observedAt', 'freshness', 'limitations',
+    ], 'Case-response recipient route');
+    reviewText(route.actionId, 64, 'Case-response recipient action id');
+    reviewEnum(route.kind, [...RESPONSE_CONTACT_KINDS, 'manual'], 'Case-response recipient kind');
+    reviewText(route.contact, 320, 'Case-response recipient value');
+    reviewText(route.source, 120, 'Case-response recipient source');
+    reviewText(route.observedAt, 64, 'Case-response recipient observation time', true);
+    reviewEnum(route.freshness, ['current', 'stale', 'unknown'], 'Case-response recipient freshness');
+    reviewStrings(route.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response recipient limitations');
+  }
+
+  let currentLineageActionIds: string[] | null = null;
+  if (current) {
+    const actionBinding = exactReviewRecord(source.actionBinding, [
+      'state', 'selectedActionId', 'lineageActionIds', 'limitations',
+    ], 'Case-response action binding');
+    const bindingState = reviewEnum(actionBinding.state, ['selected', 'not_selected'], 'Case-response action binding state');
+    const selectedActionId = reviewText(actionBinding.selectedActionId, 64, 'Case-response selected action id', true);
+    const lineageActionIds = reviewStrings(actionBinding.lineageActionIds, MAX_RESPONSE_ACTION_HISTORY, 64, 'Case-response action lineage');
+    currentLineageActionIds = lineageActionIds;
+    if ((bindingState === 'selected') !== Boolean(selectedActionId)
+      || (selectedActionId !== null && lineageActionIds[0] !== selectedActionId)
+      || new Set(lineageActionIds).size !== lineageActionIds.length) {
+      throw new TypeError('Case-response action binding is inconsistent.');
+    }
+    reviewStrings(actionBinding.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response action-binding limitations');
+    if (source.recipientRoute !== null
+      && (source.recipientRoute as Record<string, unknown>).actionId !== selectedActionId) {
+      throw new TypeError('Case-response recipient route is not bound to the selected action.');
+    }
   }
 
   for (const candidate of boundedReviewArray(source.selectedEvidence, MAX_RESPONSE_SELECTED_EVIDENCE, 'Case-response selected evidence')) {
@@ -1334,15 +1536,22 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewStrings(reference.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response artefact limitations');
   }
 
+  const escalationActionIds: string[] = [];
   for (const candidate of boundedReviewArray(source.escalationHistory, MAX_RESPONSE_ACTION_HISTORY, 'Case-response escalation history')) {
     const action = exactReviewRecord(candidate, [
       'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
+      ...(current ? ['routeObservedAt'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
     ], 'Case-response escalation action');
     for (const key of ['actionId', 'recipient', 'contactSource', 'createdAt', 'updatedAt'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`);
     }
+    if (escalationActionIds.includes(action.actionId as string)) {
+      throw new TypeError('Case-response escalation action identities must be unique.');
+    }
+    escalationActionIds.push(action.actionId as string);
+    if (current) reviewText(action.routeObservedAt, 64, 'Case-response action route observation time', true);
     reviewEnum(action.type, CASE_ACTION_TYPES, 'Case-response action type');
     reviewEnum(action.state, CASE_ACTION_STATES, 'Case-response action state');
     for (const key of ['reference', 'outcomeDetail', 'originActionId'] as const) {
@@ -1370,6 +1579,11 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       if (typeof transition.applied !== 'boolean') throw new TypeError('Case-response transition applied state is invalid.');
       reviewStrings(transition.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response transition limitations');
     }
+  }
+  if (currentLineageActionIds
+    && (currentLineageActionIds.length !== escalationActionIds.length
+      || escalationActionIds.some((id, index) => currentLineageActionIds?.[index] !== id))) {
+    throw new TypeError('Case-response escalation history must match the selected action lineage in order.');
   }
   reviewCount(source.escalationHistoryOmitted, MAX_CASE_ACTIONS, 'Case-response omitted action count');
   reviewStrings(source.escalationHistoryLimitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response escalation limitations');
@@ -1463,9 +1677,10 @@ function escapeMarkdown(value: string): string {
   return value.replace(/([\\`*_[\]<>|])/gu, '\\$1').replace(/\r?\n/gu, ' ');
 }
 
-function contactLabel(value: ResponseContactKind): string {
-  if (value === 'network_hosting') return 'Network or hosting';
+function contactLabel(value: ResponseContactKind | 'manual'): string {
+  if (value === 'network_hosting') return 'Observed endpoint network registration';
   if (value === 'security_txt') return 'security.txt';
+  if (value === 'manual') return 'Manual submission';
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
@@ -1486,6 +1701,8 @@ export async function buildCaseResponsePacket(
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
   const reviewMaterial = buildCaseResponseReviewInputs(caseRecord, input, normalizedGeneratedAt);
   const contacts = reviewMaterial.contacts;
+  const recipientRoute = reviewMaterial.recipientRoute;
+  const actionBinding = reviewMaterial.actionBinding;
   const selectedEvidence = reviewMaterial.selectedEvidence;
   const contradictions = reviewMaterial.contradictions;
   const readiness = reviewMaterial.readiness;
@@ -1541,6 +1758,8 @@ export async function buildCaseResponsePacket(
       observedAt,
     },
     contacts,
+    recipientRoute,
+    actionBinding,
     selectedEvidence,
     contradictions,
     readiness,
@@ -1590,24 +1809,26 @@ export async function buildCaseResponsePacket(
     '',
     ...abusiveUrls.map((url) => `- ${escapeMarkdown(url)}`),
     '',
-    '## Escalation contacts',
+    '## Selected response route',
     '',
-    ...(contacts.length
-      ? contacts.flatMap((contact) => [
-          `### ${contactLabel(contact.kind)}`,
+    ...(recipientRoute
+      ? [
+          `### ${contactLabel(recipientRoute.kind)}`,
           '',
-          `- Contact: ${escapeMarkdown(contact.contact)}`,
-          `- Source: ${escapeMarkdown(contact.source)}`,
-          `- Route observed: ${contact.observedAt ?? 'Not provided'} (${contact.freshness})`,
-          `- Limitations: ${contact.limitations.length ? contact.limitations.map(escapeMarkdown).join('; ') : 'None recorded'}`,
+          `- Case action: ${escapeMarkdown(recipientRoute.actionId)}`,
+          `- Contact: ${escapeMarkdown(recipientRoute.contact)}`,
+          `- Source: ${escapeMarkdown(recipientRoute.source)}`,
+          `- Route observed: ${recipientRoute.observedAt ?? 'Not provided'} (${recipientRoute.freshness})`,
+          `- Limitations: ${recipientRoute.limitations.length ? recipientRoute.limitations.map(escapeMarkdown).join('; ') : 'None recorded'}`,
           '',
-        ])
-      : ['No escalation contact was included.', '']),
-    '## Escalation history',
+        ]
+      : ['No profile-appropriate response route was bound to this packet.', '']),
+    '## Selected action lineage',
     '',
     ...(escalationHistory.length
       ? escalationHistory.flatMap((action) => [
           `- ${escapeMarkdown(action.type.replaceAll('_', ' '))} to ${escapeMarkdown(action.recipient)} · ${escapeMarkdown(action.state.replaceAll('_', ' '))} · updated ${action.updatedAt}`,
+          `  - Route observed: ${action.routeObservedAt ?? 'Not provided'}`,
           ...(action.reference ? [`  - Reference: ${escapeMarkdown(action.reference)}`] : []),
           ...(action.providerOutcome ? [`  - Typed provider outcome: ${escapeMarkdown(action.providerOutcome.replaceAll('_', ' '))}`] : []),
           ...(action.outcomeDetail ? [`  - Outcome detail: ${escapeMarkdown(action.outcomeDetail)}`] : []),
@@ -1622,8 +1843,8 @@ export async function buildCaseResponsePacket(
           ...(action.historyOmitted ? [`  - ${action.historyOmitted} earlier transition event${action.historyOmitted === 1 ? '' : 's'} omitted by bound.`] : []),
           ...action.historyLimitations.map((limitation) => `  - History limitation: ${escapeMarkdown(limitation)}`),
         ])
-      : ['No reviewed case actions were recorded.']),
-    ...(escalationHistoryOmitted ? [`- Earlier actions omitted from packet projection: ${escalationHistoryOmitted}`] : []),
+      : ['No Case action was selected.']),
+    ...(escalationHistoryOmitted ? [`- Unrelated Case actions excluded from packet: ${escalationHistoryOmitted}`] : []),
     ...escalationHistoryLimitations.map((limitation) => `- Packet history limitation: ${escapeMarkdown(limitation)}`),
     '',
     '## Readiness and authorisation',
@@ -1671,7 +1892,7 @@ export async function buildCaseResponsePacket(
     ...profile.checklist.map((item) => `- Checklist: ${escapeMarkdown(item)}`),
     ...profile.includedEvidence.map((item) => `- Included: ${escapeMarkdown(item)}`),
     ...profile.excludedEvidence.map((item) => `- Excluded: ${escapeMarkdown(item)}`),
-    ...profile.redactions.map((item) => `- Redaction: ${escapeMarkdown(item)}`),
+    ...profile.redactions.map((item) => `- Redaction to confirm: ${escapeMarkdown(item)}`),
     ...profile.attachments.map((item) => `- Attachment expectation: ${escapeMarkdown(item)}`),
     ...profile.followUpFields.map((item) => `- Follow-up field: ${escapeMarkdown(item)}`),
   ];
@@ -1690,6 +1911,14 @@ export async function buildCaseResponsePacket(
     '',
     'Exact URLs:',
     ...abusiveUrls.map((url) => `- ${url}`),
+    '',
+    'Selected evidence:',
+    ...(selectedEvidence.length
+      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}, observed ${item.observedAt} (${item.completeness})`)
+      : ['- No Case evidence pin was selected.']),
+    '',
+    `Reviewed packet SHA-256: ${digestSha256}`,
+    'Attach the reviewed packet (and any separately reviewed evidence files) through the recipient’s approved submission channel; this message does not embed or transmit attachments.',
     '',
     responseLifecycle.latestProviderOutcome
       ? `Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')})`

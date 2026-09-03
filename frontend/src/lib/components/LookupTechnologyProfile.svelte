@@ -1,7 +1,8 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  type Evidence = { source: string; description: string };
-  type Finding = { id: string; name: string; category: string; confidence: string; evidence: Evidence[] };
+  type EvidenceRole = 'observed_edge' | 'application_platform' | 'framework_runtime' | 'embedded_dependency';
+  type Evidence = { source: string; role: string; description: string };
+  type Finding = { id: string; name: string; category: string; confidence: string; roles: string[]; evidence: Evidence[] };
   type LibraryFinding = {
     id: string;
     name: string;
@@ -19,6 +20,7 @@
     status,
     complete,
     findings,
+    authoritativeNameservers,
     limitations,
     libraryAvailable,
     libraryStatus,
@@ -31,6 +33,7 @@
     status: string;
     complete: boolean;
     findings: Finding[];
+    authoritativeNameservers: string[];
     limitations: string[];
     libraryAvailable: boolean;
     libraryStatus: string;
@@ -44,6 +47,17 @@
   const advisoryMatches = $derived(libraries.filter((library) => library.advisoryCount > 0).length);
   const noTechnologyMatches = $derived(status === 'success' && complete && findings.length === 0);
   const noLibraryMatches = $derived(libraryStatus === 'success' && libraryComplete && libraries.length === 0);
+  const roleOrder: readonly EvidenceRole[] = ['observed_edge', 'application_platform', 'framework_runtime', 'embedded_dependency'];
+  const roleLabels: Record<EvidenceRole, string> = {
+    observed_edge: 'Observed edge, CDN, reverse proxy or WAF',
+    application_platform: 'Application-platform indicator',
+    framework_runtime: 'Framework or runtime indicator',
+    embedded_dependency: 'Embedded or third-party dependency',
+  };
+  const findingsByRole = $derived(Object.fromEntries(roleOrder.map((role) => [
+    role,
+    findings.filter((finding) => finding.roles.includes(role)).map((finding) => finding.name),
+  ])) as Record<EvidenceRole, string[]>);
 </script>
 
 <details class="technology-card evidence-card card" aria-labelledby="technology-profile-title" open={initiallyExpanded}>
@@ -59,18 +73,30 @@
   </summary>
 
   <div class="evidence-body">
+    <section class="infrastructure-roles" aria-labelledby="infrastructure-role-title">
+      <h5 id="infrastructure-role-title">Web infrastructure evidence roles</h5>
+      <dl>
+        <div><dt>Authoritative nameservers</dt><dd>{authoritativeNameservers.join(' · ') || 'Unavailable'}</dd></div>
+        {#each roleOrder as role}
+          <div><dt>{roleLabels[role]}</dt><dd>{findingsByRole[role].join(' · ') || 'No retained indicator'}</dd></div>
+        {/each}
+        <div><dt>Origin host</dt><dd>Not established</dd></div>
+      </dl>
+      <p class="role-note">Nameserver identity remains DNS evidence. Edge, application-platform, framework, runtime and dependency indicators describe where each clue was observed; they do not establish provider ownership, control, a concealed origin, safety or maliciousness.</p>
+    </section>
+
     {#if findings.length}
       <div class="technology-grid">
         {#each findings as finding}
           <article>
             <div class="finding-head">
               <h5>{finding.name}</h5>
-              <span class="confidence">{finding.confidence} confidence</span>
+              <span class="confidence">{finding.confidence} signature strength</span>
             </div>
             <p class="category">{finding.category}</p>
             <ul aria-label={`${finding.name} evidence`}>
               {#each finding.evidence as evidence}
-                <li><strong>{evidence.source}</strong><span>{evidence.description}</span></li>
+                <li><strong>{evidence.source}{evidence.role && roleLabels[evidence.role as EvidenceRole] ? ` · ${roleLabels[evidence.role as EvidenceRole]}` : ''}</strong><span>{evidence.description}</span></li>
               {/each}
             </ul>
           </article>
@@ -81,7 +107,7 @@
     {/if}
 
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">These indicators are derived from the selected HTTP server header, generator metadata, resource origins, and static HTML already collected by this deep lookup. They make no additional request and do not affect availability or Risk scoring.</p>
+    <p class="card-note">Signature strength describes how distinctive the matched retained clue is; it is not an empirical accuracy rate or confirmation that a technology is present. These indicators make no additional request and do not affect availability or Risk scoring.</p>
 
     {#if libraryAvailable}
       <section class="library-profile" aria-labelledby="browser-library-title">
@@ -129,6 +155,13 @@
 
 <style>
   .technology-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px}
+  .infrastructure-roles{min-width:0;margin-bottom:14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
+  .infrastructure-roles h5{margin:0 0 10px;color:var(--text);font-size:var(--text-sm)}
+  .infrastructure-roles dl{display:grid;gap:8px;margin:0}
+  .infrastructure-roles dl div{display:grid;grid-template-columns:minmax(180px,.42fr) minmax(0,1fr);gap:10px}
+  .infrastructure-roles dt{color:var(--muted);font-size:var(--text-xs)}
+  .infrastructure-roles dd{min-width:0;margin:0;color:var(--text);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .role-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .technology-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .finding-head h5{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
@@ -162,5 +195,6 @@
     .library-heading{display:grid;gap:8px}
     .library-heading .evidence-status{justify-self:start}
     dl div{grid-template-columns:1fr}
+    .infrastructure-roles dl div{grid-template-columns:1fr;gap:2px}
   }
 </style>

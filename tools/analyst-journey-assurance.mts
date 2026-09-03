@@ -188,7 +188,7 @@ export function buildAnalystJourneyAssurance() {
   for (const required of REQUIRED_BOUNDARY_SPECS) assignedShard(required, plan);
   const config = boundedSource('playwright.config.ts');
   const fixture = boundedSource('e2e/fixtures.ts');
-  if (!/failOnFlakyTests:\s*isCI/u.test(config)
+  if (!/failOnFlakyTests:\s*true/u.test(config)
     || !/auto:\s*true/u.test(fixture)
     || !/context\.route\('\*\*\/\*'/u.test(fixture)
     || !/requests must stay within the local test server origin/u.test(fixture)) {
@@ -216,16 +216,20 @@ export function buildAnalystJourneyAssurance() {
   const unknownTags = tests.flatMap((item) => item.tags.filter((tag) => tag.startsWith('@journey-') && !declaredTags.has(tag)));
   if (unknownTags.length) throw new TypeError('Analyst journey tests contain undeclared journey tags.');
 
+  const responseTaskIds = new Set(['case-decision-packet']);
+  const assuranceTaskIds = new Set(['case-monitor-recheck', 'archive-export-verify']);
   const jobs = Object.freeze({
-    Investigate: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => task !== 'case-decision-packet' && task !== 'archive-export-verify')).map((journey) => journey.id)),
+    Investigate: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => !responseTaskIds.has(task) && !assuranceTaskIds.has(task))).map((journey) => journey.id)),
     Respond: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.includes('case-decision-packet')).map((journey) => journey.id)),
-    Assure: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.includes('archive-export-verify')).map((journey) => journey.id)),
+    Assure: Object.freeze(SYNTHETIC_ANALYST_JOURNEYS.filter((journey) => journey.taskIds.some((task) => assuranceTaskIds.has(task))).map((journey) => journey.id)),
   });
   if (!jobs.Investigate.length || !jobs.Respond.length || !jobs.Assure.length) {
     throw new TypeError('Investigate, Respond, and Assure must each map to an explicit analyst journey.');
   }
   return Object.freeze({
     assuranceVersion: ANALYST_JOURNEY_ASSURANCE_VERSION,
+    execution: 'static_source_audit' as const,
+    browserTestsExecuted: 0,
     journeyContractVersion: SYNTHETIC_ANALYST_JOURNEY_VERSION,
     declaredJourneys: SYNTHETIC_ANALYST_JOURNEYS.length,
     mappedJourneys: journeys.length,
@@ -252,9 +256,10 @@ export function main(args = process.argv.slice(2)): number {
     const result = buildAnalystJourneyAssurance();
     if (args[0] === '--json') process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else process.stdout.write(
-      `Analyst journey assurance v${result.assuranceVersion}: ${result.mappedJourneys}/${result.declaredJourneys} journeys, `
-      + `${result.playwrightTests} real tests, ${result.balancedShardSpecifications} balanced-shard specs, `
-      + `${result.skippedJourneys} skipped, retry acceptance ${result.retryAcceptance ? 'enabled' : 'disabled'}.\n`,
+      `Analyst journey contract audit v${result.assuranceVersion}: ${result.mappedJourneys}/${result.declaredJourneys} journeys mapped, `
+      + `${result.playwrightTests} enabled tagged test declarations, ${result.balancedShardSpecifications} balanced-shard specifications, `
+      + `${result.skippedJourneys} declared tests disabled, retry acceptance ${result.retryAcceptance ? 'enabled' : 'disabled'}. `
+      + 'This static audit did not execute a browser test.\n',
     );
     return 0;
   } catch (error) {

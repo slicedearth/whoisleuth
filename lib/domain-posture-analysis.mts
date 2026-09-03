@@ -70,6 +70,13 @@ const SPF_MAX_DEPTH = 5;
 const SPF_MAX_BRANCHES = 32;
 const MAX_DMARC_DESTINATIONS = 10;
 const MAX_DEPENDENCIES = 64;
+const DEPENDENCY_KIND_ORDER: Readonly<Record<DependencyKind, number>> = Object.freeze({
+  nameserver: 0,
+  mail_exchange: 1,
+  spf_include: 2,
+  spf_redirect: 3,
+  dmarc_reporting: 4,
+});
 
 function strictHostname(value: unknown): string | null {
   const input = String(value || '').trim().replace(/\.+$/u, '');
@@ -357,7 +364,11 @@ function buildExternalDependencies({
       ['authorized', 'self'].includes(authorization.state) ? 'observed' : 'unavailable',
     );
   }
-  return output;
+  return output.sort((left, right) => (
+    DEPENDENCY_KIND_ORDER[left.kind] - DEPENDENCY_KIND_ORDER[right.kind]
+    || left.target.localeCompare(right.target)
+    || left.source.localeCompare(right.source)
+  ));
 }
 
 export {

@@ -5,18 +5,9 @@
 import { domainToASCII } from 'node:url';
 
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { isRecord } from './json-record.mts';
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-export function recordOrNull(value: unknown): Record<string, unknown> | null {
-  return isRecord(value) ? value : null;
-}
-
-export function recordOrEmpty(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
+export { isRecord, recordOrEmpty, recordOrNull } from './json-record.mts';
 
 export function boundedString(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/u.test(value)) return null;

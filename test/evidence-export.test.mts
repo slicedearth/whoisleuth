@@ -7,6 +7,7 @@ import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 
 function fixtureResponse(): Record<string, unknown> {
   return {
@@ -15,6 +16,10 @@ function fixtureResponse(): Record<string, unknown> {
     inputHostname: 'login.example.com',
     registrableDomain: 'example.com',
     isSubdomain: true,
+    registrarStanding: buildRegistrarStanding({
+      registrarIanaId: '999',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    }),
     rdap: {
       rdapServer: 'https://rdap.example/domain/example.com',
       transportSecurity: 'https',
@@ -384,6 +389,30 @@ describe('lookup evidence export', () => {
     assert.equal(explicitOffset?.fetchedAt, '2026-01-15T01:00:00.000Z');
   });
 
+  test('binds registrar standing to the unambiguous retained registration identity', () => {
+    const response = fixtureResponse();
+    response.registrarStanding = buildRegistrarStanding({
+      registrarIanaId: '4318',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    });
+    assert.throws(
+      () => evidence.buildLookupEvidence(response, { generatedAt: '2026-09-03T12:00:00.000Z' }),
+      /does not match the retained registration sources/iu,
+    );
+
+    const conflicting = fixtureResponse();
+    conflicting.registrarStanding = buildRegistrarStanding({
+      registrarIanaId: '999',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    });
+    recordValue(recordValue(conflicting.rdap).parsed).registrarIanaId = '999';
+    recordValue(recordValue(conflicting.whois).parsed).registrarIanaId = '2';
+    assert.throws(
+      () => evidence.buildLookupEvidence(conflicting, { generatedAt: '2026-09-03T12:00:00.000Z' }),
+      /conflicting retained registrar identifiers/iu,
+    );
+  });
+
   test('packages query context, privacy-minimized sources, analysis, and provenance', () => {
     const response = fixtureResponse();
     const injectedDiagnostics = recordValue(response.diagnostics);
@@ -418,7 +447,7 @@ describe('lookup evidence export', () => {
       version: 99,
       abuseRouting: [{ contact: 'untrusted-registry-insight@example.test' }],
     };
-    const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
+    const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-09-03T12:00:00.000Z' });
     const diagnostics = recordValue(result.diagnostics);
     const rdapDiagnostics = recordValue(diagnostics.rdap);
     const registrarDiagnostics = recordValue(rdapDiagnostics.registrar);
@@ -470,9 +499,14 @@ describe('lookup evidence export', () => {
     const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
     const registrarComparison = requiredValue(result.analysis.registrarPublicationComparison);
     const registryInsights = requiredValue(result.analysis.registryInsights);
+    const registrarStanding = recordValue(result.analysis.registrarStanding);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
     assert.equal(result.schemaVersion, evidence.LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(registrarStanding.ianaId, '999');
+    assert.equal(recordValue(registrarStanding.accreditation).state, 'terminated');
+    assert.equal(recordValue(registrarStanding.assessment).state, 'terminated');
+    assert.match(JSON.stringify(registrarStanding), /not whether this domain is malicious/iu);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -588,17 +622,21 @@ describe('lookup evidence export', () => {
     );
     assert.deepEqual(recordValue(pageIdentity.publicationMetadata), pagePublicationMetadataFixture());
     assert.deepEqual(recordValue(httpResponse.deliveryMetadata), httpDeliveryMetadataFixture());
-    assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
+    assert.equal(result.generatedAt, '2026-09-03T12:00:00.000Z');
   });
 
   test('requires explicit generation times and canonicalizes explicit offsets', () => {
     assert.throws(
-      () => evidence.buildLookupEvidence(fixtureResponse(), { generatedAt: '2026-07-11T12:00:00' }),
+      () => evidence.buildLookupEvidence(fixtureResponse(), { generatedAt: '2026-09-03T12:00:00' }),
       /explicit timezone/u,
     );
     assert.equal(
-      evidence.buildLookupEvidence(fixtureResponse(), { generatedAt: '2026-07-11T12:00:00+01:00' }).generatedAt,
-      '2026-07-11T11:00:00.000Z',
+      evidence.buildLookupEvidence(fixtureResponse(), { generatedAt: '2026-09-03T12:00:00+01:00' }).generatedAt,
+      '2026-09-03T11:00:00.000Z',
+    );
+    assert.throws(
+      () => evidence.buildLookupEvidence(fixtureResponse(), { generatedAt: '2026-09-03T08:00:00.000Z' }),
+      /observed after the evidence export time/iu,
     );
   });
 
@@ -756,6 +794,7 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.registryComparison.counts.whois_only, 0);
     assert.equal(result.analysis.registryComparison.sourceHealth.rdap.condition, 'unavailable');
     assert.equal(result.analysis.registryComparison.sourceHealth.whois.condition, 'incomplete');
+    assert.equal(result.analysis.registrarStanding, null);
   });
 
   test('keeps partial registration sources explicit when no publication payload was retained', () => {
@@ -773,6 +812,7 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.whois.status, 'partial');
     assert.equal(result.sources.whois.parsed, null);
     assert.deepEqual(result.sources.whois.chain, []);
+    assert.equal(result.analysis.registrarStanding, null);
   });
 
   test('refuses complete registration sources without normalized publication data', () => {

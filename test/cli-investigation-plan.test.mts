@@ -38,6 +38,17 @@ describe('fixed investigation plans', () => {
     assert.match(plan.limitations.join(' '), /does not execute commands/iu);
   });
 
+  test('hands executable collection plans back to the browser Case and selected comparison workflows', () => {
+    const triage = buildInvestigationPlan('domain-triage', 'example.test', NOW);
+    assert.match(triage.limitations.join(' '), /browser-local Case workspace/iu);
+    assert.match(triage.limitations.join(' '), /does not submit reports/iu);
+
+    const lookalike = buildInvestigationPlan('lookalike-review', 'Example Brand', NOW);
+    assert.match(lookalike.limitations.join(' '), /official-reference collection/iu);
+    assert.match(lookalike.limitations.join(' '), /page-compare/iu);
+    assert.match(lookalike.limitations.join(' '), /analyst-selected saved evidence/iu);
+  });
+
   test('exposes terminal and JSON output without invoking collection', async () => {
     assert.deepEqual(parseCliArguments(['workflow-plan', 'domain-triage', 'example.test', '--json']), {
       action: 'workflow-plan',
@@ -89,6 +100,24 @@ describe('fixed investigation plans', () => {
     assert.equal(collectionCalled, false);
     assert.equal(readCalled, false);
     assert.deepEqual(JSON.parse(stdout.value()).recipes.map((recipe: { id: string }) => recipe.id), ['certificate-anomaly']);
+  });
+
+  test('keeps terminal discovery readable and quiet plans silent', async () => {
+    const terminal = capture();
+    assert.equal(await runCli(['workflow-plan', '--list', '--no-color'], {
+      stdout: terminal.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(terminal.value(), /WHOISleuth workflow recipes/iu);
+    assert.match(terminal.value(), /domain-triage/u);
+
+    const quiet = capture();
+    assert.equal(await runCli(['workflow-plan', 'domain-triage', 'example.test', '--quiet'], {
+      stdout: quiet.stream,
+      stderr: capture().stream,
+      now: () => NOW,
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(quiet.value(), '');
   });
 
   test('rejects unsupported recipes and non-domain subjects where required', () => {

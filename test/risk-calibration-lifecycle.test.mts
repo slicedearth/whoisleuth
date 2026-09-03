@@ -28,7 +28,7 @@ import {
   RISK_MUTATION_TYPES,
   RISK_REVIEW_THRESHOLD,
   explainRiskScore,
-  explainRiskScoreV6,
+  explainRiskScoreV7,
 } from '../lib/risk-scoring.mts';
 import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
@@ -67,7 +67,7 @@ const EXPECTED_FIXTURES = [
     id: 'risk-calibration-report-v3-detailed',
     path: 'test/fixtures/risk-calibration-report-v3-detailed.json',
     bytes: 7_026,
-    sha256: '0c905036b05da2feb586199781444d5b575982bb5f6ef585d8f7c2e431363e8d',
+    sha256: '5c0c435e81478e90bc0b64aa7c20fd82d131b5261a57d9550df3f03334bc20e1',
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
     role: 'current',
@@ -78,7 +78,7 @@ const EXPECTED_FIXTURES = [
     id: 'risk-calibration-report-v3-summary',
     path: 'test/fixtures/risk-calibration-report-v3-summary.json',
     bytes: 5_486,
-    sha256: '637e739eac58ec06f3f2c9688fb2c03d5d139536e9629e1e1a811d3c8c7563d0',
+    sha256: 'b06c312eed14680ce30fd58a84a93908d29ea9e71bfee8174b90df286b730549',
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
     role: 'current',
@@ -199,8 +199,8 @@ function currentDetailed(): RiskCalibrationReport {
     generatedAt: GENERATED_AT,
     modelVersion: RISK_MODEL_VERSION,
     reviewThreshold: RISK_REVIEW_THRESHOLD,
-    previousModelVersion: 6,
-    explainPreviousRiskScore: explainRiskScoreV6,
+    previousModelVersion: 7,
+    explainPreviousRiskScore: explainRiskScoreV7,
   });
 }
 
@@ -237,8 +237,8 @@ function coverageDetailed(): RiskCalibrationReport {
     generatedAt: GENERATED_AT,
     modelVersion: RISK_MODEL_VERSION,
     reviewThreshold: RISK_REVIEW_THRESHOLD,
-    previousModelVersion: 6,
-    explainPreviousRiskScore: explainRiskScoreV6,
+    previousModelVersion: 7,
+    explainPreviousRiskScore: explainRiskScoreV7,
   });
 }
 

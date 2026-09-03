@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { Page, Route } from '@playwright/test';
+import type { ScheduledMonitoringRecoveryReport } from '../frontend/src/lib/scheduled-monitoring.ts';
 
 const NOW = '2026-07-16T12:00:00.000Z';
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
@@ -73,7 +74,27 @@ function hostedWatchlist(entry = localEntry(), overrides: Partial<HostedItem> = 
   };
 }
 
-function managementResponse(watchlists: HostedItem[], action: string | null = null, id: string | null = null) {
+const RECOVERY_FIXTURE = {
+  version: 1,
+  recoveredItems: 5,
+  categories: {
+    invalidWatchlists: 1,
+    duplicateIdentifiers: 1,
+    duplicateNames: 1,
+    truncatedInputs: 0,
+    normalisedWatchlists: 0,
+    invalidActiveRuns: 1,
+    releasedMalformedLeases: 1,
+    resetInconsistentStatuses: 0,
+  },
+} as const;
+
+function managementResponse(
+  watchlists: HostedItem[],
+  action: string | null = null,
+  id: string | null = null,
+  recovery: ScheduledMonitoringRecoveryReport | null = null,
+) {
   const projected = watchlists.reduce((total, item) => (
     total + (item.enabled ? item.domainCount * (7 * 24 / item.intervalHours) : 0)
   ), 0);
@@ -90,6 +111,7 @@ function managementResponse(watchlists: HostedItem[], action: string | null = nu
       utilizationPercent: Number((projected / 3024 * 100).toFixed(2)),
       reservePercent: 25,
     },
+    recovery,
     ...(action ? { action, id } : {}),
   };
 }
@@ -119,6 +141,7 @@ async function installManagementMock(
   initial: HostedItem[] = [],
   mutationGate: Promise<void> | null = null,
   refreshGate: { wait: Promise<void>; started: () => void } | null = null,
+  recovery: ScheduledMonitoringRecoveryReport | null = null,
 ) {
   let watchlists = structuredClone(initial);
   const commands: Array<Record<string, unknown>> = [];
@@ -130,7 +153,7 @@ async function installManagementMock(
         refreshGate.started();
         await refreshGate.wait;
       }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists)) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(managementResponse(watchlists, null, null, recovery)) });
       return;
     }
     const command = route.request().postDataJSON() as Record<string, unknown>;
@@ -171,7 +194,7 @@ async function installManagementMock(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(managementResponse(watchlists, action, id)),
+      body: JSON.stringify(managementResponse(watchlists, action, id, recovery)),
     });
   });
   return { commands, watchlists: () => structuredClone(watchlists) };
@@ -251,6 +274,54 @@ test('hosted controls stay usable without horizontal overflow on a narrow mobile
   await expect(hosted.getByRole('button', { name: 'Restore to browser' })).toBeVisible();
   await expect(hosted.getByRole('button', { name: 'Delete hosted copy' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('announces plural count-only corrections and whether canonical recovery is persisted', async ({ page }) => {
+  await seedLocalWatchlist(page);
+  await mockCapability(page, 'supported');
+  await installManagementMock(page, [], null, null, RECOVERY_FIXTURE);
+  await page.goto('/monitor?view=watchlists');
+
+  const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
+  const recovery = hosted.getByRole('status').filter({ hasText: '5 hosted-monitoring recovery corrections' });
+  await expect(recovery).toContainText('1 invalid watchlist');
+  await expect(recovery).toContainText('1 duplicate identifier');
+  await expect(recovery).toContainText('1 duplicate name');
+  await expect(recovery).toContainText('1 invalid active run');
+  await expect(recovery).toContainText('1 released malformed lease');
+  await expect(recovery).toContainText('These corrections remain view-only until the next successful hosted change');
+  await expect(recovery).toContainText('No malformed values were included in this status or displayed');
+  await expect(recovery).not.toContainText('private-target.invalid');
+
+  await hosted.getByLabel('Browser-local watchlist').selectOption('Priority domains');
+  await hosted.getByRole('button', { name: 'Schedule watchlist' }).click();
+  await expect(recovery).toContainText('These corrections were saved with the successful hosted change');
+  await expect(hosted.getByRole('status').filter({ hasText: 'Scheduled "Priority domains"' })).toBeVisible();
+});
+
+test('announces a singular count-only recovery correction', async ({ page }) => {
+  await mockCapability(page, 'supported');
+  await installManagementMock(page, [], null, null, {
+    version: 1,
+    recoveredItems: 1,
+    categories: {
+      invalidWatchlists: 0,
+      duplicateIdentifiers: 0,
+      duplicateNames: 0,
+      truncatedInputs: 0,
+      normalisedWatchlists: 0,
+      invalidActiveRuns: 0,
+      releasedMalformedLeases: 1,
+      resetInconsistentStatuses: 0,
+    },
+  });
+  await page.goto('/monitor?view=watchlists');
+
+  const recovery = page.getByRole('region', { name: 'Scheduled watchlists' })
+    .getByRole('status')
+    .filter({ hasText: '1 hosted-monitoring recovery correction was applied' });
+  await expect(recovery).toContainText('1 released malformed lease');
+  await expect(recovery).toContainText('This correction remains view-only until the next successful hosted change');
 });
 
 test('serializes hosted refresh and mutation controls while a command is pending', async ({ page }) => {

@@ -1,6 +1,12 @@
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import {
+  BROWSER_LIBRARY_PROFILE_VERSION,
+  TECHNOLOGY_PROFILE_VERSION,
+  WEBSITE_SECURITY_POSTURE_VERSION,
+} from '../lib/lookup-child-profile-contract.mts';
+import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -169,6 +175,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
       query: 'http-evidence.test', type: 'domain', registrableDomain: 'http-evidence.test',
       availability: {
         state: 'registered', confidence: 'high', domain: 'http-evidence.test',
+        nameservers: ['ns1.example.test'],
         http: {
           version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'http',
           durationMs: 125, complete: true, truncated: false, limitations: ['URL query strings were omitted from retained provenance.'], diagnostics: {},
@@ -196,21 +203,31 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           },
         },
         tls: {
-          version: 1, profileVersion: 2, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          version: 1, profileVersion: TLS_PROFILE_VERSION, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake fixture.'],
+          diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
+          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
+          protocol: 'TLSv1.3', alpnProtocol: 'h2',
+          cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
+          ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
           authorization: { authorized: true, error: null },
           hostname: { matches: true, error: null },
           validity: { status: 'valid' },
           certificate: {
-            subject: { commonNames: ['http-evidence.test'], organizations: [] },
-            issuer: { commonNames: ['Fixture issuing authority'], organizations: [] },
+            subject: { commonNames: ['http-evidence.test'], organizations: [], organizationalUnits: [], countries: [], localities: [], states: [] },
+            issuer: { commonNames: ['Fixture issuing authority'], organizations: [], organizationalUnits: [], countries: [], localities: [], states: [] },
             serialNumber: 'a1b2c3',
             validFrom: '2026-07-01T00:00:00.000Z',
             validTo: '2026-08-01T00:00:00.000Z',
+            fingerprintSha1: null,
             fingerprintSha256: '7'.repeat(64),
-            publicKey: { fingerprintSha256: '8'.repeat(64) },
+            isCertificateAuthority: false,
+            publicKey: { type: null, bits: null, curve: null, fingerprintSha256: '8'.repeat(64) },
           },
+          chain: [],
+          chainTruncated: false,
+          findings: [],
         },
         pageIdentity: {
           identityVersion: 3, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
@@ -283,29 +300,32 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           entities: [{
             types: ['Organization', 'WebSite'],
             name: 'Example publisher',
-            declaredOrigin: 'https://login.example.test',
+            declaredOrigin: 'https://login.example.test/',
             sameAsHosts: ['social.example.test'],
           }],
         },
         technologyProfile: {
-          profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          profileVersion: TECHNOLOGY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
-          diagnostics: { findings: 2, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
+          diagnostics: { findings: 3, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
           findings: [
-            { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'generator metadata', description: 'Generator metadata identifies the fixture CMS.' }] },
-            { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', evidence: [{ source: 'resource origin', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
+            { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', roles: ['application_platform'], evidence: [{ source: 'generator metadata', role: 'application_platform', description: 'Generator metadata identifies the fixture CMS.' }] },
+            { id: 'fixture-edge', name: 'Fixture Delivery Platform With An Exceptionally Long Provider Display Name', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge', 'application_platform'], evidence: [{ source: 'HTTP server header', role: 'observed_edge', description: 'A retained server header indicates fixture delivery infrastructure.' }, { source: 'passive response header', role: 'application_platform', description: 'A retained response header indicates the fixture application platform.' }] },
+            { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [{ source: 'passive response header', role: 'framework_runtime', description: 'A generic retained header indicates the fixture runtime.' }] },
           ],
           browserLibraryProfile: {
-            profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
             scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
             catalog: { name: 'Retire.js', version: 'retire.js-5.4.3', sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7' },
+            knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01T00:00:00.000Z' },
             limitations: ['A fixture advisory match does not establish reachability or exploitability.'],
             diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 1, advisoryMatches: 1 },
             findings: [{
               id: 'fixture-library', name: 'fixture library', apparentVersion: '1.2.3',
               detectionMethods: ['script filename'], advisoryCount: 1, highestSeverity: 'medium',
-              advisoryIdentifiers: ['CVE-0000-0000'], weaknessClasses: ['CWE-000'],
+              advisoryIdentifiers: ['CVE-0000-0000'], knownExploitedCount: 0,
+              knownExploitedIdentifiers: [], weaknessClasses: ['CWE-000'],
             }],
           },
         },
@@ -335,15 +355,15 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           }],
         },
         securityPosture: {
-          postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          postureVersion: WEBSITE_SECURITY_POSTURE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['This is a passive fixture interpretation, not an active vulnerability assessment.'],
           diagnostics: { findings: 3, observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
           summary: { observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
           findings: [
-            { id: 'fixture-https', category: 'transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The selected homepage response was reached over HTTPS.', evidence: ['HTTP response'] },
-            { id: 'fixture-csp', category: 'response headers', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The selected response did not include the header.', evidence: ['Selected HTTP response headers'] },
-            { id: 'fixture-cleartext-resources', category: 'forms and resources', state: 'observed_absence', tone: 'configured', label: 'No cleartext resource origin observed', detail: 'No retained resource origin used cleartext HTTP.', evidence: ['Static page evidence'] },
+            { id: 'fixture_https', category: 'transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The selected homepage response was reached over HTTPS.', evidence: ['HTTP response'] },
+            { id: 'fixture_csp', category: 'response headers', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The selected response did not include the header.', evidence: ['Selected HTTP response headers'] },
+            { id: 'fixture_cleartext_resources', category: 'forms and resources', state: 'observed_absence', tone: 'configured', label: 'No cleartext resource origin observed', detail: 'No retained resource origin used cleartext HTTP.', evidence: ['Static page evidence'] },
           ],
         },
       },
@@ -377,6 +397,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   }));
 
   await page.locator('#query').fill('http-evidence.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'http-evidence.test' })).toBeVisible();
   await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
@@ -483,7 +504,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await structuredCard.locator(':scope > summary').click();
   await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeVisible();
   await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
-  await expect(structuredCard.getByText('https://login.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('https://login.example.test/', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
 
@@ -506,14 +527,34 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await technologySummary.focus();
   await technologySummary.press('Enter');
   await expect(technologyCard.getByRole('heading', { name: 'Fixture CMS' })).toBeVisible();
-  await expect(technologyCard.getByText('high confidence', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText('high signature strength', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText('Application-platform indicator', { exact: true }).locator('..'))
+    .toContainText('Fixture CMS · Fixture Delivery Platform With An Exceptionally Long Provider Display Name');
+  await expect(technologyCard.getByText('Observed edge, CDN, reverse proxy or WAF', { exact: true }).locator('..'))
+    .toContainText('Fixture Delivery Platform With An Exceptionally Long Provider Display Name');
+  await expect(technologyCard.getByText('Framework or runtime indicator', { exact: true }).locator('..'))
+    .toContainText('Fixture Runtime');
+  await expect(technologyCard.getByText('Embedded or third-party dependency', { exact: true }).locator('..'))
+    .toContainText('No retained indicator');
+  await expect(technologyCard.getByText('Authoritative nameservers', { exact: true }).locator('..'))
+    .toContainText('ns1.example.test');
+  await expect(technologyCard.getByText(/Nameserver identity remains DNS evidence/i)).toBeVisible();
+  await expect(technologyCard.getByText(/do not establish provider ownership, control, a concealed origin, safety or maliciousness/i)).toBeVisible();
+  await expect(technologyCard.getByText('Origin host', { exact: true }).locator('..'))
+    .toContainText('Not established');
+  await expect(technologyCard.getByText(/unmatched technology may still be present/i)).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
-  await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: 'Fixture Delivery Platform With An Exceptionally Long Provider Display Name' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: /Fixture Library 1\.2\.3/i })).toBeVisible();
   await expect(technologyCard.getByText('1 advisory match', { exact: true })).toBeVisible();
   await expect(technologyCard.getByText(/does not download or execute referenced scripts/i)).toBeVisible();
   await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  await expect(technologyCard.getByText('Application-platform indicator', { exact: true }).locator('..'))
+    .toContainText('Fixture Delivery Platform With An Exceptionally Long Provider Display Name');
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   const postureCard = page.locator('.security-posture-card');
   await expect(postureCard).not.toHaveAttribute('open', '');
@@ -540,7 +581,8 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
-  await expect(pageComparison.getByText(/related matches cannot corroborate one another/i)).toBeVisible();
+  await expect(pageComparison.getByText(/page-identity matches remain review context and do not add Risk points/i)).toBeVisible();
+  await expect(pageComparison.getByText(/separately reviewed favicon and official-asset observations may contribute/i)).toBeVisible();
 
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
   await expect(snapshots.getByText(/Differences are review cues/)).toBeVisible();
@@ -600,7 +642,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
         confidence: 'high',
         domain: 'unmatched-technology.test',
         technologyProfile: {
-          profileVersion: 1,
+          profileVersion: TECHNOLOGY_PROFILE_VERSION,
           version: 1,
           status: 'success',
           observedAt: '2026-07-27T00:00:00.000Z',
@@ -613,7 +655,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
           diagnostics: { findings: 0, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 0 },
           findings: [],
           browserLibraryProfile: {
-            profileVersion: 1,
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION,
             version: 1,
             status: 'success',
             observedAt: '2026-07-27T00:00:00.000Z',
@@ -623,6 +665,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
             complete: true,
             truncated: false,
             catalog: { name: 'Retire.js', version: 'fixture-catalogue', sourceRevision: 'fixture-revision' },
+            knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01T00:00:00.000Z' },
             limitations: ['Static signatures are selective.'],
             diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 0, advisoryMatches: 0 },
             findings: [],
@@ -664,9 +707,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
       availability: {
         state: 'registered', confidence: 'high', domain: 'tls-evidence.test',
         tls: {
-          version: 1, profileVersion: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          version: 1, profileVersion: TLS_PROFILE_VERSION, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake to one validated public address.'],
+          diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
           connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
@@ -677,15 +721,19 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
             subject: { commonNames: ['tls-evidence.test'], organizations: ['Example service'], organizationalUnits: [], countries: [], localities: [], states: [] },
             issuer: { commonNames: ['Example issuing CA'], organizations: ['Example CA'], organizationalUnits: [], countries: [], localities: [], states: [] },
             serialNumber: 'a1b2c3', validFrom: '2026-07-01T00:00:00.000Z', validTo: '2026-08-01T00:00:00.000Z',
-            fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
-            subjectAltNames: { dnsNames: ['*.example.test', 'tls-evidence.test'], ipAddresses: [], truncated: false },
+            fingerprintSha1: null, fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
+            subjectAltNames: {
+              dnsNames: ['*.example.test', 'tls-evidence.test'], ipAddresses: [],
+              classes: { dns: 2, ip: 0, email: 0, uri: 0, directoryName: 0, registeredId: 0, otherName: 0, unclassified: 0 },
+              truncated: false,
+            },
             publicKey: { type: 'rsa', bits: 2048, curve: null, fingerprintSha256: 'b'.repeat(64) },
           },
           chain: [{
-            subject: { commonNames: ['tls-evidence.test'], organizations: ['Example service'] },
-            issuer: { commonNames: ['Example issuing CA'], organizations: ['Example CA'] },
+            subject: { commonNames: ['tls-evidence.test'], organizations: ['Example service'], organizationalUnits: [], countries: [], localities: [], states: [] },
+            issuer: { commonNames: ['Example issuing CA'], organizations: ['Example CA'], organizationalUnits: [], countries: [], localities: [], states: [] },
             serialNumber: 'a1b2c3', validFrom: '2026-07-01T00:00:00.000Z', validTo: '2026-08-01T00:00:00.000Z',
-            fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
+            fingerprintSha1: null, fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
           }],
           chainTruncated: false,
           findings: [

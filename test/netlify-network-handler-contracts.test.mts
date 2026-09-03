@@ -42,7 +42,10 @@ before(() => {
 });
 
 function event(parameters: Readonly<Record<string, string | undefined>>): NetlifyFunctionEvent {
-  return { headers: { cookie }, queryStringParameters: parameters };
+  return {
+    headers: { cookie, host: 'console.example', 'sec-fetch-site': 'same-origin' },
+    queryStringParameters: parameters,
+  };
 }
 
 function body(response: { body: string | undefined }): Record<string, unknown> {

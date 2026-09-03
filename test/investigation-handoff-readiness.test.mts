@@ -77,4 +77,16 @@ describe('investigation handoff readiness', () => {
     assert.equal(result.counts.openContradictions, 1);
     assert.equal(result.checks.find((item) => item.id === 'open_questions')?.state, 'caution');
   });
+
+  test('does not count a terminal response action as active work', () => {
+    const result = buildInvestigationHandoffReadiness({
+      caseRecord: {
+        id: 'case-1', domain: 'candidate.example', disposition: 'suspicious',
+        evidencePins: [{ id: 'pin-1' }],
+        decisions: [{ id: 'decision-1', evidencePinIds: ['pin-1'] }],
+        assertions: [], actions: [{ state: 'terminal' }],
+      },
+    });
+    assert.equal(result.counts.activeActions, 0);
+  });
 });

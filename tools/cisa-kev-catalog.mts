@@ -8,9 +8,9 @@ import {
   sha256Text as moduleDigest,
 } from './maintainer-tool-helpers.mts';
 
-const SOURCE_VERSION = '2026.08.03';
-const SOURCE_RELEASED_AT = '2026-08-03T18:55:09.067Z';
-const SOURCE_SHA256 = '16acee8334e59e44ccbaed4da7d02b409144061542b64ad74a9443fb7842a828';
+const SOURCE_VERSION = '2026.08.31';
+const SOURCE_RELEASED_AT = '2026-08-31T14:55:13.3856Z';
+const SOURCE_SHA256 = '2043ec4073019154e781f687359bfd9759e4d1ca9a18befc99fbe0c4c93bbde8';
 const SOURCE_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const OUTPUT_PATH = 'lib/generated/cisa-kev-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/cisa-kev-catalog.sha256';

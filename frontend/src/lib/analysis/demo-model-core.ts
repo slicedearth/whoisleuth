@@ -699,7 +699,7 @@ export function syntheticDemoLookupView(id: string) {
       findings: active ? [
         { id: 'synthetic-example-cms', name: 'Example CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'Generator metadata', description: 'A fixed generator fixture identifies the example CMS.' }] },
         { id: 'synthetic-example-commerce', name: 'Example Commerce', category: 'commerce', confidence: 'medium', evidence: [{ source: 'Resource origin', description: 'A fixed resource-origin fixture resembles a commerce delivery service.' }] },
-        { id: 'synthetic-example-edge', name: 'Example Edge', category: 'delivery platform', confidence: 'high', evidence: [{ source: 'HTTP server header', description: 'A fixed response-header fixture identifies the example edge service.' }] },
+        { id: 'synthetic-example-edge', name: 'Example Edge', category: 'delivery platform', confidence: 'high', roles: ['observed_edge'], evidence: [{ source: 'HTTP server header', role: 'observed_edge', description: 'A fixed response-header fixture indicates the example edge service.' }] },
       ] : [],
       limitations: ['Fixed technology indicators for demonstration only; no additional request was performed.'],
       libraryAvailable: conclusive,

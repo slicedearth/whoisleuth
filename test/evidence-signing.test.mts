@@ -216,4 +216,50 @@ describe('optional local Ed25519 evidence-package signing', () => {
     assert.equal(JSON.parse(verificationOutput).signature.publicKeyMatched, true);
     assert.equal(stderr, '');
   });
+
+  test('keeps empty inputs, reader failures, terminal output, and quiet output explicit', async () => {
+    const pair = keys();
+    for (const argv of [
+      ['sign-artifact', 'empty.json', '--private-key-file', 'private.pem'],
+      ['verify-signature', 'empty.json'],
+    ]) {
+      let stderr = '';
+      const code = await runCli(argv, {
+        stdout: { write() {} },
+        stderr: { write(value) { stderr += value; } },
+        readArtifactInput: async () => '',
+        readPrivateKeyFile: async () => pair.privatePem,
+      });
+      assert.equal(code, EXIT_CODES.USAGE);
+      assert.match(stderr, /requires one/u);
+    }
+
+    let keyError = '';
+    assert.equal(await runCli([
+      'sign-artifact', 'review.json', '--private-key-file', 'private.pem',
+    ], {
+      stdout: { write() {} },
+      stderr: { write(value) { keyError += value; } },
+      readArtifactInput: async () => JSON.stringify(await manifest()),
+      readPrivateKeyFile: async () => { throw new Error('Key read failed'); },
+    }), EXIT_CODES.USAGE);
+    assert.match(keyError, /Could not read private key file: Key read failed/u);
+
+    const signed = await signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, NOW);
+    let terminal = '';
+    assert.equal(await runCli(['verify-signature', 'signed.json'], {
+      stdout: { write(value) { terminal += value; } },
+      stderr: { write() {} },
+      readArtifactInput: async () => JSON.stringify(signed),
+    }), EXIT_CODES.SUCCESS);
+    assert.match(terminal, /State: signature_valid/iu);
+
+    let quiet = '';
+    assert.equal(await runCli(['verify-signature', 'signed.json', '--quiet'], {
+      stdout: { write(value) { quiet += value; } },
+      stderr: { write() {} },
+      readArtifactInput: async () => JSON.stringify(signed),
+    }), EXIT_CODES.SUCCESS);
+    assert.equal(quiet, '');
+  });
 });

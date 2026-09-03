@@ -1997,7 +1997,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default."
+        "scope": "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default."
       },
       "inputs": [
         {
@@ -2029,7 +2029,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eworkspace-archive-inspection"
       ],
       "inputLimits": [
-        "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default.",
+        "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2655,10 +2655,10 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth case-pack [cases.json] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
       "example": "whoisleuth case-pack cases.json --audience trusted --reviewed --json",
-      "boundary": "The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.",
+      "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -2688,7 +2688,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -3212,12 +3212,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Execute approved fixed-recipe steps",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003crecipe> \u003cdomain|brand> [--approve-network] [--resume \u003cstate.json>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation, and analyst-selection placeholders always pause without interpretation.",
+      "usage": "whoisleuth workflow-run \u003crecipe> \u003cdomain|brand> [--select \u003cstep-id>=\u003cpath-or-value>]... [--approve-network] [--resume \u003cstate.json>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.",
       "collection": {
         "mode": "network",
-        "scope": "Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause."
+        "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
       },
       "inputs": [
         {
@@ -3245,6 +3245,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [
+        "--select",
         "--approve-network",
         "--resume",
         "--json",
@@ -3260,7 +3261,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.investigation-run"
       ],
       "inputLimits": [
-        "Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.",
+        "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.",
         "recipe: 1-1 enum value",
         "subject: 1-1 text value"
       ],
@@ -3318,8 +3319,8 @@ export const PUBLIC_CLI_CATALOGUE = {
       "group": "assure",
       "common": true,
       "usage": "whoisleuth diff \u003cleft.json> \u003cright.json> [--left-session \u003cid> --right-session \u003cid>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth diff first.json second.json --json",
-      "boundary": "Comparison is offline. Multi-session Bulk exports require explicit session IDs, and missing, unavailable, equal, and different evidence remain separate states.",
+      "example": "whoisleuth diff earlier.json later.json --json",
+      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
         "mode": "offline",
         "scope": "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths."
@@ -3541,7 +3542,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]",
       "example": "whoisleuth export lookup.json --markdown",
-      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-27 exports preserve evidence-source attribution and limitations; exact public schema 26 remains readable with its strict source/publication binding, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; published v2 schema 27 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one saved Lookup and writes one bounded report."
@@ -3669,7 +3670,8 @@ export const PUBLIC_CLI_CATALOGUE = {
           }
         ],
         "limitations": [
-          "Collection remains analyst-triggered and source limitations remain explicit."
+          "Collection remains analyst-triggered and source limitations remain explicit.",
+          "Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports."
         ]
       },
       {
@@ -3735,7 +3737,8 @@ export const PUBLIC_CLI_CATALOGUE = {
           }
         ],
         "limitations": [
-          "Candidate generation does not establish registration, control, intent, or maliciousness."
+          "Candidate generation does not establish registration, control, intent, or maliciousness.",
+          "Official-reference collection and page comparison require analyst-selected saved evidence; use page-compare after retaining the reference and candidate observations."
         ]
       },
       {

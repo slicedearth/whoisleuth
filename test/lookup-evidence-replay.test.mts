@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import {
+  buildLookupReplayCaseEvidence,
   LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
   LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES,
   parseLookupEvidenceReplay,
@@ -13,6 +14,7 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_STRING_LENGTH,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceRegistryInsights,
   projectLookupEvidenceRdapSourcePublication,
   projectLookupEvidenceWhoisSourcePublication,
@@ -20,6 +22,8 @@ import {
 import { compareRegistrySources } from '../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -71,6 +75,7 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
       sslbl: null,
     },
     analysis: {
+      registrarStanding: null,
       availability: {
         state: 'registered',
         confidence: 'high',
@@ -129,6 +134,7 @@ function rebuildCurrentRegistryDerivations(document: Record<string, unknown>): v
 test('replay validates and summarizes a current first-party export without raw rendering', async () => {
   const replay = await parseLookupEvidenceReplay(JSON.stringify(evidence()));
   assert.equal(replay.target, 'example.test');
+  assert.equal(replay.caseDomain, 'example.test');
   assert.equal(replay.availability, 'registered');
   assert.equal(replay.digestSha256.length, 64);
   assert.equal(replay.digestVerified, false);
@@ -161,12 +167,42 @@ test('replay preserves the exact submitted hostname as its identity and graph ro
   };
   const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
   assert.equal(replay.target, 'portal.example.test');
+  assert.equal(replay.caseDomain, 'example.test');
   assert.ok(replay.graph.nodes.some((node) => (
     node.kind === 'target' && node.label === 'portal.example.test'
   )));
   assert.equal(replay.graph.nodes.some((node) => (
     node.kind === 'target' && node.label === 'example.test'
   )), false);
+});
+
+test('replay builds historical Case evidence without promoting it to a fresh scan', async () => {
+  const document = evidence();
+  document.query = {
+    submitted: 'portal.example.test',
+    inputHostname: 'portal.example.test',
+    registrableDomain: 'example.test',
+    type: 'domain',
+  };
+  const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
+  availability.activityStatus = 'active';
+  availability.hasPasswordField = true;
+  availability.hasExternalFormAction = false;
+  availability.phishingLanguageMatch = 'Account access language observed';
+  (availability.pageIdentity as Record<string, unknown>).observedAt = '2026-07-31T00:00:00.000Z';
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  const caseEvidence = buildLookupReplayCaseEvidence(replay);
+
+  assert.equal(caseEvidence.source, 'import');
+  assert.equal(caseEvidence.capturedAt, replay.exportedAt);
+  assert.equal(caseEvidence.inputHostname, 'portal.example.test');
+  assert.equal(caseEvidence.scanDepth, 'unknown');
+  assert.equal(caseEvidence.registrar, 'Example Registrar');
+  assert.equal(caseEvidence.activityStatus, 'active');
+  assert.equal(caseEvidence.httpFinalOrigin, 'https://example.test');
+  assert.equal(caseEvidence.hasPasswordField, true);
+  assert.equal(caseEvidence.hasExternalFormAction, false);
+  assert.equal(caseEvidence.phishingLanguageMatch, 'Account access language observed');
 });
 
 test('replay requires explicit timestamps in supported documents', async () => {
@@ -184,8 +220,60 @@ test('replay requires explicit timestamps in supported documents', async () => {
 test('replay rejects reader-only Lookup evidence without mutating it', async () => {
   const unsupported = { schema: LOOKUP_EVIDENCE_SCHEMA, schemaVersion: 25 };
   const before = structuredClone(unsupported);
-  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /schemas 26 or 27/iu);
+  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /schemas 26, 27 or 28/iu);
   assert.deepEqual(unsupported, before);
+});
+
+test('replay preserves the exact published schema-27 privacy boundary after schema 28 becomes current', async () => {
+  const fixture = await loadLookupEvidenceV27Fixture();
+  const replay = await parseLookupEvidenceReplay(fixture);
+  assert.equal(replay.schemaVersion, PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION);
+  assert.equal(replay.target, 'example.test');
+  assert.equal(replay.facts.some((fact) => fact.id === 'registration.registrar-accreditation'), false);
+  assert.equal(replay.facts.some((fact) => fact.id === 'registration.registrar-compliance'), false);
+
+  const injected = JSON.parse(fixture) as Record<string, Record<string, unknown>>;
+  injected.analysis!.registrarStanding = null;
+  await assert.rejects(
+    parseLookupEvidenceReplay(JSON.stringify(injected)),
+    /cannot contain registrar standing/iu,
+  );
+});
+
+test('replay retains separately attributed registrar accreditation and compliance facts', async () => {
+  const document = evidence();
+  document.generatedAt = '2026-09-03T12:00:00.000Z';
+  const sources = document.sources as Record<string, Record<string, unknown>>;
+  (sources.rdap!.parsed as Record<string, unknown>).registrarIanaId = '4318';
+  (sources.whois!.parsed as Record<string, unknown>).registrarIanaId = '04318';
+  (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
+    registrarIanaId: '4318',
+    now: new Date('2026-09-03T12:00:00.000Z'),
+  });
+  const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
+  assert.equal(replay.facts.find((fact) => fact.id === 'registration.registrar-accreditation')?.value, 'accredited');
+  assert.equal(replay.facts.find((fact) => fact.id === 'registration.registrar-compliance')?.value, 'Official termination notice found');
+  assert.ok(replay.sources.some((source) => source.id === 'registrar-accreditation'));
+  assert.ok(replay.sources.some((source) => source.id === 'registrar-compliance'));
+
+  (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
+    registrarIanaId: '2',
+    now: new Date('2026-09-03T12:00:00.000Z'),
+  });
+  await assert.rejects(
+    parseLookupEvidenceReplay(JSON.stringify(document)),
+    /does not match its retained registration sources/iu,
+  );
+
+  (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
+    registrarIanaId: '4318',
+    now: new Date('2026-09-03T12:00:00.000Z'),
+  });
+  document.generatedAt = '2026-09-03T08:00:00.000Z';
+  await assert.rejects(
+    parseLookupEvidenceReplay(JSON.stringify(document)),
+    /observed after the export time/iu,
+  );
 });
 
 test('replay keeps the frozen strict schema-26 compatibility fixture readable without inventing current metadata', async () => {

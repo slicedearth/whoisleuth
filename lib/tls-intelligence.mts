@@ -18,6 +18,7 @@ import {
   MAX_LOOKUP_TLS_CHAIN_CERTIFICATES,
   MAX_LOOKUP_TLS_FINDINGS,
   MAX_LOOKUP_TLS_NAME_VALUES,
+  TLS_PROFILE_VERSION,
 } from './lookup-network-evidence-bounds.mts';
 import { isPrivateAddress, resolvePublicAddresses } from './safe-fetch.mts';
 import {
@@ -124,7 +125,6 @@ type TlsCollectOptions = {
   clearTimer?: ClearTimer;
 };
 
-const TLS_PROFILE_VERSION = 3;
 const TLS_PORT = 443;
 const TLS_TIMEOUT_MS = 5000;
 const MAX_RESOLVED_ADDRESSES = 64;

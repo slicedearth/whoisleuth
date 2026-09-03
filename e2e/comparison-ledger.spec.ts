@@ -3,6 +3,10 @@ import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import {
+  TECHNOLOGY_PROFILE_VERSION,
+  WEBSITE_SECURITY_POSTURE_VERSION,
+} from '../lib/lookup-child-profile-contract.mts';
 
 const EARLIER = '2026-06-01T01:00:00.000Z';
 const MIDDLE = '2026-06-01T12:00:00.000Z';
@@ -33,7 +37,17 @@ function websiteSnapshot(
     savedAt: observedAt,
     complete,
     truncated: false,
-    technologies: options.technologies ?? [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high' }],
+    profileProvenance: {
+      technology: { version: TECHNOLOGY_PROFILE_VERSION, state: 'known' },
+      securityPosture: { version: WEBSITE_SECURITY_POSTURE_VERSION, state: 'known' },
+    },
+    technologies: options.technologies ?? [{
+      id: 'cms',
+      name: 'Example CMS',
+      category: 'framework',
+      confidence: 'high',
+      roles: ['framework_runtime'],
+    }],
     posture: [],
     identity: {
       normalizedHtml: null,

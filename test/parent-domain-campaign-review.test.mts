@@ -15,6 +15,7 @@ import {
   validateParentDomainCampaignReviewExport,
 } from '../frontend/src/lib/analysis/parent-domain-campaign-review.ts';
 import {
+  CASE_SCHEMA_VERSION,
   createCase,
   updateCase,
   type CaseRecord,
@@ -67,7 +68,7 @@ describe('bounded parent-domain campaign review', () => {
     assert.ok(parent?.hostnames.every((item) => item.observations.every((item) => (
       item.store === 'browser_case_evidence_snapshot'
       && item.campaignMemberDomain === 'example.test'
-      && item.schemaVersion === 13
+      && item.schemaVersion === CASE_SCHEMA_VERSION
       && item.observationTime !== null
       && item.scanDepth === 'deep'
     ))));

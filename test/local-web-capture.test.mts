@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 
 import type { Browser, Route } from '@playwright/test';
@@ -31,6 +33,7 @@ import {
 import { parseWebCaptureManifest } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const CAPTURE_ENTRY = fileURLToPath(new URL('../packages/web-capture/bin/whoisleuth-capture.mts', import.meta.url));
 
 function pngChunk(type: string, data: Buffer) {
   const length = Buffer.alloc(4);
@@ -85,6 +88,31 @@ const fakeFetchResource = async (url: string) => new Response(
   url.endsWith('.js?secret=discarded') ? 'void 0;' : '<!doctype html><title>Fixture</title>',
   { status: 200, headers: { 'content-type': url.includes('.js') ? 'text/javascript' : 'text/html' } },
 );
+
+function controlledDeadlineScheduler() {
+  let callback: (() => void) | null = null;
+  const timer = Object.freeze({}) as ReturnType<typeof setTimeout>;
+  return {
+    scheduler: Object.freeze({
+      schedule(candidate: () => void, delayMs: number) {
+        assert.equal(callback, null);
+        assert.ok(delayMs >= 1_000);
+        callback = candidate;
+        return timer;
+      },
+      cancel(candidate: ReturnType<typeof setTimeout>) {
+        assert.equal(candidate, timer);
+        callback = null;
+      },
+    }),
+    expire() {
+      assert.ok(callback);
+      const candidate = callback;
+      callback = null;
+      candidate();
+    },
+  };
+}
 
 function fakeBrowser(options: {
   hostname?: string;
@@ -175,6 +203,21 @@ function fakeBrowser(options: {
 }
 
 describe('optional local rendered capture package', () => {
+  test('entry point fails closed with bounded usage for incomplete capture and comparison commands', () => {
+    for (const args of [[], ['compare']]) {
+      const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
+        cwd: path.dirname(CAPTURE_ENTRY),
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      assert.equal(result.status, 2);
+      assert.equal(result.signal, null);
+      assert.equal(result.stdout, '');
+      assert.match(result.stderr, /^Capture error: Usage: whoisleuth-capture/u);
+      assert.ok(Buffer.byteLength(result.stderr, 'utf8') < 1_024);
+    }
+  });
+
   test('requires explicit authorisation and a new bounded output directory', () => {
     assert.throws(() => parseCaptureArguments(['https://example.test', '--output-dir', 'capture']), /authorize-rendered-capture/u);
     assert.throws(() => parseCaptureArguments(['http://user:secret@example.test', '--output-dir', 'capture', '--authorize-rendered-capture']), /credentials/u);
@@ -433,8 +476,11 @@ describe('optional local rendered capture package', () => {
   test('removes an owned private artefact whose write crosses the total deadline', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-write-deadline-test-'));
     const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    let writeStarted!: () => void;
+    const writing = new Promise<void>((resolve) => { writeStarted = resolve; });
     try {
-      await assert.rejects(() => captureRenderedPage({
+      const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1000,
       }, {
         launchBrowser: async () => fakeBrowser(),
@@ -445,6 +491,7 @@ describe('optional local rendered capture package', () => {
           try {
             const identity = await handle.stat();
             onCreated({ dev: identity.dev, ino: identity.ino });
+            writeStarted();
             await new Promise<void>((_resolve, reject) => {
               const abort = () => reject(signal.reason);
               if (signal.aborted) abort();
@@ -454,7 +501,11 @@ describe('optional local rendered capture package', () => {
             await handle.close();
           }
         },
-      }), /total-run deadline/u);
+        deadlineScheduler: deadline.scheduler,
+      });
+      await writing;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -793,22 +844,30 @@ describe('optional local rendered capture package', () => {
   test('aborts an admitted direct resource fetch at the shared total deadline', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-fetch-deadline-test-'));
     const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
     let requestAborted = false;
+    let requestStarted!: () => void;
+    const requesting = new Promise<void>((resolve) => { requestStarted = resolve; });
     try {
-      await assert.rejects(() => captureRenderedPage({
+      const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
       }, {
         launchBrowser: async () => fakeBrowser(),
         fetchResource: async (_url, options) => new Promise<Response>((_resolve, reject) => {
           const signal = options.signal;
           if (!signal) throw new Error('Capture request did not receive its total-run signal.');
+          requestStarted();
           signal.addEventListener('abort', () => {
             requestAborted = true;
             reject(signal.reason);
           }, { once: true });
         }),
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
-      }), /total-run deadline/u);
+        deadlineScheduler: deadline.scheduler,
+      });
+      await requesting;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
       assert.equal(requestAborted, true);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {

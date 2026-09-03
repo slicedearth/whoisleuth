@@ -32,6 +32,7 @@ export const MAX_SCHEDULED_NAME_LENGTH = 100;
 export const MAX_SCHEDULED_ERROR_LENGTH = 300;
 export const MAX_SCHEDULED_MONITOR_STATIC_BYTES = 896 * 1024;
 export const MAX_SCHEDULED_PRUNED_HISTORY_EVENTS = 1_000_000;
+export const MAX_SCHEDULED_RECOVERY_COUNT = 1_000_000;
 export const ALLOWED_SCHEDULE_INTERVAL_HOURS: readonly number[] = Object.freeze([6, 12, 24, 168]);
 export const SCHEDULED_WATCHLIST_STATUSES = [
   'idle',
@@ -96,6 +97,24 @@ export interface ScheduledMonitorState {
   version: typeof SCHEDULED_MONITOR_SCHEMA_VERSION;
   watchlists: ScheduledWatchlist[];
   activeRun: ScheduledMonitorActiveRun | null;
+}
+
+export interface ScheduledMonitorRecoveryCategories {
+  invalidWatchlists: number;
+  duplicateIdentifiers: number;
+  duplicateNames: number;
+  truncatedInputs: number;
+  normalisedWatchlists: number;
+  invalidActiveRuns: number;
+  releasedMalformedLeases: number;
+  resetInconsistentStatuses: number;
+}
+
+export interface ScheduledMonitorRecoveryReport {
+  version: 1;
+  /** Sum of category corrections, not a count of distinct watchlists or runs. */
+  recoveredItems: number;
+  categories: ScheduledMonitorRecoveryCategories;
 }
 
 export interface CreateScheduledWatchlistOptions {
@@ -323,6 +342,50 @@ function assertStoreBudget(state: ScheduledMonitorState): ScheduledMonitorState 
   return state;
 }
 
+function recoveryCounter(value: number): number {
+  return Math.min(Math.max(0, value), MAX_SCHEDULED_RECOVERY_COUNT);
+}
+
+function incrementRecovery(
+  categories: ScheduledMonitorRecoveryCategories,
+  category: keyof ScheduledMonitorRecoveryCategories,
+  amount = 1,
+): void {
+  categories[category] = recoveryCounter(categories[category] + recoveryCounter(amount));
+}
+
+function emptyRecoveryCategories(): ScheduledMonitorRecoveryCategories {
+  return {
+    invalidWatchlists: 0,
+    duplicateIdentifiers: 0,
+    duplicateNames: 0,
+    truncatedInputs: 0,
+    normalisedWatchlists: 0,
+    invalidActiveRuns: 0,
+    releasedMalformedLeases: 0,
+    resetInconsistentStatuses: 0,
+  };
+}
+
+function recoveryReport(
+  categories: ScheduledMonitorRecoveryCategories,
+): ScheduledMonitorRecoveryReport | null {
+  const recoveredItems = Object.values(categories).reduce((total, value) => total + value, 0);
+  return recoveredItems === 0 ? null : {
+    version: 1,
+    recoveredItems,
+    categories,
+  };
+}
+
+function differsFromCanonical(candidate: unknown, canonical: unknown): boolean {
+  try {
+    return JSON.stringify(candidate) !== JSON.stringify(canonical);
+  } catch {
+    return true;
+  }
+}
+
 export function assertScheduledMonitorStaticBudget(value: unknown): ScheduledMonitorState {
   const state = normalizeScheduledMonitorState(value);
   const staticState = { ...state, activeRun: null };
@@ -384,6 +447,13 @@ export function emptyScheduledMonitorState(): ScheduledMonitorState {
 }
 
 export function normalizeScheduledMonitorState(value: unknown): ScheduledMonitorState {
+  return normalizeScheduledMonitorStateWithRecovery(value).state;
+}
+
+export function normalizeScheduledMonitorStateWithRecovery(value: unknown): {
+  state: ScheduledMonitorState;
+  recovery: ScheduledMonitorRecoveryReport | null;
+} {
   const record = plainRecord(value);
   if (!record
     || record.schema !== SCHEDULED_MONITOR_SCHEMA
@@ -391,25 +461,60 @@ export function normalizeScheduledMonitorState(value: unknown): ScheduledMonitor
     throw new Error('Scheduled monitoring data uses an unsupported schema version.');
   }
   const watchlists: ScheduledWatchlist[] = [];
+  const recovery = emptyRecoveryCategories();
   const ids = new Set<string>();
   const names = new Set<string>();
-  const candidates = Array.isArray(record.watchlists)
-    ? record.watchlists.slice(0, MAX_SCHEDULED_WATCHLIST_INPUTS)
-    : [];
+  const rawWatchlists = Array.isArray(record.watchlists) ? record.watchlists : [];
+  if (!Array.isArray(record.watchlists)) incrementRecovery(recovery, 'invalidWatchlists');
+  if (rawWatchlists.length > MAX_SCHEDULED_WATCHLIST_INPUTS) {
+    incrementRecovery(
+      recovery,
+      'truncatedInputs',
+      rawWatchlists.length - MAX_SCHEDULED_WATCHLIST_INPUTS,
+    );
+  }
+  const candidates = rawWatchlists.slice(0, MAX_SCHEDULED_WATCHLIST_INPUTS);
   for (const candidate of candidates) {
     const watchlist = normalizeStoredWatchlist(candidate);
-    if (!watchlist) continue;
+    if (!watchlist) {
+      incrementRecovery(recovery, 'invalidWatchlists');
+      continue;
+    }
     const nameKey = watchlist.name.toLowerCase();
-    if (ids.has(watchlist.id) || names.has(nameKey)) continue;
+    if (ids.has(watchlist.id)) {
+      incrementRecovery(recovery, 'duplicateIdentifiers');
+      continue;
+    }
+    if (names.has(nameKey)) {
+      incrementRecovery(recovery, 'duplicateNames');
+      continue;
+    }
     ids.add(watchlist.id);
     names.add(nameKey);
+    if (watchlists.length >= MAX_SCHEDULED_WATCHLISTS) {
+      incrementRecovery(recovery, 'truncatedInputs');
+      continue;
+    }
+    if (differsFromCanonical(candidate, watchlist)) {
+      incrementRecovery(recovery, 'normalisedWatchlists');
+    }
     watchlists.push(watchlist);
-    if (watchlists.length >= MAX_SCHEDULED_WATCHLISTS) break;
   }
   const byId = new Map(watchlists.map((watchlist) => [watchlist.id, watchlist]));
   const activeRun = normalizeActiveRun(record.activeRun, byId);
+  if (record.activeRun !== null && !activeRun) {
+    incrementRecovery(recovery, 'invalidActiveRuns');
+  } else if (activeRun) {
+    const activeInput = plainRecord(record.activeRun);
+    if (activeInput?.lease !== null && activeRun.lease === null) {
+      incrementRecovery(recovery, 'releasedMalformedLeases');
+    }
+  }
   const consistentWatchlists: ScheduledWatchlist[] = watchlists.map((watchlist) => {
     const activeForWatchlist = activeRun?.watchlistId === watchlist.id ? activeRun : null;
+    if (!activeForWatchlist && (watchlist.status === 'running' || watchlist.status === 'queued')) {
+      incrementRecovery(recovery, 'resetInconsistentStatuses');
+    }
     return {
       ...watchlist,
       status: activeForWatchlist
@@ -419,12 +524,13 @@ export function normalizeScheduledMonitorState(value: unknown): ScheduledMonitor
           : watchlist.status,
     };
   });
-  return assertStoreBudget({
+  const state = assertStoreBudget({
     schema: SCHEDULED_MONITOR_SCHEMA,
     version: SCHEDULED_MONITOR_SCHEMA_VERSION,
     watchlists: consistentWatchlists,
     activeRun,
   });
+  return { state, recovery: recoveryReport(recovery) };
 }
 
 export function createScheduledWatchlist({

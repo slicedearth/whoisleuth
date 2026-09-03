@@ -1,0 +1,107 @@
+{
+  "schema": "whoisleuth.case-report",
+  "schemaVersion": 10,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": null,
+    "projectUrl": "https://github.com/slicedearth/whoisleuth"
+  },
+  "case": {
+    "id": "case-v12-response",
+    "domain": "response-history.example",
+    "status": "reviewing",
+    "disposition": "suspicious",
+    "reviewReasonCode": null,
+    "brandProfileIds": [],
+    "interoperabilityTags": [],
+    "tags": [
+      "response-review"
+    ],
+    "source": "manual",
+    "openedAt": "2026-07-28T11:00:00.000Z",
+    "updatedAt": "2026-08-01T12:00:00.000Z",
+    "notesIncluded": false
+  },
+  "currentAssessment": null,
+  "evidenceTimeline": [],
+  "analystResponse": {
+    "evidencePins": [],
+    "decisions": [],
+    "actions": [
+      {
+        "id": "action-v12-response",
+        "type": "registrar_report",
+        "recipient": "Reviewed registrar route",
+        "contactSource": "Published registrar policy",
+        "routeObservedAt": null,
+        "contactLimitations": [
+          "Route freshness was not retained."
+        ],
+        "dueAt": "2026-08-05T12:00:00.000Z",
+        "state": "acknowledged",
+        "reference": "LEGACY-RESPONSE-42",
+        "followUpAt": "2026-08-08T12:00:00.000Z",
+        "providerOutcome": null,
+        "outcome": "A provider acknowledgement was recorded.",
+        "originActionId": null,
+        "history": [
+          {
+            "id": "action-event-6tz7fd",
+            "previousState": null,
+            "nextState": "acknowledged",
+            "occurredAt": "2026-08-01T12:00:00.000Z",
+            "sourceClass": "migration",
+            "provenance": "case_v12_legacy_snapshot",
+            "reference": "LEGACY-RESPONSE-42",
+            "evidencePinId": null,
+            "limitations": [
+              "Migrated from the Case v12 current state \"acknowledged\"; pre-v13 transition history is unavailable.",
+              "Route freshness was not retained."
+            ],
+            "providerOutcome": null,
+            "outcomeDetail": "A provider acknowledgement was recorded.",
+            "originActionId": null,
+            "applied": true
+          }
+        ],
+        "historyOmitted": 0,
+        "historyLimitations": [],
+        "createdAt": "2026-07-28T12:00:00.000Z",
+        "metadataUpdatedAt": "2026-08-01T12:00:00.000Z",
+        "updatedAt": "2026-08-01T12:00:00.000Z"
+      }
+    ],
+    "assertions": [],
+    "manualTrail": [],
+    "sightings": [],
+    "observedEffects": {
+      "reviews": [],
+      "omitted": 0,
+      "preV13HistoryUnavailable": true,
+      "limitations": [
+        "Migrated from a pre-v13 Case; earlier independent observed-effect review history is unavailable.",
+        "Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them."
+      ]
+    },
+    "closures": {
+      "records": [],
+      "omitted": 0,
+      "preV13HistoryUnavailable": true,
+      "limitations": [
+        "Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.",
+        "Migrated from a pre-v13 Case; earlier deliberate closure history is unavailable."
+      ]
+    },
+    "branches": []
+  },
+  "responseLifecycle": {
+    "providerOutcomeState": "missing",
+    "latestProviderOutcome": null,
+    "observedChangeState": "missing",
+    "latestObservedEffect": null,
+    "latestObservedChangeAt": null,
+    "latestClosure": null
+  },
+  "limitations": "This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; \"incomparable\" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance. Generated locally in the browser. Review the package before sharing it."
+}

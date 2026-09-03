@@ -25,6 +25,11 @@ export type WebsiteSnapshotTechnology = Readonly<{
   name: string;
   category: string;
   confidence: string;
+  roles: readonly string[];
+}>;
+export type WebsiteSnapshotProfileProvenance = Readonly<{
+  technology: Readonly<{ version: number | null; state: 'known' | 'legacy_unknown' }>;
+  securityPosture: Readonly<{ version: number | null; state: 'known' | 'legacy_unknown' }>;
 }>;
 export type WebsiteSnapshotPosture = Readonly<{ id: string; state: string }>;
 export type WebsiteSnapshotSource = Readonly<{ source: string; state: string }>;
@@ -73,6 +78,7 @@ export type WebsiteProfileSnapshot = Readonly<{
   savedAt: string;
   complete: boolean;
   truncated: boolean;
+  profileProvenance: WebsiteSnapshotProfileProvenance;
   technologies: WebsiteSnapshotTechnology[];
   posture: WebsiteSnapshotPosture[];
   identity: WebsiteIdentityDigests;
@@ -99,6 +105,9 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const DIGEST_RE = /^[a-f0-9]{16,128}$/iu;
 const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const SERIAL_RE = /^[a-f0-9]{1,128}$/iu;
+const SNAPSHOT_TECHNOLOGY_ROLES = new Set([
+  'observed_edge', 'application_platform', 'framework_runtime', 'embedded_dependency',
+]);
 
 function record(value: unknown): UnknownRecord | null {
   return ordinaryWorkspaceRecord(value, 'Website-snapshot input');
@@ -136,7 +145,47 @@ function technology(value: unknown): WebsiteSnapshotTechnology | null {
   const id = text(item?.id, 80);
   const name = text(item?.name, 120);
   if (!id || !name) return null;
-  return { id, name, category: text(item?.category, 80) || 'technology', confidence: text(item?.confidence, 40) || 'unknown' };
+  const roles = values(item?.roles, 4, (role) => {
+    const normalized = text(role, 40);
+    return SNAPSHOT_TECHNOLOGY_ROLES.has(normalized) ? normalized : null;
+  }) as string[];
+  return {
+    id,
+    name,
+    category: text(item?.category, 80) || 'technology',
+    confidence: text(item?.confidence, 40) || 'unknown',
+    roles,
+  };
+}
+
+function profileVersion(value: unknown): number | null {
+  return Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= 10_000
+    ? Number(value)
+    : null;
+}
+
+function profileProvenance(value: unknown, legacy = false): WebsiteSnapshotProfileProvenance {
+  if (legacy) {
+    return {
+      technology: { version: null, state: 'legacy_unknown' },
+      securityPosture: { version: null, state: 'legacy_unknown' },
+    };
+  }
+  const item = record(value);
+  const technologyItem = record(item?.technology);
+  const securityPostureItem = record(item?.securityPosture);
+  const technologyVersion = profileVersion(technologyItem?.version);
+  const securityPostureVersion = profileVersion(securityPostureItem?.version);
+  return {
+    technology: {
+      version: technologyVersion,
+      state: technologyVersion === null ? 'legacy_unknown' : 'known',
+    },
+    securityPosture: {
+      version: securityPostureVersion,
+      state: securityPostureVersion === null ? 'legacy_unknown' : 'known',
+    },
+  };
 }
 function posture(value: unknown): WebsiteSnapshotPosture | null {
   const item = record(value);
@@ -242,7 +291,7 @@ function identityValues(value: unknown): WebsiteIdentityValues {
   return { resourceHosts, trackingIdentifiers, formActionOrigins };
 }
 
-export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSnapshot | null {
+export function normalizeWebsiteProfileSnapshot(raw: unknown, sourceVersion?: number): WebsiteProfileSnapshot | null {
   const value = record(raw);
   const domain = normalizeDomain(value?.domain);
   const observedAt = timestamp(value?.observedAt);
@@ -256,6 +305,7 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSna
     savedAt,
     complete: value?.complete === true,
     truncated: value?.truncated === true,
+    profileProvenance: profileProvenance(value?.profileProvenance, sourceVersion === 4),
     technologies: values(value?.technologies, 40, technology) as WebsiteSnapshotTechnology[],
     posture: values(value?.posture, 40, posture) as WebsiteSnapshotPosture[],
     identity: identity(value?.identity),
@@ -280,10 +330,13 @@ export function normalizeWebsiteSnapshotStore(raw: unknown) {
     throw new Error('This website-snapshot collection uses an unsupported schema and cannot be read safely.');
   }
   const sourceValues = Array.isArray(raw) ? raw : Array.isArray(value?.snapshots) ? value.snapshots : [];
+  const sourceVersion = value?.schema === WEBSITE_SNAPSHOT_SCHEMA && Number.isSafeInteger(value.version)
+    ? Number(value.version)
+    : undefined;
   const snapshots = values(
     sourceValues,
     MAX_WEBSITE_SNAPSHOTS * 2,
-    (candidate) => normalizeWebsiteProfileSnapshot(candidate),
+    (candidate) => normalizeWebsiteProfileSnapshot(candidate, sourceVersion),
   ) as WebsiteProfileSnapshot[];
   const perDomain = new Map<string, number>();
   const retained: WebsiteProfileSnapshot[] = [];
@@ -364,9 +417,37 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       dependencyTransitions: [] as WebsiteDependencyTransition[],
     };
   }
+  const technologyVersionBefore = before.profileProvenance.technology.version;
+  const technologyVersionAfter = after.profileProvenance.technology.version;
+  const postureVersionBefore = before.profileProvenance.securityPosture.version;
+  const postureVersionAfter = after.profileProvenance.securityPosture.version;
+  const technologyComparability = technologyVersionBefore === null || technologyVersionAfter === null
+    ? 'legacy_unknown'
+    : technologyVersionBefore === technologyVersionAfter ? 'comparable' : 'detector_changed';
+  const postureComparability = postureVersionBefore === null || postureVersionAfter === null
+    ? 'legacy_unknown'
+    : postureVersionBefore === postureVersionAfter ? 'comparable' : 'detector_changed';
   const changes = [
-    ...compareMap('technology', new Map(before.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`])), new Map(after.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`]))),
-    ...compareMap('posture', new Map(before.posture.map((item) => [item.id, item.state])), new Map(after.posture.map((item) => [item.id, item.state]))),
+    ...(technologyComparability === 'comparable' ? compareMap(
+      'technology',
+      new Map(before.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}|${item.roles.join(',')}`])),
+      new Map(after.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}|${item.roles.join(',')}`])),
+    ) : [{
+      field: 'technology.profileVersion',
+      state: technologyComparability === 'detector_changed' ? 'changed' as const : 'incomparable' as const,
+      before: technologyVersionBefore === null ? null : String(technologyVersionBefore),
+      after: technologyVersionAfter === null ? null : String(technologyVersionAfter),
+    }]),
+    ...(postureComparability === 'comparable' ? compareMap(
+      'posture',
+      new Map(before.posture.map((item) => [item.id, item.state])),
+      new Map(after.posture.map((item) => [item.id, item.state])),
+    ) : [{
+      field: 'posture.profileVersion',
+      state: postureComparability === 'detector_changed' ? 'changed' as const : 'incomparable' as const,
+      before: postureVersionBefore === null ? null : String(postureVersionBefore),
+      after: postureVersionAfter === null ? null : String(postureVersionAfter),
+    }]),
     ...compareMap('source', new Map(before.sources.map((item) => [item.source, item.state])), new Map(after.sources.map((item) => [item.source, item.state]))),
     ...compareMap(
       'dependency',
@@ -463,5 +544,13 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   if (before.complete !== after.complete || before.truncated !== after.truncated) {
     changes.push({ field: 'completeness', state: 'incomparable', before: `${before.complete}/${before.truncated}`, after: `${after.complete}/${after.truncated}` });
   }
-  return { compatible: true, changes, dependencyTransitions };
+  return {
+    compatible: true,
+    profileComparability: {
+      technology: technologyComparability,
+      securityPosture: postureComparability,
+    },
+    changes,
+    dependencyTransitions,
+  };
 }

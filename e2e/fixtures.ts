@@ -1,5 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 import type { BrowserContext, ConsoleMessage, Route } from '@playwright/test';
+import { PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT } from '../tools/playwright-execution-contract.mts';
 import { BASE_URL } from './constants';
 
 // The one origin every browser-initiated request is allowed to reach.
@@ -7,7 +8,7 @@ import { BASE_URL } from './constants';
 // logic itself can be exercised directly - see origin-guard.spec.ts - rather
 // than only ever being proven correct by the absence of a failure.
 export const ALLOWED_ORIGIN = new URL(BASE_URL).origin;
-export const PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';
+export const PERFORMANCE_AUTHORITY_PROJECT = PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;
 
 export function enforcesMachineTimingBudgets(projectName: string): boolean {
   return projectName === PERFORMANCE_AUTHORITY_PROJECT;
@@ -86,7 +87,7 @@ export async function installNetworkGuard(context: BrowserContext, allowedOrigin
 }
 
 type Options = {
-  // Opt-in, defaults to false: only bulk-analysis.spec.ts's deliberately
+  // Opt-in, defaults to false: only the Bulk analysis specifications'
   // invalid-domain scans (see runBulkScan) legitimately produce Chrome's
   // 400-response console noise as expected, handled behavior. Every other
   // spec keeps the guard fully strict.

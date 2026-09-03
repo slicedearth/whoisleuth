@@ -6,7 +6,7 @@ export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
 
 export type CriticalMutant = Readonly<{
   id: string;
-  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'public_address_enforcement';
+  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'unreviewed_evidence_scoring' | 'public_address_enforcement' | 'artifact_structure_integrity';
   file: string;
   line: number;
   search: string;
@@ -20,7 +20,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     id: 'authority-dns-delegation-required',
     area: 'authority_availability',
     file: 'lib/availability.mts',
-    line: 614,
+    line: 611,
     search: 'if (!rdapFound && !hasWhoisRegistrationData && !dnsDelegated) {',
     replacement: 'if (!rdapFound && !hasWhoisRegistrationData) {',
     focusedTests: Object.freeze(['test/availability-dns.test.mts']),
@@ -57,6 +57,16 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     timeoutMs: 20_000,
   }),
   Object.freeze({
+    id: 'scoring-unreviewed-page-match-remains-neutral',
+    area: 'unreviewed_evidence_scoring',
+    file: 'lib/risk-scoring.mts',
+    line: 86,
+    search: '  includePageBaselineMatch: false,',
+    replacement: '  includePageBaselineMatch: true,',
+    focusedTests: Object.freeze(['test/scoring.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
     id: 'ssrf-unrecognised-literal-fails-closed',
     area: 'public_address_enforcement',
     file: 'lib/safe-fetch.mts',
@@ -64,6 +74,16 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     search: '  return true; // not a recognizable IP literal - fail closed',
     replacement: '  return false; // mutant must be killed by fail-closed regression coverage',
     focusedTests: Object.freeze(['test/safe-fetch.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'artifact-projection-count-matches-items',
+    area: 'artifact_structure_integrity',
+    file: 'cli/artifact-validation/investigation-capsule.mts',
+    line: 151,
+    search: '  if (displayed > total || omitted !== total - displayed || items.length !== displayed) fail(label);',
+    replacement: '  if (displayed > total || omitted !== total - displayed) fail(label);',
+    focusedTests: Object.freeze(['test/artifact-verify.test.mts']),
     timeoutMs: 20_000,
   }),
 ]);

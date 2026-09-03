@@ -7,6 +7,8 @@ import {
   formatOfflineArtifactVerification,
   verifyOfflineArtifact,
 } from '../cli/artifact-verify.mts';
+import * as artifactStructureFacade from '../cli/artifact-structure.mts';
+import * as offlineArtifactValidation from '../cli/offline-artifact-validation.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import {
@@ -43,6 +45,7 @@ import {
 } from '../packages/contracts/case-portability.mts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
@@ -55,13 +58,179 @@ import {
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { buildDomainControlManifest, DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA } from '../lib/domain-control-manifest.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
+import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
 import { loadCliLookupV1Fixture } from './cli-lookup-v1-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
+import {
+  createDecisionFact,
+  projectDecisionFacts,
+} from '../packages/evidence/decision-fact.mts';
+import {
+  LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  type LookupInvestigationBrief,
+} from '../packages/investigation/lookup-investigation-brief.mts';
 
 const PASSPHRASE = 'fixture archive passphrase';
+const CAPSULE_OBSERVED_AT = '2026-08-04T00:00:00.000Z';
+const CAPSULE_GENERATED_AT = '2026-08-04T01:00:00.000Z';
+
+function currentCapsuleGraph() {
+  return {
+    version: 2 as const,
+    targetId: 'target-example',
+    nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }],
+    edges: [],
+    sources: [],
+    truncated: false,
+    limitations: [],
+  };
+}
+
+function currentCapsuleBrief(): LookupInvestigationBrief {
+  const decisionFact = createDecisionFact({
+    id: 'registration-and-delegation',
+    question: 'Do registration and delegated DNS observations agree?',
+    conclusion: 'The retained sources require analyst reconciliation.',
+    importance: 'high',
+    evidenceState: 'partial',
+    freshness: 'current',
+    consistency: 'contradictory',
+    contributors: [
+      {
+        id: 'dns-observation',
+        label: 'DNS observation',
+        provenance: 'direct_observation',
+        evidenceState: 'observed',
+        references: ['dns:A', '#dns-evidence'],
+        observedAt: CAPSULE_OBSERVED_AT,
+        limitations: ['The bounded query covered selected record families.'],
+      },
+      {
+        id: 'registry-observation',
+        label: 'Registry observation',
+        provenance: 'provider_reported',
+        evidenceState: 'partial',
+        references: ['rdap:status', '#registry-evidence'],
+        observedAt: CAPSULE_OBSERVED_AT,
+        limitations: ['The registry response omitted some fields.'],
+      },
+    ],
+    references: ['#dns-evidence', '#registry-evidence'],
+    contradictions: [
+      'DNS and registry timestamps differ.',
+      'Registration status conflicts with delegated DNS.',
+    ],
+    limitations: [
+      'The observations do not establish control.',
+      'The sources were observed at different layers.',
+    ],
+    nextActions: [
+      {
+        id: 'compare-registration',
+        label: 'Compare registration evidence',
+        reason: 'Resolve the source disagreement.',
+        expectedOutcome: 'Record whether the sources can be reconciled.',
+        href: '#registry-evidence',
+        importance: 'high',
+      },
+      {
+        id: 'review-dns',
+        label: 'Review DNS evidence',
+        reason: 'Confirm the bounded delegation observation.',
+        expectedOutcome: 'Record the observed delegation state.',
+        href: '#dns-evidence',
+        importance: 'medium',
+      },
+    ],
+  });
+  return {
+    schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
+    schemaVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION,
+    generatedAt: CAPSULE_OBSERVED_AT,
+    target: 'example.test',
+    targetType: 'domain',
+    task: 'general',
+    taskLabel: 'General review',
+    question: 'What is known?',
+    summary: 'Review the attributed evidence and unresolved source disagreement.',
+    observation: {
+      observedAt: CAPSULE_OBSERVED_AT,
+      evidenceAgeDays: 0,
+      completeSources: 1,
+      limitedSources: 1,
+      freshnessPolicy: {
+        version: 1,
+        id: 'task-default',
+        task: 'general',
+        thresholdsDays: { registration: 30, network: 7, web: 3 },
+      },
+    },
+    decisionFacts: projectDecisionFacts([decisionFact]),
+    relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] },
+    limitations: ['One source remains partial.'],
+  };
+}
+
+async function buildCurrentCapsule(brief = currentCapsuleBrief()) {
+  return buildInvestigationCapsule({
+    applicationVersion: WHOISLEUTH_APPLICATION_VERSION,
+    lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 27 },
+    brief,
+    graph: currentCapsuleGraph(),
+    generatedAt: CAPSULE_GENERATED_AT,
+  });
+}
+
+function record(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
+function items(value: unknown): unknown[] {
+  const values = record(value).items;
+  assert.ok(Array.isArray(values));
+  return values;
+}
+
+function currentProjectedFact(brief: Record<string, unknown>): Record<string, unknown> {
+  const facts = record(brief.decisionFacts).facts;
+  assert.ok(Array.isArray(facts) && facts.length === 1);
+  return record(facts[0]);
+}
+
+async function resignCapsule(value: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const capsule = structuredClone(value);
+  const briefDigest = await sha256ArtifactDigestV2(capsule.investigationBrief);
+  const graphDigest = await sha256ArtifactDigestV2(capsule.graphSnapshot);
+  const analystRecordsDigest = capsule.analystRecords === null
+    ? null
+    : await sha256ArtifactDigestV2(capsule.analystRecords);
+  assert.ok(Array.isArray(capsule.sourceContracts));
+  capsule.sourceContracts = capsule.sourceContracts.map((candidate) => {
+    const contract = record(candidate);
+    if (contract.id === 'investigation-brief') return { ...contract, digest: briefDigest };
+    if (contract.id === 'asset-graph') return { ...contract, digest: graphDigest };
+    if (contract.id === 'analyst-records') return { ...contract, digest: analystRecordsDigest };
+    return contract;
+  });
+  delete capsule.integrity;
+  return {
+    ...capsule,
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v2',
+      scope: 'capsule excluding integrity',
+      briefDigest,
+      graphDigest,
+      analystRecordsDigest,
+      digestSha256: await sha256ArtifactDigestV2(capsule),
+    },
+  };
+}
 async function unsupportedCaseContracts(): Promise<{
   retired: { cliCasePack: Record<string, unknown>; responsePacket: Record<string, unknown> };
 }> {
@@ -143,6 +312,8 @@ async function rebindCaseResponseReview<T extends Record<string, unknown>>(value
     case: value.case,
     incident: value.incident,
     contacts: value.contacts,
+    recipientRoute: value.recipientRoute,
+    actionBinding: value.actionBinding,
     selectedEvidence: value.selectedEvidence,
     contradictions: value.contradictions,
     readiness: value.readiness,
@@ -193,6 +364,10 @@ function lookupEvidenceArtifact(): Record<string, unknown> {
 }
 
 describe('offline artifact verifier', () => {
+  test('keeps the historical structure module as an exact compatibility facade', () => {
+    assert.deepEqual(artifactStructureFacade, offlineArtifactValidation);
+  });
+
   test('validates workspace manifests and section checksums without printing contents', async () => {
     const archive = await buildWorkspaceArchive({
       cases: {
@@ -487,9 +662,21 @@ describe('offline artifact verifier', () => {
     assert.deepEqual(report.artifact, {
       kind: 'lookup_evidence',
       schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
-      version: lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      version: lookupEvidenceModule.V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
     });
     assert.equal(report.state, 'structure_valid');
+  });
+
+  test('keeps the frozen published-v2 schema-27 Lookup export readable after schema 28 becomes current', async () => {
+    const report = await verifyOfflineArtifact(await loadLookupEvidenceV27Fixture());
+    assert.deepEqual(report.artifact, {
+      kind: 'lookup_evidence',
+      schema: lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA,
+      version: lookupEvidenceModule.PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+    });
+    assert.equal(report.state, 'structure_valid');
+    assert.equal(report.checks.structure, 'verified');
+    assert.equal(report.checks.contentIntegrity, 'not_checked');
   });
 
   test('accepts exact current homepage metadata while rejecting malformed and pre-homepage injection', async () => {
@@ -755,7 +942,7 @@ describe('offline artifact verifier', () => {
       /limited to 5 MiB/iu,
     );
 
-    for (const schemaVersion of [lookupEvidenceModule.PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
+    for (const schemaVersion of [lookupEvidenceModule.V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION - 1, lookupEvidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION + 1]) {
       const unsupported = { ...lookupEvidenceArtifact(), schemaVersion };
       await assert.rejects(
         verifyOfflineArtifact(JSON.stringify(unsupported)),
@@ -798,27 +985,7 @@ describe('offline artifact verifier', () => {
   });
 
   test('reports whole-capsule assurance and detects changed metadata or embedded projections', async () => {
-    const graph = {
-      version: 2 as const,
-      targetId: 'target-example',
-      nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }],
-      edges: [], sources: [], truncated: false, limitations: [],
-    };
-    const brief = {
-      schema: 'whoisleuth.investigation-brief' as const, schemaVersion: 2 as const,
-      generatedAt: '2026-08-04T00:00:00.000Z', target: 'example.test', targetType: 'domain',
-      task: 'general' as const, taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
-      observation: { observedAt: '2026-08-04T00:00:00.000Z', evidenceAgeDays: 0, completeSources: 1, limitedSources: 0, freshnessPolicy: { version: 1 as const, id: 'task-default' as const, task: 'general' as const, thresholdsDays: { registration: 30, network: 7, web: 3 } } },
-      decisionFacts: {
-        version: 1 as const, total: 0, displayed: 0, omitted: 0,
-        contradictory: 0, unresolved: 0, facts: [],
-      },
-      relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
-    };
-    const capsule = await buildInvestigationCapsule({
-      applicationVersion: '1.36.1', lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 24 },
-      brief, graph, generatedAt: '2026-08-04T01:00:00Z',
-    });
+    const capsule = await buildCurrentCapsule();
     const report = await verifyOfflineArtifact(JSON.stringify(capsule));
     assert.equal(report.artifact.kind, 'investigation_capsule');
     assert.equal(report.state, 'verified');
@@ -839,6 +1006,178 @@ describe('offline artifact verifier', () => {
       readArtifactInput: async () => JSON.stringify(capsule),
     });
     assert.equal(strictCode, EXIT_CODES.SUCCESS);
+  });
+
+  test('rejects malformed current Decision Fact projections after recomputed integrity', async () => {
+    const mutations: readonly Readonly<{
+      label: string;
+      mutate(brief: Record<string, unknown>): void;
+    }>[] = [
+      {
+        label: 'projection version',
+        mutate: (brief) => { record(brief.decisionFacts).version = 2; },
+      },
+      {
+        label: 'projection total',
+        mutate: (brief) => { record(brief.decisionFacts).total = 2; },
+      },
+      {
+        label: 'projection displayed count',
+        mutate: (brief) => { record(brief.decisionFacts).displayed = 0; },
+      },
+      {
+        label: 'projection state count',
+        mutate: (brief) => { record(brief.decisionFacts).contradictory = 0; },
+      },
+      {
+        label: 'fact version',
+        mutate: (brief) => { currentProjectedFact(brief).version = 2; },
+      },
+      {
+        label: 'fact identifier',
+        mutate: (brief) => { currentProjectedFact(brief).id = 'invalid identifier'; },
+      },
+      {
+        label: 'fact evidence state',
+        mutate: (brief) => { currentProjectedFact(brief).evidenceState = 'complete'; },
+      },
+      {
+        label: 'fact completeness',
+        mutate: (brief) => { currentProjectedFact(brief).completeness = 'complete'; },
+      },
+      {
+        label: 'dependency linkage',
+        mutate: (brief) => { items(currentProjectedFact(brief).dependencies)[0] = 'unlinked-source'; },
+      },
+      {
+        label: 'dependency count',
+        mutate: (brief) => { record(currentProjectedFact(brief).dependencies).total = 3; },
+      },
+      {
+        label: 'collection item count',
+        mutate: (brief) => {
+          const fact = currentProjectedFact(brief);
+          for (const value of [fact.dependencies, fact.sources]) {
+            const collection = record(value);
+            collection.displayed = 1;
+            collection.omitted = 1;
+          }
+        },
+      },
+      {
+        label: 'source-reference ordering',
+        mutate: (brief) => { items(currentProjectedFact(brief).sourceReferences).reverse(); },
+      },
+      {
+        label: 'source ordering',
+        mutate: (brief) => { items(currentProjectedFact(brief).sources).reverse(); },
+      },
+      {
+        label: 'source provenance',
+        mutate: (brief) => { record(items(currentProjectedFact(brief).sources)[0]).provenance = 'unknown'; },
+      },
+      {
+        label: 'source observation time',
+        mutate: (brief) => { record(items(currentProjectedFact(brief).sources)[0]).observedAt = 'not-a-time'; },
+      },
+      {
+        label: 'source-reference count',
+        mutate: (brief) => {
+          record(record(items(currentProjectedFact(brief).sources)[0]).references).displayed = 0;
+        },
+      },
+      {
+        label: 'contradiction ordering',
+        mutate: (brief) => { items(currentProjectedFact(brief).contradictions).reverse(); },
+      },
+      {
+        label: 'safe-action ordering',
+        mutate: (brief) => { items(currentProjectedFact(brief).safeNextActions).reverse(); },
+      },
+      {
+        label: 'safe-action destination',
+        mutate: (brief) => {
+          record(items(currentProjectedFact(brief).safeNextActions)[0]).href = 'https://outside.example/path';
+        },
+      },
+    ];
+
+    for (const { label, mutate } of mutations) {
+      const brief = structuredClone(currentCapsuleBrief()) as unknown as Record<string, unknown>;
+      mutate(brief);
+      const capsule = await buildCurrentCapsule(brief as unknown as LookupInvestigationBrief);
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(capsule)),
+        /unsupported or malformed structure/iu,
+        label,
+      );
+    }
+  });
+
+  test('validates non-empty public brief facts, decisions, and actions', async () => {
+    const fixture = JSON.parse(await readFile(
+      new URL('./fixtures/investigation-capsule-v2.json', import.meta.url),
+      'utf8',
+    )) as Record<string, unknown>;
+    const brief = record(fixture.investigationBrief);
+    brief.verifiedFacts = [{
+      label: 'Registration evidence',
+      value: 'Observed',
+      detail: 'A bounded registry observation was retained.',
+      provenance: {
+        sources: ['Registry observation'],
+        observedAt: CAPSULE_OBSERVED_AT,
+        fieldFamilies: ['registration'],
+        normalization: 'Canonical domain fields only.',
+        completeness: 'Partial evidence.',
+        limitations: ['The source omitted some fields.'],
+        conflicts: [],
+        decisionImpact: 'Review the source limitation.',
+      },
+    }];
+    brief.contradictions = [{
+      id: 'source-conflict',
+      state: 'conflict',
+      importance: 'high',
+      title: 'Sources disagree',
+      detail: 'The retained observations require reconciliation.',
+      sources: ['DNS observation', 'Registry observation'],
+      href: '#registry-evidence',
+    }];
+    brief.unknowns = [{
+      id: 'control-unknown',
+      state: 'uncertain',
+      importance: 'medium',
+      title: 'Control is unknown',
+      detail: 'The bounded evidence does not establish control.',
+      sources: ['Registry observation'],
+      href: '#registry-evidence',
+    }];
+    brief.nextActions = [{
+      id: 'review-registration',
+      label: 'Review registration evidence',
+      reason: 'Resolve the source disagreement.',
+      expectedOutcome: 'Record the reconciled observation.',
+      href: '#registry-evidence',
+      priority: 'high',
+    }];
+    const capsule = await resignCapsule(fixture);
+    const report = await verifyOfflineArtifact(JSON.stringify(capsule));
+    assert.equal(report.state, 'verified');
+
+    for (const mutate of [
+      (value: Record<string, unknown>) => { record((record(value.investigationBrief).verifiedFacts as unknown[])[0]).label = ''; },
+      (value: Record<string, unknown>) => { record((record(value.investigationBrief).contradictions as unknown[])[0]).state = 'resolved'; },
+      (value: Record<string, unknown>) => { record((record(value.investigationBrief).unknowns as unknown[])[0]).href = 'https://outside.example/path'; },
+      (value: Record<string, unknown>) => { record((record(value.investigationBrief).nextActions as unknown[])[0]).priority = 'urgent'; },
+    ]) {
+      const malformed = structuredClone(capsule);
+      mutate(malformed);
+      await assert.rejects(
+        verifyOfflineArtifact(JSON.stringify(await resignCapsule(malformed))),
+        /unsupported or malformed structure/iu,
+      );
+    }
   });
 
   test('rejects unsupported, malformed, and oversized input', async () => {
@@ -890,7 +1229,7 @@ describe('offline artifact verifier', () => {
     }
   });
 
-  test('rejects retired response packets and verifies current v7 with the exact review binding', async () => {
+  test('rejects retired response packets and verifies current v8 with the exact review binding', async () => {
     const { retired } = await unsupportedCaseContracts();
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify(retired.responsePacket)),
@@ -902,8 +1241,13 @@ describe('offline artifact verifier', () => {
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: {
+        recipient: 'Reserved response desk', type: 'registrar_report',
+        contactSource: 'fixture_registry', routeObservedAt: '2026-07-15T00:00:00.000Z',
+      },
     }, '2026-07-15T00:00:00.000Z');
     const packet = (await buildCaseResponsePacket(caseRecord, {
+      actionId: caseRecord.actions[0]!.id,
       category: 'Reserved review',
       affectedParty: 'Reserved service',
       abusiveUrls: ['https://review-binding.example/review'],
@@ -912,7 +1256,7 @@ describe('offline artifact verifier', () => {
     }, '2026-07-15T01:00:00.000Z')).json;
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.state, 'verified');
-    assert.equal(verified.artifact.version, 7);
+    assert.equal(verified.artifact.version, 8);
 
     const forged = structuredClone(packet) as unknown as Record<string, unknown>;
     const authorisation = forged.authorisation as Record<string, unknown>;
@@ -925,13 +1269,16 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('reconstructs the v7 provider lifecycle projection instead of trusting a re-signed summary', async () => {
+  test('reconstructs the v8 provider lifecycle projection instead of trusting a re-signed summary', async () => {
     const base = createCase({
       domain: 'provider-lifecycle.example',
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
-      action: { recipient: 'Reserved response desk', type: 'registrar_report' },
+      action: {
+        recipient: 'Reserved response desk', type: 'registrar_report',
+        contactSource: 'fixture_registry', routeObservedAt: '2026-07-15T00:00:00.000Z',
+      },
     }, '2026-07-15T00:00:00.000Z');
     const actionId = base.actions[0]!.id;
     let actions = base.actions;
@@ -948,6 +1295,7 @@ describe('offline artifact verifier', () => {
       outcomeDetail: 'A later response supplied procedural detail only.', provenance: 'provider_detail_only',
     }, '2026-07-15T01:30:00.000Z');
     const packet = (await buildCaseResponsePacket({ ...base, actions, updatedAt: '2026-07-15T01:30:00.000Z' }, {
+      actionId,
       category: 'Reserved review',
       affectedParty: 'Reserved service',
       abusiveUrls: ['https://provider-lifecycle.example/review'],
@@ -977,11 +1325,17 @@ describe('offline artifact verifier', () => {
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
     }, '2026-07-15T00:00:00.000Z');
     let actions = base.actions;
+    let originActionId: string | null = null;
     for (let index = 0; index <= MAX_RESPONSE_ACTION_HISTORY; index += 1) {
-      actions = appendCaseAction(actions, { recipient: `Bounded local reviewer ${index}` },
+      actions = appendCaseAction(actions, {
+        recipient: `Bounded local reviewer ${index}`,
+        originActionId,
+      },
         new Date(Date.parse('2026-07-15T00:00:00.000Z') + index * 60_000).toISOString());
+      originActionId = actions.at(-1)!.id;
     }
     const packet = (await buildCaseResponsePacket({ ...base, actions }, {
+      actionId: originActionId,
       category: 'Reserved review', affectedParty: 'Reserved service',
       abusiveUrls: ['https://bounded-packet-actions.example/review'],
       observedHarm: 'A reserved synthetic observation.', observedAt: '2026-07-15T00:00:00.000Z',
@@ -1005,19 +1359,21 @@ describe('offline artifact verifier', () => {
       status: 'escalated',
       disposition: 'confirmed_abuse',
       evidence: { availability: 'registered', capturedAt: '2026-07-15T00:00:00.000Z' },
+      action: {
+        type: 'registrar_report',
+        recipient: 'c'.repeat(320),
+        contactSource: 's'.repeat(80),
+        routeObservedAt: '2026-07-15T00:00:00.000Z',
+        contactLimitations: Array.from({ length: 8 }, (_, index) => `${String(index)}${'l'.repeat(239)}`),
+      },
     }, '2026-07-15T00:00:00.000Z');
     const packet = (await buildCaseResponsePacket(caseRecord, {
+      actionId: caseRecord.actions[0]!.id,
       category: 'Credential review',
       affectedParty: 'Example service',
       abusiveUrls: ['https://bounded-response.example/review'],
       observedHarm: 'A credential request was observed.',
       observedAt: '2026-07-15T00:00:00.000Z',
-      contacts: [{
-        kind: 'registrar',
-        contact: 'c'.repeat(320),
-        source: 's'.repeat(80),
-        limitations: Array.from({ length: 8 }, (_, index) => `${String(index)}${'l'.repeat(239)}`),
-      }],
     }, '2026-07-15T01:00:00.000Z')).json;
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.state, 'verified');
@@ -1070,7 +1426,7 @@ describe('offline artifact verifier', () => {
       },
       (value) => {
         const contact = ((value.contacts as Array<Record<string, unknown>>)[0]!);
-        contact.freshness = 'current';
+        contact.freshness = 'stale';
       },
       (value) => {
         const rows = (value.readiness as Record<string, unknown>).rows as Array<Record<string, unknown>>;

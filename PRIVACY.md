@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 24 August 2026.
+Last updated: 2 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -78,11 +78,12 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 13 can retain
-the exact normalised submitted hostname on a new evidence snapshot. Exact public
-Case schema 12 remains readable and migrates directly; a migrated snapshot can
-retain a null hostname because WHOISleuth does not reconstruct one from weaker
-fields. Case report v9 JSON and Markdown do not add that hostname.
+Creating or refreshing a Case is deliberate. Current Case schema 14 can retain
+the exact normalised submitted hostname on a new evidence snapshot and the
+observation time of a reviewed response route. Published v2 Case schema 13 and
+exact public v1 Case schema 12 remain readable and migrate directly; migrated
+fields can remain null because WHOISleuth does not reconstruct them from weaker
+evidence. Case report v10 JSON and Markdown do not add the snapshot hostname.
 
 Public CLI Case packs clear identifiers, actions, observed-effect reviews and
 closure records for the public audience. Trusted and internal Case packs and
@@ -133,6 +134,10 @@ The checked-in SSLBL certificate projection is local and digest-checked. Lookup
 does not send its target or certificate to SSLBL. Opening a separately labelled
 matching-record link is ordinary deliberate navigation to that provider.
 
+Registrar standing is matched locally using only the numeric IANA ID already
+present in registration evidence. Lookup makes no additional IANA or ICANN
+request for it.
+
 Optional scheduled monitoring is disabled by default. When configured, the
 worker retains only the bounded application-encrypted compact watchlist
 projection and ordinary object metadata needed to operate it. The hosting
@@ -144,6 +149,17 @@ scheduled watchlist rewrites the encrypted logical state; it does not delete
 the Blob object. Disabling collection also leaves the object in place. Physical
 object deletion is a separate deployment-operator action through the hosting
 platform, as documented in the operations guide.
+
+Each scheduled run uses the Fast compact collection contract: registration-led
+RDAP and the bounded authoritative DNS fallback where required. It omits WHOIS,
+HTTP, TLS, page, and optional intelligence collection, so a scheduled result is
+not a current website or page-content check.
+
+When malformed, duplicate, excessive or inconsistent scheduled-monitor state
+is recovered, the authenticated management response can include an ephemeral
+bounded count by fixed recovery category. It never includes malformed targets,
+watchlist names, source records, lease tokens, ciphertext or raw payloads, and
+the recovery projection is not written back into the encrypted durable state.
 
 Optional distributed operation controls can send only bounded operation class,
 opaque lease, expiry and one-way opaque-session fingerprint metadata to the
@@ -201,11 +217,12 @@ envelopes before preview or merge; omission never deletes destination data.
 Imported evidence remains attributed to its file and declared source and is not
 treated as freshly collected or true merely because it parsed.
 
-The current writer emits workspace archive version 6. Exact version 5 remains
-readable and migrates to an explicitly empty Analyst Review Item section without
-inventing decisions. Versions 1 through 4 are unsupported. Future versions fail
-without empty import, reset, deletion or rewrite. Release 1.47.4 can export the
-exact version-5 and Case-schema-12 public baseline before moving to v2.
+The current writer emits workspace archive version 7. Exact versions 5 and 6
+remain readable. Version 5 migrates to an explicitly empty Analyst Review Item
+section without inventing decisions; version 6 migrates its existing sections
+directly. Versions 1 through 4 are unsupported. Future versions fail without
+empty import, reset, deletion or rewrite. Release 1.47.4 can export the exact
+version-5 and Case-schema-12 public baseline before moving to v2.
 
 The optional encrypted workspace envelope remains version 1. Encryption and
 decryption happen in browser memory using password-based authenticated
@@ -217,9 +234,10 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 27 excludes raw registration payloads,
-  expanded contacts, credentials and complete query-bearing URLs, while exact
-  public schema 26 remains readable and may contain public contact fields;
+- current Lookup evidence schema 28 excludes raw registration payloads,
+  expanded contacts, credentials and complete query-bearing URLs. Published v2
+  schema 27 and exact v1 schema 26 remain readable; schema 26 may contain public
+  contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
 - defensive exports contain reviewed selected domains and rollback metadata but

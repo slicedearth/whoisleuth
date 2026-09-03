@@ -14,6 +14,16 @@ import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
+import {
+  TECHNOLOGY_EVIDENCE_ROLE_ORDER,
+  type TechnologyEvidenceRole,
+} from './technology-evidence-role.mts';
+import {
+  MAX_EVIDENCE_PER_TECHNOLOGY,
+  MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH,
+  MAX_TECHNOLOGY_FINDINGS,
+  TECHNOLOGY_PROFILE_VERSION,
+} from './lookup-child-profile-contract.mts';
 
 type TechnologyCategory =
   | 'application runtime'
@@ -26,16 +36,22 @@ type TechnologyCategory =
   | 'delivery platform';
 type TechnologyConfidence = 'high' | 'medium';
 type TechnologyEvidenceSource = 'generator metadata' | 'static HTML' | 'resource origin' | 'HTTP server header' | 'passive response header';
-type TechnologyEvidence = { source: TechnologyEvidenceSource; description: string };
+type TechnologyEvidence = {
+  source: TechnologyEvidenceSource;
+  role: TechnologyEvidenceRole;
+  description: string;
+};
 type TechnologyFinding = {
   id: string;
   name: string;
   category: TechnologyCategory;
   confidence: TechnologyConfidence;
+  roles: TechnologyEvidenceRole[];
   evidence: TechnologyEvidence[];
 };
 type TechnologyInput = {
   html?: unknown;
+  htmlAvailable?: unknown;
   generator?: unknown;
   httpServer?: unknown;
   resourceOrigins?: unknown;
@@ -51,7 +67,8 @@ type MatchContext = {
   resourceHosts: Set<string>;
   responseHeaders: ReadonlyMap<string, string>;
 };
-type SignatureEvidence = TechnologyEvidence & {
+type SignatureEvidence = Omit<TechnologyEvidence, 'role'> & {
+  role?: TechnologyEvidenceRole;
   confidence: TechnologyConfidence;
   matches: (context: MatchContext) => boolean;
 };
@@ -72,16 +89,12 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 10;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
-const MAX_TECHNOLOGY_FINDINGS = 24;
-const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
 const MAX_PASSIVE_RESPONSE_HEADERS = 8;
-const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 
 function boundedLowercase(value: unknown, maxLength: number): string {
@@ -116,14 +129,36 @@ const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
 ] as const);
 const PASSIVE_HEADER_NAMES = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 
-function normalizedResponseHeaders(value: unknown): ReadonlyMap<string, string> {
-  const input = value && typeof value === 'object' && !Array.isArray(value)
+function technologyHeaderValue(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 240 || CONTROL_CHARACTER_RE.test(value)) return '';
+  return value.trim();
+}
+
+function captureTechnologyResponseHeaders(value: unknown): Record<string, string> {
+  const output: Record<string, string> = {};
+  const getter = value && typeof value === 'object' && typeof (value as { get?: unknown }).get === 'function'
+    ? (value as { get(name: string): unknown }).get.bind(value)
+    : null;
+  const record = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
-    : {};
+    : null;
+  for (const name of PASSIVE_TECHNOLOGY_HEADER_NAMES) {
+    let rawValue: unknown;
+    try {
+      rawValue = getter ? getter(name) : record?.[name];
+    } catch {
+      rawValue = undefined;
+    }
+    const headerValue = technologyHeaderValue(rawValue);
+    if (headerValue) output[name] = headerValue;
+  }
+  return output;
+}
+
+function normalizedResponseHeaders(value: unknown): ReadonlyMap<string, string> {
   const output = new Map<string, string>();
-  for (const [rawName, rawValue] of Object.entries(input).slice(0, MAX_PASSIVE_RESPONSE_HEADERS * 4)) {
-    const name = rawName.trim().toLowerCase();
-    if (!PASSIVE_HEADER_NAMES.has(name) || typeof rawValue !== 'string') continue;
+  for (const [name, rawValue] of Object.entries(captureTechnologyResponseHeaders(value))) {
+    if (!PASSIVE_HEADER_NAMES.has(name)) continue;
     const normalized = boundedLowercase(rawValue, 240);
     if (!normalized) continue;
     output.set(name, normalized);
@@ -192,6 +227,19 @@ function responseHeaderEvidence(
       return pattern ? pattern.test(responseHeaders.get(name) ?? '') : true;
     },
   };
+}
+
+function evidenceRole(
+  signature: TechnologySignature,
+  evidence: SignatureEvidence,
+): TechnologyEvidenceRole {
+  if (evidence.role) return evidence.role;
+  if (evidence.source === 'resource origin') return 'embedded_dependency';
+  if (signature.category === 'delivery platform') return 'observed_edge';
+  if (['application runtime', 'web framework', 'static site generator', 'web server'].includes(signature.category)) {
+    return 'framework_runtime';
+  }
+  return 'application_platform';
 }
 
 const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
@@ -408,14 +456,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'netlify', name: 'Netlify', category: 'delivery platform',
     evidence: [
       serverEvidence(/^netlify(?:\s|$|\/)/i, 'The selected response server header identifies Netlify.'),
-      responseHeaderEvidence('x-nf-request-id', null, 'A Netlify request identifier response header was observed.', 'medium'),
+      { ...responseHeaderEvidence('x-nf-request-id', null, 'A Netlify application-platform response header was observed.', 'medium'), role: 'application_platform' },
     ],
   },
   {
     id: 'vercel', name: 'Vercel', category: 'delivery platform',
     evidence: [
       serverEvidence(/^vercel(?:\s|$|\/)/i, 'The selected response server header identifies Vercel.'),
-      responseHeaderEvidence('x-vercel-id', null, 'A Vercel request-trace response header was observed.', 'medium'),
+      { ...responseHeaderEvidence('x-vercel-id', null, 'A Vercel application-platform response header was observed.', 'medium'), role: 'application_platform' },
     ],
   },
   {
@@ -456,21 +504,28 @@ const TECHNOLOGY_SIGNATURE_CATALOGUE: ReadonlyArray<TechnologySignatureDescripto
     category: signature.category,
     minimumEvidenceMatches: signature.minimumEvidenceMatches || 1,
     requiresNonResourceEvidence: signature.requiresNonResourceEvidence === true,
-    evidence: Object.freeze(signature.evidence.map(({ source, description, confidence }) => Object.freeze({
-      source,
-      description,
-      confidence,
-    }))),
+    evidence: Object.freeze(signature.evidence.map((evidence) => Object.freeze({
+        source: evidence.source,
+        role: evidenceRole(signature, evidence),
+        description: evidence.description,
+        confidence: evidence.confidence,
+      }))),
   })),
 );
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
+  // Existing direct callers pass minimised, already-derived page evidence rather
+  // than the page body. The real collector declares false for header-only
+  // responses, while an explicit malformed declaration also fails closed.
+  const htmlAvailable = input.htmlAvailable === undefined
+    ? true
+    : input.htmlAvailable === true;
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
-  const browserLibraryProfile = analyzeBrowserLibraries({
+  const browserLibraryProfile = htmlAvailable ? analyzeBrowserLibraries({
     htmlAnalysis,
     observedAt: input.observedAt,
     sourceTruncated: input.sourceTruncated,
-  });
+  }) : null;
   const context: MatchContext = {
     html: htmlAnalysis.markup,
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
@@ -484,12 +539,18 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
     const matched = signature.evidence.filter((evidence) => evidence.matches(context));
     if (matched.length < (signature.minimumEvidenceMatches || 1)) continue;
     if (signature.requiresNonResourceEvidence && matched.every((evidence) => evidence.source === 'resource origin')) continue;
+    const matchedEvidence = matched.slice(0, MAX_EVIDENCE_PER_TECHNOLOGY).map((evidence) => ({
+      source: evidence.source,
+      role: evidenceRole(signature, evidence),
+      description: evidence.description,
+    }));
     findings.push({
       id: signature.id,
       name: signature.name,
       category: signature.category,
       confidence: matched.some((evidence) => evidence.confidence === 'high') ? 'high' : 'medium',
-      evidence: matched.slice(0, MAX_EVIDENCE_PER_TECHNOLOGY).map(({ source, description }) => ({ source, description })),
+      roles: TECHNOLOGY_EVIDENCE_ROLE_ORDER.filter((role) => matchedEvidence.some((evidence) => evidence.role === role)),
+      evidence: matchedEvidence,
     });
   }
 
@@ -499,11 +560,13 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
     || htmlAnalysis.inputLimitReached
     || htmlAnalysis.tagLimitReached
     || findingLimitReached;
+  const partial = truncated || !htmlAvailable;
   const limitations = [
     'Curated signature matching is selective; an unmatched technology may still be present.',
     'Static response evidence cannot identify JavaScript-rendered or deliberately concealed technologies.',
     'Technology indicators describe observed implementation clues, not ownership, safety, or maliciousness.',
   ];
+  if (!htmlAvailable) limitations.push('HTML page identity was unavailable; only bounded permitted response-header indicators were evaluated.');
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so technology indicators may be incomplete.');
   if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
   if (htmlAnalysis.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
@@ -512,16 +575,16 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   return {
     profileVersion: TECHNOLOGY_PROFILE_VERSION,
     ...createObservation({
-      status: truncated ? 'partial' : 'success',
+      status: partial ? 'partial' : 'success',
       observedAt: input.observedAt,
       scanMode: 'deep',
       source: 'derived',
-      complete: !truncated,
+      complete: !partial,
       truncated,
       limitations,
       diagnostics: {
         findings: findings.length,
-        htmlEvaluated: Boolean(context.html),
+        htmlEvaluated: htmlAvailable,
         generatorEvaluated: Boolean(context.generator),
         serverEvaluated: Boolean(context.httpServer),
         resourceOriginsEvaluated: context.resourceHosts.size,
@@ -544,12 +607,14 @@ export {
   TECHNOLOGY_PROFILE_VERSION,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
+  captureTechnologyResponseHeaders,
 };
 
 export type {
   TechnologyCategory,
   TechnologyConfidence,
   TechnologyEvidence,
+  TechnologyEvidenceRole,
   TechnologyFinding,
   TechnologyInput,
   TechnologySignatureDescriptor,

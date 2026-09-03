@@ -1,5 +1,11 @@
 import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
 import type { CDPSession, Page, TestInfo } from '@playwright/test';
+import {
+  PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+  performanceSampleMedian,
+  resetPerformanceSampleState,
+} from './performance-sampling';
 
 type ConsoleRoute = Readonly<{
   path: '/lookup' | '/monitor' | '/cli';
@@ -37,6 +43,21 @@ type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   limitations: readonly string[];
 }>;
 
+type ConsoleLoadingSampleSet = Readonly<{
+  schema: 'whoisleuth.console-loading-sample-set';
+  version: 1;
+  mode: 'authenticated_local_chromium_repeated_cold_load';
+  path: ConsoleRoute['path'];
+  budget: ConsoleRoute['budget'];
+  sampleCount: number;
+  usableMsMedian: number;
+  usableMsMaximum: number;
+  longTaskTotalMsMedian: number;
+  longTaskTotalMsMaximum: number;
+  samples: readonly ConsoleLoadingMeasurement[];
+  limitations: readonly string[];
+}>;
+
 // Calibrated from repeated isolated and suite-ordered local production-build
 // cold loads on 2026-08-24. The maxima include first-route process and browser
 // cache variance instead of relying only on warmed suite timings.
@@ -48,7 +69,6 @@ const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
   '/monitor': Object.freeze({ encodedTransferBytes: 1_748_707, usableMs: 1_627.7, longTaskTotalMs: 68, layoutShiftScore: 0.0064 }),
   '/cli': Object.freeze({ encodedTransferBytes: 466_249, usableMs: 250.7, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
 });
-
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
 }
@@ -181,8 +201,8 @@ async function measureConsoleRoute(
   page: Page,
   route: ConsoleRoute,
   testInfo: TestInfo,
+  sample: number,
 ): Promise<ConsoleLoadingMeasurement> {
-  await installMainThreadProbe(page);
   const session = await page.context().newCDPSession(page);
   const transfer = attachTransferProbe(session);
   await session.send('Network.enable');
@@ -215,7 +235,7 @@ async function measureConsoleRoute(
         'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
-    await testInfo.attach(`console-loading-${route.path.slice(1)}.json`, {
+    await testInfo.attach(`console-loading-${route.path.slice(1)}-sample-${sample}.json`, {
       body: Buffer.from(`${JSON.stringify(measurement, null, 2)}\n`, 'utf8'),
       contentType: 'application/json',
     });
@@ -228,19 +248,54 @@ async function measureConsoleRoute(
 
 for (const route of routes) {
   test(`authenticated cold load for ${route.path} preserves deterministic loading contracts`, async ({ page }, testInfo) => {
-    const measurement = await measureConsoleRoute(page, route, testInfo);
-    expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
-    expect(measurement.encodedTransferBytes).toBeGreaterThan(100_000);
-    expect(measurement.encodedTransferBytes).toBeLessThanOrEqual(route.budget.encodedTransferBytes);
-    expect(measurement.usableMs).toBeGreaterThan(0);
-    expect(measurement.longTaskSupported).toBe(true);
-    expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.layoutShiftScore).toBeLessThanOrEqual(route.budget.layoutShiftScore);
+    await installMainThreadProbe(page);
+    const measurements: ConsoleLoadingMeasurement[] = [];
+    for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
+      await resetPerformanceSampleState(page);
+      const measurement = await measureConsoleRoute(page, route, testInfo, sample);
+      measurements.push(measurement);
+      expect(measurement.completedRequestCount, 'the CDP transfer probe must observe the cold route load').toBeGreaterThan(5);
+      expect(measurement.encodedTransferBytes).toBeGreaterThan(100_000);
+      expect(measurement.encodedTransferBytes).toBeLessThanOrEqual(route.budget.encodedTransferBytes);
+      expect(measurement.usableMs).toBeGreaterThan(0);
+      expect(measurement.longTaskSupported).toBe(true);
+      expect(measurement.layoutShiftSupported).toBe(true);
+      expect(measurement.layoutShiftScore).toBeLessThanOrEqual(route.budget.layoutShiftScore);
+    }
+    const sampleSet: ConsoleLoadingSampleSet = Object.freeze({
+      schema: 'whoisleuth.console-loading-sample-set',
+      version: 1,
+      mode: 'authenticated_local_chromium_repeated_cold_load',
+      path: route.path,
+      budget: route.budget,
+      sampleCount: measurements.length,
+      usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
+      usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+      longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
+      longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
+      samples: Object.freeze([...measurements]),
+      limitations: Object.freeze([
+        'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
+        'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
+        'Every sample remains subject to transfer and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
+      ]),
+    });
+    await testInfo.attach(`console-loading-${route.path.slice(1)}-samples.json`, {
+      body: Buffer.from(`${JSON.stringify(sampleSet, null, 2)}\n`, 'utf8'),
+      contentType: 'application/json',
+    });
+    process.stdout.write(`Console loading sample set: ${JSON.stringify(sampleSet)}\n`);
     // Shared hosted runners cannot provide a stable CPU scheduling authority.
     // Transfer and layout gates above remain blocking in every project.
     if (enforcesMachineTimingBudgets(testInfo.project.name)) {
-      expect(measurement.usableMs).toBeLessThanOrEqual(route.budget.usableMs);
-      expect(measurement.longTaskTotalMs).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
+      expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(route.budget.usableMs);
+      expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
+      expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
+        route.budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+      );
+      expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
+        route.budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+      );
     }
   });
 }

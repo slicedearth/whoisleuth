@@ -1,27 +1,43 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  abuseRecipientKindLabel,
   resolveAbuseRecipients,
 } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
 
 describe('abuse recipient resolver', () => {
+  test('uses evidence-limited analyst labels without changing durable route kinds', () => {
+    assert.equal(abuseRecipientKindLabel('registrar'), 'Registrar contact');
+    assert.equal(abuseRecipientKindLabel('registry'), 'Registry contact');
+    assert.equal(abuseRecipientKindLabel('security_txt'), 'security.txt contact');
+    assert.equal(
+      abuseRecipientKindLabel('network_hosting'),
+      'Observed endpoint network-registration contact',
+    );
+  });
+
   test('keeps separately attributed publication routes without inferring a host contact', () => {
     const result = resolveAbuseRecipients({
       registryInsights: {
         version: 1,
+        publications: [
+          { source: 'registry_rdap', observedAt: '2026-07-30T01:00:00.000Z' },
+          { source: 'whois', observedAt: '2026-07-30T01:01:00.000Z' },
+          { source: 'registrar_rdap', observedAt: '2026-07-30T01:02:00.000Z' },
+        ],
         abuseRouting: [
           {
             kind: 'registrar',
             channel: 'email',
             contact: 'Abuse@Example.test',
-            source: 'registrar RDAP entity',
+            source: 'registrar RDAP abuse entity',
             limitations: ['Mailbox monitoring is not verified.'],
           },
           {
             kind: 'registry',
             channel: 'url',
             contact: 'https://registry.example/report#form',
-            source: 'registry publication',
+            source: 'Registry RDAP abuse entity',
           },
         ],
       },
@@ -63,7 +79,9 @@ describe('abuse recipient resolver', () => {
       'security_txt',
     ]);
     assert.equal(result.recipients[0]?.contact, 'abuse@example.test');
+    assert.equal(result.recipients[0]?.observedAt, '2026-07-30T01:02:00.000Z');
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
+    assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
     assert.equal(result.recipients[3]?.contact, 'network-abuse@example.test');
     assert.equal(result.recipients[3]?.actionType, 'network_hosting_report');
@@ -119,5 +137,17 @@ describe('abuse recipient resolver', () => {
     const coverage = result.coverage.find((item) => item.kind === 'network_hosting');
     assert.equal(coverage?.state, 'unavailable');
     assert.match(coverage?.detail ?? '', /incomplete/i);
+  });
+
+  test('distinguishes an unrequested security.txt file from a fetched file without a usable contact', () => {
+    const present = resolveAbuseRecipients({
+      securityTxt: { securityTxtVersion: 1, state: 'present', contacts: ['not-a-route'] },
+    });
+    const absent = resolveAbuseRecipients({
+      securityTxt: { securityTxtVersion: 1, state: 'absent', contacts: [] },
+    });
+    assert.match(present.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /fetched.*no usable/iu);
+    assert.match(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /collected with state absent/iu);
+    assert.doesNotMatch(absent.coverage.find((item) => item.kind === 'security_txt')?.detail ?? '', /not requested/iu);
   });
 });

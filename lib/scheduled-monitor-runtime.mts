@@ -18,6 +18,9 @@ import { runScheduledMonitorCycle } from './scheduled-monitor-cycle.mts';
 import {
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
+  normalizeScheduledMonitorStateWithRecovery,
+  type ScheduledMonitorRecoveryReport,
+  type ScheduledMonitorState,
 } from '../packages/monitoring/scheduled-monitor-model.mts';
 import type { NetlifyBlobStore } from './scheduled-monitor-netlify-store.mts';
 import type {
@@ -64,12 +67,13 @@ function createScheduledMonitorRepository(options: RepositoryRuntimeOptions = {}
     throw new ScheduledMonitorUnavailableError('Scheduled monitoring Blob storage is unavailable.');
   }
   const source = env as EnvironmentInput;
-  return new ScheduledMonitorRepository({
+  return new ScheduledMonitorRepository<ScheduledMonitorState, ScheduledMonitorRecoveryReport>({
     rawStore: createNetlifyBlobVersionedTextStore(options.blobStore),
     encryptionKey: String(source[KEY_ENV]),
     namespace: String(source[NAMESPACE_ENV]),
     emptyState: emptyScheduledMonitorState,
     normalizeState: normalizeScheduledMonitorState,
+    inspectState: normalizeScheduledMonitorStateWithRecovery,
   });
 }
 

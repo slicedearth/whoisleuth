@@ -5,7 +5,10 @@ import {
   openCase,
   type CaseRecord,
 } from '../cases.ts';
-import type { ResolvedAbuseRecipient } from '../analysis/abuse-recipient-resolver.ts';
+import {
+  abuseRecipientKindLabel,
+  type ResolvedAbuseRecipient,
+} from '../analysis/abuse-recipient-resolver.ts';
 import {
   checkpointPinInputs,
   type CheckpointFact,
@@ -98,6 +101,41 @@ export class LookupCaseController {
     }
   }
 
+  async openReplay(
+    domain: string,
+    evidence: CaseEvidenceInput,
+  ): Promise<LookupCaseActionResult> {
+    if (!domain) return { record: null, status: '' };
+    const importedEvidence = {
+      ...evidence,
+      source: 'import',
+      scanDepth: 'unknown',
+    };
+    try {
+      const { record, created, pruned } = await this.#api.open({
+        domain,
+        source: 'manual',
+        evidence: importedEvidence,
+      });
+      if (!created) {
+        const refreshed = await this.#api.edit(record.id, { evidence: importedEvidence });
+        return {
+          record: refreshed.record,
+          status: `Added the historical replay evidence to the Case for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+        };
+      }
+      return {
+        record,
+        status: `Created a browser-local Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record: null,
+        status: cause instanceof Error ? cause.message : 'Could not save the replay evidence to a Case.',
+      };
+    }
+  }
+
   async appendNote(
     record: CaseRecord | null,
     note: string,
@@ -119,6 +157,43 @@ export class LookupCaseController {
         record,
         status:
           cause instanceof Error ? cause.message : 'Could not add the note.',
+      };
+    }
+  }
+
+  async classify(
+    record: CaseRecord | null,
+    disposition: string,
+    reviewReasonCode: string,
+  ): Promise<LookupCaseActionResult> {
+    if (!record) {
+      return {
+        record: null,
+        status: 'Create or open the analyst case before recording a classification.',
+      };
+    }
+    const reason = disposition === 'unreviewed' ? '' : reviewReasonCode;
+    if (disposition !== 'unreviewed' && !reason) {
+      return {
+        record,
+        status: 'Select the reviewed reason before saving this disposition.',
+      };
+    }
+    try {
+      const updated = await this.#api.edit(record.id, {
+        disposition,
+        reviewReasonCode: reason,
+      });
+      return {
+        record: updated.record,
+        status: `Saved the analyst disposition and review reason.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error
+          ? cause.message
+          : 'Could not save the analyst classification.',
       };
     }
   }
@@ -151,13 +226,14 @@ export class LookupCaseController {
           type: route.actionType,
           recipient: route.contact,
           contactSource: route.source,
+          routeObservedAt: route.observedAt,
           contactLimitations: [...route.limitations],
           state: 'planned',
         },
       });
       return {
         record: updated.record,
-        status: `Recorded the ${route.kind.replaceAll('_', ' ')} route as a planned, human-reviewed action.${pruneSuffix(updated.pruned)}`,
+        status: `Recorded the ${abuseRecipientKindLabel(route.kind).toLowerCase()} as a planned, human-reviewed action.${pruneSuffix(updated.pruned)}`,
       };
     } catch (cause) {
       return {

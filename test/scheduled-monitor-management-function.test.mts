@@ -10,7 +10,12 @@ import {
   SCHEDULED_MONITOR_STORE_NAME,
 } from '../lib/scheduled-monitor-configuration.mts';
 import { MANAGEMENT_ERROR_CODES } from '../lib/scheduled-monitor-management.mts';
+import { encryptScheduledMonitorState } from '../lib/scheduled-monitor-crypto.mts';
 import { SCHEDULED_MONITOR_UNAVAILABLE_CODE } from '../lib/scheduled-monitor-runtime.mts';
+import {
+  createScheduledWatchlist,
+  emptyScheduledMonitorState,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import { readRequestTextCapped } from '../lib/http.mts';
 import scheduledMonitorManagementHandler, * as scheduledMonitorManagementModule from '../netlify/functions/scheduled-monitor-management.mts';
 import { requiredValue } from './value-assertions.mts';
@@ -137,6 +142,14 @@ test('rejects unsupported methods, missing authentication, and cross-site mutati
   ), options);
   assert.equal(crossSite.statusCode, 403);
   assert.equal(JSON.parse(crossSite.body || '').errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+
+  const crossScheme = await runScheduledMonitorManagementFunction(event(
+    'POST',
+    JSON.stringify({ action: 'delete', id: 'watchlist-00000001' }),
+    authenticatedHeaders({ origin: 'http://console.example' }),
+  ), options);
+  assert.equal(crossScheme.statusCode, 403);
+  assert.equal(JSON.parse(crossScheme.body || '').errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
   assert.equal(constructions, 0);
 });
 
@@ -344,6 +357,72 @@ test('creates, reads, pauses, resumes, replaces, and deletes through one encrypt
   assert.equal(removed.statusCode, 200);
   assert.deepEqual(JSON.parse(removed.body || '').state.watchlists, []);
   assert.ok(names.every((name) => name === SCHEDULED_MONITOR_STORE_NAME));
+});
+
+test('surfaces count-only recovery before and during the write that cleans encrypted state', async () => {
+  const store = new FakeBlobStore();
+  const item = createScheduledWatchlist({
+    id: 'watchlist-00000001',
+    name: 'Priority domains',
+    entry: fixtureEntry(),
+    intervalHours: 24,
+    now: NOW,
+  });
+  const corrupted = {
+    ...emptyScheduledMonitorState(),
+    watchlists: [
+      { ...item, status: 'running', privateValue: 'private watchlist value' },
+      { name: 'Malformed', target: 'private-target.invalid' },
+    ],
+    activeRun: {
+      id: 'active-run-000001',
+      watchlistId: item.id,
+      watchlistRevision: 99,
+      lease: { token: 'placeholder' },
+    },
+  };
+  store.entry = {
+    data: encryptScheduledMonitorState(corrupted, key, namespace),
+    etag: '"v0"',
+    metadata: {},
+  };
+  const options: ManagementFunctionOptions = {
+    env: readyEnv(),
+    blobStoreFactory: () => store,
+    now: () => Date.parse(NOW),
+  };
+
+  const read = await runScheduledMonitorManagementFunction(event(), options);
+  const readBody = JSON.parse(read.body || '');
+  assert.equal(read.statusCode, 200);
+  assert.equal(readBody.recovery.recoveredItems, 4);
+  assert.deepEqual(readBody.recovery.categories, {
+    invalidWatchlists: 1,
+    duplicateIdentifiers: 0,
+    duplicateNames: 0,
+    truncatedInputs: 0,
+    normalisedWatchlists: 1,
+    invalidActiveRuns: 1,
+    releasedMalformedLeases: 0,
+    resetInconsistentStatuses: 1,
+  });
+  assert.doesNotMatch(read.body || '', /private watchlist value|private-target|placeholder/u);
+  assert.equal(store.writes, 0);
+
+  const update = await runScheduledMonitorManagementFunction(event('POST', JSON.stringify({
+    action: 'update',
+    id: item.id,
+    enabled: false,
+  })), options);
+  const updateBody = JSON.parse(update.body || '');
+  assert.equal(update.statusCode, 200);
+  assert.deepEqual(updateBody.recovery, readBody.recovery);
+  assert.doesNotMatch(update.body || '', /private watchlist value|private-target|placeholder/u);
+  assert.equal(store.writes, 1);
+  assert.equal(store.entry?.data.includes('private-target.invalid'), false);
+
+  const settled = JSON.parse((await runScheduledMonitorManagementFunction(event(), options)).body || '');
+  assert.equal(settled.recovery, null);
 });
 
 test('maps expected conflicts and hides unexpected storage failures', async () => {

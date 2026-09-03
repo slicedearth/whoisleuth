@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildLookupSummaryModel } from '../frontend/src/lib/analysis/lookup-summary-model.ts';
+import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
 
 test('builds bounded assessment signals and separately attributed diagnostics', () => {
   const summary = buildLookupSummaryModel({
@@ -38,6 +39,10 @@ test('builds bounded assessment signals and separately attributed diagnostics', 
       endpoint: 'https://registrar-rdap.example.test',
       parsed: { conformance: ['rdap_level_0'] },
     },
+    registrarStanding: buildRegistrarStanding({
+      registrarIanaId: '4318',
+      now: new Date('2026-09-03T12:00:00.000Z'),
+    }),
     registryComparison: {
       fields: [{
         label: 'Registrar',
@@ -78,7 +83,13 @@ test('builds bounded assessment signals and separately attributed diagnostics', 
   );
   assert.ok(summary.signals.some((signal) => signal.label === 'Favicon near-match' && signal.tone === 'warn'));
   assert.ok(summary.signals.some((signal) => signal.label === 'Mixed-script IDN' && signal.tone === 'warn'));
-  assert.ok(summary.signals.some((signal) => signal.label === 'Privacy protected' && signal.tone === 'warn'));
+  assert.ok(summary.signals.some((signal) => signal.label === 'Privacy protected' && signal.tone === 'neutral'));
+  assert.ok(summary.signals.some((signal) => signal.label.includes('Active') && signal.tone === 'neutral'));
+  assert.ok(summary.signals.some((signal) => signal.label === 'Official termination notice found' && signal.tone === 'warn'));
+  assert.match(
+    summary.signals.find((signal) => signal.label === 'Official termination notice found')?.detail || '',
+    /does not classify this domain/u,
+  );
   assert.equal(summary.diagnostics.find((item) => item.source === 'whois')?.label, 'partial');
   assert.match(summary.diagnostics.find((item) => item.source === 'whois')?.detail || '', /attempts: timeout → success/u);
   assert.deepEqual(summary.diagnostics[0]?.conformance, ['rdap_level_0']);

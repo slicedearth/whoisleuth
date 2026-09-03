@@ -232,7 +232,9 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   await page.goto('/bulk');
   await seedEvidenceDebt(page, '/bulk');
   await expect(page.locator('#console-navigation')).toBeVisible();
-  await holdBrowserLocalReads(page, 1_500);
+  // Keep the fixture pending across navigation and the complete sequence of
+  // accessibility assertions; this is not a product loading deadline.
+  await holdBrowserLocalReads(page, 4_000);
   const navigation = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
 
   const region = page.getByRole('region', { name: 'Evidence gaps' });

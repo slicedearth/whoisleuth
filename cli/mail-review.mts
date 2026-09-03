@@ -3,6 +3,7 @@ import { getDomain } from 'tldts';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { isRecord, recordOrEmpty } from '../lib/json-record.mts';
 import { CliUsageError } from './errors.mts';
 
 export const CLI_MAIL_REVIEW_SCHEMA = 'whoisleuth.cli.mail-review';
@@ -15,13 +16,7 @@ type MailState = 'authenticated_mail' | 'evidence_incomplete' | 'mail_auth_gap' 
 const UNSAFE_TEXT_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u;
 const UNSAFE_TEXT_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]+/gu;
 
-function record(value: unknown): UnknownRecord {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
+const record = recordOrEmpty;
 
 function text(value: unknown, maximum = 500): string {
   return typeof value === 'string'

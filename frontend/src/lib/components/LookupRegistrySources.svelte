@@ -7,6 +7,7 @@
   } from '$lib/analysis/visualization-models.ts';
   import { buildRdapReverseSearchPreviews } from '$lib/analysis/rdap-reverse-search-preview.ts';
   import { boundedTechnologyText } from '$lib/analysis/lookup-display-shared.ts';
+  import { registrarStandingOfficialSourceUrl } from '../../../../lib/registrar-standing-catalogue-contract.mts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -44,8 +45,19 @@
     ? value.slice(0, maximum).filter((item): item is string => typeof item === 'string')
       .map((item) => boundedTechnologyText(item, maximumLength)).filter(Boolean)
     : [];
-  const display = (value: unknown): string => typeof value === 'string' && value ? value.replaceAll('_', ' ') : 'unavailable';
-
+  const display = (value: unknown): string => {
+    if (typeof value === 'string' && value) return value.replaceAll('_', ' ');
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : 'unavailable';
+  };
+  const registrarComplianceSummary = (value: JsonRecord, actionCount: number): string => {
+    const year = display(value.catalogueYear);
+    const health = display(value.sourceHealth);
+    if (value.state === 'matching_actions') return `${actionCount} matching ${year} action${actionCount === 1 ? '' : 's'} · source ${health}`;
+    if (value.state === 'reviewed_no_match') return `No matching ${year} action · source ${health}`;
+    if (value.state === 'not_applicable') return `Not assessed without one registrar IANA ID · source ${health}`;
+    if (value.state === 'stale') return `No matching action retained · source ${health}`;
+    return `${display(value.state)} · source ${health}`;
+  };
   let {
     comparisonSummary,
     comparisonRows,
@@ -60,6 +72,7 @@
     whoisContactRoles,
     whoisTruncatedFields,
     insights = {},
+    standing = {},
     registrar,
   }: {
     comparisonSummary: string;
@@ -75,6 +88,7 @@
     whoisContactRoles: ContactRole[];
     whoisTruncatedFields: string[];
     insights?: JsonRecord;
+    standing?: JsonRecord;
     registrar: {
       visible: boolean;
       label: string;
@@ -90,6 +104,15 @@
   } = $props();
 
   const disclosure = $derived(asRecord(insights.contactDisclosure));
+  const standingAccreditation = $derived(asRecord(standing.accreditation));
+  const standingCompliance = $derived(asRecord(standing.compliance));
+  const standingAssessment = $derived(asRecord(standing.assessment));
+  const standingActions = $derived(asRecords(standingCompliance.actions, 5));
+  const standingLimitations = $derived(asStrings(standing.limitations, 4, 360));
+  const standingNextActions = $derived(asStrings(standing.nextActions, 4, 360));
+  const standingComplianceSummary = $derived(registrarComplianceSummary(standingCompliance, standingActions.length));
+  const standingIanaUrl = $derived(registrarStandingOfficialSourceUrl(standingAccreditation.sourceUrl, 'iana_catalogue'));
+  const standingIcannUrl = $derived(registrarStandingOfficialSourceUrl(standingCompliance.sourceUrl, 'icann_index'));
   const registryDisclosure = $derived(asRecord(disclosure.registryRdap));
   const whoisDisclosure = $derived(asRecord(disclosure.whois));
   const lifecycle = $derived(asRecord(insights.lifecycle));
@@ -209,6 +232,70 @@
 </script>
 
 {#if resultType === 'domain'}
+  {#if standing.version === 1}
+    <section class="registrar-standing card" aria-labelledby="registrar-standing-title" data-standing-state={String(standingAssessment.state || 'unknown')}>
+      <header class="section-head">
+        <div>
+          <p class="eyebrow">Official provider context</p>
+          <h4 id="registrar-standing-title">Registrar standing</h4>
+        </div>
+        <span class="standing-badge">{display(standingAssessment.label)}</span>
+      </header>
+      <p class="standing-detail">{display(standingAssessment.detail)}</p>
+      <div class="standing-sources">
+        <article>
+          <small>IANA accreditation</small>
+          <strong>{display(standingAccreditation.state)}</strong>
+          <span>IANA ID {display(standing.ianaId)} · source {display(standingAccreditation.sourceHealth)}</span>
+          {#if standingIanaUrl}<a href={standingIanaUrl} target="_blank" rel="noopener noreferrer">Open IANA registrar catalogue<span class="sr-only"> (opens in a new tab)</span></a>{/if}
+          {#if standingAccreditation.observedAt}
+            <time datetime={String(standingAccreditation.observedAt)}>Reviewed {new Date(String(standingAccreditation.observedAt)).toLocaleDateString('en-AU')}</time>
+          {/if}
+        </article>
+        <article>
+          <small>ICANN compliance notices</small>
+          <strong>{display(standingCompliance.state)}</strong>
+          <span>{standingComplianceSummary}</span>
+          {#if standingIcannUrl}<a href={standingIcannUrl} target="_blank" rel="noopener noreferrer">Open ICANN notice index<span class="sr-only"> (opens in a new tab)</span></a>{/if}
+          {#if standingCompliance.reviewedAt}
+            <time datetime={String(standingCompliance.reviewedAt)}>Reviewed {new Date(String(standingCompliance.reviewedAt)).toLocaleDateString('en-AU')}</time>
+          {/if}
+        </article>
+      </div>
+      {#if standingActions.length}
+        <div class="standing-actions" aria-labelledby="registrar-standing-actions-title">
+          <h5 id="registrar-standing-actions-title">Matching official notices</h5>
+          <ol>
+            {#each standingActions as action (String(action.noticeId))}
+              {@const noticeUrl = registrarStandingOfficialSourceUrl(action.sourceUrl, 'icann_notice', String(action.noticeId || ''))}
+              <li>
+                <div>
+                  <strong>{display(action.type)}</strong>
+                  <span>Issued <time datetime={String(action.issuedOn)}>{String(action.issuedOn)}</time></span>
+                </div>
+                {#if noticeUrl}<a href={noticeUrl} target="_blank" rel="noopener noreferrer">Open notice<span class="sr-only"> (opens in a new tab)</span></a>{/if}
+                {#if action.indexOutcome}<p><b>Index outcome:</b> {boundedTechnologyText(action.indexOutcome, 240)}</p>{/if}
+              </li>
+            {/each}
+          </ol>
+          {#if standingCompliance.truncated}<p class="partial">Additional matching notices were omitted from this bounded view.</p>{/if}
+        </div>
+      {/if}
+      {#if standingNextActions.length}
+        <details class="standing-follow-up">
+          <summary>Review steps</summary>
+          <ol>{#each standingNextActions as action}<li>{action}</li>{/each}</ol>
+        </details>
+      {/if}
+      {#if standingLimitations.length}
+        <details class="standing-scope">
+          <summary>Scope and source limits</summary>
+          <ul>{#each standingLimitations as limitation}<li>{limitation}</li>{/each}</ul>
+        </details>
+      {/if}
+    </section>
+  {/if}
+
   <section class="authority-trace card" aria-labelledby="registration-authority-trace-title">
     <header>
       <div>
@@ -509,6 +596,33 @@
 
 <style>
   .registry-insights,.comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
+  .registrar-standing{padding:var(--card-pad)}
+  .registrar-standing h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
+  .standing-badge{max-width:260px;padding:4px 8px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:700 var(--text-2xs) var(--mono);line-height:1.35;text-align:center}
+  [data-standing-state='notice_present'] .standing-badge{border-color:var(--amber);color:var(--amber)}
+  [data-standing-state='terminated'] .standing-badge{border-color:var(--danger);color:var(--danger)}
+  [data-standing-state='accredited'] .standing-badge{border-color:var(--success);color:var(--success)}
+  .standing-detail{max-width:760px;margin:10px 0 0;color:var(--text);font-size:var(--text-sm);line-height:1.55}
+  .standing-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}
+  .standing-sources article{display:grid;align-content:start;gap:5px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .standing-sources small{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .standing-sources strong{font:700 var(--text-sm) var(--mono);text-transform:capitalize}
+  .standing-sources span,.standing-sources time{color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
+  .standing-sources a,.standing-actions a{width:max-content;max-width:100%;color:var(--accent);font:650 var(--text-2xs) var(--mono);overflow-wrap:anywhere}
+  .standing-sources a:focus-visible,.standing-actions a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .standing-actions{margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+  .standing-actions h5{margin:0;font:700 var(--text-xs) var(--mono)}
+  .standing-actions ol{display:grid;gap:8px;margin:9px 0 0;padding:0;list-style:none}
+  .standing-actions li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .standing-actions li>div{display:grid;gap:3px;min-width:0}
+  .standing-actions strong{font:700 var(--text-xs) var(--mono);text-transform:capitalize}
+  .standing-actions span,.standing-actions p{color:var(--muted);font-size:var(--text-2xs);line-height:1.5;overflow-wrap:anywhere}
+  .standing-actions p{grid-column:1/-1;margin:2px 0 0}.standing-actions p b{color:var(--text)}
+  .standing-follow-up,.standing-scope{margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .standing-follow-up>summary,.standing-scope>summary{padding:9px 10px;cursor:pointer;font:700 var(--text-xs) var(--mono)}
+  .standing-follow-up>summary:focus-visible,.standing-scope>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .standing-follow-up ol{display:grid;gap:5px;margin:0;padding:0 28px 11px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .standing-scope ul{display:grid;gap:5px;margin:0;padding:0 28px 11px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .authority-trace{padding:var(--card-pad)}
   .agreement-matrix{padding:var(--card-pad);margin-top:12px}
   .agreement-matrix h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
@@ -619,6 +733,7 @@
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}
   @media(max-width:650px){
+    .registrar-standing .section-head{display:grid}.standing-badge{max-width:none;width:max-content;text-align:left}.standing-sources{grid-template-columns:1fr}.standing-actions li{grid-template-columns:1fr}.standing-actions li>a{grid-row:2}.standing-actions p{grid-column:1}
     .authority-trace>header{display:grid}.authority-trace>header>span{max-width:none;text-align:left}.trace-sources{grid-template-columns:1fr}
     .insight-grid,.publication-list,.capability-sources{grid-template-columns:1fr}
     .capability-sources li{grid-template-columns:1fr}.capability-sources li small{grid-column:1}

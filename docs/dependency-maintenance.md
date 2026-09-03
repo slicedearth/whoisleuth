@@ -35,24 +35,19 @@ vulnerabilities of moderate severity or higher. The workflow has read-only
 repository permissions and does not replace the complete locked install or
 reviewed production dependency audit.
 
-## Production audit policy and retired exception
+## Production audit policy
 
 `npm run dependencies:audit` runs `npm audit --omit=dev --json` with a 60-second
 timeout, explicit `offline=false`, and an isolated temporary npm cache that is
 removed after the command. This prevents offline resolution or retained npm
 metavulnerability calculations from being mistaken for current advisory
-evidence. The command prints the raw audit JSON for review and then applies the
-repository's exact advisory policy.
-It does not use `--audit-level` or a numeric vulnerability threshold. An
-unlisted advisory at any severity blocks the command, so every new high or
-critical production advisory remains blocking even when npm reports it through
-another affected package node.
-
-WHOISleuth currently has no production-audit exception. Any advisory blocks the
-gate until its package path, reachability, fix availability and lockfile state
-have been reviewed. Temporary exceptions, when needed, must name the exact
-advisory and package chain, expire automatically and remain covered by fixtures.
-Policy mismatches exit 1; audit execution or lockfile-read failures exit 2.
+evidence. The command bounds and validates the JSON report, then prints a
+concise deterministic result.
+It does not use `--audit-level` or a numeric vulnerability threshold. The
+policy accepts exactly zero production vulnerabilities; any reported production
+vulnerability blocks the command. Missing, malformed, unsupported or internally
+inconsistent audit data fails closed. Policy mismatches exit 1 and audit
+execution failures exit 2.
 
 Published CLI releases have a separate exact-version check documented in the
 [release guide](releasing.md). It verifies registry integrity and exact byte

@@ -1,6 +1,6 @@
 import { projectCliLookupComparisonInput } from './compare.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
-import { validateLookupEvidenceArtifactStructure } from './artifact-structure.mts';
+import { validateLookupEvidenceArtifactStructure } from './offline-artifact-validation.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import {

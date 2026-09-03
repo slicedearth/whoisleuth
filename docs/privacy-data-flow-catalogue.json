@@ -17,7 +17,7 @@
       "familyCount": 18,
       "compatibilityCount": 85,
       "privacyProfileCount": 45,
-      "consumerFlowCount": 140,
+      "consumerFlowCount": 141,
       "metadataVersions": [
         2,
         3,
@@ -1764,7 +1764,8 @@
       ],
       "returnedDataCategories": [
         "compact_monitoring_evidence",
-        "delivery_state"
+        "delivery_state",
+        "bounded_recovery_counts"
       ],
       "processingClasses": [
         "transient_processing",
@@ -3022,7 +3023,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case-schema-13 browser export and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3083,7 +3084,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command is offline, creates a new package, never mutates the source archive, and requires an explicit review acknowledgement.",
+        "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -3586,7 +3587,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Comparison is offline. Multi-session Bulk exports require explicit session IDs, and missing, unavailable, equal, and different evidence remain separate states.",
+        "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4468,7 +4469,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-27 exports preserve evidence-source attribution and limitations; exact public schema 26 remains readable with its strict source/publication binding, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; published v2 schema 27 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4555,7 +4556,7 @@
       "command": "inspect-archive",
       "capabilityFamilyId": "portable_evidence",
       "title": "Inspect an archive locally",
-      "requestPurpose": "Reads one selected bounded workspace archive v6, retains exact v5 compatibility, and redacts output by default.",
+      "requestPurpose": "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6909,7 +6910,7 @@
       "command": "workflow-run",
       "capabilityFamilyId": "workflow_execution",
       "title": "Execute approved fixed-recipe steps",
-      "requestPurpose": "Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause.",
+      "requestPurpose": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.",
       "collectionMode": "network",
       "executionPlanes": [
         "local_cli_offline",
@@ -6989,7 +6990,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Only installed recipe commands can run. Network steps require explicit approval for each invocation, and analyst-selection placeholders always pause without interpretation.",
+        "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.",
         "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
       ],
       "variants": [
@@ -6998,7 +6999,7 @@
           "operationId": "command.cli.workflow-run",
           "variantId": "approved_run",
           "title": "Execute approved fixed-recipe steps — approved run",
-          "requestPurpose": "Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause. Variant: approved run.",
+          "requestPurpose": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause. Variant: approved run.",
           "executionPlanes": [
             "local_cli_offline",
             "local_cli_network"
@@ -7084,7 +7085,7 @@
           "operationId": "command.cli.workflow-run",
           "variantId": "unapproved_run",
           "title": "Execute approved fixed-recipe steps — unapproved run",
-          "requestPurpose": "Runs only concrete fixed-recipe steps; network collection requires --approve-network and analyst-selection steps always pause. Variant: unapproved run.",
+          "requestPurpose": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause. Variant: unapproved run.",
           "executionPlanes": [
             "local_cli_offline"
           ],
@@ -7237,6 +7238,7 @@
         "case.consumer.packet-offline-verify",
         "case.consumer.packet-verify",
         "case.consumer.report-build",
+        "case.consumer.report-pack-verify",
         "case.consumer.review-inputs-build",
         "case.consumer.review-inputs-validate",
         "case.consumer.workspace-build",
@@ -7707,10 +7709,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 13,
+      "currentVersion": 14,
       "supportedVersions": [
         12,
-        13
+        13,
+        14
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7834,12 +7837,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.website-snapshot-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -8087,12 +8091,13 @@
       "schema": "whoisleuth.case-response-review-inputs",
       "lifecycleSchema": "whoisleuth.case-response-review-inputs",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
       "storageClass": "transient_process_memory",
@@ -8377,11 +8382,12 @@
       "schema": "whoisleuth.case-report",
       "lifecycleSchema": "whoisleuth.case-report",
       "coverageClass": "registered_schema",
-      "currentVersion": 9,
+      "currentVersion": 10,
       "supportedVersions": [
-        9
+        9,
+        10
       ],
-      "futureVersionBehavior": "not_applicable",
+      "futureVersionBehavior": "reject",
       "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
@@ -8395,10 +8401,11 @@
       "schema": "whoisleuth.case-response-packet",
       "lifecycleSchema": "whoisleuth.case-response-packet",
       "coverageClass": "registered_schema",
-      "currentVersion": 7,
+      "currentVersion": 8,
       "supportedVersions": [
         6,
-        7
+        7,
+        8
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8414,10 +8421,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 13,
+      "currentVersion": 14,
       "supportedVersions": [
         12,
-        13
+        13,
+        14
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -8956,12 +8964,13 @@
       "schema": "whoisleuth.website-profile-snapshots",
       "lifecycleSchema": "whoisleuth.website-profile-snapshots",
       "coverageClass": "registered_schema",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 786432,
       "storageClass": "deliberate_local_file",
@@ -8974,10 +8983,11 @@
       "schema": "whoisleuth.workspace-archive",
       "lifecycleSchema": "whoisleuth.workspace-archive",
       "coverageClass": "registered_schema",
-      "currentVersion": 6,
+      "currentVersion": 7,
       "supportedVersions": [
         5,
-        6
+        6,
+        7
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9271,6 +9281,7 @@
         "case.consumer.encrypted-workspace-verify",
         "case.consumer.packet-offline-verify",
         "case.consumer.packet-verify",
+        "case.consumer.report-pack-verify",
         "case.consumer.review-inputs-validate",
         "case.consumer.workspace-verify",
         "case.export.import"
@@ -9352,6 +9363,7 @@
         "source-endpoints",
         "source-timings",
         "normalised-evidence",
+        "registrar-standing-official-projection",
         "collection-context"
       ],
       "excludedCategories": [
@@ -9382,6 +9394,7 @@
         "source-endpoints",
         "source-timings",
         "normalised-evidence",
+        "registrar-standing-official-projection",
         "collection-context"
       ],
       "excludedCategories": [
@@ -10890,7 +10903,8 @@
           "schema": "whoisleuth.browser.case-store",
           "versions": [
             12,
-            13
+            13,
+            14
           ],
           "mode": "direct",
           "discriminator": null
@@ -10898,7 +10912,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 13,
+        "version": 14,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -10920,7 +10934,7 @@
         {
           "schema": "whoisleuth.case-export",
           "versions": [
-            13
+            14
           ],
           "mode": "direct",
           "discriminator": null
@@ -10977,7 +10991,8 @@
           "schema": "whoisleuth.workspace-archive",
           "versions": [
             5,
-            6
+            6,
+            7
           ],
           "mode": "direct",
           "discriminator": null
@@ -11032,7 +11047,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 13,
+        "version": 14,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11053,7 +11068,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-packet",
-        "version": 7,
+        "version": 8,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11076,7 +11091,8 @@
           "schema": "whoisleuth.case-response-packet",
           "versions": [
             6,
-            7
+            7,
+            8
           ],
           "mode": "direct",
           "discriminator": null
@@ -11103,7 +11119,8 @@
           "schema": "whoisleuth.case-response-packet",
           "versions": [
             6,
-            7
+            7,
+            8
           ],
           "mode": "direct",
           "discriminator": null
@@ -11128,12 +11145,39 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-report",
-        "version": 9,
+        "version": 10,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
       "requestMode": "none",
       "retentionEffect": "operator_controlled_output",
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "case.consumer.report-pack-verify",
+      "familyId": "case-portability",
+      "plane": "cli",
+      "operation": "validate-embedded-report",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-report",
+          "versions": [
+            9,
+            10
+          ],
+          "mode": "embedded",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": null,
+      "privacyProfileId": "case.privacy.portable-input",
+      "requestMode": "none",
+      "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
         "deliberate_local_file_export",
@@ -11149,7 +11193,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-review-inputs",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11171,7 +11215,8 @@
         {
           "schema": "whoisleuth.case-response-review-inputs",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11196,7 +11241,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.workspace-archive",
-        "version": 6,
+        "version": 7,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11240,7 +11285,8 @@
           "schema": "whoisleuth.workspace-archive",
           "versions": [
             5,
-            6
+            6,
+            7
           ],
           "mode": "direct",
           "discriminator": null
@@ -11275,7 +11321,8 @@
           "schema": "whoisleuth.case-export",
           "versions": [
             12,
-            13
+            13,
+            14
           ],
           "mode": "direct",
           "discriminator": null
@@ -13781,7 +13828,8 @@
         {
           "schema": "whoisleuth.browser.website-snapshot-store",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -13789,7 +13837,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.website-snapshot-store",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14235,7 +14283,8 @@
         {
           "schema": "whoisleuth.website-profile-snapshots",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -14260,7 +14309,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.website-profile-snapshots",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

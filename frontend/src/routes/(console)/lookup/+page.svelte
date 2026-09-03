@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { getContext, onMount, tick } from 'svelte';
+  import { getContext, onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '$lib/components/LookupAtAGlance.svelte';
@@ -8,8 +8,10 @@
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import type { LookupVisualView } from '$lib/components/LookupVisualWorkspace.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
+  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
+  import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
@@ -17,6 +19,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
+  import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
@@ -32,12 +35,10 @@
     boundedTechnologyText,
     dateTimeAttribute,
     formatDate,
-    rec,
     records,
     show,
     statusLabel,
     stringList,
-    type JsonRecord,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
   import {
@@ -65,6 +66,11 @@
   } from '$lib/analysis/lookup-presentation.ts';
   import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
   import {
+    buildLookupWatchlistRecord,
+    defaultLookupWatchlistName,
+    lookupWatchlistsForDomain,
+  } from '$lib/analysis/lookup-watchlist-handoff.ts';
+  import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
@@ -75,14 +81,17 @@
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController, type LookupCaseActionResult } from '$lib/controllers/lookup-case-controller';
+  import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
-  } from '../../../../../lib/observation.mts';
+  } from '../../../../../packages/evidence/observation.mts';
+  const moduleController = new AbortController();
+  onDestroy(() => moduleController.abort());
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
-  let lookupMode=$state<LookupMode>('deep');
+  let lookupMode=$state<LookupMode>('fast');
   let loading=$state(false);
   let loadingElapsedMs=$state(0);
   let includeExternalIntelligence=$state(false);
@@ -99,8 +108,13 @@
   let draftStatus=$state('');
   let evidenceExportStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let caseDisposition=$state('unreviewed');let caseReviewReason=$state('');
   let caseActionBusy=$state(false);
   let caseActionGeneration=0;
+  let linkedWatchlistNames=$state<string[]>([]);
+  let watchlistSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  let watchlistName=$state('');let watchlistStatus=$state('');let watchlistContextTarget=$state('');
+  let watchlistActionBusy=$state(false);let watchlistActionGeneration=0;
   let expandedResultSections=$state<string[]>([]);
   let detailedAssessmentOpen=$state(false);
   let taskView=$state<LookupTaskView>('general');
@@ -115,12 +129,7 @@
   let urlReconciliationReady=$state(false);
   let lastReconciledUrl=$state('');
   let lookupRevision=0;
-  let lookupScrollHref='';
-  let lookupScrollFrame=0;
-  let lookupScrollObserver:ResizeObserver|null=null;
-  let lookupScrollRoot:HTMLElement|null=null;
-  let lookupScrollSettleTimer=0;
-  let lookupScrollDeadline=0;
+  let lookupAnchorController:LookupAnchorController|null=null;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -155,30 +164,24 @@
   const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess);
   const registryInsights=$derived(lookupView.registryInsights);
+  const registrarStanding=$derived(lookupView.registrarStanding);
   const reverseDns=$derived(lookupView.reverseDns);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
   const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
   const securityTxt=$derived(lookupView.securityTxt);
   const sslbl=$derived(lookupView.sslbl);
-  const sslblSnapshot=$derived(rec(sslbl.snapshot));
   const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
   const dnsEvidence=$derived(lookupView.dnsEvidence);
   const dnsRecords=$derived(lookupView.dnsRecords);
   const httpEvidence=$derived(lookupView.httpEvidence);
   const tlsEvidence=$derived(lookupView.tlsEvidence);
-  const tlsCertificate=$derived(lookupView.tlsCertificate);
-  const tlsAltNames=$derived(lookupView.tlsAltNames);
   const pageIdentity=$derived(lookupView.pageIdentity);
-  const pageForms=$derived(lookupView.pageForms);
-  const pageResources=$derived(lookupView.pageResources);
-  const pageDownloads=$derived(lookupView.pageDownloads);
   const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
   const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
   const technologyProfile=$derived(lookupView.technologyProfile);
   const pageRoleProfile=$derived(lookupView.pageRoleProfile);
   const clientBehaviorProfile=$derived(lookupView.clientBehaviorProfile);
-  const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
   const securityPosture=$derived(lookupView.securityPosture);
   const lookupAnalysis=$derived(buildLookupRouteAnalysis({
     result,
@@ -186,6 +189,7 @@
     profile,
     profileSourceState,
     task:taskView,
+    hasReviewedCaseRecipient:Boolean(caseRecord?.actions.some((action)=>Boolean(action.recipient)&&Boolean(action.contactSource))),
     completedLookupDepth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
@@ -195,8 +199,6 @@
   const comparison=$derived(lookupAnalysis.comparison);
   const registrarPublicationComparison=$derived(lookupAnalysis.registrarPublicationComparison);
   const lifecycleDates=$derived(lookupAnalysis.lifecycleDates);
-  const networkDisplay=$derived(lookupAnalysis.networkDisplay);
-  const dnsRehearsalEvidence=$derived(lookupAnalysis.dnsRehearsalEvidence);
   const registryDisplay=$derived(lookupAnalysis.registryDisplay);
   const idnAnalysis=$derived(lookupAnalysis.idnAnalysis);
   const profileSignals=$derived(lookupAnalysis.profileSignals);
@@ -210,6 +212,7 @@
   const redactedComparisonCount=$derived(lookupAnalysis.redactedComparisonCount);
   const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
   const caseDomain=$derived(lookupAnalysis.caseDomain);
+  const caseObservationTarget=$derived(String(result?.inputHostname||caseDomain).trim().toLowerCase());
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
   const pageDisplay=$derived(lookupAnalysis.pageDisplay);
@@ -217,7 +220,6 @@
   const hasWebEvidence=$derived(lookupAnalysis.hasWebEvidence);
   const hasCaseSection=$derived(lookupAnalysis.hasCaseSection);
   const evidenceTopologyNodes=$derived(lookupAnalysis.evidenceTopologyNodes);
-  const certificatePolicyReview=$derived(lookupAnalysis.certificatePolicyReview);
   const lookupAssetGraph=$derived(lookupAnalysis.lookupAssetGraph);
   const analystEvidencePivots=$derived(lookupAnalysis.analystEvidencePivots);
   const activationContext=$derived(lookupAnalysis.activationContext);
@@ -270,8 +272,28 @@
     if(actionGeneration!==caseActionGeneration||(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain)))return;
     caseRecord=next.record;
     caseStatus=next.status;
+    caseDisposition=next.record?.disposition??'unreviewed';
+    caseReviewReason=next.record?.reviewReasonCode??'';
   }
   function invalidateCaseActions(){caseActionGeneration+=1;caseActionBusy=false;}
+  function invalidateWatchlistActions(){watchlistActionGeneration+=1;watchlistActionBusy=false;}
+  async function refreshWatchlistContext(expectedRevision:number|null=null){
+    const target=caseObservationTarget;
+    if(!target){linkedWatchlistNames=[];watchlistSourceState='ready';watchlistContextTarget='';watchlistName='';return;}
+    const targetChanged=target!==watchlistContextTarget;
+    if(targetChanged){linkedWatchlistNames=[];watchlistName=defaultLookupWatchlistName(target);watchlistContextTarget=target;}
+    watchlistSourceState='loading';
+    try{
+      const all=await loadWatchlists();
+      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
+      linkedWatchlistNames=lookupWatchlistsForDomain(all,target);
+      watchlistSourceState='ready';
+      if(linkedWatchlistNames.length===1&&(targetChanged||!watchlistName.trim()))watchlistName=linkedWatchlistNames[0]??watchlistName;
+    }catch{
+      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
+      watchlistSourceState='unavailable';
+    }
+  }
   async function performCaseAction(
     action:()=>Promise<LookupCaseActionResult>,
     afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
@@ -293,9 +315,43 @@
       if(generation===caseActionGeneration)caseActionBusy=false;
     }
   }
-  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth));}
+  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth),(next)=>{caseDisposition=next.record?.disposition??'unreviewed';caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
+  async function saveLookupClassification(){const record=caseRecord;const disposition=caseDisposition;const reason=caseReviewReason;await performCaseAction(()=>lookupCaseController.classify(record,disposition,reason),(next)=>{caseDisposition=next.record?.disposition??'unreviewed';caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
+  async function saveLookupWatchlist(){
+    if(watchlistActionBusy)return;
+    const generation=++watchlistActionGeneration;
+    const revision=lookupRevision;
+    const target=caseObservationTarget;
+    const name=watchlistName;
+    const record=buildLookupWatchlistRecord(target,caseEvidence,lookupEvidenceDepth);
+    if(!record){watchlistStatus='The current Lookup result cannot be saved as a domain watchlist observation.';return;}
+    watchlistActionBusy=true;
+    try{
+      const saved=await saveSingleDomainWatchlist(name,record,lookupEvidenceDepth);
+      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
+      watchlistName=saved.name;
+      watchlistStatus=saved.created
+        ? `Created the browser-local watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
+        : saved.changes.length
+          ? `Updated “${saved.name}” and retained ${saved.changes.length} material change${saved.changes.length===1?'':'s'}.`
+          : `Updated “${saved.name}”; no comparable material change was observed.`;
+      await refreshWatchlistContext(revision);
+    }catch(cause){
+      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
+      watchlistStatus=cause instanceof Error?cause.message:'Could not save the browser-local watchlist observation.';
+    }finally{
+      if(generation===watchlistActionGeneration)watchlistActionBusy=false;
+    }
+  }
+  async function recheckLookupCase(){
+    const target=caseObservationTarget;
+    if(!target||loading)return;
+    query=target;
+    lookupMode=lookupEvidenceDepth;
+    await runLookup({refreshCaseEvidence:true});
+  }
   async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;await performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
   async function copyInvestigationBrief(){
     await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
@@ -332,6 +388,7 @@
   }
   function clearCompletedLookupContext(){
     invalidateCaseActions();
+    invalidateWatchlistActions();
     rawEvidenceOpen=false;
     result=null;
     completedLookupTarget='';
@@ -339,6 +396,13 @@
     caseRecord=null;
     caseNote='';
     caseStatus='';
+    caseDisposition='unreviewed';
+    caseReviewReason='';
+    linkedWatchlistNames=[];
+    watchlistSourceState='loading';
+    watchlistName='';
+    watchlistStatus='';
+    watchlistContextTarget='';
     expandedResultSections=[];
     detailedAssessmentOpen=false;
     evidenceExportStatus='';
@@ -407,109 +471,51 @@
       loads.push(import('$lib/components/LookupEvidenceQuality.svelte'),import('$lib/components/LookupOverviewFacts.svelte'));
     }else if(sectionId==='case-response'){
       loads.push(import('$lib/components/LookupCaseResponse.svelte'));
-      if(caseRecord&&checkpointFacts.length)loads.push(import('$lib/components/LookupEvidenceCheckpoint.svelte'));
     }else if(sectionId==='advanced-evidence'&&threatIntelligenceProviders.length){
       loads.push(import('$lib/components/LookupExternalIntelligence.svelte'));
     }
-    if(loads.length)preloadBestEffort(()=>Promise.all(loads));
-  }
-  const lookupScrollCancelEvents=['pointerdown','wheel','touchstart','keydown'] as const;
-  function stopLookupScrollAlignment(){
-    lookupScrollObserver?.disconnect();
-    lookupScrollObserver=null;
-    if(lookupScrollFrame&&typeof window!=='undefined')window.cancelAnimationFrame(lookupScrollFrame);
-    if(lookupScrollSettleTimer&&typeof window!=='undefined')window.clearTimeout(lookupScrollSettleTimer);
-    lookupScrollRoot?.classList.remove('lookup-scroll-aligning');
-    lookupScrollRoot=null;
-    lookupScrollFrame=0;
-    lookupScrollSettleTimer=0;
-    lookupScrollDeadline=0;
-    lookupScrollHref='';
-    if(typeof window==='undefined')return;
-    for(const eventName of lookupScrollCancelEvents)window.removeEventListener(eventName,cancelLookupScrollAlignment,true);
-    window.removeEventListener('scrollend',settleLookupScrollAlignment);
-  }
-  function cancelLookupScrollAlignment(){
-    stopLookupScrollAlignment();
-  }
-  function scheduleLookupScrollRelease(delayMs:number){
-    if(lookupScrollSettleTimer)window.clearTimeout(lookupScrollSettleTimer);
-    lookupScrollSettleTimer=window.setTimeout(()=>{
-      lookupScrollSettleTimer=0;
-      const activeHref=lookupScrollHref;
-      const loading=lookupScrollRoot?.querySelector('[data-deferred-state="loading"]');
-      if(activeHref&&loading&&performance.now()<lookupScrollDeadline){
-        scheduleLookupScrollRelease(100);
-        return;
-      }
-      if(activeHref&&window.location.hash===activeHref)scrollToLookupTarget(activeHref,'auto');
-      stopLookupScrollAlignment();
-    },delayMs);
-  }
-  function settleLookupScrollAlignment(){
-    const activeHref=lookupScrollHref;
-    if(!activeHref||window.location.hash!==activeHref){stopLookupScrollAlignment();return;}
-    scrollToLookupTarget(activeHref,'auto');
-    scheduleLookupScrollRelease(250);
-  }
-  function scheduleLookupScrollAlignment(){
-    if(lookupScrollFrame)return;
-    lookupScrollFrame=requestAnimationFrame(()=>{
-      lookupScrollFrame=0;
-      settleLookupScrollAlignment();
-    });
-  }
-  function keepLookupTargetAligned(href:string){
-    stopLookupScrollAlignment();
-    const resultRoot=document.getElementById('result');
-    if(!resultRoot)return;
-    lookupScrollHref=href;
-    lookupScrollRoot=resultRoot;
-    lookupScrollDeadline=performance.now()+5_000;
-    resultRoot.classList.add('lookup-scroll-aligning');
-    let resultHeight=resultRoot.getBoundingClientRect().height;
-    lookupScrollObserver=new ResizeObserver(()=>{
-      const nextHeight=resultRoot.getBoundingClientRect().height;
-      if(Math.abs(nextHeight-resultHeight)<0.5)return;
-      resultHeight=nextHeight;
-      scheduleLookupScrollAlignment();
-    });
-    lookupScrollObserver.observe(resultRoot);
-    for(const eventName of lookupScrollCancelEvents)window.addEventListener(eventName,cancelLookupScrollAlignment,{capture:true,passive:true});
-    window.addEventListener('scrollend',settleLookupScrollAlignment,{passive:true});
-    scheduleLookupScrollRelease(600);
+    if(loads.length)preloadBestEffort(()=>Promise.all(loads), moduleController.signal);
   }
   async function showSectionDetail(sectionId:string){
     const href=`#${sectionId}`;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     preloadLookupSection(sectionId);
     expandedResultSections=expandedResultSections.includes(sectionId)
       ? expandedResultSections
       : [...expandedResultSections,sectionId];
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   async function hideSectionDetail(sectionId:string){
     const href=`#${sectionId}`;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     expandedResultSections=expandedResultSections.filter((id)=>id!==sectionId);
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   function expandableResultSectionIds():string[]{
     return resultSectionLinks()
       .map((section)=>section.href.slice(1))
       .filter((sectionId)=>sectionId!=='overview');
   }
-  function expandAllSectionDetails(){
+  function beginCurrentLookupAlignment():boolean{
+    const href=lookupEvidenceTargetForHref(window.location.hash);
+    const familyId=lookupEvidenceFamilyForHref(href);
+    return familyId?Boolean(lookupAnchorController?.begin(href,`#${familyId}`)):false;
+  }
+  async function expandAllSectionDetails(){
+    const realign=beginCurrentLookupAlignment();
     const sectionIds=expandableResultSectionIds();
     for(const sectionId of sectionIds)preloadLookupSection(sectionId);
     expandedResultSections=sectionIds;
+    if(realign){await tick();lookupAnchorController?.align();}
   }
-  function collapseAllSectionDetails(){
+  async function collapseAllSectionDetails(){
+    const realign=beginCurrentLookupAlignment();
     expandedResultSections=[];
+    if(realign){await tick();lookupAnchorController?.align();}
   }
   function allSectionDetailsVisible():boolean{
     const sectionIds=expandableResultSectionIds();
@@ -522,26 +528,26 @@
     const sectionId=href.startsWith('#')?href.slice(1):'';
     if(!sectionId)return;
     window.history.replaceState(window.history.state,'',href);
+    lookupAnchorController?.begin(href,href);
     preloadLookupSection(sectionId);
     if(sectionId!=='overview'&&!expandedResultSections.includes(sectionId)){
       expandedResultSections=[...expandedResultSections,sectionId];
     }
     await tick();
-    scrollToLookupTarget(href);
-    keepLookupTargetAligned(href);
+    lookupAnchorController?.align();
   }
   async function navigateToLookupEvidence(href:string){
     const familyId=lookupEvidenceFamilyForHref(href);
     if(!familyId)return;
     const normalizedHref=lookupEvidenceTargetForHref(href);
     window.history.replaceState(window.history.state,'',normalizedHref);
+    lookupAnchorController?.begin(normalizedHref,`#${familyId}`);
     preloadLookupSection(familyId);
     expandedResultSections=familyId==='overview'||expandedResultSections.includes(familyId)
       ? expandedResultSections
       : [...expandedResultSections,familyId];
     await tick();
-    if(!scrollToLookupTarget(normalizedHref))scrollToLookupTarget(`#${familyId}`);
-    keepLookupTargetAligned(normalizedHref);
+    lookupAnchorController?.align();
   }
   function handleLookupEvidenceLink(event:MouseEvent){
     if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
@@ -565,24 +571,9 @@
   function sectionDetailVisible(sectionId:string):boolean{
     return expandedResultSections.includes(sectionId);
   }
-  function scrollToLookupTarget(href:string,behavior:ScrollBehavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'):boolean{
-    const targetId=href.startsWith('#')?href.slice(1):'';
-    if(!targetId)return false;
-    const target=document.getElementById(targetId);
-    if(!target)return false;
-    if(behavior==='auto'){
-      const targetTop=target.getBoundingClientRect().top+window.scrollY;
-      const scrollMarginTop=Number.parseFloat(getComputedStyle(target).scrollMarginTop)||0;
-      const maximumScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
-      window.scrollTo(window.scrollX,Math.min(Math.max(0,targetTop-scrollMarginTop),maximumScroll));
-    }else target.scrollIntoView({block:'start',behavior});
-    return true;
-  }
   async function restoreDeferredLookupTarget(){
     await tick();
-    const href=lookupScrollHref;
-    if(!href||window.location.hash!==href||!lookupEvidenceFamilyForHref(href))return;
-    scrollToLookupTarget(lookupEvidenceTargetForHref(href),'auto');
+    lookupAnchorController?.contentReady();
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -590,6 +581,7 @@
   }
   onMount(()=>{
     pageActive=true;
+    lookupAnchorController=new LookupAnchorController();
     const presentation=readLookupPresentation(localStorage);
     preferredTaskView=presentation.task;
     const restored=readLookupWorkflowState();
@@ -609,11 +601,16 @@
     urlReconciliationReady=true;
     window.addEventListener('hashchange',navigateToCurrentLookupHash);
     if(result)requestAnimationFrame(navigateToCurrentLookupHash);
-    void (async()=>{await refreshProfileContext();if(result)await refreshCase(lookupRevision);})();
+    void (async()=>{
+      await refreshProfileContext();
+      if(result)await Promise.all([refreshCase(lookupRevision),refreshWatchlistContext(lookupRevision)]);
+    })();
     return()=>{
       pageActive=false;
       invalidateCaseActions();
-      stopLookupScrollAlignment();
+      invalidateWatchlistActions();
+      lookupAnchorController?.destroy();
+      lookupAnchorController=null;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
       lookupRequestController.dispose();
       writeLookupWorkflowState({query,completedTarget:completedLookupTarget,completedLookupDepth,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
@@ -684,8 +681,7 @@
       hasCaseSection,
       task:taskView,
     });}
-  async function submit(event:SubmitEvent){
-    event.preventDefault();
+  async function runLookup(options:Readonly<{refreshCaseEvidence?:boolean}>={}){
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
     if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!entries.length||loading)return;
@@ -698,8 +694,9 @@
     }
 
     invalidateCaseActions();
-    stopLookupScrollAlignment();
-    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
+    invalidateWatchlistActions();
+    lookupAnchorController?.stop();
+    loading=true;loadingElapsedMs=0;error='';rawEvidenceOpen=false;result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition='unreviewed';caseReviewReason='';linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const target=entries[0];if(!target)return;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
@@ -726,9 +723,12 @@
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
       result=outcome.value;completedLookupTarget=target;completedLookupDepth=requestedLookupMode;
-      await refreshCase(requestRevision);
+      await Promise.all([refreshCase(requestRevision),refreshWatchlistContext(requestRevision)]);
+      if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
+      if(options.refreshCaseEvidence)await openLookupCase();
       if(!pageActive||requestRevision!==lookupRevision||entries[0]!==target||lookupMode!==requestedLookupMode)return;
       requestAnimationFrame(()=>{
+        if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
         if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
         else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
       });
@@ -738,11 +738,15 @@
       if(pageActive&&requestRevision===lookupRevision)loading=false;
     }
   }
+  async function submit(event:SubmitEvent){
+    event.preventDefault();
+    await runLookup();
+  }
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
-<LookupTaskGuidance task={taskView} {lookupMode} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+<LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
 <LookupForm
   bind:query
   bind:lookupMode
@@ -781,10 +785,8 @@
     {#if evidenceExportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{evidenceExportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
-      task={taskView}
       allSectionsExpanded={allSectionDetailsVisible()}
       anySectionsExpanded={anySectionDetailsVisible()}
-      setTask={setTaskView}
       expandAll={expandAllSectionDetails}
       collapseAll={collapseAllSectionDetails}
     />
@@ -848,190 +850,27 @@
 
     {#snippet webSection()}
     {#if hasWebEvidence}
-    <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
-      <h3 id="web-evidence-title">{result?.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
-      <LookupFamilySummary
-        label={result?.type==='domain'?'Web and DNS evidence':'DNS evidence'}
-        description="Review point-in-time DNS, HTTP, TLS, page identity, technology, and passive posture evidence without merging their source states."
-        metrics={[`${evidenceQualityMatrix.entries.filter((entry)=>['network','web'].includes(entry.category.toLowerCase())).length} source records`, `${evidenceQualityMatrix.entries.filter((entry)=>['network','web'].includes(entry.category.toLowerCase())&&entry.state!=='complete').length} limited`]}
+      <LookupWebEvidenceSection
+        {result}
+        view={lookupView}
+        analysis={lookupAnalysis}
+        {serviceDependencyReview}
+        {profile}
+        {caseDomain}
+        {lookupEvidenceDepth}
+        {lookupObservedAt}
+        {loading}
         expanded={sectionDetailVisible('web-evidence')}
-        onpreload={()=>preloadLookupSection('web-evidence')}
-        onshow={()=>void showSectionDetail('web-evidence')}
-        onhide={()=>void hideSectionDetail('web-evidence')}
+        {serviceDependencyScope}
+        {serviceDependencyFalsePositives}
+        buildSnapshot={websiteSnapshotInput}
+        onpreload={() => preloadLookupSection('web-evidence')}
+        onshow={() => void showSectionDetail('web-evidence')}
+        onhide={() => void hideSectionDetail('web-evidence')}
+        onready={restoreDeferredLookupTarget}
+        setServiceDependencyScope={(value) => serviceDependencyScope = value}
+        setServiceDependencyFalsePositives={(value) => serviceDependencyFalsePositives = value}
       />
-      {#if sectionDetailVisible('web-evidence')}
-      {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
-        <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
-          <div>
-            <p class="eyebrow">Certificate review lead</p>
-            <h4 id="sslbl-review-lead-title">The observed leaf certificate matched the local SSLBL snapshot</h4>
-            <p>This attributed warning data supports review and does not change Risk scoring.</p>
-          </div>
-          <a class="button secondary" href="#evidence-sslbl">Review certificate evidence</a>
-        </aside>
-      {/if}
-      {#if result?.type==='domain'}
-        <DeferredSurface
-          load={()=>import('$lib/components/WebsiteSnapshotManager.svelte')}
-          loadingLabel="Loading website snapshot controls…"
-          unavailableLabel="Website snapshot controls could not be loaded."
-          props={{domain:caseDomain,canSave:!loading&&lookupEvidenceDepth==='deep'&&Boolean(caseDomain)&&technologyProfile.source==='derived'&&securityPosture.source==='derived',buildSnapshot:websiteSnapshotInput}}
-        />
-      {/if}
-
-      {#if reverseDns.source==='reverse_dns'}
-        <div class="evidence-component" id="evidence-reverse-dns"><DeferredSurface
-          load={()=>import('$lib/components/LookupDnsEvidence.svelte')}
-          loadingLabel="Loading reverse-DNS evidence…"
-          unavailableLabel="Reverse-DNS evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{headingId:'reverse-dns-title',title:'Reverse DNS context',summaryDetail:'Expand for PTR names, provenance, and limitations',status:show(reverseDns.status),complete:reverseDns.complete!==false,rows:networkDisplay.reverseDnsRows,failureDetail:networkDisplay.reverseDnsFailure,truncated:Boolean(reverseDns.truncated),note:'Point-in-time PTR evidence is controlled by the address operator and may be absent, stale, generic or misleading.'}}
-        /></div>
-      {/if}
-
-      {#if dnsEvidence.source==='dns'}
-        <div class="evidence-component" id="evidence-dns"><DeferredSurface
-          load={()=>import('$lib/components/LookupDnsEvidence.svelte')}
-          loadingLabel="Loading DNS evidence…"
-          unavailableLabel="DNS evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{headingId:'dns-title',status:show(dnsEvidence.status),complete:dnsEvidence.complete!==false,rows:networkDisplay.dnsRows,failureDetail:networkDisplay.dnsQueryFailures,truncated:Boolean(dnsEvidence.truncated),delegation:networkDisplay.dnsDelegation,rehearsalEvidence:dnsRehearsalEvidence,domain:caseDomain,allowRehearsal:result?.type==='domain',note:'Point-in-time resolver evidence. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.'}}
-        /></div>
-        {#if serviceDependencyReview}
-          <div class="evidence-component"><DeferredSurface
-            load={()=>import('$lib/components/LookupServiceDependencyReview.svelte')}
-            loadingLabel="Loading service-dependency review…"
-            unavailableLabel="Service-dependency review could not be loaded."
-            props={{review:serviceDependencyReview,target:caseDomain,technologies:pageDisplay.technologyFindings,libraries:pageDisplay.browserLibraries,authorizedScope:serviceDependencyScope,falsePositiveTargets:serviceDependencyFalsePositives,setAuthorizedScope:(value:string)=>serviceDependencyScope=value,setFalsePositiveTargets:(value:string)=>serviceDependencyFalsePositives=value}}
-          /></div>
-        {/if}
-      {/if}
-
-      {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><DeferredSurface
-          load={()=>import('$lib/components/LookupHttpEvidence.svelte')}
-          loadingLabel="Loading HTTP evidence…"
-          unavailableLabel="HTTP evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(httpEvidence.status)),complete:httpEvidence.complete!==false,rows:networkDisplay.httpRows,crossOriginRedirect:Boolean(httpEvidence.crossOriginRedirect),httpsDowngrade:Boolean(httpEvidence.httpsDowngrade),redirects:networkDisplay.httpRedirects,attempts:networkDisplay.httpAttempts,metadata:networkDisplay.httpMetadata,deliveryMetadata:networkDisplay.httpDeliveryMetadata,limitations:stringList(httpEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)}}
-        /></div>
-      {/if}
-
-      {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><DeferredSurface
-          load={()=>import('$lib/components/LookupTlsEvidence.svelte')}
-          loadingLabel="Loading TLS evidence…"
-          unavailableLabel="TLS evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(tlsEvidence.status)),complete:tlsEvidence.complete!==false,rows:networkDisplay.tlsRows,findings:networkDisplay.tlsFindings,leafCertificate:networkDisplay.leafCertificate,alternativeNames:networkDisplay.alternativeNames,alternativeNamesTruncated:Boolean(tlsAltNames.truncated),chain:networkDisplay.tlsChain,chainTruncated:Boolean(tlsEvidence.chainTruncated),validationDetails:networkDisplay.tlsValidation,limitations:stringList(tlsEvidence.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH),validFrom:typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null,validTo:typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null,observedAt:lookupObservedAt}}
-        /></div>
-        <div class="evidence-component"><DeferredSurface
-          load={()=>import('$lib/components/LookupCertificatePolicyReview.svelte')}
-          loadingLabel="Loading certificate-policy review…"
-          unavailableLabel="Certificate-policy review could not be loaded."
-          props={{review:certificatePolicyReview}}
-        /></div>
-      {/if}
-
-      {#if sslbl.sslblVersion===1}
-        <div class="evidence-component" id="evidence-sslbl"><DeferredSurface
-          load={()=>import('$lib/components/LookupSslblEvidence.svelte')}
-          loadingLabel="Loading certificate warning-data evidence…"
-          unavailableLabel="Certificate warning data could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:boundedTechnologyText(sslbl.status||'unavailable',40),verdict:boundedTechnologyText(sslbl.verdict||'inconclusive',40),complete:sslbl.complete===true,detail:boundedTechnologyText(sslbl.detail||'Certificate warning-data comparison was unavailable.',500),fingerprint:boundedTechnologyText(sslbl.fingerprintSha1,40),referenceUrl:boundedTechnologyText(sslbl.referenceUrl,2048),sourceUpdatedAt:dateTimeAttribute(sslblSnapshot.sourceUpdatedAt)||'',generatedAt:dateTimeAttribute(sslblSnapshot.generatedAt)||'',entryCount:Number.isSafeInteger(sslblSnapshot.entryCount)?Number(sslblSnapshot.entryCount):null,digest:boundedTechnologyText(sslblSnapshot.digestSha256,64),limitations:stringList(sslbl.limitations).slice(0,8)}}
-        /></div>
-      {/if}
-
-      {#if securityTxt.securityTxtVersion===1}
-        <div class="evidence-component" id="evidence-security-txt"><DeferredSurface
-          load={()=>import('$lib/components/LookupSecurityTxt.svelte')}
-          loadingLabel="Loading disclosure-contact evidence…"
-          unavailableLabel="Disclosure-contact evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{state:boundedTechnologyText(securityTxt.state||'unavailable',40),detail:boundedTechnologyText(securityTxt.detail||'Disclosure contact collection was unavailable.',300),endpoint:boundedTechnologyText(securityTxt.finalUrl,2048),httpStatus:securityTxt.httpStatus?String(securityTxt.httpStatus):'',observedAt:dateTimeAttribute(securityTxt.observedAt)||'',expiresAt:dateTimeAttribute(securityTxt.expiresAt)||'',contacts:stringList(securityTxt.contacts).slice(0,10),policies:stringList(securityTxt.policies).slice(0,10),encryption:stringList(securityTxt.encryption).slice(0,10),languages:stringList(securityTxt.preferredLanguages).slice(0,10),limitations:stringList(securityTxt.limitations).slice(0,10)}}
-        /></div>
-      {/if}
-
-      {#if pageIdentity.source==='html'}
-        <div class="evidence-component" id="evidence-page"><DeferredSurface
-          load={()=>import('$lib/components/LookupPageIdentity.svelte')}
-          loadingLabel="Loading page-identity evidence…"
-          unavailableLabel="Page-identity evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(pageIdentity.status)),complete:Boolean(pageIdentity.complete),facts:pageDisplay.pageIdentityFacts,externalFormOrigins:stringList(pageForms.externalActionOrigins,10,2048),resourceCount:Number(pageResources.count)||0,resourceSummary:pageDisplay.resourceSummary,embeddedOrigins:stringList(pageIdentity.embeddedOrigins,20,2048),contactDomains:stringList(pageIdentity.contactDomains,20,253),downloadCount:Number(pageDownloads.count)||0,downloadSummary:pageDisplay.downloadSummary,trackingIdentifiers:pageDisplay.trackingIdentifiers,fingerprints:pageDisplay.fingerprints,publicationMetadata:pageDisplay.pagePublicationMetadata,limitations:stringList(pageIdentity.limitations,MAX_OBSERVATION_LIMITATIONS,MAX_OBSERVATION_LIMITATION_LENGTH)}}
-        /></div>
-      {/if}
-
-      {#if credentialSurfaceProfile.source==='html'}
-        {@const credentialSurface=pageDisplay.credentialSurface}
-        <div class="evidence-component" id="evidence-credential-surface"><DeferredSurface
-          load={()=>import('$lib/components/LookupCredentialSurfaceProfile.svelte')}
-          loadingLabel="Loading credential-surface evidence…"
-          unavailableLabel="Credential-surface evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(credentialSurfaceProfile.status)),complete:Boolean(credentialSurfaceProfile.complete),formCount:credentialSurface.formCount,inputCount:credentialSurface.inputCount,classifiedCount:credentialSurface.classifiedCount,categories:credentialSurface.categories,methods:credentialSurface.methods,actions:credentialSurface.actions,limitations:pageDisplay.credentialSurfaceLimitations}}
-        /></div>
-      {/if}
-
-      {#if securityPosture.source==='derived'}
-        <div class="evidence-component" id="evidence-posture"><DeferredSurface
-          load={()=>import('$lib/components/LookupSecurityPosture.svelte')}
-          loadingLabel="Loading passive posture evidence…"
-          unavailableLabel="Passive posture evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(securityPosture.status)),complete:Boolean(securityPosture.complete),summary:pageDisplay.securityPostureSummary,findings:pageDisplay.securityPostureFindings,limitations:pageDisplay.securityPostureLimitations}}
-        /></div>
-      {/if}
-
-      {#if structuredDataIdentity.source==='html'}
-        <div class="evidence-component" id="evidence-structured-identity"><DeferredSurface
-          load={()=>import('$lib/components/LookupStructuredDataIdentity.svelte')}
-          loadingLabel="Loading structured-identity evidence…"
-          unavailableLabel="Structured-identity evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(structuredDataIdentity.status)),complete:Boolean(structuredDataIdentity.complete),entities:pageDisplay.structuredIdentities,limitations:pageDisplay.structuredIdentityLimitations}}
-        /></div>
-      {/if}
-
-      {#if technologyProfile.source==='derived'}
-        <div class="evidence-component" id="evidence-technology"><DeferredSurface
-          load={()=>import('$lib/components/LookupTechnologyProfile.svelte')}
-          loadingLabel="Loading technology-profile evidence…"
-          unavailableLabel="Technology-profile evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(show(technologyProfile.status)),complete:Boolean(technologyProfile.complete),findings:pageDisplay.technologyFindings,limitations:pageDisplay.technologyLimitations,libraryAvailable:browserLibraryProfile.profileVersion===1||browserLibraryProfile.profileVersion===2,libraryStatus:statusLabel(show(browserLibraryProfile.status)),libraryComplete:Boolean(browserLibraryProfile.complete),libraryCatalog:boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80),libraries:pageDisplay.browserLibraries,libraryLimitations:pageDisplay.browserLibraryLimitations}}
-        /></div>
-      {/if}
-
-      {#if pageRoleProfile.source==='derived' && clientBehaviorProfile.source==='derived'}
-        <div class="evidence-component" id="evidence-page-role"><DeferredSurface
-          load={()=>import('$lib/components/LookupPageRoleBehavior.svelte')}
-          loadingLabel="Loading page-role and behaviour evidence…"
-          unavailableLabel="Page-role and behaviour evidence could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{roleStatus:statusLabel(show(pageRoleProfile.status)),roleComplete:Boolean(pageRoleProfile.complete),primaryRole:pageDisplay.primaryPageRole,roles:pageDisplay.pageRoles,roleLimitations:pageDisplay.pageRoleLimitations,behaviorStatus:statusLabel(show(clientBehaviorProfile.status)),behaviorComplete:Boolean(clientBehaviorProfile.complete),scripts:pageDisplay.clientScriptSummary,indicators:pageDisplay.clientBehaviorIndicators,behaviorLimitations:pageDisplay.clientBehaviorLimitations}}
-        /></div>
-      {/if}
-
-      {#if pageComparison || (profile?.pageBaseline && result?.type==='domain')}
-        <div class="evidence-component"><DeferredSurface
-          load={()=>import('$lib/components/LookupPageComparison.svelte')}
-          loadingLabel="Loading saved page-baseline comparison…"
-          unavailableLabel="The page-baseline comparison could not be loaded."
-          props={{comparison:pageDisplay.pageComparison,unavailable:Boolean(!pageComparison&&profile?.pageBaseline&&result?.type==='domain')}}
-        /></div>
-      {/if}
-      {#if brandMimicryReview}
-        <div class="evidence-component"><DeferredSurface
-          load={()=>import('$lib/components/LookupBrandMimicryReview.svelte')}
-          loadingLabel="Loading brand-mimicry review…"
-          unavailableLabel="Brand-mimicry review could not be loaded."
-          props={{review:brandMimicryReview}}
-        /></div>
-      {/if}
-      {/if}
-    </section>
     {/if}
     {/snippet}
 
@@ -1072,7 +911,7 @@
         loadingLabel="Loading registration evidence…"
         unavailableLabel="Registration evidence could not be loaded."
         onready={restoreDeferredLookupTarget}
-        props={{comparisonSummary:`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,comparisonRows:registryDisplay.comparisonRows,comparisonHasConflicts:comparison.counts.conflict>0,rdapError:boundedTechnologyText(rdap.error,240),resultType:String(result?.type||''),rdapParsed,rdapPartialDetail:registryDisplay.rdapPartialDetail,rdapRows:registryDisplay.rdapRows,whoisError:boundedTechnologyText(whois.error,240),whoisRows:registryDisplay.whoisRows,whoisContactRoles:registryDisplay.whoisContactRoles,whoisTruncatedFields:stringList(whoisParsed.fieldsTruncated,64,80),insights:registryInsights,registrar:registryDisplay.registrarRdap}}
+        props={{comparisonSummary:`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,comparisonRows:registryDisplay.comparisonRows,comparisonHasConflicts:comparison.counts.conflict>0,rdapError:boundedTechnologyText(rdap.error,240),resultType:String(result?.type||''),rdapParsed,rdapPartialDetail:registryDisplay.rdapPartialDetail,rdapRows:registryDisplay.rdapRows,whoisError:boundedTechnologyText(whois.error,240),whoisRows:registryDisplay.whoisRows,whoisContactRoles:registryDisplay.whoisContactRoles,whoisTruncatedFields:stringList(whoisParsed.fieldsTruncated,64,80),insights:registryInsights,standing:registrarStanding,registrar:registryDisplay.registrarRdap}}
       /></div>
 
       {#if result?.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
@@ -1170,14 +1009,14 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{domain:caseDomain,record:caseRecord,note:caseNote,caseStatus,draftStatus,outreach,recipientResolution:abuseRecipientResolution,setNote:(value:string)=>caseNote=value,createCase:openLookupCase,addNote:addLookupNote,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy}}
+          props={{domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,record:caseRecord,note:caseNote,caseStatus,caseDisposition,caseReviewReason,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(value==='unreviewed')caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,saveClassification:saveLookupClassification,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
         />
         {#if caseRecord && checkpointFacts.length}
-          <DeferredSurface
-            load={()=>import('$lib/components/LookupEvidenceCheckpoint.svelte')}
-            loadingLabel="Loading evidence checkpoint controls…"
-            unavailableLabel="Evidence checkpoint controls could not be loaded."
-            props={{facts:checkpointFacts,pins:caseRecord.evidencePins,onsave:saveEvidenceCheckpoint,actionBusy:caseActionBusy}}
+          <LookupEvidenceCheckpoint
+            facts={checkpointFacts}
+            pins={caseRecord.evidencePins}
+            onsave={saveEvidenceCheckpoint}
+            actionBusy={caseActionBusy}
           />
         {/if}
         {/if}
@@ -1263,7 +1102,6 @@
   .portable-evidence-status{margin:12px 0 0;padding:10px 12px;border:1px dotted var(--amber);border-radius:var(--radius-sm);color:var(--text);background:color-mix(in srgb,var(--amber) 7%,var(--surface));font-size:var(--text-xs);line-height:1.55}
   :global(.result-root.lookup-scroll-aligning){overflow-anchor:none}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
-  .result-section.family-web{--section-accent:var(--evidence-web)}
   .result-section.family-registry{--section-accent:var(--evidence-registry)}
   .result-section.family-relationships{--section-accent:var(--evidence-network)}
   .result-section.family-quality{--section-accent:var(--evidence-derived)}
@@ -1278,12 +1116,6 @@
   .advanced-block{min-width:0;scroll-margin-top:var(--local-nav-anchor-offset,88px)}
   .advanced-block+.advanced-block{margin-top:14px}
   .advanced-block>h4{margin:0 0 10px;font:700 var(--text-sm) var(--mono)}
-  .sslbl-review-lead{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:12px;padding:16px;border:1px solid color-mix(in srgb,var(--danger) 42%,var(--border));border-radius:var(--radius-md);background:color-mix(in srgb,var(--danger) 5%,var(--surface))}
-  .sslbl-review-lead .eyebrow{margin:0 0 5px;color:var(--danger)}
-  .sslbl-review-lead h4{margin:0;color:var(--text);font-size:var(--text-sm);line-height:1.35}
-  .sslbl-review-lead p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  .sslbl-review-lead .button{flex:0 0 auto}
-
   .evidence-card{padding:var(--card-pad)}
   .evidence-card .section-head p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .evidence-card .stat-grid{margin-top:14px}
@@ -1300,7 +1132,5 @@
 
   @media(max-width:700px){
     .detailed-assessment>summary{align-items:flex-start;flex-direction:column;gap:10px}
-    .sslbl-review-lead{align-items:stretch;flex-direction:column}
-    .sslbl-review-lead .button{width:100%}
   }
 </style>

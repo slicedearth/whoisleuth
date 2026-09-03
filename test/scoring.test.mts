@@ -10,6 +10,7 @@ import {
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
+import { explainRiskScoreV7 } from '../lib/risk-scoring.mts';
 
 const SCORING_DOMAIN = 'example.test';
 
@@ -227,8 +228,8 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 7);
-    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 7);
+    assert.equal(scoring.RISK_MODEL_VERSION, 8);
+    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 8);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 6);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 4);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 5);
@@ -273,6 +274,23 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(brand.score, 30);
     assert.equal(brand.families.find((family) => family.id === 'brand-presentation')?.contribution, 24);
     assert.equal(brand.factors.some((factor) => factor.label.includes('Corroborating')), false);
+  });
+
+  test('keeps unreviewed page-identity similarity out of current Risk scoring', () => {
+    const current = riskExplanation({
+      availability: 'registered',
+      pageBaselineMatch: true,
+    });
+    const previous = explainRiskScoreV7({
+      availability: 'registered',
+      pageBaselineMatch: true,
+    });
+    assert.equal(current.modelVersion, 8);
+    assert.equal(current.score, 6);
+    assert.equal(current.factors.some((factor) => factor.label.includes('page-identity')), false);
+    assert.equal(previous?.modelVersion, 7);
+    assert.equal(previous?.score, 20);
+    assert.equal(previous?.factors.some((factor) => factor.label.includes('page-identity')), true);
   });
 
   test('external password destinations strengthen credential evidence without double counting', () => {

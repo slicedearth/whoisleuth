@@ -68,16 +68,17 @@ implemented features.
 
 ## Compatibility
 
-Version 2 directly supports the exact durable formats written by the latest
-public v1 release, 1.47.4, and the current v2 writers documented in the
-[Case portability reference](case-contracts.md) and
+Release 2.0.1 is the current public writer. This checkout directly supports its
+exact durable formats, the retained legacy formats written by release 1.47.4,
+and the current writers and direct migrations documented in the generated
+[Case portability reference](case-contracts.md) and the
 [portable compatibility reference](portable-domain-contracts.md). Reader-only
 historical formats and unreleased development checkpoints are not public
 compatibility commitments.
 
-Once v2 is public, its durable schemas, exports, browser stores and CLI
-contracts become supported boundaries. A later release must preserve them or
-provide an explicit, tested and non-destructive migration or export path.
+The durable schemas, exports, browser stores and CLI contracts published by
+v2.0.1 are supported boundaries. A later release must preserve them or provide
+an explicit, tested and non-destructive migration or export path.
 Malformed and unsupported future data fails closed; browser-local future data
 is preserved without rewrite where its storage contract promises that
 behaviour.

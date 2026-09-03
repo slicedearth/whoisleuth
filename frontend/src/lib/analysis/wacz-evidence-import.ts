@@ -2,6 +2,7 @@ import { UnzipInflate } from 'fflate';
 import { parseBoundedJson } from '../bounded-json.ts';
 import { extractBoundedZipEntries } from '../../../../packages/interchange/bounded-zip-extraction.mts';
 import { decompressBoundedGzip } from '../../../../packages/interchange/bounded-gzip.mts';
+import { isRecord } from '../../../../lib/json-record.mts';
 
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -44,10 +45,6 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const SHA256_RE = /^sha256:([a-f0-9]{64})$/iu;
 const WACZ_VERSION_RE = /^1\.(?:0|1)(?:\.\d+)?$/u;
 const FORBIDDEN_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function safeZipPath(value: string): boolean {
   if (

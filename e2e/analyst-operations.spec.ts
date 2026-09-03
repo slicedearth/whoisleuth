@@ -10,6 +10,7 @@ import {
   requiredValue,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -19,12 +20,13 @@ const CERTIFICATE_SHA256 = 'a'.repeat(64);
 const EVENT_ID = 'b'.repeat(64);
 const EXPECTED_SPKI_SHA256 = 'c'.repeat(64);
 
-function readyForReviewAction() {
+function readyForReviewAction(): CaseActionRecord {
   return {
     id: 'action-lifecycle-review',
     type: 'registrar_report',
     recipient: 'Reserved registrar review route',
     contactSource: 'Fixture contact source',
+    routeObservedAt: OBSERVED_AT,
     contactLimitations: ['No contact was attempted.'],
     dueAt: null,
     followUpAt: null,

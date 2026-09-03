@@ -14,6 +14,7 @@ import {
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
 
 const NOW = '2026-08-09T02:00:00.000Z';
 const PROFILE_ID = 'Profile_A';
@@ -48,12 +49,13 @@ function profileFixture(overrides: { id?: string; name?: string; officialDomains
   };
 }
 
-function actionFixture(id: string, recipient = 'Reserved fixture recipient') {
+function actionFixture(id: string, recipient = 'Reserved fixture recipient'): CaseActionRecord {
   return {
     id,
     type: 'network_hosting_report',
     recipient,
     contactSource: 'manual',
+    routeObservedAt: NOW,
     contactLimitations: [],
     dueAt: NOW,
     state: 'drafting',

@@ -7,7 +7,7 @@ import {
   validateLookupEvidenceArtifactStructure,
   validateOfflineArtifactStructure,
   validateSignedDigestArtifactStructure,
-} from './artifact-structure.mts';
+} from './offline-artifact-validation.mts';
 
 import {
   verifyCaseResponsePacketIntegrity,

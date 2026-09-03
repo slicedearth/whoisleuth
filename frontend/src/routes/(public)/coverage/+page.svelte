@@ -7,10 +7,17 @@
   import { PUBLIC_COVERAGE_SUMMARY } from '$lib/generated/public-coverage-summary';
 
   let catalogueOpen = $state(false);
+  const moduleController = new AbortController();
   function preloadCatalogue() {
-    preloadBestEffort(() => import('$lib/components/PublicCoverageCatalogue.svelte'));
+    preloadBestEffort(() => import('$lib/components/PublicCoverageCatalogue.svelte'), moduleController.signal);
   }
-  onMount(() => preloadOnIdle(preloadCatalogue));
+  onMount(() => {
+    const cancelIdlePreload = preloadOnIdle(preloadCatalogue);
+    return () => {
+      cancelIdlePreload();
+      moduleController.abort();
+    };
+  });
   const pageSections = [
     { href: '#distinctions', label: 'Coverage labels' },
     { href: '#snapshot', label: 'Inventory' },

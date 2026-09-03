@@ -8,7 +8,7 @@
     "version": 2,
     "recordCount": 1
   },
-  "riskModelVersion": 7,
+  "riskModelVersion": 8,
   "currentReviewThreshold": 70,
   "summary": {
     "total": 1,
@@ -226,9 +226,9 @@
   ],
   "modelComparison": {
     "available": true,
-    "previousModelVersion": 6,
-    "currentModelVersion": 7,
-    "scoresChanged": 1,
+    "previousModelVersion": 7,
+    "currentModelVersion": 8,
+    "scoresChanged": 0,
     "bandsChanged": 0,
     "thresholdClassificationsChanged": 0
   },

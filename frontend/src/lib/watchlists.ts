@@ -12,6 +12,7 @@ import {
   normalizeWatchlistName,
   serializeWatchlistStore,
 } from './analysis/watchlist-store.ts';
+import { normalizeDomain } from './analysis/case-model.ts';
 import type {
   WatchlistCollection,
   WatchlistEntry,
@@ -98,6 +99,40 @@ export async function saveWatchlist(name:string, results:WatchlistComparableReco
     const {entry,changes}=appendWatchlistScan(all[normalizedName]||null,results,{mode});
     Object.defineProperty(all,normalizedName,{value:entry,writable:true,enumerable:true,configurable:true});
     return { document: boundedWatchlists(all), result: changes as WatchlistChange[] };
+  });
+}
+
+export async function saveSingleDomainWatchlist(
+  name: string,
+  result: WatchlistComparableRecord,
+  mode: 'fast' | 'deep',
+): Promise<{ changes: WatchlistChange[]; created: boolean; name: string }> {
+  const normalizedName = normalizeWatchlistName(name);
+  if (!normalizedName) throw new Error('Watchlist names must be 1–100 characters and use a safe name.');
+  const domain = normalizeDomain(result.domain);
+  if (!domain) throw new Error('The Lookup target is not a valid watchlist domain.');
+  return updateBrowserLocalData('watchlists', (current) => {
+    const all = { ...current } as Watchlists;
+    const existingName = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
+    const effectiveName = existingName || normalizedName;
+    const previous = existingName ? all[existingName] || null : null;
+    if (!previous && Object.keys(all).length >= MAX_WATCHLISTS) {
+      throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
+    }
+    if (previous && (previous.results.length !== 1 || previous.results[0]?.domain !== domain)) {
+      throw new Error('That name belongs to a different or multi-domain watchlist. Choose another name so unrelated domains are not presented as rechecked.');
+    }
+    const { entry, changes } = appendWatchlistScan(previous, [{ ...result, domain }], { mode });
+    Object.defineProperty(all, effectiveName, {
+      value: entry,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    return {
+      document: boundedWatchlists(all),
+      result: { changes, created: !previous, name: effectiveName },
+    };
   });
 }
 

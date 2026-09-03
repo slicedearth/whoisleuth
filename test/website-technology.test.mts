@@ -6,6 +6,7 @@ import {
   MAX_TECHNOLOGY_HTML_CHARS,
   TECHNOLOGY_PROFILE_VERSION,
   analyzeWebsiteTechnology,
+  captureTechnologyResponseHeaders,
 } from '../lib/website-technology.mts';
 import type { TechnologyFinding } from '../lib/website-technology.mts';
 
@@ -103,6 +104,7 @@ describe('website technology profile', () => {
     assert.equal(item.confidence, 'high');
     assert.deepEqual(item.evidence, [{
       source: 'static HTML',
+      role: 'application_platform',
       description: 'Static resource paths use PrestaShop module conventions.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /ps_feature|fixture\.css/u);
@@ -117,6 +119,7 @@ describe('website technology profile', () => {
     assert.equal(item.confidence, 'high');
     assert.deepEqual(item.evidence, [{
       source: 'static HTML',
+      role: 'application_platform',
       description: 'Static markup contains OpenCart routing or default asset conventions.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /common\/home|opencart-logo|Store/u);
@@ -134,7 +137,8 @@ describe('website technology profile', () => {
     assert.equal(item.confidence, 'medium');
     assert.deepEqual(item.evidence, [{
       source: 'passive response header',
-      description: 'A Netlify request identifier response header was observed.',
+      role: 'application_platform',
+      description: 'A Netlify application-platform response header was observed.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /bounded-request-marker/u);
   });
@@ -172,6 +176,7 @@ describe('website technology profile', () => {
     assert.equal(item.confidence, 'medium');
     assert.deepEqual(item.evidence, [{
       source: 'static HTML',
+      role: 'framework_runtime',
       description: 'Static asset paths use Astro build conventions.',
     }]);
   });
@@ -223,6 +228,7 @@ describe('website technology profile', () => {
     assert.deepEqual(result.findings.map((item) => item.id), ['craft-cms']);
     assert.deepEqual(finding(result, 'craft-cms').evidence, [{
       source: 'passive response header',
+      role: 'application_platform',
       description: 'The passive X-Powered-By response header identifies Craft CMS.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /5\.10\.13\.1/u);
@@ -306,11 +312,77 @@ describe('website technology profile', () => {
       ['cloudflare', 'delivery platform'],
       ['nextjs', 'web framework'],
     ]);
+    assert.deepEqual(finding(result, 'cloudflare').roles, ['observed_edge']);
+    assert.deepEqual(finding(result, 'nextjs').roles, ['framework_runtime']);
+  });
+
+  test('keeps incomplete edge, platform, and generic runtime indicators separately attributed', () => {
+    const result = analyzeWebsiteTechnology({
+      htmlAvailable: false,
+      httpServer: 'Cloudflare',
+      responseHeaders: {
+        'x-nf-request-id': 'bounded-platform-indicator',
+        'x-vercel-id': 'conflicting-platform-indicator',
+        'x-powered-by': 'PHP/8.4',
+      },
+      observedAt,
+    });
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.deepEqual(result.findings.map((item) => [item.id, item.roles]), [
+      ['php', ['framework_runtime']],
+      ['cloudflare', ['observed_edge']],
+      ['netlify', ['application_platform']],
+      ['vercel', ['application_platform']],
+    ]);
+    assert.deepEqual(result.findings.map((item) => item.evidence[0]?.source), [
+      'passive response header',
+      'HTTP server header',
+      'passive response header',
+      'passive response header',
+    ]);
+    assert.match(result.limitations.join(' '), /HTML page identity was unavailable/i);
+    assert.doesNotMatch(JSON.stringify(result), /bounded-platform-indicator|conflicting-platform-indicator|8\.4/u);
   });
 
   test('recognizes CloudFront from retained resource evidence', () => {
     const resourceResult = analyze({ resourceOrigins: ['https://assets.fixture.cloudfront.net'] });
     assert.equal(finding(resourceResult, 'cloudfront').confidence, 'medium');
+    assert.deepEqual(finding(resourceResult, 'cloudfront').roles, ['embedded_dependency']);
+  });
+
+  test('captures only canonical bounded technology headers for direct analysis', () => {
+    const captured = captureTechnologyResponseHeaders(new Headers({
+      'x-nf-request-id': 'platform-indicator',
+      'x-powered-by': 'PHP/8.4',
+      'x-unrelated-secret': 'must-not-be-retained',
+    }));
+    assert.deepEqual(captured, {
+      'x-nf-request-id': 'platform-indicator',
+      'x-powered-by': 'PHP/8.4',
+    });
+    assert.deepEqual(captureTechnologyResponseHeaders({
+      'x-vercel-id': 'x'.repeat(241),
+      'cf-ray': 'invalid\nvalue',
+      authorization: 'private',
+    }), {});
+  });
+
+  test('keeps header-only evidence partial and independent from HTML identity', () => {
+    const result = analyzeWebsiteTechnology({
+      htmlAvailable: false,
+      responseHeaders: { 'x-vercel-id': 'bounded-platform-indicator' },
+      observedAt,
+    });
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.equal(result.truncated, false);
+    assert.equal(result.diagnostics.htmlEvaluated, false);
+    assert.equal(result.browserLibraryProfile, null);
+    assert.deepEqual(finding(result, 'vercel').roles, ['application_platform']);
+    assert.match(result.limitations.join(' '), /HTML page identity was unavailable/i);
+    assert.doesNotMatch(JSON.stringify(result), /bounded-platform-indicator/u);
   });
 
   test('sorts findings deterministically by category and name', () => {
@@ -399,7 +471,7 @@ describe('website technology profile', () => {
 
     assert.equal(result.status, 'partial');
     assert.equal(result.diagnostics.tagLimitReached, true);
-    assert.equal(result.browserLibraryProfile.status, 'partial');
+    assert.equal(requiredValue(result.browserLibraryProfile).status, 'partial');
     assert.ok(elapsedMs < 2_000, `Expected bounded tokenization under 2 seconds; received ${Math.round(elapsedMs)}ms.`);
   });
 });

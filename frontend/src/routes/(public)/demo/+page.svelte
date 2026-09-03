@@ -3,6 +3,11 @@
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import {
+    DEFERRED_MODULE_RECOVERY_DETAIL,
+    loadDeferredModule,
+    reloadDeferredModulePage,
+  } from '$lib/deferred-module';
+  import {
     createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
     normalizeSyntheticDemoState, parseSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
     SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY,
@@ -35,6 +40,9 @@
   let loadedStages=$state<View[]>([]);
   let failedStages=$state<View[]>([]);
   const pendingStages=new Map<View,Promise<void>>();
+  const stageGenerations=new Map<View,number>();
+  const moduleController=new AbortController();
+  let active=true;
   let BrandProfileListView=$state<BrandsStageModule['BrandProfileList']|null>(null);
   let BulkRelationshipsView=$state<BulkStageModule['BulkRelationships']|null>(null);
   let EvidenceTopologyView=$state<LookupStageModule['EvidenceTopology']|null>(null);
@@ -118,17 +126,17 @@
   }
   async function loadStageModule(target:View){
     if(target==='brands'){
-      const module=await import('$lib/components/demo-stages/brands.ts');
+      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/brands.ts'),{signal:moduleController.signal});
       BrandProfileListView=module.BrandProfileList;
       return;
     }
     if(target==='bulk'){
-      const module=await import('$lib/components/demo-stages/bulk.ts');
+      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/bulk.ts'),{signal:moduleController.signal});
       BulkRelationshipsView=module.BulkRelationships;
       return;
     }
     if(target==='lookup'){
-      const module=await import('$lib/components/demo-stages/lookup.ts');
+      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/lookup.ts'),{signal:moduleController.signal});
       EvidenceTopologyView=module.EvidenceTopology;
       LookupLifecycleView=module.LookupLifecycle;
       LookupAcquisitionReviewView=module.LookupAcquisitionReview;
@@ -143,7 +151,7 @@
       return;
     }
     if(target==='monitor'){
-      const module=await import('$lib/components/demo-stages/monitor.ts');
+      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/monitor.ts'),{signal:moduleController.signal});
       EvidenceTimelineView=module.EvidenceTimeline;
       buildSyntheticDemoExportView=module.buildSyntheticDemoExport;
       syntheticDemoCaseRecordView=module.syntheticDemoCaseRecord;
@@ -154,18 +162,16 @@
     if(!stageRequiresModule(target)||loadedStages.includes(target))return Promise.resolve();
     const pending=pendingStages.get(target);
     if(pending)return pending;
+    const generation=(stageGenerations.get(target)??0)+1;
+    stageGenerations.set(target,generation);
     failedStages=failedStages.filter((stage)=>stage!==target);
-    const request=loadStageModule(target)
-      .then(()=>{loadedStages=[...loadedStages,target];})
-      .catch(()=>{failedStages=[...failedStages.filter((stage)=>stage!==target),target];})
-      .finally(()=>{pendingStages.delete(target);});
+    let request:Promise<void>;
+    request=loadStageModule(target)
+      .then(()=>{if(active&&stageGenerations.get(target)===generation)loadedStages=[...loadedStages,target];})
+      .catch(()=>{if(active&&stageGenerations.get(target)===generation)failedStages=[...failedStages.filter((stage)=>stage!==target),target];})
+      .finally(()=>{if(pendingStages.get(target)===request)pendingStages.delete(target);});
     pendingStages.set(target,request);
     return request;
-  }
-  async function retryStage(target:View){
-    await ensureStage(target);
-    await tick();
-    demoWorkspace?.querySelector<HTMLElement>('[data-stage-heading]')?.focus({preventScroll:true});
   }
 
   onMount(()=>{
@@ -176,7 +182,7 @@
     if(parsed){
       demoState=parsed;
       view=syntheticDemoStage(demoState) as View;
-      void ensureStage(view).then(()=>tick()).then(()=>centerActiveStage('auto'));
+      void ensureStage(view).then(()=>tick()).then(()=>{if(active)centerActiveStage('auto');});
     }
     else{
       demoState=createSyntheticDemoState();view='dashboard';
@@ -224,9 +230,13 @@
     heldWorkspaceHeight=Math.ceil(demoWorkspace?.getBoundingClientRect().height??0);
     view=target;
     await tick();
+    if(!active)return;
     await ensureStage(target);
+    if(!active)return;
     await tick();
+    if(!active)return;
     await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));
+    if(!active)return;
     demoWorkspace?.querySelector<HTMLElement>('[data-stage-heading]')?.focus({preventScroll:true});
     const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     centerActiveStage(reducedMotion?'auto':'smooth');
@@ -294,7 +304,13 @@
     URL.revokeObjectURL(url);
     message='Synthetic case report created. It is clearly marked as demonstration data.';
   }
-  onDestroy(clearWorkspaceRelease);
+  onDestroy(()=>{
+    active=false;
+    for(const stage of stageGenerations.keys())stageGenerations.set(stage,(stageGenerations.get(stage)??0)+1);
+    moduleController.abort();
+    pendingStages.clear();
+    clearWorkspaceRelease();
+  });
 </script>
 
 <PublicSeo
@@ -346,7 +362,8 @@
     </h2>
     {#if failedStages.includes(view)}
       <p role="alert">This part of the demo could not be loaded.</p>
-      <button class="primary" type="button" onclick={()=>void retryStage(view)}>Try this stage again</button>
+      <small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small>
+      <button class="primary" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
     {:else}
       <p role="status" aria-live="polite">Loading this part of the demo.</p>
     {/if}
