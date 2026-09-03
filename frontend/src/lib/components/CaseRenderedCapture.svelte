@@ -89,7 +89,7 @@
     importing = true;
     try {
       const result = await importExternalFindingsIntoCase(record.id, preview);
-      const success = `Imported ${countLabel(result.findingsAdded, 'rendered-capture finding')} into ${record.domain}${result.duplicatesSkipped ? `; skipped ${countLabel(result.duplicatesSkipped, 'duplicate')}` : ''}. Artifact bytes remained outside WHOISleuth.`;
+      const success = `Imported ${countLabel(result.findingsAdded, 'rendered-capture finding')} into ${record.domain}${result.duplicatesSkipped ? `; skipped ${countLabel(result.duplicatesSkipped, 'duplicate')}` : ''}. Artifact bytes remained outside the app.`;
       try {
         await onsaved();
         onmessage(success);

@@ -164,6 +164,7 @@ const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['cli/risk-calibration.mts', 'writer', 1, 'Copies the validated calibration marker into report metadata.'],
   ['cli/sharing-review.mts', 'writer', 1, 'Projects a bounded reviewed artifact marker.'],
   ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 1, 'Compares the marker selected by a canonical collection definition.'],
+  ['frontend/src/lib/components/CaseRenderedCapture.svelte', 'reader', 1, 'Dispatches a selected local capture through the canonical manifest reader.'],
   ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 4, 'Dispatches bounded local imports through reviewed marker families.'],
   ['frontend/src/routes/(console)/bulk/+page.svelte', 'writer', 1, 'Initialises a browser-local store from its reviewed contract constant.'],
   ['packages/cases/case-response-model.mts', 'writer', 1, 'Copies bounded source-provenance fields after local normalisation.'],
