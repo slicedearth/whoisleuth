@@ -391,8 +391,9 @@ test('append-only response review, exact authorisation, independent verification
   test.slow();
   await openCasesView(page);
   await createCase(page, 'response.invalid');
-  await page.locator('.case-body').getByLabel('Disposition').selectOption('confirmed_abuse');
-  await page.locator('.case-body').getByLabel('Review reason').selectOption('confirmed_credential_abuse');
+  const caseMetadata = page.locator('.case-body > .field-grid');
+  await caseMetadata.getByLabel('Disposition').selectOption('confirmed_abuse');
+  await caseMetadata.getByLabel('Review reason').selectOption('confirmed_credential_abuse');
 
   const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });

@@ -86,7 +86,9 @@ type DeferredInteractionSampleSet = Readonly<{
 // multi-result query. That keeps the browser recent-input semantics while
 // excluding artificial driver time for a no-delay multi-character sequence.
 // The Case response row was remeasured on 2026-08-25 after its module moved
-// into the canonical Cases-view preload packet.
+// into the canonical Cases-view preload packet. The prepared workspace remains
+// inside a closed native disclosure, and this row measures Case expansion,
+// hidden workspace readiness, and its deliberate reveal as one interaction.
 // The public Case handoff was remeasured on 2026-09-05 after the current Case
 // contract added type-specific readiness and reviewed response context. Its
 // generated example remains one deferred asset; the ceiling tracks the
@@ -820,6 +822,7 @@ test('measures the deferred Case response and packet workspace', async ({ page }
   const caseHeading = page.locator(`#case-head-${caseId}`);
   const disclosure = page.locator(`#case-response-${caseId}`);
   const summary = disclosure.locator(':scope > summary');
+  const responseWorkspace = disclosure.locator('.response-workspace');
   const advancedPresentation = disclosure.getByRole('button', { name: 'Advanced', exact: true });
 
   await measureDeferredInteraction({
@@ -835,15 +838,17 @@ test('measures the deferred Case response and packet workspace', async ({ page }
         },
       }, { clearStorage: true, destination: '/monitor?view=cases' });
       await expect(caseHeading).toBeVisible();
-      await caseHeading.click();
-      await expect(disclosure).toBeVisible();
-      await expect(disclosure.locator('.response-workspace')).toHaveCount(0);
+      await expect(disclosure).toHaveCount(0);
     },
     action: async () => {
+      await caseHeading.click();
+      await expect(disclosure).toBeVisible();
+      await expect(responseWorkspace).toBeAttached();
+      await expect(responseWorkspace).toBeHidden();
       await summary.focus();
       await page.keyboard.press('Enter');
     },
-    ready: disclosure.locator('.response-workspace'),
+    ready: responseWorkspace,
     readyControl: advancedPresentation,
     requireAsset: false,
   });
