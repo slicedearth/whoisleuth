@@ -4,6 +4,7 @@ import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
+  mergeExternalFindingsIntoCase,
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
 } from '../frontend/src/lib/analysis/external-findings-import.ts';
@@ -169,5 +170,58 @@ describe('strict external findings import', () => {
     assert.equal(second.duplicatesSkipped, 1);
     assert.equal(second.cases[0]?.evidencePins.length, 1);
     assert.equal(second.cases[0]?.sightings.length, 1);
+  });
+
+  test('targets an exact captured hostname into its selected registrable-domain Case', () => {
+    const current = createCase({ domain: 'review.example', source: 'lookup' }, NOW);
+    const parsed = parseExternalFindingsDocument(document({
+      findings: [{ ...document().findings[0], domain: 'login.review.example' }],
+    }));
+    const first = mergeExternalFindingsIntoCase([current], current.id, parsed, NOW);
+    const second = mergeExternalFindingsIntoCase(first.cases, current.id, parsed, NOW);
+
+    assert.equal(first.cases.length, 1);
+    assert.equal(first.record.id, current.id);
+    assert.equal(first.record.domain, 'review.example');
+    assert.equal(first.findingsAdded, 1);
+    assert.match(first.record.evidencePins[0]?.value ?? '', /^Captured hostname login\.review\.example\./u);
+    assert.equal(second.findingsAdded, 0);
+    assert.equal(second.duplicatesSkipped, 1);
+    assert.equal(second.record.evidencePins.length, 1);
+  });
+
+  test('updates only the selected Case identity when recovered local data contains a duplicate domain', () => {
+    const first = createCase({ domain: 'review.example', source: 'lookup' }, NOW);
+    const selected = createCase({ domain: 'review.example', source: 'manual' }, NOW);
+    const parsed = parseExternalFindingsDocument(document({
+      findings: [{ ...document().findings[0], domain: 'capture.review.example' }],
+    }));
+
+    const merged = mergeExternalFindingsIntoCase([first, selected], selected.id, parsed, NOW);
+    assert.equal(merged.cases.find((record) => record.id === first.id)?.evidencePins.length, 0);
+    assert.equal(merged.cases.find((record) => record.id === selected.id)?.evidencePins.length, 1);
+    assert.equal(merged.record.id, selected.id);
+  });
+
+  test('rejects unrelated targeted findings without changing the selected Case', () => {
+    const current = createCase({ domain: 'review.example', source: 'lookup' }, NOW);
+    const parsed = parseExternalFindingsDocument(document({
+      findings: [{ ...document().findings[0], domain: 'unrelated.example' }],
+    }));
+
+    assert.throws(
+      () => mergeExternalFindingsIntoCase([current], current.id, parsed, NOW),
+      /does not belong to the selected Case/u,
+    );
+    assert.equal(current.evidencePins.length, 0);
+    assert.equal(current.sightings.length, 0);
+  });
+
+  test('fails closed when a targeted import names a missing Case', () => {
+    const parsed = parseExternalFindingsDocument(document());
+    assert.throws(
+      () => mergeExternalFindingsIntoCase([], 'missing-case', parsed, NOW),
+      /Select an existing Case/u,
+    );
   });
 });

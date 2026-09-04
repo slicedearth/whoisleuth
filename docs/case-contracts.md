@@ -53,17 +53,13 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release 2.0.1 is the latest public writer: Case schema
-13, Case report schema
-9, response-packet schema
-7, review-input digest material version
-1, and workspace archive schema
-6. This checkout's current writers advance
-those formats to Case schema 14, report
-schema 10, response-packet schema
-8, review-input version
-2, and workspace archive schema
-7.
+Release 2.1.0 is the immediately preceding public writer. It emitted
+Case schema 14, Case report schema 10, response-packet schema
+8, review-input digest material version 2, and workspace
+archive schema 7. Version 2.2.0 is the current writer in this
+checkout. It emits Case schema 14, report schema 10,
+response-packet schema 8, review-input version 2, and workspace
+archive schema 7.
 
 Both the latest public formats and the current writers directly preserve the
 formats written by public release 1.47.4:

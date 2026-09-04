@@ -1,4 +1,4 @@
-import type { CaseRecord } from './case-model.ts';
+import { caseLookupTarget, type CaseRecord } from './case-model.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import {
@@ -48,6 +48,14 @@ export const ANALYST_REVIEW_DISMISSAL_REASONS = [
 export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASONS[number]['value'];
 
 export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
+
+export const ANALYST_REVIEW_QUEUE_OPTIONS = [
+  { value: 'needs_action', label: 'Needs action' },
+  { value: 'waiting', label: 'Waiting / follow-up' },
+  { value: 'changed', label: 'Changed since review' },
+  { value: 'all', label: 'Everything' },
+] as const;
+export type AnalystReviewQueue = typeof ANALYST_REVIEW_QUEUE_OPTIONS[number]['value'];
 
 export type AnalystReviewProjectionAdmission = Readonly<{
   omittedAtLeast: Readonly<Partial<Record<AnalystReviewEvidenceFamily, number>>>;
@@ -104,10 +112,25 @@ const LIMITED_SOURCE_STATES = new Set([
 const PRIORITY_RANK: Record<AnalystReviewPriority, number> = { urgent: 0, high: 1, normal: 2 };
 const COMPLETENESS_RANK: Record<AnalystReviewCompleteness, number> = { inconclusive: 0, partial: 1, complete: 2 };
 const DISMISSAL_PREFIX = 'evidence-gap-review:';
+const CHANGED_REVIEW_KINDS = new Set<AnalystReviewKind>(['watchlist_change', 'comparison', 'certificate']);
 export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
 export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
 const AGING_AFTER_MS = ANALYST_REVIEW_AGING_AFTER_DAYS * 24 * 60 * 60 * 1_000;
 const STALE_AFTER_MS = ANALYST_REVIEW_STALE_AFTER_DAYS * 24 * 60 * 60 * 1_000;
+
+export function analystReviewQueue(
+  item: AnalystReviewInboxItem,
+  now: unknown,
+): Exclude<AnalystReviewQueue, 'all'> | 'reviewed' {
+  const nowIso = timestamp(now) || new Date(0).toISOString();
+  if (item.lifecycle.invalidated || item.lifecycle.recurred) return 'changed';
+  if (item.lifecycle.state === 'resolved') return 'reviewed';
+  const dueAt = item.dueAt ? Date.parse(item.dueAt) : Number.NaN;
+  const futureFollowUp = Number.isFinite(dueAt) && dueAt > Date.parse(nowIso);
+  if (item.lifecycle.state === 'expected' || item.lifecycle.state === 'suppressed' || futureFollowUp) return 'waiting';
+  if (CHANGED_REVIEW_KINDS.has(item.kind)) return 'changed';
+  return 'needs_action';
+}
 
 function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64) return null;
@@ -473,29 +496,40 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
   return items;
 }
 
-function watchlistItems(watchlists: WatchlistCollection, nowIso: string): AnalystReviewItem[] {
+function watchlistItems(
+  watchlists: WatchlistCollection,
+  cases: readonly CaseRecord[],
+  nowIso: string,
+): AnalystReviewItem[] {
   const items: AnalystReviewItem[] = [];
   for (const [name, watchlist] of Object.entries(watchlists).slice(0, 100)) {
     const latestChange = [...watchlist.history].reverse().find((event) => event.changeCount > 0);
     if (!latestChange) continue;
     const observedAt = timestamp(latestChange.checkedAt) || timestamp(watchlist.updatedAt) || nowIso;
     const priority: AnalystReviewPriority = latestChange.changes.some((change) => change.tone === 'danger') ? 'high' : 'normal';
+    const changedDomains = new Set(latestChange.changes.map((change) => change.domain));
+    const relatedCases = cases.filter((record) => (
+      changedDomains.has(record.domain) || changedDomains.has(caseLookupTarget(record))
+    ));
+    const relatedCase = changedDomains.size === 1 && relatedCases.length === 1 ? relatedCases[0] ?? null : null;
     items.push(withReviewMetadata({
       id: `watchlist:${name}`,
       kind: 'watchlist_change',
       priority,
       title: `${name} has ${latestChange.changeCount} material change${latestChange.changeCount === 1 ? '' : 's'}`,
-      detail: `${latestChange.conclusiveCount} of ${latestChange.resultCount} results were conclusive. ${latestChange.omittedChanges} changes were omitted by the history bound.`,
+      detail: `${latestChange.conclusiveCount} of ${latestChange.resultCount} results were conclusive. ${latestChange.omittedChanges} changes were omitted by the history bound.${relatedCase ? ` Related Case: ${relatedCase.domain}.` : relatedCases.length ? ` ${relatedCases.length} Case${relatedCases.length === 1 ? '' : 's'} match${relatedCases.length === 1 ? 'es' : ''} ${changedDomains.size > 1 ? 'only part of the changed scope' : 'the changed hostname'}; review the watchlist before choosing one.` : ''}`,
       source: 'Browser-local watchlist history',
       sourceIds: ['watchlist'],
-      caseDomain: null,
+      caseDomain: relatedCase?.domain ?? null,
       observedAt,
       dueAt: null,
       completeness: latestChange.conclusiveCount === latestChange.resultCount && latestChange.omittedChanges === 0 ? 'complete' : 'partial',
       nextAction: 'review',
-      href: '/monitor?view=watchlists',
+      href: relatedCase
+        ? `/monitor?view=cases&case=${encodeURIComponent(relatedCase.id)}#case-response-${encodeURIComponent(relatedCase.id)}`
+        : `/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`,
       retryHref: null,
-      caseId: null,
+      caseId: relatedCase?.id ?? null,
       dismissalTarget: null,
     }, nowIso));
   }
@@ -682,7 +716,11 @@ export function buildAnalystReviewInbox(
   if ((input.bulkSessions?.length ?? 0) > 10) projected.lowerBoundFamilies.add('bulk');
   const all = [
     ...caseItems(Array.isArray(input.cases) ? input.cases : [], nowIso),
-    ...watchlistItems(input.watchlists && typeof input.watchlists === 'object' ? input.watchlists : {}, nowIso),
+    ...watchlistItems(
+      input.watchlists && typeof input.watchlists === 'object' ? input.watchlists : {},
+      Array.isArray(input.cases) ? input.cases : [],
+      nowIso,
+    ),
     ...bulkItems(Array.isArray(input.bulkSessions) ? input.bulkSessions : [], nowIso),
     ...(Array.isArray(input.projectedItems) ? input.projectedItems : []),
   ];

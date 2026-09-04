@@ -34,7 +34,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
-  { id: 'date', pattern: /Last updated: 2 September 2026/u },
+  { id: 'date', pattern: /Last updated: 4 September 2026/u },
   { id: 'local-first', pattern: /local-first.*ordinary investigation state stays.*browser profile/iu },
   { id: 'no-general-database', pattern: /no general (?:user, )?Case,? or workspace database/iu },
   { id: 'explicit-network', pattern: /deliberately started network(?:-capable)? operation sends (?:only )?its declared bounded target or evidence/iu },
@@ -43,6 +43,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
   { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remain(?:s)? readable`, 'iu') },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },
+  { id: 'case-incident-links', pattern: /Case can (?:also )?retain controlled classifications and exact HTTP\(S\) incident links.*browser-local Case metadata/iu },
   { id: 'public-case-pack', pattern: /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu },
   { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} and ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION} remain readable`, 'iu') },
   { id: 'unsupported-workspace', pattern: /Versions 1 through 4.*future versions fail without.*reset, deletion,? or rewrite/iu },
@@ -61,6 +62,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'registrar-standing-network', pattern: /Registrar standing is matched locally using only the numeric IANA ID.*Lookup makes no additional IANA or ICANN request/iu },
   { id: 'integrity-limits', pattern: /Checksums and signatures.*do not prove evidence accuracy, authorship, signer identity/iu },
   { id: 'capture-disclosure', pattern: /executes remote page JavaScript.*exact requested URL, including its path and query/iu },
+  { id: 'capture-manifest-import', pattern: /capture manifest.*imports only sanitised manifest metadata and.*digests.*artefact bytes stay outside WHOISleuth/iu },
+  { id: 'platform-reporting-navigation', pattern: /Opening an official (?:platform reporting|provider) route is deliberate external navigation.*does not prefetch.*or submit Case data/iu },
   { id: 'no-automatic-action', pattern: /does not automatically submit reports, contact recipients, acquire domains, apply.*controls,? or change.*infrastructure/iu },
   { id: 'non-inference', pattern: /Missing, blocked, stale, malformed, partial, unavailable,? or unsupported evidence never becomes absence, safety, ownership, control, intent,? or remediation/iu },
 ]);

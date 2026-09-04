@@ -7,14 +7,17 @@
     CASE_ASSERTION_KINDS,
     CASE_ASSERTION_STATES,
     CASE_CLOSURE_REASONS,
+    CASE_DISPOSITIONS,
     CASE_EVIDENCE_RELATION_STANCES,
     CASE_MANUAL_TRAIL_KINDS,
     CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
     CASE_OBSERVED_EFFECT_STATES,
     CASE_PIN_COMPLETENESS,
     CASE_PROVIDER_OUTCOMES,
+    CASE_REVIEW_REASONS,
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
+    caseInvestigationContext,
     editCase,
     type CaseActionRecord,
     type CaseActionState,
@@ -30,8 +33,14 @@
   } from '$lib/analysis/case-response-model.ts';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
+  import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
+  import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
-  import CaseResponseStageGuide, { type CaseResponseStage, type CaseResponseStageId } from '$lib/components/CaseResponseStageGuide.svelte';
+  import {
+    CASE_RESPONSE_STAGE_DEFINITIONS,
+    type CaseResponseStage,
+    type CaseResponseStageId,
+  } from '$lib/analysis/case-response-stage.ts';
 
   let {
     record,
@@ -61,6 +70,9 @@
   let decisionSummary = $state('');
   let decisionRationale = $state('');
   let decisionPinIds = $state<string[]>([]);
+  let decisionDisposition = $state('unreviewed');
+  let decisionReviewReason = $state('');
+  let decisionClassificationDirty = $state(false);
   let actionType = $state('internal_review');
   let actionRecipient = $state('');
   let actionContactSource = $state('analyst supplied');
@@ -108,7 +120,12 @@
   let closureReviewId = $state('');
   let closureActionId = $state('');
   let closureLimitations = $state('');
+  let quickActionId = $state('');
+  let quickActionReference = $state('');
+  let quickProviderOutcome = $state('');
+  let quickOutcomeDetail = $state('');
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
+  const investigationContext = $derived(caseInvestigationContext(record));
   const responseLifecycle = $derived(buildCaseResponseLifecycleSummary(record));
   const sightingChronology = $derived(buildCaseSightingChronology(record.sightings));
   const sightingReviewConclusionCount = $derived(
@@ -120,11 +137,17 @@
   const userObservedEffectSourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
 
   let mutationBusy = $state(false);
+  $effect(() => {
+    record.updatedAt;
+    if (!decisionClassificationDirty && !mutationBusy) {
+      decisionDisposition = record.disposition;
+      decisionReviewReason = record.reviewReasonCode ?? '';
+    }
+  });
   const reviewNow = new Date().toISOString();
   let evidenceHandoffStage = $state<CaseResponseStage>({
     id: 'evidence_handoff',
-    number: 4,
-    label: 'Evidence handoff',
+    ...CASE_RESPONSE_STAGE_DEFINITIONS.evidence_handoff,
     status: 'not_started',
     summary: 'Packet review has not started.',
     nextRequirement: 'Open the evidence handoff to review recipient, evidence, privacy, readiness, and authorisation inputs.',
@@ -160,9 +183,13 @@
       : closureReason === 'infrastructure_changed' ? review.state === 'changed' : true));
   const eligibleClosureActions = $derived(record.actions.filter((action) =>
     closureNeedsAction ? action.providerOutcome === 'provider_reports_resolved' : true));
+  const quickAction = $derived(record.actions.find((action) => action.id === quickActionId)
+    ?? record.actions.find((action) => action.state !== 'terminal')
+    ?? record.actions.at(-1)
+    ?? null);
   const responseStages = $derived<CaseResponseStage[]>([
     {
-      id: 'observation', number: 1, label: 'Observation',
+      id: 'observation', ...CASE_RESPONSE_STAGE_DEFINITIONS.observation,
       status: record.evidencePins.length || record.sightings.length ? 'complete' : 'not_started',
       summary: `${countLabel(record.evidencePins.length, 'retained evidence pin')} and ${countLabel(record.sightings.length, 'source-qualified sighting')}.`,
       nextRequirement: record.evidencePins.length || record.sightings.length
@@ -170,7 +197,7 @@
         : 'Pin an observed fact or record a source-qualified sighting with completeness and limitations.',
     },
     {
-      id: 'assessment', number: 2, label: 'Assessment',
+      id: 'assessment', ...CASE_RESPONSE_STAGE_DEFINITIONS.assessment,
       status: evidenceLinkedDecisionCount ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
       nextRequirement: !record.decisions.length
@@ -180,19 +207,20 @@
           : 'Review the decision rationale and any unresolved assertions or branches.',
     },
     {
-      id: 'response_decision', number: 3, label: 'Response decision',
+      id: 'response_decision', ...CASE_RESPONSE_STAGE_DEFINITIONS.response_decision,
       status: record.actions.some((action) => ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'complete' : record.actions.length ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.actions.length, 'append-only response action')}; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} follow-up due.`,
       nextRequirement: !record.actions.length ? 'Create a drafting action with recipient provenance and due dates.' : 'Review the next legal action transition without rewriting earlier events.',
     },
     evidenceHandoffStage,
     {
-      id: 'outcome_tracking', number: 5, label: 'Outcome tracking',
+      id: 'outcome_tracking', ...CASE_RESPONSE_STAGE_DEFINITIONS.outcome_tracking,
       status: record.closures.records.length ? 'complete' : record.observedEffects.reviews.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.observedEffects.reviews.length, 'independent effect review')} and ${countLabel(record.closures.records.length, 'deliberate closure')}.`,
       nextRequirement: !record.observedEffects.reviews.length ? 'Keep provider outcomes separate and record an independently observed effect when reviewed.' : !record.closures.records.length ? 'Review follow-up and, when justified, record a deliberate closure reason.' : 'Review whether follow-up remains due.',
     },
   ]);
+  const currentResponseStage = $derived(responseStages.find((stage) => stage.status !== 'complete') ?? responseStages.at(-1));
 
   function updateEvidenceHandoffStage(stage: CaseResponseStage): void {
     evidenceHandoffStage = stage;
@@ -298,7 +326,17 @@
   }
 
   async function addDecision() {
+    if (decisionDisposition === 'unreviewed' || !decisionReviewReason) {
+      onmessage('Select a reviewed disposition and review reason before recording a conclusion.');
+      return;
+    }
+    if (!decisionPinIds.length) {
+      onmessage('Select at least one retained evidence pin before recording a conclusion. Use an assertion for an unsupported hypothesis or unknown.');
+      return;
+    }
     if (!await persist({
+      disposition: decisionDisposition,
+      reviewReasonCode: decisionReviewReason,
       decision: {
         summary: decisionSummary,
         rationale: decisionRationale,
@@ -308,6 +346,7 @@
     decisionSummary = '';
     decisionRationale = '';
     decisionPinIds = [];
+    decisionClassificationDirty = false;
   }
 
   async function addAssertion() {
@@ -480,6 +519,56 @@
     if (selectedAction) transitionNextState = nextTransitionState(selectedAction, 'analyst');
   }
 
+  function quickActionVerb(action: CaseActionRecord): string {
+    if (action.state === 'drafting') return 'Ready for review';
+    if (action.state === 'ready_for_review') return 'Mark reviewed';
+    if (action.state === 'reviewed') return 'Authorise';
+    if (action.state === 'authorised') return 'Mark sent';
+    if (action.state === 'submitted') return quickProviderOutcome === 'no_response' ? 'Record no response' : 'Record provider response';
+    if (action.state === 'acknowledged') return 'Record final provider outcome';
+    return 'Action complete';
+  }
+
+  async function advanceQuickAction(action: CaseActionRecord) {
+    if (action.state === 'terminal') return;
+    const nextState: CaseActionState = action.state === 'drafting' ? 'ready_for_review'
+      : action.state === 'ready_for_review' ? 'reviewed'
+        : action.state === 'reviewed' ? 'authorised'
+          : action.state === 'authorised' ? 'submitted'
+            : action.state === 'submitted' && quickProviderOutcome !== 'no_response' ? 'acknowledged'
+              : 'terminal';
+    const recordsProviderOutcome = action.state === 'submitted' || action.state === 'acknowledged';
+    const sourceClass: CaseActionEventSourceClass = recordsProviderOutcome && quickProviderOutcome !== 'no_response'
+      ? 'provider'
+      : 'analyst';
+    const provenance = nextState === 'ready_for_review' ? 'analyst prepared action'
+      : nextState === 'reviewed' ? 'analyst reviewed action'
+        : nextState === 'authorised' ? 'analyst authorised action'
+          : nextState === 'submitted' ? 'analyst recorded delivery'
+            : sourceClass === 'provider' ? 'provider response recorded by analyst'
+              : 'analyst follow-up review';
+    if (!await persist({
+      actionUpdate: {
+        id: action.id,
+        transition: {
+          nextState,
+          occurredAt: new Date().toISOString(),
+          sourceClass,
+          provenance,
+          reference: quickActionReference || null,
+          evidencePinId: null,
+          limitations: [],
+          providerOutcome: recordsProviderOutcome ? quickProviderOutcome || null : null,
+          outcomeDetail: recordsProviderOutcome ? quickOutcomeDetail || null : null,
+          originActionId: action.originActionId,
+        },
+      },
+    }, `${quickActionVerb(action)} recorded for ${record.domain}.`)) return;
+    quickActionReference = '';
+    quickProviderOutcome = '';
+    quickOutcomeDetail = '';
+  }
+
   async function addObservedEffectReview() {
     if (!await persist({
       observedEffectReview: {
@@ -542,19 +631,14 @@
       onmessage('The packet was exported, but its selected Case action is no longer available. Reload before recording delivery.');
       return;
     }
-    selectAction(action.id);
-    transitionOccurredAt = localFromIso(exported.exportedAt);
-    transitionSourceClass = 'analyst';
-    transitionProvenance = 'local response-packet export';
-    transitionReference = `response-packet-sha256:${exported.digestSha256}`;
-    transitionLimitations = 'A local packet was exported. Confirm actual delivery before appending a submitted transition.';
-    if (action.state === 'authorised') transitionNextState = 'submitted';
-    await openAdvancedStage('response_decision');
+    quickActionId = action.id;
+    quickActionReference = `response-packet-sha256:${exported.digestSha256}`;
+    presentationMode = 'quick';
     await tick();
-    document.getElementById(`case-action-transition-reference-${record.id}`)?.focus({ preventScroll: true });
+    document.getElementById(`quick-action-advance-${record.id}`)?.focus({ preventScroll: true });
     onmessage(action.state === 'authorised'
-      ? 'Prepared a submitted transition bound to the exported packet digest. Confirm actual delivery before appending it.'
-      : `Selected the packet action and retained its export digest. Its current state is ${action.state.replaceAll('_', ' ')}; choose a legal transition only after the corresponding event occurs.`);
+      ? 'Prepared the delivery record with the exported packet digest. Select Mark sent only after actual delivery.'
+      : `Selected the packet action and prepared its export digest. Its current state is ${action.state.replaceAll('_', ' ')}; complete each review state only after it occurs.`);
   }
 </script>
 
@@ -568,6 +652,15 @@
     <button type="button" aria-pressed={presentationMode === 'advanced'} onclick={() => presentationMode = 'advanced'}>Advanced</button>
     <span>Both presentations edit this one Case record.</span>
   </div>
+  {#if investigationContext}
+    <dl class="case-context" aria-label="Current Case context">
+      <div class="context-objective"><dt>Objective</dt><dd>{investigationContext.objective}</dd></div>
+      <div><dt>Incident URL</dt><dd>{investigationContext.urlRetention === 'exact' ? investigationContext.incidentUrl : `${investigationContext.incidentUrl} (origin only)`}</dd></div>
+      <div><dt>Disposition</dt><dd>{record.disposition.replaceAll('_', ' ')}</dd></div>
+      <div><dt>Evidence</dt><dd>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} linked conclusion${evidenceLinkedDecisionCount === 1 ? '' : 's'}` : 'Conclusion link needed'}</dd></div>
+      <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
+    </dl>
+  {/if}
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>
@@ -583,8 +676,105 @@
     </div>
   {/if}
 
+  <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
+
   {#if presentationMode === 'quick'}
-    <CaseResponseStageGuide stages={responseStages} oncontinue={openAdvancedStage} onadvanced={() => presentationMode = 'advanced'} />
+    <section class="quick-workspace" aria-labelledby={`case-quick-workspace-${record.id}`}>
+      <header class="quick-heading">
+        <div><p class="eyebrow">Current work</p><h4 id={`case-quick-workspace-${record.id}`}>Next analyst action</h4></div>
+        <button class="btn" type="button" onclick={() => void openAdvancedStage('observation')}>Advanced history and fields</button>
+      </header>
+      {#if currentResponseStage}
+        <div class="next-action-summary" data-status={currentResponseStage.status} role="status" aria-label="Next Case requirement">
+          <strong>{currentResponseStage.label}</strong>
+          <span>{currentResponseStage.status.replaceAll('_', ' ')}</span>
+          <p>{currentResponseStage.nextRequirement}</p>
+        </div>
+      {/if}
+
+      <section class="quick-task" aria-labelledby={`quick-conclusion-${record.id}`}>
+        <header><div><p class="eyebrow">Assess</p><h5 id={`quick-conclusion-${record.id}`}>Record conclusion</h5></div><span>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} evidence-linked` : 'Evidence link required'}</span></header>
+        {#if record.decisions.length}
+          {@const latestDecision = record.decisions.at(-1)}
+          {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>{latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
+        {/if}
+        <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
+          <div class="two-columns">
+            <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+            <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+          </div>
+          <label class="field">Conclusion summary<input bind:value={decisionSummary} maxlength="80" required placeholder="What should the Case record conclude?"></label>
+          <label class="field">Evidence-based rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="2" required></textarea></label>
+          {#if record.evidencePins.length}
+            <fieldset class="pin-references"><legend>Evidence considered</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source}</span></label>{/each}</fieldset>
+          {:else}
+            <p class="notice">No retained evidence pin is available. Return to Lookup or use Advanced to pin an observation before recording a supported conclusion.</p>
+          {/if}
+          <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record conclusion</button>
+        </form>
+      </section>
+
+      <section class="quick-task" aria-labelledby={`quick-response-${record.id}`}>
+        <header><div><p class="eyebrow">Respond</p><h5 id={`quick-response-${record.id}`}>Prepare and track response</h5></div><span>{actionSummary.total} action{actionSummary.total === 1 ? '' : 's'}</span></header>
+        {#if !record.actions.length}
+          <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
+            <div class="two-columns">
+              <label class="field">Action type<select bind:value={actionType}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+              <label class="field">Recipient or owner<input bind:value={actionRecipient} maxlength="320" required></label>
+              <label class="field">How this route was found<input bind:value={actionContactSource} maxlength="80" required></label>
+              <label class="field">Follow up at<input type="datetime-local" bind:value={actionFollowUpAt}></label>
+            </div>
+            <button class="btn" type="submit" disabled={mutationBusy || !actionRecipient.trim() || !actionContactSource.trim()}>Create drafting action</button>
+          </form>
+        {:else if quickAction}
+          <div class="quick-form">
+            {#if record.actions.length > 1}<label class="field">Action<select value={quickAction.id} onchange={(event) => quickActionId = event.currentTarget.value}>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}
+            <div class="retained-summary"><strong>{quickAction.type.replaceAll('_', ' ')} · {quickAction.state.replaceAll('_', ' ')}</strong><p>{quickAction.recipient}</p><small>Route source: {quickAction.contactSource}</small></div>
+            {#if quickAction.state === 'authorised'}
+              <label class="field">Delivery reference<input bind:value={quickActionReference} maxlength="500" placeholder="Provider reference, ticket, or response-packet digest"></label>
+            {:else if quickAction.state === 'submitted' || quickAction.state === 'acknowledged'}
+              <label class="field">Provider outcome<select bind:value={quickProviderOutcome}><option value="">Select the observed response</option>{#each CASE_PROVIDER_OUTCOMES.filter((value) => value !== 'withdrawn' && !(quickAction.state === 'acknowledged' && value === 'no_response')) as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+              <label class="field">Reference<input bind:value={quickActionReference} maxlength="500" placeholder="Ticket, message, or provider reference"></label>
+              <label class="field">Outcome detail<textarea bind:value={quickOutcomeDetail} maxlength="2000" rows="2"></textarea></label>
+            {/if}
+            {#if quickAction.state !== 'terminal'}
+              <button id={`quick-action-advance-${record.id}`} class="primary" type="button" onclick={() => void advanceQuickAction(quickAction)} disabled={mutationBusy || quickAction.state === 'authorised' && !quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && !quickProviderOutcome}>{quickActionVerb(quickAction)}</button>
+            {:else}
+              <p class="notice">This action is terminal. Its retained history is immutable.</p>
+            {/if}
+          </div>
+        {/if}
+      </section>
+
+      {#if record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state))}
+        <section class="quick-task" aria-labelledby={`quick-recheck-${record.id}`}>
+          <header><div><p class="eyebrow">Assure</p><h5 id={`quick-recheck-${record.id}`}>Record recheck outcome</h5></div><span>{record.observedEffects.reviews.length} review{record.observedEffects.reviews.length === 1 ? '' : 's'}</span></header>
+          <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
+            <div class="two-columns">
+              <label class="field">Observed effect<select bind:value={effectState}>{#each CASE_OBSERVED_EFFECT_STATES.filter((value) => value !== 'not_checked') as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+              <label class="field">Observed at<input type="datetime-local" bind:value={effectObservedAt}></label>
+              <label class="field">Source<input bind:value={effectSource} maxlength="80" required></label>
+              <label class="field">Completeness<select bind:value={effectCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
+              {#if record.evidencePins.length}<label class="field">Current evidence<select bind:value={effectEvidencePinId}><option value="">No evidence pin selected</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>{/if}
+              <label class="field">Follow up at<input type="datetime-local" bind:value={effectFollowUpAt}></label>
+            </div>
+            <button class="btn" type="submit" disabled={mutationBusy || effectState === 'not_checked' || !effectSource.trim()}>Record independent outcome</button>
+          </form>
+          {#if record.observedEffects.reviews.length && record.status !== 'resolved'}
+            <form class="quick-form closure-quick" onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
+              <h6>Close deliberately</h6>
+              <div class="two-columns">
+                <label class="field">Reason<select bind:value={closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+                {#if closureNeedsReview}<label class="field">Independent review<select bind:value={closureReviewId} required><option value="">Select review</option>{#each eligibleClosureReviews as review}<option value={review.id}>{review.state.replaceAll('_', ' ')} · {review.observedAt}</option>{/each}</select></label>{/if}
+                {#if closureNeedsAction}<label class="field">Provider action<select bind:value={closureActionId} required><option value="">Select action</option>{#each eligibleClosureActions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}
+              </div>
+              <label class="field">Closure summary<textarea bind:value={closureSummary} maxlength="2000" rows="2" required></textarea></label>
+              <button class="btn" type="submit" disabled={mutationBusy || !closureSummary.trim() || closureNeedsReview && !closureReviewId || closureNeedsAction && !closureActionId}>Close case with reason</button>
+            </form>
+          {/if}
+        </section>
+      {/if}
+    </section>
   {:else}
   <details id={`case-response-observation-${record.id}`}>
     <summary>Pin an observed fact</summary>
@@ -653,12 +843,16 @@
   <details id={`case-response-assessment-${record.id}`}>
     <summary>Record an analyst decision</summary>
     <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
+      <div class="two-columns">
+        <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+        <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+      </div>
       <label class="field">Decision summary<input bind:value={decisionSummary} maxlength="80" required></label>
       <label class="field">Rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="3" required></textarea></label>
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
-      <button class="btn" type="submit" disabled={mutationBusy}>Record decision</button>
+      <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record decision</button>
     </form>
     {#if record.decisions.length}
       <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>{decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
@@ -783,9 +977,16 @@
   </details>
 
   {/if}
+  <CaseRenderedCapture
+    {record}
+    exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
+    {onsaved}
+    {oncommitted}
+    {onmessage}
+  />
   <CaseResponsePacketWorkspace
     {record}
-    visible={presentationMode === 'advanced'}
+    visible
     {onmessage}
     onstagechange={updateEvidenceHandoffStage}
     onpacketexported={preparePacketDeliveryRecord}
@@ -855,6 +1056,7 @@
   .response-workspace{display:grid;gap:10px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   header{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:10px}h3{margin:0}header>span{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .presentation-switch{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.presentation-switch button{min-height:34px;padding:0 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:700 var(--text-xs) var(--mono);cursor:pointer}.presentation-switch button[aria-pressed='true']{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--accent)}.presentation-switch span{margin-left:4px;color:var(--muted);font-size:var(--text-2xs)}
+  .case-context{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(120px,.65fr));gap:1px;margin:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}.case-context>div{min-width:0;padding:9px 10px;background:var(--panel)}.case-context .context-objective{grid-column:1/-1}.case-context dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-context dd{margin:4px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.case-context .context-objective dd{color:var(--text);font-weight:650}
   details{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   summary{padding:11px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}details[open]>summary{border-bottom:1px solid var(--border)}
   .response-form{display:grid;gap:10px;padding:12px}.two-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -869,5 +1071,11 @@
   .pin-references{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
   .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}.choice input{width:auto;margin-top:2px}.choice span{min-width:0;overflow-wrap:anywhere}
-  @media(max-width:800px){.two-columns,.separate-times{grid-template-columns:1fr}.actions .btn{flex:1 1 150px}.response-workspace{padding:10px}}
+  .quick-workspace{display:grid;gap:10px}.quick-heading{align-items:center}.quick-heading h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
+  .next-action-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:11px;border-left:3px solid var(--accent);border-radius:var(--radius-sm);background:var(--panel)}.next-action-summary[data-status='attention']{border-color:var(--amber)}.next-action-summary[data-status='complete']{border-color:var(--success)}.next-action-summary strong{font:700 var(--text-sm) var(--mono)}.next-action-summary span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.next-action-summary p{grid-column:1/-1;margin:2px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .quick-task{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.quick-task>header{align-items:baseline}.quick-task h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}.quick-task>header>span{color:var(--muted);font-size:var(--text-2xs)}
+  .quick-form{display:grid;gap:9px}.quick-form>.btn,.quick-form>.primary{justify-self:start}.retained-summary{min-width:0;padding:9px;border-left:2px solid var(--accent);background:var(--panel-raised)}.retained-summary strong,.retained-summary small{display:block}.retained-summary p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}.retained-summary small{color:var(--muted);font-size:var(--text-2xs)}.closure-quick{padding-top:10px;border-top:1px solid var(--border)}.closure-quick h6{margin:0;font:700 var(--text-xs) var(--mono)}
+  @media(max-width:800px){.two-columns,.separate-times{grid-template-columns:1fr}.case-context{grid-template-columns:1fr 1fr}.case-context .context-objective{grid-column:1/-1}.actions .btn{flex:1 1 150px}.response-workspace{padding:10px}}
+  @media(max-width:480px){.response-workspace{border:0;border-radius:0}.case-context{grid-template-columns:1fr}.case-context .context-objective{grid-column:auto}}
+  @media(max-width:620px){.quick-heading{display:grid}.quick-heading .btn,.quick-form>.btn,.quick-form>.primary{width:100%}.next-action-summary{grid-template-columns:1fr}.next-action-summary span{grid-row:2}.next-action-summary p{grid-row:3}}
 </style>

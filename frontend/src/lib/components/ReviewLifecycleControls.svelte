@@ -39,11 +39,11 @@
     message = '';
     const selectedDisposition = disposition;
     if (!selectedDisposition) {
-      message = 'Choose a disposition before recording this lifecycle decision.';
+      message = 'Choose a review outcome before saving.';
       return;
     }
     if (!rationale.trim()) {
-      message = 'Enter a rationale before recording this lifecycle decision.';
+      message = 'Enter a rationale before saving this review.';
       return;
     }
     if (needsExpiry && !expiresAt) {
@@ -62,9 +62,9 @@
       disposition = '';
       expiresAt = '';
       reviewDueAt = '';
-      message = 'Review lifecycle saved. Source evidence was not changed.';
+      message = 'Review saved. Source evidence was not changed.';
     } catch (cause) {
-      message = cause instanceof Error ? cause.message : 'The Review Item lifecycle could not be saved.';
+      message = cause instanceof Error ? cause.message : 'The Review Item could not be saved.';
     } finally {
       busy = false;
     }
@@ -73,7 +73,7 @@
 
 <details class="lifecycle-controls">
   <summary>
-    Lifecycle: <strong>{lifecycle.state.replaceAll('_', ' ')}</strong>
+    Review state: <strong>{lifecycle.state.replaceAll('_', ' ')}</strong>
     {#if lifecycle.recurred}<span>recurred</span>{/if}
   </summary>
   <p class="lifecycle-reason">{lifecycle.reason}</p>
@@ -87,16 +87,16 @@
     <p class="retained-rationale">{lifecycle.decision.rationale}</p>
   {/if}
   <div class="decision-grid">
-    <label>Disposition
+    <label>Review outcome
       <select bind:value={disposition} disabled={busy}>
-        <option value="">Choose a disposition</option>
+        <option value="">Choose an outcome</option>
         {#each ANALYST_REVIEW_DISPOSITION_OPTIONS as option}
           <option value={option.value} disabled={option.value === 'resolved' && (item.completeness !== 'complete' || item.age === 'stale')}>{option.label}</option>
         {/each}
       </select>
     </label>
     <label class="rationale">Rationale
-      <textarea bind:value={rationale} maxlength="1000" rows="2" disabled={busy} placeholder="Record why this lifecycle state applies"></textarea>
+      <textarea bind:value={rationale} maxlength="1000" rows="2" disabled={busy} placeholder="Record why this review outcome applies"></textarea>
     </label>
     <label>Expiry {#if needsExpiry}<span aria-hidden="true">*</span><span class="sr-only">required</span>{/if}
       <input type="datetime-local" bind:value={expiresAt} required={needsExpiry} disabled={busy} />

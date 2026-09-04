@@ -56,6 +56,18 @@ whoisleuth lookup example.test --deep --browse
 whoisleuth lookup example.test --deep --markdown --output lookup.md
 ```
 
+To continue a reviewed terminal Lookup in the browser, save the completed
+private document from the interactive view:
+
+```bash
+whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
+```
+
+In Console Lookup, open **Replay exported evidence**, select the file, verify
+its digest and source states, then create or update a browser-local Case. The
+file is not uploaded. Case classification, exact incident links, response
+actions and packet preparation remain deliberate browser steps.
+
 Process selected local input:
 
 ```bash

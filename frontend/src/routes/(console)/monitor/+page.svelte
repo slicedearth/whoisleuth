@@ -37,7 +37,7 @@
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
-    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
+    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, caseFreeformTags, caseTagsWithTypes, caseTypeIds, caseTypeRecords, deleteCase, dispositionLabel, editCase, exportCases,
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase,
     previewRiskCalibrationDataset, removeCaseBrandProfileAssociation, statusLabel, type CaseRecord, type RiskCalibrationExportPreview
   } from '$lib/cases';
@@ -179,7 +179,7 @@
     return cases.filter(record=>{
       if(statusFilter&&record.status!==statusFilter)return false;
       if(dispositionFilter&&record.disposition!==dispositionFilter)return false;
-      if(term&&!record.domain.includes(term)&&!record.tags.some(tag=>tag.toLowerCase().includes(term)))return false;
+      if(term&&!record.domain.includes(term)&&!caseFreeformTags(record.tags).some(tag=>tag.toLowerCase().includes(term))&&!caseTypeRecords(record.tags).some(type=>type.label.toLowerCase().includes(term)))return false;
       return true;
     }).sort((a,b)=>{
       if(caseSort==='domain')return a.domain.localeCompare(b.domain);
@@ -233,7 +233,8 @@
   ){
     await reconcileCommittedCaseSnapshot(committed,success,committed.record);
   }
-  function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
+  function caseTagDraft(record:CaseRecord){return caseFreeformTags(record.tags).join(', ');}
+  function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=caseTagDraft(record);noteDraft='';}
   async function openRelatedCase(record:CaseRecord){clearCaseFilters();casePage=1;showCasePage(record);if(expandedId!==record.id)expand(record);await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);}
   function openEvidenceDebtCase(caseId:string){const record=cases.find((item)=>item.id===caseId);if(record)openRelatedCase(record);else caseMessage='That retained case is no longer available.';}
   async function focusCase(record:CaseRecord){
@@ -260,7 +261,7 @@
       `${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`} Watchlist history remains separately attributed.`,
       record,
     );
-    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
+    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=caseTagDraft(record);noteDraft='';
     await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
   }
   async function openGuidedCase(domain:string){
@@ -274,7 +275,7 @@
       created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`,
       record,
     );
-    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
+    clearCaseFilters();casePage=1;showCasePage(record);expandedId=record.id;tagDraft=caseTagDraft(record);noteDraft='';
     await navigateMonitor('cases',{parameter:'case',value:record.id});
     if(responseRequested)await focusResponsePreflight(record);else await focusCase(record);
   }
@@ -326,7 +327,7 @@
     const{record,created}=committed;
     newDomain='';
     await reconcileCommittedCaseSnapshot(committed,created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`,record);
-    showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
+    showCasePage(record);expandedId=record.id;tagDraft=caseTagDraft(record);noteDraft='';await navigateMonitor('cases',{parameter:'case',value:record.id});await focusCase(record);
   }
   async function setStatus(record:CaseRecord,value:string){
     try{const committed=await editCase(record.id,{status:value});await reconcileCommittedCaseMutation(committed,`Set ${record.domain} to ${statusLabel(value)}.`);}
@@ -369,14 +370,15 @@
   function addBrandProfileAssociation(record:CaseRecord,profileId:string){return changeBrandProfileAssociation(record,profileId,'add');}
   function removeBrandProfileAssociation(record:CaseRecord,profileId:string){return changeBrandProfileAssociation(record,profileId,'remove');}
   async function saveTags(record:CaseRecord){
-    const previous=[...record.tags];const next=tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean);if(previous.join('\\0')===next.join('\\0'))return;
+    const previous=[...record.tags];
     try{
+      const next=caseTagsWithTypes(tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean),caseTypeIds(record.tags));if(previous.join('\\0')===next.join('\\0'))return;
       const committed=await editCase(record.id,{tags:next});
-      tagDraft=committed.record.tags.join(', ');
+      tagDraft=caseTagDraft(committed.record);
       await reconcileCommittedCaseMutation(committed,`Updated tags for ${record.domain}.`);
       registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{
         const restored=await editCase(record.id,{tags:previous});
-        if(expandedId===record.id)tagDraft=restored.record.tags.join(', ');
+        if(expandedId===record.id)tagDraft=caseTagDraft(restored.record);
         await reconcileCommittedCaseMutation(restored,`Restored the previous tags for ${record.domain}.`);
         return `Restored the previous tags for ${record.domain}.`;
       }});
@@ -456,7 +458,7 @@
       if(caseState!=='ready')return;
       const target=loadedCases.find((record)=>record.id===routeTarget.id);
       if(!target)return;
-      clearCaseFilters();casePage=1;showCasePage(target);expandedId=routeTarget.id;tagDraft=target.tags.join(', ');noteDraft='';
+      clearCaseFilters();casePage=1;showCasePage(target);expandedId=routeTarget.id;tagDraft=caseTagDraft(target);noteDraft='';
       await tick();
       if(monitorRouteKey(page.url)!==routeKey)return;
       const workspace=document.getElementById(`case-response-${target.id}`);

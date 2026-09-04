@@ -17,9 +17,14 @@ dependency tree.
 ## Install and run
 
 ```bash
-npm ci
+npm ci --include=optional --ignore-scripts --audit=false
 npm run dev
 ```
+
+The install command matches required CI and keeps registry advisory availability
+separate from source verification. Run `npm run dependencies:audit` when
+reviewing dependencies and before a release; its online, fail-closed policy is
+documented in [Dependency maintenance](dependency-maintenance.md).
 
 The development server prints its local URL. The protected Console requires the
 same authentication configuration described in the operations guide; public

@@ -88,7 +88,7 @@ async function openPacketWizardStep(
   packet: import('@playwright/test').Locator,
   name: string,
 ): Promise<void> {
-  const button = packet.getByRole('navigation', { name: 'Response-packet handoff steps' })
+  const button = packet.getByRole('navigation', { name: 'Response-packet phases' })
     .getByRole('button', { name: new RegExp(name, 'iu') });
   await button.click();
   await expect(button).toHaveAttribute('aria-current', 'step');

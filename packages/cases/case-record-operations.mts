@@ -1,6 +1,7 @@
 // Pure, framework-neutral analyst-case records, evidence histories, bounded
 // record normalization, and analyst updates.
 
+import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -22,6 +23,7 @@ import {
   normalizeCaseSightings,
   updateCaseAction,
   updateCaseAssertion,
+  type CaseEvidenceRelationStance,
 } from './case-response-model.mts';
 import {
   CASE_SCHEMA_VERSION,
@@ -62,6 +64,111 @@ import {
   normalizeCaseInvestigationBranches,
   updateCaseInvestigationBranch,
 } from './case-investigation-branch-model.mts';
+
+export const MAX_CASE_OBJECTIVE_LENGTH = 320;
+export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
+export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
+const OBJECTIVE_PREFIX = 'Objective: ';
+const RETENTION_SEPARATOR = ' | URL retained: ';
+
+export type IncidentUrlContext = Readonly<{
+  exactUrl: string;
+  hostname: string;
+  registrableDomain: string;
+  originUrl: string;
+  hasPath: boolean;
+  hasQuery: boolean;
+  hasFragment: boolean;
+}>;
+
+export type CaseInvestigationContext = Readonly<{
+  objective: string;
+  incidentUrl: string;
+  urlRetention: 'exact' | 'origin_only';
+  assertionId: string;
+  updatedAt: string;
+}>;
+
+function boundedContextText(value: unknown, maximum: number): string {
+  return typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum)
+    : '';
+}
+
+export function normalizeCaseObjective(value: unknown): string {
+  return boundedContextText(value, MAX_CASE_OBJECTIVE_LENGTH);
+}
+
+export function parseIncidentUrlContext(value: unknown): IncidentUrlContext | null {
+  if (typeof value !== 'string' || !value || value.length > MAX_CASE_INCIDENT_URL_LENGTH) return null;
+  if (/[\u0000-\u001f\u007f]/u.test(value) || value.trim() !== value) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) return null;
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
+  const registrableDomain = canonicalRegistrableDomain(hostname);
+  if (!registrableDomain) return null;
+  const exactUrl = parsed.toString();
+  if (exactUrl.length > MAX_CASE_INCIDENT_URL_LENGTH) return null;
+  return Object.freeze({
+    exactUrl,
+    hostname,
+    registrableDomain,
+    originUrl: parsed.origin,
+    hasPath: parsed.pathname !== '/',
+    hasQuery: Boolean(parsed.search),
+    hasFragment: Boolean(parsed.hash),
+  });
+}
+
+export function caseInvestigationContext(record: CaseRecord | null | undefined): CaseInvestigationContext | null {
+  if (!record) return null;
+  for (const assertion of [...record.assertions].reverse()) {
+    if (assertion.kind !== 'next_step' || assertion.state !== 'open'
+      || !assertion.statement.startsWith(INCIDENT_CONTEXT_STATEMENT_PREFIX)) continue;
+    const incidentUrl = assertion.statement.slice(INCIDENT_CONTEXT_STATEMENT_PREFIX.length);
+    const parsed = parseIncidentUrlContext(incidentUrl);
+    if (!parsed || parsed.registrableDomain !== record.domain) continue;
+    const rationale = assertion.rationale ?? '';
+    const separatorIndex = rationale.lastIndexOf(RETENTION_SEPARATOR);
+    const objective = separatorIndex > OBJECTIVE_PREFIX.length && rationale.startsWith(OBJECTIVE_PREFIX)
+      ? normalizeCaseObjective(rationale.slice(OBJECTIVE_PREFIX.length, separatorIndex))
+      : '';
+    const retention = separatorIndex >= 0 ? rationale.slice(separatorIndex + RETENTION_SEPARATOR.length) : '';
+    if (!objective || (retention !== 'exact' && retention !== 'origin_only')) continue;
+    return Object.freeze({
+      objective,
+      incidentUrl: parsed.exactUrl,
+      urlRetention: retention,
+      assertionId: assertion.id,
+      updatedAt: assertion.updatedAt,
+    });
+  }
+  return null;
+}
+
+export function caseInvestigationContextAssertion(input: Readonly<{
+  objective: unknown;
+  incidentUrl: unknown;
+  retainExactUrl: boolean;
+}>): Readonly<{ statement: string; rationale: string; retainedUrl: string; retention: 'exact' | 'origin_only' }> {
+  const objective = normalizeCaseObjective(input.objective);
+  if (!objective) throw new Error('Enter the investigation objective before retaining Incident context.');
+  const parsed = parseIncidentUrlContext(input.incidentUrl);
+  if (!parsed) throw new Error(`Enter one absolute HTTP(S) Incident URL of at most ${MAX_CASE_INCIDENT_URL_LENGTH} characters without credentials.`);
+  const retention = input.retainExactUrl ? 'exact' : 'origin_only';
+  const retainedUrl = input.retainExactUrl ? parsed.exactUrl : parsed.originUrl;
+  return Object.freeze({
+    statement: `${INCIDENT_CONTEXT_STATEMENT_PREFIX}${retainedUrl}`,
+    rationale: `${OBJECTIVE_PREFIX}${objective}${RETENTION_SEPARATOR}${retention}`,
+    retainedUrl,
+    retention,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Case normalization
@@ -415,4 +522,195 @@ export function updateCase(
   const next = [...cases];
   next[index] = record;
   return { cases: next, record };
+}
+
+export type CaseConclusionEvidence = Readonly<{
+  pin: unknown;
+  stance: CaseEvidenceRelationStance;
+}>;
+
+export type CaseConclusionInput = Readonly<{
+  disposition: unknown;
+  reviewReasonCode: unknown;
+  summary: unknown;
+  rationale: unknown;
+  evidence: readonly CaseConclusionEvidence[];
+}>;
+
+/**
+ * Records one reviewed conclusion as a single pure Case mutation. The selected
+ * observations become bounded Case pins before the decision is created, so the
+ * decision cannot point at absent evidence. Counterevidence is retained as a
+ * separate resolved contradiction assertion rather than being hidden inside a
+ * favourable disposition.
+ */
+export function recordCaseConclusion(
+  cases: CaseRecord[],
+  id: string,
+  input: CaseConclusionInput,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
+  const disposition = normalizeDisposition(input.disposition);
+  const reviewReasonCode = normalizeReviewReasonCode(input.reviewReasonCode);
+  if (disposition === 'unreviewed') {
+    throw new Error('Select a reviewed disposition before recording a conclusion.');
+  }
+  if (!reviewReasonCode) {
+    throw new Error('Select the reviewed reason before recording a conclusion.');
+  }
+  if (!Array.isArray(input.evidence) || !input.evidence.length) {
+    throw new Error('Select at least one observed fact for this conclusion.');
+  }
+  const invalidStance = input.evidence.find((item) => (
+    !item || !['supports', 'contradicts', 'unresolved'].includes(item.stance)
+  ));
+  if (invalidStance) throw new Error('A conclusion evidence relationship is invalid.');
+  if (!input.evidence.some((item) => item.stance === 'supports')) {
+    throw new Error('A conclusion requires at least one observed fact that supports it. Record only contradictory or unresolved material as an assertion instead.');
+  }
+
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const existingPinIds = new Set(current.evidencePins.map((pin) => pin.id));
+  const withPins = updateCase(cases, id, {
+    evidencePins: input.evidence.map((item) => item.pin),
+  }, now);
+  const addedPins = withPins.record.evidencePins.filter((pin) => !existingPinIds.has(pin.id));
+  if (addedPins.length !== input.evidence.length) {
+    throw new Error('The selected conclusion evidence could not be retained completely.');
+  }
+
+  const supportingPinIds = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'supports' ? [pin.id] : []
+  ));
+  let concluded = updateCase(withPins.cases, id, {
+    disposition,
+    reviewReasonCode,
+    decision: {
+      summary: input.summary,
+      rationale: input.rationale,
+      evidencePinIds: supportingPinIds,
+    },
+  }, now);
+
+  const contradictionRelations = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'contradicts'
+      ? [{ evidencePinId: pin.id, stance: 'contradicts' as const }]
+      : []
+  ));
+  if (contradictionRelations.length) {
+    const retainedSummary = concluded.record.decisions.at(-1)?.summary ?? 'Analyst conclusion';
+    concluded = updateCase(concluded.cases, id, {
+      assertion: {
+        kind: 'contradiction',
+        statement: `Counterevidence considered for: ${retainedSummary}`,
+        rationale: input.rationale,
+        evidenceRelations: contradictionRelations,
+        state: 'resolved',
+      },
+    }, now);
+  }
+  const unresolvedRelations = addedPins.flatMap((pin, index) => (
+    input.evidence[index]?.stance === 'unresolved'
+      ? [{ evidencePinId: pin.id, stance: 'unresolved' as const }]
+      : []
+  ));
+  if (unresolvedRelations.length) {
+    const retainedSummary = concluded.record.decisions.at(-1)?.summary ?? 'Analyst conclusion';
+    concluded = updateCase(concluded.cases, id, {
+      assertion: {
+        kind: 'unknown',
+        statement: `Unresolved evidence considered for: ${retainedSummary}`,
+        rationale: input.rationale,
+        evidenceRelations: unresolvedRelations,
+        state: 'open',
+      },
+    }, now);
+  }
+  return concluded;
+}
+
+export function recordCaseInvestigationContext(
+  cases: CaseRecord[],
+  id: string,
+  input: Readonly<{ objective: unknown; incidentUrl: unknown; retainExactUrl: boolean }>,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const parsed = parseIncidentUrlContext(input.incidentUrl);
+  if (!parsed || parsed.registrableDomain !== current.domain) {
+    throw new Error(`The Incident URL must belong to the Case domain ${current.domain}.`);
+  }
+  const context = caseInvestigationContextAssertion(input);
+  const existing = caseInvestigationContext(current);
+  return updateCase(cases, id, existing
+    ? {
+        assertionUpdate: {
+          id: existing.assertionId,
+          statement: context.statement,
+          rationale: context.rationale,
+          state: 'open',
+        },
+      }
+    : {
+        assertion: {
+          kind: 'next_step',
+          statement: context.statement,
+          rationale: context.rationale,
+          evidenceRelations: [],
+          state: 'open',
+        },
+      }, nowIso);
+}
+
+export function recordCaseRecheckOutcome(
+  cases: CaseRecord[],
+  id: string,
+  input: Readonly<{
+    state: unknown;
+    observedAt: unknown;
+    completeness: unknown;
+    comparisonSummary: unknown;
+    source: unknown;
+    followUpAt?: unknown;
+    limitations?: unknown;
+    collectionDepth?: unknown;
+  }>,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
+  const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
+  const current = cases.find((item) => item.id === id);
+  if (!current) throw new Error('That case no longer exists.');
+  const beforePinIds = new Set(current.evidencePins.map((pin) => pin.id));
+  const withPin = updateCase(cases, id, {
+    evidencePin: {
+      field: 'case.recheck_comparison',
+      category: 'recheck',
+      label: 'Recheck comparison',
+      value: input.comparisonSummary,
+      source: input.source,
+      sourceState: 'reviewed',
+      observedAt: input.observedAt,
+      collectionDepth: input.collectionDepth,
+      completeness: input.completeness,
+      truncated: false,
+      limitations: input.limitations,
+    },
+  }, now);
+  const comparisonPin = withPin.record.evidencePins.find((pin) => !beforePinIds.has(pin.id));
+  if (!comparisonPin) throw new Error('The recheck comparison could not be retained.');
+  return updateCase(withPin.cases, id, {
+    observedEffectReview: {
+      state: input.state,
+      observedAt: input.observedAt,
+      sourceClass: 'analyst',
+      source: input.source,
+      completeness: input.completeness,
+      evidencePinId: comparisonPin.id,
+      followUpAt: input.followUpAt,
+      limitations: input.limitations,
+    },
+  }, now);
 }

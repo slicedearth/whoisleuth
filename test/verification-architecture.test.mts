@@ -334,6 +334,35 @@ describe('verification architecture contracts', () => {
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
   });
 
+  test('closes application-version changes over derived fixtures, documentation, and release gates', () => {
+    const ownership = buildVerificationOwnershipPlan(['package.json', 'package-lock.json']);
+    const execution = buildFocusedVerificationExecution(ownership);
+    const unitChecks = new Set(ownership.focusedUnitChecks);
+    const commandIds = new Set(execution.commands.map((command) => command.id));
+
+    for (const testFile of [
+      'test/release-version-check.test.mts',
+      'test/case-portability-lifecycle.test.mts',
+      'test/case-supported-contract-baseline.test.mts',
+      'test/case-contract-doc.test.mts',
+      'test/documentation-contract.test.mts',
+      'test/cli-package.test.mts',
+    ]) {
+      assert.equal(unitChecks.has(testFile), true, `${testFile} must own application-version changes`);
+    }
+    for (const command of [
+      'release:check',
+      'schema:inventory',
+      'cli:package:check',
+      'licenses:check',
+      'dependencies:audit',
+    ]) {
+      assert.equal(commandIds.has(command), true, `${command} must own application-version changes`);
+    }
+    assert.equal(ownership.mandatorySpecialisedChecks.includes('documentation'), true);
+    assert.equal(ownership.userFacingBrowserRequired, false);
+  });
+
   test('retains delivery-only security checks outside dirty-tree verification', () => {
     const ownership = buildVerificationOwnershipPlan(['lib/safe-fetch.mts']);
     const execution = buildFocusedVerificationExecution(ownership);

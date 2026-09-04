@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  analystReviewQueue,
   buildAnalystReviewInbox,
   filterAnalystReviewItems,
   MAX_ANALYST_REVIEW_ITEMS,
@@ -130,6 +131,46 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.admission.omittedAtLeast, 0);
     assert.equal(inbox.admission.totalIsExact, true);
     assert.equal(inbox.truncated, false);
+  });
+
+  test('groups the main queue around analyst action rather than item taxonomy', () => {
+    const inbox = buildAnalystReviewInbox({
+      cases: [caseRecord()],
+      watchlists: watchlists(),
+      bulkSessions: [bulkSession()],
+    }, NOW);
+    assert.equal(analystReviewQueue(inbox.items.find((item) => item.kind === 'watchlist_change')!, NOW), 'changed');
+    assert.equal(analystReviewQueue(inbox.items.find((item) => item.kind === 'case_action')!, NOW), 'needs_action');
+    assert.equal(analystReviewQueue(inbox.items.find((item) => item.kind === 'bulk_session')!, NOW), 'needs_action');
+    const reviewed = inbox.items.find((item) => item.kind === 'case_action')!;
+    assert.equal(analystReviewQueue({
+      ...reviewed,
+      lifecycle: { ...reviewed.lifecycle, state: 'resolved' },
+    }, NOW), 'reviewed');
+    const changed = inbox.items.find((item) => item.kind === 'watchlist_change')!;
+    assert.equal(analystReviewQueue({
+      ...changed,
+      lifecycle: { ...changed.lifecycle, state: 'expected' },
+    }, NOW), 'waiting');
+  });
+
+  test('links a watchlist change directly to one matching Case but not an ambiguous set', () => {
+    const matching = caseRecord();
+    matching.evidenceHistory = [{ inputHostname: 'changed.invalid' } as unknown as CaseRecord['evidenceHistory'][number]];
+    const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists() }, NOW)
+      .items.find((item) => item.kind === 'watchlist_change');
+    assert.equal(linked?.caseId, matching.id);
+    assert.match(linked?.href ?? '', /case-response-case-one$/u);
+    assert.match(linked?.detail ?? '', /Related Case: review\.invalid/u);
+
+    const second = caseRecord();
+    second.id = 'case-two';
+    second.domain = 'changed.invalid';
+    const ambiguous = buildAnalystReviewInbox({ cases: [matching, second], watchlists: watchlists() }, NOW)
+      .items.find((item) => item.kind === 'watchlist_change');
+    assert.equal(ambiguous?.caseId, null);
+    assert.match(ambiguous?.href ?? '', /^\/monitor\?view=watchlists/u);
+    assert.match(ambiguous?.detail ?? '', /2 Cases match/u);
   });
 
   test('projects explicit case evidence gaps without inventing missing facts', () => {

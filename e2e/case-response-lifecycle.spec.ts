@@ -18,7 +18,7 @@ test('rapid repeated note submission persists one note and is shown in the recor
 
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
   await expect(page.locator('.notes p')).toHaveCount(1);
-  await expect(page.locator('.case-domain small')).toHaveText('1 note');
+  await expect(page.locator('.case-domain small')).toContainText('1 note');
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
@@ -54,30 +54,22 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await expect(submit).toBeFocused();
 });
 
-test('Quick and Advanced Case Response presentations keep one record and restore stage focus', async ({ page }) => {
+test('Quick and Advanced Case Response presentations keep one record and focus the selected work', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCasesView(page);
   await createCase(page, 'quick-response.invalid');
 
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
-  await expect(workspace.getByRole('status')).toContainText('Next incomplete requirement');
-  await expect(workspace.locator('.stages > li')).toHaveCount(5);
-  await expect(workspace.locator('.stages > li').locator('strong')).toHaveText([
-    'Observation',
-    'Assessment',
-    'Response decision',
-    'Evidence handoff',
-    'Outcome tracking',
-  ]);
-  await expect(workspace.locator('details')).toHaveCount(0);
-  await workspace.getByRole('button', { name: 'Continue observation' }).click();
+  await expect(workspace.getByRole('heading', { name: 'Evidence, reasoning, and actions' })).toBeVisible();
+  await expect(workspace.getByRole('status', { name: 'Next Case requirement' })).toContainText('Observation');
+  await expect(workspace.locator('details[id^="case-response-observation-"]')).toHaveCount(0);
+  await workspace.getByRole('button', { name: 'Advanced history and fields' }).click();
   const observation = workspace.locator('details[id^="case-response-observation-"]').first();
   await expect(observation).toHaveAttribute('open', '');
   await expect(observation.getByText('Pin an observed fact', { exact: true })).toBeFocused();
   await expect(workspace.getByRole('button', { name: 'Advanced', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
-  await expect(workspace.getByRole('heading', { name: 'Case response steps' })).toBeVisible();
+  await expect(workspace.getByRole('heading', { name: 'Next analyst action' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -95,7 +87,7 @@ test('Case mutation focus recovery respects deliberate movement and restores a d
 
   await holdBrowserLocalReads(page, 750);
   await pinSubmit.click();
-  const caseSearch = page.locator('.case-filters input[placeholder="Domain or tag"]');
+  const caseSearch = page.locator('.case-filters').getByRole('textbox', { name: 'Search' });
   await caseSearch.focus();
   await expect(workspace).toContainText('Focus fixture pin');
   await expect(caseSearch).toBeFocused();
@@ -395,6 +387,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
 test('append-only response review, exact authorisation, independent verification, and closure persist locally', {
   tag: ['@analyst-journey', '@journey-reviewed-response-decision'],
 }, async ({ page }) => {
+  test.slow();
   await openCasesView(page);
   await createCase(page, 'response.invalid');
   await page.locator('.case-body').getByLabel('Disposition').selectOption('confirmed_abuse');
@@ -420,10 +413,9 @@ test('append-only response review, exact authorisation, independent verification
   await expect(workspace).toContainText('Escalate for reviewed reporting');
 
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
-  await expect(workspace.locator('.stages > li').nth(0)).toHaveAttribute('data-status', 'complete');
-  await expect(workspace.locator('.stages > li').nth(1)).toHaveAttribute('data-status', 'complete');
-  await expect(workspace.locator('.stages > li').nth(3)).toContainText('Evidence handoff');
-  await expect(workspace.locator('.stages > li').nth(4)).toContainText('Outcome tracking');
+  const nextRequirement = workspace.getByRole('status', { name: 'Next Case requirement' });
+  await expect(nextRequirement).toHaveAttribute('data-status', 'not_started');
+  await expect(nextRequirement).toContainText('Response decision');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
 
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
@@ -444,21 +436,12 @@ test('append-only response review, exact authorisation, independent verification
   await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
 
   await action.getByRole('button', { name: 'Review or append event' }).click();
-  for (const state of ['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const) {
+  for (const state of ['ready_for_review', 'reviewed', 'authorised'] as const) {
     await action.getByLabel('Next state').selectOption(state);
     await action.getByRole('button', { name: 'Append transition' }).click();
     await expect(action).toContainText(`Current projection: ${state.replaceAll('_', ' ')}`);
   }
-  await action.getByLabel('Event source').selectOption('provider');
-  await action.getByLabel('Next state').selectOption('acknowledged');
-  await action.getByLabel('Bounded reference').fill('CASE-EXAMPLE-101');
-  await action.getByLabel('Typed provider outcome').selectOption('accepted_for_review');
-  await action.getByLabel('Provider outcome detail').fill('The provider acknowledged the bounded report for review.');
-  await action.getByLabel('Event limitations').fill('Acknowledgement is not independent remediation evidence.');
-  await action.getByRole('button', { name: 'Append transition' }).click();
-  await expect(action).toContainText('registrar report · acknowledged');
-  await expect(action).toContainText('Latest typed provider outcome: accepted for review');
-  await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
+  await expect(action.locator('.transition-timeline > li')).toHaveCount(4);
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
@@ -472,15 +455,12 @@ test('append-only response review, exact authorisation, independent verification
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
-  await openPacketWizardStep(packet, 'Readiness limitations');
-  await expect(packet).toContainText('needs input');
-  await openPacketWizardStep(packet, 'Source and contact provenance');
   await packet.getByLabel('Case action for this packet').selectOption({ index: 1 });
   await expect(packet).toContainText('Registrar abuse desk');
   await expect(packet).toContainText('RDAP entity role');
-  await openPacketWizardStep(packet, 'Evidence selection');
   await packet.getByRole('checkbox', { name: /Observed credential form/ }).check();
-  await openPacketWizardStep(packet, 'Readiness limitations');
+  await openPacketWizardStep(packet, 'Review');
+  await expect(packet).toContainText('review cautions');
   const infrastructure = packet.locator('.readiness-editor section', { hasText: 'Infrastructure responsibility' });
   await infrastructure.getByLabel('State').selectOption('complete');
   await infrastructure.getByLabel('Detail').fill('The selected registration evidence supports this bounded registrar route.');
@@ -496,20 +476,17 @@ test('append-only response review, exact authorisation, independent verification
   await sourceLimitations.getByLabel('Limitations').fill('No delivery or provider monitoring check was performed.');
   await expect(packet.locator('.readiness-matrix tbody tr')).toHaveCount(10);
   await expect(packet).toContainText('Profile-specific readiness matrix');
-  await openPacketWizardStep(packet, 'Privacy and redaction');
   await packet.getByLabel('Label', { exact: true }).last().fill('Reviewed static capture metadata');
   await packet.getByLabel('Captured at').fill('2026-07-28T10:00');
   await packet.getByLabel('SHA-256 digest').fill('a'.repeat(64));
   await packet.getByLabel('Byte length').fill('1024');
-  await openPacketWizardStep(packet, 'Readiness limitations');
   await expect(packet).toContainText('review cautions');
 
-  await openPacketWizardStep(packet, 'Exact-input digest');
   await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
   await expect(packet).toContainText('draft · authorisation incomplete');
-  await openPacketWizardStep(packet, 'Recipient and scope');
+  await openPacketWizardStep(packet, 'Prepare');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name and logo.');
-  await openPacketWizardStep(packet, 'Exact-input digest');
+  await openPacketWizardStep(packet, 'Review');
   await expect(packet).toContainText('Material inputs changed after review');
   await packet.getByRole('button', { name: 'Review and bind exact inputs' }).click();
   for (const confirmation of [
@@ -521,10 +498,10 @@ test('append-only response review, exact authorisation, independent verification
   ]) await packet.getByRole('checkbox', { name: confirmation }).check();
   await expect(packet.getByLabel('Confirmation time')).toBeEnabled();
   await packet.getByRole('button', { name: 'Authorise exact bound inputs' }).click();
-  await expect(packet).toContainText('The current exact inputs are authorised for deliberate local export.');
-  await openPacketWizardStep(packet, 'Explicit authorisation');
+  await openPacketWizardStep(packet, 'Review');
   await expect(packet.getByLabel('Confirmation time')).not.toHaveValue('');
-  await openPacketWizardStep(packet, 'Local export');
+  await openPacketWizardStep(packet, 'Export and record');
+  await expect(packet).toContainText('The current exact inputs are authorised for deliberate local export.');
 
   const downloadPromise = page.waitForEvent('download');
   await packet.getByRole('button', { name: 'Export JSON draft or authorised packet' }).click();
@@ -550,15 +527,14 @@ test('append-only response review, exact authorisation, independent verification
     escalationHistory: [{
       type: 'registrar_report',
       recipient: 'Registrar abuse desk',
-      state: 'acknowledged',
-      providerOutcome: 'accepted_for_review',
-      reference: 'CASE-EXAMPLE-101',
+      state: 'authorised',
+      providerOutcome: null,
     }],
     readiness: { profileId: 'registrar' },
     artefactReferences: [{ label: 'Reviewed static capture metadata', byteLength: 1024 }],
     authorisation: { status: 'authorised', digestMatches: true, missingConfirmations: [] },
     responseLifecycle: {
-      latestProviderOutcome: { outcome: 'accepted_for_review' },
+      latestProviderOutcome: null,
       latestObservedEffect: null,
       latestObservedChangeAt: null,
     },
@@ -576,14 +552,30 @@ test('append-only response review, exact authorisation, independent verification
       scope: 'packet excluding integrity',
     },
   });
-  expect(exported.escalationHistory[0].transitions).toHaveLength(6);
+  expect(exported.escalationHistory[0].transitions).toHaveLength(4);
   expect(exported.readiness.rows).toHaveLength(10);
   expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
   await packet.getByRole('button', { name: 'Continue to record delivery' }).click();
-  await expect(action.getByLabel('Bounded reference')).toHaveValue(`response-packet-sha256:${exported.integrity.digestSha256}`);
-  await expect(action.getByLabel('Event limitations')).toHaveValue(/Confirm actual delivery/u);
-  await expect(caseWorkspaceActionStatus(page)).toContainText('choose a legal transition only after the corresponding event occurs');
+  const quickResponse = workspace.locator('.quick-workspace');
+  await expect(quickResponse.getByLabel('Delivery reference')).toHaveValue(`response-packet-sha256:${exported.integrity.digestSha256}`);
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Prepared the delivery record');
+  await quickResponse.getByRole('button', { name: 'Mark sent' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Mark sent recorded');
+
+  await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await action.getByText('Track append-only response actions', { exact: true }).click();
+  await action.getByRole('button', { name: 'Review or append event' }).click();
+  await action.getByLabel('Event source').selectOption('provider');
+  await action.getByLabel('Next state').selectOption('acknowledged');
+  await action.getByLabel('Bounded reference').fill('CASE-EXAMPLE-101');
+  await action.getByLabel('Typed provider outcome').selectOption('accepted_for_review');
+  await action.getByLabel('Provider outcome detail').fill('The provider acknowledged the bounded report for review.');
+  await action.getByLabel('Event limitations').fill('Acknowledgement is not independent remediation evidence.');
+  await action.getByRole('button', { name: 'Append transition' }).click();
+  await expect(action).toContainText('registrar report · acknowledged');
+  await expect(action).toContainText('Latest typed provider outcome: accepted for review');
+  await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
 
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();

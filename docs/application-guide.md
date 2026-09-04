@@ -176,6 +176,18 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+Each Case has a stable `WS-` reference derived from its complete immutable local
+UUID, so it remains stable across browser exports without relying on a shared
+counter.
+Controlled Case types classify the reviewed issue separately from free-form
+tags. Exact public incident links can be retained for web or social-platform
+content, resolved without erasing history, and carried into a response packet.
+
+For supported platform hostnames, the Case workspace shows freshness-bounded
+official safety or rights-reporting routes matched to the selected Case types.
+The analyst must verify the current route and authority before opening it.
+WHOISleuth creates only a drafting action and never submits the complaint.
+
 Response packet preflight checks the selected evidence, recipient scope,
 privacy, redactions, analyst authority, freshness and contradictions. Drafts
 remain available with cautions. Reviewed authorisation is bound to the exact
@@ -184,6 +196,11 @@ local export; WHOISleuth does not send it or promise a provider outcome.
 
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
+
+A retained exact Incident URL can also be handed to the authorised repo-local
+rendered-capture command. The browser validates the selected manifest and can
+import its sanitised metadata and declared digests into that Case; screenshots
+and other capture artefact bytes remain in the local output directory.
 
 ### Retained change and review
 

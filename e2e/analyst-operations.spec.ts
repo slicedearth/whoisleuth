@@ -223,15 +223,17 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const reviewStateBefore = await readBrowserLocalCollection(page, 'analyst_review_state');
   await item.locator('details.lifecycle-controls > summary').click();
-  await expect(item.getByLabel('Disposition')).toHaveValue('');
+  await expect(item.getByLabel('Review outcome')).toHaveValue('');
   await expect(item.getByRole('button', { name: 'Record decision' })).toBeDisabled();
-  await item.getByLabel('Disposition').selectOption('suppressed');
+  await item.getByLabel('Review outcome').selectOption('suppressed');
   await item.getByLabel('Rationale').fill('The reviewed handoff remains intentionally paused while the bounded fixture route is unavailable.');
   await item.getByLabel(/Expiry/).fill('2030-01-01T00:00');
   await item.getByLabel('Next review').fill('2029-12-01T00:00');
   await item.getByRole('button', { name: 'Record decision' }).click();
-  await expect(item.getByRole('status')).toContainText('Review lifecycle saved');
-  await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
+  await expect(page.getByRole('status').filter({
+    hasText: 'Recorded suppressed for Complete reviewed handoff for lifecycle-review.invalid',
+  })).toBeVisible();
+  await expect(item).toHaveCount(0);
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {
     minimumRecords: 1,
@@ -260,8 +262,12 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await expect(actions).toContainText('Current projection: reviewed');
 
   await page.getByRole('tab', { name: /Inbox/ }).click();
-  const filters = page.getByRole('group', { name: 'Review inbox detail filters' });
-  await filters.getByLabel('Lifecycle').selectOption('recurred');
+  await page.getByRole('group', { name: 'Review queue' })
+    .getByRole('button', { name: /^Changed since review/ }).click();
+  const advancedFilters = page.locator('.review-inbox details.advanced-filters');
+  await advancedFilters.locator(':scope > summary').click();
+  const filters = advancedFilters.getByRole('group', { name: 'Advanced review filters' });
+  await filters.getByLabel('Review state').selectOption('recurred');
   const recurred = page.locator('.review-inbox .items > li').filter({ hasText: 'lifecycle-review.invalid' });
   await expect(recurred).toBeVisible();
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('invalidated');
@@ -321,11 +327,11 @@ test('the central certificate inbox keeps CT, live TLS, CAA, certificate digest,
   const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const reviewStateBefore = await readBrowserLocalCollection(page, 'analyst_review_state');
   await issuerFinding.locator('details.lifecycle-controls > summary').click();
-  await issuerFinding.getByLabel('Disposition').selectOption('suppressed');
+  await issuerFinding.getByLabel('Review outcome').selectOption('suppressed');
   await issuerFinding.getByLabel('Rationale').fill('The issuer difference is retained for time-bounded fixture review.');
   await issuerFinding.getByLabel(/Expiry/).fill('2030-01-01T00:00');
   await issuerFinding.getByRole('button', { name: 'Record decision' }).click();
-  await expect(issuerFinding.getByRole('status')).toContainText('Review lifecycle saved');
+  await expect(issuerFinding.getByRole('status')).toContainText('Review saved. Source evidence was not changed.');
   await expect(issuerFinding.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {

@@ -3,6 +3,10 @@ import {
   editCase,
   getCaseByDomain,
   openCase,
+  recordCaseConclusion,
+  recordCaseInvestigationContext,
+  recordCaseRecheckOutcome,
+  type CaseConclusionInput,
   type CaseRecord,
 } from '../cases.ts';
 import {
@@ -22,6 +26,9 @@ type LookupCaseApi = Readonly<{
   open: typeof openCase;
   addNote: typeof addCaseNote;
   edit: typeof editCase;
+  conclude?: typeof recordCaseConclusion;
+  recordContext?: typeof recordCaseInvestigationContext;
+  recordRecheck?: typeof recordCaseRecheckOutcome;
 }>;
 
 type LookupCaseActionResult = Readonly<{
@@ -35,7 +42,15 @@ const DEFAULT_CASE_API: LookupCaseApi = {
   open: openCase,
   addNote: addCaseNote,
   edit: editCase,
+  conclude: recordCaseConclusion,
+  recordContext: recordCaseInvestigationContext,
+  recordRecheck: recordCaseRecheckOutcome,
 };
+
+export type LookupConclusionEvidenceSelection = Readonly<{
+  field: string;
+  stance: 'supports' | 'contradicts' | 'unresolved';
+}>;
 
 function pruneSuffix(pruned: number): string {
   return pruned
@@ -198,6 +213,112 @@ export class LookupCaseController {
     }
   }
 
+  async recordConclusion(
+    record: CaseRecord | null,
+    facts: readonly CheckpointFact[],
+    disposition: string,
+    reviewReasonCode: string,
+    rationale: string,
+    selections: readonly LookupConclusionEvidenceSelection[],
+  ): Promise<LookupCaseActionResult> {
+    if (!record) {
+      return {
+        record: null,
+        status: 'Create or open the analyst case before recording a conclusion.',
+      };
+    }
+    const reviewedRationale = rationale.trim();
+    if (!reviewedRationale) {
+      return { record, status: 'Explain the evidence-based rationale before recording this conclusion.' };
+    }
+    if (!selections.length) {
+      return { record, status: 'Select at least one observed fact for this conclusion.' };
+    }
+    const selectionByField = new Map(selections.map((item) => [item.field, item.stance]));
+    if (selectionByField.size !== selections.length) {
+      return { record, status: 'Each conclusion fact can be selected only once.' };
+    }
+    const pins = checkpointPinInputs(facts, selections.map((item) => item.field));
+    if (pins.length !== selections.length) {
+      return { record, status: 'One or more selected facts are no longer available in this observation.' };
+    }
+    const evidence: CaseConclusionInput['evidence'] = pins.map((pin) => ({
+      pin,
+      stance: selectionByField.get(pin.field ?? '') ?? 'unresolved',
+    }));
+    const summary = `Analyst conclusion: ${disposition.replaceAll('_', ' ')}`;
+    try {
+      const conclude = this.#api.conclude ?? recordCaseConclusion;
+      const updated = await conclude(record.id, {
+        disposition,
+        reviewReasonCode,
+        summary,
+        rationale: reviewedRationale,
+        evidence,
+      });
+      return {
+        record: updated.record,
+        status: `Recorded an evidence-linked analyst conclusion using ${evidence.length} selected fact${evidence.length === 1 ? '' : 's'}.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error ? cause.message : 'Could not record the analyst conclusion.',
+      };
+    }
+  }
+
+  async recordInvestigationContext(
+    record: CaseRecord | null,
+    input: Readonly<{ objective: string; incidentUrl: string; retainExactUrl: boolean }>,
+  ): Promise<LookupCaseActionResult> {
+    if (!record) {
+      return { record: null, status: 'Create or open the analyst case before retaining Incident context.' };
+    }
+    try {
+      const save = this.#api.recordContext ?? recordCaseInvestigationContext;
+      const updated = await save(record.id, input);
+      return {
+        record: updated.record,
+        status: `${input.retainExactUrl ? 'Retained the exact Incident URL' : 'Retained only the Incident origin'} and investigation objective in this Case.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error ? cause.message : 'Could not retain the Incident context.',
+      };
+    }
+  }
+
+  async recordRecheckOutcome(
+    record: CaseRecord | null,
+    input: Readonly<{
+      state: string;
+      observedAt: string;
+      completeness: string;
+      comparisonSummary: string;
+      source: string;
+      followUpAt: string | null;
+      limitations: readonly string[];
+      collectionDepth: 'fast' | 'deep';
+    }>,
+  ): Promise<LookupCaseActionResult> {
+    if (!record) return { record: null, status: 'Create or open the analyst case before recording a recheck outcome.' };
+    try {
+      const save = this.#api.recordRecheck ?? recordCaseRecheckOutcome;
+      const updated = await save(record.id, input);
+      return {
+        record: updated.record,
+        status: `Recorded the analyst-reviewed recheck outcome and linked comparison evidence.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error ? cause.message : 'Could not record the recheck outcome.',
+      };
+    }
+  }
+
   async recordRecipient(
     record: CaseRecord | null,
     route: ResolvedAbuseRecipient,
@@ -281,43 +402,6 @@ export class LookupCaseController {
     }
   }
 
-  async recordBriefHandoff(
-    record: CaseRecord | null,
-    brief: Readonly<{
-      target: string;
-      taskLabel: string;
-      generatedAt: string;
-      contradictionCount: number;
-      unknownCount: number;
-    }>,
-  ): Promise<LookupCaseActionResult> {
-    if (!record) {
-      return {
-        record: null,
-        status: 'Create or open the analyst case before recording a brief handoff.',
-      };
-    }
-    try {
-      const updated = await this.#api.edit(record.id, {
-        trailEvent: {
-          kind: 'handoff',
-          summary: `Prepared ${brief.taskLabel} brief for ${brief.target} with ${brief.contradictionCount} contradiction${brief.contradictionCount === 1 ? '' : 's'} and ${brief.unknownCount} unknown record${brief.unknownCount === 1 ? '' : 's'}.`,
-          target: `Local investigation brief generated ${brief.generatedAt}`,
-        },
-      });
-      return {
-        record: updated.record,
-        status: `Recorded the local investigation brief in the case trail.${pruneSuffix(updated.pruned)}`,
-      };
-    } catch (cause) {
-      return {
-        record,
-        status: cause instanceof Error
-          ? cause.message
-          : 'Could not record the investigation brief handoff.',
-      };
-    }
-  }
 }
 
 export type {

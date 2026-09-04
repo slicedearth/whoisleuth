@@ -1,10 +1,19 @@
-// Resolves only contact routes already present in a completed Lookup response.
-// It makes no requests, does not test deliverability, and never infers a route
-// from an infrastructure provider name or a generic domain pattern.
+// Resolves contact routes already present in a completed Lookup response plus
+// freshness-valid, officially published provider routes matched to an exact
+// current technology identifier and evidence role. It makes no requests, does
+// not test deliverability, and never treats a provider name as responsibility.
 
-export type AbuseRecipientKind = 'network_hosting' | 'registrar' | 'registry' | 'security_txt';
+import { resolveProviderReportingRoutes } from './provider-reporting-routes.ts';
+
+export type AbuseRecipientKind =
+  | 'application_platform'
+  | 'network_hosting'
+  | 'observed_edge'
+  | 'registrar'
+  | 'registry'
+  | 'security_txt';
 export type AbuseRecipientChannel = 'email' | 'phone' | 'url';
-export type AbuseRecipientCoverageState = 'found' | 'not_collected' | 'unavailable';
+export type AbuseRecipientCoverageState = 'found' | 'not_collected' | 'stale' | 'unavailable';
 
 export type ResolvedAbuseRecipient = Readonly<{
   id: string;
@@ -14,6 +23,8 @@ export type ResolvedAbuseRecipient = Readonly<{
   source: string;
   observedAt: string | null;
   limitations: readonly string[];
+  officialSourceUrl?: string;
+  catalogueReviewAfter?: string;
   actionType:
     | 'network_hosting_report'
     | 'registrar_report'
@@ -36,12 +47,21 @@ const MAX_RECIPIENTS = 12;
 const MAX_CONTACT_LENGTH = 320;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const EMAIL_RE = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/u;
-const KINDS = ['registrar', 'registry', 'security_txt', 'network_hosting'] as const;
+const KINDS = [
+  'registrar',
+  'registry',
+  'security_txt',
+  'application_platform',
+  'observed_edge',
+  'network_hosting',
+] as const;
 
 const KIND_LABELS: Readonly<Record<AbuseRecipientKind, string>> = Object.freeze({
   registrar: 'Registrar contact',
   registry: 'Registry contact',
   security_txt: 'security.txt contact',
+  application_platform: 'Application-platform reporting route',
+  observed_edge: 'Observed edge-service reporting route',
   network_hosting: 'Observed endpoint network-registration contact',
 });
 
@@ -104,7 +124,9 @@ function channelAndContact(value: unknown, hintedChannel: unknown = ''): {
 function actionType(kind: AbuseRecipientKind): ResolvedAbuseRecipient['actionType'] {
   if (kind === 'registrar') return 'registrar_report';
   if (kind === 'registry') return 'registry_report';
-  if (kind === 'network_hosting') return 'network_hosting_report';
+  if (kind === 'network_hosting' || kind === 'application_platform' || kind === 'observed_edge') {
+    return 'network_hosting_report';
+  }
   return 'security_contact_report';
 }
 
@@ -228,17 +250,47 @@ function networkRecipients(networkContextRaw: unknown): ResolvedAbuseRecipient[]
   });
 }
 
+function providerRecipients(
+  technologyProfile: unknown,
+  now: Date,
+): Readonly<{
+  recipients: ResolvedAbuseRecipient[];
+  coverage: ReturnType<typeof resolveProviderReportingRoutes>['coverage'];
+}> {
+  const resolved = resolveProviderReportingRoutes(technologyProfile, now);
+  const recipients = resolved.routes.flatMap((route) => {
+    const item = recipient(
+      route.role,
+      route.contact,
+      `${route.providerLabel} official reporting guidance matched to ${route.role.replaceAll('_', ' ')} evidence`,
+      route.channel,
+      route.observedAt,
+      route.limitations,
+    );
+    return item ? [{
+      ...item,
+      officialSourceUrl: route.officialSourceUrl,
+      catalogueReviewAfter: route.reviewAfter,
+    }] : [];
+  });
+  return { recipients, coverage: resolved.coverage };
+}
+
 export function resolveAbuseRecipients(input: Readonly<{
   registryInsights?: unknown;
   availabilityAbuse?: unknown;
   securityTxt?: unknown;
   networkContext?: unknown;
+  technologyProfile?: unknown;
+  now?: Date;
 }>): AbuseRecipientResolution {
+  const provider = providerRecipients(input.technologyProfile, input.now ?? new Date());
   const byId = new Map<string, ResolvedAbuseRecipient>();
   for (const item of [
     ...registryRecipients(input.registryInsights),
     ...fallbackRegistrarRecipient(input.availabilityAbuse),
     ...securityTxtRecipients(input.securityTxt),
+    ...provider.recipients,
     ...networkRecipients(input.networkContext),
   ]) {
     if (!byId.has(item.id)) byId.set(item.id, item);
@@ -273,6 +325,15 @@ export function resolveAbuseRecipients(input: Readonly<{
           : 'No usable published network-registration route was present in the selected endpoint IP RDAP evidence.'
         : 'IP RDAP network contact evidence was not collected for this lookup.',
     };
+    if (kind === 'application_platform' || kind === 'observed_edge') {
+      const providerCoverage = provider.coverage.find((item) => item.role === kind);
+      return {
+        kind,
+        state: providerCoverage?.state ?? 'not_collected' as const,
+        detail: providerCoverage?.detail
+          ?? 'Current technology evidence was not available for provider-route matching.',
+      };
+    }
     if (kind === 'security_txt' && securityTxt.securityTxtVersion !== 1) return {
       kind,
       state: 'not_collected' as const,
@@ -304,9 +365,10 @@ export function resolveAbuseRecipients(input: Readonly<{
     recipients,
     coverage,
     limitations: [
-      'Recipient resolution uses only already-collected publication fields and performs no contact discovery or reachability check.',
+      'Recipient resolution uses already-collected publication fields and a small freshness-gated catalogue of official provider routes; it performs no contact discovery or reachability check.',
       'A published route does not prove responsibility, ownership, monitoring, policy scope, or that a report should be sent.',
       'An IP RDAP route belongs to the registered network of one observed endpoint and does not establish hosting responsibility or identify an origin server.',
+      'Application-platform and observed-edge routes remain separate. Either indicator may coexist with another delivery layer and neither establishes the origin host.',
       'Select and record a route in a case before preparing a human-reviewed response packet.',
     ],
   };

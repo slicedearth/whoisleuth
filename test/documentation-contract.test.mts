@@ -4,13 +4,14 @@ import { test } from 'node:test';
 
 import { TECHNOLOGY_PROFILE_VERSION } from '../lib/lookup-child-profile-contract.mts';
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { LATEST_PUBLIC_APPLICATION_VERSION } from '../packages/contracts/case-portability.mts';
 
 async function documentation(pathname: string): Promise<string> {
   return readFile(new URL(`../${pathname}`, import.meta.url), 'utf8');
 }
 
-test('critical current profile and public-writer statements follow canonical version owners', async () => {
+test('critical current profile and release-writer statements follow canonical version owners', async () => {
   const [readme, productBoundary, registryContract, portableContracts, caseContracts] = await Promise.all([
     documentation('README.md'),
     documentation('docs/product-boundary.md'),
@@ -31,11 +32,17 @@ test('critical current profile and public-writer statements follow canonical ver
   assert.match(registryContract, /lookup-network-evidence-bounds\.mts/u);
   assert.equal((registryContract.match(/Current profile version/gu) ?? []).length, 1);
 
-  const applicationVersion = LATEST_PUBLIC_APPLICATION_VERSION.replaceAll('.', '\\.');
-  const publicWriter = new RegExp(`(?:[Pp]ublic release|[Rr]elease|[Aa]pplication release) ${applicationVersion}[^\\n]*current public writer`, 'u');
-  assert.match(readme, publicWriter);
-  assert.match(productBoundary, publicWriter);
-  assert.match(portableContracts, publicWriter);
-  assert.match(caseContracts, new RegExp(`Release ${applicationVersion} is the latest public writer`, 'u'));
+  const currentVersion = WHOISLEUTH_APPLICATION_VERSION.replaceAll('.', '\\.');
+  const publicVersion = LATEST_PUBLIC_APPLICATION_VERSION.replaceAll('.', '\\.');
+  const checkoutWriter = new RegExp(`Version ${currentVersion} is the current writer in this\\s+checkout`, 'u');
+  const publishedBoundary = new RegExp(`published by release ${publicVersion}`, 'u');
+  assert.match(readme, checkoutWriter);
+  assert.match(readme, publishedBoundary);
+  assert.match(productBoundary, checkoutWriter);
+  assert.match(productBoundary, publishedBoundary);
+  assert.match(portableContracts, checkoutWriter);
+  assert.match(portableContracts, publishedBoundary);
+  assert.match(caseContracts, new RegExp(`Release ${publicVersion} is the immediately preceding public writer`, 'u'));
+  assert.match(caseContracts, checkoutWriter);
   assert.doesNotMatch(productBoundary, /Once v2 is public/iu);
 });

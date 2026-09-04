@@ -18,12 +18,15 @@ import {
   CI_CLI_RUNTIME_NODE_MAJOR,
   CI_CLI_RUNTIME_SCRIPTS,
   CI_HOSTED_ONLY_BROWSER_SCRIPTS,
+  CI_PREFLIGHT_SCRIPTS,
   CI_QUALITY_SCRIPTS,
   CI_UNIT_SCRIPTS,
   assertHostedCiParity,
   assertLocalCiRuntime,
+  assertPlaywrightBrowserCacheWritable,
   expectedHostedCiScriptPlan,
   formatLocalCiPlan,
+  playwrightBrowserCacheDirectory,
   readHostedCiScriptPlan,
   selectNodeRuntimeExecutable,
 } from '../tools/ci-verification.mts';
@@ -43,6 +46,10 @@ const STRESS_WORKFLOW = fs.readFileSync(
 );
 const TEST_HEALTH_WORKFLOW = fs.readFileSync(
   path.join(__dirname, '..', '.github', 'workflows', 'test-health.yml'),
+  'utf8',
+);
+const PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW = fs.readFileSync(
+  path.join(__dirname, '..', '.github', 'workflows', 'dependency-audit.yml'),
   'utf8',
 );
 const PLAYWRIGHT_CONFIG = fs.readFileSync(
@@ -144,9 +151,15 @@ describe('continuous integration workflow', () => {
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
     const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
+    assert.ok(
+      qualityJob.indexOf('npm run release:check')
+        < qualityJob.indexOf('npm ci --include=optional --ignore-scripts --audit=false'),
+      'release-derived drift must fail before the locked install starts',
+    );
     assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts$/gmu), 4);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 4);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run dependencies:audit$/gmu), 0);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}UNIT_RESULT: \$\{\{ needs\.unit\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}$/mu);
@@ -173,6 +186,7 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
+      ...CI_PREFLIGHT_SCRIPTS.map((script) => `npm run ${script}`),
       ...CI_QUALITY_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
       ...CI_UNIT_SCRIPTS.map((script) => `npm run ${script}`),
@@ -237,12 +251,15 @@ describe('continuous integration workflow', () => {
     assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     const localPlan = formatLocalCiPlan();
-    for (const script of [...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
+    for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
     assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
-    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('locked install'));
+    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('release:check'));
+    assert.ok(localPlan.indexOf('release:check') < localPlan.indexOf('locked install'));
+    assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
+    assert.match(localPlan, /locked install \(install-time audit disabled; scheduled and release audits are separate\)/u);
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
       'test:e2e:install',
       'test:e2e:shard',
@@ -270,6 +287,68 @@ describe('continuous integration workflow', () => {
     );
     assert.doesNotThrow(() => assertLocalCiRuntime('24.19.0', '24.19.0'));
     assert.throws(() => assertLocalCiRuntime('26.0.0', '24.19.0'), /requires Node\.js 24\.19\.0/u);
+  });
+
+  test('fails before expensive local work when the Playwright browser cache is not writable', (context) => {
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-browser-cache-test-'));
+    context.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+
+    assert.equal(
+      playwrightBrowserCacheDirectory({}, 'darwin', '/fixture/home', '/fixture/repository'),
+      '/fixture/home/Library/Caches/ms-playwright',
+    );
+    assert.equal(
+      playwrightBrowserCacheDirectory(
+        { XDG_CACHE_HOME: '/fixture/cache' },
+        'linux',
+        '/fixture/home',
+        '/fixture/repository',
+      ),
+      '/fixture/cache/ms-playwright',
+    );
+    assert.equal(
+      playwrightBrowserCacheDirectory(
+        { PLAYWRIGHT_BROWSERS_PATH: 'browser-cache', INIT_CWD: '/fixture/project' },
+        'linux',
+        '/fixture/home',
+        '/fixture/repository',
+      ),
+      '/fixture/project/browser-cache',
+    );
+    assert.equal(
+      playwrightBrowserCacheDirectory(
+        { PLAYWRIGHT_BROWSERS_PATH: '0' },
+        'linux',
+        '/fixture/home',
+        '/fixture/repository',
+      ),
+      '/fixture/repository/node_modules/playwright-core/.local-browsers',
+    );
+
+    const writableCache = path.join(temporaryRoot, 'cache');
+    assert.doesNotThrow(() => assertPlaywrightBrowserCacheWritable(writableCache));
+    assert.deepEqual(fs.readdirSync(writableCache), []);
+
+    const blockingFile = path.join(temporaryRoot, 'not-a-directory');
+    fs.writeFileSync(blockingFile, 'fixture', 'utf8');
+    assert.throws(
+      () => assertPlaywrightBrowserCacheWritable(path.join(blockingFile, 'cache')),
+      /requires write access to the Playwright browser cache/u,
+    );
+  });
+
+  test('keeps the live production audit outside required per-push verification', () => {
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^on:\s*\n\s{2}schedule:\s*\n\s{4}- cron: '29 3 \* \* 2'\s*\n\s{2}workflow_dispatch:$/mu);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{2}cancel-in-progress: false$/mu);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{4}timeout-minutes: 10$/mu);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s+run: npm run dependencies:audit$/mu);
+    assert.doesNotMatch(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /npm (?:ci|install)|continue-on-error|write\b/iu);
+    const actions = pinnedActions(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW);
+    assert.deepEqual(actions.map(({ action }) => action), ['actions/checkout', 'actions/setup-node']);
+    for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}persist-credentials: false$/mu);
+    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}package-manager-cache: false$/mu);
   });
 
   test('uses the same zero-retry single-worker contract locally and in CI while retaining bounded diagnostics', () => {
@@ -368,6 +447,7 @@ describe('continuous integration workflow', () => {
     assert.match(STRESS_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
     assert.doesNotMatch(STRESS_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:stress$/mu);
+    assert.match(STRESS_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
     assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:summary$/mu);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:stress'],
@@ -388,6 +468,7 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '43 3 \* \* 3'\s*\n\s{2}workflow_dispatch:$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
     assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
+    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);

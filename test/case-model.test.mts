@@ -146,6 +146,89 @@ describe('case creation and updates', () => {
     assert.throws(() => model.updateCase(cases, 'nope', { status: 'resolved' }), /no longer exists/i);
   });
 
+  test('records a reviewed conclusion with retained evidence and explicit counterevidence in one mutation', () => {
+    const opened = model.openOrCreateCase([], { domain: 'conclusion.example' }, ISO);
+    const concluded = model.recordCaseConclusion(opened.cases, opened.record.id, {
+      disposition: 'confirmed_abuse',
+      reviewReasonCode: 'confirmed_malware',
+      summary: 'Analyst conclusion: confirmed abuse',
+      rationale: 'The retained page observation supports the conclusion while registration context remains contradictory.',
+      evidence: [
+        {
+          stance: 'supports',
+          pin: {
+            field: 'page.password-field',
+            label: 'Password field',
+            value: 'Observed',
+            source: 'Website probe',
+            observedAt: ISO,
+            completeness: 'complete',
+          },
+        },
+        {
+          stance: 'contradicts',
+          pin: {
+            field: 'registration.age',
+            label: 'Creation date',
+            value: '2020-01-01',
+            source: 'Registry RDAP',
+            observedAt: ISO,
+            completeness: 'complete',
+          },
+        },
+        {
+          stance: 'unresolved',
+          pin: {
+            field: 'network.registration',
+            label: 'Network registration',
+            value: 'Example network',
+            source: 'IP RDAP',
+            observedAt: ISO,
+            completeness: 'partial',
+          },
+        },
+      ],
+    }, LATER);
+
+    assert.equal(concluded.record.disposition, 'confirmed_abuse');
+    assert.equal(concluded.record.reviewReasonCode, 'confirmed_malware');
+    assert.equal(concluded.record.evidencePins.length, 3);
+    assert.equal(concluded.record.decisions.length, 1);
+    assert.equal(concluded.record.decisions[0]?.evidencePinIds.length, 1);
+    assert.equal(concluded.record.assertions.length, 2);
+    assert.equal(concluded.record.assertions[0]?.kind, 'contradiction');
+    assert.deepEqual(concluded.record.assertions[0]?.evidenceRelations?.map((item) => item.stance), ['contradicts']);
+    assert.equal(concluded.record.assertions[1]?.kind, 'unknown');
+    assert.equal(concluded.record.assertions[1]?.state, 'open');
+    assert.deepEqual(concluded.record.assertions[1]?.evidenceRelations?.map((item) => item.stance), ['unresolved']);
+    assert.equal(concluded.record.updatedAt, LATER);
+  });
+
+  test('rejects conclusions without a reviewed reason, rationale-compatible decision, or evidence', () => {
+    const opened = model.openOrCreateCase([], { domain: 'invalid-conclusion.example' }, ISO);
+    const input = {
+      disposition: 'suspicious',
+      reviewReasonCode: 'insufficient_evidence',
+      summary: 'Analyst conclusion: suspicious',
+      rationale: 'Further review is required.',
+      evidence: [],
+    } as const;
+    assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, input, LATER), /at least one observed fact/iu);
+    assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, {
+      ...input,
+      disposition: 'unreviewed',
+    }, LATER), /reviewed disposition/iu);
+    assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, {
+      ...input,
+      evidence: [{ stance: 'supports', pin: { label: 'Fact', value: 'Observed' } }],
+      reviewReasonCode: 'not-a-reason',
+    }, LATER), /reviewed reason/iu);
+    assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, {
+      ...input,
+      evidence: [{ stance: 'unresolved', pin: { label: 'Unknown', value: 'Not established' } }],
+    }, LATER), /at least one observed fact that supports/iu);
+  });
+
   test('explicit Brand Profile edits replace exact references and fail closed', () => {
     const opened = model.openOrCreateCase([], { domain: 'association.example' }, ISO);
     const associated = model.updateCase(opened.cases, opened.record.id, {
@@ -183,6 +266,100 @@ describe('case creation and updates', () => {
     assert.equal(closed.status, 'resolved');
     assert.equal(closed.closures.records.length, 1);
     assert.equal(closed.closures.records[0]?.reason, 'risk_accepted');
+  });
+});
+
+describe('Incident URL context', () => {
+  test('separates the exact URL from the hostname used for collection', () => {
+    const parsed = model.parseIncidentUrlContext('https://login.example.test/sign-in?token=secret#step');
+    assert.deepEqual(parsed, {
+      exactUrl: 'https://login.example.test/sign-in?token=secret#step',
+      hostname: 'login.example.test',
+      registrableDomain: 'example.test',
+      originUrl: 'https://login.example.test',
+      hasPath: true,
+      hasQuery: true,
+      hasFragment: true,
+    });
+    assert.equal(model.parseIncidentUrlContext('https://user:secret@login.example.test/path'), null);
+    assert.equal(model.parseIncidentUrlContext('file:///tmp/evidence'), null);
+  });
+
+  test('retains exact or origin-only context through the existing Case assertion contract', () => {
+    const original = model.createCase({ domain: 'example.test' }, ISO);
+    const exact = model.recordCaseInvestigationContext([original], original.id, {
+      objective: 'Determine whether the page is impersonating the affected service.',
+      incidentUrl: 'https://login.example.test/sign-in?token=secret',
+      retainExactUrl: true,
+    }, LATER);
+    assert.deepEqual(model.caseInvestigationContext(exact.record), {
+      objective: 'Determine whether the page is impersonating the affected service.',
+      incidentUrl: 'https://login.example.test/sign-in?token=secret',
+      urlRetention: 'exact',
+      assertionId: exact.record.assertions[0]?.id,
+      updatedAt: LATER,
+    });
+
+    const originOnly = model.recordCaseInvestigationContext(exact.cases, original.id, {
+      objective: 'Prepare the reviewed evidence needed for a response decision.',
+      incidentUrl: 'https://login.example.test/different?identifier=private',
+      retainExactUrl: false,
+    }, LATEST);
+    assert.equal(originOnly.record.assertions.length, 1);
+    assert.deepEqual(model.caseInvestigationContext(originOnly.record), {
+      objective: 'Prepare the reviewed evidence needed for a response decision.',
+      incidentUrl: 'https://login.example.test/',
+      urlRetention: 'origin_only',
+      assertionId: originOnly.record.assertions[0]?.id,
+      updatedAt: LATEST,
+    });
+    assert.doesNotMatch(JSON.stringify(originOnly.record), /identifier=private/u);
+  });
+
+  test('rejects context for a different Case domain', () => {
+    const record = model.createCase({ domain: 'example.test' }, ISO);
+    assert.throws(() => model.recordCaseInvestigationContext([record], record.id, {
+      objective: 'Review the observed page.',
+      incidentUrl: 'https://other.invalid/path',
+      retainExactUrl: true,
+    }, LATER), /must belong to the Case domain example\.test/u);
+  });
+});
+
+describe('reviewed recheck outcome', () => {
+  test('retains a comparison pin and links the independent outcome atomically', () => {
+    const original = model.createCase({ domain: 'example.test' }, ISO);
+    const result = model.recordCaseRecheckOutcome([original], original.id, {
+      state: 'changed',
+      observedAt: LATER,
+      completeness: 'complete',
+      comparisonSummary: 'MX hosts: old.example.test to new.example.test',
+      source: 'Analyst-reviewed Lookup recheck',
+      followUpAt: LATEST,
+      limitations: ['HTTP content was not compared.'],
+      collectionDepth: 'deep',
+    }, LATER);
+    const pin = result.record.evidencePins[0];
+    const review = result.record.observedEffects.reviews[0];
+    assert.equal(pin?.field, 'case.recheck_comparison');
+    assert.equal(pin?.value, 'MX hosts: old.example.test to new.example.test');
+    assert.equal(review?.state, 'changed');
+    assert.equal(review?.evidencePinId, pin?.id);
+    assert.equal(review?.followUpAt, LATEST);
+    assert.deepEqual(review?.limitations, ['HTTP content was not compared.']);
+  });
+
+  test('does not retain half a recheck when the outcome is invalid', () => {
+    const original = model.createCase({ domain: 'example.test' }, ISO);
+    assert.throws(() => model.recordCaseRecheckOutcome([original], original.id, {
+      state: 'automatic_safe_verdict',
+      observedAt: LATER,
+      completeness: 'complete',
+      comparisonSummary: 'No comparable material field change was found.',
+      source: 'Analyst-reviewed Lookup recheck',
+      collectionDepth: 'deep',
+    }, LATER), /independent observed-effect review requires/u);
+    assert.equal(original.evidencePins.length, 0);
   });
 });
 

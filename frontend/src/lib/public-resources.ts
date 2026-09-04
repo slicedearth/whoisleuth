@@ -2,6 +2,7 @@ import {
   PUBLIC_RESOURCE_SLUGS,
   type PublicResourceSlug,
 } from '../../../lib/public-resource-routes.mts';
+import { PLATFORM_REPORTING_RESOURCE_REFERENCES } from './analysis/platform-reporting-routes.ts';
 
 export type PublicResourceSection = Readonly<{
   title: string;
@@ -32,6 +33,8 @@ export type PublicResource = Readonly<{
   evidence: readonly PublicResourceEvidence[];
   questions: readonly string[];
   references: readonly PublicResourceReference[];
+  referencesTitle?: string;
+  referencesIntroduction?: string;
   demoHref: string;
   demoLabel: string;
   guideHref: string;
@@ -222,6 +225,41 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     demoLabel: 'Try the investigation example',
     guideHref: '/resources#start',
     guideLabel: 'Choose an investigation path',
+    repositoryDoc: 'docs/application-guide.md',
+  }),
+  Object.freeze({
+    slug: 'reporting-and-takedown-guidance',
+    shortTitle: 'Reporting and takedown guidance',
+    title: 'Prepare and track an abuse or infringement report',
+    seoTitle: 'Abuse and takedown reporting guide',
+    description: 'Prepare evidence, choose an official platform or infrastructure route, record delivery and recheck the reported content without assuming removal.',
+    eyebrow: 'Response guidance',
+    summary: Object.freeze([
+      'A useful complaint identifies the exact content, the observed conduct, the affected party, the reporter’s authority and the evidence available at a stated time. Different providers use different safety, impersonation, trademark and copyright processes.',
+      'WHOISleuth can retain exact incident links, suggest freshness-bounded official routes and prepare a local evidence packet. It does not submit a complaint, provide legal authority, or treat a provider acknowledgement as proof that content was removed.',
+    ]),
+    steps: Object.freeze([
+      Object.freeze({ title: 'Preserve the review basis', body: 'Retain exact public URLs, observation times, screenshots or capture digests, source limitations and an evidence-linked Case conclusion. Avoid collecting unrelated personal information.' }),
+      Object.freeze({ title: 'Choose the applicable official route', body: 'Select the Case type and review the current provider guidance for Facebook, Instagram, TikTok, X, Telegram, YouTube, LinkedIn or the responsible registrar, registry and hosting provider. Rights forms should be used only by a rights holder or authorised representative.' }),
+      Object.freeze({ title: 'Record delivery and independently recheck', body: 'Export and review the packet, submit it manually, then record the actual delivery event. Recheck the exact target later and record what was observed; an acknowledgement or closed ticket is not independent evidence of removal.' }),
+    ]),
+    evidence: Object.freeze([
+      Object.freeze({ source: 'Case evidence and incident links', usefulFor: 'Binding the complaint to exact reviewed targets, times, conclusions and limitations.', limitation: 'A retained link or analyst classification does not itself prove a policy or legal violation.' }),
+      Object.freeze({ source: 'Official provider guidance', usefulFor: 'Choosing the current safety, impersonation, trademark, copyright or abuse route.', limitation: 'Forms, eligibility rules and disclosure practices change; recheck the official page before submission.' }),
+      Object.freeze({ source: 'Later independent observation', usefulFor: 'Recording whether the reported content, account or service remained available at a later time.', limitation: 'One failed request may reflect blocking, authentication, geography or a temporary outage rather than removal.' }),
+    ]),
+    questions: Object.freeze([
+      'Do you have the authority required by the selected safety or rights process?',
+      'Does the report identify each exact target and distinguish observations from analyst conclusions?',
+      'What later observation would support a closure decision without relying only on provider status text?',
+    ]),
+    references: PLATFORM_REPORTING_RESOURCE_REFERENCES,
+    referencesTitle: 'Official reporting guidance',
+    referencesIntroduction: 'Use the provider-owned pages below to verify the current reporting route, eligibility and disclosure terms before submitting anything.',
+    demoHref: '/demo',
+    demoLabel: 'Review the fictional evidence flow',
+    guideHref: '/resources#reference',
+    guideLabel: 'Open product references',
     repositoryDoc: 'docs/application-guide.md',
   }),
   Object.freeze({

@@ -12,7 +12,6 @@ import {
 import {
   main,
   productionDependencyAuditArguments,
-  PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX,
   PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS,
 } from '../tools/production-dependency-audit.mts';
 
@@ -190,15 +189,14 @@ describe('production dependency audit policy', () => {
   });
 
   test('runner emits only a concise result and rejects command failures', () => {
-    assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS > 0);
-    assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS <= 120_000);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX, /^whoisleuth-[a-z-]+-$/u);
-    assert.deepEqual(productionDependencyAuditArguments('/tmp/fixture-audit-cache'), [
+    assert.equal(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS, 300_000);
+    assert.deepEqual(productionDependencyAuditArguments(), [
       'audit',
+      '--package-lock-only',
       '--omit=dev',
       '--json',
       '--offline=false',
-      '--cache=/tmp/fixture-audit-cache',
+      '--prefer-online',
     ]);
 
     const stdout = outputBuffer();
@@ -290,10 +288,11 @@ describe('production dependency audit policy', () => {
     }
   });
 
-  test('documents the zero-only policy and fresh online audit boundary', () => {
+  test('documents the zero-only policy and non-blocking online audit boundary', () => {
     const guide = fs.readFileSync(path.join(REPOSITORY_ROOT, 'docs/dependency-maintenance.md'), 'utf8');
     assert.match(guide, /accepts exactly zero production vulnerabilities/u);
-    assert.match(guide, /isolated temporary npm cache/u);
-    assert.match(guide, /offline=false/u);
+    assert.match(guide, /five-minute outer deadline/u);
+    assert.match(guide, /not part of the required per-push CI\s+path/u);
+    assert.match(guide, /weekly or manually dispatched workflow/u);
   });
 });

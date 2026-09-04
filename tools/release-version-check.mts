@@ -7,7 +7,14 @@ import { fileURLToPath } from 'node:url';
 import {
   MAX_SEMANTIC_VERSION_LENGTH,
   normalizeBoundedSemanticVersion,
+  normalizeBoundedStableSemanticVersion,
 } from '../lib/semantic-version.mts';
+import {
+  CASE_PORTABILITY_LIFECYCLE_FAMILY,
+  CASE_SCHEMA_VERSION,
+  CLI_CASE_PACK_SCHEMA,
+  LATEST_PUBLIC_APPLICATION_VERSION,
+} from '../packages/contracts/case-portability.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
@@ -17,6 +24,8 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
   inspectIdentity?: typeof inspectReleaseVersionIdentity;
+  inspectDerivedOutputs?: typeof inspectReleaseVersionDerivedOutputs;
+  inspectPublicBoundary?: typeof inspectPrecedingPublicReleaseVersion;
 }>;
 
 export type ReleaseVersionIdentity = Readonly<{
@@ -24,10 +33,17 @@ export type ReleaseVersionIdentity = Readonly<{
   checkedPaths: number;
 }>;
 
+export type ReleaseVersionDerivedOutputIdentity = Readonly<{
+  checkedFixtures: number;
+  checkedReports: number;
+}>;
+
 export const RELEASE_VERSION_CHECK_SCHEMA = 'whoisleuth.release-version-check';
 export const RELEASE_VERSION_CHECK_VERSION = 2;
 export const MAX_RELEASE_VERSION_LENGTH = MAX_SEMANTIC_VERSION_LENGTH;
 export const MAX_RELEASE_MANIFEST_BYTES = 2 * 1024 * 1024;
+export const MAX_RELEASE_DERIVED_REPORTS = 1_000;
+export const MAX_RELEASE_TAGS = 1_000;
 export const RELEASE_IDENTITY_PATHS = Object.freeze([
   '.nvmrc',
   'DISCLOSURE',
@@ -159,6 +175,65 @@ export function inspectReleaseVersionIdentity(
   return Object.freeze({ state: 'tagged_current_sources', checkedPaths: RELEASE_IDENTITY_PATHS.length });
 }
 
+function stableVersionParts(value: string): readonly [string, string, string] {
+  const version = normalizeBoundedStableSemanticVersion(value, 'Release tag');
+  const parts = version.split('.');
+  return Object.freeze([parts[0]!, parts[1]!, parts[2]!]);
+}
+
+function compareStableVersions(left: string, right: string): number {
+  const leftParts = stableVersionParts(left);
+  const rightParts = stableVersionParts(right);
+  for (let index = 0; index < leftParts.length; index += 1) {
+    const leftPart = leftParts[index]!;
+    const rightPart = rightParts[index]!;
+    if (leftPart.length !== rightPart.length) return leftPart.length - rightPart.length;
+    if (leftPart !== rightPart) return leftPart < rightPart ? -1 : 1;
+  }
+  return 0;
+}
+
+export function selectPrecedingPublicReleaseVersion(
+  currentVersion: string,
+  tagNames: readonly string[],
+): string {
+  const current = normalizeBoundedStableSemanticVersion(currentVersion, 'Current release');
+  if (!Array.isArray(tagNames) || tagNames.length < 1 || tagNames.length > MAX_RELEASE_TAGS) {
+    throw new TypeError('Release tag inventory is missing or exceeds its bound.');
+  }
+  const candidates = tagNames.flatMap((tagName) => {
+    if (typeof tagName !== 'string' || !/^v\d+\.\d+\.\d+$/u.test(tagName)) return [];
+    try {
+      const version = normalizeBoundedStableSemanticVersion(tagName.slice(1), 'Release tag');
+      return compareStableVersions(version, current) < 0 ? [version] : [];
+    } catch {
+      return [];
+    }
+  });
+  candidates.sort(compareStableVersions);
+  const selected = candidates.at(-1);
+  if (!selected) throw new TypeError(`No preceding public release tag is reachable before version ${current}.`);
+  return selected;
+}
+
+export function inspectPrecedingPublicReleaseVersion(
+  repositoryRoot: string,
+  currentVersion: string,
+): string {
+  const output = requireSuccessfulGit(
+    git(repositoryRoot, ['tag', '--merged', 'HEAD', '--list', 'v*']),
+    'Release identity could not inspect reachable semantic-version tags.',
+  );
+  const tags = output.split('\n').filter(Boolean);
+  const actual = selectPrecedingPublicReleaseVersion(currentVersion, tags);
+  if (actual !== LATEST_PUBLIC_APPLICATION_VERSION) {
+    throw new TypeError(
+      `The declared preceding public release ${LATEST_PUBLIC_APPLICATION_VERSION} has drifted from reachable tag v${actual}. Update the canonical compatibility boundary.`,
+    );
+  }
+  return actual;
+}
+
 async function readBoundedJson(filename: string): Promise<unknown> {
   const metadata = await stat(filename);
   if (!metadata.isFile() || metadata.size > MAX_RELEASE_MANIFEST_BYTES) {
@@ -170,6 +245,56 @@ async function readBoundedJson(filename: string): Promise<unknown> {
   } catch {
     throw new TypeError(`${path.basename(filename)} is not valid JSON.`);
   }
+}
+
+export function assertReleaseVersionDerivedCasePack(
+  value: unknown,
+  releaseVersion: string,
+): number {
+  const root = record(value, 'Current Case-pack fixture');
+  if (root.version !== CASE_SCHEMA_VERSION) {
+    throw new TypeError('Current Case-pack fixture does not use the current Case schema.');
+  }
+  const packet = record(root.packet, 'Current Case-pack packet');
+  if (packet.schema !== CLI_CASE_PACK_SCHEMA || !Array.isArray(packet.reports)
+    || packet.reports.length < 1 || packet.reports.length > MAX_RELEASE_DERIVED_REPORTS) {
+    throw new TypeError('Current Case-pack fixture has an invalid or unbounded report collection.');
+  }
+  for (const reportValue of packet.reports) {
+    const report = record(reportValue, 'Current Case-pack report');
+    const application = record(report.application, 'Current Case-pack report application');
+    if (application.name !== 'WHOISleuth' || application.version !== releaseVersion) {
+      throw new TypeError(
+        `Current Case-pack fixture application metadata must match release version ${releaseVersion}. Regenerate the fixture through its canonical writer.`,
+      );
+    }
+  }
+  return packet.reports.length;
+}
+
+export async function inspectReleaseVersionDerivedOutputs(
+  repositoryRoot: string,
+  releaseVersion: string,
+): Promise<ReleaseVersionDerivedOutputIdentity> {
+  const casePackFixtures = CASE_PORTABILITY_LIFECYCLE_FAMILY.fixtures.filter(
+    (fixture) => fixture.schema === CLI_CASE_PACK_SCHEMA,
+  );
+  if (casePackFixtures.length < 1 || casePackFixtures.length > 32) {
+    throw new TypeError('Release version check requires a bounded Case-pack fixture inventory.');
+  }
+  let checkedFixtures = 0;
+  let checkedReports = 0;
+  for (const fixture of casePackFixtures) {
+    const value = await readBoundedJson(path.join(repositoryRoot, fixture.path));
+    const root = record(value, 'Case-pack fixture');
+    if (root.version !== CASE_SCHEMA_VERSION) continue;
+    checkedReports += assertReleaseVersionDerivedCasePack(root, releaseVersion);
+    checkedFixtures += 1;
+  }
+  if (checkedFixtures < 1) {
+    throw new TypeError('Release version check found no fixture for the current Case writer.');
+  }
+  return Object.freeze({ checkedFixtures, checkedReports });
 }
 
 export function formatReleaseVersionReport(report: ReturnType<typeof buildReleaseVersionReport>): string {
@@ -204,7 +329,17 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       repositoryRoot,
       manifestReport.expectedTag,
     );
+    const publicBoundary = (options.inspectPublicBoundary || inspectPrecedingPublicReleaseVersion)(
+      repositoryRoot,
+      manifestReport.releaseVersion,
+    );
+    const derived = await (options.inspectDerivedOutputs || inspectReleaseVersionDerivedOutputs)(
+      repositoryRoot,
+      manifestReport.releaseVersion,
+    );
     stdout.write(`${formatReleaseVersionReport(buildReleaseVersionReport(packageManifest, lockfile, identity))}\n`);
+    stdout.write(`Preceding public compatibility boundary: v${publicBoundary}\n`);
+    stdout.write(`Version-derived outputs: ${derived.checkedFixtures} current fixture(s) and ${derived.checkedReports} embedded report(s) match\n`);
     return 0;
   } catch (error) {
     stderr.write(`${error instanceof Error ? error.message : 'Release version check failed.'}\n`);

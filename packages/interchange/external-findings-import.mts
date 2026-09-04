@@ -4,6 +4,7 @@ import {
   updateCase,
   type CaseRecord,
 } from '../cases/case-model.mts';
+import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -80,6 +81,13 @@ export type ExternalFindingsMergeResult = Readonly<{
   cases: CaseRecord[];
   casesCreated: number;
   casesUpdated: number;
+  findingsAdded: number;
+  duplicatesSkipped: number;
+}>;
+
+export type ExternalFindingsCaseMergeResult = Readonly<{
+  cases: CaseRecord[];
+  record: CaseRecord;
   findingsAdded: number;
   duplicatesSkipped: number;
 }>;
@@ -397,6 +405,63 @@ function structuredPinFields(finding: ExternalFinding): Record<string, unknown> 
   };
 }
 
+function mergeExternalFindingIntoCase(
+  current: readonly CaseRecord[],
+  caseId: string,
+  finding: ExternalFinding,
+  source: ExternalFindingsDocument['source'],
+  now: string,
+): Readonly<{ cases: CaseRecord[]; record: CaseRecord; added: boolean }> {
+  const target = current.find((candidate) => candidate.id === caseId) ?? null;
+  if (!target) throw new Error('The selected Case is unavailable for this finding.');
+  if (existingPinKey(target, finding, source.name)) {
+    return { cases: [...current], record: target, added: false };
+  }
+  const sourceLimitations = [
+    finding.evidenceClass === 'deployment_observation'
+      ? `Imported as an observation made by ${source.name}; this browser session did not collect or independently verify it.`
+      : `Reported by ${source.name}; WHOISleuth did not collect or independently verify this provider finding.`,
+    ...(source.reference ? [`Source reference: ${source.reference}`] : []),
+    ...finding.limitations,
+  ];
+  const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
+  let updated = updateCase([...current], target.id, {
+    evidencePin: {
+      ...structuredPinFields(finding),
+      label: `External ${finding.category} finding`,
+      value: finding.structuredObservation?.value ?? pinValue(finding),
+      source: importedSourceLabel(finding, source.name),
+      observedAt: finding.observedAt,
+      completeness: finding.completeness,
+      limitations: sourceLimitations,
+    },
+  }, now);
+  const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
+  if (!addedPin) throw new Error('The imported finding could not be retained as Case evidence.');
+  updated = updateCase(updated.cases, target.id, {
+    sighting: {
+      state: finding.evidenceClass === 'deployment_observation'
+        ? 'observed_by_deployment'
+        : 'reported_by_provider',
+      category: finding.category === 'dns'
+        ? 'delegation'
+        : finding.category === 'certificate'
+          ? 'certificate'
+          : finding.category === 'registration'
+            ? 'registration'
+            : finding.category === 'http' || finding.category === 'page'
+              ? 'website'
+              : 'other',
+      source: source.name,
+      observedAt: finding.observedAt,
+      completeness: finding.completeness,
+      evidencePinId: addedPin.id,
+      limitations: sourceLimitations,
+    },
+  }, now);
+  return { cases: updated.cases, record: updated.record, added: true };
+}
+
 export function mergeExternalFindingsIntoCases(
   current: readonly CaseRecord[],
   document: ExternalFindingsDocument,
@@ -413,53 +478,11 @@ export function mergeExternalFindingsIntoCases(
     const opened = openOrCreateCase(cases, { domain: finding.domain, source: 'import' }, now);
     cases = opened.cases;
     const target = cases.find((candidate) => candidate.id === opened.record.id) ?? opened.record;
-    if (existingPinKey(target, finding, document.source.name)) {
+    const merged = mergeExternalFindingIntoCase(cases, target.id, finding, document.source, now);
+    cases = merged.cases;
+    if (!merged.added) {
       duplicatesSkipped += 1;
       continue;
-    }
-    const sourceLimitations = [
-      finding.evidenceClass === 'deployment_observation'
-        ? `Imported as an observation made by ${document.source.name}; this browser session did not collect or independently verify it.`
-        : `Reported by ${document.source.name}; WHOISleuth did not collect or independently verify this provider finding.`,
-      ...(document.source.reference ? [`Source reference: ${document.source.reference}`] : []),
-      ...finding.limitations,
-    ];
-    const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
-    const updated = updateCase(cases, target.id, {
-      evidencePin: {
-        ...structuredPinFields(finding),
-        label: `External ${finding.category} finding`,
-        value: finding.structuredObservation?.value ?? pinValue(finding),
-        source: importedSourceLabel(finding, document.source.name),
-        observedAt: finding.observedAt,
-        completeness: finding.completeness,
-        limitations: sourceLimitations,
-      },
-    }, now);
-    cases = updated.cases;
-    const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
-    if (addedPin) {
-      cases = updateCase(cases, updated.record.id, {
-        sighting: {
-          state: finding.evidenceClass === 'deployment_observation'
-            ? 'observed_by_deployment'
-            : 'reported_by_provider',
-          category: finding.category === 'dns'
-            ? 'delegation'
-            : finding.category === 'certificate'
-              ? 'certificate'
-              : finding.category === 'registration'
-                ? 'registration'
-                : finding.category === 'http' || finding.category === 'page'
-                  ? 'website'
-                  : 'other',
-          source: document.source.name,
-          observedAt: finding.observedAt,
-          completeness: finding.completeness,
-          evidencePinId: addedPin.id,
-          limitations: sourceLimitations,
-        },
-      }, now).cases;
     }
     findingsAdded += 1;
     if (existing) updatedDomains.add(finding.domain);
@@ -470,6 +493,71 @@ export function mergeExternalFindingsIntoCases(
     cases,
     casesCreated: createdDomains.size,
     casesUpdated: updatedDomains.size,
+    findingsAdded,
+    duplicatesSkipped,
+  };
+}
+
+function targetedFinding(finding: ExternalFinding, caseDomain: string): ExternalFinding {
+  if (finding.domain === caseDomain) return finding;
+  const prefix = `Captured hostname ${finding.domain}. `;
+  const maximumSummaryLength = 900;
+  const remaining = maximumSummaryLength - prefix.length;
+  const summary = remaining > 1 && finding.summary.length > remaining
+    ? `${prefix}${finding.summary.slice(0, remaining - 1).trimEnd()}…`
+    : `${prefix}${finding.summary}`;
+  return { ...finding, domain: caseDomain, summary };
+}
+
+export function externalFindingsCaseTargets(
+  document: ExternalFindingsDocument,
+  caseDomain: string,
+): readonly string[] {
+  if (canonicalRegistrableDomain(caseDomain) !== caseDomain) {
+    throw new Error('The selected Case does not have a canonical registrable-domain identity.');
+  }
+  const targets = new Set<string>();
+  for (const finding of document.findings) {
+    if (canonicalRegistrableDomain(finding.domain) !== caseDomain) {
+      throw new Error(`The imported finding for ${finding.domain} does not belong to the selected Case for ${caseDomain}.`);
+    }
+    targets.add(finding.domain);
+  }
+  return Object.freeze([...targets]);
+}
+
+/**
+ * Merges already-validated external findings into one selected Case. A Case is
+ * keyed to its registrable domain, while rendered captures may retain an exact
+ * hostname. Only same-domain findings are accepted, the exact hostname remains
+ * explicit in the retained evidence, and this operation can never open another
+ * Case as a side effect.
+ */
+export function mergeExternalFindingsIntoCase(
+  current: readonly CaseRecord[],
+  caseId: string,
+  document: ExternalFindingsDocument,
+  now: string = new Date().toISOString(),
+): ExternalFindingsCaseMergeResult {
+  const selected = current.find((candidate) => candidate.id === caseId) ?? null;
+  if (!selected) throw new Error('Select an existing Case before importing rendered-capture evidence.');
+  externalFindingsCaseTargets(document, selected.domain);
+
+  let cases = [...current];
+  let record = selected;
+  let findingsAdded = 0;
+  let duplicatesSkipped = 0;
+  for (const original of document.findings) {
+    const finding = targetedFinding(original, selected.domain);
+    const merged = mergeExternalFindingIntoCase(cases, selected.id, finding, document.source, now);
+    cases = merged.cases;
+    record = merged.record;
+    if (merged.added) findingsAdded += 1;
+    else duplicatesSkipped += 1;
+  }
+  return {
+    cases,
+    record,
     findingsAdded,
     duplicatesSkipped,
   };

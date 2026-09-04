@@ -7,12 +7,15 @@ import { describe, test } from 'node:test';
 
 import {
   MAX_RELEASE_VERSION_LENGTH,
+  MAX_RELEASE_DERIVED_REPORTS,
   RELEASE_IDENTITY_PATHS,
   RELEASE_VERSION_CHECK_SCHEMA,
   RELEASE_VERSION_CHECK_VERSION,
+  assertReleaseVersionDerivedCasePack,
   buildReleaseVersionReport,
   formatReleaseVersionReport,
   inspectReleaseVersionIdentity,
+  selectPrecedingPublicReleaseVersion,
   main,
   normalizeSemanticVersion,
   parseArguments,
@@ -97,6 +100,53 @@ describe('release manifest lockstep', () => {
     assert.throws(() => buildReleaseVersionReport(publishable.packageManifest, publishable.lockfile), /remain private/);
   });
 
+  test('requires current generated Case-pack reports to match the release version', () => {
+    const fixture = {
+      version: 14,
+      packet: {
+        schema: 'whoisleuth.cli.case-pack',
+        reports: [{ application: { name: 'WHOISleuth', version: '2.2.0' } }],
+      },
+    };
+    assert.equal(assertReleaseVersionDerivedCasePack(fixture, '2.2.0'), 1);
+    assert.throws(
+      () => assertReleaseVersionDerivedCasePack(fixture, '2.2.1'),
+      /must match release version 2\.2\.1.*canonical writer/u,
+    );
+    assert.throws(
+      () => assertReleaseVersionDerivedCasePack({ ...fixture, version: 13 }, '2.2.0'),
+      /current Case schema/u,
+    );
+    assert.throws(
+      () => assertReleaseVersionDerivedCasePack({
+        ...fixture,
+        packet: { ...fixture.packet, reports: Array(MAX_RELEASE_DERIVED_REPORTS + 1).fill(null) },
+      }, '2.2.0'),
+      /invalid or unbounded/u,
+    );
+  });
+
+  test('selects the latest reachable stable tag before the current release', () => {
+    assert.equal(selectPrecedingPublicReleaseVersion('2.2.0', [
+      'v1.47.4',
+      'v2.0.1',
+      'v2.1.0',
+      'v2.2.0',
+      'v2.3.0',
+      'v2.2.0-rc.1',
+      'not-a-release',
+    ]), '2.1.0');
+    assert.equal(selectPrecedingPublicReleaseVersion('2.1.1', ['v2.1.0', 'v2.0.10']), '2.1.0');
+    assert.throws(
+      () => selectPrecedingPublicReleaseVersion('2.0.0', ['v2.0.0', 'v2.1.0']),
+      /No preceding public release tag/u,
+    );
+    assert.throws(
+      () => selectPrecedingPublicReleaseVersion('2.2.0', []),
+      /tag inventory/u,
+    );
+  });
+
   test('checks repository manifests through the no-argument command', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-release-check-'));
     const { packageManifest, lockfile } = manifests('2.1.0');
@@ -110,9 +160,13 @@ describe('release manifest lockstep', () => {
         stdout: stdout.stream,
         stderr: stderr.stream,
         inspectIdentity: () => ({ state: 'unreleased', checkedPaths: RELEASE_IDENTITY_PATHS.length }),
+        inspectPublicBoundary: () => '2.1.0',
+        inspectDerivedOutputs: async () => ({ checkedFixtures: 1, checkedReports: 1 }),
       }), 0);
       assert.match(stdout.value(), /Version: 2\.1\.0/);
       assert.match(stdout.value(), /Release identity: untagged version/u);
+      assert.match(stdout.value(), /Preceding public compatibility boundary: v2\.1\.0/u);
+      assert.match(stdout.value(), /Version-derived outputs: 1 current fixture\(s\) and 1 embedded report\(s\) match/u);
       assert.equal(stderr.value(), '');
     } finally {
       await rm(directory, { recursive: true, force: true });

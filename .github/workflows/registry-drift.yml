@@ -27,7 +27,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - name: Install locked dependencies
-        run: npm ci --include=optional --ignore-scripts
+        run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Run bounded official-registry audit
         id: audit
         timeout-minutes: 2

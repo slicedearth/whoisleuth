@@ -40,6 +40,7 @@
   --card-shadow-alpha: .22;
   --card-hover-shadow-alpha: .3;
   --body-grid-alpha: .015;
+  --body-grid-step: 3px;
   --body-ambient-alpha: .05;
   --ambient-rgb: 126 224 168;
   --cursor-glow-alpha: .5;
@@ -261,14 +262,31 @@ html { color: var(--text); background: var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
 body {
+  isolation: isolate;
   min-width: 0;
   min-height: 100vh;
   margin: 0;
   line-height: 1.5;
   background:
-    repeating-linear-gradient(0deg, rgb(var(--overlay-rgb) / var(--body-grid-alpha)) 0, rgb(var(--overlay-rgb) / var(--body-grid-alpha)) 1px, transparent 1px, transparent 3px),
     radial-gradient(ellipse 900px 500px at 50% 0, rgb(var(--ambient-rgb) / var(--body-ambient-alpha)), transparent 65%),
     var(--bg);
+}
+
+/* Keep the fine texture on a viewport-sized layer. Painting it across a very
+   tall document can resample the three-pixel cadence into uneven bands. */
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--overlay-rgb) / var(--body-grid-alpha)) 0 1px,
+    transparent 1px 100%
+  );
+  background-repeat: repeat-y;
+  background-size: 100% var(--body-grid-step);
 }
 
 .sr-only {

@@ -74,7 +74,7 @@
   </section>
 
   <section class="primary-references" id="primary-references" aria-labelledby="primary-references-title">
-    <div class="section-intro"><p class="eyebrow">Primary references</p><h2 id="primary-references-title">Specifications behind this guide</h2><p>Use these sources to verify the protocol and evidence boundaries described above.</p></div>
+    <div class="section-intro"><p class="eyebrow">Primary references</p><h2 id="primary-references-title">{resource.referencesTitle ?? 'Specifications behind this guide'}</h2><p>{resource.referencesIntroduction ?? 'Use these sources to verify the protocol and evidence boundaries described above.'}</p></div>
     <ul>
       {#each resource.references as reference}
         <li>

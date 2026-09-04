@@ -36,7 +36,7 @@
 <section class="case-filters card">
   <label class="field">Status<select value={status} onchange={(event) => setStatus(event.currentTarget.value)}><option value="">All statuses</option>{#each statusOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   <label class="field">Disposition<select value={disposition} onchange={(event) => setDisposition(event.currentTarget.value)}><option value="">All dispositions</option>{#each dispositionOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-  <label class="field search">Search<input value={search} oninput={(event) => setSearch(event.currentTarget.value)} placeholder="Domain or tag" autocomplete="off"></label>
+  <label class="field search">Search<input value={search} oninput={(event) => setSearch(event.currentTarget.value)} placeholder="Domain, Case type or tag" autocomplete="off"></label>
   <label class="field">Sort<select value={sort} onchange={(event) => setSort(event.currentTarget.value as Sort)}><option value="updated">Recently updated</option><option value="domain">Domain</option><option value="status">Status</option></select></label>
   <button class="btn" onclick={clear} disabled={!status && !disposition && !search}>Clear</button>
 </section>

@@ -88,7 +88,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'At a glance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Analyst assessment' })).toBeVisible();
   const atAGlance = page.locator('.at-a-glance');
   const glanceGeometry = await atAGlance.evaluate((section) => {
     const intro = section.querySelector('.glance-intro');

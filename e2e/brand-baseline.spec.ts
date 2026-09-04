@@ -138,6 +138,56 @@ test('rapid repeated Brand Profile save persists only one record', async ({ page
   expect(snapshot.records).toHaveLength(1);
 });
 
+test('the active Brand Profile has a separate maintainable allowlist', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]),
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const allowlist = page.getByRole('region', { name: 'Allowlist' });
+  await expect(allowlist).toBeVisible();
+  await allowlist.getByLabel('Add domains').fill('reviewed.example\nstored.example');
+  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await expect(allowlist.getByText('reviewed.example', { exact: true })).toBeVisible();
+  await expect(allowlist.locator('li', { hasText: 'stored.example' })).toHaveCount(0);
+  await allowlist.getByLabel('Add registrar names').fill('Example Registrar');
+  await allowlist.getByRole('button', { name: 'Add', exact: true }).nth(1).click();
+  await expect(allowlist.getByText('Example Registrar', { exact: true })).toBeVisible();
+  await expect(allowlist).toContainText('Unsaved allowlist changes');
+  await allowlist.getByRole('button', { name: 'Save allowlist' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
+
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
+  const persisted = requiredValue(after.records[0], 'The saved Brand Profile is missing.').value;
+  expect(persisted.allowlistedDomains).toEqual(['reviewed.example']);
+  expect(persisted.allowlistedRegistrars).toEqual(['Example Registrar']);
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Allowlist' }).getByText('reviewed.example', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByLabel('Allowlisted domains')).toHaveCount(0);
+  await expect(page.getByLabel('Allowlisted registrars')).toHaveCount(0);
+
+  const openEditorAllowlist = page.getByRole('region', { name: 'Allowlist' });
+  await openEditorAllowlist.getByLabel('Add domains').fill('later-review.example');
+  await openEditorAllowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await openEditorAllowlist.getByRole('button', { name: 'Save allowlist' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
+  await page.getByLabel('Brand name').fill('Renamed Example Brand');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+
+  const afterEditorSave = await readBrowserLocalCollection(page, 'brand_profiles', {
+    minimumRecords: 1,
+    minimumRevision: after.manifest.revision + 2,
+  });
+  const edited = requiredValue(afterEditorSave.records[0], 'The edited Brand Profile is missing.').value;
+  expect(edited.name).toBe('Renamed Example Brand');
+  expect(edited.allowlistedDomains).toEqual(['reviewed.example', 'later-review.example']);
+  expect(edited.allowlistedRegistrars).toEqual(['Example Registrar']);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('captures and persists only a bounded official-site baseline after profile save', async ({ page }) => {
   await page.route('**/api/availability?*', async (route) => route.fulfill({
     status: 200,

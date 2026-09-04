@@ -905,6 +905,9 @@ test('keeps the current queue, results, filters, sort, and page during console n
   await expect(page.locator('.filters').getByRole('button', { name: /^errors / })).toHaveClass(/active/);
 
   await page.reload();
-  await expect(page.locator('#domains')).toHaveValue('');
+  // A hard reload deliberately discards the in-memory session. Under the
+  // four-shard suite the authenticated shell can still be resolving its
+  // bounded session check when the default assertion deadline expires.
+  await expect(page.locator('#domains')).toHaveValue('', { timeout: 15_000 });
   await expect(page.locator('.results-table')).toHaveCount(0);
 });

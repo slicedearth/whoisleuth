@@ -33,6 +33,7 @@ import {
   updateCaseAction,
   updateCaseAssertion,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
+import { CASE_RESPONSE_STAGE_DEFINITIONS } from '../frontend/src/lib/analysis/case-response-stage.ts';
 import * as caseModel from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
 
@@ -40,6 +41,18 @@ const NOW = '2026-07-28T01:00:00.000Z';
 const LATER = '2026-07-29T01:00:00.000Z';
 const NEXT = '2026-07-30T01:00:00.000Z';
 const LATEST = '2026-07-31T01:00:00.000Z';
+
+test('the response workflow retains one ordered canonical stage vocabulary', () => {
+  assert.deepEqual(Object.entries(CASE_RESPONSE_STAGE_DEFINITIONS), [
+    ['observation', { number: 1, label: 'Observation' }],
+    ['assessment', { number: 2, label: 'Assessment' }],
+    ['response_decision', { number: 3, label: 'Response decision' }],
+    ['evidence_handoff', { number: 4, label: 'Evidence handoff' }],
+    ['outcome_tracking', { number: 5, label: 'Outcome tracking' }],
+  ]);
+  assert.equal(Object.isFrozen(CASE_RESPONSE_STAGE_DEFINITIONS), true);
+  assert.equal(Object.values(CASE_RESPONSE_STAGE_DEFINITIONS).every(Object.isFrozen), true);
+});
 
 describe('case response record normalization', () => {
   test('pins keep bounded provenance and explicit completeness', () => {
