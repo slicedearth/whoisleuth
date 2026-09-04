@@ -15,6 +15,7 @@ import { classifyQuery } from '../lib/classify.mts';
 import { registryStandardsCoverageSnapshot } from '../lib/registry-capabilities.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { CAPABILITY_MANIFEST, cliOperationForCommand } from '../packages/contracts/capability-manifest.mts';
+import { CLI_HELP_GROUP_ORDER } from '../packages/contracts/cli-command-semantics.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import {
   CLI_PUBLIC_GUIDANCE,
@@ -82,7 +83,7 @@ function publicCliCatalogue() {
   });
   return Object.freeze({
     commandCount: commands.length,
-    groups: Object.freeze(['investigate', 'respond', 'assure', 'utilities']),
+    groups: CLI_HELP_GROUP_ORDER,
     modes: Object.freeze(['offline', 'network']),
     commands: Object.freeze(commands),
     workflows: Object.freeze({

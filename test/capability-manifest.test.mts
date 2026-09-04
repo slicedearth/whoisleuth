@@ -52,6 +52,7 @@ import {
   capabilityForSourceId,
   cliOperationForCommand,
 } from '../packages/contracts/capability-manifest.mts';
+import { CLI_COMMAND_SEMANTICS } from '../packages/contracts/cli-command-semantics.mts';
 import { buildBulkCollectionPreflight, buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 import { renderCapabilityManifestMarkdown } from '../tools/capability-manifest-renderer.mts';
 import { OUTPUT_PATH, retainedDocument } from '../tools/capability-manifest.mts';
@@ -256,6 +257,7 @@ describe('canonical capability manifest', () => {
       assert.equal(operation.command, command);
       assert.equal(operation.collectionMode, COMMAND_COLLECTION[command].mode);
       assert.equal(operation.capabilityFamilyId, CLI_CAPABILITY_BINDINGS[command]);
+      assert.equal(operation.capabilityFamilyId, CLI_COMMAND_SEMANTICS[command].capabilityFamilyId);
       assert.match(
         commandHelp(command),
         operation.collectionMode === 'offline' ? /Collection:\n  Offline:/u : /Collection:\n  Network:/u,

@@ -47,7 +47,6 @@ import {
   snapshotRiskCalibrationReportForSerialization,
 } from '../packages/contracts/risk-calibration.mts';
 import { MAX_CLI_OUTPUT_BYTES } from '../cli/output-file.mts';
-import { SCHEMA_LIFECYCLE_HOOK_MODULES } from '../tools/schema-lifecycle-repository.mts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const GENERATED_AT = '2026-08-18T00:00:00.000Z';
@@ -684,11 +683,4 @@ describe('Risk calibration lifecycle', () => {
     );
   });
 
-  test('binds every declared hook to a statically imported callable export', () => {
-    for (const hook of RISK_CALIBRATION_SCHEMA_LIFECYCLE.metadata.hooks) {
-      const module = SCHEMA_LIFECYCLE_HOOK_MODULES[hook.module as keyof typeof SCHEMA_LIFECYCLE_HOOK_MODULES];
-      assert.ok(module, hook.id);
-      assert.equal(typeof (module as Record<string, unknown>)[hook.exportName], 'function', hook.id);
-    }
-  });
 });

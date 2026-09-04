@@ -46,6 +46,10 @@ import { WORKFLOW_COMMAND_HANDLERS } from '../cli/workflow-command-runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
 import {
+  CLI_COMMAND_SEMANTICS,
+  CLI_HELP_GROUP_ORDER,
+} from '../packages/contracts/cli-command-semantics.mts';
+import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -208,9 +212,15 @@ describe('canonical CLI command registry', () => {
     assert.equal(isCliCommand('not-a-command'), false);
 
     const helpCommands = Object.values(HELP_COMMANDS_BY_GROUP).flat();
+    assert.deepEqual(Object.keys(HELP_COMMANDS_BY_GROUP), [...CLI_HELP_GROUP_ORDER]);
     assert.equal(helpCommands.length, CLI_COMMANDS.length);
     assert.deepEqual([...helpCommands].sort(), [...CLI_COMMANDS].sort());
     assert.equal(new Set(helpCommands).size, CLI_COMMANDS.length);
+    assert.equal(CLI_HELP_GROUP_ORDER.every((group) => HELP_COMMANDS_BY_GROUP[group].length > 0), true);
+    assert.deepEqual(Object.keys(CLI_COMMAND_SEMANTICS), [...CLI_COMMANDS]);
+    for (const definition of CLI_COMMAND_REGISTRY) {
+      assert.equal(definition.help.group, CLI_COMMAND_SEMANTICS[definition.command].group);
+    }
   });
 
   test('owns typed option grammar, bounded values, ranges, occurrences, and constraints', () => {

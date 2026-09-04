@@ -1,3 +1,9 @@
+import {
+  CAPABILITY_IDS,
+  CLI_COMMAND_SEMANTICS,
+  type CapabilityId,
+} from './cli-command-semantics.mts';
+
 const CAPABILITY_MANIFEST_SCHEMA = 'whoisleuth.capability-manifest';
 const CAPABILITY_MANIFEST_VERSION = 1 as const;
 const MAX_CAPABILITY_MANIFEST_BYTES = 256 * 1024;
@@ -23,44 +29,8 @@ const CAPABILITY_OUTCOME_STATES = Object.freeze([
   'budget_exhausted',
 ] as const);
 
-const CAPABILITY_IDS = Object.freeze({
-  LOOKUP: 'lookup',
-  RDAP: 'rdap',
-  RDAP_NAMESERVER_SEARCH: 'rdap_nameserver_search',
-  WHOIS: 'whois',
-  AVAILABILITY: 'availability',
-  DOMAIN_EVIDENCE: 'domain_evidence',
-  DNS_INTELLIGENCE: 'dns_intelligence',
-  WEBSITE_PROBE: 'website_probe',
-  TLS_INTELLIGENCE: 'tls_intelligence',
-  CERTIFICATE_TRANSPARENCY: 'certificate_transparency',
-  SECURITY_TXT: 'security_txt',
-  EXTERNAL_INTELLIGENCE: 'external_intelligence',
-  URLSCAN_SEARCH: 'urlscan_search',
-  URLHAUS_HOST: 'urlhaus_host',
-  THREATFOX_DOMAIN_IOC: 'threatfox_domain_ioc',
-  REGISTRAR_RDAP: 'registrar_rdap',
-  NETWORK_CONTEXT: 'network_context',
-  REVERSE_DNS: 'reverse_dns',
-  DOMAIN_POSTURE: 'domain_posture',
-  DNSSEC_VALIDATION: 'dnssec_validation',
-  MAIL_TRANSPORT_REVIEW: 'mail_transport_review',
-  RENDERED_WEB_CAPTURE: 'rendered_web_capture',
-  RENDERED_CAPTURE_COMPARISON: 'rendered_capture_comparison',
-  IDN_CONFUSABLES: 'idn_confusables',
-  ANALYST_CASES: 'analyst_cases',
-  WATCHLISTS: 'watchlists',
-  OFFLINE_REVIEW: 'offline_review',
-  PORTABLE_EVIDENCE: 'portable_evidence',
-  RUNTIME_DIAGNOSTICS: 'runtime_diagnostics',
-  WORKFLOW_EXECUTION: 'workflow_execution',
-  SCHEDULED_MONITORING: 'scheduled_monitoring',
-  DISTRIBUTED_BUDGETS: 'distributed_budgets',
-} as const);
-
 type ExecutionPlane = typeof EXECUTION_PLANES[number];
 type CapabilityOutcomeState = typeof CAPABILITY_OUTCOME_STATES[number];
-type CapabilityId = typeof CAPABILITY_IDS[keyof typeof CAPABILITY_IDS];
 type CapabilityJob = 'investigate' | 'respond' | 'assure' | 'platform';
 type CapabilityTrigger =
   | 'explicit_browser_action'
@@ -1270,56 +1240,12 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
   }),
 ]);
 
-const CLI_CAPABILITY_BINDINGS = Object.freeze({
-  completion: CAPABILITY_IDS.OFFLINE_REVIEW,
-  doctor: CAPABILITY_IDS.RUNTIME_DIAGNOSTICS,
-  commands: CAPABILITY_IDS.OFFLINE_REVIEW,
-  manual: CAPABILITY_IDS.OFFLINE_REVIEW,
-  manifest: CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'map-observations': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'oam-export': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  lookup: CAPABILITY_IDS.LOOKUP,
-  bulk: CAPABILITY_IDS.LOOKUP,
-  'ct-search': CAPABILITY_IDS.CERTIFICATE_TRANSPARENCY,
-  'ct-intake': CAPABILITY_IDS.OFFLINE_REVIEW,
-  discover: CAPABILITY_IDS.OFFLINE_REVIEW,
-  'discover-scan': CAPABILITY_IDS.LOOKUP,
-  posture: CAPABILITY_IDS.DOMAIN_POSTURE,
-  http: CAPABILITY_IDS.WEBSITE_PROBE,
-  tls: CAPABILITY_IDS.TLS_INTELLIGENCE,
-  'dnssec-validate': CAPABILITY_IDS.DNSSEC_VALIDATION,
-  'mail-transport': CAPABILITY_IDS.MAIL_TRANSPORT_REVIEW,
-  'registry-support': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'registry-doctor': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'registry-cohort': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'registry-scaffold': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'risk-calibrate': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'lookalike-calibrate': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'verify-artifact': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'interchange-report': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'inspect-archive': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'sign-artifact': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'verify-signature': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'source-report': CAPABILITY_IDS.OFFLINE_REVIEW,
-  compare: CAPABILITY_IDS.OFFLINE_REVIEW,
-  'page-compare': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'mail-review': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'mail-headers': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'review-evidence': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  brief: CAPABILITY_IDS.OFFLINE_REVIEW,
-  'case-pack': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'domain-control': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'monitor-once': CAPABILITY_IDS.LOOKUP,
-  assurance: CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'change-packet': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'sharing-review': CAPABILITY_IDS.PORTABLE_EVIDENCE,
-  'workflow-plan': CAPABILITY_IDS.OFFLINE_REVIEW,
-  'workflow-run': CAPABILITY_IDS.WORKFLOW_EXECUTION,
-  diff: CAPABILITY_IDS.OFFLINE_REVIEW,
-  reconcile: CAPABILITY_IDS.OFFLINE_REVIEW,
-  timeline: CAPABILITY_IDS.OFFLINE_REVIEW,
-  export: CAPABILITY_IDS.PORTABLE_EVIDENCE,
-} as const satisfies Readonly<Record<string, CapabilityId>>);
+const CLI_CAPABILITY_BINDINGS = Object.freeze(Object.fromEntries(
+  Object.entries(CLI_COMMAND_SEMANTICS).map(([command, semantic]) => [
+    command,
+    semantic.capabilityFamilyId,
+  ]),
+)) as Readonly<Record<keyof typeof CLI_COMMAND_SEMANTICS, CapabilityId>>;
 
 const CAPABILITY_SOURCE_ALIASES = Object.freeze({
   malware_host_intelligence: CAPABILITY_IDS.URLHAUS_HOST,

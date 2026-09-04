@@ -13,6 +13,12 @@ import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import {
+  CLI_COMMAND_SEMANTICS,
+  CLI_HELP_GROUP_ORDER,
+  type CliCommand,
+  type CliHelpGroup,
+} from '../packages/contracts/cli-command-semantics.mts';
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
@@ -24,7 +30,6 @@ const LEGACY_WORKSPACE_ARCHIVE_SCOPE = LEGACY_WORKSPACE_ARCHIVE_VERSIONS
   .map((version) => `v${version}`)
   .join(' and ');
 
-type CliCommand = keyof typeof COMMAND_SEEDS;
 type CompletionShell = 'bash' | 'zsh' | 'fish' | 'powershell';
 type CommandDetail = Readonly<{
   description: string;
@@ -37,7 +42,6 @@ type CommandCollection = Readonly<{
 }>;
 type CliNetworkEffect = 'offline' | 'always_network' | 'conditional_network';
 type CliInvocationNetworkEffect = 'offline' | 'network';
-type CliHelpGroup = 'investigate' | 'respond' | 'assure' | 'utilities';
 type CliDisclosureClass = 'none' | 'bounded_passive' | 'conditional_bounded_passive' | 'bounded_authorised_active';
 type CliOptionValueKind = 'enum' | 'file' | 'flag' | 'integer' | 'policy_list' | 'text';
 type CliOptionOccurrence = 'idempotent' | 'once' | 'repeatable';
@@ -425,7 +429,6 @@ type CliCommandSeed = Readonly<{
   options: readonly string[];
   positionals: readonly CliPositionalSpec[];
   constraints: readonly CliGrammarConstraint[];
-  helpGroup: CliHelpGroup;
   handlerOwner: CliHandlerOwner;
   networkEffect: CliNetworkEffect;
   common: boolean;
@@ -463,7 +466,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: [],
     positionals: Object.freeze([positional('shell', 'enum', 1, 1, ['bash', 'zsh', 'fish', 'powershell'])]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'utilities',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -485,7 +487,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--network', '--json', '--quiet', '--no-color'],
     positionals: NO_POSITIONALS,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'utilities',
     handlerOwner: 'inline',
     networkEffect: 'conditional_network',
     common: true,
@@ -507,7 +508,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--common', '--group', '--mode', '--json', '--quiet', '--no-color'],
     positionals: NO_POSITIONALS,
     constraints: Object.freeze([]),
-    helpGroup: 'utilities',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -529,7 +529,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: [],
     positionals: NO_POSITIONALS,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'utilities',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -553,7 +552,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -575,7 +573,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -597,7 +594,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -629,7 +625,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'requires_any', option: '--no-attribution', requiredOptions: ['--markdown', '--html'] }),
     constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--junit', '--markdown', '--html', '--summary', '--verbose', '--strict-exit', '--events', '--quiet', '--fail-on'] }),
   ]),
-    helpGroup: 'investigate',
     handlerOwner: 'lookup',
     networkEffect: 'conditional_network',
     common: true,
@@ -657,7 +652,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'requires_all', option: '--resume', requiredOptions: ['--checkpoint'] }),
     constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--junit', '--csv', '--domains', '--queries', '--events', '--checkpoint', '--resume', '--quiet', '--fail-on'] }),
   ]),
-    helpGroup: 'investigate',
     handlerOwner: 'bulk',
     networkEffect: 'conditional_network',
     common: true,
@@ -679,7 +673,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('keyword', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -701,7 +694,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -727,7 +719,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'mutually_exclusive', options: ['--preset', '--families'] }),
     constraint({ kind: 'value_excludes', option: '--preset', value: 'common', excludedOptions: ['--dictionary'] }),
   ]),
-    helpGroup: 'investigate',
     handlerOwner: 'discovery',
     networkEffect: 'offline',
     common: true,
@@ -757,7 +748,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'value_excludes', option: '--preset', value: 'common', excludedOptions: ['--dictionary'] }),
     constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--csv', '--domains', '--events', '--checkpoint', '--resume', '--observation-snapshot', '--quiet', '--fail-on'] }),
   ]),
-    helpGroup: 'investigate',
     handlerOwner: 'discovery_scan',
     networkEffect: 'conditional_network',
     common: true,
@@ -782,7 +772,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--sarif'] }),
     constraint({ kind: 'requires_all', option: '--sarif', requiredOptions: ['--owned-domain'] }),
   ]),
-    helpGroup: 'investigate',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -804,7 +793,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -826,7 +814,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('hostname', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -850,7 +837,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--resolver', '--trust-anchor', '--owned-or-authorized'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -874,7 +860,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--resolver', '--trust-anchor', '--owned-or-authorized', '--active-probe'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'network',
     networkEffect: 'always_network',
     common: false,
@@ -896,7 +881,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain-or-suffix', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -918,7 +902,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -940,7 +923,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -964,7 +946,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--profile', '--suffix', '--scenario'] }),
   ]),
-    helpGroup: 'utilities',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -988,7 +969,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--summary-json'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1010,7 +990,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1035,7 +1014,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'requires_all', option: '--manifest', requiredOptions: ['--manifest-entry'] }),
     constraint({ kind: 'requires_all', option: '--manifest-entry', requiredOptions: ['--manifest'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1057,7 +1035,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--passphrase-file', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1082,7 +1059,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'requires_all', option: '--reveal', requiredOptions: ['--search'] }),
     constraint({ kind: 'requires_all', option: '--require-match', requiredOptions: ['--search'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'evidence',
     networkEffect: 'offline',
     common: false,
@@ -1106,7 +1082,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--private-key-file'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'evidence',
     networkEffect: 'offline',
     common: false,
@@ -1128,7 +1103,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--public-key-file', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'evidence',
     networkEffect: 'offline',
     common: false,
@@ -1150,7 +1124,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1172,7 +1145,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1194,7 +1166,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1216,7 +1187,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1238,7 +1208,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1260,7 +1229,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1290,7 +1258,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'investigate',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1314,7 +1281,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--audience', '--reviewed'] }),
   ]),
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1336,7 +1302,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1360,7 +1325,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--junit'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'always_network',
     common: false,
@@ -1382,7 +1346,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1404,7 +1367,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1428,7 +1390,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--marking', '--recipient-scope', '--purpose'] }),
   ]),
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1455,7 +1416,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--list', '--explain'] }),
   ]),
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1480,7 +1440,6 @@ const COMMAND_SEEDS = Object.freeze({
     positional('subject', 'text', 1, 1),
   ]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'conditional_network',
     common: false,
@@ -1502,7 +1461,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--left-session', '--right-session', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1524,7 +1482,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 5)]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1546,7 +1503,6 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 20)]),
     constraints: EMPTY_CONSTRAINTS,
-    helpGroup: 'assure',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: false,
@@ -1572,7 +1528,6 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'excludes_all', option: '--compact', excludedOptions: ['--markdown', '--html'] }),
     constraint({ kind: 'requires_any', option: '--no-attribution', requiredOptions: ['--markdown', '--html'] }),
   ]),
-    helpGroup: 'respond',
     handlerOwner: 'inline',
     networkEffect: 'offline',
     common: true,
@@ -1582,14 +1537,13 @@ const COMMAND_SEEDS = Object.freeze({
     additionalOutputFormats: Object.freeze(['JSON']),
     bootstrapProfile: 'allowed',
   }),
-});
+} satisfies Readonly<Record<CliCommand, CliCommandSeed>>);
 
 const COMMAND_ORDER = Object.freeze(Object.keys(COMMAND_SEEDS)) as readonly CliCommand[];
-const HELP_GROUP_ORDER = Object.freeze(['investigate', 'respond', 'assure', 'utilities'] as const);
 const HELP_COMMANDS_BY_GROUP = Object.freeze(Object.fromEntries(
-  HELP_GROUP_ORDER.map((group) => [
+  CLI_HELP_GROUP_ORDER.map((group) => [
     group,
-    Object.freeze(COMMAND_ORDER.filter((command) => COMMAND_SEEDS[command].helpGroup === group)),
+    Object.freeze(COMMAND_ORDER.filter((command) => CLI_COMMAND_SEMANTICS[command].group === group)),
   ]),
 )) as Readonly<Record<CliHelpGroup, readonly CliCommand[]>>;
 
@@ -1674,7 +1628,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
         networkEffect: seed.networkEffect,
       }),
       help: Object.freeze({
-        group: seed.helpGroup,
+        group: CLI_COMMAND_SEMANTICS[command].group,
         summary: seed.summary,
       }),
       documentation: documentationMetadata(seed, commonOptions, commandOptions, seed.positionals),
