@@ -214,6 +214,10 @@ Later comparison is explicit. It preserves collection-condition changes,
 unavailable components and incompatible model versions instead of treating
 omission as removal.
 
+The Monitor follow-up calendar exports only selected dated records. It names
+the stable Case reference by default; investigated domains, recipients, Case
+types and event details require separate disclosure choices.
+
 ### Defensive and assurance outputs
 
 Defensive domain exports require deliberate reviewed selection and contain

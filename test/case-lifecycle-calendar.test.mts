@@ -4,6 +4,7 @@ import {
   buildCaseLifecycleEvents,
   filterCaseLifecycleEvents,
   serializeCaseLifecycleCalendar,
+  serializeCaseLifecycleCalendarEvents,
 } from '../frontend/src/lib/analysis/case-lifecycle-calendar.ts';
 import { normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
 
@@ -12,6 +13,7 @@ describe('case lifecycle calendar', () => {
     const record = normalizeCase({
       id: 'case-1',
       domain: 'example.test',
+      tags: ['case-type:phishing'],
       source: 'manual',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -122,15 +124,34 @@ describe('case lifecycle calendar', () => {
       ['certificate_expiry_review'],
     );
     const calendar = serializeCaseLifecycleCalendar(record ? [record] : [], '2026-06-01T00:00:00.000Z');
+    const unfoldedCalendar = calendar.replaceAll(/\r\n[ \t]/gu, '');
     assert.match(calendar, /BEGIN:VCALENDAR/);
     assert.match(calendar, /X-WHOISLEUTH-SCHEMA:whoisleuth\.case-review-calendar/);
+    assert.match(calendar, /X-WHOISLEUTH-CASE-REFERENCE:WS-/u);
     assert.doesNotMatch(calendar, /X-WHOISLEUTH-(?:APP-)?VERSION/iu);
     assert.doesNotMatch(calendar, /private-route/);
-    assert.match(calendar, /performs no request/iu);
+    assert.doesNotMatch(calendar, /example\.test|phishing|action state/iu);
+    assert.match(unfoldedCalendar, /calendar event makes no request/iu);
     assert.doesNotMatch(
       serializeCaseLifecycleCalendar([], '2026-06-01T00:00:00.000Z'),
       /X-WHOISLEUTH-SCHEMA/iu,
     );
+
+    const selected = events.filter((event) => event.kind === 'action_follow_up');
+    const disclosed = serializeCaseLifecycleCalendarEvents(selected, {
+      includeDomain: true,
+      includeRecipient: true,
+      includeContext: true,
+    }, '2026-06-01T00:00:00.000Z');
+    const unfoldedDisclosed = disclosed.replaceAll(/\r\n[ \t]/gu, '');
+    assert.equal(disclosed.match(/BEGIN:VEVENT/gu)?.length, 1);
+    assert.match(unfoldedDisclosed, /example\.test/u);
+    assert.match(unfoldedDisclosed, /private-route@example\.test/u);
+    assert.match(unfoldedDisclosed, /Case types: Phishing/u);
+    assert.match(unfoldedDisclosed, /Case action state: drafting/u);
+    for (const line of disclosed.split('\r\n').filter(Boolean)) {
+      assert.ok(Buffer.byteLength(line, 'utf8') <= 75, `Calendar line exceeds 75 octets: ${line}`);
+    }
 
     const hostileCalendar = serializeCaseLifecycleCalendar(record ? [{
       ...record,

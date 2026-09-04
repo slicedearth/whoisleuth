@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 4 September 2026.
+Last updated: 5 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -82,10 +82,10 @@ target state or silently mark an item reviewed.
 Creating or refreshing a Case is deliberate. Current Case schema 15 can retain
 the exact normalised submitted hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
-review times. Supported Case schemas 12, 13 and 14 migrate directly; migrated
-fields can remain null, unknown or blank because WHOISleuth does not reconstruct
-them from weaker evidence. Case report v11 JSON and Markdown do not add the
-snapshot hostname.
+review times. Exact public v1 Case schema 12 and published-v2 schemas 13 and 14
+remain readable and migrate directly; migrated fields can remain null, unknown
+or blank because WHOISleuth does not reconstruct them from weaker evidence.
+Case report v11 JSON and Markdown do not add the snapshot hostname.
 
 A Case can also retain controlled classifications and exact HTTP(S) incident
 links as browser-local Case metadata. Exact links can contain public paths,
@@ -264,6 +264,10 @@ Different exports have different sensitivity:
   contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
+- selected Case follow-up calendars identify only the stable Case reference by
+  default. Investigated domains, recipients, Case types and event details are
+  separate opt-ins, and a calendar or synchronisation provider can retain any
+  field the analyst chooses to include; and
 - defensive exports contain reviewed selected domains and rollback metadata but
   are never uploaded or applied automatically.
 

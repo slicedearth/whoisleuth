@@ -1,5 +1,6 @@
 import type { CaseRecord } from './case-model.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { caseNumber, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;
@@ -10,13 +11,22 @@ export type CaseLifecycleCalendarSource = 'case_action' | 'observed_effect_revie
 export type CaseLifecycleCalendarEvent = Readonly<{
   uid: string;
   caseId: string;
+  caseReference: string;
   domain: string;
+  recipient: string | null;
+  classification: string | null;
   kind: CaseLifecycleCalendarKind;
   source: CaseLifecycleCalendarSource;
   sourceLabel: string;
   startsAt: string;
   summary: string;
   description: string;
+}>;
+
+export type CaseLifecycleCalendarDisclosure = Readonly<{
+  includeDomain?: boolean;
+  includeRecipient?: boolean;
+  includeContext?: boolean;
 }>;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -45,19 +55,40 @@ function calendarDate(value: string): string {
 }
 
 function foldLine(value: string): string {
+  const encoder = new TextEncoder();
   const parts: string[] = [];
-  let remaining = value;
-  while (remaining.length > 74) {
-    parts.push(remaining.slice(0, 74));
-    remaining = ` ${remaining.slice(74)}`;
+  let current = '';
+  let byteLimit = 75;
+  for (const character of value) {
+    if (current && encoder.encode(`${current}${character}`).byteLength > byteLimit) {
+      parts.push(current);
+      current = character;
+      byteLimit = 74;
+    } else {
+      current += character;
+    }
   }
-  parts.push(remaining);
-  return parts.join('\r\n');
+  parts.push(current);
+  return parts.map((part, index) => index === 0 ? part : ` ${part}`).join('\r\n');
 }
+
+const EVENT_LABELS: Readonly<Record<CaseLifecycleCalendarKind, string>> = Object.freeze({
+  action_due: 'Case action due',
+  action_follow_up: 'Case action follow-up',
+  observed_effect_follow_up: 'Independent effect review',
+  certificate_expiry_review: 'Certificate evidence review',
+  disclosure_expiry_review: 'Disclosure evidence review',
+  domain_expiry_review: 'Domain expiry evidence review',
+});
 
 export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
   const events: CaseLifecycleCalendarEvent[] = [];
   for (const record of records.slice(0, 500)) {
+    const caseContext = {
+      caseReference: caseNumber(record.id),
+      domain: record.domain,
+      classification: caseTypeSummary(record.tags) || null,
+    };
     for (const action of record.actions.slice(-50)) {
       const dueAt = timestamp(action.dueAt);
       const followUpAt = timestamp(action.followUpAt);
@@ -65,7 +96,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         events.push({
           uid: `${record.id}-${action.id}-due`,
           caseId: record.id,
-          domain: record.domain,
+          ...caseContext,
+          recipient: action.recipient,
           kind: 'action_due',
           source: 'case_action',
           sourceLabel: 'Saved case action',
@@ -78,7 +110,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         events.push({
           uid: `${record.id}-${action.id}-follow-up`,
           caseId: record.id,
-          domain: record.domain,
+          ...caseContext,
+          recipient: action.recipient,
           kind: 'action_follow_up',
           source: 'case_action',
           sourceLabel: 'Saved case action',
@@ -94,7 +127,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
       events.push({
         uid: `${record.id}-${review.id}-effect-follow-up`,
         caseId: record.id,
-        domain: record.domain,
+        ...caseContext,
+        recipient: null,
         kind: 'observed_effect_follow_up',
         source: 'observed_effect_review',
         sourceLabel: 'Independent observed-effect review',
@@ -108,7 +142,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
       events.push({
         uid: `${record.id}-${expiry.slice(0, 10)}-expiry-review`,
         caseId: record.id,
-        domain: record.domain,
+        ...caseContext,
+        recipient: null,
         kind: 'domain_expiry_review',
         source: 'evidence_history',
         sourceLabel: 'Latest retained domain evidence',
@@ -128,7 +163,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
       events.push({
         uid: `${record.id}-${certificateExpiry.slice(0, 10)}-certificate-review`,
         caseId: record.id,
-        domain: record.domain,
+        ...caseContext,
+        recipient: null,
         kind: 'certificate_expiry_review',
         source: 'evidence_pin',
         sourceLabel: 'Analyst-selected TLS evidence pin',
@@ -142,7 +178,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
       events.push({
         uid: `${record.id}-${disclosureExpiry.slice(0, 10)}-disclosure-review`,
         caseId: record.id,
-        domain: record.domain,
+        ...caseContext,
+        recipient: null,
         kind: 'disclosure_expiry_review',
         source: 'evidence_pin',
         sourceLabel: 'Analyst-selected disclosure evidence pin',
@@ -193,8 +230,9 @@ export function filterCaseLifecycleEvents(
   }).slice(0, MAX_CASE_LIFECYCLE_EVENTS);
 }
 
-export function serializeCaseLifecycleCalendar(
-  records: readonly CaseRecord[],
+export function serializeCaseLifecycleCalendarEvents(
+  events: readonly CaseLifecycleCalendarEvent[],
+  disclosure: CaseLifecycleCalendarDisclosure = {},
   generatedAt: unknown = new Date().toISOString(),
 ): string {
   const createdAt = timestamp(generatedAt) || new Date(0).toISOString();
@@ -204,21 +242,40 @@ export function serializeCaseLifecycleCalendar(
     'PRODID:-//WHOISleuth//Browser-local case review//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:${escapeCalendarText('WHOISleuth case reviews')}`,
+    `X-WR-CALNAME:${escapeCalendarText('WHOISleuth case follow-ups')}`,
   ];
-  for (const event of buildCaseLifecycleEvents(records)) {
+  const seen = new Set<string>();
+  for (const event of events.slice(0, MAX_CASE_LIFECYCLE_EVENTS)) {
+    if (seen.has(event.uid)) continue;
+    seen.add(event.uid);
+    const summaryParts = [EVENT_LABELS[event.kind], event.caseReference];
+    if (disclosure.includeDomain) summaryParts.push(event.domain);
+    const descriptions = ['Open the browser-local Case before acting. This calendar event makes no request.'];
+    if (disclosure.includeRecipient && event.recipient) descriptions.push(`Recipient or internal owner: ${event.recipient}.`);
+    if (disclosure.includeContext) {
+      if (event.classification) descriptions.push(`Case types: ${event.classification}.`);
+      descriptions.push(event.description);
+    }
     lines.push(
       'BEGIN:VEVENT',
       `UID:${escapeCalendarText(`${event.uid}@whoisleuth.local`)}`,
       `DTSTAMP:${calendarDate(createdAt)}`,
       `DTSTART:${calendarDate(event.startsAt)}`,
-      `SUMMARY:${escapeCalendarText(event.summary)}`,
-      `DESCRIPTION:${escapeCalendarText(event.description)}`,
+      `SUMMARY:${escapeCalendarText(summaryParts.join(' · '))}`,
+      `DESCRIPTION:${escapeCalendarText(descriptions.join(' '))}`,
       `X-WHOISLEUTH-SCHEMA:${CASE_LIFECYCLE_CALENDAR_SCHEMA}`,
-      `X-WHOISLEUTH-CASE-ID:${escapeCalendarText(event.caseId)}`,
+      `X-WHOISLEUTH-CASE-REFERENCE:${escapeCalendarText(event.caseReference)}`,
       'END:VEVENT',
     );
   }
   lines.push('END:VCALENDAR');
   return lines.map(foldLine).join('\r\n').concat('\r\n');
+}
+
+export function serializeCaseLifecycleCalendar(
+  records: readonly CaseRecord[],
+  generatedAt: unknown = new Date().toISOString(),
+  disclosure: CaseLifecycleCalendarDisclosure = {},
+): string {
+  return serializeCaseLifecycleCalendarEvents(buildCaseLifecycleEvents(records), disclosure, generatedAt);
 }
