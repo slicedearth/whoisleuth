@@ -37,6 +37,7 @@ import {
   main as toolchainCompatibilityMain,
   satisfiesCaretAlternatives,
 } from '../tools/toolchain-compatibility.mts';
+import { runFunctionalRunsSerially } from '../tools/playwright-balanced-suite.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -476,6 +477,9 @@ describe('continuous integration workflow', () => {
     assert.match(BALANCED_SHARD_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
     assert.match(BALANCED_SUITE_SOURCE, /aggregatePlaywrightShardTimings\(reports\)/u);
     assert.match(BALANCED_SUITE_SOURCE, /buildVerificationTimingUpdateCandidate\(\[/u);
+    assert.match(BALANCED_SUITE_SOURCE, /runFunctionalRunsSerially\(functionalRuns/u);
+    assert.doesNotMatch(BALANCED_SUITE_SOURCE, /Promise\.all\(functionalRuns\.map/u);
+    assert.match(BALANCED_SUITE_SOURCE, /-serial-shards`/u);
     assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');
     assert.deepEqual(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, [
       'e2e/console-loading.spec.ts',
@@ -517,6 +521,44 @@ describe('continuous integration workflow', () => {
     assert.match(deferredOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.residualLayoutShiftScore\)\.toBeLessThanOrEqual/u);
     assert.match(deferredOutsideAuthority, /expect\(captured\.investigationRequests[^\n]+\)\.toEqual\(\[\]\)/u);
+  });
+
+  test('stops serial local browser shards after an interruption without hiding ordinary failures', async () => {
+    const runs = ['1/4', '2/4', '3/4'].map((identity, index) => ({
+      label: `functional shard ${identity}`,
+      environment: {},
+      port: 4_180 + index,
+      args: ['runner', `--run=${identity}`],
+    }));
+    const interruptedLaunches: string[] = [];
+    const verifiedPorts: number[] = [];
+    let interrupted = false;
+    const interruptedResult = await runFunctionalRunsSerially(runs, {
+      execute: async (run) => {
+        interruptedLaunches.push(run.label);
+        interrupted = true;
+        return 2;
+      },
+      verifyPortFree: async (run) => {
+        verifiedPorts.push(run.port);
+      },
+      isInterrupted: () => interrupted,
+    });
+    assert.deepEqual(interruptedLaunches, ['functional shard 1/4']);
+    assert.deepEqual(verifiedPorts, [4_180]);
+    assert.deepEqual(interruptedResult, { exits: [2], interrupted: true });
+
+    const ordinaryLaunches: string[] = [];
+    const ordinaryResult = await runFunctionalRunsSerially(runs, {
+      execute: async (run) => {
+        ordinaryLaunches.push(run.label);
+        return run.label.endsWith('2/4') ? 2 : 0;
+      },
+      verifyPortFree: async () => undefined,
+      isInterrupted: () => false,
+    });
+    assert.deepEqual(ordinaryLaunches, runs.map((run) => run.label));
+    assert.deepEqual(ordinaryResult, { exits: [0, 2, 0], interrupted: false });
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {

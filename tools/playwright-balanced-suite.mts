@@ -27,8 +27,22 @@ const SHARD_RUNNER = path.join(REPOSITORY_ROOT, 'tools', 'playwright-balanced-sh
 const DEFAULT_BASE_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const activeChildren = new Set<ChildProcess>();
+let interruptionRequested = false;
 
 type SuiteOptions = Readonly<{ useBuild: boolean }>;
+
+type FunctionalRun = Readonly<{
+  label: string;
+  environment: NodeJS.ProcessEnv;
+  port: number;
+  args: readonly string[];
+}>;
+
+type FunctionalRunDependencies = Readonly<{
+  execute: (run: FunctionalRun) => Promise<number>;
+  verifyPortFree: (run: FunctionalRun) => Promise<void>;
+  isInterrupted: () => boolean;
+}>;
 
 function parseOptions(args: readonly string[]): SuiteOptions {
   if (args.length > 1 || args.some((value) => value !== '--use-build')) {
@@ -129,7 +143,7 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
       '--lane=browser',
       `--report=${aggregatePath}`,
       `--provenance-id=browser-local-parity-${process.pid}-${Date.now()}`,
-      `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}`,
+      `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-serial-shards`,
       '--sample-basis=complete-four-shard-functional-run',
     ]);
     if (candidate.inventoryFingerprint !== result.aggregate.inventoryFingerprint) {
@@ -145,71 +159,108 @@ function stopChildren(): void {
   for (const child of activeChildren) child.kill('SIGTERM');
 }
 
+export async function runFunctionalRunsSerially(
+  runs: readonly FunctionalRun[],
+  dependencies: FunctionalRunDependencies,
+): Promise<Readonly<{ exits: readonly number[]; interrupted: boolean }>> {
+  const exits: number[] = [];
+  for (const run of runs) {
+    if (dependencies.isInterrupted()) {
+      return Object.freeze({ exits: Object.freeze(exits), interrupted: true });
+    }
+    exits.push(await dependencies.execute(run));
+    await dependencies.verifyPortFree(run);
+    if (dependencies.isInterrupted()) {
+      return Object.freeze({ exits: Object.freeze(exits), interrupted: true });
+    }
+  }
+  return Object.freeze({ exits: Object.freeze(exits), interrupted: false });
+}
+
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
     assertFrontendBuildIntegrity(REPOSITORY_ROOT);
 
+    if (interruptionRequested) return 130;
+
     const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const ports = await selectPortRange(plan.shardCount + 1);
-    const performanceEnvironment = runEnvironment(ports[plan.shardCount]!, 'performance');
-    const performanceExit = await runProcess(
-      'isolated performance authority',
-      playwrightPerformanceAuthorityArguments(PLAYWRIGHT_CLI),
-      performanceEnvironment,
-    );
-    if (performanceExit !== 0) {
-      await requirePortRangeFree(ports);
-      return performanceExit;
-    }
+    try {
+      if (interruptionRequested) return 130;
+      const performanceEnvironment = runEnvironment(ports[plan.shardCount]!, 'performance');
+      const performanceExit = await runProcess(
+        'isolated performance authority',
+        playwrightPerformanceAuthorityArguments(PLAYWRIGHT_CLI),
+        performanceEnvironment,
+      );
+      if (interruptionRequested) return 130;
+      if (performanceExit !== 0) return performanceExit;
 
-    const functionalRuns = plan.shards.map((shard, index) => {
-      const identity = `${shard.shard}/${plan.shardCount}`;
-      const environment = runEnvironment(ports[index]!, 'functional', identity);
-      return Object.freeze({
-        label: `functional shard ${identity}`,
-        environment,
-        promise: runProcess(`functional shard ${identity}`, [SHARD_RUNNER, `--run=${identity}`], environment),
+      const functionalRuns = plan.shards.map((shard, index) => {
+        const identity = `${shard.shard}/${plan.shardCount}`;
+        const environment = runEnvironment(ports[index]!, 'functional', identity);
+        return Object.freeze({
+          label: `functional shard ${identity}`,
+          environment,
+          port: ports[index]!,
+          args: Object.freeze([SHARD_RUNNER, `--run=${identity}`]),
+        });
       });
-    });
-    const exits = await Promise.all(functionalRuns.map((run) => run.promise));
-    await requirePortRangeFree(ports);
-    if (exits.some((code) => code !== 0)) return 2;
+      // Hosted CI assigns each shard its own runner. Launching all four on one
+      // local host creates contention that the hosted topology does not have and
+      // can turn bounded deferred-module deadlines into false product failures.
+      // Preserve the exact shard plan and reports, but give each local shard the
+      // same isolated execution opportunity as its hosted counterpart.
+      const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
+        execute: (run) => runProcess(run.label, run.args, run.environment),
+        verifyPortFree: (run) => requirePortRangeFree([run.port]),
+        isInterrupted: () => interruptionRequested,
+      });
+      if (functionalResult.interrupted) return 130;
+      if (functionalResult.exits.some((code) => code !== 0)) return 2;
 
-    const performanceResult = resultData(performanceEnvironment);
-    const functionalResults = functionalRuns.map((run) => resultData(run.environment));
-    process.stdout.write(verifyHostedBrowserHealth(functionalResults));
-    const summaries = [
-      resultSummary(performanceEnvironment, performanceResult),
-      ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
-    ];
-    const totals = summaries.reduce((summary, item) => ({
-      total: summary.total + item.total,
-      passed: summary.passed + item.passed,
-      failed: summary.failed + item.failed,
-      flaky: summary.flaky + item.flaky,
-      skipped: summary.skipped + item.skipped,
-      retried: summary.retried + item.retried,
-    }), { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0, retried: 0 });
-    process.stdout.write(
-      `Accepted Playwright suite: ${totals.passed}/${totals.total} passed; `
-      + `${totals.failed} failed, ${totals.flaky} flaky, ${totals.retried} retried, ${totals.skipped} skipped.\n`,
-    );
-    return totals.failed || totals.flaky || totals.retried ? 2 : 0;
+      const performanceResult = resultData(performanceEnvironment);
+      const functionalResults = functionalRuns.map((run) => resultData(run.environment));
+      process.stdout.write(verifyHostedBrowserHealth(functionalResults));
+      const summaries = [
+        resultSummary(performanceEnvironment, performanceResult),
+        ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
+      ];
+      const totals = summaries.reduce((summary, item) => ({
+        total: summary.total + item.total,
+        passed: summary.passed + item.passed,
+        failed: summary.failed + item.failed,
+        flaky: summary.flaky + item.flaky,
+        skipped: summary.skipped + item.skipped,
+        retried: summary.retried + item.retried,
+      }), { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0, retried: 0 });
+      process.stdout.write(
+        `Accepted Playwright suite: ${totals.passed}/${totals.total} passed; `
+        + `${totals.failed} failed, ${totals.flaky} flaky, ${totals.retried} retried, ${totals.skipped} skipped.\n`,
+      );
+      return totals.failed || totals.flaky || totals.retried ? 2 : 0;
+    } finally {
+      await requirePortRangeFree(ports);
+    }
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
-    return 2;
+    return interruptionRequested ? 130 : 2;
   }
 }
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
-    stopChildren();
-    process.exitCode = 130;
-  });
+function installSignalHandlers(): void {
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      interruptionRequested = true;
+      stopChildren();
+      process.exitCode = 130;
+    });
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installSignalHandlers();
   process.exitCode = await main();
 }
