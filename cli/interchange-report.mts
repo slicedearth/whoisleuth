@@ -259,6 +259,19 @@ export async function buildInterchangeFidelityReport(
 export function formatInterchangeFidelityReport(report: InterchangeFidelityReport): string {
   const browser = report.compatibility.browser;
   const cli = report.compatibility.cli;
+  const nextAction = !report.recognised
+    ? 'Choose a supported WHOISleuth export and run verify-artifact before trying to import it.'
+    : !report.artifact.versionSupported
+      ? 'Use a WHOISleuth release that supports this exact version, or re-export it with its last supported release.'
+      : !report.verification.assuranceSatisfied
+        ? 'Do not import or share this artefact yet; run verify-artifact and resolve the reported structure or integrity failure.'
+        : report.compatibility.fullyImportable === false
+          ? 'Review unsupported, blocked, skipped or pruned records before selecting any import.'
+          : browser?.import === 'supported'
+            ? 'Open the browser import preview and review the proposed additions and updates before applying them.'
+            : cli?.read === 'supported'
+              ? 'Use the declared offline CLI reader; browser import is not supported for this artefact.'
+              : 'Retain the verification result and use only the operations declared above.';
   return [
     'Interchange fidelity report',
     `Recognised     ${report.recognised ? 'yes' : 'no'}`,
@@ -280,6 +293,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
     '',
     `Preserved      ${report.compatibility.preservedFieldGroups.join(', ') || 'none declared'}`,
     `Excluded       ${report.compatibility.excludedFieldGroups.join(', ') || 'none declared'}`,
+    `Next action    ${nextAction}`,
     '',
     ...report.limitations.map((item) => `Limitation: ${item}`),
     '',

@@ -17,7 +17,7 @@
     resolvePlatformReportingRoutes,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
-  } from '$lib/analysis/platform-reporting-routes.ts';
+  } from '../../../../packages/cases/platform-reporting-routes.mts';
 
   let {
     record,

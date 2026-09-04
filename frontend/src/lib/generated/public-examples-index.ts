@@ -34,10 +34,10 @@ export const PUBLIC_EXAMPLES_INDEX = {
     },
     {
       "id": "case-handoff",
-      "title": "Reviewed public Case handoff",
+      "title": "Importable public Case handoff",
       "format": "JSON",
       "command": "whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json",
-      "summary": "A canonical public Case-pack v2 built from one reserved-domain Case schema 15 record.",
+      "summary": "A complete public Case-pack v2 built from one reserved-domain Case schema 15 record, with a verifiable digest.",
       "synthetic": true,
       "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
       "large": true

@@ -258,9 +258,10 @@ test('opens, filters and downloads a large synthetic example without workspace a
   const disclosure = example.getByRole('button', { name: 'Open synthetic output' });
   await disclosure.focus();
   await page.keyboard.press('Enter');
-  const output = example.getByRole('textbox', { name: 'Reviewed public Case handoff synthetic output' });
-  await expect(output).toHaveValue(/"synthetic": true/u);
+  const output = example.getByRole('textbox', { name: 'Importable public Case handoff synthetic output' });
+  await expect(output).toHaveValue(/"schema": "whoisleuth\.cli\.case-pack"/u);
   await expect(output).toHaveValue(/"domain": "example\.test"/u);
+  await expect(output).toHaveValue(/"digestSha256": "sha256:[a-f0-9]{64}"/u);
 
   const downloadPromise = page.waitForEvent('download');
   await example.getByRole('button', { name: 'Download example' }).click();

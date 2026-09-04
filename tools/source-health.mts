@@ -16,9 +16,10 @@ import { buildRegistryFixtureFreshnessReport } from './registry-fixture-freshnes
 import { buildReviewedAccuracyStatus } from './reviewed-accuracy-status.mts';
 import { auditServiceDependencySignatures } from './service-dependency-signature-audit.mts';
 import { registrarStandingCatalogueHealth } from '../lib/registrar-standing.mts';
+import { platformReportingCatalogueHealth } from '../packages/cases/platform-reporting-routes.mts';
 
 export const SOURCE_HEALTH_SCHEMA = 'whoisleuth.source-health';
-export const SOURCE_HEALTH_VERSION = 1;
+export const SOURCE_HEALTH_VERSION = 2;
 
 type WritableLike = { write(value: string): unknown };
 type SourceHealthState = 'current' | 'limited' | 'malformed' | 'measured' | 'stale' | 'unavailable' | 'unproven';
@@ -43,6 +44,7 @@ type SourceHealthBuilders = Readonly<{
   reviewedAccuracy: (now: Date) => ReturnType<typeof buildReviewedAccuracyStatus>;
   serviceDependencies: (now: Date) => ReturnType<typeof auditServiceDependencySignatures>;
   registrarStanding: (now: Date) => ReturnType<typeof registrarStandingCatalogueHealth>;
+  platformReporting: (now: Date) => ReturnType<typeof platformReportingCatalogueHealth>;
 }>;
 type BuildOptions = Readonly<{
   now?: Date;
@@ -76,6 +78,7 @@ const DEFAULT_BUILDERS: SourceHealthBuilders = Object.freeze({
   reviewedAccuracy: (now) => buildReviewedAccuracyStatus(now),
   serviceDependencies: (now) => auditServiceDependencySignatures({ now: () => now }),
   registrarStanding: (now) => registrarStandingCatalogueHealth(now),
+  platformReporting: (now) => platformReportingCatalogueHealth(now),
 });
 
 function entry(value: SourceHealthEntry): SourceHealthEntry {
@@ -274,6 +277,28 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
         strictCommand: 'npm run registrar:standing:check',
       });
     }),
+    observedEntry('platform_reporting_routes', 'Platform reporting-route catalogue', 'retained_dataset', 'npm run platform:routes:check', async () => {
+      const report = await builders.platformReporting(now);
+      return entry({
+        id: 'platform_reporting_routes',
+        label: 'Platform reporting-route catalogue',
+        kind: 'retained_dataset',
+        state: report.state,
+        sourceObservedAt: report.reviewedAt,
+        ageDays: report.ageDays,
+        itemCount: report.routeCount,
+        detail: report.state === 'stale'
+          ? `The reviewed reporting routes reached their ${report.reviewAfter.slice(0, 10)} recheck date.`
+          : report.state === 'limited'
+            ? `The reporting routes are due for review in ${report.reviewDueInDays} day${report.reviewDueInDays === 1 ? '' : 's'}.`
+            : `The reporting routes are inside their review window until ${report.reviewAfter.slice(0, 10)}.`,
+        limitation: 'This status checks only reviewed dates and catalogue structure. It does not contact a platform or establish that a complaint route is currently available.',
+        action: report.state === 'current'
+          ? 'No local maintenance action is currently indicated.'
+          : 'Review current official platform guidance and update the catalogue through its existing owner.',
+        strictCommand: 'npm run platform:routes:check',
+      });
+    }),
   ]);
 
   let evaluationEntries: SourceHealthEntry[];
@@ -360,7 +385,7 @@ export function formatSourceHealthAnnotations(
   report: Awaited<ReturnType<typeof buildSourceHealthReport>>,
 ): string {
   const warnings = report.entries.filter((item) => item.kind === 'retained_dataset'
-    && (item.state === 'stale' || item.state === 'unavailable'));
+    && (item.state === 'limited' || item.state === 'stale' || item.state === 'unavailable'));
   if (!warnings.length) return '';
   return `${warnings.map((item) => {
     const title = githubAnnotationValue(`Retained source ${item.state}: ${item.label}`, true);

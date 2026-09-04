@@ -420,6 +420,20 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await expectNoHorizontalOverflow(page);
 });
 
+test('support diagnostics expose only coarse allowlisted browser state', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('diagnostic-case', 'diagnostic.invalid', 'new')] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.locator('details.support-diagnostics > summary').click();
+  await page.getByRole('button', { name: 'Prepare support diagnostics' }).click();
+  const output = page.getByRole('textbox', { name: 'Support diagnostics' });
+  await expect(output).toHaveValue(/"applicationVersion": "2\.3\.0"/u);
+  await expect(output).toHaveValue(/"viewportClass": "wide"/u);
+  await expect(output).not.toHaveValue(/diagnostic\.invalid|\/dashboard|case|evidence|url|userAgent/iu);
+});
+
 test('the dashboard reports bounded browser-local counts and recent saved work', async ({ page }) => {
   await page.goto('/dashboard');
   const stored = {

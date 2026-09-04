@@ -5,8 +5,9 @@ import {
   INCIDENT_PLATFORMS,
   PLATFORM_REPORTING_ROUTES,
   incidentPlatformForUrl,
+  platformReportingCatalogueHealth,
   resolvePlatformReportingRoutes,
-} from '../frontend/src/lib/analysis/platform-reporting-routes.ts';
+} from '../packages/cases/platform-reporting-routes.mts';
 
 describe('platform reporting routes', () => {
   test('matches only exact reviewed platform host suffixes', () => {
@@ -30,6 +31,18 @@ describe('platform reporting routes', () => {
     assert.equal(result.state, 'stale');
     assert.deepEqual(result.routes, []);
     assert.match(result.limitation, /recheck date/iu);
+  });
+
+  test('warns for the final review month and becomes stale at the exact deadline', () => {
+    const current = platformReportingCatalogueHealth(new Date('2027-02-01T00:00:00.000Z'));
+    const limited = platformReportingCatalogueHealth(new Date('2027-02-02T00:00:00.000Z'));
+    const stale = platformReportingCatalogueHealth(new Date('2027-03-04T00:00:00.000Z'));
+    assert.equal(current.state, 'current');
+    assert.equal(limited.state, 'limited');
+    assert.equal(limited.reviewDueInDays, 30);
+    assert.equal(stale.state, 'stale');
+    assert.equal(stale.reviewDueInDays, 0);
+    assert.throws(() => platformReportingCatalogueHealth(new Date('invalid')), /valid review time/iu);
   });
 
   test('keeps every route on an official platform-controlled origin with reviewed dates and preparation guidance', () => {

@@ -1,0 +1,31 @@
+name: Improvement request
+description: Describe a blocked analyst task rather than a speculative capability list.
+title: "[Improvement]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Analyst task
+      description: What were you trying to complete, and where did the current workflow stop helping?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+      description: Explain the manual or external steps currently needed without sharing investigation material.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Useful outcome
+      description: Describe the evidence, decision or handoff you need. Avoid prescribing a new service or dependency unless it is essential.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundaries
+      options:
+        - label: This request does not contain targets, evidence, credentials, private URLs or personal data.
+          required: true

@@ -1,0 +1,45 @@
+name: Defect report
+description: Report a reproducible website or CLI problem without sharing investigation data.
+title: "[Defect]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include live targets, Case contents, evidence, credentials, private URLs or personal data. Report security concerns privately through the repository Security page.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Website
+        - CLI
+        - Import or export
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Reproduction and observed behaviour
+      description: Use reserved examples where possible and state what happened after each step.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Allowlisted diagnostics
+      description: Paste only the Dashboard support summary or CLI version and doctor output after reviewing it.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed targets, evidence, credentials, private URLs and personal data.
+          required: true

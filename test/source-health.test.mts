@@ -35,9 +35,9 @@ describe('offline source-health composition', () => {
     assert.equal(report.version, SOURCE_HEALTH_VERSION);
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
-    assert.equal(report.summary.entries, 10);
+    assert.equal(report.summary.entries, 11);
     assert.deepEqual(report.summary.states, {
-      current: 5,
+      current: 6,
       limited: 0,
       measured: 1,
       unproven: 4,

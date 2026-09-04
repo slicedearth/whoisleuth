@@ -161,9 +161,9 @@ Brand views can provide:
 The register is a read-only view. One-hop candidates do not become authored
 scope or further anchors. Missing or partial sources remain explicit.
 
-Brand Profile version 7 is current. Exact public version 6 remains readable and
-receives deterministic identifiers for approved windows without inventing an
-analyst decision.
+Brand Profile version 8 is current. Exact public version 6 and published-v2
+version 7 remain readable. The version-6 migration supplies deterministic
+identifiers for approved windows without inventing an analyst decision.
 
 ## Monitor, Respond and Assure
 
@@ -307,6 +307,27 @@ The CLI can verify supported envelopes, compare saved observations, inspect
 workspace archives and prepare sharing reviews offline. See
 [offline artefact verification](https://www.whoisleuth.com/cli#command-verify-artifact)
 and the [interchange fidelity report](https://www.whoisleuth.com/cli#command-interchange-report).
+
+### Browser and CLI handoffs
+
+Use the same short sequence for each handoff: export deliberately, verify the
+selected file, inspect its interchange report, then preview the destination
+import. These checks do not upload the file or establish that its observations
+are true or current.
+
+- For a browser workspace, run `verify-artifact workspace.json --json` and
+  `interchange-report workspace.json --json` before using the Dashboard import
+  preview.
+- For a CLI Lookup, save `lookup.json`, verify it, then use **Replay exported
+  evidence** in browser Lookup before retaining anything in a Case.
+- For a Case handoff, choose the audience explicitly, run `sharing-review` on
+  the separate package and review its redaction manifest before sharing it.
+
+Repository maintainers can run `npm run interchange:roundtrip` to exercise one
+reserved-domain workspace through the canonical browser export, CLI
+verification, browser merge and canonical re-export path. It prints the digest
+for that exact generated fixture and performs no request or durable workspace
+write.
 
 ## Limits of the product
 

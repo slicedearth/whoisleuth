@@ -640,7 +640,7 @@ test('measures request-free local filtering of the public CLI catalogue', async 
 test('measures a deferred large synthetic public example without collection', async ({ page }, testInfo) => {
   const example = page.locator('article[data-example="case-handoff"]');
   const disclosure = example.locator(':scope > button');
-  const output = example.getByRole('textbox', { name: 'Reviewed public Case handoff synthetic output' });
+  const output = example.getByRole('textbox', { name: 'Importable public Case handoff synthetic output' });
 
   await measureDeferredInteraction({
     page,
@@ -659,7 +659,7 @@ test('measures a deferred large synthetic public example without collection', as
     readyControl: example.getByRole('button', { name: 'Download example' }),
   });
   await expect(disclosure).toBeFocused();
-  await expect(output).toHaveValue(/Synthetic reserved-domain example\./u);
+  await expect(output).toHaveValue(/"schema": "whoisleuth\.cli\.case-pack"/u);
   await expectNoHorizontalOverflow(page);
 });
 
