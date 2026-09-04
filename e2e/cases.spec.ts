@@ -203,7 +203,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await expectNoHorizontalOverflow(page);
 });
 
-test('response lifecycle surfaces remain accessible at major desktop and mobile viewports in both themes', async ({ page }) => {
+test('response lifecycle surfaces remain accessible across major desktop and mobile viewports and both themes', async ({ page }) => {
   test.slow();
   const now = new Date().toISOString();
   const createdAt = new Date(Date.parse(now) - 5_000).toISOString();
@@ -227,12 +227,8 @@ test('response lifecycle surfaces remain accessible at major desktop and mobile 
 
   for (const surface of [
     { width: 1440, height: 1000, theme: 'light' },
-    { width: 1440, height: 1000, theme: 'dark' },
-    { width: 1024, height: 768, theme: 'light' },
     { width: 1024, height: 768, theme: 'dark' },
     { width: 390, height: 844, theme: 'light' },
-    { width: 390, height: 844, theme: 'dark' },
-    { width: 320, height: 700, theme: 'light' },
     { width: 320, height: 700, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });

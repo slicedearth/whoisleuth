@@ -116,7 +116,7 @@
   .reference-tree section>a.active{color:var(--accent);background:rgb(var(--accent-rgb) / .09);box-shadow:inset 2px 0 var(--accent)}
   .page-sections{display:grid;gap:1px;margin:5px 0 2px 9px;padding:7px 0 7px 11px;border-left:1px solid var(--border)}
   .page-sections h3{margin:0 0 4px;color:var(--muted);font:700 .55rem var(--mono);letter-spacing:.07em;text-transform:uppercase}
-  .page-sections a{padding:4px 6px;color:var(--muted);font:600 .67rem/1.35 var(--mono);overflow-wrap:anywhere}
+  .page-sections a{display:flex;min-height:24px;align-items:center;padding:4px 6px;color:var(--muted);font:600 .67rem/1.35 var(--mono);overflow-wrap:anywhere}
   .page-sections a:hover,.page-sections a:focus-visible,.page-sections a.active{color:var(--accent)}
   .reference-browser{display:none}
   @media(max-width:1080px){

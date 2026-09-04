@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, openPacketWizardStep } from './case-response-fixtures';
+import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
 
 // Case response mutation, failure recovery and lifecycle coverage.
 
@@ -513,7 +514,7 @@ test('append-only response review, exact authorisation, independent verification
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 8,
+    schemaVersion: CASE_RESPONSE_PACKET_VERSION,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',

@@ -68,7 +68,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.page-sections')).toBeVisible();
   await expect(page.locator('.page-sections').getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
   await expect(page.locator('.public-section-navigation')).toHaveCount(0);
-  expect((await page.locator('.reference-document-slot').boundingBox())?.width ?? 0).toBeGreaterThan(800);
+  expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(800);
   const startNotes = page.locator('.start-notes');
   await expect(startNotes).toHaveCSS('align-items', 'start');
   const installedHelpNote = startNotes.locator(':scope > p');
@@ -86,7 +86,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.reference-browser')).toBeVisible();
   await page.locator('.reference-browser > summary').click();
   await expect(page.locator('.reference-browser > nav')).toHaveCSS('align-items', 'start');
-  expect((await page.locator('.reference-document-slot').boundingBox())?.width ?? 0).toBeGreaterThan(880);
+  expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(880);
   await expectNoHorizontalOverflow(page);
 
   const footer = page.getByRole('navigation', { name: 'Footer' });
