@@ -228,8 +228,26 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
   Object.freeze({
     id: 'package-release', area: 'package, dependency, and release metadata', priority: 30,
     matches: (value: string) => ['package.json', 'package-lock.json', 'THIRD_PARTY_NOTICES.md', '.nvmrc', 'playwright.config.ts', 'tsconfig.json'].includes(value),
-    focusedUnit: unit('test/release-version-check.test.mts', 'test/cli-package.test.mts', 'test/ci-workflow.test.mts'), focusedBrowser: browser(),
-    specialised: specialised('cli-package', 'release-contract', 'licences', 'production-dependency-audit', 'workflow-closure'), browserRequired: false,
+    focusedUnit: unit(
+      'test/release-version-check.test.mts',
+      'test/case-portability-lifecycle.test.mts',
+      'test/case-supported-contract-baseline.test.mts',
+      'test/case-contract-doc.test.mts',
+      'test/documentation-contract.test.mts',
+      'test/cli-package.test.mts',
+      'test/ci-workflow.test.mts',
+    ),
+    focusedBrowser: browser(),
+    specialised: specialised(
+      'cli-package',
+      'release-contract',
+      'schema-inventory',
+      'documentation',
+      'licences',
+      'production-dependency-audit',
+      'workflow-closure',
+    ),
+    browserRequired: false,
   }),
 ]);
 

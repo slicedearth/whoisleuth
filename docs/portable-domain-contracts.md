@@ -13,10 +13,11 @@ facades. Browser callers keep the same exported values and functions, while CLI
 and other non-frontend consumers import the dependency-neutral owner directly.
 The architecture gate rejects any CLI dependency path into frontend source.
 
-Application release 2.0.1 is the current public writer. The generated Case
-portability reference and `npm run schema:inventory` are the canonical current
-version inventories; this guide describes why those families remain separate
-without maintaining another version list.
+Version 2.2.0 is the current writer in this checkout. It retains the exact
+durable formats published by release 2.1.0. The generated Case portability
+reference and `npm run schema:inventory` are the canonical current version
+inventories; this guide describes why those families remain separate without
+maintaining another version list.
 
 ## Registered families
 

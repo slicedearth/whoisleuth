@@ -109,11 +109,11 @@ authorised-active contracts. See [architecture](docs/architecture.md),
 [current product boundaries](docs/product-boundary.md) and the
 [threat model](docs/threat-model.md).
 
-Public release 2.0.1 is the current public writer. This checkout directly reads
-its exact durable formats and the retained legacy formats written by release
-1.47.4. Exact Case and workspace readers are listed in the generated
-[Case portability reference](docs/case-contracts.md); other current writers and
-direct migrations are in the
+Version 2.2.0 is the current writer in this checkout. It directly reads the
+exact durable formats published by release 2.1.0 and the retained legacy
+formats written by release 1.47.4. Exact Case and workspace readers are listed
+in the generated [Case portability reference](docs/case-contracts.md); other
+current writers and direct migrations are in the
 [portable compatibility reference](docs/portable-domain-contracts.md).
 
 ## Documentation

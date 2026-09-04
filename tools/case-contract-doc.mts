@@ -20,7 +20,13 @@ import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
   LATEST_PUBLIC_APPLICATION_VERSION,
+  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 const DISPLAY_NAMES = Object.freeze({
   'browser.cases': 'Browser-local Cases',
@@ -105,17 +111,13 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release ${LATEST_PUBLIC_APPLICATION_VERSION} is the latest public writer: Case schema
-${PUBLISHED_V2_CASE_SCHEMA_VERSION}, Case report schema
-${PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION}, response-packet schema
-${PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION}, review-input digest material version
-${PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace archive schema
-${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION}. This checkout's current writers advance
-those formats to Case schema ${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}, report
-schema ${CASE_REPORT_OUTPUT_VERSIONS.at(-1)}, response-packet schema
-${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}, review-input version
-${CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace archive schema
-${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.at(-1)}.
+Release ${LATEST_PUBLIC_APPLICATION_VERSION} is the immediately preceding public writer. It emitted
+Case schema ${LATEST_PUBLIC_CASE_SCHEMA_VERSION}, Case report schema ${LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION}, response-packet schema
+${LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION}, review-input digest material version ${LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace
+archive schema ${LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION}. Version ${WHOISLEUTH_APPLICATION_VERSION} is the current writer in this
+checkout. It emits Case schema ${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}, report schema ${CASE_REPORT_OUTPUT_VERSIONS.at(-1)},
+response-packet schema ${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}, review-input version ${CASE_RESPONSE_REVIEW_INPUTS_VERSION}, and workspace
+archive schema ${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.at(-1)}.
 
 Both the latest public formats and the current writers directly preserve the
 formats written by public release 1.47.4:
