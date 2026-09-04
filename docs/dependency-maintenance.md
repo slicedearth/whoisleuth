@@ -37,12 +37,14 @@ reviewed production dependency audit.
 
 ## Production audit policy
 
-`npm run dependencies:audit` runs `npm audit --omit=dev --json` with a 60-second
-timeout, explicit `offline=false`, and an isolated temporary npm cache that is
-removed after the command. This prevents offline resolution or retained npm
-metavulnerability calculations from being mistaken for current advisory
-evidence. The command bounds and validates the JSON report, then prints a
-concise deterministic result.
+`npm run dependencies:audit` audits the exact lockfile with
+`npm audit --package-lock-only --omit=dev --json`. It uses a two-minute outer
+deadline, explicit `offline=false`, and an isolated temporary npm cache that is
+removed after the command. This avoids an unnecessary installed-tree traversal
+while retaining the same production dependency inventory. The fresh cache
+prevents offline resolution or retained npm metavulnerability calculations from
+being mistaken for current advisory evidence. The command bounds and validates
+the JSON report, then prints a concise deterministic result.
 It does not use `--audit-level` or a numeric vulnerability threshold. The
 policy accepts exactly zero production vulnerabilities; any reported production
 vulnerability blocks the command. Missing, malformed, unsupported or internally

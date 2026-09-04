@@ -190,11 +190,11 @@ describe('production dependency audit policy', () => {
   });
 
   test('runner emits only a concise result and rejects command failures', () => {
-    assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS > 0);
-    assert.ok(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS <= 120_000);
+    assert.equal(PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS, 120_000);
     assert.match(PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX, /^whoisleuth-[a-z-]+-$/u);
     assert.deepEqual(productionDependencyAuditArguments('/tmp/fixture-audit-cache'), [
       'audit',
+      '--package-lock-only',
       '--omit=dev',
       '--json',
       '--offline=false',

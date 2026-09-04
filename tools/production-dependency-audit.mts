@@ -11,7 +11,7 @@ import {
   PRODUCTION_DEPENDENCY_AUDIT_MAX_BYTES,
 } from '../lib/production-dependency-audit-policy.mts';
 
-export const PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS = 60_000;
+export const PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS = 120_000;
 export const PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX = 'whoisleuth-production-audit-';
 
 type WritableLike = Readonly<{ write(value: string): unknown }>;
@@ -27,6 +27,7 @@ type AuditCommandResult = Readonly<{
 export function productionDependencyAuditArguments(cacheDirectory: string): readonly string[] {
   return Object.freeze([
     'audit',
+    '--package-lock-only',
     '--omit=dev',
     '--json',
     '--offline=false',
