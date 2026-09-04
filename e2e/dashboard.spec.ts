@@ -587,6 +587,9 @@ test('reviewed case evidence keeps the same workspace content through two CLI an
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
+  // Three 600,000-iteration key derivations and two complete CLI archive
+  // inspections can exceed the default timeout while CI shards share a host.
+  test.slow();
   const passphrase = 'portable archive fixture passphrase';
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
