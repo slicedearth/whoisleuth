@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createConnection } from 'node:net';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
+import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
 import {
   aggregatePlaywrightShardTimings,
   renderBrowserShardTimingSummary,
@@ -46,64 +47,31 @@ function configuredBasePort(): number {
   return value;
 }
 
-async function portIsFree(port: number): Promise<boolean> {
-  return await new Promise((resolve, reject) => {
-    const socket = createConnection({ host: '127.0.0.1', port });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error(`Port ${port} status check timed out.`));
-    }, 1_000);
-    socket.once('connect', () => {
-      clearTimeout(timer);
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once('error', (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      socket.destroy();
-      if (error.code === 'ECONNREFUSED') resolve(true);
-      else reject(error);
-    });
-  });
-}
-
 async function selectPortRange(count: number): Promise<readonly number[]> {
   const preferred = configuredBasePort();
   for (let offset = 0; offset <= MAX_PORT_SEARCH; offset += count) {
     const ports = Array.from({ length: count }, (_, index) => preferred + offset + index);
     if (ports.at(-1)! > 65_535) break;
-    if ((await Promise.all(ports.map(portIsFree))).every(Boolean)) return Object.freeze(ports);
+    if ((await Promise.all(ports.map((port) => localPortIsFree(port)))).every(Boolean)) return Object.freeze(ports);
   }
   throw new Error(`Could not find ${count} consecutive free local ports from ${preferred}.`);
 }
 
 async function requirePortRangeFree(ports: readonly number[]): Promise<void> {
-  const occupied = (await Promise.all(ports.map(async (port) => ({ port, free: await portIsFree(port) }))))
+  const occupied = (await Promise.all(ports.map(async (port) => ({ port, free: await localPortIsFree(port) }))))
     .filter((item) => !item.free)
     .map((item) => item.port);
   if (occupied.length) throw new Error(`Playwright left local test ports occupied: ${occupied.join(', ')}.`);
 }
 
 function runBuild(): void {
-  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const child = spawnSync(command, ['run', 'build'], {
+  const child = spawnSync(npmExecutableName(), ['run', 'build'], {
     cwd: REPOSITORY_ROOT,
     env: process.env,
     stdio: 'inherit',
   });
   if (child.error) throw child.error;
   if (child.status !== 0) throw new Error(`Frontend build failed with exit code ${child.status ?? 2}.`);
-}
-
-function requireBuild(): void {
-  for (const required of [
-    'frontend/build/index.html',
-    'frontend/.svelte-kit/output/client/.vite/manifest.json',
-  ]) {
-    if (!existsSync(path.join(REPOSITORY_ROOT, required))) {
-      throw new Error(`The reusable production build is missing ${required}. Run npm run build first.`);
-    }
-  }
 }
 
 function runProcess(label: string, args: readonly string[], environment: NodeJS.ProcessEnv): Promise<number> {
@@ -180,8 +148,8 @@ function stopChildren(): void {
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     const options = parseOptions(args);
-    if (options.useBuild) requireBuild();
-    else runBuild();
+    if (!options.useBuild) runBuild();
+    assertFrontendBuildIntegrity(REPOSITORY_ROOT);
 
     const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const ports = await selectPortRange(plan.shardCount + 1);

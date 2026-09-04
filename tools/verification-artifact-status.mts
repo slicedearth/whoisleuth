@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { existsSync, rmSync } from 'node:fs';
-import { createConnection } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FRONTEND_BUILD_INTEGRITY_MARKER } from './frontend-build-integrity.mts';
+import { localPortIsFree } from './maintainer-tool-helpers.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLAYWRIGHT_PORT = 4173;
@@ -12,6 +13,7 @@ const GROUPS = Object.freeze({
   unit: Object.freeze(['test-coverage.lcov', 'coverage']),
   browser: Object.freeze([
     'frontend/build',
+    FRONTEND_BUILD_INTEGRITY_MARKER,
     'frontend/.svelte-kit',
     'frontend/playwright/.auth',
     'playwright/.auth',
@@ -30,27 +32,6 @@ function resolveArtifact(relative: string): string {
   return absolute;
 }
 
-async function portIsFree(): Promise<boolean> {
-  return await new Promise((resolve, reject) => {
-    const socket = createConnection({ host: '127.0.0.1', port: PLAYWRIGHT_PORT });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error(`Port ${PLAYWRIGHT_PORT} status check timed out.`));
-    }, 2_000);
-    socket.once('connect', () => {
-      clearTimeout(timer);
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once('error', (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      socket.destroy();
-      if (error.code === 'ECONNREFUSED') resolve(true);
-      else reject(error);
-    });
-  });
-}
-
 export async function inspectVerificationArtifacts(
   cleanup: 'none' | 'unit' | 'browser' | 'all' = 'none',
   checkPort = true,
@@ -67,7 +48,7 @@ export async function inspectVerificationArtifacts(
     removed: cleanup === 'none' ? Object.freeze([]) : Object.freeze(before),
     remaining: Object.freeze(remaining),
     playwrightPort: PLAYWRIGHT_PORT,
-    portFree: checkPort ? await portIsFree() : null,
+    portFree: checkPort ? await localPortIsFree(PLAYWRIGHT_PORT, 2_000) : null,
   });
 }
 

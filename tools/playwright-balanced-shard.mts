@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
+import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
@@ -34,6 +35,7 @@ export function main(args = process.argv.slice(2)): number {
     if (runOptions.length !== 1 || args.length !== (list ? 2 : 1) || args.some((value) => value !== '--list' && !value.startsWith('--run='))) {
       throw new TypeError('Usage: node tools/playwright-balanced-shard.mts --run=N/TOTAL [--list]');
     }
+    assertFrontendBuildIntegrity(REPOSITORY_ROOT);
     const selection = selectBalancedBrowserShard(runOptions[0]!.slice('--run='.length));
     process.stdout.write(
       `Balanced browser shard ${selection.shard.shard}/${selection.plan.shardCount}: `

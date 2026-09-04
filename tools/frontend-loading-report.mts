@@ -5,11 +5,6 @@
 // not enter public-route dependency closures. It performs no browser request.
 
 import {
-  closeSync,
-  constants,
-  fstatSync,
-  openSync,
-  readSync,
   realpathSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -21,7 +16,9 @@ import {
   compareCodeUnits,
   hasMaintainerUnsafeCharacters,
   pathIsWithin,
+  readBoundedStableRegularFileSync,
 } from './maintainer-tool-helpers.mts';
+import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 
 type WritableLike = { write(value: string): unknown };
 type ManifestEntry = Readonly<{
@@ -435,34 +432,6 @@ export function formatFrontendLoadingReport(report: ReturnType<typeof buildFront
   return `${lines.join('\n')}\n`;
 }
 
-function readBoundedRegularFileSync(filename: string, maximumBytes: number, label: string): Buffer {
-  const descriptor = openSync(filename, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
-  try {
-    const before = fstatSync(descriptor);
-    if (!before.isFile() || before.size < 1 || before.size > maximumBytes) {
-      throw new TypeError(`${label} must be a non-empty regular file within its byte limit.`);
-    }
-    const bytes = Buffer.allocUnsafe(Math.min(maximumBytes + 1, before.size + 1));
-    let offset = 0;
-    while (offset < bytes.length) {
-      const count = readSync(descriptor, bytes, offset, bytes.length - offset, null);
-      if (count === 0) break;
-      offset += count;
-    }
-    const after = fstatSync(descriptor);
-    if (offset > maximumBytes
-      || offset !== before.size
-      || after.size !== before.size
-      || after.mtimeMs !== before.mtimeMs
-      || after.ctimeMs !== before.ctimeMs) {
-      throw new TypeError(`${label} changed while it was being read.`);
-    }
-    return Buffer.from(bytes.subarray(0, offset));
-  } finally {
-    closeSync(descriptor);
-  }
-}
-
 function measureClientAsset(clientRoot: string, realClientRoot: string, file: string): AssetMeasurement {
   const safeFile = boundedSafeRelativePath(file, 'Frontend asset path', 1024);
   const requested = path.resolve(clientRoot, safeFile);
@@ -470,7 +439,7 @@ function measureClientAsset(clientRoot: string, realClientRoot: string, file: st
   if (!pathIsWithin(realClientRoot, resolved)) {
     throw new TypeError(`Frontend asset ${safeFile} resolves outside the client root.`);
   }
-  const source = readBoundedRegularFileSync(requested, MAX_FRONTEND_ASSET_BYTES, `Frontend asset ${safeFile}`);
+  const source = readBoundedStableRegularFileSync(requested, MAX_FRONTEND_ASSET_BYTES, `Frontend asset ${safeFile}`);
   return Object.freeze({ file: safeFile, bytes: source.byteLength, gzipBytes: gzipSync(source).byteLength });
 }
 
@@ -484,10 +453,11 @@ export function main(
   errors: WritableLike = process.stderr,
 ): number {
   try {
+    assertFrontendBuildIntegrity();
     const frontend = path.resolve('frontend');
     const clientRoot = path.join(frontend, '.svelte-kit/output/client');
     const realClientRoot = realpathSync(clientRoot);
-    const manifestSource = readBoundedRegularFileSync(
+    const manifestSource = readBoundedStableRegularFileSync(
       path.join(clientRoot, '.vite/manifest.json'),
       MAX_FRONTEND_MANIFEST_BYTES,
       'Frontend client manifest',
@@ -497,7 +467,7 @@ export function main(
       maximumBytes: MAX_FRONTEND_MANIFEST_BYTES,
     }));
     const routeNodes = parseGeneratedRouteNodes(
-      readBoundedRegularFileSync(
+      readBoundedStableRegularFileSync(
         path.join(frontend, '.svelte-kit/generated/client/app.js'),
         MAX_FRONTEND_ROUTE_SOURCE_BYTES,
         'Generated client route source',

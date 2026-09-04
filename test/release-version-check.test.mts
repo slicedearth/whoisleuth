@@ -20,6 +20,7 @@ import {
   normalizeSemanticVersion,
   parseArguments,
 } from '../tools/release-version-check.mts';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 function capture() {
   let value = '';
@@ -102,7 +103,7 @@ describe('release manifest lockstep', () => {
 
   test('requires current generated Case-pack reports to match the release version', () => {
     const fixture = {
-      version: 14,
+      version: CASE_SCHEMA_VERSION,
       packet: {
         schema: 'whoisleuth.cli.case-pack',
         reports: [{ application: { name: 'WHOISleuth', version: '2.2.0' } }],
@@ -114,7 +115,7 @@ describe('release manifest lockstep', () => {
       /must match release version 2\.2\.1.*canonical writer/u,
     );
     assert.throws(
-      () => assertReleaseVersionDerivedCasePack({ ...fixture, version: 13 }, '2.2.0'),
+      () => assertReleaseVersionDerivedCasePack({ ...fixture, version: CASE_SCHEMA_VERSION - 1 }, '2.2.0'),
       /current Case schema/u,
     );
     assert.throws(

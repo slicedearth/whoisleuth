@@ -101,7 +101,43 @@ jobs:
         if: always()
         run: npm run verification:artifacts -- --cleanup=unit
 
+  browser-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts --audit=false
+      - name: Build Svelte frontend
+        run: npm run build
+      - name: Enforce frontend loading budgets
+        run: npm run frontend:loading-report
+      - name: Scan built browser assets
+        run: npm run security:retire
+      - name: Verify frontend build identity
+        run: npm run frontend:build:integrity
+      - name: Upload verified frontend build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            frontend/build
+            frontend/build-identity.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
+
   browser:
+    needs:
+      - browser-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -136,12 +172,13 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
-      - name: Build Svelte frontend
-        run: npm run build
-      - name: Enforce frontend loading budgets
-        run: npm run frontend:loading-report
-      - name: Scan built browser assets
-        run: npm run security:retire
+      - name: Download verified frontend build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: frontend
+      - name: Verify frontend build identity
+        run: npm run frontend:build:integrity
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
       - name: Run Playwright functional shard
@@ -251,6 +288,7 @@ jobs:
     needs:
       - quality
       - unit
+      - browser-build
       - browser
       - browser-health
       - cli-runtime
@@ -261,12 +299,14 @@ jobs:
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           UNIT_RESULT: ${{ needs.unit.result }}
+          BROWSER_BUILD_RESULT: ${{ needs.browser-build.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
           BROWSER_HEALTH_RESULT: ${{ needs.browser-health.result }}
           CLI_RUNTIME_RESULT: ${{ needs.cli-runtime.result }}
         run: |
           test "$QUALITY_RESULT" = success
           test "$UNIT_RESULT" = success
+          test "$BROWSER_BUILD_RESULT" = success
           test "$BROWSER_RESULT" = success
           test "$BROWSER_HEALTH_RESULT" = success
           test "$CLI_RUNTIME_RESULT" = success

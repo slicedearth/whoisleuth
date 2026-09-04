@@ -14,9 +14,10 @@ import {
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
-  CI_BROWSER_PREREQUISITE_SCRIPTS,
+  CI_BROWSER_BUILD_SCRIPTS,
   CI_CLI_RUNTIME_NODE_MAJOR,
   CI_CLI_RUNTIME_SCRIPTS,
+  CI_FRONTEND_BUILD_ARTIFACT_NAME,
   CI_HOSTED_ONLY_BROWSER_SCRIPTS,
   CI_PREFLIGHT_SCRIPTS,
   CI_QUALITY_SCRIPTS,
@@ -60,6 +61,10 @@ const BALANCED_SUITE_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'tools', 'playwright-balanced-suite.mts'),
   'utf8',
 );
+const BALANCED_SHARD_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'tools', 'playwright-balanced-shard.mts'),
+  'utf8',
+);
 const PERFORMANCE_RUNNER_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'tools', 'playwright-performance-authority.mts'),
   'utf8',
@@ -89,6 +94,10 @@ const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
   }));
 const PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'package.json'),
+  'utf8',
+)) as { scripts?: Record<string, string> };
+const FRONTEND_PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'frontend', 'package.json'),
   'utf8',
 )) as { scripts?: Record<string, string> };
 
@@ -140,16 +149,19 @@ describe('continuous integration workflow', () => {
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.match(WORKFLOW, /^\s{2}quality:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}unit:\s*$/mu);
+    assert.match(WORKFLOW, /^\s{2}browser-build:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}browser:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}browser-health:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}cli-runtime:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}verify:\s*$/mu);
     assert.match(WORKFLOW, /^concurrency:\s*\n\s{2}group: ci-/mu);
     assert.match(WORKFLOW, /^\s{2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
-    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 5);
+    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser-build\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
+    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 6);
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
-    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
+    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser-build:/u.exec(WORKFLOW)?.[1]);
+    const browserBuildJob = requiredValue(/\n  browser-build:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
+    const browserJob = requiredValue(/\n  browser:\n([\s\S]*?)\n  browser-health:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
     assert.ok(
       qualityJob.indexOf('npm run release:check')
@@ -158,10 +170,11 @@ describe('continuous integration workflow', () => {
     );
     assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 4);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 5);
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm run dependencies:audit$/gmu), 0);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}UNIT_RESULT: \$\{\{ needs\.unit\.result \}\}$/mu);
+    assert.match(WORKFLOW, /^\s{10}BROWSER_BUILD_RESULT: \$\{\{ needs\.browser-build\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_HEALTH_RESULT: \$\{\{ needs\.browser-health\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}CLI_RUNTIME_RESULT: \$\{\{ needs\.cli-runtime\.result \}\}$/mu);
@@ -175,6 +188,10 @@ describe('continuous integration workflow', () => {
       'actions/upload-artifact',
       'actions/checkout',
       'actions/setup-node',
+      'actions/upload-artifact',
+      'actions/checkout',
+      'actions/setup-node',
+      'actions/download-artifact',
       'actions/upload-artifact',
       'actions/upload-artifact',
       'actions/checkout',
@@ -190,7 +207,7 @@ describe('continuous integration workflow', () => {
       ...CI_QUALITY_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
       ...CI_UNIT_SCRIPTS.map((script) => `npm run ${script}`),
-      ...CI_BROWSER_PREREQUISITE_SCRIPTS.map((script) => `npm run ${script}`),
+      ...CI_BROWSER_BUILD_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run test:e2e:install',
       'npm run test:e2e:shard -- --run=${{ matrix.shard }}',
       'npm run frontend:authenticated-loading-report',
@@ -202,6 +219,19 @@ describe('continuous integration workflow', () => {
     }
     assert.deepEqual(readHostedCiScriptPlan(WORKFLOW), expectedHostedCiScriptPlan());
     assert.doesNotThrow(() => assertHostedCiParity(WORKFLOW));
+    const workflowWithoutBuildJob = WORKFLOW.replace(/\n  browser-build:\n[\s\S]*?\n  browser:/u, '\n  browser:');
+    assert.throws(() => assertHostedCiParity(workflowWithoutBuildJob), /missing the browser-build job/u);
+    const workflowWithAlteredArtifactName = WORKFLOW.replace(CI_FRONTEND_BUILD_ARTIFACT_NAME, 'frontend-build-altered');
+    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactName), /artifact publication has drifted/u);
+    const workflowWithAlteredArtifactPath = WORKFLOW.replace('            frontend/build\n            frontend/build-identity.json', '            frontend/other');
+    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactPath), /artifact publication has drifted/u);
+    const workflowWithoutBuildIntegrity = WORKFLOW.replace('        run: npm run frontend:build:integrity', '        run: npm run frontend:build:missing');
+    assert.throws(() => assertHostedCiParity(workflowWithoutBuildIntegrity), /browserBuild scripts have drifted/u);
+    const workflowWithMatrixBuild = WORKFLOW.replace(
+      '      - name: Install Playwright Chromium',
+      '      - name: Rebuild unexpectedly\n        run: npm run build\n      - name: Install Playwright Chromium',
+    );
+    assert.throws(() => assertHostedCiParity(workflowWithMatrixBuild), /browser scripts have drifted/u);
     const workflowWithUnownedGate = WORKFLOW.replace(
       '      - name: Run type checks',
       '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run type checks',
@@ -217,6 +247,9 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
       'node tools/production-dependency-audit.mts',
     );
+    assert.equal(PACKAGE_MANIFEST.scripts?.['frontend:build:integrity'], 'node tools/frontend-build-integrity.mts --check');
+    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.prebuild, 'node ../tools/frontend-build-integrity.mts --clean');
+    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.postbuild, 'node ../tools/frontend-build-integrity.mts --record');
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /packages\/\*\*\/\*\.mts/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /tools\/production-coverage\.mts/u);
     assert.doesNotMatch(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /test:critical-io-coverage/u);
@@ -243,6 +276,23 @@ describe('continuous integration workflow', () => {
     assert.match(WORKFLOW, /^\s+run: npm run cli:package:check$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
+    assert.match(browserJob, /^\s{4}needs:\s*\n\s{6}- browser-build$/mu);
+    assert.equal(occurrences(browserBuildJob, /^\s+run: npm run build$/gmu), 1);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run build$/gmu), 1);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run frontend:loading-report$/gmu), 1);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run security:retire$/gmu), 1);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run frontend:build:integrity$/gmu), 2);
+    assert.match(browserBuildJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
+    assert.match(browserBuildJob, /^\s{10}path: \|\s*\n\s{12}frontend\/build\s*\n\s{12}frontend\/build-identity\.json$/mu);
+    assert.match(browserBuildJob, /^\s{10}if-no-files-found: error$/mu);
+    assert.match(browserBuildJob, /^\s{10}retention-days: 1$/mu);
+    assert.match(browserBuildJob, /^\s{10}compression-level: 6$/mu);
+    assert.doesNotMatch(browserBuildJob, /\.svelte-kit/u);
+    assert.match(browserJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
+    assert.match(browserJob, /^\s{10}path: frontend$/mu);
+    assert.doesNotMatch(browserJob, /^\s{10}(?:pattern|merge-multiple):/mu);
+    assert.ok(browserJob.indexOf('Download verified frontend build') < browserJob.indexOf('Verify frontend build identity'));
+    assert.ok(browserJob.indexOf('Verify frontend build identity') < browserJob.indexOf('Install Playwright Chromium'));
     assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
@@ -251,7 +301,7 @@ describe('continuous integration workflow', () => {
     assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     const localPlan = formatLocalCiPlan();
-    for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
+    for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_BUILD_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
     assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
@@ -261,6 +311,7 @@ describe('continuous integration workflow', () => {
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
     assert.match(localPlan, /locked install \(install-time audit disabled; scheduled and release audits are separate\)/u);
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
+      'frontend:build:integrity',
       'test:e2e:install',
       'test:e2e:shard',
       'frontend:authenticated-loading-report',
@@ -358,6 +409,7 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /^\s{2}workers: 1,$/mu);
     assert.match(PLAYWRIGHT_CONFIG, /\['json', \{ outputFile: artifacts\.jsonResults \}\]/u);
     assert.match(PLAYWRIGHT_CONFIG, /outputDir: artifacts\.testResults/u);
+    assert.match(PLAYWRIGHT_CONFIG, /if \(useExistingBuild\) assertFrontendBuildIntegrity\(\);/u);
     assert.match(PLAYWRIGHT_CONFIG, /trace: 'retain-on-failure'/u);
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
   });
@@ -389,7 +441,10 @@ describe('continuous integration workflow', () => {
       'node tools/playwright-performance-authority.mts',
     );
     assert.match(PERFORMANCE_RUNNER_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
+    assert.match(PERFORMANCE_RUNNER_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
     assert.match(BALANCED_SUITE_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
+    assert.match(BALANCED_SUITE_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
+    assert.match(BALANCED_SHARD_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
     assert.match(BALANCED_SUITE_SOURCE, /aggregatePlaywrightShardTimings\(reports\)/u);
     assert.match(BALANCED_SUITE_SOURCE, /buildVerificationTimingUpdateCandidate\(\[/u);
     assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');

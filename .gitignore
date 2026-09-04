@@ -8,6 +8,7 @@ node_modules/
 *.passphrase
 frontend/.svelte-kit/
 frontend/build/
+frontend/build-identity.json
 *.log
 .DS_Store
 playwright-report/

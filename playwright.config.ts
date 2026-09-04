@@ -6,9 +6,11 @@ import {
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
 } from './tools/playwright-execution-contract.mts';
 import { playwrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
+import { assertFrontendBuildIntegrity } from './tools/frontend-build-integrity.mts';
 
 const isCI = Boolean(process.env.CI);
 const useExistingBuild = isCI || process.env.WHOISLEUTH_E2E_USE_BUILD === '1';
+if (useExistingBuild) assertFrontendBuildIntegrity();
 const performanceAuthority = process.env.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';
 const artifacts = playwrightRunArtifacts();
 

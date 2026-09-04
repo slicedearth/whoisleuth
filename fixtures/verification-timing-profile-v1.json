@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "a594edf0f565e5d05c5b1f3d9b1f6ce7b034bea558795803e32dc3af87cd5931",
+  "inventoryFingerprint": "30551df670b6240c950d9c0e53603d8dcc85edba136f08b53fc2d5c15c81344a",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -57,6 +57,13 @@
       "environmentClass": "local-darwin-arm64-node24",
       "sampleBasis": "median-of-three-complete-unit-runs",
       "sampleCount": 3
+    },
+    {
+      "id": "unit-local-build-integrity-bootstrap",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node24",
+      "sampleBasis": "exact-new-build-integrity-test-file",
+      "sampleCount": 1
     }
   ],
   "files": [
@@ -1984,6 +1991,13 @@
       "weightMs": 4,
       "sampleCount": 3,
       "provenanceId": "unit-local-analyst-workflow-node24"
+    },
+    {
+      "file": "test/frontend-build-integrity.test.mts",
+      "lane": "unit",
+      "weightMs": 290,
+      "sampleCount": 1,
+      "provenanceId": "unit-local-build-integrity-bootstrap"
     },
     {
       "file": "test/frontend-loading-report.test.mts",

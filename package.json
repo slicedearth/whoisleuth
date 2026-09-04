@@ -91,6 +91,7 @@
     "lookup:transport-qualify": "node tools/incremental-lookup-qualification.mts",
     "lookup:staging-evidence": "node tools/incremental-lookup-staging-evidence.mts",
     "frontend:loading-report": "node tools/frontend-loading-report.mts",
+    "frontend:build:integrity": "node tools/frontend-build-integrity.mts --check",
     "frontend:authenticated-loading-report": "node tools/playwright-performance-authority.mts",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",

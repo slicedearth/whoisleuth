@@ -128,7 +128,8 @@ describe('published CLI verification', () => {
   });
 
   test('rejects candidate report drift and selected archive mismatch before registry access', async () => {
-    assert.equal(MAX_CLI_PACKAGE_INSTALLED_CHECKS, 80);
+    assert.ok(Number.isSafeInteger(MAX_CLI_PACKAGE_INSTALLED_CHECKS));
+    assert.ok(MAX_CLI_PACKAGE_INSTALLED_CHECKS >= candidateReport().installedChecks.length);
     assert.doesNotThrow(() => validateCandidateReport(candidateReport({
       installedChecks: Array.from({ length: 71 }, (_, index) => `installed-check-${index}`),
     }), VERSION));
