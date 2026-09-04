@@ -95,27 +95,27 @@ export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
 // The executable and compatibility-root dependency graphs remain capped at
-// their reviewed 342-module and 344-module closures.
+// their reviewed 343-module and 345-module closures.
 // Two browser-safe domain-control paths remain explicit package roots because
 // released CLI archives permitted those deep imports. Structural extraction
 // does not change the independent source or packed-byte limits.
-export const MAX_CLI_RUNTIME_MODULES = 342;
-export const MAX_CLI_PACKAGE_MODULES = 344;
+export const MAX_CLI_RUNTIME_MODULES = 343;
+export const MAX_CLI_PACKAGE_MODULES = 345;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
-// dependency graph. They may emit no runtime code, but the reviewed 332-input
+// dependency graph. They may emit no runtime code, but the reviewed 333-input
 // closure remains bounded because TypeScript reads it while producing the
 // candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 332;
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 333;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep the reviewed 343-entry closure exact; packed and unpacked byte ceilings
+// Keep the reviewed 344-entry closure exact; packed and unpacked byte ceilings
 // remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 343;
+export const MAX_CLI_PACKAGE_ENTRIES = 344;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
+export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 81;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
@@ -1140,6 +1140,29 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     if (!discoveryScanHelp.includes('whoisleuth discover-scan') || !discoveryScanHelp.includes('This command performs network collection.')) {
       throw new TypeError('Installed discover-scan help did not preserve its explicit network boundary.');
     }
+    const mailHeaderFixture = path.join(temporaryRoot, 'message.eml');
+    await writeFile(mailHeaderFixture, [
+      'Authentication-Results: mx.example.test; spf=pass; dkim=pass; dmarc=pass',
+      'From: private-person@example.test',
+      'Subject: private subject',
+      '',
+      'private body',
+    ].join('\r\n'), { encoding: 'utf8', mode: 0o600 });
+    const mailHeaderReview = record(JSON.parse(await runInstalledCheck(
+      executable,
+      ['mail-headers', mailHeaderFixture, '--json'],
+      'mail-header review',
+    )), 'Installed mail-header review');
+    const mailHeaderProvenance = record(mailHeaderReview.provenance, 'Installed mail-header provenance');
+    if (mailHeaderReview.schema !== 'whoisleuth.cli.mail-header-review'
+      || mailHeaderProvenance.bodyRetained !== false
+      || mailHeaderProvenance.attachmentsRetained !== false
+      || mailHeaderProvenance.localPartsRetained !== false
+      || JSON.stringify(mailHeaderReview).includes('private-person')
+      || JSON.stringify(mailHeaderReview).includes('private subject')
+      || JSON.stringify(mailHeaderReview).includes('private body')) {
+      throw new TypeError('Installed offline mail-header review did not preserve its privacy boundary.');
+    }
 
     const commandHelpChecks: string[] = [];
     const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
@@ -1192,6 +1215,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'registry-support',
       'discover',
       'discover-scan-network-boundary',
+      'mail-header-review',
       'domain-control-deep-imports',
       ...installedHandlerChecks,
       ...commandHelpChecks,

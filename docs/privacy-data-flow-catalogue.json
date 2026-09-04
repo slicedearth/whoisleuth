@@ -6,7 +6,7 @@
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
       "capabilityCount": 32,
-      "cliOperationCount": 47,
+      "cliOperationCount": 48,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -5147,6 +5147,78 @@
           ]
         }
       ]
+    },
+    {
+      "id": "command.cli.mail-headers",
+      "command": "mail-headers",
+      "capabilityFamilyId": "offline_review",
+      "title": "Review message headers offline",
+      "requestPurpose": "Parses only the bounded header block from one selected message or standard input.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "explicit_per_item",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
     },
     {
       "id": "command.cli.mail-review",

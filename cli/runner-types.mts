@@ -63,6 +63,7 @@ type CliDependencies = {
   readPublicKeyFile?: (source: string) => string | Promise<string>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
   readMailReviewInput?: (source?: string | null) => string | Promise<string>;
+  readMailHeaderInput?: (source?: string | null) => string | Promise<string>;
   readMailTransportInput?: (source?: string | null) => string | Promise<string>;
   readTrustAnchorInput?: (source: string) => string | Promise<string>;
   now?: () => string;
@@ -114,6 +115,7 @@ type CliCommandContext = Readonly<{
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
   readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
+  readHeaderInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
   readPassphraseSource(source: string): Promise<string>;
   now(): string;
   beginProgress(message: string): TerminalProgress;

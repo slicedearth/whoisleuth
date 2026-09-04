@@ -219,7 +219,7 @@ describe('CLI shell completion', () => {
       'manifest', 'map-observations', 'oam-export', 'bulk', 'ct-intake', 'mail-transport',
       'registry-doctor', 'registry-cohort', 'risk-calibrate', 'lookalike-calibrate',
       'verify-artifact', 'interchange-report', 'inspect-archive', 'sign-artifact',
-      'verify-signature', 'source-report', 'compare', 'page-compare', 'mail-review',
+      'verify-signature', 'source-report', 'compare', 'page-compare', 'mail-review', 'mail-headers',
       'review-evidence', 'brief', 'case-pack', 'domain-control', 'monitor-once',
       'assurance', 'change-packet', 'sharing-review', 'diff', 'reconcile', 'timeline', 'export',
     ]) {

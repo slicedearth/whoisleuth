@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 47,
+  "commandCount": 48,
   "groups": [
     "investigate",
     "respond",
@@ -2461,6 +2461,78 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "inputLimits": [
         "Reads one saved Bulk result and sends no DNS or SMTP traffic.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "outputFormats": [
+        "terminal",
+        "JSON"
+      ],
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "mail-headers",
+      "summary": "Review message headers offline",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth mail-headers [message.eml] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth mail-headers message.eml --json",
+      "boundary": "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Parses only the bounded header block from one selected message or standard input."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecli.mail-header-review"
+      ],
+      "inputLimits": [
+        "Parses only the bounded header block from one selected message or standard input.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

@@ -1226,6 +1226,28 @@ const COMMAND_SEEDS = Object.freeze({
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',
   }),
+  "mail-headers": commandSeed({
+    reference: {
+      usage: 'whoisleuth mail-headers [message.eml] [--json] [--quiet] [--no-color]',
+      description: 'Review identity, reported authentication, domain alignment, and Received routing from selected message headers.',
+      example: 'whoisleuth mail-headers message.eml --json',
+      boundary: 'Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.',
+    },
+    collection: { mode: 'offline', scope: 'Parses only the bounded header block from one selected message or standard input.' },
+    summary: 'Review message headers offline',
+    options: ['--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: EMPTY_CONSTRAINTS,
+    helpGroup: 'investigate',
+    handlerOwner: 'inline',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.mail-header-review']),
+    primaryArtefacts: Object.freeze([]),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
   "review-evidence": commandSeed({
     reference: {
       usage: 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--strict-exit] [--quiet] [--no-color]',

@@ -120,6 +120,10 @@ import {
   buildCliTlsDocument,
 } from '../cli/formatters/json.mts';
 import {
+  CLI_MAIL_HEADER_REVIEW_SCHEMA,
+  CLI_MAIL_HEADER_REVIEW_VERSION,
+} from '../cli/mail-header-review.mts';
+import {
   CRYPTOGRAPHIC_ASSURANCE_INPUT_SCHEMA,
   CRYPTOGRAPHIC_ASSURANCE_INPUT_VERSION,
   CRYPTOGRAPHIC_ASSURANCE_REVIEW_VERSION,
@@ -322,6 +326,7 @@ describe('schema compatibility inventory', () => {
       ['cli.lookup-plan', CLI_LOOKUP_PLAN_SCHEMA, CLI_LOOKUP_PLAN_VERSION],
       ['cli.lookup-timeline', CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION],
       ['cli.mail-review', CLI_MAIL_REVIEW_SCHEMA, CLI_MAIL_REVIEW_VERSION],
+      ['cli.mail-header-review', CLI_MAIL_HEADER_REVIEW_SCHEMA, CLI_MAIL_HEADER_REVIEW_VERSION],
       ['cli.page-compare', CLI_PAGE_COMPARE_SCHEMA, CLI_PAGE_COMPARE_VERSION],
     ] as const) {
       assert.equal(byId(inventory, id).schema, schema);

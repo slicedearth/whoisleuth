@@ -355,6 +355,7 @@ const OFFLINE_PER_ITEM_COMMANDS = Object.freeze([
   'registry-cohort',
   'source-report',
   'mail-review',
+  'mail-headers',
 ] as const);
 const OFFLINE_PER_SOURCE_COMMANDS = Object.freeze([
   'registry-doctor',
@@ -1303,6 +1304,7 @@ const CLI_CAPABILITY_BINDINGS = Object.freeze({
   compare: CAPABILITY_IDS.OFFLINE_REVIEW,
   'page-compare': CAPABILITY_IDS.OFFLINE_REVIEW,
   'mail-review': CAPABILITY_IDS.OFFLINE_REVIEW,
+  'mail-headers': CAPABILITY_IDS.OFFLINE_REVIEW,
   'review-evidence': CAPABILITY_IDS.PORTABLE_EVIDENCE,
   brief: CAPABILITY_IDS.OFFLINE_REVIEW,
   'case-pack': CAPABILITY_IDS.PORTABLE_EVIDENCE,

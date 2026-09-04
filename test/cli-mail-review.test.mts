@@ -3,6 +3,13 @@ import { describe, test } from 'node:test';
 
 import { parseCliArguments } from '../cli/arguments.mts';
 import { buildCliMailReview, formatCliMailReview, mailState } from '../cli/mail-review.mts';
+import {
+  MAX_MAIL_HEADER_FIELDS,
+  MAX_MAIL_HEADER_INPUT_BYTES,
+  MAX_MAIL_HEADER_LINE_BYTES,
+  buildCliMailHeaderReview,
+  formatCliMailHeaderReview,
+} from '../cli/mail-header-review.mts';
 import { bulkJsonItem } from '../cli/formatters/json.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import { runCli } from '../cli/runner.mts';
@@ -269,5 +276,118 @@ describe('passive mail exposure review', () => {
       }),
     ]), ISO);
     assert.equal(distinct.providerRelationships.some((item) => item.providerDomain.startsWith('zz-')), false);
+  });
+});
+
+const MESSAGE = [
+  'Received: from relay.sender.test (relay.sender.test [192.0.2.20]) by mx.recipient.test with ESMTPS; Sat, 1 Aug 2026 01:01:00 +0000',
+  'Received: from origin.sender.test by relay.sender.test with ESMTP; Sat, 1 Aug 2026 01:00:00 +0000',
+  'Authentication-Results: mx.recipient.test; spf=pass smtp.mailfrom=private.sender.test; dkim=pass header.d=sender.test; dmarc=pass header.from=sender.test; arc=none',
+  'Received-SPF: pass (mx.recipient.test: domain of private.sender.test designates 192.0.2.20 as permitted sender)',
+  'DKIM-Signature: v=1; a=rsa-sha256; d=sender.test; s=mail; bh=private-value; b=private-signature',
+  'From: "Private decoy@display.test" <private-person@sender.test>',
+  'Reply-To: response@support.sender.test',
+  'Return-Path: <bounce@sender.test>',
+  'Message-ID: <private-message-id@mailer.sender.test>',
+  'Date: Sat, 1 Aug 2026 01:00:00 +0000',
+  'Subject: Confidential investigation subject',
+  '',
+  'Confidential message body and attachment marker',
+].join('\r\n');
+
+describe('offline message-header review', () => {
+  test('projects domain-only identity, reported authentication, and ordered routing', () => {
+    const document = buildCliMailHeaderReview(MESSAGE, ISO);
+    assert.equal(document.schema, 'whoisleuth.cli.mail-header-review');
+    assert.equal(document.version, 1);
+    assert.equal(document.generatedAt, ISO);
+    assert.deepEqual(document.identity.fromDomains, ['sender.test']);
+    assert.deepEqual(document.identity.replyToDomains, ['support.sender.test']);
+    assert.deepEqual(document.identity.returnPathDomains, ['sender.test']);
+    assert.deepEqual(document.identity.messageIdentifierDomains, ['mailer.sender.test']);
+    assert.deepEqual(document.authentication.spf, { state: 'pass', observations: 2 });
+    assert.deepEqual(document.authentication.dkim, { state: 'pass', observations: 1 });
+    assert.deepEqual(document.authentication.dmarc, { state: 'pass', observations: 1 });
+    assert.deepEqual(document.authentication.arc, { state: 'none', observations: 1 });
+    assert.equal(document.alignment.fromToReplyTo, 'divergent');
+    assert.equal(document.alignment.fromToReturnPath, 'aligned');
+    assert.equal(document.alignment.fromToDkimSigner, 'aligned');
+    assert.deepEqual(document.routing.receivedHops.map((hop) => [hop.fromDomain, hop.byDomain]), [
+      ['relay.sender.test', 'mx.recipient.test'],
+      ['origin.sender.test', 'relay.sender.test'],
+    ]);
+    assert.equal(document.routing.receivedHops[0]?.order, 'most_recent_first');
+    assert.equal(document.provenance.bodyRetained, false);
+    assert.equal(document.provenance.attachmentsRetained, false);
+    assert.equal(document.provenance.localPartsRetained, false);
+    const serialised = JSON.stringify(document);
+    for (const omitted of [
+      'Private decoy',
+      'display.test',
+      'private-person',
+      'response@',
+      'bounce@',
+      'private-message-id',
+      'Confidential investigation subject',
+      'Confidential message body',
+      'private-signature',
+    ]) assert.doesNotMatch(serialised, new RegExp(omitted, 'u'));
+    assert.match(formatCliMailHeaderReview(document), /Reported authentication/u);
+    assert.match(document.limitations.join(' '), /does not establish spoofing, abuse or maliciousness/u);
+  });
+
+  test('keeps conflicting, absent, and unsupported reported states explicit', () => {
+    const document = buildCliMailHeaderReview([
+      'Authentication-Results: gateway.example.test; spf=pass; dkim=policy; dmarc=temperror',
+      'Authentication-Results: backup.example.test; spf=fail; dkim=pass; dmarc=temperror',
+      'From: user@example.test',
+    ].join('\r\n'), ISO);
+    assert.deepEqual(document.authentication.spf, { state: 'mixed', observations: 2 });
+    assert.deepEqual(document.authentication.dkim, { state: 'mixed', observations: 2 });
+    assert.deepEqual(document.authentication.dmarc, { state: 'temperror', observations: 2 });
+    assert.deepEqual(document.authentication.arc, { state: 'unknown', observations: 0 });
+    assert.equal(document.alignment.fromToReplyTo, 'unavailable');
+  });
+
+  test('accepts a header-only file with one trailing line ending', () => {
+    const document = buildCliMailHeaderReview('From: analyst@example.test\r\n', ISO);
+    assert.deepEqual(document.identity.fromDomains, ['example.test']);
+  });
+
+  test('rejects malformed and over-bound header input before projection', () => {
+    assert.throws(() => buildCliMailHeaderReview(` continuation\r\nFrom: a@example.test`, ISO), /continuation without a preceding field/u);
+    assert.throws(() => buildCliMailHeaderReview('Malformed field', ISO), /malformed/u);
+    assert.throws(() => buildCliMailHeaderReview('From: a@example.test\u202e.invalid', ISO), /unsafe control/u);
+    assert.throws(
+      () => buildCliMailHeaderReview(`X-Test: ${'a'.repeat(MAX_MAIL_HEADER_LINE_BYTES)}\r\n`, ISO),
+      /line 1 exceeds/u,
+    );
+    assert.throws(
+      () => buildCliMailHeaderReview(Array.from({ length: MAX_MAIL_HEADER_FIELDS + 1 }, (_, index) => `X-${index}: value`).join('\r\n'), ISO),
+      /more than 512 fields/u,
+    );
+    assert.throws(() => buildCliMailHeaderReview(`X-Test: ${'a'.repeat(MAX_MAIL_HEADER_INPUT_BYTES)}`, ISO), /limited to/u);
+    assert.throws(() => buildCliMailHeaderReview('From: a@example.test', 'not-a-time'), /valid ISO 8601 timestamp/u);
+  });
+
+  test('registers and executes the command without a network dependency', async () => {
+    assert.deepEqual(parseCliArguments(['mail-headers', 'message.eml', '--json']), {
+      action: 'mail-headers', source: 'message.eml', output: 'json', quiet: false, color: true,
+    });
+    const stdout = capture();
+    const stderr = capture();
+    const unexpectedNetwork = async () => { throw new Error('network path was reached'); };
+    const code = await runCli(['mail-headers', '--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      now: () => ISO,
+      readMailHeaderInput: async () => MESSAGE,
+      safeFetch: unexpectedNetwork as never,
+      resolvePublicAddresses: unexpectedNetwork as never,
+      whoisQuery: unexpectedNetwork as never,
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(JSON.parse(stdout.value()).schema, 'whoisleuth.cli.mail-header-review');
+    assert.equal(stderr.value(), '');
   });
 });

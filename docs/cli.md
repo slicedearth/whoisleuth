@@ -75,6 +75,7 @@ whoisleuth bulk domains.txt --csv
 whoisleuth discover example.test --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json --strict-exit
 whoisleuth compare lookup.json --json
+whoisleuth mail-headers message.eml --json
 whoisleuth brief lookup.json
 ```
 
@@ -89,7 +90,7 @@ application:
 
 | Group | Common commands |
 | --- | --- |
-| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `brief` |
+| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `mail-headers`, `brief` |
 | Respond | `case-pack`, `change-packet`, `sharing-review`, `export` (local handoff from browser-created Cases) |
 | Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
 | Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
@@ -121,6 +122,16 @@ Networked commands run from the local machine and contact the sources named in
 their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
+
+### Message-header review
+
+`mail-headers` parses only the bounded header block from a selected message file
+or standard input. It extracts domain-only identity, reported SPF, DKIM, DMARC
+and ARC states, exact-domain alignment, and the bounded `Received` route in its
+reported order. It makes no request and does not retain address local parts,
+display names, subject, body, attachments, or raw header values in its output.
+Authentication states are header claims, not an independent DNS or
+cryptographic validation, and alignment differences can be legitimate.
 
 ## Output and automation
 

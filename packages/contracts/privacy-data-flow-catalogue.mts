@@ -1426,8 +1426,8 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
   fixtures: [{
     id: 'privacy-data-flow-catalogue-v1',
     path: 'docs/privacy-data-flow-catalogue.json',
-    bytes: 486_897,
-    sha256: '943b0ffd91e4d69afc49917b72b49e585e21fa8fb9f70af30030687dcfc1779c',
+    bytes: 489_590,
+    sha256: '7276a3e852d701bf37ffa2aa6bee052094dae74e82dae102042dba4209fdd326',
     contentDigestSha256: null,
     schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
     version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,

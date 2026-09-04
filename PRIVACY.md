@@ -216,6 +216,12 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+The offline `mail-headers` command parses only the bounded header block from a
+selected message or standard input. Its output can retain a header digest,
+domain-only identity and routing, reported authentication states, and
+observation counts. It does not retain address local parts, display names,
+subject, body, attachments, or raw header values, and makes no network request.
+
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit
 owned-or-authorised acknowledgement. Mail transport also requires a separate

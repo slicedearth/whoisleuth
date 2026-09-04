@@ -91,6 +91,7 @@ const MINIMUM_ARGUMENTS: Readonly<Record<CliCommand, readonly string[]>> = Objec
   compare: ['compare'],
   'page-compare': ['page-compare', 'left.json', 'right.json'],
   'mail-review': ['mail-review'],
+  'mail-headers': ['mail-headers'],
   'review-evidence': ['review-evidence'],
   brief: ['brief'],
   'case-pack': ['case-pack', '--audience', 'internal', '--reviewed'],

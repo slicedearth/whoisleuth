@@ -20,6 +20,7 @@ const REVIEW_INLINE_COMMANDS = Object.freeze([
   'compare',
   'page-compare',
   'mail-review',
+  'mail-headers',
   'review-evidence',
   'brief',
   'case-pack',

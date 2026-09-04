@@ -41,6 +41,7 @@ whoisleuth lookup example.test --deep --summary
 whoisleuth bulk domains.txt --csv
 whoisleuth discover example.test --preset common --jsonl
 whoisleuth compare lookup.json --json
+whoisleuth mail-headers message.eml --json
 whoisleuth verify-artifact lookup.json --json --strict-exit
 ```
 
@@ -52,7 +53,7 @@ only `bulk` accepts multiple targets.
 
 | Group | Common commands |
 | --- | --- |
-| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `brief` |
+| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `mail-headers`, `brief` |
 | Respond | `case-pack`, `change-packet`, `sharing-review`, `export` |
 | Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
 | Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |

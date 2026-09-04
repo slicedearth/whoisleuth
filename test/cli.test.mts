@@ -1679,6 +1679,7 @@ test('review-family readers fail through bounded command-specific usage errors',
     ['compare', 'lookup.json'],
     ['page-compare', 'left.json', 'right.json'],
     ['mail-review', 'mail.json'],
+    ['mail-headers', 'message.eml'],
     ['review-evidence', 'evidence.json'],
     ['brief', 'lookup.json'],
     ['case-pack', 'cases.json', '--audience', 'internal', '--reviewed'],
@@ -1697,6 +1698,7 @@ test('review-family readers fail through bounded command-specific usage errors',
       readCompareInput: failRead,
       readDiffInput: failRead,
       readMailReviewInput: failRead,
+      readMailHeaderInput: failRead,
     });
     assert.equal(code, EXIT_CODES.USAGE, argv[0]);
     assert.equal(stdout.value(), '', argv[0]);

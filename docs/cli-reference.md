@@ -63,6 +63,13 @@ disclosures without collecting. Fast is the Lookup default. Deep adds the
 applicable registration, DNS, HTTP, TLS, page, technology and network context.
 Optional browser providers are not implicit CLI actions.
 
+`mail-headers` is an offline review of one analyst-selected RFC-style header
+block. It reports domain-only identity, header-reported authentication,
+exact-domain alignment, and bounded `Received` routing. It retains no address
+local parts, display names, subject, body, attachment, or raw header value in
+its output. It does not independently validate SPF, DKIM, DMARC, or ARC and
+does not treat divergence as proof of abuse.
+
 `dnssec-validate` and `mail-transport` are isolated authorised actions. Both
 require a selected literal public resolver, a local trust-anchor document and
 `--owned-or-authorized`; mail transport also requires `--active-probe`. Mail

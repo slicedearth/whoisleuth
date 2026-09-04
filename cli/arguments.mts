@@ -71,6 +71,7 @@ type CliAction =
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'mail-headers'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: true } & TerminalOptions)
@@ -932,6 +933,11 @@ function parseMailReviewArguments(argv: string[]): Extract<CliArguments, { actio
   return { action: 'mail-review', ...parsed };
 }
 
+function parseMailHeadersArguments(argv: string[]): Extract<CliArguments, { action: 'mail-headers' }> {
+  const parsed = parseSingleJsonInput(argv, 'mail-headers accepts one optional message or header file.');
+  return { action: 'mail-headers', ...parsed };
+}
+
 function parseReviewEvidenceArguments(argv: string[]): Extract<CliArguments, { action: 'review-evidence' }> {
   let source: string | null = null;
   let mmdbSource: string | null = null;
@@ -1500,6 +1506,7 @@ const CLI_PARSERS = Object.freeze({
   compare: parseCompareArguments,
   'page-compare': parsePageCompareArguments,
   'mail-review': parseMailReviewArguments,
+  'mail-headers': parseMailHeadersArguments,
   'review-evidence': parseReviewEvidenceArguments,
   brief: parseBriefArguments,
   'case-pack': parseCasePackArguments,
