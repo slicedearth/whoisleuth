@@ -104,8 +104,8 @@ export const MAX_CLI_PACKAGE_MODULES = 346;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
 // dependency graph. They may emit no runtime code, but the reviewed 334-input
 // closure remains bounded because TypeScript reads it while producing the
-// candidate. The offline mail-header command accounts for the additional
-// source.
+// candidate. The shared CLI command-semantics owner accounts for the
+// additional source.
 export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 334;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
