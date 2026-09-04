@@ -1,10 +1,7 @@
 <script lang="ts">
-  import { getContext, type Snippet } from 'svelte';
+  import type { Snippet } from 'svelte';
+  import PublicReferenceSidebar from '$lib/components/PublicReferenceSidebar.svelte';
   import { PUBLIC_REFERENCE_DESTINATIONS } from '$lib/public-reference-navigation';
-  import {
-    PUBLIC_REFERENCE_CONTEXT,
-    type PublicReferenceContext,
-  } from '$lib/public-reference-context';
   import { WHOISLEUTH_SITE_ORIGIN } from '../../../../lib/project-metadata.mts';
 
   let {
@@ -24,13 +21,6 @@
     actions?: Snippet;
     children: Snippet;
   } = $props();
-
-  const referenceContext = getContext<PublicReferenceContext>(PUBLIC_REFERENCE_CONTEXT);
-  $effect(() => {
-    referenceContext.currentHref = currentHref;
-    referenceContext.title = title;
-    referenceContext.sections = sections;
-  });
 
   const currentDestination = $derived(PUBLIC_REFERENCE_DESTINATIONS.find((item) => item.href === currentHref) ?? null);
   const currentIndex = $derived(PUBLIC_REFERENCE_DESTINATIONS.findIndex((item) => item.href === currentHref));
@@ -70,34 +60,38 @@
   <svelte:element this={'script'} type="application/ld+json">{breadcrumbJson}</svelte:element>
 </svelte:head>
 
-<article class="reference-document">
-  <nav class="breadcrumbs" aria-label="Breadcrumb">
-    <a href="/">Home</a><span aria-hidden="true">/</span>
-    {#if currentHref === '/resources'}
-      <span>Resources</span>
-    {:else}
-      <a href="/resources">Resources</a><span aria-hidden="true">/</span><span>{breadcrumbLabel}</span>
-    {/if}
-  </nav>
-
-  <header class="reference-heading">
-    <p class="eyebrow">{eyebrow}</p>
-    <h1>{title}</h1>
-    {#each summary as paragraph}<p>{paragraph}</p>{/each}
-    {#if actions}<div class="reference-actions">{@render actions()}</div>{/if}
-  </header>
-
-  <div class="reference-body"><div class="reference-content">{@render children()}</div></div>
-
-  {#if previous || next}
-    <nav class="reference-pagination" aria-label="Related documentation">
-      {#if previous}<a class="previous" href={previous.href}><span>Previous</span><strong>{previous.label}</strong></a>{:else}<span></span>{/if}
-      {#if next}<a class="next" href={next.href}><span>Next</span><strong>{next.label}</strong></a>{/if}
+<div class="reference-shell">
+  <PublicReferenceSidebar currentPath={currentHref} currentTitle={title} currentSections={sections} />
+  <article class="reference-document">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="/">Home</a><span aria-hidden="true">/</span>
+      {#if currentHref === '/resources'}
+        <span>Resources</span>
+      {:else}
+        <a href="/resources">Resources</a><span aria-hidden="true">/</span><span>{breadcrumbLabel}</span>
+      {/if}
     </nav>
-  {/if}
-</article>
+
+    <header class="reference-heading">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      {#each summary as paragraph}<p>{paragraph}</p>{/each}
+      {#if actions}<div class="reference-actions">{@render actions()}</div>{/if}
+    </header>
+
+    <div class="reference-body"><div class="reference-content">{@render children()}</div></div>
+
+    {#if previous || next}
+      <nav class="reference-pagination" aria-label="Related documentation">
+        {#if previous}<a class="previous" href={previous.href}><span>Previous</span><strong>{previous.label}</strong></a>{:else}<span></span>{/if}
+        {#if next}<a class="next" href={next.href}><span>Next</span><strong>{next.label}</strong></a>{/if}
+      </nav>
+    {/if}
+  </article>
+</div>
 
 <style>
+  .reference-shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:clamp(28px,4vw,52px);align-items:start}
   .reference-document{min-width:0}
   .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 22px;color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4}
   .breadcrumbs a{color:var(--accent)}
@@ -113,5 +107,6 @@
   .reference-pagination a.next{text-align:right}
   .reference-pagination span{color:var(--muted);font:650 .58rem var(--mono);letter-spacing:.07em;text-transform:uppercase}
   .reference-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
+  @media(max-width:1080px){.reference-shell{grid-template-columns:1fr;gap:0}}
   @media(max-width:520px){.reference-pagination{grid-template-columns:1fr}.reference-pagination>span{display:none}.reference-pagination a.next{text-align:left}}
 </style>

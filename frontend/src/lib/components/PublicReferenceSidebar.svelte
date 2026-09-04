@@ -1,18 +1,19 @@
 <script lang="ts">
-  import { getContext, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     PUBLIC_REFERENCE_GROUPS,
     publicReferenceDestination,
   } from '$lib/public-reference-navigation';
-  import {
-    PUBLIC_REFERENCE_CONTEXT,
-    type PublicReferenceContext,
-  } from '$lib/public-reference-context';
-
-  let { currentPath }: { currentPath: string } = $props();
-  const referenceContext = getContext<PublicReferenceContext>(PUBLIC_REFERENCE_CONTEXT);
-  const currentLabel = $derived(publicReferenceDestination(currentPath)?.label ?? 'Documentation');
-  const currentSections = $derived(referenceContext.currentHref === currentPath ? referenceContext.sections : []);
+  let {
+    currentPath,
+    currentTitle,
+    currentSections = [],
+  }: {
+    currentPath: string;
+    currentTitle: string;
+    currentSections?: readonly Readonly<{ href: string; label: string }>[];
+  } = $props();
+  const currentLabel = $derived(publicReferenceDestination(currentPath)?.label ?? currentTitle);
   let activeSectionHref = $state('');
 
   function updateActiveSection() {
@@ -67,12 +68,12 @@
         {#each group.items as item}
           <a class:active={item.href === currentPath} aria-current={item.href === currentPath ? 'page' : undefined} href={item.href}>{item.label}</a>
           {#if item.href === currentPath && currentSections.length}
-            <div class="page-sections" aria-label={`${currentLabel} sections`}>
+            <nav class="page-sections" aria-label={`${currentLabel} sections`}>
               <h3>On this page</h3>
               {#each currentSections as section}
                 <a class:active={section.href === activeSectionHref} aria-current={section.href === activeSectionHref ? 'location' : undefined} href={section.href}>{section.label}</a>
               {/each}
-            </div>
+            </nav>
           {/if}
         {/each}
       </section>

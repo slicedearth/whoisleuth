@@ -3,7 +3,6 @@
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
-  import PublicReferenceSidebar from '$lib/components/PublicReferenceSidebar.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import {
@@ -18,21 +17,12 @@
     classifyPublicSessionResponse,
     type PublicSessionState,
   } from '$lib/public-session';
-  import {
-    PUBLIC_REFERENCE_CONTEXT,
-    type PublicReferenceContext,
-  } from '$lib/public-reference-context';
 
   let { children } = $props();
   let session = $state<PublicSessionState>('checking');
   let signingOut = $state(false);
   let logoutError = $state('');
   let siteMenu = $state<HTMLDetailsElement>();
-  const referenceContext = $state<PublicReferenceContext>({
-    currentHref: '',
-    title: '',
-    sections: [],
-  });
   const resourceDestinationPaths = new Set(publicReferenceNavigation.map((item) => item.href));
   const referenceSectionActive = $derived(
     page.url.pathname === '/resources'
@@ -41,7 +31,6 @@
   );
 
   setContext(PUBLIC_SESSION_CONTEXT, () => session);
-  setContext(PUBLIC_REFERENCE_CONTEXT, referenceContext);
   onMount(() => { void checkSession(); });
 
   function publicItemActive(href: string): boolean {
@@ -119,14 +108,7 @@
   </header>
 
   <main class="public-content" class:reference-page={referenceSectionActive} id="main-content" tabindex="-1">
-    {#if referenceSectionActive}
-      <div class="reference-shell">
-        <PublicReferenceSidebar currentPath={page.url.pathname} />
-        <div class="reference-document-slot">{@render children()}</div>
-      </div>
-    {:else}
-      {@render children()}
-    {/if}
+    {@render children()}
   </main>
 
   <SiteFooter />
@@ -163,8 +145,6 @@
   .session-error{flex:1 0 100%;max-width:100%;margin:0;padding:8px 10px;border:1px dotted var(--danger);border-radius:var(--radius-sm);color:var(--danger);font:700 var(--text-2xs) var(--mono);line-height:1.45;overflow-wrap:anywhere}
   .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
   .public-content.reference-page{padding-top:30px}
-  .reference-shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:clamp(28px,4vw,52px);align-items:start}
-  .reference-document-slot{min-width:0}
   @container public-header (max-width:940px){
     .console-label-full{display:none}
     .console-label-short{display:inline}
@@ -190,7 +170,6 @@
     .public-content{padding-top:38px}
     .public-content.reference-page{padding-top:20px}
   }
-  @media(max-width:1080px){.reference-shell{grid-template-columns:1fr;gap:0}}
   @media(max-width:440px){
     .public-shell{padding-inline:8px}
     .public-header{gap:4px}

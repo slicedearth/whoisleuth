@@ -34,14 +34,6 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 
 describe('production coverage policy', () => {
   test('retains explicit browser owners and coverage floors for critical production paths', () => {
-    assert.deepEqual(
-      PRODUCTION_COVERAGE_EXCLUSIONS.find((item) => item.source === 'frontend/src/lib/public-reference-context.ts'),
-      {
-        source: 'frontend/src/lib/public-reference-context.ts',
-        category: 'browser_adapter',
-        owner: 'e2e/public-guide.spec.ts',
-      },
-    );
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/discriminated-command-handlers.mts'], {
       lines: 100, branches: 100, functions: 100,
     });

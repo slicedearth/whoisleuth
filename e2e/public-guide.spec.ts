@@ -2,6 +2,20 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 
+test('reference section navigation is available before client hydration', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  try {
+    await page.goto('/cli');
+    const sections = page.getByRole('navigation', { name: 'CLI sections' });
+    await expect(sections).toBeVisible();
+    await expect(sections.getByRole('link')).toHaveCount(6);
+    await expect(sections.getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+  } finally {
+    await context.close();
+  }
+});
+
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
   await page.goto('/');
 
