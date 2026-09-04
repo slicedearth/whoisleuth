@@ -86,19 +86,19 @@
       "responseActions": 8,
       "responseActionEvents": 8,
       "browserLocal": {
-        "serializedCaseBytes": 43078,
-        "retainedEvidenceBytes": 35382,
+        "serializedCaseBytes": 43622,
+        "retainedEvidenceBytes": 35926,
         "evidenceHistoryBytes": 22006,
         "evidencePinBytes": 4824,
-        "decisionHistoryBytes": 1696,
-        "responseActionHistoryBytes": 6920,
-        "indexedDbRecordPayloadBytes": 43254,
-        "indexedDbRecordEnvelopeBytes": 48718,
+        "decisionHistoryBytes": 2048,
+        "responseActionHistoryBytes": 7112,
+        "indexedDbRecordPayloadBytes": 43798,
+        "indexedDbRecordEnvelopeBytes": 49342,
         "indexedDbManifestBytes": 283,
-        "indexedDbSerializedContractBytes": 49001,
-        "currentQuotaRatio": 0.010271,
-        "projectedContentAddressedBytes": 77734,
-        "projectedQuotaRatio": 0.018533
+        "indexedDbSerializedContractBytes": 49625,
+        "currentQuotaRatio": 0.0104,
+        "projectedContentAddressedBytes": 78278,
+        "projectedQuotaRatio": 0.018663
       },
       "duplication": {
         "eligiblePayloads": 40,
@@ -110,8 +110,8 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 0,
         "grossCanonicalDuplicateBytes": 0,
-        "currentEligibleBytes": 31230,
-        "artifactBytes": 38278,
+        "currentEligibleBytes": 31582,
+        "artifactBytes": 38630,
         "referenceBytes": 4888,
         "manifestBytes": 200,
         "indexBytes": 7264,
@@ -119,8 +119,8 @@
         "collisionMetadataBytes": 5176,
         "repairPreviewMetadataBytes": 5120,
         "operationalMetadataBytes": 15256,
-        "candidateBytesBeforeOperationalReserve": 50630,
-        "candidateBytesAfterAllOverhead": 65886,
+        "candidateBytesBeforeOperationalReserve": 50982,
+        "candidateBytesAfterAllOverhead": 66238,
         "netSavingsBytes": -34656,
         "deduplicableBytesAfterAllOverhead": 0,
         "architectureDeltaBytes": 34656
@@ -128,13 +128,13 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 48612,
-          "retainedEvidenceBytes": 35383
+          "totalBytes": 49156,
+          "retainedEvidenceBytes": 35927
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 114156,
-          "retainedEvidenceBytes": 85306,
+          "totalBytes": 115244,
+          "retainedEvidenceBytes": 86394,
           "caseLimitApplied": false
         }
       }
@@ -149,19 +149,19 @@
       "responseActions": 24,
       "responseActionEvents": 24,
       "browserLocal": {
-        "serializedCaseBytes": 129274,
-        "retainedEvidenceBytes": 106234,
+        "serializedCaseBytes": 130906,
+        "retainedEvidenceBytes": 107866,
         "evidenceHistoryBytes": 66008,
         "evidencePinBytes": 14500,
-        "decisionHistoryBytes": 5116,
-        "responseActionHistoryBytes": 20802,
-        "indexedDbRecordPayloadBytes": 129850,
-        "indexedDbRecordEnvelopeBytes": 146256,
+        "decisionHistoryBytes": 6172,
+        "responseActionHistoryBytes": 21378,
+        "indexedDbRecordPayloadBytes": 131482,
+        "indexedDbRecordEnvelopeBytes": 148128,
         "indexedDbManifestBytes": 285,
-        "indexedDbSerializedContractBytes": 146541,
-        "currentQuotaRatio": 0.030821,
-        "projectedContentAddressedBytes": 156751,
-        "projectedQuotaRatio": 0.037372
+        "indexedDbSerializedContractBytes": 148413,
+        "currentQuotaRatio": 0.03121,
+        "projectedContentAddressedBytes": 158383,
+        "projectedQuotaRatio": 0.037761
       },
       "duplication": {
         "eligiblePayloads": 120,
@@ -355,8 +355,8 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 49452,
         "grossCanonicalDuplicateBytes": 49452,
-        "currentEligibleBytes": 93764,
-        "artifactBytes": 59120,
+        "currentEligibleBytes": 94820,
+        "artifactBytes": 60176,
         "referenceBytes": 14664,
         "manifestBytes": 201,
         "indexBytes": 15240,
@@ -364,8 +364,8 @@
         "collisionMetadataBytes": 10848,
         "repairPreviewMetadataBytes": 10752,
         "operationalMetadataBytes": 32016,
-        "candidateBytesBeforeOperationalReserve": 89225,
-        "candidateBytesAfterAllOverhead": 121241,
+        "candidateBytesBeforeOperationalReserve": 90281,
+        "candidateBytesAfterAllOverhead": 122297,
         "netSavingsBytes": -27477,
         "deduplicableBytesAfterAllOverhead": 0,
         "architectureDeltaBytes": 27477
@@ -373,13 +373,13 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 134811,
-          "retainedEvidenceBytes": 106235
+          "totalBytes": 136443,
+          "retainedEvidenceBytes": 107867
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 340943,
-          "retainedEvidenceBytes": 256092,
+          "totalBytes": 344207,
+          "retainedEvidenceBytes": 259356,
           "caseLimitApplied": false
         }
       }
@@ -394,19 +394,19 @@
       "responseActions": 500,
       "responseActionEvents": 500,
       "browserLocal": {
-        "serializedCaseBytes": 2003024,
-        "retainedEvidenceBytes": 1523500,
+        "serializedCaseBytes": 2037024,
+        "retainedEvidenceBytes": 1557500,
         "evidenceHistoryBytes": 687500,
         "evidencePinBytes": 301500,
-        "decisionHistoryBytes": 106000,
-        "responseActionHistoryBytes": 432500,
-        "indexedDbRecordPayloadBytes": 2015500,
-        "indexedDbRecordEnvelopeBytes": 2289890,
+        "decisionHistoryBytes": 128000,
+        "responseActionHistoryBytes": 444500,
+        "indexedDbRecordPayloadBytes": 2049500,
+        "indexedDbRecordEnvelopeBytes": 2328890,
         "indexedDbManifestBytes": 287,
-        "indexedDbSerializedContractBytes": 2290177,
-        "currentQuotaRatio": 0.477558,
-        "projectedContentAddressedBytes": 988734,
-        "projectedQuotaRatio": 0.235733
+        "indexedDbSerializedContractBytes": 2329177,
+        "currentQuotaRatio": 0.485664,
+        "projectedContentAddressedBytes": 1000778,
+        "projectedQuotaRatio": 0.238604
       },
       "duplication": {
         "eligiblePayloads": 2000,
@@ -414,10 +414,10 @@
         "exactDuplicatePayloadGroups": [
           {
             "kind": "decision_history",
-            "payloadDigest": "sha256:e338ac054fdf1a4af450913e66eff0af3430fa19bbc89a6c6749a9244186f38f",
+            "payloadDigest": "sha256:85ca1cffa13c218f3303d2abf33266b943b65153900d4277be0ba7c19ea80a5a",
             "occurrences": 500,
-            "payloadBytes": 210,
-            "grossDuplicateBytes": 104790
+            "payloadBytes": 254,
+            "grossDuplicateBytes": 126746
           },
           {
             "kind": "evidence_history",
@@ -445,11 +445,11 @@
         "canonicallyEquivalentPayloadGroups": [
           {
             "kind": "decision_history",
-            "payloadDigest": "sha256:089ead08847afb76e893399ce50b9cb689d6122c89a3255e07caaf43553ec451",
+            "payloadDigest": "sha256:a8f875880435280184a7f9c94e781cccf244f3b0f088e7258432cc4d0470a625",
             "occurrences": 500,
             "exactForms": 1,
-            "payloadBytes": 210,
-            "grossDuplicateBytes": 104790
+            "payloadBytes": 254,
+            "grossDuplicateBytes": 126746
           },
           {
             "kind": "evidence_history",
@@ -478,10 +478,10 @@
         ],
         "canonicallyEquivalentGroupCount": 4,
         "canonicalOnlyGroupCount": 0,
-        "grossExactDuplicateBytes": 1261971,
-        "grossCanonicalDuplicateBytes": 1261971,
-        "currentEligibleBytes": 1264500,
-        "artifactBytes": 3234,
+        "grossExactDuplicateBytes": 1283927,
+        "grossCanonicalDuplicateBytes": 1283927,
+        "currentEligibleBytes": 1286500,
+        "artifactBytes": 3278,
         "referenceBytes": 244500,
         "manifestBytes": 201,
         "indexBytes": 734,
@@ -489,22 +489,22 @@
         "collisionMetadataBytes": 517,
         "repairPreviewMetadataBytes": 520,
         "operationalMetadataBytes": 1541,
-        "candidateBytesBeforeOperationalReserve": 248669,
-        "candidateBytesAfterAllOverhead": 250210,
-        "netSavingsBytes": 1014290,
-        "deduplicableBytesAfterAllOverhead": 1014290,
-        "architectureDeltaBytes": -1014290
+        "candidateBytesBeforeOperationalReserve": 248713,
+        "candidateBytesAfterAllOverhead": 250254,
+        "netSavingsBytes": 1036246,
+        "deduplicableBytesAfterAllOverhead": 1036246,
+        "architectureDeltaBytes": -1036246
       },
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 2008564,
-          "retainedEvidenceBytes": 1523501
+          "totalBytes": 2042564,
+          "retainedEvidenceBytes": 1557501
         },
         "cliCasePack": {
           "caseCount": 25,
-          "totalBytes": 277176,
-          "retainedEvidenceBytes": 188825,
+          "totalBytes": 280576,
+          "retainedEvidenceBytes": 192225,
           "caseLimitApplied": true
         }
       }
@@ -567,32 +567,32 @@
     },
     "postConsolidation": {
       "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 19,
-      "lifecycleContracts": 19,
-      "legacyContracts": 10,
+      "supportedVersionSlots": 25,
+      "lifecycleContracts": 25,
+      "legacyContracts": 16,
       "retiredOutputContracts": 0,
-      "migrations": 6,
+      "migrations": 9,
       "readerEdges": 11,
       "writerEdges": 9,
-      "readerVersionSlots": 26,
-      "lifecycleFixtures": 21,
-      "lifecycleFixtureBytes": 112147,
-      "legacyAndRetiredFixtures": 10,
-      "legacyAndRetiredFixtureBytes": 43056,
-      "lifecycleShapes": 19,
+      "readerVersionSlots": 34,
+      "lifecycleFixtures": 28,
+      "lifecycleFixtureBytes": 158795,
+      "legacyAndRetiredFixtures": 16,
+      "legacyAndRetiredFixtureBytes": 80937,
+      "lifecycleShapes": 23,
       "lifecycleBoundProfiles": 7,
       "lifecycleHooks": 18,
       "lifecycleSerialisationProfiles": 7,
       "lifecyclePrivacyProfiles": 3,
       "lifecycleConsumerEdges": 17,
-      "versionSensitiveProductionLines": 221,
-      "versionSensitiveBranches": 53,
+      "versionSensitiveProductionLines": 237,
+      "versionSensitiveBranches": 59,
       "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 12,
+      "generatedDocumentationEntries": 13,
       "sourceMeasurement": {
         "sourceFiles": 15,
-        "versionSensitiveProductionLines": 221,
-        "versionSensitiveBranches": 53,
+        "versionSensitiveProductionLines": 237,
+        "versionSensitiveBranches": 59,
         "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
       }
     }

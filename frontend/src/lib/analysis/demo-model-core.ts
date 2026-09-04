@@ -155,6 +155,8 @@ const syntheticProfile: BrandProfile = {
   approvedPartnerDomains: [],
   allowlistedDomains: [],
   allowlistedRegistrars: [],
+  officialChannels: [],
+  rightsReferences: [],
   dkimSelectors: [],
   retiredDkimSelectors: [],
   mailProtectionProfile: 'standard',

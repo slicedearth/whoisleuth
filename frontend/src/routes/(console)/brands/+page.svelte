@@ -15,7 +15,7 @@
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
-  import type { DesiredPostureBaseline, ProtectionAttestation } from '$lib/analysis/brand-profile-model.ts';
+  import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
@@ -46,6 +46,7 @@
   let activePreferenceSourceState=$state<BrandReviewSourceState>('loading');
   let certificateReplayUnavailable=$state(false);
   let name=$state(''),official=$state(''),products=$state(''),tlds=$state('com, net, org'),partners=$state(''),selectors=$state(''),retiredSelectors=$state(''),mailProtectionProfile=$state('standard'),trademarkOwner=$state(''),trademarkRegistration=$state(''),faviconHash=$state(''),faviconPHash=$state('');
+  let officialChannels=$state<OfficialChannel[]>([]),rightsReferences=$state<RightsReference[]>([]);
   let pageBaseline=$state<ReturnType<typeof normalizePageBaseline>>(null),capturingIdentity=$state(false);
   let identityCaptureGeneration=0;let identityCaptureController:AbortController|null=null;
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -140,9 +141,9 @@
   async function focusEditor(){await tick();document.getElementById('brand-profile-name')?.focus();}
   function cancelIdentityCapture(){identityCaptureGeneration+=1;identityCaptureController?.abort();identityCaptureController=null;capturingIdentity=false;if(message==='Capturing official-site identity…')message='';}
   function closeEditor(){if(savingProfile)return;cancelIdentityCapture();showForm=false;}
-  function clearForm(prefillDomain=''){cancelIdentityCapture();editing='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';selectors='';retiredSelectors='';mailProtectionProfile='standard';trademarkOwner='';trademarkRegistration='';faviconHash='';faviconPHash='';pageBaseline=null;showForm=true;void focusEditor();}
+  function clearForm(prefillDomain=''){cancelIdentityCapture();editing='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';selectors='';retiredSelectors='';mailProtectionProfile='standard';trademarkOwner='';trademarkRegistration='';officialChannels=[];rightsReferences=[];faviconHash='';faviconPHash='';pageBaseline=null;showForm=true;void focusEditor();}
   function setEditorValue(field:EditorField,value:string){if(field==='name')name=value;else if(field==='official'){const previousDomain=parseList(official,true)[0]||'';official=value;const nextDomain=parseList(official,true)[0]||'';if(nextDomain!==previousDomain){cancelIdentityCapture();if(pageBaseline?.domain!==nextDomain){pageBaseline=null;faviconHash='';faviconPHash='';}}}else if(field==='products')products=value;else if(field==='tlds')tlds=value;else if(field==='partners')partners=value;else if(field==='selectors')selectors=value;else if(field==='retiredSelectors')retiredSelectors=value;else if(field==='mailProtectionProfile')mailProtectionProfile=value;else if(field==='trademarkOwner')trademarkOwner=value;else if(field==='trademarkRegistration')trademarkRegistration=value;else faviconHash=value;}
-  function edit(profile:BrandProfile){cancelIdentityCapture();editing=profile.id;name=profile.name;official=profile.officialDomains.join('\n');products=profile.productNames.join(', ');tlds=profile.tlds.join(', ');partners=profile.approvedPartnerDomains.join('\n');selectors=profile.dkimSelectors.join(', ');retiredSelectors=profile.retiredDkimSelectors.join(', ');mailProtectionProfile=profile.mailProtectionProfile;trademarkOwner=profile.trademarkOwner;trademarkRegistration=profile.trademarkRegistration;faviconHash=profile.officialFaviconHash;faviconPHash=profile.officialFaviconPHash;pageBaseline=normalizePageBaseline(profile.pageBaseline);showForm=true;void focusEditor();}
+  function edit(profile:BrandProfile){cancelIdentityCapture();editing=profile.id;name=profile.name;official=profile.officialDomains.join('\n');products=profile.productNames.join(', ');tlds=profile.tlds.join(', ');partners=profile.approvedPartnerDomains.join('\n');selectors=profile.dkimSelectors.join(', ');retiredSelectors=profile.retiredDkimSelectors.join(', ');mailProtectionProfile=profile.mailProtectionProfile;trademarkOwner=profile.trademarkOwner;trademarkRegistration=profile.trademarkRegistration;officialChannels=profile.officialChannels.map((item)=>({...item}));rightsReferences=profile.rightsReferences.map((item)=>({...item}));faviconHash=profile.officialFaviconHash;faviconPHash=profile.officialFaviconPHash;pageBaseline=normalizePageBaseline(profile.pageBaseline);showForm=true;void focusEditor();}
   type ProfileCommitIssue='active-preference'|'reread'|null;
   type ProfileCommitOptions=Readonly<{preserveCompletedAudit?:boolean}>;
   type CompletedAuditSnapshot=Readonly<{profileId:string;profileFingerprint:string;results:readonly AuditResult[]}>;
@@ -183,7 +184,7 @@
     message='Saving Brand Profile…';
     try{
       const existing=editing?profiles.find((profile)=>profile.id===editing):null;
-      const result=await commitProfileWrite({name,officialDomains:parseList(official,true),productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:existing?.allowlistedDomains||[],allowlistedRegistrars:existing?.allowlistedRegistrars||[],dkimSelectors:parseList(selectors,true),retiredDkimSelectors:parseList(retiredSelectors,true),mailProtectionProfile,protectionAttestations:existing?.protectionAttestations||[],desiredPostureBaselines:existing?.desiredPostureBaselines||[],trademarkOwner,trademarkRegistration,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing);
+      const result=await commitProfileWrite({name,officialDomains:parseList(official,true),officialChannels,productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:existing?.allowlistedDomains||[],allowlistedRegistrars:existing?.allowlistedRegistrars||[],dkimSelectors:parseList(selectors,true),retiredDkimSelectors:parseList(retiredSelectors,true),mailProtectionProfile,protectionAttestations:existing?.protectionAttestations||[],desiredPostureBaselines:existing?.desiredPostureBaselines||[],trademarkOwner,trademarkRegistration,rightsReferences,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing);
       showForm=false;
       message=result.issue?`Saved "${result.profile.name}". ${committedIssueText(result.issue)}`:`Saved "${result.profile.name}" and set it active.`;
     }catch(cause){message=profileFailureMessage(cause,'Could not save profile.');}
@@ -270,7 +271,7 @@
 {:else}
   <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 {/if}
-{#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
+{#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {officialChannels} {rightsReferences} setOfficialChannels={(value)=>officialChannels=value} setRightsReferences={(value)=>rightsReferences=value} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
 <div class="brand-views" role="tablist" aria-label="Brands views">
   <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
   <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onpointerenter={()=>preloadBrandsView('assets')} onfocus={()=>preloadBrandsView('assets')} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>

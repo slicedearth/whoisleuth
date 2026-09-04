@@ -18,7 +18,7 @@ function caseRecord(id: string, domain: string, disposition: string): CaseRecord
       mutationTypes: [],
     }],
     evidencePins: [],
-    decisions: [{ id: `decision-${id}`, summary: 'Reviewed', rationale: 'Analyst rationale', evidencePinIds: [], createdAt: '2026-08-02T00:00:00.000Z' }],
+    decisions: [{ id: `decision-${id}`, summary: 'Reviewed', rationale: 'Analyst rationale', confidence: 'unknown', confidenceBasis: '', evidencePinIds: [], createdAt: '2026-08-02T00:00:00.000Z' }],
     actions: [],
     assertions: [{ id: `assertion-${id}`, kind: 'hypothesis', statement: 'Review hypothesis', rationale: null, evidencePinIds: [], state: 'open', createdAt: '2026-08-02T00:00:00.000Z', updatedAt: '2026-08-02T00:00:00.000Z' }],
     manualTrail: [],

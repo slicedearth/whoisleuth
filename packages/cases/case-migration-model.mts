@@ -154,7 +154,7 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
       throw new TypeError(`Unversioned Case stores are retired. Export or reset them explicitly before using Case schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
     if (!CASE_IMPORT_VERSIONS.includes(sourceVersion as typeof CASE_IMPORT_VERSIONS[number]) && sourceVersion < CASE_SCHEMA_VERSION) {
-      throw new TypeError(`Case schema ${sourceVersion} is not part of the supported compatibility boundary. Exact published schemas 12 and 13 migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+      throw new TypeError(`Case schema ${sourceVersion} is not part of the supported compatibility boundary. Exact published schemas ${CASE_IMPORT_VERSIONS.filter((version) => version < CASE_SCHEMA_VERSION).join(', ')} migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
     if (sourceVersion > CASE_SCHEMA_VERSION) {
       throw new TypeError(`Case schema ${sourceVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
@@ -199,6 +199,17 @@ function assertCurrentCaseShape(raw: unknown): void {
       const record = objectRecord(action);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeObservedAt')) {
         throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route observation time, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+      }
+      if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeReviewAfter')) {
+        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route review deadline, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+      }
+    }
+    const decisions = itemRecord.decisions;
+    for (const decision of Array.isArray(decisions) ? decisions : []) {
+      const record = objectRecord(decision);
+      if (Object.keys(record).length > 0
+        && (!Object.hasOwn(record, 'confidence') || !Object.hasOwn(record, 'confidenceBasis'))) {
+        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} analyst decisions must declare confidence and its basis; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
       }
     }
   }
@@ -584,7 +595,7 @@ export function mergeCases(
   const importedVersion = parseStoreVersion(importedEnvelope);
   if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion < CASE_SCHEMA_VERSION
     && !CASE_IMPORT_VERSIONS.includes(importedVersion as typeof CASE_IMPORT_VERSIONS[number])) {
-    throw new Error(`Case schema ${importedVersion} is not part of the supported compatibility boundary. Exact published schemas 12 and 13 migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
+    throw new Error(`Case schema ${importedVersion} is not part of the supported compatibility boundary. Exact published schemas ${CASE_IMPORT_VERSIONS.filter((version) => version < CASE_SCHEMA_VERSION).join(', ')} migrate to schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
   if (importedVersion !== null && Number.isSafeInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`Case schema ${importedVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);

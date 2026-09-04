@@ -134,8 +134,8 @@ perform validation, normalisation and merge.
 
 Workspace exports are deliberate local files with versioned manifests and
 section digests. Import validates the full envelope before a non-destructive
-merge. The current archive v7 reads exact versions 5 and 6; Case schema 14 reads
-and migrates published v2 schema 13 and exact public v1 schema 12. Unsupported future browser records are
+merge. The current archive v8 reads exact versions 5, 6 and 7; Case schema 15 reads
+and migrates supported schemas 12, 13 and 14. Unsupported future browser records are
 preserved without write where promised, while portable future files are
 rejected before merge.
 

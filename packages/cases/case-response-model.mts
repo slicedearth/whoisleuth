@@ -72,10 +72,14 @@ export const CASE_ACTION_TYPES = [
   'registry_report',
   'network_hosting_report',
   'security_contact_report',
+  'platform_report',
   'defensive_control',
   'internal_review',
 ] as const;
 export type CaseActionType = typeof CASE_ACTION_TYPES[number];
+
+export const CASE_DECISION_CONFIDENCE_LEVELS = ['unknown', 'low', 'moderate', 'high'] as const;
+export type CaseDecisionConfidence = typeof CASE_DECISION_CONFIDENCE_LEVELS[number];
 
 export const CASE_ACTION_STATES = [
   'drafting',
@@ -251,6 +255,8 @@ export type CaseDecisionRecord = {
   id: string;
   summary: string;
   rationale: string;
+  confidence: CaseDecisionConfidence;
+  confidenceBasis: string;
   evidencePinIds: string[];
   createdAt: string;
 };
@@ -277,6 +283,7 @@ export type CaseActionRecord = {
   recipient: string;
   contactSource: string;
   routeObservedAt: string | null;
+  routeReviewAfter: string | null;
   contactLimitations: string[];
   dueAt: string | null;
   state: CaseActionState;
@@ -424,6 +431,7 @@ const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
 const TRANSITION_EXPECTATIONS = new Set<string>(CASE_TRANSITION_EXPECTATIONS);
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
+const DECISION_CONFIDENCE_LEVELS = new Set<string>(CASE_DECISION_CONFIDENCE_LEVELS);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 const PROVIDER_OUTCOMES = new Set<string>(CASE_PROVIDER_OUTCOMES);
 const ACTION_EVENT_SOURCE_CLASSES = new Set<string>(CASE_ACTION_EVENT_SOURCE_CLASSES);
@@ -729,10 +737,17 @@ function normalizeDecision(
   const rationale = text(item.rationale, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!summary || !rationale) return null;
   const createdAt = iso(item.createdAt, fallback, options);
+  const currentConfidence = typeof item.confidence === 'string' && DECISION_CONFIDENCE_LEVELS.has(item.confidence)
+    ? item.confidence as CaseDecisionConfidence
+    : 'unknown';
   return {
     id: safeId(item.id, 'decision', { summary, rationale, createdAt }),
     summary,
     rationale,
+    confidence: options.sourceVersion != null && options.sourceVersion < 15 ? 'unknown' : currentConfidence,
+    confidenceBasis: options.sourceVersion != null && options.sourceVersion < 15
+      ? ''
+      : text(item.confidenceBasis, MAX_RESPONSE_RATIONALE_LENGTH),
     evidencePinIds: uniqueIds(item.evidencePinIds, validPinIds),
     createdAt,
   };
@@ -1069,16 +1084,28 @@ function normalizeAction(
   const latestEventAt = applied.at(-1)?.occurredAt ?? createdAt;
   const metadataUpdatedAt = iso(item.metadataUpdatedAt ?? item.updatedAt, createdAt, options);
   const updatedAt = Date.parse(latestEventAt) > Date.parse(metadataUpdatedAt) ? latestEventAt : metadataUpdatedAt;
+  const contactSource = text(item.contactSource, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_supplied';
+  const legacyPlatformReview = options.sourceVersion != null && options.sourceVersion < 15
+    && item.type === 'security_contact_report'
+    ? /^Official .+, reviewed (\d{4}-\d{2}-\d{2})$/u.exec(contactSource)
+    : null;
   return {
     id: actionId,
-    type: typeof item.type === 'string' && ACTION_TYPES.has(item.type)
+    type: legacyPlatformReview
+      ? 'platform_report'
+      : typeof item.type === 'string' && ACTION_TYPES.has(item.type)
       ? item.type as CaseActionType
       : 'internal_review',
     recipient,
-    contactSource: text(item.contactSource, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_supplied',
-    routeObservedAt: options.sourceVersion != null && options.sourceVersion < 14
+    contactSource,
+    routeObservedAt: legacyPlatformReview
+      ? normalizeExplicitIsoTimestamp(`${legacyPlatformReview[1]}T00:00:00.000Z`)
+      : options.sourceVersion != null && options.sourceVersion < 14
       ? null
       : optionalIso(item.routeObservedAt, options),
+    routeReviewAfter: options.sourceVersion != null && options.sourceVersion < 15
+      ? null
+      : optionalIso(item.routeReviewAfter, options),
     contactLimitations: limitations(item.contactLimitations),
     dueAt: optionalIso(item.dueAt, options),
     state: history.state,

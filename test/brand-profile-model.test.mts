@@ -31,6 +31,7 @@ function profile(overrides = {}) {
     id: 'profile-1',
     name: 'Example Brand',
     officialDomains: ['example.invalid'],
+    officialChannels: [],
     productNames: ['Example Account'],
     tlds: ['invalid'],
     approvedPartnerDomains: [],
@@ -43,6 +44,7 @@ function profile(overrides = {}) {
     desiredPostureBaselines: [],
     trademarkOwner: '',
     trademarkRegistration: '',
+    rightsReferences: [],
     officialFaviconHash: '',
     officialFaviconPHash: '',
     pageBaseline: null,
@@ -70,6 +72,40 @@ test('normalizes semantic list fields and drops unusable values', () => {
   assert.deepEqual(result.allowlistedDomains, ['allow.invalid']);
   assert.deepEqual(result.allowlistedRegistrars, ['Example Registrar']);
   assert.deepEqual(result.dkimSelectors, ['mail.one']);
+});
+
+test('normalizes reviewed official channels and rights references without retaining credentials', () => {
+  const result = normalizeBrandProfile(profile({
+    officialChannels: [
+      { platform: 'instagram', url: 'https://social.example/example/', handle: '@example', role: 'Primary', reviewedAt: NOW },
+      { platform: 'instagram', url: 'https://SOCIAL.example/example/', handle: 'duplicate' },
+      { platform: 'other', url: 'https://user:secret@social.example/private', handle: 'discarded' },
+      { platform: 'unsupported', url: 'https://social.example/unsupported' },
+    ],
+    rightsReferences: [
+      { kind: 'trademark', owner: 'Example Rights Holder', identifier: 'TM-123', jurisdiction: 'AU', sourceUrl: 'https://register.example/record/123', reviewedAt: NOW, note: 'Reviewed registry record.' },
+      { kind: 'trademark', owner: 'example rights holder', identifier: 'tm-123', jurisdiction: 'au', sourceUrl: 'https://register.example/duplicate' },
+      { kind: 'copyright', owner: 'Example Rights Holder', identifier: '', sourceUrl: 'https://user:secret@register.example/private' },
+      { kind: 'future', owner: 'Discarded' },
+    ],
+  }));
+  assert.ok(result);
+  assert.deepEqual(result.officialChannels, [{
+    platform: 'instagram',
+    url: 'https://social.example/example/',
+    handle: '@example',
+    role: 'Primary',
+    reviewedAt: NOW,
+  }]);
+  assert.deepEqual(result.rightsReferences, [{
+    kind: 'trademark',
+    owner: 'Example Rights Holder',
+    identifier: 'TM-123',
+    jurisdiction: 'AU',
+    sourceUrl: 'https://register.example/record/123',
+    reviewedAt: NOW,
+    note: 'Reviewed registry record.',
+  }]);
 });
 
 test('bounds names and free-text values without retaining controls', () => {
@@ -182,7 +218,7 @@ test('normalizes bounded desired posture baselines and retained observations', (
   assert.deepEqual(baseline.observationHistory, [baseline.previousObservation]);
 });
 
-test('migrates Brand Profile v6 change windows to deterministic collision-safe v7 identities', () => {
+test('migrates Brand Profile v6 change windows to deterministic identities in the current schema', () => {
   const legacy = {
     version: 6,
     profiles: [profile({
@@ -200,7 +236,7 @@ test('migrates Brand Profile v6 change windows to deterministic collision-safe v
   const second = normalizeBrandProfileStore(structuredClone(legacy));
   const firstWindows = requiredValue(first.profiles[0]).desiredPostureBaselines[0]?.approvedChangeWindows ?? [];
   const secondWindows = requiredValue(second.profiles[0]).desiredPostureBaselines[0]?.approvedChangeWindows ?? [];
-  assert.equal(first.version, 7);
+  assert.equal(first.version, BRAND_PROFILE_SCHEMA_VERSION);
   assert.deepEqual(firstWindows.map((window) => window.id), secondWindows.map((window) => window.id));
   assert.equal(new Set(firstWindows.map((window) => window.id)).size, 2);
   assert.ok(firstWindows.every((window) => /^cw-[a-f0-9]{32}$/u.test(window.id)));
@@ -388,8 +424,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 6, or 7/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 8/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 6, 7, or 8/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 9/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

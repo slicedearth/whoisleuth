@@ -296,6 +296,9 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
   await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
   await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
+  const typeReadiness = workspace.getByRole('region', { name: 'Evidence readiness by Case type' });
+  await expect(typeReadiness).toContainText('required missing');
+  await expect(typeReadiness).toContainText('Exact incident link');
 
   const incidentUrl = 'https://www.tiktok.com/@example/video/7';
   await workspace.getByLabel('Exact HTTP(S) URL').fill(incidentUrl);
@@ -319,7 +322,11 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
   expect(updatedCase.tags).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
   expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
-  expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'security_contact_report', recipient: 'https://www.tiktok.com/legal/report/feedback' })]));
+  expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({
+    type: 'platform_report',
+    recipient: 'https://www.tiktok.com/legal/report/feedback',
+    routeReviewAfter: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/u),
+  })]));
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();

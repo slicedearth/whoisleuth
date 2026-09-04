@@ -449,7 +449,7 @@ describe('portable workspace archive', () => {
     assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
   });
 
-  test('keeps archive v7 while round-tripping embedded Case v14 lifecycle histories', async () => {
+  test('keeps archive v8 while round-tripping embedded Case v15 lifecycle histories', async () => {
     let record = createCase({
       domain: 'response-archive.invalid',
       source: 'lookup',
@@ -487,7 +487,7 @@ describe('portable workspace archive', () => {
     source.cases = [record];
     const archive = await buildWorkspaceArchive(source, { generatedAt: '2026-07-19T02:04:00.000Z' });
     assert.equal(archive.version, WORKSPACE_ARCHIVE_VERSION);
-    assert.equal(archive.sections.cases.version, 14);
+    assert.equal(archive.sections.cases.version, 15);
     const parsed = await readWorkspaceArchive(archive);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'ready');
@@ -768,7 +768,7 @@ describe('portable workspace archive', () => {
 
   test('closes versioned workspace envelopes, manifests, and manifest entries before integrity claims', async () => {
     const attacks: Array<{ label: string; mutate: (archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>) => void }> = [
-      { label: 'version 7 envelope', mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
+      { label: 'version 8 envelope', mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
       { label: 'manifest', mutate: (archive) => { Reflect.set(archive.manifest, 'uncheckedPolicy', 'private material'); } },
       { label: 'manifest section entry', mutate: (archive) => { Reflect.set(archive.manifest.sections[0]!, 'credential', 'private material'); } },
     ];
@@ -817,16 +817,16 @@ describe('portable workspace archive', () => {
     assert.equal(preview.unsupportedCount, 1);
   });
 
-  test('isolates a checksummed future Case v15 section as unsupported', async () => {
+  test('isolates a checksummed future Case v16 section as unsupported', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    await retargetSectionVersion(archive, 'cases', 15);
+    await retargetSectionVersion(archive, 'cases', 16);
     const parsed = await readWorkspaceArchive(archive);
     assert.equal(parsed.sections.find((section) => section.id === 'cases')?.status, 'unsupported');
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'unsupported');
     assert.equal(cases?.selected, false);
-    assert.match(cases?.reason ?? '', /newer schema 15/iu);
+    assert.match(cases?.reason ?? '', /newer schema 16/iu);
   });
 
   test('isolates a checksummed unsupported Case v11 section with explicit non-destructive guidance', async () => {
@@ -866,7 +866,7 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(schemaMismatch), /section contract does not match/iu);
   });
 
-  test('rejects a checksummed unknown section from an exact version 7 archive', async () => {
+  test('rejects a checksummed unknown section from an exact version 8 archive', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const index = archive.manifest.sections.findIndex((section) => section.id === 'settings');
     archive.manifest.sections[index] = {

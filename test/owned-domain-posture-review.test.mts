@@ -13,6 +13,8 @@ const profile = {
   approvedPartnerDomains: [],
   allowlistedDomains: [],
   allowlistedRegistrars: [],
+  officialChannels: [],
+  rightsReferences: [],
   dkimSelectors: [],
   retiredDkimSelectors: [],
   mailProtectionProfile: 'standard',

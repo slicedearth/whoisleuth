@@ -18,6 +18,7 @@ function currentActionFixture(input: {
   recipient: string;
   contactSource: string;
   routeObservedAt: string | null;
+  routeReviewAfter?: string | null;
   contactLimitations: string[];
   dueAt: string | null;
   targetState: CurrentActionTargetState;
@@ -63,6 +64,7 @@ function currentActionFixture(input: {
   });
   return {
     ...material,
+    routeReviewAfter: material.routeReviewAfter ?? null,
     state: targetState,
     providerOutcome,
     originActionId: null,

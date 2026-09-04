@@ -2,7 +2,7 @@
 
 This reference is generated from the canonical Case portability family in
 `packages/contracts/case-portability.mts`. Run
-`node tools/case-contract-doc.mts` to reproduce it. Runtime validators
+`node tools/case-contract-doc.mts --write` to reproduce it. Runtime validators
 remain statically imported; lifecycle module and export names are descriptive
 metadata and are never executed dynamically.
 
@@ -14,38 +14,38 @@ fixture remain. Every writer emits only the version shown in â€œCurrent writerâ€
 
 | Contract | Canonical lifecycle schema | Durable supported | Readable | Current writer | Future version | Migration |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| Browser-local Cases | `whoisleuth.browser.case-store` | 12, 13, 14 | 12, 13, 14 | 14 | `preserve_without_write` | `normalize_to_current` |
-| Portable Case export | `whoisleuth.case-export` | 12, 13, 14 | 12, 13, 14 | 14 | `reject` | `normalize_to_current` |
-| Case report | `whoisleuth.case-report` | 9, 10 | 9, 10 | 10 | `reject` | `read_only` |
-| Case-response packet | `whoisleuth.case-response-packet` | 6, 7, 8 | 6, 7, 8 | 8 | `reject` | `read_only` |
-| Review-input digest material | `whoisleuth.case-response-review-inputs` | 1, 2 | 1, 2 | 2 | `reject` | `read_only` |
+| Browser-local Cases | `whoisleuth.browser.case-store` | 12, 13, 14, 15 | 12, 13, 14, 15 | 15 | `preserve_without_write` | `normalize_to_current` |
+| Portable Case export | `whoisleuth.case-export` | 12, 13, 14, 15 | 12, 13, 14, 15 | 15 | `reject` | `normalize_to_current` |
+| Case report | `whoisleuth.case-report` | 9, 10, 11 | 9, 10, 11 | 11 | `reject` | `read_only` |
+| Case-response packet | `whoisleuth.case-response-packet` | 6, 7, 8, 9 | 6, 7, 8, 9 | 9 | `reject` | `read_only` |
+| Review-input digest material | `whoisleuth.case-response-review-inputs` | 1, 2, 3 | 1, 2, 3 | 3 | `reject` | `read_only` |
 | CLI Case-pack | `whoisleuth.cli.case-pack` | 2 | 2 | 2 | `reject` | `read_only` |
-| Workspace archive | `whoisleuth.workspace-archive` | 5, 6, 7 | 5, 6, 7 | 7 | `reject` | `normalize_to_current` |
+| Workspace archive | `whoisleuth.workspace-archive` | 5, 6, 7, 8 | 5, 6, 7, 8 | 8 | `reject` | `normalize_to_current` |
 | Workspace settings section | `whoisleuth.workspace-settings` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 | Encrypted workspace archive | `whoisleuth.encrypted-workspace-archive` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 
 Browser-local Case reading and portable Case import accept only schema
-12, 13, 14. The current writers emit Case report
-schema 10 and response-packet schema
-8; the compatible output epochs are
+12, 13, 14, 15. The current writers emit Case report
+schema 11 and response-packet schema
+9; the compatible output epochs are
 listed above. Response-packet verification accepts schema
-6, 7, 8. Review-input digest material
-accepts exact versions 1, 2
-and the current writer emits version 2.
+6, 7, 8, 9. Review-input digest material
+accepts exact versions 1, 2, 3
+and the current writer emits version 3.
 
 ## CLI Case/report epochs
 
-The Case-pack verifier accepts the exact public v1, published v2, and current
-Case/report epochs.
+The Case-pack verifier accepts every exact Case/report epoch listed below.
 
 | Case versions | Matching report versions |
 | ---: | ---: |
 | 12 | 8 |
 | 13 | 9 |
 | 14 | 10 |
+| 15 | 11 |
 
 The durable CLI Case-pack envelope is version 2.
-The durable workspace archive envelope supports versions 5, 6 and 7;
+The durable workspace archive envelope supports versions 5, 6, 7 and 8;
 its embedded Case section consumes the supported Case contract shown above.
 The encrypted workspace envelope remains version 1
 and authenticates an ordinary workspace document without changing either the
@@ -53,23 +53,23 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release 2.1.0 is the immediately preceding public writer. It emitted
+Release 2.2.0 is the immediately preceding public writer. It emitted
 Case schema 14, Case report schema 10, response-packet schema
 8, review-input digest material version 2, and workspace
-archive schema 7. Version 2.2.0 is the current writer in this
-checkout. It emits Case schema 14, report schema 10,
-response-packet schema 8, review-input version 2, and workspace
-archive schema 7.
+archive schema 7. Version 2.3.0 is the current writer in this
+checkout. It emits Case schema 15, report schema 11,
+response-packet schema 9, review-input version 3, and workspace
+archive schema 8.
 
 Both the latest public formats and the current writers directly preserve the
 formats written by public release 1.47.4:
 browser and portable Case schema 12, Case report schema 8, response-packet schema 6,
 CLI Case-pack schema 2 with its Case 12/report 8 epoch, workspace archive schema
 5, workspace settings schema 1, and encrypted workspace archive schema 1.
-Case schemas 12 and 13 migrate directly to schema
-14; response packets 6 and
-7 verify alongside packet
-8. Every declared CLI epoch remains
+Case schemas 12, 13 and 14 migrate directly to schema
+15; response packets
+6, 7 and 8 verify alongside packet
+9. Every declared CLI epoch remains
 readable without passing through an unreleased checkpoint.
 
 Older formats accepted only by historical readers and formats produced only by
@@ -81,7 +81,7 @@ and no import path automatically deletes stored data.
 
 ## Durable compatibility evidence
 
-The lifecycle family binds 21 immutable current-format
+The lifecycle family binds 28 immutable current-format
 fixtures to exact byte counts and SHA-256 identities. The canonical JSON
 commitment is
 `docs/case-supported-contract-baseline-v1.json`; it is derived from

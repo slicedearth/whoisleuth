@@ -19,15 +19,18 @@ import {
   MAX_DESIRED_POSTURE_SUPPRESSIONS,
   MAX_DKIM_SELECTOR_LENGTH,
   MAX_DKIM_SELECTORS,
+  MAX_OFFICIAL_CHANNELS,
   MAX_PROFILES,
   MAX_PROFILE_DOMAIN_LENGTH,
   MAX_PROFILE_NAME_LENGTH,
   MAX_PROFILE_STORE_BYTES,
   MAX_PROFILE_TEXT_LENGTH,
   MAX_PROFILE_TLD_LENGTH,
+  MAX_PROFILE_URL_LENGTH,
   MAX_PROFILE_VALUE_INPUTS,
   MAX_PROFILE_VALUES,
   MAX_PROTECTION_ATTESTATIONS,
+  MAX_RIGHTS_REFERENCES,
   SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
 } from '../contracts/workspace-portability.mts';
 
@@ -41,15 +44,18 @@ export {
   MAX_DESIRED_POSTURE_SUPPRESSIONS,
   MAX_DKIM_SELECTOR_LENGTH,
   MAX_DKIM_SELECTORS,
+  MAX_OFFICIAL_CHANNELS,
   MAX_PROFILES,
   MAX_PROFILE_DOMAIN_LENGTH,
   MAX_PROFILE_NAME_LENGTH,
   MAX_PROFILE_STORE_BYTES,
   MAX_PROFILE_TEXT_LENGTH,
   MAX_PROFILE_TLD_LENGTH,
+  MAX_PROFILE_URL_LENGTH,
   MAX_PROFILE_VALUE_INPUTS,
   MAX_PROFILE_VALUES,
   MAX_PROTECTION_ATTESTATIONS,
+  MAX_RIGHTS_REFERENCES,
   SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS,
 } from '../contracts/workspace-portability.mts';
 
@@ -144,10 +150,42 @@ export type DesiredPostureBaseline = {
   updatedAt: string;
 };
 
+export const OFFICIAL_CHANNEL_PLATFORMS = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'telegram',
+  'tiktok',
+  'x',
+  'youtube',
+  'other',
+] as const;
+export type OfficialChannelPlatform = typeof OFFICIAL_CHANNEL_PLATFORMS[number];
+export type OfficialChannel = {
+  platform: OfficialChannelPlatform;
+  url: string;
+  handle: string;
+  role: string;
+  reviewedAt: string | null;
+};
+
+export const RIGHTS_REFERENCE_KINDS = ['trademark', 'copyright', 'design', 'other'] as const;
+export type RightsReferenceKind = typeof RIGHTS_REFERENCE_KINDS[number];
+export type RightsReference = {
+  kind: RightsReferenceKind;
+  owner: string;
+  identifier: string;
+  jurisdiction: string;
+  sourceUrl: string;
+  reviewedAt: string | null;
+  note: string;
+};
+
 export type BrandProfile = {
   id: string;
   name: string;
   officialDomains: string[];
+  officialChannels: OfficialChannel[];
   productNames: string[];
   tlds: string[];
   approvedPartnerDomains: string[];
@@ -160,6 +198,7 @@ export type BrandProfile = {
   desiredPostureBaselines: DesiredPostureBaseline[];
   trademarkOwner: string;
   trademarkRegistration: string;
+  rightsReferences: RightsReference[];
   officialFaviconHash: string;
   officialFaviconPHash: string;
   pageBaseline: PageBaseline | null;
@@ -480,6 +519,73 @@ function normalizeFaviconPHash(value: unknown): string {
   return typeof value === 'string' && isInformativeFaviconHash(value) ? value.toLowerCase() : '';
 }
 
+function normalizePublicUrl(value: unknown): string {
+  if (typeof value !== 'string' || CONTROL_RE.test(value) || value.length > MAX_PROFILE_URL_LENGTH * 2) return '';
+  try {
+    const parsed = new URL(value.trim());
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return '';
+    const normalized = parsed.toString();
+    return normalized.length <= MAX_PROFILE_URL_LENGTH ? normalized : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeOfficialChannels(value: unknown): OfficialChannel[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Map<string, OfficialChannel>();
+  for (const candidate of value.slice(0, MAX_OFFICIAL_CHANNELS * 4)) {
+    const item = record(candidate);
+    const platform = typeof item.platform === 'string'
+      && (OFFICIAL_CHANNEL_PLATFORMS as readonly string[]).includes(item.platform)
+      ? item.platform as OfficialChannelPlatform
+      : null;
+    const url = normalizePublicUrl(item.url);
+    if (!platform || !url) continue;
+    const key = url.toLowerCase();
+    if (output.has(key)) continue;
+    output.set(key, {
+      platform,
+      url,
+      handle: boundedText(item.handle),
+      role: boundedText(item.role),
+      reviewedAt: timestamp(item.reviewedAt, null),
+    });
+    if (output.size >= MAX_OFFICIAL_CHANNELS) break;
+  }
+  return [...output.values()];
+}
+
+function normalizeRightsReferences(value: unknown): RightsReference[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Map<string, RightsReference>();
+  for (const candidate of value.slice(0, MAX_RIGHTS_REFERENCES * 4)) {
+    const item = record(candidate);
+    const kind = typeof item.kind === 'string' && (RIGHTS_REFERENCE_KINDS as readonly string[]).includes(item.kind)
+      ? item.kind as RightsReferenceKind
+      : null;
+    const owner = boundedText(item.owner);
+    const identifier = boundedText(item.identifier);
+    if (!kind || (!owner && !identifier)) continue;
+    const jurisdiction = boundedText(item.jurisdiction);
+    const sourceUrl = item.sourceUrl == null || item.sourceUrl === '' ? '' : normalizePublicUrl(item.sourceUrl);
+    if (item.sourceUrl && !sourceUrl) continue;
+    const key = `${kind}\u0000${owner.toLowerCase()}\u0000${identifier.toLowerCase()}\u0000${jurisdiction.toLowerCase()}`;
+    if (output.has(key)) continue;
+    output.set(key, {
+      kind,
+      owner,
+      identifier,
+      jurisdiction,
+      sourceUrl,
+      reviewedAt: timestamp(item.reviewedAt, null),
+      note: boundedText(item.note),
+    });
+    if (output.size >= MAX_RIGHTS_REFERENCES) break;
+  }
+  return [...output.values()];
+}
+
 /** Normalize one profile while retaining only known, bounded fields. */
 export function normalizeBrandProfile(
   raw: unknown,
@@ -509,6 +615,7 @@ export function normalizeBrandProfile(
     id: profileId,
     name,
     officialDomains,
+    officialChannels: normalizeOfficialChannels(value.officialChannels),
     productNames: normalizeProfileTextValues(value.productNames),
     tlds: normalizeProfileTlds(value.tlds),
     approvedPartnerDomains: normalizeProfileDomains(value.approvedPartnerDomains),
@@ -527,6 +634,7 @@ export function normalizeBrandProfile(
     ),
     trademarkOwner: boundedText(value.trademarkOwner),
     trademarkRegistration: boundedText(value.trademarkRegistration),
+    rightsReferences: normalizeRightsReferences(value.rightsReferences),
     officialFaviconHash: baselineDomainMismatch ? '' : normalizeFaviconHash(value.officialFaviconHash),
     officialFaviconPHash: baselineDomainMismatch ? '' : normalizeFaviconPHash(value.officialFaviconPHash),
     pageBaseline,

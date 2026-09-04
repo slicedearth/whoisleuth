@@ -7,6 +7,7 @@
     CASE_ASSERTION_KINDS,
     CASE_ASSERTION_STATES,
     CASE_CLOSURE_REASONS,
+    CASE_DECISION_CONFIDENCE_LEVELS,
     CASE_DISPOSITIONS,
     CASE_EVIDENCE_RELATION_STANCES,
     CASE_MANUAL_TRAIL_KINDS,
@@ -69,6 +70,8 @@
   let pinLimitations = $state('');
   let decisionSummary = $state('');
   let decisionRationale = $state('');
+  let decisionConfidence = $state('unknown');
+  let decisionConfidenceBasis = $state('');
   let decisionPinIds = $state<string[]>([]);
   let decisionDisposition = $state('unreviewed');
   let decisionReviewReason = $state('');
@@ -340,11 +343,15 @@
       decision: {
         summary: decisionSummary,
         rationale: decisionRationale,
+        confidence: decisionConfidence,
+        confidenceBasis: decisionConfidenceBasis,
         evidencePinIds: decisionPinIds,
       },
     }, `Recorded an analyst decision for ${record.domain}.`)) return;
     decisionSummary = '';
     decisionRationale = '';
+    decisionConfidence = 'unknown';
+    decisionConfidenceBasis = '';
     decisionPinIds = [];
     decisionClassificationDirty = false;
   }
@@ -696,7 +703,7 @@
         <header><div><p class="eyebrow">Assess</p><h5 id={`quick-conclusion-${record.id}`}>Record conclusion</h5></div><span>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} evidence-linked` : 'Evidence link required'}</span></header>
         {#if record.decisions.length}
           {@const latestDecision = record.decisions.at(-1)}
-          {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>{latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
+          {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>Confidence: {latestDecision.confidence}{latestDecision.confidenceBasis ? ` — ${latestDecision.confidenceBasis}` : ''} · {latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
         {/if}
         <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
           <div class="two-columns">
@@ -705,12 +712,16 @@
           </div>
           <label class="field">Conclusion summary<input bind:value={decisionSummary} maxlength="80" required placeholder="What should the Case record conclude?"></label>
           <label class="field">Evidence-based rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="2" required></textarea></label>
+          <div class="two-columns">
+            <label class="field">Analyst confidence<select bind:value={decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Confidence records the analyst’s judgement, not the Risk score or evidence completeness.</small></label>
+            <label class="field">Confidence basis<textarea bind:value={decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionConfidence !== 'unknown'} placeholder={decisionConfidence === 'unknown' ? 'Optional while confidence is unknown' : 'Why is this confidence level appropriate?'}></textarea></label>
+          </div>
           {#if record.evidencePins.length}
             <fieldset class="pin-references"><legend>Evidence considered</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source}</span></label>{/each}</fieldset>
           {:else}
             <p class="notice">No retained evidence pin is available. Return to Lookup or use Advanced to pin an observation before recording a supported conclusion.</p>
           {/if}
-          <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record conclusion</button>
+          <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>Record conclusion</button>
         </form>
       </section>
 
@@ -849,13 +860,17 @@
       </div>
       <label class="field">Decision summary<input bind:value={decisionSummary} maxlength="80" required></label>
       <label class="field">Rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="3" required></textarea></label>
+      <div class="two-columns">
+        <label class="field">Analyst confidence<select bind:value={decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Separate from Risk, source health and evidence completeness.</small></label>
+        <label class="field">Confidence basis<textarea bind:value={decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionConfidence !== 'unknown'}></textarea></label>
+      </div>
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
-      <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record decision</button>
+      <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>Record decision</button>
     </form>
     {#if record.decisions.length}
-      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>{decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
+      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{decision.confidenceBasis ? ` — ${decision.confidenceBasis}` : ''} · {decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
     {/if}
   </details>
 

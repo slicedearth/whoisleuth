@@ -135,8 +135,8 @@ function packetInput(caseRecord: ReturnType<typeof reviewedCase>) {
 }
 
 describe('case response packet', () => {
-  test('refuses malformed packet shells before current v8 output', async () => {
-    for (const version of [5, 6, 7] as const) {
+  test('refuses malformed packet shells before current v9 output', async () => {
+    for (const version of [5, 6, 7, 8] as const) {
       assert.equal(await verifyCaseResponsePacketIntegrity({
         schema: CASE_RESPONSE_PACKET_SCHEMA,
         schemaVersion: version,
@@ -513,7 +513,7 @@ describe('case response packet', () => {
   test('defines audience-specific inclusion, exclusion, redaction, attachment, and follow-up previews', () => {
     assert.deepEqual(
       RESPONSE_PACKET_PROFILES.map((profile) => profile.id),
-      ['registrar', 'registry', 'network_hosting', 'security_contact', 'browser_blocklist', 'internal_soc'],
+      ['registrar', 'registry', 'network_hosting', 'security_contact', 'application_platform', 'browser_blocklist', 'internal_soc'],
     );
     let caseRecord = reviewedCase();
     caseRecord = updateCase([caseRecord], caseRecord.id, {
@@ -611,5 +611,36 @@ describe('case response packet', () => {
     assert.equal(result.json.recipientRoute?.observedAt, NOW);
     assert.equal(result.json.escalationHistory[0]?.routeObservedAt, NOW);
     assert.equal(result.json.recipientRoute?.contact, 'Updated registrar abuse desk');
+  });
+
+  test('binds application-platform packets to an explicit platform action and review deadline', async () => {
+    let caseRecord = reviewedCase();
+    caseRecord = updateCase([caseRecord], caseRecord.id, {
+      action: {
+        type: 'platform_report',
+        recipient: 'Reviewed platform reporting form',
+        contactSource: 'Official provider guidance',
+        routeObservedAt: NOW,
+        routeReviewAfter: '2026-07-29T00:00:00.000Z',
+      },
+    }, NOW).record;
+    const action = caseRecord.actions.find((candidate) => candidate.type === 'platform_report')!;
+    const input = {
+      ...packetInput(caseRecord),
+      profile: 'application_platform',
+      actionId: action.id,
+      selectedEvidencePinIds: [caseRecord.evidencePins[0]!.id],
+    };
+    const current = await buildCaseResponsePacket(caseRecord, input, '2026-07-28T23:59:59.000Z');
+    assert.equal(current.json.profile.id, 'application_platform');
+    assert.equal(current.json.recipientRoute?.kind, 'application_platform');
+    assert.equal(current.json.recipientRoute?.reviewAfter, '2026-07-29T00:00:00.000Z');
+    assert.equal(current.json.recipientRoute?.freshness, 'current');
+    assert.equal(current.json.contacts[0]?.kind, 'application_platform');
+    assert.match(current.markdown, /Route review after: 2026-07-29T00:00:00.000Z/u);
+
+    const stale = await buildCaseResponsePacket(caseRecord, input, '2026-07-29T00:00:00.000Z');
+    assert.equal(stale.json.recipientRoute?.freshness, 'stale');
+    assert.equal(stale.json.readiness.rows.find((row) => row.id === 'recipient_route')?.state, 'stale');
   });
 });

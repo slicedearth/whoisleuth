@@ -86,16 +86,16 @@ handling.
 
 ### Retaining a Lookup
 
-Creating or refreshing a Case is deliberate. Case schema 14 retains the exact
+Creating or refreshing a Case is deliberate. Case schema 15 retains the exact
 normalised submitted hostname on the new point-in-time evidence snapshot while
 the Case remains keyed by canonical registrable domain. Different hostnames can
 therefore remain attached to different snapshots. Published v2 schema-13 and
-public v1 schema-12 Cases migrate directly and may retain a null hostname;
+schema-14 and public v1 schema-12 Cases migrate directly and may retain a null hostname;
 WHOISleuth does not reconstruct one from URLs, certificates, redirects or other
 weaker evidence.
 
-Ordinary transient Lookups create no hostname history. Case report v10 and
-response packet v8 do not add the snapshot hostname, while ordinary Case,
+Ordinary transient Lookups create no hostname history. Case report v11 and
+response packet v9 do not add the snapshot hostname, while ordinary Case,
 workspace and trusted Case-pack exports can contain it and require sharing
 review.
 
@@ -269,16 +269,16 @@ current browser profile. Failed reads, quota errors and unsupported versions
 remain explicit. Clearing site data removes the workspace; downloaded files
 remain under the user's control.
 
-Workspace archive version 7 is current and accepts exact versions 5 and 6.
+Workspace archive version 8 is current and accepts exact versions 5, 6 and 7.
 Version 5 contains public Case schema 12 and gains an empty Analyst Review Item
 section during migration. Version 6 retains its existing sections, while the
-current writer stores Case schema 14 in version 7. Import validates the full
+current writer stores Case schema 15 in version 8. Import validates the full
 checksummed envelope before a non-destructive merge, and an omitted section
 never deletes local data.
 
 The encrypted envelope remains version 1 and uses browser-local password-based
 authenticated encryption. It protects the downloaded file while locked, not an
-open Console or active IndexedDB. A checksummed Case schema 14 or later section
+open Console or active IndexedDB. A checksummed unsupported future Case section
 is isolated as unsupported.
 
 See [browser-local data](browser-local-data.md) for migration, concurrency,

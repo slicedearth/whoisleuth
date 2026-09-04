@@ -37,6 +37,7 @@ function profile(baselines: DesiredPostureBaseline[]): BrandProfile {
     name: 'Example',
     officialDomains: ['one.example.invalid', 'two.example.invalid', 'three.example.invalid'],
     productNames: [], tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [],
+    officialChannels: [], rightsReferences: [],
     dkimSelectors: [], retiredDkimSelectors: [], mailProtectionProfile: 'standard', protectionAttestations: [],
     desiredPostureBaselines: baselines,
     trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,

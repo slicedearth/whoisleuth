@@ -33,13 +33,13 @@ function reviewedRemoval(reason = 'reviewed_support_window'): Record<string, unk
     id: 'reviewed-fixture-removal',
     reviewedAt: '2027-08-22',
     reason,
-    contracts: [{ compatibilityId: 'export.cases', versions: [15] }],
+    contracts: [{ compatibilityId: 'export.cases', versions: [16] }],
     supportWindow: {
       firstRelease: '1.48.0',
       finalBroadReaderRelease: '1.49.0',
       removalRelease: '2.0.0',
     },
-    safePath: 'Export schema 15 with the final broad-reader release before importing its replacement.',
+    safePath: 'Export schema 16 with the final broad-reader release before importing its replacement.',
     evidence: {
       fixturesUpdated: true,
       schemaInventoryUpdated: true,
@@ -87,9 +87,9 @@ describe('durable Case supported-contract baseline', () => {
   test('rejects disappearance that reuses an old removal record', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@15',
+      key: 'export.cases@16',
       compatibilityId: 'export.cases',
-      version: 15,
+      version: 16,
       lifecycle: 'current',
       readable: true,
       emitted: true,
@@ -117,9 +117,9 @@ describe('durable Case supported-contract baseline', () => {
   test('accepts a disappearance only with a fresh reviewed removal and complete evidence', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@15',
+      key: 'export.cases@16',
       compatibilityId: 'export.cases',
-      version: 15,
+      version: 16,
       lifecycle: 'current',
       readable: true,
       emitted: true,
@@ -142,9 +142,9 @@ describe('durable Case supported-contract baseline', () => {
   test('rejects a future removal that is not a reviewed support-window decision', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@15',
+      key: 'export.cases@16',
       compatibilityId: 'export.cases',
-      version: 15,
+      version: 16,
     });
     const current = mutableBaseline();
     current.removalRecords.push(reviewedRemoval('one_time_single_operator_consolidation'));

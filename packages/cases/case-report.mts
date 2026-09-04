@@ -619,6 +619,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const decision of response.decisions) {
       lines.push(`- **${escapeMarkdownInline(decision.summary)}** (${escapeMarkdownInline(decision.createdAt)})`);
       lines.push(`  ${escapeMarkdownInline(decision.rationale)}`);
+      lines.push(`  Analyst confidence: ${escapeMarkdownInline(decision.confidence)}${decision.confidenceBasis ? ` — ${escapeMarkdownInline(decision.confidenceBasis)}` : ''}.`);
       if (decision.evidencePinIds.length) lines.push(`  Evidence pins: ${escapeMarkdownInline(decision.evidencePinIds.join(', '))}`);
     }
     lines.push('');
@@ -628,6 +629,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const action of response.actions) {
       lines.push(`- **${escapeMarkdownInline(action.type.replaceAll('_', ' '))}:** ${escapeMarkdownInline(action.recipient)} (${escapeMarkdownInline(action.state)})`);
       lines.push(`  Contact source: ${escapeMarkdownInline(action.contactSource)}; updated ${escapeMarkdownInline(action.updatedAt)}.`);
+      if (action.routeObservedAt) lines.push(`  Route reviewed: ${escapeMarkdownInline(action.routeObservedAt)}`);
+      if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
       if (action.dueAt) lines.push(`  Due: ${escapeMarkdownInline(action.dueAt)}`);
       if (action.followUpAt) lines.push(`  Follow-up: ${escapeMarkdownInline(action.followUpAt)}`);

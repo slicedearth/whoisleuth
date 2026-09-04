@@ -74,12 +74,12 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8]);
+    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15]);
+    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15]);
+    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11]);
+    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
-    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7]);
+    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8]);
 
     const family = contracts.CASE_PORTABILITY_LIFECYCLE_FAMILY;
     assert.ok(family.compatibility.length > 0);
@@ -106,18 +106,18 @@ describe('canonical Case portability lifecycle', () => {
   });
 
   test('verifies every durable current reader fixture and exact starting-checkout path', async () => {
-    const browserStore = await fixture('browser-case-v14');
+    const browserStore = await fixture('browser-case-v15');
     assert.deepEqual(caseModel.normalizeCaseStore(browserStore), browserStore);
     assert.deepEqual(
       JSON.parse(caseModel.serializeCaseStore(caseModel.normalizeCaseStore(browserStore).cases)),
       browserStore,
     );
 
-    for (const name of ['browser-case-v12', 'browser-case-v13']) {
+    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14']) {
       assert.deepEqual(caseModel.normalizeCaseStore(await fixture(name)), browserStore);
     }
 
-    const currentExport = await fixture('case-export-v14');
+    const currentExport = await fixture('case-export-v15');
     assert.equal(caseModel.mergeCases([], currentExport).added, 1);
     const publicExport = JSON.parse(await readFile(PUBLIC_CASE_EXPORT_FIXTURE, 'utf8')) as Record<string, unknown>;
     assert.deepEqual(caseModel.buildCaseExport(caseModel.mergeCases([], publicExport).cases, NOW), currentExport);
@@ -125,14 +125,18 @@ describe('canonical Case portability lifecycle', () => {
       caseModel.buildCaseExport(caseModel.mergeCases([], await fixture('case-export-v13')).cases, NOW),
       currentExport,
     );
+    assert.deepEqual(
+      caseModel.buildCaseExport(caseModel.mergeCases([], await fixture('case-export-v14')).cases, NOW),
+      currentExport,
+    );
 
-    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8']) {
+    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9']) {
       const packet = await fixture<Record<string, unknown>>(name);
       validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, packet);
       assert.equal(await responsePacket.verifyCaseResponsePacketIntegrity(packet), true);
     }
 
-    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14']) {
+    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15']) {
       const pack = await fixture(name);
       assert.ok(casePack.verifyCliCasePack(pack).caseCount > 0);
       assert.ok(caseModel.mergeCases([], pack).added > 0);
@@ -147,6 +151,10 @@ describe('canonical Case portability lifecycle', () => {
     const migratedPublishedV2 = await workspace.readWorkspaceArchive(publishedV2Archive);
     assert.equal(migratedPublishedV2.sourceVersion, 6);
     assert.equal(migratedPublishedV2.version, contracts.WORKSPACE_ARCHIVE_VERSION);
+    const latestPublicArchive = await fixture('workspace-archive-v7-empty-current');
+    const migratedLatestPublic = await workspace.readWorkspaceArchive(latestPublicArchive);
+    assert.equal(migratedLatestPublic.sourceVersion, 7);
+    assert.equal(migratedLatestPublic.version, contracts.WORKSPACE_ARCHIVE_VERSION);
 
     const encrypted = await fixture('encrypted-workspace-archive-v1');
     const decrypted = await encryptedWorkspace.decryptWorkspaceArchive(encrypted, PASSPHRASE) as Record<string, unknown>;
@@ -155,25 +163,25 @@ describe('canonical Case portability lifecycle', () => {
   });
 
   test('keeps current writer shapes byte-for-byte aligned with frozen outputs', async () => {
-    const frozenExport = await fixture('case-export-v14');
+    const frozenExport = await fixture('case-export-v15');
     const cases = caseModel.mergeCases([], frozenExport).cases;
     const currentExport = caseModel.buildCaseExport(cases, NOW);
-    assert.equal(contracts.serialiseCasePortableJson(currentExport), await fixtureText('case-export-v14'));
+    assert.equal(contracts.serialiseCasePortableJson(currentExport), await fixtureText('case-export-v15'));
 
     const currentCase = cases[0];
     assert.ok(currentCase);
     const actionId = currentCase.actions[0]?.id;
     assert.ok(actionId);
-    assert.deepEqual(caseReport.buildCaseReport(currentCase, { generatedAt: NOW }).json, await fixture('case-report-v10'));
-    assert.deepEqual((await responsePacket.buildCaseResponsePacket(currentCase, packetInput(actionId), NOW)).json, await fixture('case-response-packet-v8'));
-    assert.deepEqual(responsePacket.buildCaseResponseReviewInputs(currentCase, packetInput(actionId), NOW), await fixture('case-response-review-inputs-v2'));
+    assert.deepEqual(caseReport.buildCaseReport(currentCase, { generatedAt: NOW }).json, await fixture('case-report-v11'));
+    assert.deepEqual((await responsePacket.buildCaseResponsePacket(currentCase, packetInput(actionId), NOW)).json, await fixture('case-response-packet-v9'));
+    assert.deepEqual(responsePacket.buildCaseResponseReviewInputs(currentCase, packetInput(actionId), NOW), await fixture('case-response-review-inputs-v3'));
     assert.deepEqual(
       casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW),
-      await fixture('cli-case-pack-v2-case-v14'),
+      await fixture('cli-case-pack-v2-case-v15'),
     );
     assert.deepEqual(
-      await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: (await fixture<Record<string, unknown>>('workspace-archive-v7-empty-current')).generatedAt }),
-      await fixture('workspace-archive-v7-empty-current'),
+      await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: (await fixture<Record<string, unknown>>('workspace-archive-v8-empty-current')).generatedAt }),
+      await fixture('workspace-archive-v8-empty-current'),
     );
   });
 
@@ -186,16 +194,16 @@ describe('canonical Case portability lifecycle', () => {
     assert.throws(() => caseModel.mergeCases([], retiredCase), /schema 11 is not part of the supported compatibility boundary.*no data was changed/iu);
     assert.deepEqual(retiredCase, retiredCaseBefore);
     assert.throws(() => caseModel.mergeCases([], retired.portableCase), /schema 11 is not part of the supported compatibility boundary/iu);
-    assert.throws(() => caseModel.mergeCases([], future.browserCase), /newer than the supported schema 14/iu);
-    assert.throws(() => caseModel.mergeCases([], future.portableCase), /newer than the supported schema 14/iu);
-    assert.throws(() => caseModel.mergeCases([], { version: 14, cases: 'invalid' }), /well-formed.*schema 14/iu);
+    assert.throws(() => caseModel.mergeCases([], future.browserCase), /newer than the supported schema 15/iu);
+    assert.throws(() => caseModel.mergeCases([], future.portableCase), /newer than the supported schema 15/iu);
+    assert.throws(() => caseModel.mergeCases([], { version: 15, cases: 'invalid' }), /well-formed.*schema 15/iu);
 
-    const malformedCurrent = await fixture<Record<string, unknown>>('case-export-v14');
-    delete (((malformedCurrent.cases as Array<Record<string, unknown>>)[0]!.actions as Array<Record<string, unknown>>)[0]!).routeObservedAt;
+    const malformedCurrent = await fixture<Record<string, unknown>>('case-export-v15');
+    delete (((malformedCurrent.cases as Array<Record<string, unknown>>)[0]!.actions as Array<Record<string, unknown>>)[0]!).routeReviewAfter;
     const malformedCurrentBefore = structuredClone(malformedCurrent);
     assert.throws(
       () => caseModel.mergeCases([], malformedCurrent),
-      /schema 14 response actions must declare their route observation time.*no data was changed/iu,
+      /schema 15 response actions must declare their route review deadline.*no data was changed/iu,
     );
     assert.deepEqual(malformedCurrent, malformedCurrentBefore);
 
@@ -212,7 +220,7 @@ describe('canonical Case portability lifecycle', () => {
         contracts.CASE_RESPONSE_PACKET_SCHEMA,
         future.responsePacket as Record<string, unknown>,
       ),
-      /version 9 is newer than the supported version 8.*no data was changed/iu,
+      /version 10 is newer than the supported version 9.*no data was changed/iu,
     );
 
     assert.throws(
@@ -229,19 +237,20 @@ describe('canonical Case portability lifecycle', () => {
     );
     await assert.rejects(
       workspace.readWorkspaceArchive(future.workspaceArchive),
-      /newer than the supported schema 7.*no data was changed/iu,
+      /newer than the supported schema 8.*no data was changed/iu,
     );
 
-    const currentExport = await fixture<Record<string, unknown>>('case-export-v14');
+    const currentExport = await fixture<Record<string, unknown>>('case-export-v15');
     assert.throws(() => caseModel.mergeCases([], { ...currentExport, undeclared: true }), /undeclared envelope fields/iu);
-    const currentPack = await fixture<Record<string, unknown>>('cli-case-pack-v2-case-v14');
+    const currentPack = await fixture<Record<string, unknown>>('cli-case-pack-v2-case-v15');
     assert.throws(() => casePack.verifyCliCasePack({ ...currentPack, undeclared: true }), /unexpected root envelope field/iu);
   });
 
   test('keeps exact bounded review-input validation for malformed, sparse, and future values', async () => {
     const publishedV2ReviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v1');
-    const reviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v2');
-    assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, version: 3 }), /unsupported version/iu);
+    const latestPublicReviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v2');
+    const reviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v3');
+    assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, version: 4 }), /unsupported version/iu);
     assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, undeclared: true }), /undeclared/iu);
     const nestedUnknown = structuredClone(reviewInputs);
     (nestedUnknown.profile as Record<string, unknown>).undeclared = true;
@@ -263,10 +272,12 @@ describe('canonical Case portability lifecycle', () => {
     assert.throws(() => responsePacket.validateCaseResponseReviewInputs(coercive), /profile is unsupported/iu);
     assert.equal(conversionCalls, 0);
     const validated = responsePacket.validateCaseResponseReviewInputs(reviewInputs);
+    const validatedLatestPublic = responsePacket.validateCaseResponseReviewInputs(latestPublicReviewInputs);
     const validatedPublishedV2 = responsePacket.validateCaseResponseReviewInputs(publishedV2ReviewInputs);
     assert.equal(Object.isFrozen(validated), true);
     assert.equal(Object.isFrozen(validated.profile), true);
     assert.equal(Object.isFrozen(validated.contacts), true);
+    assert.equal(Object.isFrozen(validatedLatestPublic), true);
     assert.equal(Object.isFrozen(validatedPublishedV2), true);
   });
 });

@@ -14,7 +14,9 @@ import {
 import type {
   DesiredPostureBaseline,
   MailProtectionProfile,
+  OfficialChannel,
   ProtectionAttestation,
+  RightsReference,
 } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
@@ -56,6 +58,7 @@ export interface BrandProfile {
   id: string;
   name: string;
   officialDomains: string[];
+  officialChannels: OfficialChannel[];
   productNames: string[];
   tlds: string[];
   approvedPartnerDomains: string[];
@@ -68,6 +71,7 @@ export interface BrandProfile {
   desiredPostureBaselines: DesiredPostureBaseline[];
   trademarkOwner: string;
   trademarkRegistration: string;
+  rightsReferences: RightsReference[];
   officialFaviconHash: string;
   officialFaviconPHash: string;
   pageBaseline: PageBaseline;

@@ -81,6 +81,22 @@ describe('case response record normalization', () => {
     assert.deepEqual(requiredValue(decisions[0]).evidencePinIds, [pin.id]);
   });
 
+  test('current decisions retain bounded confidence while older schemas migrate without inventing it', () => {
+    const current = requiredValue(normalizeCaseDecisions([{
+      summary: 'Escalate for review',
+      rationale: 'The selected evidence warrants review.',
+      confidence: 'moderate',
+      confidenceBasis: 'Two consistent retained observations.',
+      createdAt: NOW,
+    }], NOW, undefined, { sourceVersion: 15 })[0]);
+    assert.equal(current.confidence, 'moderate');
+    assert.equal(current.confidenceBasis, 'Two consistent retained observations.');
+
+    const migrated = requiredValue(normalizeCaseDecisions([current], NOW, undefined, { sourceVersion: 14 })[0]);
+    assert.equal(migrated.confidence, 'unknown');
+    assert.equal(migrated.confidenceBasis, '');
+  });
+
   test('checkpoints append bounded selected facts with typed provenance metadata', () => {
     const pins = appendCaseEvidencePins([], [
       {
@@ -297,6 +313,40 @@ describe('case response record normalization', () => {
     assert.deepEqual(migrated.contactLimitations, ['Route freshness was not retained.']);
     assert.match(migrated.history[0]?.limitations.join(' ') ?? '', /pre-v13 transition history is unavailable/iu);
     assert.deepEqual(second, first);
+  });
+
+  test('retains current route-review deadlines and narrowly migrates exact legacy platform routes', () => {
+    const current = requiredValue(normalizeCaseActions([{
+      recipient: 'Application platform reporting form',
+      type: 'platform_report',
+      contactSource: 'Official provider guidance',
+      routeObservedAt: NOW,
+      routeReviewAfter: LATER,
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 15 })[0]);
+    assert.equal(current.type, 'platform_report');
+    assert.equal(current.routeObservedAt, NOW);
+    assert.equal(current.routeReviewAfter, LATER);
+
+    const legacy = requiredValue(normalizeCaseActions([{
+      recipient: 'Application platform reporting form',
+      type: 'security_contact_report',
+      contactSource: 'Official Application platform, reviewed 2026-07-28',
+      routeObservedAt: LATER,
+      routeReviewAfter: NEXT,
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 14 })[0]);
+    assert.equal(legacy.type, 'platform_report');
+    assert.equal(legacy.routeObservedAt, '2026-07-28T00:00:00.000Z');
+    assert.equal(legacy.routeReviewAfter, null);
+
+    const unrelated = requiredValue(normalizeCaseActions([{
+      recipient: 'Security contact',
+      type: 'security_contact_report',
+      contactSource: 'Official security contact',
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 14 })[0]);
+    assert.equal(unrelated.type, 'security_contact_report');
   });
 
   test('merges action histories by stable event identity and reports bounded omissions', () => {
