@@ -98,7 +98,7 @@
 
 <section id="tools" class="resource-section" aria-labelledby="tools-title">
   <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2><p>Each tool has a distinct role.</p></div>
-  <div class="tool-guide">
+  <div class="tool-guide responsive-grid">
     {#each toolGuides as tool}
       <article class="card" id={`tool-${tool.id}`}>
         <h3>{tool.name}</h3>
@@ -115,12 +115,12 @@
 
 <section id="reference" class="resource-section" aria-labelledby="reference-title">
   <div class="section-intro"><h2 id="reference-title">Product and source references</h2><p>Command-line use, evidence rules, implemented coverage and example output.</p></div>
-  <nav class="reference-pages" aria-label="Product references">
+  <nav class="reference-pages responsive-grid" aria-label="Product references">
     {#each publicResourceHubNavigation as item}
       <a href={item.href}><strong>{item.label}</strong><span>{item.detail}</span></a>
     {/each}
   </nav>
-  <div class="reference-guide">
+  <div class="reference-guide responsive-grid">
     {#each referenceGuides as resource}
       <article class="card" id={`reference-${resource.id}`}>
         <h3>{resource.name}</h3>
@@ -140,9 +140,9 @@
   <a class="reference-link" href="/privacy">Read the privacy policy <span aria-hidden="true">→</span></a>
 </section>
 
-<section id="results" class="resource-section" aria-labelledby="results-title">
+<section id="results" class="resource-section layout-container" aria-labelledby="results-title">
   <div class="section-intro"><p class="eyebrow">Read the result</p><h2 id="results-title">Source health is part of the evidence</h2><p>Registration status is authority-aware. DNS, certificates, websites and external intelligence add context, but do not override an authoritative registry answer.</p></div>
-  <article class="result-layout card" aria-labelledby="result-layout-title">
+  <article class="result-layout split-layout card" aria-labelledby="result-layout-title">
     <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need</h3><p>At a glance separates complete, limited, disagreeing and unresolved evidence. The analyst question changes section order for the selected task; it does not change the evidence.</p></div>
     <ol>
       <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
@@ -194,16 +194,16 @@
   .closing-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.closing-actions a{min-height:42px}
   .reference-link{display:inline-flex;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .resource-section{padding:62px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
-  .reference-pages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 12px}.reference-pages a{display:grid;min-width:0;gap:6px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.reference-pages a:hover,.reference-pages a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.reference-pages strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.reference-pages span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .tool-guide,.reference-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tool-guide article,.reference-guide article{padding:20px}.tool-guide article:last-child:nth-child(odd),.reference-guide article:only-child{grid-column:1/-1}.tool-guide article:last-child:nth-child(odd) dl,.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-guide h3,.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--text-xs);line-height:1.5}
+  .reference-pages{--grid-min:180px;--grid-gap:8px;margin:0 0 12px}.reference-pages a{display:grid;min-width:0;gap:6px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.reference-pages a:hover,.reference-pages a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.reference-pages strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.reference-pages span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}
+  .tool-guide,.reference-guide{--grid-min:330px;--grid-gap:10px}.tool-guide article,.reference-guide article{padding:20px}.tool-guide article:last-child:nth-child(odd),.reference-guide article:only-child{grid-column:1 / -1}.tool-guide article:last-child:nth-child(odd) dl,.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-guide h3,.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--type-label-size) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--type-supporting-size);line-height:1.5}
   .state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:0 24px}.state-grid article{padding:16px 0;border-top:1px solid var(--border)}.state-grid h3{margin:0;color:var(--interface-accent);font:700 var(--text-sm) var(--mono)}.state-grid p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation{margin-top:12px;padding:19px;border-left:3px solid var(--amber)}.interpretation strong{font:700 var(--text-sm) var(--mono)}.interpretation p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
-  .result-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:26px;margin-bottom:24px;padding:22px}.result-layout h3{margin:4px 0 8px;font:700 clamp(1.1rem,2vw,1.35rem) var(--mono);line-height:1.25}.result-layout p{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}.result-layout ol{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.result-layout li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:10px 12px;background:var(--panel)}.result-layout li strong{color:var(--accent);font:700 var(--text-xs) var(--mono)}.result-layout li span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}.result-layout .layout-note{grid-column:1 / -1;padding-top:14px;border-top:1px solid var(--border)}
+  .result-layout{--split-leading:.85fr;--split-trailing:1.15fr;--split-gap:26px;margin-bottom:24px;padding:22px}.result-layout h3{margin:4px 0 8px;font:700 clamp(1.1rem,2vw,1.35rem) var(--mono);line-height:1.25}.result-layout p{margin:0;color:var(--muted);font-size:var(--type-body-size);line-height:1.6}.result-layout ol{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.result-layout li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:10px 12px;background:var(--panel)}.result-layout li strong{color:var(--accent);font:700 var(--text-xs) var(--mono)}.result-layout li span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}.result-layout .layout-note{grid-column:1 / -1;padding-top:14px;border-top:1px solid var(--border)}
   .glossary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 30px;margin:0}.glossary-grid>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:15px;padding:16px 0;border-top:1px solid var(--border)}.glossary-grid dt{color:var(--accent);font:700 var(--text-xs) var(--mono)}.glossary-grid dd{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .faq-list{overflow:hidden}.faq-list details{padding:0;border-top:1px solid var(--border)}.faq-list details:first-child{border-top:0}.faq-list summary{padding:16px 48px 16px 18px;font:700 var(--text-sm) var(--mono)}.faq-list details p{margin:0;padding:0 18px 18px;color:var(--muted);font-size:var(--text-sm);line-height:1.65}
   .mistake-list{display:grid;gap:10px;margin:0;padding:20px 20px 20px 42px}.mistake-list li{padding-left:5px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.mistake-list li::marker{color:var(--amber)}
-  @media(max-width:900px){.glossary-grid,.result-layout{grid-template-columns:1fr}.reference-pages{grid-template-columns:repeat(2,minmax(0,1fr))}.result-layout .layout-note{grid-column:auto}}
+  @media(max-width:900px){.glossary-grid{grid-template-columns:1fr}}
   @media(max-width:680px){
-    .reference-pages,.tool-guide,.reference-guide,.state-grid{grid-template-columns:1fr}
+    .state-grid{grid-template-columns:1fr}
     .tool-guide article:last-child:nth-child(odd),.reference-guide article:only-child{grid-column:auto}
     .tool-guide article:last-child:nth-child(odd) dl,.reference-guide article:only-child dl{grid-template-columns:1fr}
     .tool-guide dl div,.reference-guide dl div,.glossary-grid>div,.result-layout li{grid-template-columns:1fr;gap:4px}

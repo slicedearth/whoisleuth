@@ -96,6 +96,21 @@ test('the active console navigation marker never overlaps its label', async ({ p
   }
 });
 
+test('data-dense analyst routes can use the available desktop workspace without widening the Dashboard', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/dashboard');
+  const dashboardWidth = (await page.locator('#main-content').boundingBox())?.width ?? 0;
+  await expect(page.locator('#main-content')).not.toHaveClass(/wide-workspace/u);
+
+  for (const path of ['/lookup', '/bulk', '/monitor', '/brands']) {
+    await page.goto(path);
+    const main = page.locator('#main-content');
+    await expect(main).toHaveClass(/wide-workspace/u);
+    expect((await main.boundingBox())?.width ?? 0).toBeGreaterThan(dashboardWidth);
+    await expectNoHorizontalOverflow(page);
+  }
+});
+
 test('certificate monitoring highlights the Assure navigation destination', async ({ page }) => {
   await page.goto('/monitor?view=certificates');
   const navigation = page.locator('#console-navigation');

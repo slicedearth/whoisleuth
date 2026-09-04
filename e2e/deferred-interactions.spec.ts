@@ -87,6 +87,10 @@ type DeferredInteractionSampleSet = Readonly<{
 // excluding artificial driver time for a no-delay multi-character sequence.
 // The Case response row was remeasured on 2026-08-25 after its module moved
 // into the canonical Cases-view preload packet.
+// The public Case handoff was remeasured on 2026-09-05 after the current Case
+// contract added type-specific readiness and reviewed response context. Its
+// generated example remains one deferred asset; the ceiling tracks the
+// measured contract rather than hiding the added bytes in an unrelated route.
 // Transfer ceilings add 20% and round up to 1 KiB; readiness and long-task
 // ceilings add 50% and round up to 25 ms and 10 ms respectively. Layout
 // ceilings add 50% and round up to 0.005. Zero-observation floors preserve a
@@ -94,7 +98,7 @@ type DeferredInteractionSampleSet = Readonly<{
 const INTERACTION_OBSERVED_MAXIMA = Object.freeze({
   cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 156.02, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 40.42, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 7_904, usableMs: 61.65, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, usableMs: 61.65, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 7_955, usableMs: 357.43, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_533, usableMs: 209.61, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_559, usableMs: 52.37, longTaskTotalMs: 0, layoutShiftScore: 0 }),
@@ -584,8 +588,9 @@ function bulkResponse(target: string) {
 
 test('measures a deferred public CLI command detail without collection', async ({ page }, testInfo) => {
   const command = page.locator('article[data-command="commands"]');
-  const disclosure = command.locator(':scope > .command-row > button');
-  const detail = command.locator('.command-detail');
+  const open = command.locator(':scope > .command-row > button');
+  const workspace = page.locator('article[data-command-detail="commands"]');
+  const detail = workspace.locator('.command-detail');
 
   await measureDeferredInteraction({
     page,
@@ -597,15 +602,14 @@ test('measures a deferred public CLI command detail without collection', async (
       await expect(detail).toHaveCount(0);
     },
     action: async () => {
-      await disclosure.focus();
+      await open.focus();
       await page.keyboard.press('Enter');
     },
     ready: detail,
-    readyControl: disclosure,
+    readyControl: workspace.getByRole('link', { name: /Back to/u }),
     requireAsset: false,
   });
-  await expect(disclosure).toBeFocused();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(workspace).toBeFocused();
   await expectNoHorizontalOverflow(page);
 });
 

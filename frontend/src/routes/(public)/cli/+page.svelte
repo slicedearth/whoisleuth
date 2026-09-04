@@ -59,7 +59,6 @@
   title="WHOISleuth CLI"
   summary={['Install the command, start with a common task, or browse the current command reference.']}
   sections={pageSections}
-  sectionNavigation="inline"
 >
   {#snippet actions()}
     <a class="primary" href="#start">Get started</a>
@@ -81,7 +80,7 @@
   </ol>
   <div class="start-notes independent-grid">
     <p>Use <code>whoisleuth &lt;command&gt; --help</code> for the exact options installed on your machine.</p>
-    <details class="update-instructions"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command}<CopyableCommand {command} label="update command" compact />{/each}</div></details>
+    <details class="update-instructions compact-disclosure"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command}<CopyableCommand {command} label="update command" compact />{/each}</div></details>
   </div>
 </section>
 
@@ -103,7 +102,7 @@
 
 <section class="cli-section browser-handoff" id="browser-handoff" aria-labelledby="browser-handoff-title">
   <div class="section-intro"><p class="eyebrow">Interoperability</p><h2 id="browser-handoff-title">Move reviewed work without uploading it</h2><p>Use existing versioned exports, check them locally, and preview browser imports before applying records.</p></div>
-  <div class="handoff-recipes independent-grid">
+  <div class="handoff-recipes responsive-grid">
     {#each PUBLIC_CLI_GUIDANCE.interchangeRecipes as recipe,index}
       <article>
         <header><span>{index + 1}</span><h3>{recipe.label}</h3></header>
@@ -126,8 +125,8 @@
   </section>
 
   <div class="additional-behaviour independent-grid">
-    <details><summary>Configuration profiles</summary><ul>{#each PUBLIC_CLI_GUIDANCE.configuration as item}<li>{item}</li>{/each}</ul></details>
-    <details><summary>Browser and evidence handoffs</summary><ul>{#each PUBLIC_CLI_GUIDANCE.handoffs as item}<li>{item}</li>{/each}</ul></details>
+    <details class="compact-disclosure"><summary>Configuration profiles</summary><ul>{#each PUBLIC_CLI_GUIDANCE.configuration as item}<li>{item}</li>{/each}</ul></details>
+    <details class="compact-disclosure"><summary>Browser and evidence handoffs</summary><ul>{#each PUBLIC_CLI_GUIDANCE.handoffs as item}<li>{item}</li>{/each}</ul></details>
   </div>
 </section>
 
@@ -156,10 +155,10 @@
   .start-steps{display:grid;gap:0;margin:0;padding:0;list-style:none}.start-steps>li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;padding:22px 0;border-top:1px solid var(--border)}.start-steps>li:last-child{border-bottom:1px solid var(--border)}.start-steps>li>span{display:grid;width:27px;height:27px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:750 var(--text-xs) var(--mono)}.start-steps h3{margin:2px 0 6px;font:700 var(--text-md) var(--mono)}.start-steps p{margin:0 0 13px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.start-steps :global(.copyable-command)+:global(.copyable-command){margin-top:7px}.update-instructions{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.update-instructions summary{padding:14px 16px;font:700 var(--text-xs) var(--mono)}.update-instructions>div{display:grid;gap:7px;padding:0 14px 14px}
   .start-notes{grid-template-columns:minmax(0,1fr) minmax(260px,.6fr);gap:10px;margin-top:14px}.start-notes>p{margin:0;padding:14px 16px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--text-xs);line-height:1.55}.start-notes>p code{color:var(--accent)}.update-instructions{margin:0}
   .task-groups{display:grid;gap:10px}.task-groups>section{display:grid;grid-template-columns:minmax(160px,.35fr) minmax(0,.65fr);gap:22px;padding:20px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.task-groups header h3{margin:0;color:var(--accent);font:750 var(--text-md) var(--mono)}.task-groups header p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.task-groups ul{display:grid;gap:12px;margin:0;padding:0;list-style:none}.task-groups li{display:grid;gap:7px}.task-groups li strong{font:700 var(--text-xs) var(--mono)}
-  .handoff-recipes{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.handoff-recipes article{display:flex;min-width:0;flex-direction:column;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.handoff-recipes header{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start}.handoff-recipes header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.handoff-recipes h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono);line-height:1.35}.recipe-commands{display:grid;gap:6px;margin-top:14px}.handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .handoff-recipes{--grid-min:260px;--grid-gap:9px}.handoff-recipes article{display:flex;min-width:0;flex-direction:column;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.handoff-recipes header{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start}.handoff-recipes header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.handoff-recipes h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono);line-height:1.35}.recipe-commands{display:grid;gap:6px;margin-top:14px}.handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--type-supporting-size);line-height:1.55}.handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--type-supporting-size);line-height:1.5}
   .boundary-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:1px;background:var(--border)}.boundary-list p{margin:0;padding:15px;background:var(--panel);color:var(--muted);font-size:var(--text-xs);line-height:1.55}.exit-codes{margin-top:34px}.exit-codes h3{margin:0 0 12px;font:700 var(--text-md) var(--mono)}.exit-codes table{width:100%;border:1px solid var(--border);border-spacing:0;border-radius:var(--radius-sm);overflow:hidden}.exit-codes tr:first-child>*{border-top:0}.exit-codes th,.exit-codes td{padding:11px 13px;border-top:1px solid var(--border);text-align:left}.exit-codes th{width:64px;color:var(--interface-accent);background:var(--panel-raised);font:750 var(--text-sm) var(--mono)}.exit-codes td{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.exit-codes>p{margin:11px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.additional-behaviour{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:28px}.additional-behaviour details{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.additional-behaviour summary{padding:14px;font:700 var(--text-xs) var(--mono)}.additional-behaviour ul{margin:0;padding:0 18px 16px 34px}.additional-behaviour li{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.additional-behaviour li+li{margin-top:7px}
   .more-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.more-links a{display:grid;gap:6px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.more-links a:hover,.more-links a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.more-links strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.more-links span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}.package-verification{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:20px;padding:20px;border-left:3px solid var(--interface-accent);background:var(--panel)}.package-verification h3{margin:0;font:700 var(--text-sm) var(--mono)}.package-verification p{max-width:65ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.package-verification nav{display:flex;flex:0 0 auto;align-items:flex-end;flex-direction:column;gap:6px}.package-verification a{color:var(--accent);font:700 var(--text-xs) var(--mono)}
-  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.boundary-list{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}.handoff-recipes{grid-template-columns:1fr}}
+  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.boundary-list{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}}
   @media(max-width:720px){.cli-section{padding:45px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
   @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
 </style>

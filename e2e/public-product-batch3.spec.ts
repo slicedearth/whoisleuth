@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
   PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -64,8 +65,9 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto('/cli');
   await expect(page.locator('.reference-tree')).toBeVisible();
-  await expect(page.locator('.reference-body.has-sections')).toHaveCount(0);
-  await expect(page.locator('.public-section-navigation.inline')).toBeVisible();
+  await expect(page.locator('.page-sections')).toBeVisible();
+  await expect(page.locator('.page-sections').getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+  await expect(page.locator('.public-section-navigation')).toHaveCount(0);
   expect((await page.locator('.reference-document-slot').boundingBox())?.width ?? 0).toBeGreaterThan(800);
   const startNotes = page.locator('.start-notes');
   await expect(startNotes).toHaveCSS('align-items', 'start');
@@ -124,30 +126,46 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
 
   const command = catalogue.locator('article[data-command="workflow-plan"]');
-  const disclosure = command.locator(':scope > .command-row > button');
-  await disclosure.focus();
+  const open = command.locator(':scope > .command-row > button');
+  await open.focus();
   await page.keyboard.press('Enter');
-  await expect(disclosure).toBeFocused();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-  await expect(command.locator('.command-detail')).toContainText('Network behaviour');
-  await expect(command.locator('.command-detail')).toContainText('Schemas');
+  const workspace = catalogue.locator('article[data-command-detail="workflow-plan"]');
+  await expect(workspace).toBeFocused();
+  await expect(workspace.locator('.command-detail')).toContainText('Network behaviour');
+  await expect(workspace.locator('.command-detail')).toContainText('Schemas');
+  await workspace.getByRole('link', { name: /Back to 1 filtered command/u }).click();
+  await expect(catalogue.locator('article[data-command="workflow-plan"] .command-open')).toBeFocused();
+  await expect(page).toHaveURL(/\?q=workflow-plan#commands$/u);
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
+});
+
+test('keeps CLI catalogue filters shareable across reloads', async ({ page }) => {
+  await page.goto('/cli?q=workflow&mode=offline&common=1#commands');
+  const catalogue = page.getByTestId('public-cli-catalogue');
+  await expect(catalogue.getByRole('searchbox', { name: 'Search commands' })).toHaveValue('workflow');
+  await expect(catalogue.getByRole('combobox', { name: 'Mode' })).toHaveValue('offline');
+  await expect(catalogue.getByRole('checkbox', { name: 'Common commands only' })).toBeChecked();
+  const status = catalogue.getByRole('status');
+  const before = await status.textContent();
+  await page.reload();
+  await expect(status).toHaveText(before ?? '');
+  await expect(page).toHaveURL(/\?q=workflow&mode=offline&common=1#commands$/u);
 });
 
 test('opens a directly linked CLI command without loading unrelated command details', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/cli#command-workflow-plan');
   const catalogue = page.getByTestId('public-cli-catalogue');
-  const command = catalogue.locator('article[data-command="workflow-plan"]');
-  await expect(command.locator(':scope > .command-row > button')).toHaveAttribute('aria-expanded', 'true');
+  const command = catalogue.locator('article[data-command-detail="workflow-plan"]');
+  await expect(command).toBeVisible();
   await expect(command.locator('.command-detail')).toContainText('Limits and contracts');
   await expect(catalogue.locator('.command-detail')).toHaveCount(1);
   await expect.poll(async () => {
     const commandBox = await command.boundingBox();
-    const sectionNavigationBox = await page.locator('.public-section-navigation.inline').boundingBox();
-    return commandBox && sectionNavigationBox
-      ? commandBox.y >= sectionNavigationBox.y + sectionNavigationBox.height
+    const filtersBox = await catalogue.locator('.filters').boundingBox();
+    return commandBox && filtersBox
+      ? commandBox.y >= filtersBox.y + filtersBox.height
       : false;
   }).toBe(true);
   await expectNoHorizontalOverflow(page);
@@ -173,14 +191,14 @@ test('reveals related CLI commands even when the current filters exclude them', 
   await search.fill('lookup');
   const source = catalogue.locator('article[data-command="lookup"]');
   await source.locator(':scope > .command-row > button').click();
-  const related = source.locator('.related-commands a').first();
+  const sourceDetail = catalogue.locator('article[data-command-detail="lookup"]');
+  const related = sourceDetail.locator('.related-commands a').first();
   const targetId = (await related.getAttribute('href'))?.replace('#command-', '') ?? '';
   expect(targetId).not.toBe('');
   await related.click();
   await expect(search).toHaveValue('');
-  const target = catalogue.locator(`article[data-command="${targetId}"]`);
+  const target = catalogue.locator(`article[data-command-detail="${targetId}"]`);
   await expect(target).toBeVisible();
-  await expect(target.locator(':scope > .command-row > button')).toHaveAttribute('aria-expanded', 'true');
   await expect(page).toHaveURL(new RegExp(`#command-${targetId}$`, 'u'));
 });
 
@@ -188,7 +206,7 @@ test('keeps the final CLI section current at the end of the document', async ({ 
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/cli');
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  const contents = page.getByRole('navigation', { name: 'WHOISleuth CLI sections' });
+  const contents = page.locator('.page-sections');
   await expect(contents.getByRole('link', { name: 'More documentation' })).toHaveAttribute('aria-current', 'location');
 });
 
@@ -299,7 +317,7 @@ test('keeps privacy detail on the policy page and links to it from resources', a
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
   await expect(page.getByText(new RegExp(
-    `Current Case schema ${CASE_SCHEMA_VERSION}.*Published v2 Case schema ${PUBLISHED_V2_CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+    `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
     'iu',
   ))).toBeVisible();
   await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);

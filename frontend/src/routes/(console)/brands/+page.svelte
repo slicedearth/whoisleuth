@@ -288,27 +288,27 @@
         <label for="brand-workbench">Tool<select id="brand-workbench" value={brandWorkbench??''} onfocus={()=>preloadBrandWorkbench(brandWorkbench??'control')} oninput={(event)=>preloadBrandWorkbench(event.currentTarget.value)} onchange={(event)=>void selectBrandWorkbench(event.currentTarget.value)}><option value="">Choose a tool</option>{#each brandWorkbenchOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
       </section>
       {#if brandWorkbench==='control'}
-        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='portfolio'}
-        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='posture'}
-        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='baselines'}
-        <DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} />
+        <DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} placeholder="workspace" />
       {:else if brandWorkbench==='passport'}
-        <DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'}
-        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='attestations'}
-        <DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='mail'}
-        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" />
       {/if}
     {/if}
   </div>
 {:else}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-assets">
-    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} />
+    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
   </div>
 {/if}
 

@@ -72,6 +72,9 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   await page.goto('/monitor');
   await page.getByRole('tab', { name: /^Relationships\b/u }).click();
   await requested;
+  const placeholder = page.locator('[data-deferred-placeholder="workspace"]').first();
+  await expect(placeholder).toBeVisible();
+  expect((await placeholder.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(220);
 
   const unavailable = page.getByRole('alert').filter({
     hasText: 'Website-profile relationships could not be loaded.',
@@ -101,8 +104,8 @@ test('a cached CLI module failure recovers only after the accessible reload acti
   await expect(page).toHaveURL(/\/cli#command-commands$/u);
 
   await alert.getByRole('button', { name: 'Reload page' }).click();
-  await expect(command.locator('.command-detail')).toBeVisible();
-  await expect(command.locator(':scope > .command-row > button')).toHaveAttribute('aria-expanded', 'true');
+  const workspace = page.locator('article[data-command-detail="commands"]');
+  await expect(workspace.locator('.command-detail')).toBeVisible();
   await expect(page).toHaveURL(/\/cli#command-commands$/u);
   expect(requestCount()).toBe(2);
   await expectNoHorizontalOverflow(page);

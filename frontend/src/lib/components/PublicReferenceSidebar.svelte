@@ -1,11 +1,61 @@
 <script lang="ts">
+  import { getContext, onMount } from 'svelte';
   import {
     PUBLIC_REFERENCE_GROUPS,
     publicReferenceDestination,
   } from '$lib/public-reference-navigation';
+  import {
+    PUBLIC_REFERENCE_CONTEXT,
+    type PublicReferenceContext,
+  } from '$lib/public-reference-context';
 
   let { currentPath }: { currentPath: string } = $props();
+  const referenceContext = getContext<PublicReferenceContext>(PUBLIC_REFERENCE_CONTEXT);
   const currentLabel = $derived(publicReferenceDestination(currentPath)?.label ?? 'Documentation');
+  const currentSections = $derived(referenceContext.currentHref === currentPath ? referenceContext.sections : []);
+  let activeSectionHref = $state('');
+
+  function updateActiveSection() {
+    let next = currentSections[0]?.href ?? '';
+    for (const item of currentSections) {
+      const target = document.getElementById(item.href.slice(1));
+      if (target && target.getBoundingClientRect().top <= 56) next = item.href;
+    }
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {
+      next = currentSections.at(-1)?.href ?? next;
+    }
+    activeSectionHref = next;
+  }
+
+  onMount(() => {
+    let frame = 0;
+    const scheduleUpdate = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        updateActiveSection();
+      });
+    };
+    scheduleUpdate();
+    addEventListener('scroll', scheduleUpdate, { passive: true });
+    addEventListener('resize', scheduleUpdate);
+    addEventListener('hashchange', scheduleUpdate);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      removeEventListener('scroll', scheduleUpdate);
+      removeEventListener('resize', scheduleUpdate);
+      removeEventListener('hashchange', scheduleUpdate);
+    };
+  });
+
+  $effect(() => {
+    currentPath;
+    currentSections;
+    activeSectionHref = currentSections[0]?.href ?? '';
+    if (typeof window === 'undefined') return;
+    const frame = requestAnimationFrame(updateActiveSection);
+    return () => cancelAnimationFrame(frame);
+  });
 </script>
 
 <aside class="reference-sidebar">
@@ -16,12 +66,20 @@
         <h2 id={`reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>{group.label}</h2>
         {#each group.items as item}
           <a class:active={item.href === currentPath} aria-current={item.href === currentPath ? 'page' : undefined} href={item.href}>{item.label}</a>
+          {#if item.href === currentPath && currentSections.length}
+            <div class="page-sections" aria-label={`${currentLabel} sections`}>
+              <h3>On this page</h3>
+              {#each currentSections as section}
+                <a class:active={section.href === activeSectionHref} aria-current={section.href === activeSectionHref ? 'location' : undefined} href={section.href}>{section.label}</a>
+              {/each}
+            </div>
+          {/if}
         {/each}
       </section>
     {/each}
   </nav>
 
-  <details class="reference-browser">
+  <details class="reference-browser compact-disclosure">
     <summary><span>Browse documentation</span><strong>{currentLabel}</strong></summary>
     <nav class="independent-grid" aria-label="Documentation">
       {#each PUBLIC_REFERENCE_GROUPS as group}
@@ -32,6 +90,14 @@
           {/each}
         </section>
       {/each}
+      {#if currentSections.length}
+        <section class="mobile-page-sections" aria-labelledby="mobile-reference-page-sections">
+          <h2 id="mobile-reference-page-sections">On this page</h2>
+          {#each currentSections as section}
+            <a class:active={section.href === activeSectionHref} aria-current={section.href === activeSectionHref ? 'location' : undefined} href={section.href}>{section.label}</a>
+          {/each}
+        </section>
+      {/if}
     </nav>
   </details>
 </aside>
@@ -47,15 +113,16 @@
   .reference-tree section>a{display:block;padding:7px 8px;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-xs) var(--mono);line-height:1.35}
   .reference-tree section>a:hover,.reference-tree section>a:focus-visible{color:var(--text);background:rgb(var(--accent-rgb) / .07)}
   .reference-tree section>a.active{color:var(--accent);background:rgb(var(--accent-rgb) / .09);box-shadow:inset 2px 0 var(--accent)}
+  .page-sections{display:grid;gap:1px;margin:5px 0 2px 9px;padding:7px 0 7px 11px;border-left:1px solid var(--border)}
+  .page-sections h3{margin:0 0 4px;color:var(--muted);font:700 .55rem var(--mono);letter-spacing:.07em;text-transform:uppercase}
+  .page-sections a{padding:4px 6px;color:var(--muted);font:600 .67rem/1.35 var(--mono);overflow-wrap:anywhere}
+  .page-sections a:hover,.page-sections a:focus-visible,.page-sections a.active{color:var(--accent)}
   .reference-browser{display:none}
   @media(max-width:1080px){
     .reference-sidebar{position:static;max-height:none;overflow:visible}
     .reference-tree{display:none}
     .reference-browser{display:block;margin:0 0 28px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-    .reference-browser>summary{display:flex;min-height:46px;align-items:center;justify-content:space-between;gap:14px;padding:10px 13px;list-style:none;font-family:var(--mono)}
-    .reference-browser>summary::-webkit-details-marker{display:none}
-    .reference-browser>summary::after{content:'+';flex:0 0 auto;color:var(--accent);font-weight:750}
-    .reference-browser[open]>summary::after{content:'−'}
+    .reference-browser>summary{grid-template-columns:minmax(0,1fr) minmax(0,auto) 14px;min-height:46px;gap:14px;padding:10px 13px;font-family:var(--mono)}
     .reference-browser>summary span{color:var(--muted);font-size:var(--text-2xs)}
     .reference-browser>summary strong{margin-left:auto;color:var(--text);font-size:var(--text-xs);text-align:right}
     .reference-browser>nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:16px;border-top:1px solid var(--border)}
@@ -63,6 +130,7 @@
     .reference-browser h2{margin-inline:0}
     .reference-browser section>a{display:block;padding:6px 0;color:var(--muted);font:650 var(--text-xs) var(--mono);line-height:1.4;overflow-wrap:anywhere}
     .reference-browser section>a:hover,.reference-browser section>a:focus-visible,.reference-browser section>a.active{color:var(--accent)}
+    .reference-browser .mobile-page-sections{grid-column:1/-1;padding-top:14px;border-top:1px solid var(--border)}
   }
   @media(max-width:520px){.reference-browser>nav{grid-template-columns:1fr}}
 </style>

@@ -589,7 +589,7 @@
 {#if view==='certificates'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-certificates">
   {#if casesSourceState==='ready'&&brandProfilesSourceState==='ready'&&analystReviewStateSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/CertificateReviewInbox.svelte')} loadingLabel="Loading retained certificate review…" unavailableLabel="The certificate review inbox could not be loaded." props={{profiles:brandProfiles,cases,reviewState:analystReviewState,profileId:page.url.searchParams.get('profile')??'',onreview:recordAnalystReviewDecision,oncount:(count:number)=>certificateReviewCount=count}} />
+    <DeferredSurface load={()=>import('$lib/components/CertificateReviewInbox.svelte')} loadingLabel="Loading retained certificate review…" unavailableLabel="The certificate review inbox could not be loaded." props={{profiles:brandProfiles,cases,reviewState:analystReviewState,profileId:page.url.searchParams.get('profile')??'',onreview:recordAnalystReviewDecision,oncount:(count:number)=>certificateReviewCount=count}} placeholder="workspace" />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
     <LocalCollectionState state={casesSourceState==='loading'||brandProfilesSourceState==='loading'||analystReviewStateSourceState==='loading'?'loading':'unavailable'} title="Certificate review unavailable" detail="Readable Brand Profiles, retained Cases, and the analyst lifecycle overlay are required. Missing collections are not treated as empty certificate evidence." />
@@ -600,8 +600,8 @@
 {#if view==='timeline'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-timeline">
   {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} />
-    <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} />
+    <DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||relationshipsSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Retained timeline unavailable" detail="The combined timeline requires readable cases, watchlists, saved Bulk sessions, relationship observations, and website snapshots. No empty history is inferred while any required collection is unavailable." />
   {/if}
@@ -611,7 +611,7 @@
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   {#if campaignsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>{campaigns=nextCampaigns;refreshRelationships();}}} />
+    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>{campaigns=nextCampaigns;refreshRelationships();}}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The browser-local campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}
@@ -621,7 +621,7 @@
 {#if view==='relationships'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
   {#if websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} />
+    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={websiteSnapshotsSourceState} title="Website-profile relationships unavailable" detail="Saved website snapshots could not be read, so no missing cluster is inferred and review-lead recording from that source remains unavailable." />
   {/if}
@@ -636,7 +636,7 @@
     {:else}
       <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Relationship augmentation incomplete" detail="Readable Case evidence remains below. Campaign or retained-relationship augmentation could not be fully loaded, so combined relationship counts remain unavailable rather than being inferred as zero." />
     {/if}
-    <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} />
+    <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Cases must be readable before cross-case relationships can be projected. Readable website-profile and retained-relationship evidence remains separately attributed above." />
   {/if}
@@ -646,7 +646,7 @@
 {#if view==='rules'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-rules">
   {#if detectionRulesSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} />
+    <DeferredSurface load={()=>import('$lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The browser-local rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
   {/if}
@@ -672,7 +672,7 @@
   {#if cases.length}
     <DeferredSurface load={()=>import('$lib/components/CaseFilters.svelte')} loadingLabel="Loading Case filters…" unavailableLabel="Case filters could not be loaded." props={{status:statusFilter,setStatus:(value:string)=>{statusFilter=value;casePage=1;},disposition:dispositionFilter,setDisposition:(value:string)=>{dispositionFilter=value;casePage=1;},search:caseSearch,setSearch:(value:string)=>{caseSearch=value;casePage=1;},sort:caseSort,setSort:(value:'updated'|'domain'|'status')=>{caseSort=value;casePage=1;},statusOptions:CASE_STATUSES,dispositionOptions:CASE_DISPOSITIONS,clear:()=>{clearCaseFilters();casePage=1;},matchedCount:filteredCases.length,totalCount:cases.length}} />
 
-    <DeferredSurface load={()=>import('$lib/components/CaseList.svelte')} loadingLabel="Loading retained Cases…" unavailableLabel="The retained Case list could not be loaded." onready={restoreCaseListTarget} props={{records:pagedCases,allRecords:cases,expandedId,tagDraft,setTagDraft:(value:string)=>tagDraft=value,noteDraft,setNoteDraft:(value:string)=>noteDraft=value,pendingNoteCaseIds,calibrationCaseIds,toggleCalibrationCase,expand,setStatus,setDisposition,setReviewReason,addBrandProfileAssociation,removeBrandProfileAssociation,saveTags,addNote,removeCase,refreshCases,installCommittedCaseSnapshot,setMessage:(value:string)=>caseMessage=value,formatDate:date,currentPage:currentCasePage,pageCount:casePageCount,setPage:setCasePage,brandProfiles,brandProfilesUnavailable,responseCaseId:page.url.hash===`#case-response-${encodeURIComponent(expandedId)}`||(page.url.searchParams.get('response')==='1'&&page.url.searchParams.get('case')===expandedId)?expandedId:''}} />
+    <DeferredSurface load={()=>import('$lib/components/CaseList.svelte')} loadingLabel="Loading retained Cases…" unavailableLabel="The retained Case list could not be loaded." onready={restoreCaseListTarget} props={{records:pagedCases,allRecords:cases,expandedId,tagDraft,setTagDraft:(value:string)=>tagDraft=value,noteDraft,setNoteDraft:(value:string)=>noteDraft=value,pendingNoteCaseIds,calibrationCaseIds,toggleCalibrationCase,expand,setStatus,setDisposition,setReviewReason,addBrandProfileAssociation,removeBrandProfileAssociation,saveTags,addNote,removeCase,refreshCases,installCommittedCaseSnapshot,setMessage:(value:string)=>caseMessage=value,formatDate:date,currentPage:currentCasePage,pageCount:casePageCount,setPage:setCasePage,brandProfiles,brandProfilesUnavailable,responseCaseId:page.url.hash===`#case-response-${encodeURIComponent(expandedId)}`||(page.url.searchParams.get('response')==='1'&&page.url.searchParams.get('case')===expandedId)?expandedId:''}} placeholder="workspace" />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}
@@ -687,7 +687,7 @@
   {#if watchlistsSourceState==='ready'}
     {#if watchlistsRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing watchlists while the last readable snapshot remains available.</p>{/if}
     <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
-    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,openCase:openWatchlistCase,formatDate:date}} />
+    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Browser-local watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}

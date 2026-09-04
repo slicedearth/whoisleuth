@@ -827,6 +827,7 @@
           load={()=>import('$lib/components/LookupClaimReadiness.svelte')}
           loadingLabel="Loading Evidence Readiness review…"
           unavailableLabel="Evidence Readiness review could not be loaded."
+          placeholder="panel"
           props={{readiness:lookupClaimReadiness,reviewActions:lookupReviewActionModel,onpassport:downloadClaimPassport}}
         />
 
@@ -835,6 +836,7 @@
             load={()=>import('$lib/components/LookupInvestigationCapsule.svelte')}
             loadingLabel="Loading portable investigation hand-off…"
             unavailableLabel="The portable investigation hand-off could not be loaded."
+            placeholder="panel"
             props={{applicationVersion:__WHOISLEUTH_VERSION__,lookupEvidence:lookupEvidenceDocument,brief:lookupInvestigationBrief,graph:lookupAssetGraph,caseRecord}}
           />
         {/if}
@@ -844,6 +846,7 @@
             load={()=>import('$lib/components/LookupAcquisitionDueDiligence.svelte')}
             loadingLabel="Loading acquisition due-diligence review…"
             unavailableLabel="Acquisition due-diligence review could not be loaded."
+            placeholder="workspace"
             props={{review:acquisitionDueDiligence,target:caseDomain,observedAt:lookupObservedAt}}
           />
         {/if}

@@ -14,12 +14,14 @@
     loadingLabel,
     unavailableLabel,
     onready,
+    placeholder = 'none',
   }: {
     load: () => Promise<DeferredModule>;
     props?: Record<string, unknown>;
     loadingLabel: string;
     unavailableLabel: string;
     onready?: () => void | Promise<void>;
+    placeholder?: 'none' | 'panel' | 'workspace';
   } = $props();
 
   let View = $state<Component<any> | null>(null);
@@ -93,9 +95,19 @@
   });
 </script>
 
-<div class="deferred-surface" data-deferred-state={loadState} aria-busy={loadState === 'loading'}>
-  {#if loadState === 'loading' && showLoadingState}
-    <p class="deferred-state" role="status" aria-live="polite">{loadingLabel}</p>
+<div
+  class="deferred-surface"
+  class:reserved={loadState === 'loading' && placeholder !== 'none'}
+  class:workspace-placeholder={loadState === 'loading' && placeholder === 'workspace'}
+  data-deferred-state={loadState}
+  data-deferred-placeholder={loadState === 'loading' ? placeholder : undefined}
+  aria-busy={loadState === 'loading'}
+>
+  {#if loadState === 'loading'}
+    {#if placeholder !== 'none'}
+      <div class="placeholder-shape" aria-hidden="true"><span></span><span></span><span></span></div>
+    {/if}
+    {#if showLoadingState}<p class="deferred-state" role="status" aria-live="polite">{loadingLabel}</p>{/if}
   {:else if loadState === 'unavailable'}
     <div class="deferred-state unavailable" role="alert">
       <p>{unavailableLabel}</p>
@@ -109,6 +121,13 @@
 
 <style>
   .deferred-surface{min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .deferred-surface.reserved{position:relative;min-block-size:132px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);overflow:hidden}
+  .deferred-surface.reserved.workspace-placeholder{min-block-size:220px}
+  .placeholder-shape{display:grid;gap:12px;padding:20px}
+  .placeholder-shape span{display:block;width:min(100%,560px);height:12px;border-radius:4px;background:color-mix(in srgb,var(--border) 68%,transparent)}
+  .placeholder-shape span:nth-child(2){width:min(72%,420px)}
+  .placeholder-shape span:nth-child(3){width:min(44%,260px)}
+  .reserved>.deferred-state{position:absolute;right:12px;bottom:12px;left:12px}
   .deferred-state{margin:0;padding:12px;border-left:2px solid var(--accent);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .deferred-state.unavailable{display:grid;min-width:0;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 12px;border-left-color:var(--muted);border-left-style:dotted}
   .deferred-state.unavailable p{min-width:0;margin:0}
