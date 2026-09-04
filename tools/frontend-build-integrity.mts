@@ -12,7 +12,6 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 import {
@@ -26,6 +25,17 @@ import {
 export const FRONTEND_BUILD_INTEGRITY_FORMAT = 'frontend-build-identity';
 export const FRONTEND_BUILD_INTEGRITY_VERSION = 1 as const;
 export const FRONTEND_BUILD_INTEGRITY_MARKER = 'frontend/build-identity.json';
+
+// Playwright currently transpiles its TypeScript configuration through a
+// CommonJS loader. Keep this module importable from that boundary by avoiding
+// import.meta while still resolving a direct maintainer invocation from the
+// tool's own path rather than the caller's working directory.
+const DIRECT_INVOCATION_PATH = process.argv[1] ? path.resolve(process.argv[1]) : '';
+const DIRECT_INVOCATION = path.basename(DIRECT_INVOCATION_PATH) === 'frontend-build-integrity.mts'
+  && path.basename(path.dirname(DIRECT_INVOCATION_PATH)) === 'tools';
+const DEFAULT_REPOSITORY_ROOT = DIRECT_INVOCATION
+  ? path.resolve(path.dirname(DIRECT_INVOCATION_PATH), '..')
+  : path.resolve(process.cwd());
 
 const SOURCE_DIRECTORIES = Object.freeze([
   'cli',
@@ -520,7 +530,7 @@ function renderSnapshot(snapshot: FrontendBuildIntegritySnapshot): string {
 }
 
 export function createFrontendBuildIntegritySnapshot(
-  repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  repositoryRoot = DEFAULT_REPOSITORY_ROOT,
   environment: NodeJS.ProcessEnv = process.env,
 ): FrontendBuildIntegritySnapshot {
   const first = createSnapshotOnce(repositoryRoot, environment);
@@ -532,7 +542,7 @@ export function createFrontendBuildIntegritySnapshot(
 }
 
 export function recordFrontendBuildIntegrity(
-  repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  repositoryRoot = DEFAULT_REPOSITORY_ROOT,
   environment: NodeJS.ProcessEnv = process.env,
 ): FrontendBuildIntegritySnapshot {
   const snapshot = createFrontendBuildIntegritySnapshot(repositoryRoot, environment);
@@ -549,7 +559,7 @@ export function recordFrontendBuildIntegrity(
 }
 
 export function assertFrontendBuildIntegrity(
-  repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  repositoryRoot = DEFAULT_REPOSITORY_ROOT,
   environment: NodeJS.ProcessEnv = process.env,
 ): FrontendBuildIntegritySnapshot {
   const marker = path.join(repositoryRoot, FRONTEND_BUILD_INTEGRITY_MARKER);
@@ -578,7 +588,7 @@ export function assertFrontendBuildIntegrity(
 }
 
 export function cleanFrontendBuildArtifacts(
-  repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+  repositoryRoot = DEFAULT_REPOSITORY_ROOT,
 ): void {
   for (const relative of [
     'frontend/build',
@@ -614,6 +624,6 @@ export function main(args = process.argv.slice(2)): number {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (DIRECT_INVOCATION) {
   process.exitCode = main();
 }

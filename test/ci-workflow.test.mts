@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -412,6 +413,34 @@ describe('continuous integration workflow', () => {
     assert.match(PLAYWRIGHT_CONFIG, /if \(useExistingBuild\) assertFrontendBuildIntegrity\(\);/u);
     assert.match(PLAYWRIGHT_CONFIG, /trace: 'retain-on-failure'/u);
     assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
+  });
+
+  test('loads the Playwright configuration through the exact CommonJS-backed loader', () => {
+    const environment = environmentWithoutV8Coverage();
+    delete environment.CI;
+    delete environment.WHOISLEUTH_E2E_USE_BUILD;
+    const child = spawnSync(
+      process.execPath,
+      [
+        path.join(__dirname, '..', 'node_modules', '@playwright', 'test', 'cli.js'),
+        'test',
+        '--list',
+        '--project=setup',
+      ],
+      {
+        cwd: path.join(__dirname, '..'),
+        env: environment,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30_000,
+      },
+    );
+    assert.equal(
+      child.status,
+      0,
+      `Playwright configuration failed to load:\n${child.stderr || child.stdout}`,
+    );
+    assert.match(child.stdout, /Total: 1 test in 1 file/u);
   });
 
   test('keeps functional checks deterministic and isolates runtime ceilings in every environment', () => {
