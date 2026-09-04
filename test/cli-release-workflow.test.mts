@@ -49,6 +49,10 @@ describe('scoped CLI release workflow', () => {
     assert.equal((WORKFLOW.match(/npm stage publish/gu) ?? []).length, 1);
     assert.match(WORKFLOW, /npm stage publish[^\n]+--access public --provenance/u);
     assert.doesNotMatch(WORKFLOW.slice(0, environmentIndex), /\bnpm (?:publish|stage publish)\b/u);
+    const auditIndex = WORKFLOW.indexOf('npm run dependencies:audit');
+    const installIndex = WORKFLOW.indexOf('npm ci --include=optional --ignore-scripts --audit=false');
+    assert.ok(auditIndex > 0 && installIndex > auditIndex && installIndex < uploadIndex);
+    assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 1);
     const candidateUpload = WORKFLOW.slice(uploadIndex, environmentIndex);
     assert.match(candidateUpload, /retention-days: 7/u);
     assert.equal((candidateUpload.match(/retention-days:/gu) ?? []).length, 1);

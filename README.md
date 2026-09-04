@@ -70,7 +70,7 @@ Requirements: Node.js 24 or later and npm. Repository verification uses the
 exact runtime in `.nvmrc`; packaged CLI smoke checks also run on Node.js 26.
 
 ```bash
-npm ci
+npm ci --include=optional --ignore-scripts --audit=false
 npm run dev
 ```
 

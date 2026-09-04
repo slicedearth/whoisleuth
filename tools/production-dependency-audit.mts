@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +9,7 @@ import {
   PRODUCTION_DEPENDENCY_AUDIT_MAX_BYTES,
 } from '../lib/production-dependency-audit-policy.mts';
 
-export const PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS = 120_000;
-export const PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX = 'whoisleuth-production-audit-';
+export const PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS = 300_000;
 
 type WritableLike = Readonly<{ write(value: string): unknown }>;
 type AuditCommandResult = Readonly<{
@@ -24,14 +21,14 @@ type AuditCommandResult = Readonly<{
   error?: Error;
 }>;
 
-export function productionDependencyAuditArguments(cacheDirectory: string): readonly string[] {
+export function productionDependencyAuditArguments(): readonly string[] {
   return Object.freeze([
     'audit',
     '--package-lock-only',
     '--omit=dev',
     '--json',
     '--offline=false',
-    `--cache=${cacheDirectory}`,
+    '--prefer-online',
   ]);
 }
 
@@ -40,16 +37,8 @@ function commandError(cause: unknown): Error {
 }
 
 function runNpmAudit(): AuditCommandResult {
-  let cacheDirectory: string;
   try {
-    cacheDirectory = mkdtempSync(path.join(tmpdir(), PRODUCTION_DEPENDENCY_AUDIT_CACHE_PREFIX));
-  } catch (cause) {
-    return { status: null, signal: null, stdout: '', stderr: '', error: commandError(cause) };
-  }
-
-  let auditResult: AuditCommandResult;
-  try {
-    const result = spawnSync('npm', productionDependencyAuditArguments(cacheDirectory), {
+    const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', productionDependencyAuditArguments(), {
       cwd: path.resolve(fileURLToPath(new URL('..', import.meta.url))),
       encoding: 'utf8',
       maxBuffer: PRODUCTION_DEPENDENCY_AUDIT_MAX_BYTES,
@@ -58,7 +47,7 @@ function runNpmAudit(): AuditCommandResult {
       shell: false,
     });
     const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
-    auditResult = {
+    return {
       status: result.status,
       signal: result.signal,
       stdout: result.stdout ?? '',
@@ -67,15 +56,8 @@ function runNpmAudit(): AuditCommandResult {
       ...(result.error ? { error: result.error } : {}),
     };
   } catch (cause) {
-    auditResult = { status: null, signal: null, stdout: '', stderr: '', error: commandError(cause) };
+    return { status: null, signal: null, stdout: '', stderr: '', error: commandError(cause) };
   }
-  let cleanupError: Error | undefined;
-  try {
-    rmSync(cacheDirectory, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
-  } catch (cause) {
-    cleanupError = commandError(cause);
-  }
-  return cleanupError && !auditResult.error ? { ...auditResult, error: cleanupError } : auditResult;
 }
 
 function boundedError(value: string): string {

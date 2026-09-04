@@ -31,7 +31,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
-        run: npm ci --include=optional --ignore-scripts
+        run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Verify development toolchain compatibility
         run: npm run toolchain:check
       - name: Run expanded property checks

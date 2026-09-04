@@ -37,14 +37,23 @@ reviewed production dependency audit.
 
 ## Production audit policy
 
-`npm run dependencies:audit` audits the exact lockfile with
-`npm audit --package-lock-only --omit=dev --json`. It uses a two-minute outer
-deadline, explicit `offline=false`, and an isolated temporary npm cache that is
-removed after the command. This avoids an unnecessary installed-tree traversal
-while retaining the same production dependency inventory. The fresh cache
-prevents offline resolution or retained npm metavulnerability calculations from
-being mistaken for current advisory evidence. The command bounds and validates
-the JSON report, then prints a concise deterministic result.
+`npm run dependencies:audit` audits the exact production lockfile online with
+`npm audit --package-lock-only --omit=dev --json --offline=false --prefer-online`.
+It uses a five-minute outer deadline, bounds and validates the JSON report, then
+prints a concise deterministic result. A missing, failed or timed-out advisory
+response fails closed rather than being mistaken for a clean audit.
+
+Registry availability is deliberately not part of the required per-push CI
+path. Pull requests that change a manifest or lockfile are blocked by the
+pinned GitHub Dependency Review action, while the full online production audit
+runs on its own weekly or manually dispatched workflow and remains a release
+gate. Required local and hosted CI both install the exact lockfile with
+install-time auditing disabled, avoiding four redundant advisory requests and
+preventing a registry delay from obscuring source or test failures.
+Scheduled maintenance workflows make the same choice. The CLI release workflow
+runs the explicit production audit before its audited-disabled locked install,
+so publication cannot rely on an implicit install summary.
+
 It does not use `--audit-level` or a numeric vulnerability threshold. The
 policy accepts exactly zero production vulnerabilities; any reported production
 vulnerability blocks the command. Missing, malformed, unsupported or internally

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +11,6 @@ const FULL_SHA = /^[a-f0-9]{40}$/u;
 
 export const CI_QUALITY_SCRIPTS = Object.freeze([
   'toolchain:check',
-  'release:check',
   'verification:timing:check',
   'verification:ownership:check',
   'verification:journeys:check',
@@ -23,9 +23,12 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
   'technology:coverage-check',
   'cli:package:check',
   'architecture:check',
-  'dependencies:audit',
   'typecheck',
   'check',
+] as const);
+
+export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
+  'release:check',
 ] as const);
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
@@ -75,6 +78,44 @@ export function assertLocalCiRuntime(
 ): void {
   if (!/^\d+\.\d+\.\d+$/u.test(expected) || actual !== expected) {
     throw new Error(`Local CI requires Node.js ${expected || 'from .nvmrc'}; running ${actual}.`);
+  }
+}
+
+export function playwrightBrowserCacheDirectory(
+  environment: NodeJS.ProcessEnv = process.env,
+  platform = process.platform,
+  home = homedir(),
+  cwd = REPOSITORY_ROOT,
+): string {
+  const configured = environment.PLAYWRIGHT_BROWSERS_PATH;
+  if (configured === '0') return path.join(cwd, 'node_modules', 'playwright-core', '.local-browsers');
+  if (configured) return path.resolve(environment.INIT_CWD || cwd, configured);
+  if (platform === 'darwin') return path.join(home, 'Library', 'Caches', 'ms-playwright');
+  if (platform === 'linux') return path.join(environment.XDG_CACHE_HOME || path.join(home, '.cache'), 'ms-playwright');
+  if (platform === 'win32') {
+    return path.join(environment.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'ms-playwright');
+  }
+  throw new Error(`Local CI does not support Playwright cache discovery on ${platform}.`);
+}
+
+export function assertPlaywrightBrowserCacheWritable(cacheDirectory = playwrightBrowserCacheDirectory()): void {
+  let probeDirectory = '';
+  try {
+    mkdirSync(cacheDirectory, { recursive: true });
+    probeDirectory = mkdtempSync(path.join(cacheDirectory, '.whoisleuth-write-check-'));
+    rmSync(probeDirectory, { recursive: true });
+  } catch (cause) {
+    if (probeDirectory) {
+      try {
+        rmSync(probeDirectory, { recursive: true, force: true });
+      } catch {
+        // Preserve the original writability failure.
+      }
+    }
+    const detail = cause instanceof Error ? ` ${cause.message}` : '';
+    throw new Error(
+      `Local CI requires write access to the Playwright browser cache at ${cacheDirectory}.${detail}`,
+    );
   }
 }
 
@@ -188,7 +229,7 @@ export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
 
 export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
   return Object.freeze({
-    quality: Object.freeze(['security:staged', ...CI_QUALITY_SCRIPTS]),
+    quality: Object.freeze(['security:staged', ...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS]),
     unit: Object.freeze([...CI_UNIT_SCRIPTS, 'verification:artifacts']),
     browser: Object.freeze([...CI_BROWSER_PREREQUISITE_SCRIPTS, ...CI_HOSTED_ONLY_BROWSER_SCRIPTS]),
     browserHealth: CI_BROWSER_HEALTH_SCRIPTS,
@@ -213,8 +254,10 @@ export function assertHostedCiParity(
 
 export function formatLocalCiPlan(): string {
   return [
+    'Playwright browser-cache writability',
     'changed-line secret scan',
-    'locked install',
+    ...CI_PREFLIGHT_SCRIPTS,
+    'locked install (install-time audit disabled; scheduled and release audits are separate)',
     ...CI_QUALITY_SCRIPTS,
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_PREREQUISITE_SCRIPTS,
@@ -240,10 +283,12 @@ export function main(args = process.argv.slice(2)): number {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
     cleanup = true;
+    assertPlaywrightBrowserCacheWritable();
     const cliRuntime = cliRuntimeExecutable();
     const range = localCiRevisionRange();
     npmRun('security:staged', ['--', '--range', range]);
-    run(commandName(), ['ci', '--include=optional', '--ignore-scripts']);
+    for (const script of CI_PREFLIGHT_SCRIPTS) npmRun(script);
+    run(commandName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);
     for (const script of CI_QUALITY_SCRIPTS) npmRun(script);
     for (const script of CI_UNIT_SCRIPTS) npmRun(script);
     for (const script of CI_BROWSER_PREREQUISITE_SCRIPTS) npmRun(script);

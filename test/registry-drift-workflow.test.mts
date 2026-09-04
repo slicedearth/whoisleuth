@@ -30,7 +30,7 @@ describe('official registry drift workflow', () => {
 
   test('runs the existing bounded command and retains only reviewable reports', () => {
     assert.match(WORKFLOW, /^\s{4}timeout-minutes: 10$/mu);
-    assert.match(WORKFLOW, /npm ci --include=optional --ignore-scripts/u);
+    assert.match(WORKFLOW, /npm ci --include=optional --ignore-scripts --audit=false/u);
     assert.match(WORKFLOW, /npm run --silent registry:drift -- --json > registry-drift-report\.json/u);
     assert.match(
       WORKFLOW,

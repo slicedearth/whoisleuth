@@ -76,8 +76,10 @@ jobs:
             const verified = runs.some((run) => run?.head_sha === sha && run?.event === "push" && run?.conclusion === "success");
             if (!verified) throw new Error("The exact tagged commit must have a successful completed push run of ci.yml.");
           '
+      - name: Audit production dependencies
+        run: npm run dependencies:audit
       - name: Install locked dependencies
-        run: npm ci --include=optional --ignore-scripts
+        run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Verify release and notices
         run: |
           npm run release:check
