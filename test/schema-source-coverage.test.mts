@@ -17,6 +17,7 @@ import {
   SCHEMA_SOURCE_ROOTS,
   validateSchemaSourceCoverage,
 } from '../tools/schema-source-coverage.mts';
+import { discoverSchemaIdentifiersInSource as discoverSchemaIdentifiersInParser } from '../tools/schema-source-parsers.mts';
 import type { SchemaCompatibilityEntry } from '../packages/contracts/schema-compatibility.mts';
 
 const NOW = '2026-08-16T00:00:00.000Z';
@@ -73,6 +74,10 @@ function fixtureEntry(owner = 'lib/owner.mts'): SchemaCompatibilityEntry {
 }
 
 describe('schema source coverage', () => {
+  test('keeps the repository closure facade bound to the pure source parser', () => {
+    assert.equal(discoverSchemaIdentifiersInSource, discoverSchemaIdentifiersInParser);
+  });
+
   test('treats the reviewed lifecycle contract as metadata rather than a schema emitter', () => {
     const result = discoverSchemaIdentifiersInSource(`
       export function readLifecycle(value: { schema: string }) {
