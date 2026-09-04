@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -95,6 +96,44 @@ describe('frontend build integrity', () => {
     context.after(() => rmSync(copied, { recursive: true, force: true }));
     cpSync(root, copied, { recursive: true });
     assert.deepEqual(assertFrontendBuildIntegrity(copied, ENVIRONMENT), first);
+  });
+
+  test('verifies the exact downloaded artifact without SvelteKit build intermediates', (context) => {
+    const root = fixtureRepository(context);
+    const retained = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const artifact = mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-frontend-artifact-only-'));
+    context.after(() => rmSync(artifact, { recursive: true, force: true }));
+
+    for (const directory of SOURCE_DIRECTORIES) {
+      cpSync(path.join(root, directory), path.join(artifact, directory), { recursive: true });
+    }
+    for (const relative of SOURCE_FILES) {
+      const destination = path.join(artifact, relative);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      cpSync(path.join(root, relative), destination);
+    }
+    cpSync(path.join(root, 'frontend/build'), path.join(artifact, 'frontend/build'), { recursive: true });
+    cpSync(
+      path.join(root, FRONTEND_BUILD_INTEGRITY_MARKER),
+      path.join(artifact, FRONTEND_BUILD_INTEGRITY_MARKER),
+    );
+
+    assert.equal(existsSync(path.join(artifact, 'frontend/.svelte-kit')), false);
+    assert.deepEqual(assertFrontendBuildIntegrity(artifact, ENVIRONMENT), retained);
+  });
+
+  test('rejects an aggregate-oversized sparse output before reading file contents', (context) => {
+    const root = fixtureRepository(context);
+    for (let index = 0; index < 9; index += 1) {
+      const relative = `frontend/build/oversized-${index}.bin`;
+      const filename = path.join(root, relative);
+      write(root, relative, '');
+      truncateSync(filename, 32 * 1024 * 1024);
+    }
+    assert.throws(
+      () => recordFrontendBuildIntegrity(root, ENVIRONMENT),
+      /aggregate byte limit before content is read/u,
+    );
   });
 
   test('rejects modified, added, and missing served files', (context) => {

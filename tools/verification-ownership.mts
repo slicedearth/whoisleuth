@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Buffer } from 'node:buffer';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,6 +51,8 @@ export type SpecialisedCheck =
   | 'staged-security'
   | 'documentation'
   | 'workflow-closure'
+  | 'browser-build'
+  | 'browser-loading-report'
   | 'browser-timing-plan'
   | 'analyst-journey-assurance'
   | 'critical-mutation'
@@ -169,7 +171,12 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'hosted-functions', area: 'hosted bounded functions', priority: 35,
     matches: (value: string) => value.startsWith('netlify/functions/'),
-    focusedUnit: unit('test/netlify-functions.test.mts', 'test/outbound-request-bounds.test.mts'),
+    focusedUnit: unit(
+      'test/netlify-api-error-boundaries.test.mts',
+      'test/netlify-network-guard.test.mts',
+      'test/netlify-network-handler-contracts.test.mts',
+      'test/outbound-request-bounds.test.mts',
+    ),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'privacy-catalogue', 'staged-security'),
     browserRequired: false,
@@ -236,6 +243,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     id: 'frontend-brand-impact', area: 'Brand and campaign analyst workflow', priority: 0,
     impactOnly: true,
     matches: (value: string) => value.includes('/brands/')
+      || value === 'frontend/src/lib/campaigns.ts'
       || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/brand-profile-model.test.mts', 'test/campaign-model.test.mts'),
     focusedBrowser: browser('e2e/brand-asset-register.spec.ts', 'e2e/brand-baseline.spec.ts', 'e2e/parent-domain-campaign-scope.spec.ts'),
@@ -245,7 +253,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-case-impact', area: 'Case analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    matches: (value: string) => value === 'frontend/src/lib/cases.ts'
+      || /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts'),
     focusedBrowser: browser(
       'e2e/cases.spec.ts',
@@ -261,6 +270,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     id: 'frontend-monitor-impact', area: 'Monitoring analyst workflow', priority: 0,
     impactOnly: true,
     matches: (value: string) => value.includes('/monitor/')
+      || value === 'frontend/src/lib/scheduled-monitoring.ts'
+      || value === 'frontend/src/lib/watchlists.ts'
       || /\/(?:HostedWatchlist|Monitor|Watchlist|monitor-|watchlist-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/watchlist-store.test.mts', 'test/scheduled-monitor-model.test.mts'),
     focusedBrowser: browser('e2e/hosted-monitoring.spec.ts', 'e2e/lookup-case-monitoring.spec.ts', 'e2e/watchlist-storage.spec.ts'),
@@ -274,6 +285,21 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedUnit: unit('test/analyst-review-inbox.test.mts'),
     focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/dashboard.spec.ts', 'e2e/local-data-platform.spec.ts'),
     specialised: specialised('browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'browser-local-data-impact', area: 'browser-local persistence and migration behaviour', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => /^frontend\/src\/lib\/browser-local-data(?:-[^/]+)?\.ts$/u.test(value),
+    focusedUnit: unit(
+      'test/browser-local-data-definitions.test.mts',
+      'test/browser-local-data-provider.test.mts',
+      'test/browser-local-data-service.test.mts',
+      'test/workspace-import-failure.test.mts',
+      'test/workspace-rollback.test.mts',
+    ),
+    focusedBrowser: browser('e2e/local-data-platform.spec.ts', 'e2e/watchlist-storage.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'schema-inventory'),
     browserRequired: true,
   }),
   Object.freeze({
@@ -320,7 +346,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     id: 'privacy-tooling-impact', area: 'privacy catalogue verification', priority: 0,
     impactOnly: true,
     matches: (value: string) => value.startsWith('tools/privacy-data-flow-'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'),
+    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'),
     focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
     specialised: specialised('privacy-catalogue', 'schema-inventory'),
     browserRequired: true,
@@ -352,6 +378,16 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     browserRequired: false,
   }),
   Object.freeze({
+    id: 'browser-build-artifact-impact', area: 'production browser build artefact verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value === 'tools/frontend-build-integrity.mts'
+      || value === 'tools/frontend-loading-report.mts',
+    focusedUnit: unit('test/frontend-build-integrity.test.mts', 'test/frontend-loading-report.test.mts'),
+    focusedBrowser: browser(),
+    specialised: specialised('browser-build', 'browser-loading-report'),
+    browserRequired: false,
+  }),
+  Object.freeze({
     id: 'unit-tests', area: 'unit and model verification', priority: 30,
     matches: (value: string) => value.startsWith('test/'),
     focusedUnit: unit(), focusedBrowser: browser(),
@@ -366,7 +402,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'privacy-documents', area: 'privacy and data-flow documentation', priority: 45,
     matches: (value: string) => value === 'PRIVACY.md' || value.startsWith('docs/privacy-'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'), focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
+    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'), focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
     specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'), browserRequired: true,
   }),
   Object.freeze({
@@ -374,7 +410,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     impactOnly: true,
     matches: (value: string) => value.includes('privacy-data-flow')
       || value.startsWith('frontend/src/routes/(public)/privacy/'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'),
+    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'),
     focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
     specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'),
     browserRequired: true,
@@ -431,7 +467,48 @@ function normaliseChangedPath(value: unknown): string {
 }
 
 function existingTest(value: string): boolean {
-  try { return statSync(path.join(REPOSITORY_ROOT, value)).isFile(); } catch { return false; }
+  try {
+    const stat = lstatSync(path.join(REPOSITORY_ROOT, value));
+    return stat.isFile() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+export function assertDeclaredVerificationTest(
+  value: unknown,
+  lane: 'unit' | 'browser',
+): string {
+  if (lane !== 'unit' && lane !== 'browser') {
+    throw new TypeError('Declared verification checks must select a known test lane.');
+  }
+  const pattern = lane === 'unit'
+    ? /^test\/[^/]+\.test\.mts$/u
+    : /^e2e\/[^/]+\.spec\.ts$/u;
+  if (typeof value !== 'string' || value.length > MAX_VERIFICATION_CHANGED_PATH_LENGTH || !pattern.test(value)) {
+    throw new TypeError(`Declared ${lane} verification check has an invalid test-file identity.`);
+  }
+  if (!existingTest(value)) {
+    throw new TypeError(`Declared ${lane} verification check does not exist: ${value}.`);
+  }
+  return value;
+}
+
+function validateRules(): void {
+  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
+    throw new TypeError('Verification rules are missing, repeated, or unbounded.');
+  }
+  for (const rule of RULES) {
+    for (const [lane, checks] of [
+      ['unit', rule.focusedUnit],
+      ['browser', rule.focusedBrowser],
+    ] as const) {
+      if (new Set(checks).size !== checks.length) {
+        throw new TypeError(`Verification rule ${rule.id} repeats a declared ${lane} check.`);
+      }
+      for (const check of checks) assertDeclaredVerificationTest(check, lane);
+    }
+  }
 }
 
 function exactFocusedChecks(changedPath: string): readonly string[] {
@@ -470,6 +547,7 @@ function uniqueSorted<T extends string>(values: readonly T[]): readonly T[] {
 }
 
 export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): VerificationOwnershipPlan {
+  validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
     throw new TypeError(`Verification plan requires 1 to ${MAX_VERIFICATION_CHANGED_PATHS} changed paths.`);
   }
@@ -479,11 +557,11 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
     const impacts = matchingRules(changedPath);
     const owner = ownershipRule(changedPath, impacts);
     const focusedUnitChecks = uniqueSorted([
-      ...impacts.flatMap((rule) => rule.focusedUnit).filter(existingTest),
+      ...impacts.flatMap((rule) => rule.focusedUnit),
       ...exactFocusedChecks(changedPath),
     ]);
     const focusedBrowserChecks = uniqueSorted([
-      ...impacts.flatMap((rule) => rule.focusedBrowser).filter(existingTest),
+      ...impacts.flatMap((rule) => rule.focusedBrowser),
       ...exactBrowserChecks(changedPath),
     ]);
     const browserRequired = impacts.some((rule) => rule.browserRequired);
@@ -559,9 +637,7 @@ function readDependencyRuleNames(): readonly string[] {
 }
 
 export function checkVerificationOwnershipMap() {
-  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
-    throw new TypeError('Verification rules are missing, repeated, or unbounded.');
-  }
+  validateRules();
   const inventory = maintainedInventory();
   const assignments = inventory.map((file) => ownershipRule(file));
   for (const rule of RULES.filter((candidate) => candidate.impactOnly)) {

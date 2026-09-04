@@ -55,6 +55,8 @@ const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> =
   'release-contract': 'release:check',
   licences: 'licenses:check',
   'production-dependency-audit': 'dependencies:audit',
+  'browser-build': 'build',
+  'browser-loading-report': 'frontend:loading-report',
   'browser-timing-plan': 'verification:timing:check',
   'analyst-journey-assurance': 'verification:journeys:check',
   'critical-mutation': 'test:mutation',
@@ -153,13 +155,19 @@ export function buildFocusedVerificationExecution(
   }
 
   const browserSpecs = Object.freeze([...plan.focusedBrowserChecks]);
-  if (browserSpecs.length) commands.push(npmCommand('build'));
+  if (browserSpecs.length && !commands.some((command) => command.id === 'build')) {
+    commands.push(npmCommand('build'));
+  }
   commands.push(Object.freeze({ id: 'diff-whitespace', executable: 'git', args: Object.freeze(['diff', '--check']) }));
+
+  const producesBrowserArtifacts = frontendChanged
+    || browserSpecs.length > 0
+    || commands.some((command) => command.id === 'build' || command.id === 'frontend:loading-report');
 
   return Object.freeze({
     commands: Object.freeze(commands),
     browserSpecs,
-    cleanupBrowserArtifacts: frontendChanged || browserSpecs.length > 0,
+    cleanupBrowserArtifacts: producesBrowserArtifacts,
     deferredSpecialisedChecks: Object.freeze([...deferred].sort()),
   });
 }

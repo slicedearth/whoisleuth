@@ -45,6 +45,7 @@ const SOURCE_FILES = Object.freeze([
   'frontend/vite.config.ts',
 ] as const);
 const MAX_FILES = 4_096;
+const MAX_INVENTORY_ENTRIES = MAX_FILES * 2;
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const MAX_HTML_BYTES = 4 * 1024 * 1024;
@@ -66,6 +67,18 @@ type TreeIdentity = Readonly<{
   totalBytes: number;
   files: readonly FileIdentity[];
 }>;
+
+type PlannedFile = Readonly<{
+  filename: string;
+  path: string;
+  bytes: number;
+}>;
+
+type InventoryBudget = {
+  entries: number;
+  files: number;
+  totalBytes: number;
+};
 
 export type FrontendBuildIntegritySnapshot = Readonly<{
   format: typeof FRONTEND_BUILD_INTEGRITY_FORMAT;
@@ -89,10 +102,42 @@ type InventoryOptions = Readonly<{
   omit?: ReadonlySet<string>;
 }>;
 
-function fileIdentity(filename: string, relative: string): FileIdentity {
+function inventoryBudget(): InventoryBudget {
+  return { entries: 0, files: 0, totalBytes: 0 };
+}
+
+function planFile(
+  filename: string,
+  relative: string,
+  budget: InventoryBudget,
+): PlannedFile {
   const safe = boundedSafeRelativePath(relative, 'Frontend build inventory path', MAX_PATH_LENGTH);
-  const bytes = readBoundedStableRegularFileSync(filename, MAX_FILE_BYTES, `Frontend build file ${safe}`, 0);
-  return Object.freeze({ path: safe, bytes: bytes.byteLength, sha256: sha256Bytes(bytes) });
+  const stat = lstatSync(filename);
+  if (stat.isSymbolicLink()) throw new TypeError(`Frontend build inventory rejects symbolic links: ${safe}.`);
+  if (!stat.isFile()) throw new TypeError(`Frontend build inventory rejects special files: ${safe}.`);
+  if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > MAX_FILE_BYTES) {
+    throw new TypeError(`Frontend build file ${safe} must be a regular file within its byte limits.`);
+  }
+  budget.files += 1;
+  if (budget.files > MAX_FILES) throw new TypeError('Frontend build inventory exceeds its file limit.');
+  budget.totalBytes += stat.size;
+  if (budget.totalBytes > MAX_TOTAL_BYTES) {
+    throw new TypeError('Frontend build inventory exceeds its aggregate byte limit before content is read.');
+  }
+  return Object.freeze({ filename, path: safe, bytes: stat.size });
+}
+
+function fileIdentity(file: PlannedFile): FileIdentity {
+  const bytes = readBoundedStableRegularFileSync(
+    file.filename,
+    MAX_FILE_BYTES,
+    `Frontend build file ${file.path}`,
+    0,
+  );
+  if (bytes.byteLength !== file.bytes) {
+    throw new TypeError(`Frontend build file ${file.path} changed after inventory admission.`);
+  }
+  return Object.freeze({ path: file.path, bytes: bytes.byteLength, sha256: sha256Bytes(bytes) });
 }
 
 function treeIdentity(files: readonly FileIdentity[]): TreeIdentity {
@@ -127,31 +172,45 @@ function inventoryDirectory(
   repositoryRoot: string,
   relativeRoot: string,
   options: InventoryOptions,
-): readonly FileIdentity[] {
+  budget: InventoryBudget,
+): readonly PlannedFile[] {
   const safeRoot = boundedSafeRelativePath(relativeRoot, 'Frontend build inventory root', MAX_PATH_LENGTH);
   const absoluteRoot = path.join(repositoryRoot, safeRoot);
   const rootStat = lstatSync(absoluteRoot);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new TypeError(`Frontend build inventory root must be a real directory: ${safeRoot}.`);
   }
-  const files: FileIdentity[] = [];
+  const files: PlannedFile[] = [];
   const visit = (absoluteDirectory: string, relativeDirectory: string): void => {
+    const directoryPath = relativeDirectory ? `${safeRoot}/${relativeDirectory}` : safeRoot;
+    const directoryStat = lstatSync(absoluteDirectory);
+    if (directoryStat.isSymbolicLink()) {
+      throw new TypeError(`Frontend build inventory rejects symbolic links: ${directoryPath}.`);
+    }
+    if (!directoryStat.isDirectory()) {
+      throw new TypeError(`Frontend build inventory rejects non-directory traversal: ${directoryPath}.`);
+    }
     const entries = readdirSync(absoluteDirectory, { withFileTypes: true })
       .sort((left, right) => compareCodeUnits(left.name, right.name));
     for (const entry of entries) {
       const childWithinRoot = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
       const childRepositoryPath = `${safeRoot}/${childWithinRoot}`;
       const child = path.join(absoluteDirectory, entry.name);
-      if (entry.isSymbolicLink()) throw new TypeError(`Frontend build inventory rejects symbolic links: ${childRepositoryPath}.`);
-      if (entry.isDirectory()) {
+      boundedSafeRelativePath(childRepositoryPath, 'Frontend build inventory entry', MAX_PATH_LENGTH);
+      budget.entries += 1;
+      if (budget.entries > MAX_INVENTORY_ENTRIES) {
+        throw new TypeError('Frontend build inventory exceeds its directory-entry limit.');
+      }
+      const childStat = lstatSync(child);
+      if (childStat.isSymbolicLink()) throw new TypeError(`Frontend build inventory rejects symbolic links: ${childRepositoryPath}.`);
+      if (childStat.isDirectory()) {
         visit(child, childWithinRoot);
         continue;
       }
-      if (!entry.isFile()) throw new TypeError(`Frontend build inventory rejects special files: ${childRepositoryPath}.`);
+      if (!childStat.isFile()) throw new TypeError(`Frontend build inventory rejects special files: ${childRepositoryPath}.`);
       const identityPath = options.repositoryRelative ? childRepositoryPath : childWithinRoot;
       if (options.omit?.has(identityPath)) continue;
-      files.push(fileIdentity(child, identityPath));
-      if (files.length > MAX_FILES) throw new TypeError('Frontend build inventory exceeds its file limit.');
+      files.push(planFile(child, identityPath, budget));
     }
   };
   visit(absoluteRoot, '');
@@ -159,17 +218,38 @@ function inventoryDirectory(
 }
 
 function sourceIdentity(repositoryRoot: string): TreeIdentity {
-  const files: FileIdentity[] = SOURCE_DIRECTORIES.flatMap((directory) => (
-    inventoryDirectory(repositoryRoot, directory, { repositoryRelative: true })
+  const budget = inventoryBudget();
+  const planned: PlannedFile[] = SOURCE_DIRECTORIES.flatMap((directory) => (
+    inventoryDirectory(repositoryRoot, directory, { repositoryRelative: true }, budget)
   ));
   for (const relative of SOURCE_FILES) {
-    files.push(fileIdentity(path.join(repositoryRoot, relative), relative));
+    planned.push(planFile(path.join(repositoryRoot, relative), relative, budget));
   }
-  return treeIdentity(files);
+  return treeIdentity(planned.map(fileIdentity));
 }
 
 function outputIdentity(repositoryRoot: string, relativeRoot: string): TreeIdentity {
-  return treeIdentity(inventoryDirectory(repositoryRoot, relativeRoot, { repositoryRelative: false }));
+  const planned = inventoryDirectory(
+    repositoryRoot,
+    relativeRoot,
+    { repositoryRelative: false },
+    inventoryBudget(),
+  );
+  return treeIdentity(planned.map(fileIdentity));
+}
+
+function relatedOutputIdentities(
+  repositoryRoot: string,
+  relativeRoots: readonly string[],
+): readonly TreeIdentity[] {
+  const budget = inventoryBudget();
+  const plans = relativeRoots.map((relativeRoot) => inventoryDirectory(
+    repositoryRoot,
+    relativeRoot,
+    { repositoryRelative: false },
+    budget,
+  ));
+  return Object.freeze(plans.map((planned) => treeIdentity(planned.map(fileIdentity))));
 }
 
 function resolvedBuildRevision(repositoryRoot: string, environment: NodeJS.ProcessEnv): string {
@@ -289,8 +369,11 @@ function createSnapshotOnce(
 ): FrontendBuildIntegritySnapshot {
   const revision = resolvedBuildRevision(repositoryRoot, environment);
   const source = sourceIdentity(repositoryRoot);
-  const client = outputIdentity(repositoryRoot, 'frontend/.svelte-kit/output/client');
-  const prerendered = outputIdentity(repositoryRoot, 'frontend/.svelte-kit/output/prerendered/pages');
+  const [client, prerendered] = relatedOutputIdentities(repositoryRoot, [
+    'frontend/.svelte-kit/output/client',
+    'frontend/.svelte-kit/output/prerendered/pages',
+  ]);
+  if (!client || !prerendered) throw new TypeError('Frontend build outputs are incomplete.');
   const served = outputIdentity(repositoryRoot, 'frontend/build');
   const manifestPath = path.join(repositoryRoot, 'frontend/.svelte-kit/output/client/.vite/manifest.json');
   const manifestSource = readBoundedStableRegularFileSync(manifestPath, MAX_MANIFEST_BYTES, 'Frontend Vite manifest');

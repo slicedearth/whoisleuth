@@ -28,6 +28,7 @@ import {
   VERIFICATION_TIMING_PROFILE_PATH,
 } from '../tools/verification-timing-profile.mts';
 import {
+  assertDeclaredVerificationTest,
   buildVerificationOwnershipPlan,
   checkVerificationOwnershipMap,
   FULL_BATCH_RELEASE_GATES,
@@ -310,6 +311,18 @@ describe('verification architecture contracts', () => {
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+    assert.throws(
+      () => assertDeclaredVerificationTest('test/absent.test.mts', 'unit'),
+      /does not exist/u,
+    );
+    assert.throws(
+      () => assertDeclaredVerificationTest('test/verification-architecture.mts', 'unit'),
+      /invalid test-file identity/u,
+    );
+    assert.throws(
+      () => assertDeclaredVerificationTest('e2e/accessibility.setup.ts', 'browser'),
+      /invalid test-file identity/u,
+    );
   });
 
   test('selects one owner while aggregating every matching verification impact', () => {
@@ -380,6 +393,58 @@ describe('verification architecture contracts', () => {
     assert.ok(!ids.includes('test:e2e:built'));
     assert.ok(!ids.includes('verification:ci'));
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
+  });
+
+  test('binds lowercase workflow facades and shared browser storage to their dedicated suites', () => {
+    const plan = buildVerificationOwnershipPlan([
+      'frontend/src/lib/cases.ts',
+      'frontend/src/lib/campaigns.ts',
+      'frontend/src/lib/watchlists.ts',
+      'frontend/src/lib/scheduled-monitoring.ts',
+      'frontend/src/lib/browser-local-data.ts',
+      'frontend/src/lib/browser-local-data-service.ts',
+    ]);
+    const byPath = new Map(plan.assignments.map((assignment) => [assignment.changedPath, assignment]));
+
+    const cases = byPath.get('frontend/src/lib/cases.ts')!;
+    assert.ok(cases.impactAreas.includes('Case analyst workflow'));
+    assert.ok(cases.focusedUnitChecks.includes('test/case-model.test.mts'));
+    assert.ok(cases.focusedBrowserChecks.includes('e2e/cases.spec.ts'));
+
+    const campaigns = byPath.get('frontend/src/lib/campaigns.ts')!;
+    assert.ok(campaigns.impactAreas.includes('Brand and campaign analyst workflow'));
+    assert.ok(campaigns.focusedUnitChecks.includes('test/campaign-model.test.mts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/brand-asset-register.spec.ts'));
+
+    for (const owner of ['frontend/src/lib/watchlists.ts', 'frontend/src/lib/scheduled-monitoring.ts']) {
+      const assignment = byPath.get(owner)!;
+      assert.ok(assignment.impactAreas.includes('Monitoring analyst workflow'));
+      assert.ok(assignment.focusedUnitChecks.includes('test/watchlist-store.test.mts'));
+      assert.ok(assignment.focusedBrowserChecks.includes('e2e/hosted-monitoring.spec.ts'));
+    }
+
+    for (const owner of ['frontend/src/lib/browser-local-data.ts', 'frontend/src/lib/browser-local-data-service.ts']) {
+      const assignment = byPath.get(owner)!;
+      assert.ok(assignment.impactAreas.includes('browser-local persistence and migration behaviour'));
+      assert.ok(assignment.focusedUnitChecks.includes('test/browser-local-data-provider.test.mts'));
+      assert.ok(assignment.focusedBrowserChecks.includes('e2e/local-data-platform.spec.ts'));
+      assert.ok(assignment.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+      assert.ok(assignment.mandatorySpecialisedChecks.includes('schema-inventory'));
+    }
+  });
+
+  test('runs a real production build and loading report for build-boundary tooling', () => {
+    const ownership = buildVerificationOwnershipPlan(['tools/frontend-build-integrity.mts']);
+    const execution = buildFocusedVerificationExecution(ownership);
+    const ids = execution.commands.map((command) => command.id);
+    const build = ids.indexOf('build');
+    const loading = ids.indexOf('frontend:loading-report');
+
+    assert.ok(build >= 0);
+    assert.ok(loading > build);
+    assert.equal(ids.filter((id) => id === 'build').length, 1);
+    assert.equal(execution.cleanupBrowserArtifacts, true);
+    assert.deepEqual(execution.browserSpecs, []);
   });
 
   test('closes application-version changes over derived fixtures, documentation, and release gates', () => {
