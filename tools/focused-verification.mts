@@ -169,7 +169,7 @@ function renderExecutionPlan(
   execution: FocusedVerificationExecution,
 ): string {
   const lines = [
-    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} area(s).`,
+    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
     `Focused unit files: ${plan.focusedUnitChecks.length}.`,
     ...execution.commands.map((command) => `Run: ${command.id}`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,

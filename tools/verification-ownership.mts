@@ -9,10 +9,10 @@ import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.m
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-renderer.mts';
 
-export const VERIFICATION_OWNERSHIP_MAP_VERSION = 1;
+export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
 export const MAX_VERIFICATION_CHANGED_PATHS = 128;
 export const MAX_VERIFICATION_CHANGED_PATH_LENGTH = 320;
-export const MAX_VERIFICATION_OWNERSHIP_RULES = 64;
+export const MAX_VERIFICATION_RULES = 64;
 export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -56,10 +56,11 @@ export type SpecialisedCheck =
   | 'critical-mutation'
   | 'critical-io-coverage';
 
-type OwnershipRule = Readonly<{
+type VerificationRule = Readonly<{
   id: string;
   area: string;
   priority: number;
+  impactOnly?: boolean;
   matches: (changedPath: string) => boolean;
   focusedUnit: readonly string[];
   focusedBrowser: readonly string[];
@@ -70,6 +71,7 @@ type OwnershipRule = Readonly<{
 export type VerificationOwnershipAssignment = Readonly<{
   changedPath: string;
   ownershipArea: string;
+  impactAreas: readonly string[];
   focusedUnitChecks: readonly string[];
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
@@ -77,10 +79,11 @@ export type VerificationOwnershipAssignment = Readonly<{
 }>;
 
 export type VerificationOwnershipPlan = Readonly<{
-  mapVersion: 1;
+  mapVersion: 2;
   changedPaths: readonly string[];
   assignments: readonly VerificationOwnershipAssignment[];
   ownershipAreas: readonly string[];
+  impactAreas: readonly string[];
   focusedUnitChecks: readonly string[];
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
@@ -93,7 +96,7 @@ const unit = (...values: string[]) => Object.freeze(values);
 const browser = (...values: string[]) => Object.freeze(values);
 const specialised = (...values: SpecialisedCheck[]) => Object.freeze(values);
 
-const RULES: readonly OwnershipRule[] = Object.freeze([
+const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'shared-contracts', area: 'shared contracts and lifecycle metadata', priority: 40,
     matches: (value: string) => value.startsWith('packages/contracts/'),
@@ -183,8 +186,113 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
     id: 'frontend-user-interface', area: 'frontend user-facing routes and components', priority: 30,
     matches: (value: string) => value.startsWith('frontend/src/'),
     focusedUnit: unit('test/model-contract-properties.test.mts'),
-    focusedBrowser: browser('e2e/design-system.spec.ts', 'e2e/accessibility.spec.ts', 'e2e/mobile-nav.spec.ts'),
-    specialised: specialised('architecture', 'privacy-catalogue', 'analyst-journey-assurance'),
+    focusedBrowser: browser('e2e/accessibility.spec.ts'),
+    specialised: specialised('architecture', 'analyst-journey-assurance'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-navigation-impact', area: 'shared navigation, theme, and layout behaviour', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value === 'frontend/src/app.css'
+      || /\/\+layout(?:\.svelte|\.ts)$/u.test(value)
+      || /\/(?:CommandPalette|LocalSectionNav|PublicReferenceSidebar|SiteFooter|ThemeSelector)\.svelte$/u.test(value),
+    focusedUnit: unit('test/public-product-catalogue.test.mts'),
+    focusedBrowser: browser(
+      'e2e/design-system.spec.ts',
+      'e2e/mobile-nav.spec.ts',
+      'e2e/skip-navigation.spec.ts',
+      'e2e/theme.spec.ts',
+    ),
+    specialised: specialised('browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-lookup-impact', area: 'Lookup analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('/lookup/')
+      || /\/(?:Lookup|lookup-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/lookup-request-controller.test.mts', 'test/lookup-route-analysis.test.mts'),
+    focusedBrowser: browser(
+      'e2e/lookup-anchor-navigation.spec.ts',
+      'e2e/lookup-input.spec.ts',
+      'e2e/lookup-interaction-design.spec.ts',
+      'e2e/lookup-network-evidence.spec.ts',
+      'e2e/lookup-registration-evidence.spec.ts',
+    ),
+    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-bulk-impact', area: 'Bulk analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('/bulk/')
+      || /\/(?:Bulk|bulk-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/bulk-route-model.test.mts', 'test/bulk-session-model.test.mts'),
+    focusedBrowser: browser('e2e/bulk-analysis.spec.ts', 'e2e/bulk-presentation.spec.ts', 'e2e/bulk-session-workflows.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-brand-impact', area: 'Brand and campaign analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('/brands/')
+      || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/brand-profile-model.test.mts', 'test/campaign-model.test.mts'),
+    focusedBrowser: browser('e2e/brand-asset-register.spec.ts', 'e2e/brand-baseline.spec.ts', 'e2e/parent-domain-campaign-scope.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-case-impact', area: 'Case analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts'),
+    focusedBrowser: browser(
+      'e2e/cases.spec.ts',
+      'e2e/case-evidence-workflows.spec.ts',
+      'e2e/case-import-workflows.spec.ts',
+      'e2e/case-relationship-workflows.spec.ts',
+      'e2e/case-response-lifecycle.spec.ts',
+    ),
+    specialised: specialised('privacy-catalogue'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-monitor-impact', area: 'Monitoring analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('/monitor/')
+      || /\/(?:HostedWatchlist|Monitor|Watchlist|monitor-|watchlist-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/watchlist-store.test.mts', 'test/scheduled-monitor-model.test.mts'),
+    focusedBrowser: browser('e2e/hosted-monitoring.spec.ts', 'e2e/lookup-case-monitoring.spec.ts', 'e2e/watchlist-storage.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-dashboard-impact', area: 'Dashboard analyst workflow', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('/dashboard/') || /\/Dashboard[^/]*\.svelte$/u.test(value),
+    focusedUnit: unit('test/analyst-review-inbox.test.mts'),
+    focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/dashboard.spec.ts', 'e2e/local-data-platform.spec.ts'),
+    specialised: specialised('browser-timing-plan'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-public-reference-impact', area: 'public documentation and reference experience', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.startsWith('frontend/src/routes/(public)/')
+      || /\/PublicReference[^/]*\.svelte$/u.test(value),
+    focusedUnit: unit('test/public-guide.test.mts', 'test/public-product-catalogue.test.mts'),
+    focusedBrowser: browser('e2e/public-guide.spec.ts', 'e2e/public-product-batch3.spec.ts', 'e2e/seo.spec.ts'),
+    specialised: specialised('documentation', 'capability-catalogue'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'frontend-deferred-loading-impact', area: 'deferred loading and recovery behaviour', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => /\/(?:DeferredSurface|deferred-|console-loading)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    focusedUnit: unit('test/deferred-module.test.mts'),
+    focusedBrowser: browser('e2e/console-loading.spec.ts', 'e2e/deferred-interactions.spec.ts', 'e2e/deferred-recovery.spec.ts'),
+    specialised: specialised('browser-timing-plan'),
     browserRequired: true,
   }),
   Object.freeze({
@@ -193,6 +301,54 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
     focusedUnit: unit('test/ci-workflow.test.mts', 'test/verification-architecture.test.mts'),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'workflow-closure'),
+    browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'schema-tooling-impact', area: 'schema inventory and lifecycle verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => /^tools\/schema-(?:compatibility|lifecycle|source)/u.test(value),
+    focusedUnit: unit(
+      'test/schema-compatibility.test.mts',
+      'test/schema-lifecycle-repository.test.mts',
+      'test/schema-source-coverage.test.mts',
+    ),
+    focusedBrowser: browser(),
+    specialised: specialised('schema-inventory', 'critical-mutation'),
+    browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'privacy-tooling-impact', area: 'privacy catalogue verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.startsWith('tools/privacy-data-flow-'),
+    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'),
+    focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'schema-inventory'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'public-product-tooling-impact', area: 'public product and capability verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => /^tools\/(?:capability|public-product)/u.test(value),
+    focusedUnit: unit('test/capability-manifest.test.mts', 'test/public-product-catalogue.test.mts'),
+    focusedBrowser: browser('e2e/capabilities.spec.ts', 'e2e/public-product-batch3.spec.ts'),
+    specialised: specialised('capability-catalogue', 'documentation'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'browser-build-tooling-impact', area: 'browser build and CI parity verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value === 'tools/ci-verification.mts'
+      || value === 'tools/frontend-build-integrity.mts'
+      || value === 'tools/frontend-loading-report.mts'
+      || value.startsWith('tools/playwright-')
+      || value === 'tools/verification-artifact-status.mts',
+    focusedUnit: unit(
+      'test/ci-workflow.test.mts',
+      'test/frontend-build-integrity.test.mts',
+      'test/frontend-loading-report.test.mts',
+    ),
+    focusedBrowser: browser(),
+    specialised: specialised('browser-timing-plan', 'workflow-closure'),
     browserRequired: false,
   }),
   Object.freeze({
@@ -209,9 +365,19 @@ const RULES: readonly OwnershipRule[] = Object.freeze([
   }),
   Object.freeze({
     id: 'privacy-documents', area: 'privacy and data-flow documentation', priority: 45,
-    matches: (value: string) => value === 'PRIVACY.md' || value.startsWith('docs/privacy-') || value.includes('privacy-data-flow'),
+    matches: (value: string) => value === 'PRIVACY.md' || value.startsWith('docs/privacy-'),
     focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'), focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
     specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'), browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'privacy-contract-impact', area: 'privacy contract and disclosure surfaces', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.includes('privacy-data-flow')
+      || value.startsWith('frontend/src/routes/(public)/privacy/'),
+    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-docs.test.mts'),
+    focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
+    specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'),
+    browserRequired: true,
   }),
   Object.freeze({
     id: 'workflow-definitions', area: 'hosted verification workflows', priority: 40,
@@ -284,11 +450,17 @@ function exactBrowserChecks(changedPath: string): readonly string[] {
   return Object.freeze([]);
 }
 
-function matchingRule(changedPath: string): OwnershipRule {
+function matchingRules(changedPath: string): readonly VerificationRule[] {
   const matches = RULES.filter((rule) => rule.matches(changedPath));
   if (!matches.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
-  const priority = Math.max(...matches.map((rule) => rule.priority));
-  const selected = matches.filter((rule) => rule.priority === priority);
+  return Object.freeze(matches);
+}
+
+function ownershipRule(changedPath: string, matches = matchingRules(changedPath)): VerificationRule {
+  const owners = matches.filter((rule) => !rule.impactOnly);
+  if (!owners.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
+  const priority = Math.max(...owners.map((rule) => rule.priority));
+  const selected = owners.filter((rule) => rule.priority === priority);
   if (selected.length !== 1) throw new TypeError(`Ambiguous verification ownership for ${changedPath}.`);
   return selected[0]!;
 }
@@ -304,19 +476,28 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
   const changedPaths = rawPaths.map(normaliseChangedPath);
   if (new Set(changedPaths).size !== changedPaths.length) throw new TypeError('Verification plan changed paths must not repeat.');
   const assignments = changedPaths.sort().map((changedPath): VerificationOwnershipAssignment => {
-    const rule = matchingRule(changedPath);
-    const focusedUnitChecks = uniqueSorted([...rule.focusedUnit.filter(existingTest), ...exactFocusedChecks(changedPath)]);
-    const focusedBrowserChecks = uniqueSorted([...rule.focusedBrowser.filter(existingTest), ...exactBrowserChecks(changedPath)]);
-    if (rule.browserRequired && focusedBrowserChecks.length === 0) {
+    const impacts = matchingRules(changedPath);
+    const owner = ownershipRule(changedPath, impacts);
+    const focusedUnitChecks = uniqueSorted([
+      ...impacts.flatMap((rule) => rule.focusedUnit).filter(existingTest),
+      ...exactFocusedChecks(changedPath),
+    ]);
+    const focusedBrowserChecks = uniqueSorted([
+      ...impacts.flatMap((rule) => rule.focusedBrowser).filter(existingTest),
+      ...exactBrowserChecks(changedPath),
+    ]);
+    const browserRequired = impacts.some((rule) => rule.browserRequired);
+    if (browserRequired && focusedBrowserChecks.length === 0) {
       throw new TypeError(`User-facing ownership for ${changedPath} has no focused browser check.`);
     }
     return Object.freeze({
       changedPath,
-      ownershipArea: rule.area,
+      ownershipArea: owner.area,
+      impactAreas: uniqueSorted(impacts.map((rule) => rule.area)),
       focusedUnitChecks,
       focusedBrowserChecks,
-      mandatorySpecialisedChecks: uniqueSorted(rule.specialised),
-      userFacingBrowserRequired: rule.browserRequired,
+      mandatorySpecialisedChecks: uniqueSorted(impacts.flatMap((rule) => rule.specialised)),
+      userFacingBrowserRequired: browserRequired,
     });
   });
   return Object.freeze({
@@ -324,6 +505,7 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
     changedPaths: Object.freeze(changedPaths),
     assignments: Object.freeze(assignments),
     ownershipAreas: uniqueSorted(assignments.map((item) => item.ownershipArea)),
+    impactAreas: uniqueSorted(assignments.flatMap((item) => item.impactAreas)),
     focusedUnitChecks: uniqueSorted(assignments.flatMap((item) => item.focusedUnitChecks)),
     focusedBrowserChecks: uniqueSorted(assignments.flatMap((item) => item.focusedBrowserChecks)),
     mandatorySpecialisedChecks: uniqueSorted(assignments.flatMap((item) => item.mandatorySpecialisedChecks)),
@@ -331,6 +513,7 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
     fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES,
     interpretation: Object.freeze([
       'Focused checks support iteration only and do not establish batch or release readiness.',
+      'Each path has one highest-priority owner while every matching impact contributes checks.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
     ]),
@@ -376,16 +559,21 @@ function readDependencyRuleNames(): readonly string[] {
 }
 
 export function checkVerificationOwnershipMap() {
-  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_OWNERSHIP_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
-    throw new TypeError('Verification ownership rules are missing, repeated, or unbounded.');
+  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
+    throw new TypeError('Verification rules are missing, repeated, or unbounded.');
   }
   const inventory = maintainedInventory();
-  const assignments = inventory.map((file) => matchingRule(file));
+  const assignments = inventory.map((file) => ownershipRule(file));
+  for (const rule of RULES.filter((candidate) => candidate.impactOnly)) {
+    if (!inventory.some((file) => rule.matches(file))) {
+      throw new TypeError(`Verification impact rule ${rule.id} does not match the maintained inventory.`);
+    }
+  }
   const schemaOwners = SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => [
     family.owner,
     ...('metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []),
   ]);
-  for (const owner of schemaOwners) matchingRule(normaliseChangedPath(owner));
+  for (const owner of schemaOwners) ownershipRule(normaliseChangedPath(owner));
   if (CAPABILITY_MANIFEST.capabilities.length < 1 || CAPABILITY_MANIFEST.cliOperations.length < 1
     || new Set(CAPABILITY_MANIFEST.capabilities.map((item) => item.id)).size !== CAPABILITY_MANIFEST.capabilities.length
     || new Set(CAPABILITY_MANIFEST.cliOperations.map((item) => item.command)).size !== CAPABILITY_MANIFEST.cliOperations.length) {
@@ -408,6 +596,7 @@ export function checkVerificationOwnershipMap() {
     maintainedFiles: inventory.length,
     assignedFiles: assignments.length,
     ownershipAreas: new Set(assignments.map((item) => item.area)).size,
+    impactAreas: new Set(inventory.flatMap((file) => matchingRules(file).map((rule) => rule.area))).size,
     schemaFamilies: SCHEMA_LIFECYCLE_REGISTRY.length,
     schemaOwnerPaths: new Set(schemaOwners).size,
     capabilities: CAPABILITY_MANIFEST.capabilities.length,
@@ -423,7 +612,7 @@ export function main(args = process.argv.slice(2)): number {
   try {
     if (args.length === 1 && args[0] === '--check') {
       const result = checkVerificationOwnershipMap();
-      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} areas; ${result.fullBatchReleaseGates} full gates retained.\n`);
+      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas; ${result.fullBatchReleaseGates} full gates retained.\n`);
       process.stdout.write(`Canonical closure: ${result.schemaFamilies} schema families, ${result.schemaOwnerPaths} owner paths, ${result.capabilities} capabilities, ${result.cliOperations} CLI operations, ${result.privacyProfiles} privacy profiles, ${result.privacyConsumerFlows} privacy consumer flows, ${result.blockingDependencyRules} blocking dependency rules.\n`);
       return 0;
     }

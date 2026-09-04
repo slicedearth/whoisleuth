@@ -293,6 +293,7 @@ describe('verification architecture contracts', () => {
       '.github/workflows/ci.yml',
     ];
     const plan = buildVerificationOwnershipPlan(paths);
+    assert.equal(plan.mapVersion, 2);
     assert.equal(plan.assignments.length, paths.length);
     assert.deepEqual(plan.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES);
     assert.ok(plan.focusedUnitChecks.length > 0);
@@ -309,6 +310,52 @@ describe('verification architecture contracts', () => {
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+  });
+
+  test('selects one owner while aggregating every matching verification impact', () => {
+    const plan = buildVerificationOwnershipPlan([
+      'packages/contracts/privacy-data-flow-catalogue.mts',
+      'tools/privacy-data-flow-catalogue-renderer.mts',
+      'tools/schema-lifecycle-repository.mts',
+      'tools/public-product-catalogue-renderer.mts',
+      'frontend/src/lib/components/LookupAtAGlance.svelte',
+    ]);
+    const byPath = new Map(plan.assignments.map((assignment) => [assignment.changedPath, assignment]));
+
+    const sharedPrivacy = byPath.get('packages/contracts/privacy-data-flow-catalogue.mts')!;
+    assert.equal(sharedPrivacy.ownershipArea, 'shared contracts and lifecycle metadata');
+    assert.deepEqual(sharedPrivacy.impactAreas, [
+      'portable domain packages',
+      'privacy contract and disclosure surfaces',
+      'shared contracts and lifecycle metadata',
+    ]);
+    assert.ok(sharedPrivacy.focusedUnitChecks.includes('test/schema-lifecycle-registry.test.mts'));
+    assert.ok(sharedPrivacy.focusedUnitChecks.includes('test/privacy-data-flow-catalogue.test.mts'));
+    assert.ok(sharedPrivacy.focusedBrowserChecks.includes('e2e/privacy-data-flow-catalogue.spec.ts'));
+
+    const privacyRenderer = byPath.get('tools/privacy-data-flow-catalogue-renderer.mts')!;
+    assert.equal(privacyRenderer.ownershipArea, 'maintainer verification tooling');
+    assert.ok(privacyRenderer.impactAreas.includes('privacy catalogue verification'));
+    assert.ok(privacyRenderer.impactAreas.includes('privacy contract and disclosure surfaces'));
+    assert.ok(privacyRenderer.mandatorySpecialisedChecks.includes('workflow-closure'));
+    assert.ok(privacyRenderer.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+
+    const schemaTool = byPath.get('tools/schema-lifecycle-repository.mts')!;
+    assert.ok(schemaTool.impactAreas.includes('schema inventory and lifecycle verification'));
+    assert.ok(schemaTool.focusedUnitChecks.includes('test/schema-lifecycle-repository.test.mts'));
+    assert.ok(schemaTool.mandatorySpecialisedChecks.includes('schema-inventory'));
+
+    const publicTool = byPath.get('tools/public-product-catalogue-renderer.mts')!;
+    assert.ok(publicTool.impactAreas.includes('public product and capability verification'));
+    assert.ok(publicTool.focusedBrowserChecks.includes('e2e/capabilities.spec.ts'));
+    assert.ok(publicTool.mandatorySpecialisedChecks.includes('capability-catalogue'));
+
+    const lookup = byPath.get('frontend/src/lib/components/LookupAtAGlance.svelte')!;
+    assert.equal(lookup.ownershipArea, 'frontend user-facing routes and components');
+    assert.ok(lookup.impactAreas.includes('Lookup analyst workflow'));
+    assert.ok(lookup.focusedBrowserChecks.includes('e2e/lookup-anchor-navigation.spec.ts'));
+    assert.ok(lookup.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(lookup.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
   test('consolidates a user-interface change into one bounded focused execution plan', () => {
@@ -328,7 +375,8 @@ describe('verification architecture contracts', () => {
     assert.ok(ids.includes('diff-whitespace'));
     assert.ok(execution.browserSpecs.includes('e2e/lookup-interaction-design.spec.ts'));
     assert.ok(execution.browserSpecs.includes('e2e/accessibility.spec.ts'));
-    assert.ok(execution.browserSpecs.includes('e2e/design-system.spec.ts'));
+    assert.ok(execution.browserSpecs.includes('e2e/lookup-anchor-navigation.spec.ts'));
+    assert.equal(execution.browserSpecs.includes('e2e/design-system.spec.ts'), false);
     assert.ok(!ids.includes('test:e2e:built'));
     assert.ok(!ids.includes('verification:ci'));
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
