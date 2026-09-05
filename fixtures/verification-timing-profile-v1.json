@@ -10,45 +10,10 @@
       "sampleCount": 1
     },
     {
-      "id": "browser-local-change-60400ba9",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-one-worker-no-retry",
-      "sampleBasis": "accepted-dashboard-and-guide-working-tree-based-on-60400ba9",
-      "sampleCount": 1
-    },
-    {
       "id": "browser-local-deferred-loading-20260901",
       "lane": "browser",
       "environmentClass": "local-darwin-arm64-chromium-node26-no-retry-production-build",
       "sampleBasis": "exact-deferred-interactions-and-recovery-production-build",
-      "sampleCount": 1
-    },
-    {
-      "id": "browser-local-batch2-20260823",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
-      "sampleBasis": "exact-analyst-operations-production-build-working-tree-based-on-ee5380c6",
-      "sampleCount": 1
-    },
-    {
-      "id": "browser-local-batch3-20260823",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
-      "sampleBasis": "exact-public-product-production-build-working-tree-based-on-f3525a48",
-      "sampleCount": 1
-    },
-    {
-      "id": "browser-local-e2e-split-20260901",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry",
-      "sampleBasis": "exact-one-hundred-moved-tests-and-auth-setup",
-      "sampleCount": 1
-    },
-    {
-      "id": "browser-local-monitoring-handoff-20260903",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node26-one-worker-no-retry-production-build",
-      "sampleBasis": "exact-mobile-case-monitor-recheck-production-build",
       "sampleCount": 1
     },
     {
@@ -57,148 +22,155 @@
       "environmentClass": "local-darwin-arm64-node24",
       "sampleBasis": "median-of-three-complete-unit-runs",
       "sampleCount": 3
+    },
+    {
+      "id": "browser-local-repair-20260905",
+      "lane": "browser",
+      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
+      "sampleBasis": "complete-balanced-production-build-four-shards",
+      "sampleCount": 4
     }
   ],
   "files": [
     {
       "file": "e2e/accessibility.spec.ts",
       "lane": "browser",
-      "weightMs": 21848,
+      "weightMs": 20918,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/analyst-context.spec.ts",
       "lane": "browser",
-      "weightMs": 2274,
+      "weightMs": 2680,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/analyst-operations.spec.ts",
       "lane": "browser",
-      "weightMs": 2889,
+      "weightMs": 3277,
       "sampleCount": 1,
-      "provenanceId": "browser-local-batch2-20260823"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/auth.setup.ts",
       "lane": "browser_setup",
-      "weightMs": 47,
-      "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "weightMs": 46,
+      "sampleCount": 4,
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/auth.spec.ts",
       "lane": "browser",
-      "weightMs": 4321,
+      "weightMs": 4767,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/brand-asset-register.spec.ts",
       "lane": "browser",
-      "weightMs": 4005,
+      "weightMs": 4748,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/brand-baseline.spec.ts",
       "lane": "browser",
-      "weightMs": 17400,
+      "weightMs": 22045,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/bulk-analysis.spec.ts",
       "lane": "browser",
-      "weightMs": 21440,
+      "weightMs": 19648,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/bulk-presentation.spec.ts",
       "lane": "browser",
-      "weightMs": 9031,
+      "weightMs": 9084,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/bulk-session-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 6867,
+      "weightMs": 6547,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/candidate-handoff.spec.ts",
       "lane": "browser",
-      "weightMs": 961,
+      "weightMs": 929,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/capabilities.spec.ts",
       "lane": "browser",
-      "weightMs": 811,
+      "weightMs": 892,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/case-brand-association.spec.ts",
       "lane": "browser",
-      "weightMs": 32079,
+      "weightMs": 34431,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/case-evidence-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 13200,
+      "weightMs": 13665,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/case-import-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 8753,
+      "weightMs": 7997,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/case-relationship-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 25231,
+      "weightMs": 26287,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/case-response-lifecycle.spec.ts",
       "lane": "browser",
-      "weightMs": 26709,
+      "weightMs": 21649,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/cases.spec.ts",
       "lane": "browser",
-      "weightMs": 30668,
+      "weightMs": 26836,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/collection-pagination.spec.ts",
       "lane": "browser",
-      "weightMs": 3340,
+      "weightMs": 4413,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/comparison-ledger.spec.ts",
       "lane": "browser",
-      "weightMs": 2361,
+      "weightMs": 2363,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/console-loading.spec.ts",
@@ -210,9 +182,9 @@
     {
       "file": "e2e/dashboard.spec.ts",
       "lane": "browser",
-      "weightMs": 22096,
+      "weightMs": 27350,
       "sampleCount": 1,
-      "provenanceId": "browser-local-change-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/deferred-interactions.spec.ts",
@@ -224,240 +196,240 @@
     {
       "file": "e2e/deferred-recovery.spec.ts",
       "lane": "browser",
-      "weightMs": 12374,
+      "weightMs": 8369,
       "sampleCount": 1,
-      "provenanceId": "browser-local-deferred-loading-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/deletion-focus.spec.ts",
       "lane": "browser",
-      "weightMs": 9794,
+      "weightMs": 10215,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/demo.spec.ts",
       "lane": "browser",
-      "weightMs": 8978,
+      "weightMs": 8853,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/design-system.spec.ts",
       "lane": "browser",
-      "weightMs": 17850,
+      "weightMs": 16859,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/discover.spec.ts",
       "lane": "browser",
-      "weightMs": 29508,
+      "weightMs": 30348,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/evidence-debt.spec.ts",
       "lane": "browser",
-      "weightMs": 4520,
+      "weightMs": 7120,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/hosted-monitoring.spec.ts",
       "lane": "browser",
-      "weightMs": 5926,
+      "weightMs": 7228,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/investigation-guide.spec.ts",
       "lane": "browser",
-      "weightMs": 22792,
+      "weightMs": 24381,
       "sampleCount": 1,
-      "provenanceId": "browser-local-change-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/investigation-search.spec.ts",
       "lane": "browser",
-      "weightMs": 9884,
+      "weightMs": 10530,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/local-data-platform.spec.ts",
       "lane": "browser",
-      "weightMs": 4942,
+      "weightMs": 5604,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-anchor-navigation.spec.ts",
       "lane": "browser",
-      "weightMs": 18849,
+      "weightMs": 18785,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-case-monitoring.spec.ts",
       "lane": "browser",
-      "weightMs": 3461,
+      "weightMs": 5186,
       "sampleCount": 1,
-      "provenanceId": "browser-local-monitoring-handoff-20260903"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-evidence-design.spec.ts",
       "lane": "browser",
-      "weightMs": 16543,
+      "weightMs": 11958,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-input.spec.ts",
       "lane": "browser",
-      "weightMs": 23518,
+      "weightMs": 25817,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-interaction-design.spec.ts",
       "lane": "browser",
-      "weightMs": 20029,
+      "weightMs": 18095,
       "sampleCount": 1,
-      "provenanceId": "browser-local-e2e-split-20260901"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-network-evidence.spec.ts",
       "lane": "browser",
-      "weightMs": 22073,
+      "weightMs": 23139,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-registration-evidence.spec.ts",
       "lane": "browser",
-      "weightMs": 32977,
+      "weightMs": 35204,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/lookup-replay.spec.ts",
       "lane": "browser",
-      "weightMs": 1597,
+      "weightMs": 1546,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/mail-report-workbench.spec.ts",
       "lane": "browser",
-      "weightMs": 2033,
+      "weightMs": 2282,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/mobile-nav.spec.ts",
       "lane": "browser",
-      "weightMs": 3779,
+      "weightMs": 3864,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/network-controls.spec.ts",
       "lane": "browser",
-      "weightMs": 3107,
+      "weightMs": 3393,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/origin-guard.spec.ts",
       "lane": "browser",
-      "weightMs": 88,
+      "weightMs": 102,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/parent-domain-campaign-scope.spec.ts",
       "lane": "browser",
-      "weightMs": 5886,
+      "weightMs": 5986,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/privacy-data-flow-catalogue.spec.ts",
       "lane": "browser",
-      "weightMs": 2001,
+      "weightMs": 910,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/public-contact.spec.ts",
       "lane": "browser",
-      "weightMs": 538,
+      "weightMs": 562,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/public-guide.spec.ts",
       "lane": "browser",
-      "weightMs": 3972,
+      "weightMs": 4160,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/public-product-batch3.spec.ts",
       "lane": "browser",
-      "weightMs": 3237,
+      "weightMs": 5849,
       "sampleCount": 1,
-      "provenanceId": "browser-local-batch3-20260823"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/registry-support.spec.ts",
       "lane": "browser",
-      "weightMs": 8383,
+      "weightMs": 7293,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/risk-calibration-dashboard.spec.ts",
       "lane": "browser",
-      "weightMs": 1491,
+      "weightMs": 1754,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/seo.spec.ts",
       "lane": "browser",
-      "weightMs": 340,
+      "weightMs": 378,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/shortlist-storage.spec.ts",
       "lane": "browser",
-      "weightMs": 829,
+      "weightMs": 881,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/skip-navigation.spec.ts",
       "lane": "browser",
-      "weightMs": 1190,
+      "weightMs": 1111,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/theme.spec.ts",
       "lane": "browser",
-      "weightMs": 9018,
+      "weightMs": 12211,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "e2e/watchlist-storage.spec.ts",
       "lane": "browser",
-      "weightMs": 2431,
+      "weightMs": 2447,
       "sampleCount": 1,
-      "provenanceId": "browser-local-start-60400ba9"
+      "provenanceId": "browser-local-repair-20260905"
     },
     {
       "file": "test/abort.test.mts",
