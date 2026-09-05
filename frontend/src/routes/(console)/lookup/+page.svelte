@@ -215,7 +215,7 @@
   const redactedComparisonCount=$derived(lookupAnalysis.redactedComparisonCount);
   const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
   const caseDomain=$derived(lookupAnalysis.caseDomain);
-  const caseObservationTarget=$derived(caseDomain);
+  const caseObservationTarget=$derived(String(result?.inputHostname||caseDomain).trim().toLowerCase());
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
   const pageDisplay=$derived(lookupAnalysis.pageDisplay);

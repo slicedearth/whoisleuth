@@ -158,12 +158,16 @@ export async function upsertProfile(raw: unknown, editingId = '', expectedUpdate
 export async function updateProfileFields(
   profileId: string,
   patch: BrandProfileFieldPatch,
+  expectedUpdatedAt: string | null = null,
 ): Promise<BrandProfile> {
   const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = profiles.findIndex((item) => item.id === profileId);
     const existing = index >= 0 ? profiles[index] : undefined;
     if (!existing) throw new Error('That Brand Profile no longer exists. It was not recreated.');
+    if (expectedUpdatedAt !== null && existing.updatedAt !== expectedUpdatedAt) {
+      throw new Error('That Brand Profile changed after this editor opened. Review the current values before saving again.');
+    }
     const normalized = applyBrandProfileFieldPatch(existing, patch) as BrandProfile;
     profiles[index] = normalized;
     const document = boundedProfiles(profiles);

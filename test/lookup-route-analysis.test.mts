@@ -87,7 +87,7 @@ describe('Lookup route analysis', () => {
     });
 
     assert.equal(analysis.caseDomain, 'example.test');
-    assert.equal(analysis.caseEvidence.inputHostname, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, 'portal.example.test');
     assert.equal(analysis.lookupEvidenceDepth, 'fast');
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:05:00.000Z');
     assert.equal(analysis.comparison.counts.conflict, 0);
@@ -158,7 +158,7 @@ describe('Lookup route analysis', () => {
     )));
   });
 
-  test('attributes Case evidence to the registrable target actually observed', () => {
+  test('does not invent submitted-hostname context when the response omits it', () => {
     const { inputHostname: _inputHostname, ...withoutInputHostname } = response();
     const result = withoutInputHostname as LookupHttpResponse;
     const analysis = buildLookupRouteAnalysis({
@@ -169,7 +169,7 @@ describe('Lookup route analysis', () => {
       completedLookupDepth: 'fast',
     });
     assert.equal(analysis.caseDomain, 'example.test');
-    assert.equal(analysis.caseEvidence.inputHostname, 'example.test');
+    assert.equal(analysis.caseEvidence.inputHostname, null);
   });
 
   test('keeps non-domain registry comparisons neutral and bounded', () => {

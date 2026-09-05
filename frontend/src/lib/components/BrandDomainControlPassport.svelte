@@ -18,7 +18,7 @@
 
   let { active, saveProfile }: {
     active: BrandProfile;
-    saveProfile: (profile: BrandProfile) => Promise<PersistenceResult>;
+    saveProfile: (profile: BrandProfile, expectedUpdatedAt: string) => Promise<PersistenceResult>;
   } = $props();
 
   const fieldLabels: Record<DomainControlPassportField, string> = {
@@ -142,8 +142,9 @@
       if (!choices.length || choices.every((choice) => !choice.fields.length)) {
         throw new Error('Select at least one configured field to import.');
       }
+      const expectedUpdatedAt = active.updatedAt;
       const nextProfile = await applyVerifiedDomainControlPassport(active, imported, choices);
-      const result = await saveProfile(nextProfile);
+      const result = await saveProfile(nextProfile, expectedUpdatedAt);
       if (!result.committed) {
         message = result.message;
         return;

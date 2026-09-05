@@ -543,10 +543,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     status: show(availability.state),
   };
   const caseEvidence = {
-    // Availability, DNS, HTTP, TLS and page observations are collected for
-    // caseDomain. Preserve that real observation scope in Case history rather
-    // than borrowing the separately retained submitted-hostname context.
-    inputHostname: caseDomain || null,
+    inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,
