@@ -4,6 +4,7 @@ import { caseNumber, caseTypeSummary } from '../../../../packages/cases/case-wor
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;
+export const MAX_CASE_LIFECYCLE_SOURCE_CASES = 500;
 
 export type CaseLifecycleCalendarKind = 'action_due' | 'action_follow_up' | 'observed_effect_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
 export type CaseLifecycleCalendarSource = 'case_action' | 'observed_effect_review' | 'evidence_history' | 'evidence_pin';
@@ -27,6 +28,14 @@ export type CaseLifecycleCalendarDisclosure = Readonly<{
   includeDomain?: boolean;
   includeRecipient?: boolean;
   includeContext?: boolean;
+}>;
+
+export type CaseLifecycleCalendarQuery = Readonly<{ kind?: unknown; window?: unknown }>;
+export type CaseLifecycleCalendarProjection = Readonly<{
+  events: readonly CaseLifecycleCalendarEvent[];
+  matchingCount: number;
+  omittedCount: number;
+  sourceCasesOmitted: number;
 }>;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -81,9 +90,9 @@ const EVENT_LABELS: Readonly<Record<CaseLifecycleCalendarKind, string>> = Object
   domain_expiry_review: 'Domain expiry evidence review',
 });
 
-export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
+function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
   const events: CaseLifecycleCalendarEvent[] = [];
-  for (const record of records.slice(0, 500)) {
+  for (const record of records.slice(0, MAX_CASE_LIFECYCLE_SOURCE_CASES)) {
     const caseContext = {
       caseReference: caseNumber(record.id),
       domain: record.domain,
@@ -190,15 +199,13 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
     }
   }
   return events
-    .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid))
-    .slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+    .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid));
 }
 
-export function filterCaseLifecycleEvents(
-  events: readonly CaseLifecycleCalendarEvent[],
-  options: { kind?: unknown; window?: unknown } = {},
+function lifecycleEventPredicate(
+  options: CaseLifecycleCalendarQuery,
   now: unknown = new Date().toISOString(),
-): CaseLifecycleCalendarEvent[] {
+): (event: CaseLifecycleCalendarEvent) => boolean {
   const kinds = new Set<CaseLifecycleCalendarKind>([
     'action_due',
     'action_follow_up',
@@ -220,14 +227,41 @@ export function filterCaseLifecycleEvents(
     : window === '90d'
       ? nowMs + 90 * 86_400_000
       : Number.POSITIVE_INFINITY;
-  return events.filter((event) => {
+  return (event) => {
     if (kind !== 'all' && event.kind !== kind) return false;
     const startsAt = Date.parse(event.startsAt);
     if (window === 'overdue') return startsAt < nowMs;
     if (window === 'future') return startsAt >= nowMs;
     if (window === '30d' || window === '90d') return startsAt >= nowMs && startsAt <= maximum;
     return true;
-  }).slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+  };
+}
+
+export function projectCaseLifecycleEvents(
+  records: readonly CaseRecord[],
+  options: CaseLifecycleCalendarQuery = {},
+  now: unknown = new Date().toISOString(),
+): CaseLifecycleCalendarProjection {
+  const matching = collectCaseLifecycleEvents(records).filter(lifecycleEventPredicate(options, now));
+  const events = matching.slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+  return Object.freeze({
+    events: Object.freeze(events),
+    matchingCount: matching.length,
+    omittedCount: matching.length - events.length,
+    sourceCasesOmitted: Math.max(0, records.length - MAX_CASE_LIFECYCLE_SOURCE_CASES),
+  });
+}
+
+export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
+  return [...projectCaseLifecycleEvents(records, { window: 'all' }, new Date(0).toISOString()).events];
+}
+
+export function filterCaseLifecycleEvents(
+  events: readonly CaseLifecycleCalendarEvent[],
+  options: CaseLifecycleCalendarQuery = {},
+  now: unknown = new Date().toISOString(),
+): CaseLifecycleCalendarEvent[] {
+  return events.filter(lifecycleEventPredicate(options, now)).slice(0, MAX_CASE_LIFECYCLE_EVENTS);
 }
 
 export function serializeCaseLifecycleCalendarEvents(

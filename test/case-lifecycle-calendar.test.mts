@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   buildCaseLifecycleEvents,
   filterCaseLifecycleEvents,
+  projectCaseLifecycleEvents,
   serializeCaseLifecycleCalendar,
   serializeCaseLifecycleCalendarEvents,
 } from '../frontend/src/lib/analysis/case-lifecycle-calendar.ts';
@@ -160,4 +161,50 @@ describe('case lifecycle calendar', () => {
     assert.doesNotMatch(hostileCalendar, /\r(?!\n)/u);
     assert.doesNotMatch(hostileCalendar, /\rX-INJECTED/iu);
   });
+});
+
+test('filters before applying the bounded event view and reports omissions', () => {
+  const action = (id: string, dueAt: string, followUpAt: string | null) => ({
+    id,
+    type: 'internal_review',
+    recipient: 'Internal review',
+    contactSource: 'Analyst supplied',
+    contactLimitations: [],
+    dueAt,
+    state: 'drafting',
+    reference: null,
+    followUpAt,
+    providerOutcome: null,
+    outcome: null,
+    originActionId: null,
+    history: [],
+    historyOmitted: 0,
+    historyLimitations: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    metadataUpdatedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+  const past = Array.from({ length: 250 }, (_, index) => normalizeCase({
+    id: `past-${index}`,
+    domain: `past-${index}.example`,
+    actions: [action(`past-action-${index}`, '2026-01-02T00:00:00.000Z', '2026-01-03T00:00:00.000Z')],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })).filter((record): record is NonNullable<typeof record> => Boolean(record));
+  const future = normalizeCase({
+    id: 'future-case',
+    domain: 'future.example',
+    actions: [action('future-action', '2026-12-01T00:00:00.000Z', null)],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+  assert.ok(future);
+  const records = [...past, future];
+  const upcoming = projectCaseLifecycleEvents(records, { window: 'future' }, '2026-06-01T00:00:00.000Z');
+  assert.deepEqual(upcoming.events.map((event) => event.caseId), ['future-case']);
+  assert.equal(upcoming.omittedCount, 0);
+  const all = projectCaseLifecycleEvents(records, { window: 'all' }, '2026-06-01T00:00:00.000Z');
+  assert.equal(all.events.length, 500);
+  assert.equal(all.matchingCount, 501);
+  assert.equal(all.omittedCount, 1);
 });

@@ -2,8 +2,7 @@
   import type { CaseRecord } from '$lib/cases';
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
   import {
-    buildCaseLifecycleEvents,
-    filterCaseLifecycleEvents,
+    projectCaseLifecycleEvents,
     serializeCaseLifecycleCalendarEvents,
   } from '$lib/analysis/case-lifecycle-calendar.ts';
 
@@ -15,10 +14,14 @@
   let includeDomain = $state(false);
   let includeRecipient = $state(false);
   let includeContext = $state(false);
+  let eventPage = $state(1);
+  const eventPageSize = 24;
   const routeReview = $derived(buildDisclosureRouteReview(records));
-  const events = $derived(buildCaseLifecycleEvents(records));
-  const visibleEvents = $derived(filterCaseLifecycleEvents(events, { kind, window }));
-  const selectedEvents = $derived(events.filter((event) => selectedEventIds.includes(event.uid)));
+  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window }));
+  const visibleEvents = $derived(eventProjection.events);
+  const eventPageCount = $derived(Math.max(1, Math.ceil(visibleEvents.length / eventPageSize)));
+  const pagedEvents = $derived(visibleEvents.slice((eventPage - 1) * eventPageSize, eventPage * eventPageSize));
+  const selectedEvents = $derived(visibleEvents.filter((event) => selectedEventIds.includes(event.uid)));
   const visibleSelectedCount = $derived(visibleEvents.filter((event) => selectedEventIds.includes(event.uid)).length);
 
   function selectVisibleEvents() {
@@ -30,6 +33,16 @@
       ? [...new Set([...selectedEventIds, uid])]
       : selectedEventIds.filter((value) => value !== uid);
   }
+
+  $effect(() => {
+    kind;
+    window;
+    eventPage = 1;
+  });
+
+  $effect(() => {
+    if (eventPage > eventPageCount) eventPage = eventPageCount;
+  });
 
   function downloadCalendar() {
     if (!selectedEvents.length) return;
@@ -82,14 +95,15 @@
   </div>
   {#if visibleEvents.length}
     <ol class="timeline" aria-label="Browser-local lifecycle review timeline">
-      {#each visibleEvents.slice(0, 24) as event}
+      {#each pagedEvents as event}
         <li>
           <label class="event-select"><input type="checkbox" checked={selectedEventIds.includes(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select ${event.summary}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleDateString()}</time></label>
           <div><strong>{event.summary}</strong><p>{event.description}</p><small>{event.sourceLabel}</small><a href={`/monitor?view=cases&case=${encodeURIComponent(event.caseId)}`}>Open {event.domain}</a></div>
         </li>
       {/each}
     </ol>
-    {#if visibleEvents.length > 24}<p class="note">Showing the next 24 of {visibleEvents.length} matching browser-local review events. Export includes all {events.length} retained events.</p>{/if}
+    <div class="event-pages" aria-label="Lifecycle event pages"><button class="btn small" type="button" onclick={() => eventPage = Math.max(1, eventPage - 1)} disabled={eventPage === 1}>Previous</button><span>Page {eventPage} of {eventPageCount}</span><button class="btn small" type="button" onclick={() => eventPage = Math.min(eventPageCount, eventPage + 1)} disabled={eventPage === eventPageCount}>Next</button></div>
+    <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} retained matching browser-local review events. Export includes only the {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this bounded matching view.{eventProjection.omittedCount ? ` ${eventProjection.omittedCount} additional matching event${eventProjection.omittedCount === 1 ? ' was' : 's were'} omitted by the ${visibleEvents.length}-event view bound.` : ''}{eventProjection.sourceCasesOmitted ? ` ${eventProjection.sourceCasesOmitted} Case${eventProjection.sourceCasesOmitted === 1 ? ' was' : 's were'} outside the bounded source population.` : ''}</p>
   {:else}
     <p class="empty">No lifecycle review events match these filters.</p>
   {/if}
@@ -121,7 +135,7 @@
   .route-grid article>div{display:flex;justify-content:space-between;gap:8px}.route-grid strong,.route-grid small{overflow-wrap:anywhere}
   .route-grid span{color:var(--accent2);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.route-grid span.due{color:var(--amber)}
   .route-grid p,.route-grid small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.route-grid a{display:inline-block;margin-top:8px;font-size:var(--text-xs)}
-  .message{color:var(--accent);font-size:var(--text-xs)}.empty,.note,.limitations{color:var(--muted);font-size:var(--text-xs)}.limitations{margin:0;padding-left:18px}
+  .message{color:var(--accent);font-size:var(--text-xs)}.empty,.note,.limitations{color:var(--muted);font-size:var(--text-xs)}.limitations{margin:0;padding-left:18px}.event-pages{display:flex;align-items:center;justify-content:flex-end;gap:8px}.event-pages span{color:var(--muted);font:650 var(--text-xs) var(--mono)}
   .timeline-filters{display:flex;flex-wrap:wrap;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md)}.timeline-filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .calendar-selection{display:grid;gap:8px}.selection-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.selection-actions span{color:var(--muted);font:650 var(--text-xs) var(--mono)}.calendar-privacy{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.calendar-privacy>summary{padding:11px 13px;font:650 var(--text-xs) var(--mono)}.calendar-privacy fieldset{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0;padding:12px 13px;border:0;border-top:1px solid var(--border)}.calendar-privacy legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.calendar-privacy label{display:flex;align-items:flex-start;gap:7px;color:var(--text);font-size:var(--text-xs)}.calendar-privacy input{margin-top:2px}.calendar-privacy p{margin:0;padding:0 13px 13px;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .timeline{display:grid;gap:0;padding:0;margin:0;list-style:none}.timeline li{display:grid;grid-template-columns:minmax(118px,150px) minmax(0,1fr);gap:14px;padding:11px 0;border-top:1px solid var(--border)}.timeline li:first-child{border-top:0}.event-select{display:flex;align-items:flex-start;gap:8px;cursor:pointer}.event-select input{margin-top:1px}.timeline time{color:var(--accent2);font:650 var(--text-xs) var(--mono)}.timeline strong,.timeline p,.timeline small,.timeline a{display:block;overflow-wrap:anywhere}.timeline p,.timeline small{margin-top:4px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.timeline a{margin-top:6px;font-size:var(--text-xs)}
