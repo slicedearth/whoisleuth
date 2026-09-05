@@ -292,8 +292,37 @@ export function canonicalMxRecord(value: unknown): string {
   return exchange(candidate);
 }
 
-function caaValue(value: unknown): string {
-  return recordText(value, MAX_DOMAIN_CONTROL_CAA_VALUE_LENGTH).replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/u, '$1$2').trim().toLowerCase();
+function caaValue(value: unknown, tag: string): string {
+  const candidate = recordText(value, MAX_DOMAIN_CONTROL_CAA_VALUE_LENGTH)
+    .replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/u, '$1$2').trim();
+  if (!candidate) return '';
+  if (tag === 'issue' || tag === 'issuewild') {
+    const [issuer = '', ...parameters] = candidate.split(';');
+    const normalizedIssuer = issuer.trim().toLowerCase().replace(/\.$/u, '');
+    return [normalizedIssuer, ...parameters.map((parameter) => parameter.trim())].join('; ');
+  }
+  const scheme = /^([a-z][a-z0-9+.-]*):(.*)$/isu.exec(candidate);
+  if (!scheme) return candidate;
+  const normalizedScheme = scheme[1]!.toLowerCase();
+  if (normalizedScheme === 'http' || normalizedScheme === 'https') {
+    try {
+      const url = new URL(candidate);
+      url.protocol = normalizedScheme;
+      url.hostname = url.hostname.toLowerCase();
+      return url.toString();
+    } catch {
+      return candidate;
+    }
+  }
+  if (normalizedScheme === 'mailto') {
+    const [address = '', ...query] = scheme[2]!.split('?');
+    const at = address.lastIndexOf('@');
+    const normalizedAddress = at > 0
+      ? `${address.slice(0, at)}@${address.slice(at + 1).toLowerCase()}`
+      : address;
+    return `${normalizedScheme}:${normalizedAddress}${query.length ? `?${query.join('?')}` : ''}`;
+  }
+  return `${normalizedScheme}:${scheme[2]}`;
 }
 
 export function canonicalCaaRecord(value: unknown): string {
@@ -301,7 +330,7 @@ export function canonicalCaaRecord(value: unknown): string {
   if (item) {
     const flags = canonicalIntegerAlias(item, ['critical', 'flags'], MAX_DOMAIN_CONTROL_CAA_FLAGS, 'Domain control CAA flags', 0);
     const tag = recordText(item.tag, MAX_DOMAIN_CONTROL_CAA_TAG_LENGTH).toLowerCase();
-    const payload = caaValue(item.value);
+    const payload = caaValue(item.value, tag);
     return flags !== null && /^(?:issue|issuewild|iodef)$/u.test(tag) && payload
       ? `${flags} ${tag} ${payload}`
       : '';
@@ -311,7 +340,7 @@ export function canonicalCaaRecord(value: unknown): string {
   if (!match) return '';
   const flags = recordInteger(match[1], MAX_DOMAIN_CONTROL_CAA_FLAGS);
   const tag = match[2]?.toLowerCase() ?? '';
-  const payload = caaValue(match[3]);
+  const payload = caaValue(match[3], tag);
   return flags !== null && payload ? `${flags} ${tag} ${payload}` : '';
 }
 
@@ -526,7 +555,8 @@ function hostnames(value: unknown): string[] {
 }
 
 function digest(value: unknown): string | null {
-  const candidate = text(value, DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH)?.toLowerCase() ?? '';
+  if (typeof value !== 'string' || CONTROL_RE.test(value)) return null;
+  const candidate = value.trim().toLowerCase();
   return SPKI_DIGEST_PATTERN.test(candidate) ? candidate : null;
 }
 
@@ -535,6 +565,12 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
   const source = value as Record<string, unknown>;
   const domain = domainControlName(source.domain);
   if (!domain) return null;
+  const tlsSpkiSha256 = digest(source.tlsSpkiSha256);
+  if (source.tlsSpkiSha256 !== undefined && source.tlsSpkiSha256 !== null
+    && (typeof source.tlsSpkiSha256 !== 'string' || source.tlsSpkiSha256.trim())
+    && !tlsSpkiSha256) {
+    throw new TypeError('Domain control TLS public-key fingerprint must be exactly 64 hexadecimal characters.');
+  }
   return Object.freeze({
     domain,
     nameservers: Object.freeze(hostnames(source.nameservers)),
@@ -542,7 +578,7 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
     mx: Object.freeze(canonicalDomainControlRecordList(source.mx, 'mx')),
     caa: Object.freeze(canonicalDomainControlRecordList(source.caa, 'caa')),
     tlsIssuer: text(source.tlsIssuer, MAX_DOMAIN_CONTROL_TEXT_LENGTH)?.toLowerCase() ?? null,
-    tlsSpkiSha256: digest(source.tlsSpkiSha256),
+    tlsSpkiSha256,
     registrarLock: source.registrarLock === 'required' || source.registrarLock === 'not_required'
       ? source.registrarLock
       : null,

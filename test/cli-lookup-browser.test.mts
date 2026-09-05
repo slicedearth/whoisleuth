@@ -176,6 +176,24 @@ describe('lookup terminal evidence browser', () => {
     assert.doesNotMatch(terminal, /must-not-render|privateCertificateBytes/u);
   });
 
+  test('keeps every canonical verbose formatter section reachable and searchable', () => {
+    const document = lookupDocument();
+    Reflect.set(document, 'sslbl', {
+      status: 'success', complete: true, truncated: false, match: false,
+      observedAt: document.generatedAt,
+    });
+    const terminalHeadings = formatTerminalLookup(document, { detail: 'verbose' })
+      .split('\n')
+      .filter((line) => line.endsWith(':'))
+      .map((line) => line.slice(0, -1));
+    const panels = buildLookupBrowserPanels(document);
+    assert.equal(terminalHeadings.length, 10);
+    assert.deepEqual(panels.map((panel) => panel.label), terminalHeadings);
+    assert.equal(panels.at(-1)?.label, 'Collection');
+    const matches = findLookupBrowserMatches(panels, document.generatedAt);
+    assert.ok(matches.matches.some((match) => panels[match.panelIndex]?.label === 'Collection'));
+  });
+
   test('discloses record and collection truncation while removing terminal direction controls', () => {
     const document = lookupDocument();
     document.availability.dns.records.a = Array.from({ length: 100 }, (_, index) => `192.0.2.${index}`);

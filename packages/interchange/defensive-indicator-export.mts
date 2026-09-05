@@ -241,8 +241,8 @@ function formatRpz(domains: readonly string[], generatedAt: string, includeWildc
     `@ IN SOA localhost. root.localhost. (${serial} 60 60 60 60)`,
     '@ IN NS localhost.',
     ...domains.flatMap((domain) => [
-      `${domain}. CNAME .`,
-      ...(includeWildcards ? [`*.${domain}. CNAME .`] : []),
+      `${domain} CNAME .`,
+      ...(includeWildcards ? [`*.${domain} CNAME .`] : []),
     ]),
   ].join('\n');
 }

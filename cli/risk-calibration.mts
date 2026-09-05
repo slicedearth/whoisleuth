@@ -417,9 +417,7 @@ function metricsForThreshold(records: readonly CalibrationScoredRecord[], thresh
     recall,
     specificity,
     falsePositiveRate: ratio(falsePositive, falsePositive + trueNegative),
-    f1: precision === null || recall === null || precision + recall === 0
-      ? null
-      : Number(((2 * precision * recall) / (precision + recall)).toFixed(4)),
+    f1: ratio(2 * truePositive, 2 * truePositive + falsePositive + falseNegative),
     balancedAccuracy: recall === null || specificity === null
       ? null
       : Number(((recall + specificity) / 2).toFixed(4)),
@@ -543,7 +541,8 @@ export function buildRiskCalibrationReport(
       const current = records[index];
       if (!source || !current) continue;
       const previous = options.explainPreviousRiskScore(scoringEvidence(source));
-      if (previous?.score !== current.score) scoresChanged += 1;
+      const previousScore = previous?.score ?? null;
+      if (previousScore !== current.score) scoresChanged += 1;
       if (scoreBand(previous?.score ?? null) !== current.band) bandsChanged += 1;
       if (((previous?.score ?? -1) >= options.reviewThreshold) !== ((current.score ?? -1) >= options.reviewThreshold)) {
         thresholdClassificationsChanged += 1;

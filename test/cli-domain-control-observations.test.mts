@@ -63,6 +63,17 @@ describe('CLI domain-control observations', () => {
     assert.doesNotMatch(JSON.stringify(observation), /raw|query/iu);
   });
 
+  test('does not relabel registry DS metadata as a DNS delegation observation', () => {
+    const value = lookup();
+    value.rdap.parsed.dsData = [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }];
+    delete (value.availability.dns as Record<string, unknown>).delegation;
+    const observation = domainControlObservationFromSavedLookup(parseSavedLookupDocument(JSON.stringify(value)));
+    const delegation = observation.fields.find((field) => field.id === 'delegation_ds');
+    assert.deepEqual(delegation, {
+      id: 'delegation_ds', source: 'DNS delegation', state: 'unavailable', values: [],
+    });
+  });
+
   test('rejects non-finite saved evidence numbers before parsing', () => {
     for (const value of ['1e400', '-1e400']) {
       const raw = JSON.stringify(lookup()).replace('"registrar":', `"numericExtension":${value},"registrar":`);

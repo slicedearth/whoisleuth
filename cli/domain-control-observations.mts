@@ -165,7 +165,7 @@ export function domainControlObservationFromSavedLookup(document: SavedLookupDoc
     field('registry_nameservers', 'Registry RDAP', rdapState, list(rdapParsed.nameservers, hostname)),
     field('whois_nameservers', 'WHOIS', diagnostic(document, 'whois'), list(record(record(document.whois).parsed).nameservers, hostname)),
     field('delegated_nameservers', 'DNS', dnsState, list(dnsRecords.ns, hostname)),
-    field('delegation_ds', 'DNS delegation', state(delegation.status ?? dns.status), list(delegationRecords.ds ?? rdapParsed.dsData, dsValue)),
+    field('delegation_ds', 'DNS delegation', state(delegation.status), list(delegationRecords.ds, dsValue)),
     field('mail_exchangers', 'DNS', dnsState, list(dnsRecords.mx, mxValue)),
     field('caa_policy', 'DNS', dnsState, list(record(dns.caaPolicy).records ?? dnsRecords.caa, caaValue)),
     field('tls_certificate', 'TLS', tlsState, list([certificate.fingerprintSha256 ?? tls.fingerprintSha256], (item) => text(item, 128))),

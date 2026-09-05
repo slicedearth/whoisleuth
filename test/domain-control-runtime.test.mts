@@ -34,7 +34,9 @@ import {
 } from '../packages/contracts/domain-control-manifest.mts';
 import { MAX_DOMAIN_NAME_LENGTH } from '../packages/contracts/domain-name.mts';
 import {
+  DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   buildDomainControlManifest,
+  reviewDomainControlManifest,
   verifyDomainControlManifest,
 } from '../lib/domain-control-manifest.mts';
 import { verifyDomainControlPassport } from '../frontend/src/lib/analysis/domain-control-passport.ts';
@@ -229,6 +231,14 @@ describe('pure domain-control runtime ownership', () => {
     assert.equal(canonicalMxRecord({ exchange: 'MAIL.EXAMPLE.TEST.', host: 'mail.example.test', priority: 10, preference: '10' }), '10 mail.example.test');
     assert.equal(canonicalMxRecord({ exchange: null, host: 'mail.example.test', priority: null, preference: 10 }), '10 mail.example.test');
     assert.equal(canonicalCaaRecord({ tag: 'ISSUE', value: 'ca.example' }), '0 issue ca.example');
+    assert.equal(
+      canonicalCaaRecord({ tag: 'IODEF', value: 'HTTPS://Reports.Example.Test/CaseReport?Token=AbC' }),
+      '0 iodef https://reports.example.test/CaseReport?Token=AbC',
+    );
+    assert.equal(
+      canonicalCaaRecord({ tag: 'issue', value: 'CA.Example.Test; account=CaseSensitive' }),
+      '0 issue ca.example.test; account=CaseSensitive',
+    );
     assert.equal(canonicalCaaRecord({ critical: 0, flags: '0', tag: 'issue', value: 'ca.example' }), '0 issue ca.example');
     assert.equal(canonicalDsRecord({ keyTag: 12_345, key_tag: '12345', algorithm: 13, digestType: 2, digest_type: '2', digest: 'ABCDEF' }), '12345 13 2 abcdef');
 
@@ -237,6 +247,50 @@ describe('pure domain-control runtime ownership', () => {
     assert.throws(() => canonicalCaaRecord({ critical: 0, flags: 1, tag: 'issue', value: 'ca.example' }), /aliases must resolve/iu);
     assert.throws(() => canonicalDsRecord({ keyTag: 1, key_tag: 2, algorithm: 13, digestType: 2, digest: 'abcdef' }), /aliases must resolve/iu);
     assert.throws(() => canonicalDsRecord({ keyTag: 1, algorithm: 13, digestType: 2, digest_type: 'x', digest: 'abcdef' }), /aliases must resolve/iu);
+  });
+
+  test('preserves case-sensitive CAA data through manifest verification and review', () => {
+    const manifest = buildDomainControlManifest(input({
+      domain: 'example.test',
+      caa: ['0 iodef HTTPS://Reports.Example.Test/CaseReport', '0 issue CA.Example.Test; account=CaseSensitive'],
+    }), GENERATED_AT);
+    assert.deepEqual(manifest.entries[0]?.caa, [
+      '0 iodef https://reports.example.test/CaseReport',
+      '0 issue ca.example.test; account=CaseSensitive',
+    ]);
+    assert.deepEqual(verifyDomainControlManifest(structuredClone(manifest)), manifest);
+    const review = reviewDomainControlManifest({
+      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+      version: 1,
+      manifest,
+      observations: [{
+        domain: 'example.test',
+        fields: {
+          caa: {
+            state: 'observed',
+            values: ['0 iodef https://REPORTS.EXAMPLE.TEST/casereport', '0 issue ca.example.test; account=casesensitive'],
+            source: 'saved DNS evidence',
+            observedAt: GENERATED_AT,
+          },
+        },
+      }],
+    }, GENERATED_AT);
+    assert.equal(review.domains[0]?.comparisons.find((item) => item.field === 'caa')?.state, 'drift');
+  });
+
+  test('validates the complete desired TLS public-key fingerprint before normalising case', () => {
+    const valid = buildDomainControlManifest(input({
+      domain: 'example.test', tlsSpkiSha256: 'A'.repeat(64),
+    }), GENERATED_AT);
+    assert.equal(valid.entries[0]?.tlsSpkiSha256, 'a'.repeat(64));
+    assert.equal(buildDomainControlManifest(input({ domain: 'example.test', tlsSpkiSha256: '' }), GENERATED_AT).entries[0]?.tlsSpkiSha256, null);
+    assert.equal(buildDomainControlManifest(input({ domain: 'example.test', tlsSpkiSha256: null }), GENERATED_AT).entries[0]?.tlsSpkiSha256, null);
+    for (const malformed of ['a'.repeat(63), 'a'.repeat(65), `${'a'.repeat(63)}z`]) {
+      assert.throws(
+        () => buildDomainControlManifest(input({ domain: 'example.test', tlsSpkiSha256: malformed }), GENERATED_AT),
+        /exactly 64 hexadecimal/iu,
+      );
+    }
   });
 
   test('accepts ordinary structured data and rejects non-ordinary record shapes without invoking values', () => {
