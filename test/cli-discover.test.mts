@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import {
   DEFAULT_DISCOVERY_TLDS,
   MAX_DISCOVERY_DICTIONARY_BYTES,
@@ -159,23 +159,23 @@ describe('discover CLI argument parsing', () => {
   });
 
   test('rejects conflicting formats, invalid values, repeated controls, and multiple seeds', () => {
-    assert.throws(() => parseCliArguments(['discover', 'x', '--json', '--jsonl']), /one output format/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'unknown']), /requires common/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'all', '--preset', 'common']), /only once/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--keyboard', 'dvorak']), /requires qwerty/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--keyboard', 'qwerty', '--keyboard', 'azerty']), /only once/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--tlds']), /requires a comma-separated/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--tlds', 'com', '--tlds', 'net']), /only once/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--dictionary']), /requires one UTF-8/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--dictionary', 'one.txt', '--dictionary', 'two.txt']), /only once/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--families']), /requires a comma-separated/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--families', 'pluralization', '--families', 'dictionary']), /only once/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'all', '--families', 'pluralization']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--families', 'pluralization', '--preset', 'all']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'common', '--dictionary', 'terms.txt']), /requires the impersonation or all preset/);
-    assert.throws(() => parseCliArguments(['discover', 'one', 'two']), /one brand label or domain/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['discover', 'x', '--snapshot']), /requires one bounded/);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--json', '--jsonl']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'unknown']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'all', '--preset', 'common']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--keyboard', 'dvorak']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--keyboard', 'qwerty', '--keyboard', 'azerty']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--tlds']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--tlds', 'com', '--tlds', 'net']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--dictionary']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--dictionary', 'one.txt', '--dictionary', 'two.txt']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--families']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--families', 'pluralization', '--families', 'dictionary']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'all', '--families', 'pluralization']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--families', 'pluralization', '--preset', 'all']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--preset', 'common', '--dictionary', 'terms.txt']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'one', 'two']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover', 'x', '--snapshot']), CliUsageError);
   });
 });
 

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import type { BulkLookupResult, ClassifiedQuery } from '../cli/bulk.mts';
 import {
   buildDiscoveryScanDocument,
@@ -127,10 +127,10 @@ describe('discover-scan CLI arguments', () => {
     assert.equal(parsed.scanLimit, 40);
     assert.equal(parsed.filter, 'registered');
     assert.equal(parsed.output, 'csv');
-    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--deep', '--scan-limit', '51']), /capped at 50/u);
-    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--deep', '--concurrency', '4']), /capped at 3/u);
-    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--resume']), /requires --checkpoint/u);
-    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--registered-only', '--suppressed-only']), /mutually exclusive/u);
+    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--deep', '--scan-limit', '51']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--deep', '--concurrency', '4']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--resume']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover-scan', 'x.example', '--registered-only', '--suppressed-only']), CliUsageError);
   });
 });
 

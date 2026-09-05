@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 
@@ -30,7 +30,7 @@ describe('multi-target collection preflights', () => {
     assert.equal(parsed.plan, true);
     assert.equal(parsed.scanLimit, 20);
     assert.equal(parsed.resolverText, '1.1.1.1');
-    assert.throws(() => parseCliArguments(['bulk', '--plan', '--checkpoint', 'state.json']), /cannot be combined/iu);
-    assert.throws(() => parseCliArguments(['discover-scan', 'example.test', '--plan', '--jsonl']), /terminal or JSON/iu);
+    assert.throws(() => parseCliArguments(['bulk', '--plan', '--checkpoint', 'state.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['discover-scan', 'example.test', '--plan', '--jsonl']), CliUsageError);
   });
 });

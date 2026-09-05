@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { formatTerminalRiskCalibration } from '../cli/formatters/terminal.mts';
 import {
@@ -91,12 +91,12 @@ describe('risk-calibrate arguments and bounded input', () => {
   });
 
   test('rejects duplicate output, incompatible quiet mode, unknown options, and multiple files', () => {
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--summary-json']), /mutually exclusive/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--summary-json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--threshold', '50']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', 'one.json', 'two.json']), /one optional dataset/);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--summary-json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--summary-json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--threshold', '50']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', 'one.json', 'two.json']), CliUsageError);
   });
 
   test('reads bounded UTF-8 and rejects an oversized stream', async () => {

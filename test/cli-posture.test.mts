@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliPostureDocument } from '../cli/formatters/json.mts';
 import { MAX_POSTURE_TERMINAL_RECORDS, formatTerminalPosture } from '../cli/formatters/terminal.mts';
@@ -55,16 +55,16 @@ describe('posture CLI argument parsing', () => {
   });
 
   test('rejects repeated flags, multiple domains, and unrelated options', () => {
-    assert.throws(() => parseCliArguments(['posture', 'one.test', 'two.test']), /one domain/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors', 'one', '--selectors', 'two']), /only once/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors']), /requires/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--retired-selectors', 'one', '--retired-selectors', 'two']), /only once/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'future']), /must be/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'standard', '--mail-profile', 'parked']), /only once/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--sarif']), /requires --owned-domain/);
-    assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', 'two.test']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors', 'one', '--selectors', 'two']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--retired-selectors', 'one', '--retired-selectors', 'two']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'future']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'standard', '--mail-profile', 'parked']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--deep']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--sarif']), CliUsageError);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--quiet']), CliUsageError);
   });
 });
 

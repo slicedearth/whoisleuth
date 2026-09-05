@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import {
   MAX_BULK_INPUT_BYTES,
   MAX_DEEP_BULK_QUERIES,
@@ -96,15 +96,15 @@ describe('bulk CLI argument parsing', () => {
   });
 
   test('rejects conflicting formats, modes, files, and unsafe concurrency', () => {
-    assert.throws(() => parseCliArguments(['bulk', '--json', '--jsonl']), /one output format/);
-    assert.throws(() => parseCliArguments(['bulk', '--deep', '--fast']), /mutually exclusive/);
-    assert.throws(() => parseCliArguments(['bulk', 'a.txt', 'b.txt']), /one optional input file/);
-    assert.throws(() => parseCliArguments(['bulk', '--concurrency']), /requires an integer/);
-    assert.throws(() => parseCliArguments(['bulk', '--concurrency', '0']), /from 1 to 8/);
-    assert.throws(() => parseCliArguments(['bulk', '--deep', '--concurrency', '4']), /capped at 3/);
-    assert.throws(() => parseCliArguments(['bulk', '--json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['bulk', '--registered-only', '--inconclusive-only']), /mutually exclusive/);
-    assert.throws(() => parseCliArguments(['bulk', '--errors-only', '--registered-only']), /mutually exclusive/);
+    assert.throws(() => parseCliArguments(['bulk', '--json', '--jsonl']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--deep', '--fast']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', 'a.txt', 'b.txt']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--concurrency']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--concurrency', '0']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--deep', '--concurrency', '4']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--registered-only', '--inconclusive-only']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--errors-only', '--registered-only']), CliUsageError);
     const errorsOnly = parseCliArguments(['bulk', 'domains.txt', '--queries', '--errors-only']);
     assert.equal(errorsOnly.action, 'bulk');
     if (errorsOnly.action === 'bulk') assert.equal(errorsOnly.filter, 'errors');

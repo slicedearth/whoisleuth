@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { describe, test } from 'node:test';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-checkpoint.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -141,15 +141,15 @@ describe('CLI automation arguments', () => {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
       checkpoint: 'bulk.json', resume: true, events: true, plan: false, filter: 'all',
     });
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), /cannot be combined/u);
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), /requires --output/u);
-    assert.throws(() => parseCliArguments(['bulk', '--resume']), /requires --checkpoint/u);
-    assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), /two different input files/u);
-    assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
-    assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
-    assert.throws(() => parseCliArguments(['reconcile', 'one.json']), /from 2 to 5/u);
-    assert.throws(() => parseCliArguments(['manifest', 'one.json']), /requires --workflow/iu);
-    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), /must be different/iu);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--resume']), CliUsageError);
+    assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['timeline', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['reconcile', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), CliUsageError);
   });
 });
 

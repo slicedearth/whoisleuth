@@ -70,6 +70,7 @@ type CliOptionSpec = Readonly<{
   values: readonly string[];
   integerRanges: readonly CliOptionIntegerRange[];
   occurrence: CliOptionOccurrence;
+  acceptsOptionLikeValue: boolean;
   metaAction: CliMetaActionId | null;
 }>;
 type CliPositionalSpec = Readonly<{
@@ -213,54 +214,19 @@ Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
 Source and licence: ${WHOISLEUTH_SOURCE_REPOSITORY_URL}
 `;
 
-const COMMON_OPTIONS = Object.freeze(['--help', '--output', '--force', '--config', '--profile', '--palette']);
+const COMMON_OPTIONS = Object.freeze([
+  '--help', '--output', '--force', '--config', '--profile', '--palette',
+] as const satisfies readonly (keyof typeof CLI_OPTION_DEFINITIONS)[]);
 const REGISTRY_SCAFFOLD_COMMON_OPTIONS = Object.freeze(
   COMMON_OPTIONS.filter((option) => option !== '--config' && option !== '--profile'),
 );
 
-function commonOptionsSeedForCommand(command: CliCommand): readonly string[] {
+function commonOptionsSeedForCommand(command: CliCommand): readonly CliOption[] {
   return command === 'registry-scaffold' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
 }
 
-const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  '--group': Object.freeze(['investigate', 'respond', 'assure', 'utilities']),
-  '--mode': Object.freeze(['offline', 'network']),
-  '--explain': INVESTIGATION_PLAN_RECIPES,
-  '--preset': Object.freeze(['common', 'impersonation', 'all']),
-  '--keyboard': Object.freeze(['qwerty', 'azerty', 'qwertz', 'all']),
-  '--mail-profile': Object.freeze(['standard', 'defensive-no-mail', 'parked']),
-  '--marking': Object.freeze(['clear', 'green', 'amber', 'amber-strict', 'red']),
-  '--recipient-scope': Object.freeze(['public', 'community', 'organization', 'named-recipients']),
-  '--audience': Object.freeze(['internal', 'trusted', 'public']),
-  '--fail-on': Object.freeze(['source-failure', 'inconclusive', 'danger', 'material-drift']),
-  '--manifest-entry': Object.freeze(Array.from({ length: 16 }, (_, index) => `artifact-${index + 1}`)),
-  '--palette': Object.freeze(['auto', 'light', 'dark']),
-  '--scenario': Object.freeze(['registered', 'not_found', 'inconclusive']),
-});
 const STANDARD_CONCURRENCY_VALUES = Object.freeze(['1', '2', '3', '4', '5', '6', '7', '8']);
 const LIMITED_CONCURRENCY_VALUES = Object.freeze(['1', '2', '3']);
-
-const FILE_OPTIONS = Object.freeze([
-  '--checkpoint',
-  '--config',
-  '--allowlist',
-  '--dictionary',
-  '--manifest',
-  '--mmdb',
-  '--output',
-  '--passphrase-file',
-  '--private-key-file',
-  '--public-key-file',
-  '--snapshot',
-  '--observation-snapshot',
-  '--previous',
-  '--save-lookup',
-  '--trust-anchor',
-]);
-
-const FILE_OPTIONS_BY_COMMAND: Partial<Record<CliCommand, readonly string[]>> = Object.freeze({
-  'workflow-run': Object.freeze(['--resume']),
-});
 
 function positional(
   name: string,
@@ -286,65 +252,173 @@ const NO_POSITIONALS: readonly CliPositionalSpec[] = Object.freeze([]);
 const OPTIONAL_FILE_POSITIONAL = Object.freeze([positional('source', 'file', 0, 1, [], 'argv_or_stdin')]);
 const OPTIONAL_TEXT_POSITIONAL = Object.freeze([positional('subject', 'text', 0, 1, [], 'argv_or_stdin')]);
 
-const TEXT_OPTIONS = Object.freeze([
-  '--families',
-  '--workflow',
-  '--configuration-digest',
-  '--resolver',
-  '--expect-content-digest',
-  '--profile',
-  '--suffix',
-  '--left-session',
-  '--right-session',
-  '--purpose',
-  '--observer',
-  '--retired-selectors',
-  '--search',
-  '--select',
-  '--selectors',
-  '--tlds',
-  '--vantage',
-]);
 
-const IDEMPOTENT_OPTIONS = Object.freeze([
-  '--human-reviewed',
-  '--no-color',
-  '--personal-data-reviewed',
-  '--quiet',
-  '--redactions-confirmed',
-]);
+type CliOptionDefinition = Readonly<{
+  valueKind: (command: CliCommand) => CliOptionValueKind;
+  values: (command: CliCommand) => readonly string[];
+  occurrence: CliOptionOccurrence;
+  acceptsOptionLikeValue: boolean;
+  metaAction: CliMetaActionId | null;
+  integerRanges: (command: CliCommand) => readonly CliOptionIntegerRange[];
+}>;
 
-const REPEATABLE_OPTIONS = Object.freeze(['--select']);
+const NO_INTEGER_RANGES = () => Object.freeze([] as CliOptionIntegerRange[]);
+const BASE_INTEGER_RANGE = (minimum: number, maximum: number): CliOptionIntegerRange => (
+  Object.freeze({ minimum, maximum, whenOptionPresent: null })
+);
+const DEEP_INTEGER_RANGE = (minimum: number, maximum: number): CliOptionIntegerRange => (
+  Object.freeze({ minimum, maximum, whenOptionPresent: '--deep' })
+);
+function optionDefinition(
+  valueKind: CliOptionValueKind | ((command: CliCommand) => CliOptionValueKind),
+  options: Readonly<{
+    values?: readonly string[] | ((command: CliCommand) => readonly string[]);
+    occurrence?: CliOptionOccurrence;
+    acceptsOptionLikeValue?: boolean;
+    metaAction?: CliMetaActionId;
+    integerRanges?: (command: CliCommand) => readonly CliOptionIntegerRange[];
+  }> = {},
+): CliOptionDefinition {
+  const configuredValues = options.values;
+  return Object.freeze({
+    valueKind: typeof valueKind === 'function' ? valueKind : () => valueKind,
+    values: typeof configuredValues === 'function'
+      ? configuredValues
+      : () => Object.freeze([...(configuredValues ?? [])]),
+    occurrence: options.occurrence ?? 'once',
+    acceptsOptionLikeValue: options.acceptsOptionLikeValue ?? false,
+    metaAction: options.metaAction ?? null,
+    integerRanges: options.integerRanges ?? NO_INTEGER_RANGES,
+  });
+}
 
-const INTEGER_RANGE_SEED: Readonly<Partial<Record<CliCommand, Readonly<Record<string, readonly CliOptionIntegerRange[]>>>>> = Object.freeze({
-  bulk: Object.freeze({
-    '--concurrency': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 8, whenOptionPresent: null }),
-      Object.freeze({ minimum: 1, maximum: 3, whenOptionPresent: '--deep' }),
-    ]),
+const flag = (occurrence: CliOptionOccurrence = 'once') => optionDefinition('flag', { occurrence });
+const file = () => optionDefinition('file');
+const text = (acceptsOptionLikeValue = false) => optionDefinition('text', { acceptsOptionLikeValue });
+const enumeration = (values: readonly string[]) => optionDefinition('enum', { values });
+const integer = (ranges: (command: CliCommand) => readonly CliOptionIntegerRange[]) => (
+  optionDefinition('integer', { integerRanges: ranges })
+);
+
+const CLI_OPTION_DEFINITIONS = Object.freeze({
+  '--help': optionDefinition('flag', { metaAction: 'help' }),
+  '--output': file(),
+  '--force': flag(),
+  '--config': file(),
+  '--profile': text(true),
+  '--palette': enumeration(['auto', 'light', 'dark']),
+  '--network': flag(),
+  '--json': flag(),
+  '--quiet': flag('idempotent'),
+  '--no-color': flag('idempotent'),
+  '--common': flag(),
+  '--group': enumeration(['investigate', 'respond', 'assure', 'utilities']),
+  '--mode': enumeration(['offline', 'network']),
+  '--workflow': text(true),
+  '--configuration-digest': text(true),
+  '--junit': flag(),
+  '--markdown': flag(),
+  '--html': flag(),
+  '--no-attribution': flag(),
+  '--fast': flag(),
+  '--deep': flag(),
+  '--observer': text(),
+  '--vantage': text(),
+  '--plan': flag(),
+  '--summary': flag(),
+  '--verbose': flag(),
+  '--browse': flag(),
+  '--save-lookup': file(),
+  '--strict-exit': flag(),
+  '--fail-on': optionDefinition('policy_list', {
+    values: (command) => CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? [],
   }),
-  'discover-scan': Object.freeze({
-    '--scan-limit': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 500, whenOptionPresent: null }),
-      Object.freeze({ minimum: 1, maximum: 50, whenOptionPresent: '--deep' }),
-    ]),
-    '--chunk-size': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 100, whenOptionPresent: null }),
-    ]),
-    '--concurrency': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 8, whenOptionPresent: null }),
-      Object.freeze({ minimum: 1, maximum: 3, whenOptionPresent: '--deep' }),
-    ]),
-  }),
-  'monitor-once': Object.freeze({
-    '--limit': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 20, whenOptionPresent: null }),
-    ]),
-    '--concurrency': Object.freeze([
-      Object.freeze({ minimum: 1, maximum: 3, whenOptionPresent: null }),
-    ]),
-  }),
-});
+  '--events': flag(),
+  '--jsonl': flag(),
+  '--csv': flag(),
+  '--domains': flag(),
+  '--queries': flag(),
+  '--registered-only': flag(),
+  '--inconclusive-only': flag(),
+  '--errors-only': flag(),
+  '--concurrency': integer((command) => command === 'monitor-once'
+    ? Object.freeze([BASE_INTEGER_RANGE(1, 3)])
+    : Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)])),
+  '--checkpoint': file(),
+  '--resume': optionDefinition((command) => command === 'workflow-run' ? 'file' : 'flag'),
+  '--tlds': text(true),
+  '--preset': enumeration(['common', 'impersonation', 'all']),
+  '--families': text(),
+  '--keyboard': enumeration(['qwerty', 'azerty', 'qwertz', 'all']),
+  '--dictionary': file(),
+  '--snapshot': file(),
+  '--scan-limit': integer(() => Object.freeze([
+    BASE_INTEGER_RANGE(1, 500),
+    DEEP_INTEGER_RANGE(1, 50),
+  ])),
+  '--chunk-size': integer(() => Object.freeze([BASE_INTEGER_RANGE(1, 100)])),
+  '--resolver': text(),
+  '--allowlist': file(),
+  '--observation-snapshot': file(),
+  '--acquisition-only': flag(),
+  '--suppressed-only': flag(),
+  '--selectors': text(true),
+  '--retired-selectors': text(true),
+  '--mail-profile': enumeration(['standard', 'defensive-no-mail', 'parked']),
+  '--sarif': flag(),
+  '--owned-domain': flag(),
+  '--trust-anchor': file(),
+  '--owned-or-authorized': flag(),
+  '--active-probe': flag(),
+  '--suffix': text(true),
+  '--scenario': enumeration(['registered', 'not_found', 'inconclusive']),
+  '--summary-json': flag(),
+  '--passphrase-file': file(),
+  '--manifest': file(),
+  '--manifest-entry': enumeration(Array.from({ length: 16 }, (_, index) => `artifact-${index + 1}`)),
+  '--search': text(),
+  '--require-match': flag(),
+  '--reveal': flag(),
+  '--expect-content-digest': text(true),
+  '--private-key-file': file(),
+  '--public-key-file': file(),
+  '--mmdb': file(),
+  '--audience': enumeration(['internal', 'trusted', 'public']),
+  '--reviewed': flag(),
+  '--previous': file(),
+  '--limit': integer(() => Object.freeze([BASE_INTEGER_RANGE(1, 20)])),
+  '--marking': enumeration(['clear', 'green', 'amber', 'amber-strict', 'red']),
+  '--recipient-scope': enumeration(['public', 'community', 'organization', 'named-recipients']),
+  '--purpose': text(),
+  '--human-reviewed': flag('idempotent'),
+  '--personal-data-reviewed': flag('idempotent'),
+  '--redactions-confirmed': flag('idempotent'),
+  '--list': flag(),
+  '--explain': enumeration(INVESTIGATION_PLAN_RECIPES),
+  '--select': optionDefinition('text', { occurrence: 'repeatable', acceptsOptionLikeValue: true }),
+  '--approve-network': flag(),
+  '--left-session': text(true),
+  '--right-session': text(true),
+  '--compact': flag(),
+} as const satisfies Readonly<Record<string, CliOptionDefinition>>);
+
+type CliOption = keyof typeof CLI_OPTION_DEFINITIONS;
+
+const VALUE_OPTIONS = Object.freeze(Object.fromEntries(
+  Object.entries(CLI_OPTION_DEFINITIONS)
+    .map(([option, definition]) => [option, Object.freeze([...new Set(
+      (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[]).flatMap((command) => definition.values(command)),
+    )])] as const)
+    .filter(([, values]) => values.length > 0),
+)) as Readonly<Partial<Record<CliOption, readonly string[]>>>;
+const FILE_OPTIONS = Object.freeze(Object.entries(CLI_OPTION_DEFINITIONS)
+  .filter(([, definition]) => (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[])
+    .every((command) => definition.valueKind(command) === 'file'))
+  .map(([option]) => option)) as readonly CliOption[];
+const TEXT_OPTIONS = Object.freeze(Object.entries(CLI_OPTION_DEFINITIONS)
+  .filter(([, definition]) => (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[])
+    .every((command) => definition.valueKind(command) === 'text'))
+  .map(([option]) => option)) as readonly CliOption[];
 
 function constraint(
   value: CliGrammarConstraint,
@@ -374,35 +448,25 @@ const MACHINE_OUTPUT_OPTIONS = Object.freeze([
   '--html', '--sarif', '--summary-json',
 ]);
 
-function optionValueKind(command: CliCommand, option: string): CliOptionValueKind {
-  if (Object.hasOwn(VALUE_OPTIONS, option)) return option === '--fail-on' ? 'policy_list' : 'enum';
-  if (INTEGER_RANGE_SEED[command]?.[option]) return 'integer';
-  if (FILE_OPTIONS.includes(option) || FILE_OPTIONS_BY_COMMAND[command]?.includes(option)) return 'file';
-  if (TEXT_OPTIONS.includes(option)) return 'text';
-  return 'flag';
-}
-
-function optionSpec(command: CliCommand, option: string, scope: CliOptionScope): CliOptionSpec {
-  const valueKind = optionValueKind(command, option);
-  const values = option === '--fail-on'
-    ? CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? []
-    : VALUE_OPTIONS[option] ?? [];
+function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScope): CliOptionSpec {
+  const definition = CLI_OPTION_DEFINITIONS[option];
+  const valueKind = definition.valueKind(command);
+  const values = definition.values(command);
   return Object.freeze({
     option,
     scope,
     arity: valueKind === 'flag' ? 0 : 1,
     valueKind,
     values: Object.freeze([...values]),
-    integerRanges: Object.freeze([...(INTEGER_RANGE_SEED[command]?.[option] ?? [])]),
-    occurrence: REPEATABLE_OPTIONS.includes(option)
-      ? 'repeatable'
-      : IDEMPOTENT_OPTIONS.includes(option) ? 'idempotent' : 'once',
-    metaAction: option === '--help' ? 'help' : null,
+    integerRanges: Object.freeze([...definition.integerRanges(command)]),
+    occurrence: definition.occurrence,
+    acceptsOptionLikeValue: definition.acceptsOptionLikeValue,
+    metaAction: definition.metaAction,
   });
 }
 
 function grammarConstraints(
-  commandOptions: readonly string[],
+  commandOptions: readonly CliOption[],
   commandConstraints: readonly CliGrammarConstraint[],
 ): readonly CliGrammarConstraint[] {
   const machineOutputOptions = commandOptions.filter((option) => MACHINE_OUTPUT_OPTIONS.includes(option));
@@ -423,10 +487,10 @@ function grammarConstraints(
 }
 
 type CliCommandSeed = Readonly<{
-  reference: Readonly<CommandDetail & { usage: string }>;
+  reference: CommandDetail;
   collection: CommandCollection;
   summary: string;
-  options: readonly string[];
+  options: readonly CliOption[];
   positionals: readonly CliPositionalSpec[];
   constraints: readonly CliGrammarConstraint[];
   handlerOwner: CliHandlerOwner;
@@ -456,7 +520,6 @@ function commandSeed(seed: CliCommandSeed): CliCommandSeed {
 const COMMAND_SEEDS = Object.freeze({
   completion: commandSeed({
     reference: {
-      usage: 'whoisleuth completion <bash|zsh|fish|powershell>',
       description: 'Print a static shell-completion script for the installed CLI.',
       example: 'whoisleuth completion zsh > ~/.zfunc/_whoisleuth',
       boundary: 'Generation is offline and writes only the script to stdout. The command never modifies shell configuration.',
@@ -477,7 +540,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   doctor: commandSeed({
     reference: {
-      usage: 'whoisleuth doctor [--network] [--json] [--quiet] [--no-color]',
       description: 'Check the supported runtime and local terminal capabilities.',
       example: 'whoisleuth doctor --json',
       boundary: 'The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.',
@@ -498,7 +560,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   commands: commandSeed({
     reference: {
-      usage: 'whoisleuth commands [--common] [--group <group>] [--mode <offline|network>] [--json] [--quiet] [--no-color]',
       description: 'List the installed command contracts in terminal or versioned JSON form.',
       example: 'whoisleuth commands --json',
       boundary: 'Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.',
@@ -519,7 +580,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   manual: commandSeed({
     reference: {
-      usage: 'whoisleuth manual',
       description: 'Print a generated roff manual page for local installation.',
       example: 'whoisleuth manual | man -l -',
       boundary: 'Generation is offline and derives from the same command catalogue as focused help.',
@@ -540,7 +600,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   manifest: commandSeed({
     reference: {
-      usage: 'whoisleuth manifest <artefact.json> [...] --workflow <label> [--configuration-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
       description: 'Record an ordered, path-free manifest for up to 16 local JSON artefacts.',
       example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
       boundary: 'The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.',
@@ -563,7 +622,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "map-observations": commandSeed({
     reference: {
-      usage: 'whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]',
       description: 'Apply one bounded declarative field-mapping profile to local source observations.',
       example: 'whoisleuth map-observations mapping.json --json',
       boundary: 'Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.',
@@ -584,7 +642,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "oam-export": commandSeed({
     reference: {
-      usage: 'whoisleuth oam-export [external-findings.json] [--json] [--quiet] [--no-color]',
       description: 'Project browser-compatible external findings into a bounded Open Asset Model bridge document.',
       example: 'whoisleuth oam-export external-findings.json --json',
       boundary: 'The projection is offline, preserves source completeness without inventing confidence, and covers only bounded FQDN, IP address, certificate, and related edge vocabulary.',
@@ -605,7 +662,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   lookup: commandSeed({
     reference: {
-      usage: 'whoisleuth lookup [domain|IP|ASN] [--json|--junit|--markdown|--html] [--no-attribution] [--fast|--deep] [--observer <label>] [--vantage <label>] [--plan] [--summary|--verbose|--browse [--save-lookup <file>]] [--palette <auto|light|dark>] [--strict-exit] [--fail-on <policies>] [--events] [--quiet] [--no-color]',
       description: 'Collect registration evidence for one domain, IP, or ASN.',
       example: 'whoisleuth lookup example.test --deep --browse',
       boundary: 'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.',
@@ -636,7 +692,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   bulk: commandSeed({
     reference: {
-      usage: 'whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency <1-8>] [--checkpoint <file> [--resume]] [--events] [--plan] [--fail-on <policies>] [--quiet] [--no-color]',
       description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
       example: 'cat domains.txt | whoisleuth bulk --jsonl',
       boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.',
@@ -663,7 +718,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "ct-search": commandSeed({
     reference: {
-      usage: 'whoisleuth ct-search [keyword] [--json] [--quiet] [--no-color]',
       description: 'Search certificate-transparency observations for one bounded keyword.',
       example: 'whoisleuth ct-search "example brand" --json',
       boundary: 'Certificate observations do not prove website activity, registration ownership, or malicious intent.',
@@ -684,7 +738,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "ct-intake": commandSeed({
     reference: {
-      usage: 'whoisleuth ct-intake [events.json] [--json] [--quiet] [--no-color]',
       description: 'Normalise source-qualified local certificate events into browser-compatible findings.',
       example: 'whoisleuth ct-intake certificate-events.json --json',
       boundary: 'The command is offline, caps output at 100 findings, and treats every event as a review lead rather than proof of serving or control.',
@@ -705,7 +758,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   discover: commandSeed({
     reference: {
-      usage: 'whoisleuth discover [brand|domain] [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--snapshot <file>] [--json|--jsonl|--domains] [--quiet] [--no-color]',
       description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
       example: 'whoisleuth discover example.test --preset common --jsonl',
       boundary: 'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
@@ -730,7 +782,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "discover-scan": commandSeed({
     reference: {
-      usage: 'whoisleuth discover-scan [brand|domain] [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--fast|--deep] [--scan-limit <n>] [--chunk-size <n>] [--concurrency <n>] [--resolver <IPs>] [--allowlist <file>] [--checkpoint <file> [--resume]] [--observation-snapshot <file>] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--events] [--json|--jsonl|--csv|--domains] [--plan] [--fail-on <policies>] [--quiet] [--no-color]',
       description: 'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
       example: 'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
       boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.',
@@ -759,7 +810,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   posture: commandSeed({
     reference: {
-      usage: 'whoisleuth posture [domain] [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json|--sarif --owned-domain] [--quiet] [--no-color]',
       description: 'Review bounded DNS mail, delegation, and domain-control posture.',
       example: 'whoisleuth posture example.test --mail-profile standard --json',
       boundary: 'Missing or failed DNS observations remain inconclusive and are not reported as absent controls.',
@@ -783,7 +833,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   http: commandSeed({
     reference: {
-      usage: 'whoisleuth http [domain] [--json] [--quiet] [--no-color]',
       description: 'Inspect one homepage request, redirects, and bounded response metadata.',
       example: 'whoisleuth http example.test --json',
       boundary: 'Requests use the shared public-address and redirect guards. Fixed content-coding and cache-policy metadata describes only the selected response, excludes raw header values, and does not prove caching, transfer savings, performance, privacy, or safety. This is not a rendered browser or vulnerability scan.',
@@ -804,7 +853,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   tls: commandSeed({
     reference: {
-      usage: 'whoisleuth tls [hostname] [--json] [--quiet] [--no-color]',
       description: 'Inspect one hostname certificate through a bounded TLS connection.',
       example: 'whoisleuth tls example.test --json',
       boundary: 'One observed connection is point-in-time evidence and does not establish every address, edge, or historical certificate.',
@@ -825,7 +873,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "dnssec-validate": commandSeed({
     reference: {
-      usage: 'whoisleuth dnssec-validate <domain> --resolver <public-IP> --trust-anchor <anchor.json> --owned-or-authorized [--json] [--quiet] [--no-color]',
       description: 'Cryptographically validate one authorised DNSSEC chain from a supplied trust anchor through one selected public resolver.',
       example: 'whoisleuth dnssec-validate example.test --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --json',
       boundary: 'This isolated action is never invoked by Lookup, Bulk, monitoring, or recipes. It caps DNS queries, aliases, delegations, bytes, and duration; transport and validation failures remain separate, and secure is not a general safety verdict.',
@@ -848,7 +895,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "mail-transport": commandSeed({
     reference: {
-      usage: 'whoisleuth mail-transport [input.json] --resolver <public-IP> --trust-anchor <anchor.json> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]',
       description: 'Review selected authorised MX endpoints, DNSSEC-qualified TLSA evidence, SMTP capabilities, and optional STARTTLS certificates.',
       example: 'whoisleuth mail-transport selected-mx.json --resolver "$PUBLIC_RESOLVER_IP" --trust-anchor anchor.json --owned-or-authorized --active-probe --json',
       boundary: 'This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test. If a DANE-TA TLSA usage 2 association is published, active collection retains only the leaf certificate and leaves that comparison partial without certificate-path construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported and cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.',
@@ -871,7 +917,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "registry-support": commandSeed({
     reference: {
-      usage: 'whoisleuth registry-support [domain|suffix] [--json] [--quiet] [--no-color]',
       description: 'Explain the local registry capability profile for one domain or suffix.',
       example: 'whoisleuth registry-support example.test --json',
       boundary: 'This command is offline. Catalogue coverage does not test live reachability or decide registration or availability.',
@@ -892,7 +937,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "registry-doctor": commandSeed({
     reference: {
-      usage: 'whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]',
       description: 'Compare a saved Lookup registry result with the reviewed local capability profile.',
       example: 'whoisleuth registry-doctor lookup.json --json',
       boundary: 'The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.',
@@ -913,7 +957,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "registry-cohort": commandSeed({
     reference: {
-      usage: 'whoisleuth registry-cohort [lookups-or-reports.json|jsonl] [--json] [--quiet] [--no-color]',
       description: 'Build privacy-safe suffix and capability-profile timelines from saved observations or retained cohort reports.',
       example: 'whoisleuth registry-cohort saved-lookups.jsonl --json',
       boundary: 'This command is offline and omits domains, queries, and raw evidence. Input families cannot be mixed, and retained samples are never assumed independent.',
@@ -934,7 +977,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "registry-scaffold": commandSeed({
     reference: {
-      usage: 'whoisleuth registry-scaffold --profile <id> --suffix <suffix> --scenario <registered|not_found|inconclusive>',
       description: 'Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.',
       example: 'whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered',
       boundary: 'The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.',
@@ -957,7 +999,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "risk-calibrate": commandSeed({
     reference: {
-      usage: 'whoisleuth risk-calibrate [dataset.json] [--json|--summary-json] [--quiet] [--no-color]',
       description: 'Replay reviewed labels against the current explainable Risk model.',
       example: 'whoisleuth risk-calibrate calibration.json --summary-json',
       boundary: 'Calibration is offline and diagnostic. The summary form omits record identifiers, domains, and evidence; neither form trains, tunes, or changes the scoring model automatically.',
@@ -980,7 +1021,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "lookalike-calibrate": commandSeed({
     reference: {
-      usage: 'whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
       description: 'Summarise reviewed candidate dispositions by mutation family without retaining domains.',
       example: 'whoisleuth lookalike-calibrate reviewed-candidates.json --json',
       boundary: 'Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.',
@@ -1001,7 +1041,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-artifact": commandSeed({
     reference: {
-      usage: 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--manifest <manifest.json> --manifest-entry <artifact-N>] [--json] [--strict-exit] [--quiet] [--no-color]',
       description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup, or supported Lookup-evidence export without printing evidence contents.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
       boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
@@ -1025,7 +1064,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "interchange-report": commandSeed({
     reference: {
-      usage: 'whoisleuth interchange-report [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
       description: 'Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.',
       example: 'whoisleuth interchange-report workspace.json --json',
       boundary: 'The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.',
@@ -1046,7 +1084,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "inspect-archive": commandSeed({
     reference: {
-      usage: 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--expect-content-digest <sha256:digest>] [--json] [--quiet] [--no-color]',
       description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact ${LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION} support and redacted output by default.`,
       example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
       boundary: 'Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.',
@@ -1070,7 +1107,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "sign-artifact": commandSeed({
     reference: {
-      usage: 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
       description: 'Sign one reviewed response packet or supported manifest with a local private key.',
       example: 'whoisleuth sign-artifact packet.json --private-key-file analyst-private.pem',
       boundary: 'The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator\'s responsibility.',
@@ -1093,7 +1129,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-signature": commandSeed({
     reference: {
-      usage: 'whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]',
       description: 'Verify the cryptographic signature of one signed evidence package and report embedded-artefact assurance separately.',
       example: 'whoisleuth verify-signature packet.signed.json --json',
       boundary: 'A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder\'s real-world identity or authority.',
@@ -1114,7 +1149,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "source-report": commandSeed({
     reference: {
-      usage: 'whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]',
       description: 'Create a target-free reliability summary from a saved lookup.',
       example: 'whoisleuth source-report lookup.json --json',
       boundary: 'The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.',
@@ -1135,7 +1169,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   compare: commandSeed({
     reference: {
-      usage: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
       description: 'Compare separately attributed registry publications in a saved lookup.',
       example: 'whoisleuth compare lookup.json --json',
       boundary: 'Comparison is offline. Differences are review context and do not by themselves prove which publication is current.',
@@ -1156,7 +1189,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "page-compare": commandSeed({
     reference: {
-      usage: 'whoisleuth page-compare <left.json> <right.json> [--json] [--quiet] [--no-color]',
       description: 'Compare static page identity, favicon, technology, and TLS evidence in two saved deep lookups.',
       example: 'whoisleuth page-compare official.json candidate.json --json',
       boundary: 'Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.',
@@ -1177,7 +1209,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "mail-review": commandSeed({
     reference: {
-      usage: 'whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]',
       description: 'Review passive MX, null MX, SPF, DMARC, and shared mail-provider evidence from saved Bulk results.',
       example: 'whoisleuth mail-review candidates.json --json',
       boundary: 'Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.',
@@ -1198,7 +1229,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "mail-headers": commandSeed({
     reference: {
-      usage: 'whoisleuth mail-headers [message.eml] [--json] [--quiet] [--no-color]',
       description: 'Review identity, reported authentication, domain alignment, and Received routing from selected message headers.',
       example: 'whoisleuth mail-headers message.eml --json',
       boundary: 'Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.',
@@ -1219,7 +1249,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "review-evidence": commandSeed({
     reference: {
-      usage: 'whoisleuth review-evidence [evidence.json] [--mmdb <database-file>] [--json] [--strict-exit] [--quiet] [--no-color]',
       description: 'Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
       boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
@@ -1248,7 +1277,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   brief: commandSeed({
     reference: {
-      usage: 'whoisleuth brief [lookup.json] [--json] [--quiet] [--no-color]',
       description: 'Turn one saved Lookup into a compact decision brief with facts, unknowns, contradictions, and next actions.',
       example: 'whoisleuth brief lookup.json --json',
       boundary: 'The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.',
@@ -1269,7 +1297,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "case-pack": commandSeed({
     reference: {
-      usage: 'whoisleuth case-pack [cases.json] --audience <internal|trusted|public> --reviewed [--json] [--quiet] [--no-color]',
       description: `Package browser-created Case-schema-${CASE_SCHEMA_VERSION} records as a reviewed, audience-specific Case-pack v2.`,
       example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
       boundary: 'The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.',
@@ -1292,7 +1319,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "domain-control": commandSeed({
     reference: {
-      usage: 'whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]',
       description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
       example: 'whoisleuth domain-control domain-control-input.json --json',
       boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
@@ -1313,7 +1339,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "monitor-once": commandSeed({
     reference: {
-      usage: 'whoisleuth monitor-once [manifest.json] [--previous <snapshot.json>] [--limit <1-20>] [--concurrency <1-3>] [--fail-on <policies>] [--json|--junit] [--quiet] [--no-color]',
       description: 'Collect one bounded owned-domain review and compare it with an optional prior checkpoint.',
       example: 'whoisleuth monitor-once manifest.json --previous previous.json --json --output next.json',
       boundary: 'This is an operator-scheduled one-shot collection, not a daemon. It caps targets and concurrency, retains normalised observations, and never changes domain configuration.',
@@ -1336,7 +1361,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   assurance: commandSeed({
     reference: {
-      usage: 'whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]',
       description: 'Review a versioned domain change, recovery-dependency, or retirement plan.',
       example: 'whoisleuth assurance domain-assurance.json --json',
       boundary: 'The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.',
@@ -1357,7 +1381,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "change-packet": commandSeed({
     reference: {
-      usage: 'whoisleuth change-packet [change-packet-input.json] [--json] [--quiet] [--no-color]',
       description: 'Assemble pre-change, post-change, and planning evidence into one integrity-protected packet.',
       example: 'whoisleuth change-packet change-review.json --json',
       boundary: 'Assembly is offline. Readiness reflects only the supplied bounded evidence and does not authorise or perform a domain change.',
@@ -1378,7 +1401,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "sharing-review": commandSeed({
     reference: {
-      usage: 'whoisleuth sharing-review [artifact.json] --marking <level> --recipient-scope <scope> --purpose <text> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]',
       description: 'Lint one reviewed artefact against local integrity, marking, recipient, personal-data, and redaction controls.',
       example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
       boundary: 'The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.',
@@ -1401,7 +1423,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "workflow-plan": commandSeed({
     reference: {
-      usage: 'whoisleuth workflow-plan <recipe> <domain|brand> | --list | --explain <recipe> [--json] [--quiet] [--no-color]',
       description: 'Build a fixed domain-investigation plan from existing bounded CLI commands.',
       example: 'whoisleuth workflow-plan domain-triage example.test --json',
       boundary: 'Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.',
@@ -1427,7 +1448,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "workflow-run": commandSeed({
     reference: {
-      usage: 'whoisleuth workflow-run <recipe> <domain|brand> [--select <step-id>=<path-or-value>]... [--approve-network] [--resume <state.json>] [--json] [--quiet] [--no-color]',
       description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
       example: 'whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json',
       boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.',
@@ -1451,7 +1471,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   diff: commandSeed({
     reference: {
-      usage: 'whoisleuth diff <left.json> <right.json> [--left-session <id> --right-session <id>] [--json] [--quiet] [--no-color]',
       description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
       boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
@@ -1472,7 +1491,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   reconcile: commandSeed({
     reference: {
-      usage: 'whoisleuth reconcile <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
       description: 'Reconcile bounded values across independently labelled observations of one domain.',
       example: 'whoisleuth reconcile office.json mobile.json external.json --json',
       boundary: 'The command is offline, accepts 2 to 5 saved observations for one domain, and never treats labels as proof of network independence or majority agreement as truth.',
@@ -1493,7 +1511,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   timeline: commandSeed({
     reference: {
-      usage: 'whoisleuth timeline <observation.json> <observation.json> [...] [--json] [--quiet] [--no-color]',
       description: 'Build an ordered same-domain history from saved Lookup observations.',
       example: 'whoisleuth timeline first.json second.json latest.json --json',
       boundary: 'The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.',
@@ -1514,7 +1531,6 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   export: commandSeed({
     reference: {
-      usage: 'whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]',
       description: 'Convert one saved lookup into a versioned evidence report.',
       example: 'whoisleuth export lookup.json --markdown',
       boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; published v2 schema ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION} and exact v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
@@ -1596,6 +1612,51 @@ function documentationMetadata(
   });
 }
 
+function optionUsage(specification: CliOptionSpec): string {
+  if (specification.arity === 0) return specification.option;
+  if (specification.valueKind === 'enum') {
+    return `${specification.option} <${specification.values.join('|')}>`;
+  }
+  if (specification.valueKind === 'policy_list') return `${specification.option} <policy[,policy...]>`;
+  if (specification.valueKind === 'integer') return `${specification.option} <integer>`;
+  if (specification.valueKind === 'file') return `${specification.option} <file>`;
+  return `${specification.option} <value>`;
+}
+
+function positionalUsage(specification: CliPositionalSpec): string {
+  const value = specification.valueKind === 'enum'
+    ? `<${specification.values.join('|')}>`
+    : `<${specification.name}${specification.maximum > 1 ? '...' : ''}>`;
+  return specification.minimum === 0 ? `[${value}]` : value;
+}
+
+function generatedCommandUsage(
+  command: CliCommand,
+  options: readonly CliOptionSpec[],
+  positionals: readonly CliPositionalSpec[],
+  constraints: readonly CliGrammarConstraint[],
+): string {
+  const commandOptions = options.filter((option) => option.scope === 'command');
+  const required = new Set(constraints
+    .filter((item): item is Extract<CliGrammarConstraint, { kind: 'required' }> => item.kind === 'required')
+    .flatMap((item) => item.options));
+  const mutuallyExclusive = constraints
+    .filter((item): item is Extract<CliGrammarConstraint, { kind: 'mutually_exclusive' }> => item.kind === 'mutually_exclusive')
+    .map((item) => item.options.filter((option) => commandOptions.some((candidate) => candidate.option === option)))
+    .filter((group) => group.length > 1);
+  const grouped = new Set(mutuallyExclusive.flat());
+  const renderedGroups = mutuallyExclusive.map((group) => `[${group.map((option) => (
+    optionUsage(commandOptions.find((candidate) => candidate.option === option)!)
+  )).join('|')}]`);
+  const renderedOptions = commandOptions
+    .filter((option) => !grouped.has(option.option))
+    .map((option) => {
+      const rendered = optionUsage(option);
+      return required.has(option.option) ? rendered : `[${rendered}]`;
+    });
+  return ['whoisleuth', command, ...positionals.map(positionalUsage), ...renderedGroups, ...renderedOptions].join(' ');
+}
+
 const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
   COMMAND_ORDER.map((command, order) => {
     const seed = COMMAND_SEEDS[command];
@@ -1605,10 +1666,14 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
       ...commonOptions.map((option) => optionSpec(command, option, 'common')),
       ...commandOptions.map((option) => optionSpec(command, option, 'command')),
     ]);
+    const constraints = grammarConstraints(commandOptions, seed.constraints);
     return Object.freeze({
       command,
       order,
-      reference: seed.reference,
+      reference: Object.freeze({
+        ...seed.reference,
+        usage: generatedCommandUsage(command, grammarOptions, seed.positionals, constraints),
+      }),
       collection: seed.collection,
       completion: Object.freeze({
         description: seed.summary,
@@ -1620,7 +1685,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
         bootstrapProfile: seed.bootstrapProfile,
         options: grammarOptions,
         positionals: seed.positionals,
-        constraints: grammarConstraints(commandOptions, seed.constraints),
+        constraints,
         metaActions: Object.freeze(['help'] as const),
       }),
       execution: Object.freeze({
@@ -1647,6 +1712,13 @@ const FILE_POSITIONAL_COMMANDS: readonly CliCommand[] = Object.freeze(
 const CLI_COMMAND_BY_NAME = Object.freeze(Object.fromEntries(
   CLI_COMMAND_REGISTRY.map((definition) => [definition.command, definition]),
 )) as Readonly<Record<CliCommand, CliCommandDefinition>>;
+const FILE_OPTIONS_BY_COMMAND = Object.freeze(Object.fromEntries(
+  CLI_COMMAND_REGISTRY
+    .map((definition) => [definition.command, Object.freeze(definition.grammar.options
+      .filter((option) => option.valueKind === 'file' && !FILE_OPTIONS.includes(option.option as CliOption))
+      .map((option) => option.option))] as const)
+    .filter(([, options]) => options.length > 0),
+)) as Readonly<Partial<Record<CliCommand, readonly string[]>>>;
 
 function isCliCommand(value: unknown): value is CliCommand {
   return typeof value === 'string' && Object.hasOwn(CLI_COMMAND_BY_NAME, value);

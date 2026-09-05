@@ -16,7 +16,7 @@ import type {
   InspectArchiveArguments,
   SignArtifactArguments,
   VerifySignatureArguments,
-} from './evidence-command-arguments.mts';
+} from './arguments.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';

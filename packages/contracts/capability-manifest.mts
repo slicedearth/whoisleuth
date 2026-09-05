@@ -2,6 +2,7 @@ import {
   CAPABILITY_IDS,
   CLI_COMMAND_SEMANTICS,
   type CapabilityId,
+  type CliCommand,
 } from './cli-command-semantics.mts';
 
 const CAPABILITY_MANIFEST_SCHEMA = 'whoisleuth.capability-manifest';
@@ -306,38 +307,98 @@ const COMPLETE_OR_PARTIAL = Object.freeze([
   'complete', 'partial',
 ] as const satisfies readonly CapabilityOutcomeState[]);
 
-const OFFLINE_ALL_OR_NOTHING_COMMANDS = Object.freeze([
-  'manifest',
-  'registry-support',
-  'registry-scaffold',
-  'risk-calibrate',
-  'lookalike-calibrate',
-  'sign-artifact',
-  'case-pack',
-  'workflow-plan',
-  'export',
-] as const);
-const OFFLINE_PER_ITEM_COMMANDS = Object.freeze([
-  'map-observations',
-  'oam-export',
-  'ct-intake',
-  'discover',
-  'registry-cohort',
-  'source-report',
-  'mail-review',
-  'mail-headers',
-] as const);
-const OFFLINE_PER_SOURCE_COMMANDS = Object.freeze([
-  'registry-doctor',
-  'compare',
-  'page-compare',
-  'brief',
-  'domain-control',
-  'assurance',
-  'diff',
-  'reconcile',
-  'timeline',
-] as const);
+type OfflineCliPolicy = Readonly<{
+  kind: 'offline';
+  cancellation: CapabilityCancellation;
+  credentialModel: CapabilityCredentialModel;
+  outcomes: readonly CapabilityOutcomeState[];
+  partialResults: CapabilityPartialResults;
+}>;
+type CliOperationPolicy =
+  | Readonly<{ kind: 'static' }>
+  | OfflineCliPolicy
+  | Readonly<{ kind: 'doctor' }>
+  | Readonly<{ kind: 'lookup'; command: 'lookup' | 'bulk' | 'discover-scan' }>
+  | Readonly<{ kind: 'monitor' }>
+  | Readonly<{ kind: 'ct_search' }>
+  | Readonly<{ kind: 'posture' }>
+  | Readonly<{ kind: 'http' }>
+  | Readonly<{ kind: 'tls' }>
+  | Readonly<{ kind: 'dnssec_validate' }>
+  | Readonly<{ kind: 'mail_transport' }>
+  | Readonly<{ kind: 'workflow_run' }>;
+
+function offlinePolicy(
+  partialResults: CapabilityPartialResults,
+  outcomes: readonly CapabilityOutcomeState[] = COMPLETE_OR_PARTIAL,
+  credentialModel: CapabilityCredentialModel = 'none',
+  cancellation: CapabilityCancellation = 'bounded_atomic',
+): OfflineCliPolicy {
+  return Object.freeze({ kind: 'offline', partialResults, outcomes, credentialModel, cancellation });
+}
+
+const OFFLINE_ALL_OR_NOTHING = offlinePolicy('all_or_nothing', STATIC_OUTCOMES);
+const OFFLINE_PER_ITEM = offlinePolicy('explicit_per_item');
+const OFFLINE_PER_SOURCE = offlinePolicy('explicit_per_source');
+const OFFLINE_DOCUMENT = offlinePolicy('explicit_document');
+const OFFLINE_PASSPHRASE_DOCUMENT = offlinePolicy(
+  'explicit_document', COMPLETE_OR_PARTIAL, 'optional_secret_passphrase_file',
+);
+
+const CLI_OPERATION_POLICY = Object.freeze({
+  completion: Object.freeze({ kind: 'static' }),
+  doctor: Object.freeze({ kind: 'doctor' }),
+  commands: Object.freeze({ kind: 'static' }),
+  manual: Object.freeze({ kind: 'static' }),
+  manifest: OFFLINE_ALL_OR_NOTHING,
+  'map-observations': OFFLINE_PER_ITEM,
+  'oam-export': OFFLINE_PER_ITEM,
+  lookup: Object.freeze({ kind: 'lookup', command: 'lookup' }),
+  bulk: Object.freeze({ kind: 'lookup', command: 'bulk' }),
+  'ct-search': Object.freeze({ kind: 'ct_search' }),
+  'ct-intake': OFFLINE_PER_ITEM,
+  discover: OFFLINE_PER_ITEM,
+  'discover-scan': Object.freeze({ kind: 'lookup', command: 'discover-scan' }),
+  posture: Object.freeze({ kind: 'posture' }),
+  http: Object.freeze({ kind: 'http' }),
+  tls: Object.freeze({ kind: 'tls' }),
+  'dnssec-validate': Object.freeze({ kind: 'dnssec_validate' }),
+  'mail-transport': Object.freeze({ kind: 'mail_transport' }),
+  'registry-support': OFFLINE_ALL_OR_NOTHING,
+  'registry-doctor': OFFLINE_PER_SOURCE,
+  'registry-cohort': OFFLINE_PER_ITEM,
+  'registry-scaffold': offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'none', 'not_applicable'),
+  'risk-calibrate': OFFLINE_ALL_OR_NOTHING,
+  'lookalike-calibrate': OFFLINE_ALL_OR_NOTHING,
+  'verify-artifact': OFFLINE_PASSPHRASE_DOCUMENT,
+  'interchange-report': offlinePolicy(
+    'explicit_document', ['complete', 'partial', 'unsupported', 'unavailable'], 'optional_secret_passphrase_file',
+  ),
+  'inspect-archive': offlinePolicy(
+    'explicit_document', ['complete', 'partial', 'unavailable'], 'optional_secret_passphrase_file',
+  ),
+  'sign-artifact': offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'required_secret_private_key_file'),
+  'verify-signature': offlinePolicy('explicit_document', ['complete', 'partial', 'unavailable'], 'optional_public_key_file'),
+  'source-report': OFFLINE_PER_ITEM,
+  compare: OFFLINE_PER_SOURCE,
+  'page-compare': OFFLINE_PER_SOURCE,
+  'mail-review': OFFLINE_PER_ITEM,
+  'mail-headers': OFFLINE_PER_ITEM,
+  'review-evidence': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
+  brief: OFFLINE_PER_SOURCE,
+  'case-pack': OFFLINE_ALL_OR_NOTHING,
+  'domain-control': OFFLINE_PER_SOURCE,
+  'monitor-once': Object.freeze({ kind: 'monitor' }),
+  assurance: OFFLINE_PER_SOURCE,
+  'change-packet': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
+  'sharing-review': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
+  'workflow-plan': offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'none', 'not_applicable'),
+  'workflow-run': Object.freeze({ kind: 'workflow_run' }),
+  diff: OFFLINE_PER_SOURCE,
+  reconcile: OFFLINE_PER_SOURCE,
+  timeline: OFFLINE_PER_SOURCE,
+  export: OFFLINE_ALL_OR_NOTHING,
+} as const satisfies Readonly<Record<CliCommand, CliOperationPolicy>>);
 
 function freezeCapability(definition: CapabilityDefinition): CapabilityDefinition {
   return Object.freeze({
@@ -1280,8 +1341,12 @@ function freezeCliOperation(definition: CliOperationDefinition): CliOperationDef
   });
 }
 
-function offlineCliOperation(command: string, capabilityId: CapabilityId): CliOperationDefinition {
-  if (['completion', 'commands', 'manual'].includes(command)) {
+function offlineCliOperation(
+  command: CliCommand,
+  capabilityId: CapabilityId,
+  policy: Readonly<{ kind: 'static' }> | OfflineCliPolicy,
+): CliOperationDefinition {
+  if (policy.kind === 'static') {
     return freezeCliOperation({
       recordId: `command.cli.${command}`,
       command,
@@ -1309,22 +1374,6 @@ function offlineCliOperation(command: string, capabilityId: CapabilityId): CliOp
     });
   }
   const portable = capabilityId === CAPABILITY_IDS.PORTABLE_EVIDENCE;
-  const allOrNothing = OFFLINE_ALL_OR_NOTHING_COMMANDS.includes(
-    command as typeof OFFLINE_ALL_OR_NOTHING_COMMANDS[number],
-  );
-  const perItem = OFFLINE_PER_ITEM_COMMANDS.includes(
-    command as typeof OFFLINE_PER_ITEM_COMMANDS[number],
-  );
-  const perSource = OFFLINE_PER_SOURCE_COMMANDS.includes(
-    command as typeof OFFLINE_PER_SOURCE_COMMANDS[number],
-  );
-  const credentialModel: CapabilityCredentialModel = command === 'sign-artifact'
-    ? 'required_secret_private_key_file'
-    : command === 'verify-signature'
-      ? 'optional_public_key_file'
-      : ['verify-artifact', 'interchange-report', 'inspect-archive'].includes(command)
-        ? 'optional_secret_passphrase_file'
-        : 'none';
   return freezeCliOperation({
     recordId: `command.cli.${command}`,
     command,
@@ -1338,30 +1387,14 @@ function offlineCliOperation(command: string, capabilityId: CapabilityId): CliOp
     requestBudget: 'none',
     responseBudget: portable ? 'bounded_portable_document' : 'bounded_local_input',
     concurrency: 'none',
-    credentialModel,
+    credentialModel: policy.credentialModel,
     retention: 'local_output_deliberate',
     export: portable ? 'deliberate_bounded' : 'local_output',
     scoringEffect: 'none',
     authorisation: 'explicit_action',
-    cancellation: ['registry-scaffold', 'workflow-plan'].includes(command)
-      ? 'not_applicable'
-      : 'bounded_atomic',
-    partialResults: allOrNothing
-      ? 'all_or_nothing'
-      : perItem
-        ? 'explicit_per_item'
-        : perSource
-          ? 'explicit_per_source'
-          : 'explicit_document',
-    outcomes: allOrNothing
-      ? STATIC_OUTCOMES
-      : command === 'interchange-report'
-        ? ['complete', 'partial', 'unsupported', 'unavailable']
-        : ['inspect-archive', 'verify-signature'].includes(command)
-          ? ['complete', 'partial', 'unavailable']
-          : ['review-evidence', 'change-packet', 'sharing-review'].includes(command)
-            ? ['complete', 'partial', 'blocked']
-            : COMPLETE_OR_PARTIAL,
+    cancellation: policy.cancellation,
+    partialResults: policy.partialResults,
+    outcomes: policy.outcomes,
     privacyLimitations: [
       'The command reads only selected bounded local input and makes no network request.',
       'Output remains under the operator\'s local retention and deletion control.',
@@ -1471,8 +1504,12 @@ function lookupCliVariants(command: 'lookup' | 'bulk' | 'discover-scan'): readon
   return [plan('fast'), plan('deep'), collect('fast'), collect('deep')];
 }
 
-function cliOperation(command: string, capabilityId: CapabilityId): CliOperationDefinition {
-  if (command === 'doctor') {
+function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOperationDefinition {
+  const policy = CLI_OPERATION_POLICY[command];
+  if (policy.kind === 'static' || policy.kind === 'offline') {
+    return offlineCliOperation(command, capabilityId, policy);
+  }
+  if (policy.kind === 'doctor') {
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
@@ -1527,9 +1564,9 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (['lookup', 'bulk', 'discover-scan'].includes(command)) {
-    const lookupCommand = command as 'lookup' | 'bulk' | 'discover-scan';
-    const cancellation: CapabilityCancellation = command === 'lookup'
+  if (policy.kind === 'lookup') {
+    const lookupCommand = policy.command;
+    const cancellation: CapabilityCancellation = lookupCommand === 'lookup'
       ? 'client_stops_waiting'
       : 'queue_stops_admission';
     return passiveCliOperation(command, capabilityId, {
@@ -1538,13 +1575,13 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       disclosedData: [
         'normalised_target', 'registry_query', 'whois_query', 'dns_question',
         'homepage_request', 'tls_handshake',
-        ...(command === 'lookup' ? ['public_ip_address' as const] : []),
+        ...(lookupCommand === 'lookup' ? ['public_ip_address' as const] : []),
       ],
       recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
       requestBudget: 'variant_specific',
       scoringEffect: 'bounded_risk_and_acquisition_input',
       cancellation,
-      partialResults: command === 'lookup' ? 'explicit_per_source' : 'explicit_per_item',
+      partialResults: lookupCommand === 'lookup' ? 'explicit_per_source' : 'explicit_per_item',
       outcomes: COMPLETE_OR_PARTIAL,
       variants: lookupCliVariants(lookupCommand),
       privacyLimitations: [
@@ -1553,7 +1590,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'monitor-once') {
+  if (policy.kind === 'monitor') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake'],
       recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
@@ -1566,7 +1603,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'ct-search') {
+  if (policy.kind === 'ct_search') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['certificate_search_term'],
       recipients: ['certificate_transparency_service'],
@@ -1577,7 +1614,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'posture') {
+  if (policy.kind === 'posture') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['normalised_target', 'registry_query', 'dns_question', 'mta_sts_policy_request'],
       recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
@@ -1587,7 +1624,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'http') {
+  if (policy.kind === 'http') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['normalised_target', 'dns_question', 'homepage_request'],
       recipients: ['dns_resolver', 'target_public_service'],
@@ -1597,7 +1634,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'tls') {
+  if (policy.kind === 'tls') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['normalised_target', 'dns_question', 'tls_handshake'],
       recipients: ['dns_resolver', 'target_public_service'],
@@ -1607,7 +1644,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  if (command === 'dnssec-validate') {
+  if (policy.kind === 'dnssec_validate') {
     return freezeCliOperation({
       ...passiveCliOperation(command, capabilityId, {
         planes: ['local_cli_authorised_active'],
@@ -1625,7 +1662,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       credentialModel: 'required_public_trust_file',
     });
   }
-  if (command === 'mail-transport') {
+  if (policy.kind === 'mail_transport') {
     return freezeCliOperation({
       ...passiveCliOperation(command, capabilityId, {
         planes: ['local_cli_authorised_active'],
@@ -1643,7 +1680,7 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       credentialModel: 'required_public_trust_file',
     });
   }
-  if (command === 'workflow-run') {
+  if (policy.kind === 'workflow_run') {
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
@@ -1702,12 +1739,13 @@ function cliOperation(command: string, capabilityId: CapabilityId): CliOperation
       ],
     });
   }
-  return offlineCliOperation(command, capabilityId);
+  const unhandledPolicy: never = policy;
+  throw new Error(`CLI operation policy is not implemented: ${JSON.stringify(unhandledPolicy)}`);
 }
 
 const cliOperations: readonly CliOperationDefinition[] = Object.freeze(
-  Object.entries(CLI_CAPABILITY_BINDINGS).map(([command, capabilityId]) => (
-    cliOperation(command, capabilityId)
+  (Object.keys(CLI_CAPABILITY_BINDINGS) as CliCommand[]).map((command) => (
+    cliOperation(command, CLI_CAPABILITY_BINDINGS[command])
   )),
 );
 

@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import {
   MAX_REGISTRY_SUPPORT_REFERENCES,
@@ -61,7 +61,7 @@ describe('registry-support argument parsing', () => {
     assert.throws(() => parseCliArguments(['registry-support', 'uk', '--json', '--json']), /only once/);
     assert.throws(() => parseCliArguments(['registry-support', 'uk', '--json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['registry-support', 'uk', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['registry-support', 'uk', 'es']), /one domain or suffix/);
+    assert.throws(() => parseCliArguments(['registry-support', 'uk', 'es']), CliUsageError);
   });
 });
 

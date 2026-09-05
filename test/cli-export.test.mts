@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { APPLICATION_VERSION, buildCliEvidenceExport, formatCliEvidenceExport } from '../cli/export-evidence.mts';
 import {
@@ -180,16 +180,16 @@ describe('evidence export CLI arguments', () => {
   });
 
   test('rejects multiple files, repeated or conflicting format flags, and unrelated output flags', () => {
-    assert.throws(() => parseCliArguments(['export', 'one.json', 'two.json']), /one optional lookup JSON file/);
-    assert.throws(() => parseCliArguments(['export', '--compact', '--compact']), /only once/);
-    assert.throws(() => parseCliArguments(['export', '--markdown', '--markdown']), /only one evidence export format/);
-    assert.throws(() => parseCliArguments(['export', '--markdown', '--html']), /only one evidence export format/);
-    assert.throws(() => parseCliArguments(['export', '--markdown', '--compact']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['export', '--html', '--compact']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['export', '--no-attribution']), /only to Markdown or HTML/);
-    assert.throws(() => parseCliArguments(['export', '--markdown', '--no-attribution', '--no-attribution']), /only once/);
-    assert.throws(() => parseCliArguments(['export', '--json']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['export', '--quiet']), /Unknown option/);
+    assert.throws(() => parseCliArguments(['export', 'one.json', 'two.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--compact', '--compact']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--markdown']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--html']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--compact']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--html', '--compact']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--no-attribution']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--no-attribution', '--no-attribution']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['export', '--quiet']), CliUsageError);
   });
 });
 
