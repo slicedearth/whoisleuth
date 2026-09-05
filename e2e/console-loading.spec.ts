@@ -3,14 +3,18 @@ import type { CDPSession, Page, TestInfo } from '@playwright/test';
 import {
   PERFORMANCE_SAMPLE_COUNT,
   PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+  installNavigationReadinessMark,
   performanceSampleMedian,
+  readNavigationReadinessMark,
   resetPerformanceSampleState,
+  type BrowserReadinessTarget,
 } from './performance-sampling';
 
 type ConsoleRoute = Readonly<{
   path: '/lookup' | '/monitor' | '/cli';
   heading: 'Lookup' | 'Monitor' | 'WHOISleuth CLI';
   readyControl: 'lookup-input' | 'monitor-inbox' | 'cli-search';
+  readinessTargets: readonly BrowserReadinessTarget[];
   budget: Readonly<{
     encodedTransferBytes: number;
     usableMs: number;
@@ -33,8 +37,9 @@ type RuntimeProbe = Readonly<{
 
 type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   schema: 'whoisleuth.console-loading-measurement';
-  version: 1;
+  version: 2;
   mode: 'authenticated_local_chromium_cold_load';
+  readinessClock: 'navigation_start_to_animation_frame';
   path: ConsoleRoute['path'];
   budget: ConsoleRoute['budget'];
   encodedTransferBytes: number;
@@ -45,7 +50,7 @@ type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
 
 type ConsoleLoadingSampleSet = Readonly<{
   schema: 'whoisleuth.console-loading-sample-set';
-  version: 1;
+  version: 2;
   mode: 'authenticated_local_chromium_repeated_cold_load';
   path: ConsoleRoute['path'];
   budget: ConsoleRoute['budget'];
@@ -58,16 +63,17 @@ type ConsoleLoadingSampleSet = Readonly<{
   limitations: readonly string[];
 }>;
 
-// Calibrated from repeated isolated and suite-ordered local production-build
-// cold loads on 2026-08-24. The maxima include first-route process and browser
-// cache variance instead of relying only on warmed suite timings.
+// Calibrated from nine browser-marked samples across three clean isolated
+// local production-build runs on 2026-09-05. The maxima include first-route
+// process and browser-cache variance instead of relying only on warmed suite
+// timings. Browser marks exclude host assertion polling from route readiness.
 // Transfer ceilings add 20% and round up to 64 KiB; readiness and long-task
 // ceilings add 50% and round up to 50 ms and 10 ms respectively. Layout
 // ceilings add 50% and round up to 0.005, with small zero-observation floors.
 const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
-  '/lookup': Object.freeze({ encodedTransferBytes: 1_979_140, usableMs: 748.7, longTaskTotalMs: 82, layoutShiftScore: 0 }),
-  '/monitor': Object.freeze({ encodedTransferBytes: 1_748_707, usableMs: 1_627.7, longTaskTotalMs: 68, layoutShiftScore: 0.0064 }),
-  '/cli': Object.freeze({ encodedTransferBytes: 466_249, usableMs: 250.7, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
+  '/lookup': Object.freeze({ encodedTransferBytes: 2_125_921, usableMs: 511.3, longTaskTotalMs: 92, layoutShiftScore: 0 }),
+  '/monitor': Object.freeze({ encodedTransferBytes: 1_831_989, usableMs: 341.1, longTaskTotalMs: 0, layoutShiftScore: 0.0064 }),
+  '/cli': Object.freeze({ encodedTransferBytes: 513_179, usableMs: 91.8, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
 });
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
@@ -88,18 +94,30 @@ const routes: readonly ConsoleRoute[] = Object.freeze([
     path: '/lookup',
     heading: 'Lookup',
     readyControl: 'lookup-input',
+    readinessTargets: Object.freeze([
+      Object.freeze({ selector: 'h1', exactText: 'Lookup' }),
+      Object.freeze({ selector: '#query', requireEnabled: true }),
+    ]),
     budget: coldLoadBudget('/lookup'),
   }),
   Object.freeze({
     path: '/monitor',
     heading: 'Monitor',
     readyControl: 'monitor-inbox',
+    readinessTargets: Object.freeze([
+      Object.freeze({ selector: 'h1', exactText: 'Monitor' }),
+      Object.freeze({ selector: '#tab-inbox', requireEnabled: true }),
+    ]),
     budget: coldLoadBudget('/monitor'),
   }),
   Object.freeze({
     path: '/cli',
     heading: 'WHOISleuth CLI',
     readyControl: 'cli-search',
+    readinessTargets: Object.freeze([
+      Object.freeze({ selector: 'h1', exactText: 'WHOISleuth CLI' }),
+      Object.freeze({ selector: '.filters input[type="search"]', requireEnabled: true }),
+    ]),
     budget: coldLoadBudget('/cli'),
   }),
 ]);
@@ -208,6 +226,7 @@ async function measureConsoleRoute(
   await session.send('Network.enable');
   try {
     await page.goto(route.path, { waitUntil: 'domcontentloaded' });
+    const usableMs = await readNavigationReadinessMark(page);
     await page.getByRole('heading', { name: route.heading, exact: true }).waitFor();
     const readyControl = route.readyControl === 'lookup-input'
       ? page.getByRole('textbox', { name: 'Domain, IP address, ASN, or domain list' })
@@ -216,12 +235,12 @@ async function measureConsoleRoute(
         : page.getByRole('searchbox', { name: 'Search commands' });
     await readyControl.waitFor();
     await expect(readyControl).toBeEnabled();
-    const usableMs = await page.evaluate(() => Math.round(performance.now() * 100) / 100);
     await page.waitForLoadState('networkidle');
     const measurement: ConsoleLoadingMeasurement = Object.freeze({
       schema: 'whoisleuth.console-loading-measurement',
-      version: 1,
+      version: 2,
       mode: 'authenticated_local_chromium_cold_load',
+      readinessClock: 'navigation_start_to_animation_frame',
       path: route.path,
       budget: route.budget,
       ...transfer(),
@@ -230,6 +249,8 @@ async function measureConsoleRoute(
       limitations: Object.freeze([
         'This is a local production-style server measurement, not production latency.',
         'The desktop Chromium result does not represent mobile hardware or visitor network conditions.',
+        'Usable time is a browser-side navigation mark captured on the first animation frame where the route heading and primary control are visible and enabled.',
+        'Host command and assertion-polling duration is excluded from usable time.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Ceilings are reviewed regression limits derived from repeated clean local production-build runs with documented headroom.',
         'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
@@ -249,6 +270,7 @@ async function measureConsoleRoute(
 for (const route of routes) {
   test(`authenticated cold load for ${route.path} preserves deterministic loading contracts`, async ({ page }, testInfo) => {
     await installMainThreadProbe(page);
+    await installNavigationReadinessMark(page, route.readinessTargets);
     const measurements: ConsoleLoadingMeasurement[] = [];
     for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
       await resetPerformanceSampleState(page);
@@ -264,7 +286,7 @@ for (const route of routes) {
     }
     const sampleSet: ConsoleLoadingSampleSet = Object.freeze({
       schema: 'whoisleuth.console-loading-sample-set',
-      version: 1,
+      version: 2,
       mode: 'authenticated_local_chromium_repeated_cold_load',
       path: route.path,
       budget: route.budget,

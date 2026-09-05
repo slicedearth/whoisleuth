@@ -498,6 +498,12 @@ describe('continuous integration workflow', () => {
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /export const PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER = 2;/u);
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /Network\.clearBrowserCache/u);
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /Storage\.clearDataForOrigin/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /runtime\.startedAt = performance\.now\(\)/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /runtime\.readyAt = performance\.now\(\)/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /runtime\.animationFrame = requestAnimationFrame\(poll\)/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /scope\.__whoisleuthNavigationReadyAt = performance\.now\(\)/u);
+    assert.match(consoleOutsideAuthority, /const usableMs = await readNavigationReadinessMark\(page\);/u);
+    assert.match(consoleOutsideAuthority, /readinessClock: 'navigation_start_to_animation_frame'/u);
     assert.match(consoleOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
     assert.match(consoleOutsideAuthority, /resetPerformanceSampleState\(page\)/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
@@ -516,6 +522,10 @@ describe('continuous integration workflow', () => {
     assert.match(deferredOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
     assert.match(deferredOutsideAuthority, /resetPerformanceSampleState\(options\.page\)/u);
     assert.match(deferredOutsideAuthority, /await options\.prepare\(sample\)/u);
+    assert.match(deferredOutsideAuthority, /const \{ browserReadyMs: usableMs \} = await readBrowserInteractionReadiness\(options\.page\);/u);
+    assert.match(deferredOutsideAuthority, /readinessClock: 'browser_event_to_animation_frame'/u);
+    assert.match(deferredOutsideAuthority, /hostActionMsMedian/u);
+    assert.doesNotMatch(deferredOutsideAuthority, /const usableMs = round\(performance\.now\(\) -/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.completedAssetRequestCount[^\n]+\)\.toBeGreaterThan/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.assetEncodedTransferBytes\)\.toBeLessThanOrEqual/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);

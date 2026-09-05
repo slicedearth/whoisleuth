@@ -8,8 +8,12 @@ import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import {
   PERFORMANCE_SAMPLE_COUNT,
   PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
+  abortBrowserInteractionReadiness,
+  beginBrowserInteractionReadiness,
   performanceSampleMedian,
+  readBrowserInteractionReadiness,
   resetPerformanceSampleState,
+  type BrowserInteractionReadiness,
 } from './performance-sampling';
 
 type InteractionId =
@@ -45,14 +49,16 @@ type RuntimeProbe = Readonly<{
 
 type DeferredInteractionMeasurement = Readonly<{
   schema: 'whoisleuth.deferred-interaction-measurement';
-  version: 1;
+  version: 2;
   mode: 'authenticated_local_chromium_production_build';
+  readinessClock: 'browser_event_to_animation_frame';
   interaction: InteractionId;
   path: string;
   budget: InteractionBudget;
   assetEncodedTransferBytes: number;
   completedAssetRequestCount: number;
   usableMs: number;
+  hostActionMs: number;
   longTaskSupported: boolean;
   longTaskCount: number;
   longTaskTotalMs: number;
@@ -67,7 +73,7 @@ type DeferredInteractionMeasurement = Readonly<{
 
 type DeferredInteractionSampleSet = Readonly<{
   schema: 'whoisleuth.deferred-interaction-sample-set';
-  version: 1;
+  version: 2;
   mode: 'authenticated_local_chromium_repeated_interaction';
   interaction: InteractionId;
   path: string;
@@ -75,20 +81,23 @@ type DeferredInteractionSampleSet = Readonly<{
   sampleCount: number;
   usableMsMedian: number;
   usableMsMaximum: number;
+  hostActionMsMedian: number;
+  hostActionMsMaximum: number;
   longTaskTotalMsMedian: number;
   longTaskTotalMsMaximum: number;
   samples: readonly DeferredInteractionMeasurement[];
   limitations: readonly string[];
 }>;
 
-// Calibrated from three clean local production-build runs on 2026-08-24.
+// Calibrated from nine browser-marked samples across three clean isolated
+// local production-build runs on 2026-09-05. Browser event-to-frame marks
+// exclude host command, keyboard-dispatch and assertion-polling time.
 // The CLI filter row measures one real keyboard refinement after a prefilled
 // multi-result query. That keeps the browser recent-input semantics while
 // excluding artificial driver time for a no-delay multi-character sequence.
-// The Case response row was remeasured on 2026-08-25 after its module moved
-// into the canonical Cases-view preload packet. The prepared workspace remains
-// inside a closed native disclosure, and this row measures Case expansion,
-// hidden workspace readiness, and its deliberate reveal as one interaction.
+// The Case response row measures deliberate disclosure of the already-prepared
+// workspace. Case expansion and its host-side readiness assertions are setup,
+// not part of the browser-visible reveal interval.
 // The public Case handoff was remeasured on 2026-09-05 after the current Case
 // contract added type-specific readiness and reviewed response context. Its
 // generated example remains one deferred asset; the ceiling tracks the
@@ -98,16 +107,16 @@ type DeferredInteractionSampleSet = Readonly<{
 // ceilings add 50% and round up to 0.005. Zero-observation floors preserve a
 // small measurement allowance without turning these tripwires into targets.
 const INTERACTION_OBSERVED_MAXIMA = Object.freeze({
-  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 156.02, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 40.42, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, usableMs: 61.65, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 7_955, usableMs: 357.43, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_533, usableMs: 209.61, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_559, usableMs: 52.37, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 59_182, usableMs: 127.71, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 68_765, usableMs: 195.37, longTaskTotalMs: 72, layoutShiftScore: 0 }),
-  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 130.89, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 118.1, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 11.4, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 19.6, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, usableMs: 30.2, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, usableMs: 187.4, longTaskTotalMs: 56, layoutShiftScore: 0 }),
+  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, usableMs: 63.5, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, usableMs: 31.2, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 30.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, usableMs: 55.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 19.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 17.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
 });
 
 function roundUp(value: number, quantum: number): number {
@@ -360,6 +369,7 @@ type DeferredInteractionOptions = Readonly<{
   path: string;
   prepare: (sample: number) => Promise<void>;
   action: () => Promise<void>;
+  browserReadiness: BrowserInteractionReadiness;
   ready: Locator;
   readyControl?: Locator;
   budget?: InteractionBudget;
@@ -373,27 +383,31 @@ async function measureDeferredInteractionSample(
   const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
   await options.page.waitForLoadState('networkidle');
   const probe = await beginInteractionProbe(options.page);
-  const startedAt = performance.now();
   try {
+    await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
+    const hostStartedAt = performance.now();
     await options.action();
+    const hostActionMs = round(performance.now() - hostStartedAt);
+    const { browserReadyMs: usableMs } = await readBrowserInteractionReadiness(options.page);
     await expect(options.ready, `${options.interaction} must render its deferred target`).toBeVisible();
     if (options.readyControl) {
       await expect(options.readyControl, `${options.interaction} must expose a usable control`).toBeVisible();
       await expect(options.readyControl).toBeEnabled();
     }
-    const usableMs = round(performance.now() - startedAt);
     const captured = await probe.close();
     if (!captured) throw new Error(`The ${options.interaction} measurement probe closed before recording.`);
     const measurement: DeferredInteractionMeasurement = Object.freeze({
       schema: 'whoisleuth.deferred-interaction-measurement',
-      version: 1,
+      version: 2,
       mode: 'authenticated_local_chromium_production_build',
+      readinessClock: 'browser_event_to_animation_frame',
       interaction: options.interaction,
       path: options.path,
       budget,
       assetEncodedTransferBytes: captured.assetEncodedTransferBytes,
       completedAssetRequestCount: captured.completedAssetRequestCount,
       usableMs,
+      hostActionMs,
       longTaskSupported: captured.runtime.longTaskSupported,
       longTaskCount: captured.runtime.longTaskCount,
       longTaskTotalMs: captured.runtime.longTaskTotalMs,
@@ -406,6 +420,8 @@ async function measureDeferredInteractionSample(
       limitations: Object.freeze([
         'This is a local production-build interaction measurement, not production latency.',
         'The desktop Chromium process does not represent all visitor hardware or network conditions.',
+        'Usable time starts at the triggering browser event and ends on the first animation frame where the declared target and control are visible and enabled.',
+        'Host command, keyboard dispatch and assertion-polling duration is excluded from usable time; host action duration is retained separately as diagnostic context.',
         'Transfer includes same-origin JavaScript and CSS completed after the explicit action.',
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
@@ -438,6 +454,7 @@ async function measureDeferredInteractionSample(
     expect(captured.investigationRequests, 'module loading must not start an investigation or collection request').toEqual([]);
     return measurement;
   } catch (cause) {
+    await abortBrowserInteractionReadiness(options.page);
     await probe.abort();
     throw cause;
   }
@@ -453,7 +470,7 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
   }
   const sampleSet: DeferredInteractionSampleSet = Object.freeze({
     schema: 'whoisleuth.deferred-interaction-sample-set',
-    version: 1,
+    version: 2,
     mode: 'authenticated_local_chromium_repeated_interaction',
     interaction: options.interaction,
     path: options.path,
@@ -461,12 +478,15 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
     sampleCount: measurements.length,
     usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
     usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+    hostActionMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostActionMs)),
+    hostActionMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostActionMs)),
     longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
     longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
     samples: Object.freeze([...measurements]),
     limitations: Object.freeze([
       'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
       'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
+      'Browser-visible readiness and host action duration are retained separately; only browser-visible readiness is compared with the usable-time budget.',
       'Every sample remains subject to transfer, request and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
     ]),
   });
@@ -607,6 +627,13 @@ test('measures a deferred public CLI command detail without collection', async (
       await open.focus();
       await page.keyboard.press('Enter');
     },
+    browserReadiness: {
+      start: { event: 'click', selector: 'article[data-command="commands"] .command-row > button' },
+      targets: [
+        { selector: '#command-detail-commands' },
+        { selector: 'article[data-command-detail="commands"] .back-to-results', requireEnabled: true },
+      ],
+    },
     ready: detail,
     readyControl: workspace.getByRole('link', { name: /Back to/u }),
     requireAsset: false,
@@ -633,6 +660,13 @@ test('measures request-free local filtering of the public CLI catalogue', async 
     },
     action: async () => {
       await page.keyboard.press('p');
+    },
+    browserReadiness: {
+      start: { event: 'input', selector: '.filters input[type="search"]' },
+      targets: [
+        { selector: '.filter-status', exactText: `Showing 1 of ${CLI_COMMANDS.length} commands.` },
+        { selector: 'article[data-command="workflow-plan"] .command-row > button', requireEnabled: true },
+      ],
     },
     ready: filteredStatus,
     readyControl: workflowPlan.locator(':scope > .command-row > button'),
@@ -661,6 +695,13 @@ test('measures a deferred large synthetic public example without collection', as
       await disclosure.focus();
       await page.keyboard.press('Enter');
     },
+    browserReadiness: {
+      start: { event: 'click', selector: 'article[data-example="case-handoff"] > button' },
+      targets: [
+        { selector: '[aria-label="Importable public Case handoff synthetic output"]' },
+        { selector: 'article[data-example="case-handoff"] .output-actions button', requireEnabled: true },
+      ],
+    },
     ready: output,
     readyControl: example.getByRole('button', { name: 'Download example' }),
   });
@@ -685,6 +726,13 @@ test('measures a later fictional demo stage without opening production storage',
         .some((database) => database.name === 'whoisleuth-browser-data-v1'))).toBe(false);
     },
     action: () => start.click(),
+    browserReadiness: {
+      start: { event: 'click', selector: '#demo-workspace button.primary' },
+      targets: [
+        { selector: '#brand-heading', exactText: 'Define the official identity' },
+        { selector: '#demo-workspace .profile-handoff button.primary', requireEnabled: true },
+      ],
+    },
     ready: heading,
     readyControl: page.getByRole('button', { name: 'Use synthetic profile' }),
   });
@@ -708,6 +756,13 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
     },
     action: async () => {
       await selectedTab.click();
+    },
+    browserReadiness: {
+      start: { event: 'click', selector: '#tab-relationships' },
+      targets: [
+        { selector: '.case-relationship-workspace' },
+        { selector: '#tab-relationships[aria-selected="true"]', requireEnabled: true },
+      ],
     },
     ready: relationshipWorkspace,
     readyControl: selectedTab,
@@ -738,6 +793,13 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
     },
     action: async () => {
       await workbench.selectOption('portfolio');
+    },
+    browserReadiness: {
+      start: { event: 'change', selector: '#brand-workbench' },
+      targets: [
+        { selector: '#portfolio-posture-matrix-title', exactText: 'Owned-domain comparison' },
+        { selector: '#brand-workbench', requireEnabled: true },
+      ],
     },
     ready: heading,
     readyControl: workbench,
@@ -770,14 +832,25 @@ test('measures a deferred Bulk cohort-analysis workspace after collection comple
       await page.getByRole('button', { name: 'Scan 3 domains' }).click();
       await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
       await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
+      // Entering Analysis owns the best-effort preload. The measured
+      // disclosure is therefore a request-free interaction with that module.
+      await analysisView.click();
+      await expect(analysisView).toHaveAttribute('aria-pressed', 'true');
       await expect(outlierHeading).toHaveCount(0);
     },
     action: async () => {
-      await analysisView.click();
       await page.getByRole('button', { name: /Cohort outliers/u }).click();
+    },
+    browserReadiness: {
+      start: { event: 'click', selector: '#bulk-analysis-panel .mobile-disclosure-toggle' },
+      targets: [
+        { selector: '#bulk-outlier-title', exactText: 'Local cohort outliers' },
+        { selector: '#bulk-analysis-panel .mobile-disclosure-content' },
+      ],
     },
     ready: outlierHeading,
     readyControl: page.getByRole('button', { name: /Cohort outliers/u }),
+    requireAsset: false,
   });
   await expect(analysisView).toHaveAttribute('aria-pressed', 'true');
   await expectNoHorizontalOverflow(page);
@@ -810,6 +883,13 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
       await familyToggle.focus();
       await page.keyboard.press('Enter');
     },
+    browserReadiness: {
+      start: { event: 'click', selector: '#web-evidence > button.family-summary' },
+      targets: [
+        { selector: '#evidence-dns .dns-card' },
+        { selector: '#evidence-dns .dns-card > summary' },
+      ],
+    },
     ready: dnsHeading,
     readyControl: page.locator('#evidence-dns .dns-card > summary'),
   });
@@ -839,14 +919,21 @@ test('measures the deferred Case response and packet workspace', async ({ page }
       }, { clearStorage: true, destination: '/monitor?view=cases' });
       await expect(caseHeading).toBeVisible();
       await expect(disclosure).toHaveCount(0);
-    },
-    action: async () => {
       await caseHeading.click();
       await expect(disclosure).toBeVisible();
       await expect(responseWorkspace).toBeAttached();
       await expect(responseWorkspace).toBeHidden();
+    },
+    action: async () => {
       await summary.focus();
       await page.keyboard.press('Enter');
+    },
+    browserReadiness: {
+      start: { event: 'click', selector: '#case-response-deferred-response-case > summary' },
+      targets: [
+        { selector: '#case-response-deferred-response-case .response-workspace' },
+        { selector: '#case-response-deferred-response-case .presentation-switch button:nth-child(2)', requireEnabled: true },
+      ],
     },
     ready: responseWorkspace,
     readyControl: advancedPresentation,
@@ -872,6 +959,13 @@ test('measures command navigation and preserves shortcut focus recovery', async 
       await expect(dialog).toHaveCount(0);
     },
     action: () => page.keyboard.press('Control+K'),
+    browserReadiness: {
+      start: { event: 'keydown', key: 'k', controlOrMeta: true },
+      targets: [
+        { selector: '[role="dialog"][aria-labelledby="command-palette-title"]' },
+        { selector: '#command-search', requireEnabled: true },
+      ],
+    },
     ready: dialog,
     readyControl: search,
     requireAsset: false,
