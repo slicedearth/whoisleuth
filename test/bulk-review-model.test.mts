@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  BULK_AGE_FILTERS,
+  BULK_GROUP_OPTIONS,
+  BULK_LIFECYCLE_FILTERS,
+  BULK_MAIL_FILTERS,
   BULK_REVIEW_SCHEMA,
   BULK_REVIEW_SCHEMA_VERSION,
+  BULK_SOURCE_FILTERS,
   buildBulkReviewExport,
   mergeBulkReviewStores,
   normalizeBulkReviewStore,
@@ -20,9 +25,9 @@ function view() {
     mutationFilter: 'homoglyph',
     signalFilters: ['password', 'idn'],
     sourceFilter: 'limited',
-    lifecycleFilter: 'new',
-    ageFilter: '30d',
-    mailFilter: 'dmarc_missing',
+    lifecycleFilter: 'registered',
+    ageFilter: 'new_30',
+    mailFilter: 'authenticated',
     registrarFilter: 'Example Registrar',
     caseDispositionFilter: 'unreviewed',
     reviewStateFilter: 'reviewing',
@@ -45,6 +50,32 @@ describe('Bulk review model', () => {
       { domain: 'example.invalid', state: 'reviewing' },
     ]);
     assert.equal(JSON.stringify(store).includes('results'), false);
+  });
+
+  test('round-trips every current advanced filter and presentation option', () => {
+    const current = {
+      ...view(),
+      sourceFilter: 'unrecorded',
+      lifecycleFilter: 'registered',
+      ageFilter: 'new_30',
+      mailFilter: 'authenticated',
+      groupBy: 'tld',
+      sortKey: 'confidence',
+    };
+    const stored = upsertBulkReviewPreset(null, { id: 'current-view', name: 'Current controls', view: current }, EARLIER);
+    assert.deepEqual(stored.presets[0]?.view, current);
+    for (const [field, values] of [
+      ['sourceFilter', BULK_SOURCE_FILTERS],
+      ['lifecycleFilter', BULK_LIFECYCLE_FILTERS],
+      ['ageFilter', BULK_AGE_FILTERS],
+      ['mailFilter', BULK_MAIL_FILTERS],
+      ['groupBy', BULK_GROUP_OPTIONS],
+    ] as const) {
+      for (const value of values) {
+        const candidate = upsertBulkReviewPreset(null, { name: `${field}-${value || 'all'}`, view: { ...view(), [field]: value } }, EARLIER);
+        assert.equal(candidate.presets[0]?.view[field], value, `${field}:${value}`);
+      }
+    }
   });
 
   test('uses unreviewed as the implicit state and removes an unnecessary row record', () => {

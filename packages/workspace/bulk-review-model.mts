@@ -1,4 +1,5 @@
 import { normalizeDomain } from '../cases/case-model.mts';
+import { CASE_DISPOSITIONS as CASE_DISPOSITION_OPTIONS } from '../cases/case-record-contracts.mts';
 import { normalizeBulkPresentationSortKey } from './bulk-sort.mts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
@@ -24,19 +25,29 @@ export {
 export const BULK_REVIEW_STATES = ['unreviewed', 'reviewing', 'reviewed', 'deferred'] as const;
 export type BulkReviewState = typeof BULK_REVIEW_STATES[number];
 export type BulkReviewFilter = '' | BulkReviewState;
+export const BULK_SOURCE_FILTERS = ['', 'complete', 'limited', 'unrecorded'] as const;
+export const BULK_LIFECYCLE_FILTERS = ['', 'registered', 'for_sale', 'expiring', 'available', 'unknown', 'error'] as const;
+export const BULK_AGE_FILTERS = ['', 'new_30', 'new_365', 'older_365', 'unknown'] as const;
+export const BULK_MAIL_FILTERS = ['', 'mail', 'no_mail', 'authenticated', 'auth_gap', 'unknown'] as const;
+export const BULK_GROUP_OPTIONS = ['', 'mutation', 'tld', 'registrar', 'nameserver'] as const;
+export type BulkSourceFilter = typeof BULK_SOURCE_FILTERS[number];
+export type BulkLifecycleFilter = typeof BULK_LIFECYCLE_FILTERS[number];
+export type BulkAgeFilter = typeof BULK_AGE_FILTERS[number];
+export type BulkMailFilter = typeof BULK_MAIL_FILTERS[number];
+export type BulkGroupBy = typeof BULK_GROUP_OPTIONS[number];
 
 export type BulkReviewPresetView = {
   primaryFilter: string;
   mutationFilter: string;
   signalFilters: string[];
-  sourceFilter: string;
-  lifecycleFilter: string;
-  ageFilter: string;
-  mailFilter: string;
+  sourceFilter: BulkSourceFilter;
+  lifecycleFilter: BulkLifecycleFilter;
+  ageFilter: BulkAgeFilter;
+  mailFilter: BulkMailFilter;
   registrarFilter: string;
   caseDispositionFilter: string;
   reviewStateFilter: BulkReviewFilter;
-  groupBy: string;
+  groupBy: BulkGroupBy;
   sortKey: BulkSortKey;
   sortDirection: BulkSortDirection;
 };
@@ -69,14 +80,14 @@ export type BulkReviewStore = {
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
 const PRIMARY_FILTERS = new Set(['all', 'available', 'registered', 'high_risk', 'trusted', 'profile_unevaluated', 'errors']);
-const SOURCE_FILTERS = new Set(['', 'complete', 'limited', 'failed']);
-const LIFECYCLE_FILTERS = new Set(['', 'new', 'expiring', 'aged', 'unknown']);
-const AGE_FILTERS = new Set(['', '7d', '30d', '90d', '365d', 'older', 'unknown']);
-const MAIL_FILTERS = new Set(['', 'mx', 'no_mx', 'spf_missing', 'dmarc_missing', 'unknown']);
-const GROUPS = new Set(['', 'registrar', 'nameserver', 'source_state', 'lifecycle', 'mail']);
-const SORT_KEYS = new Set<BulkSortKey>(['domain', 'availability', 'risk', 'opportunity', 'activity', 'registrar', 'mutation']);
+const SOURCE_FILTERS = new Set<string>(BULK_SOURCE_FILTERS);
+const LIFECYCLE_FILTERS = new Set<string>(BULK_LIFECYCLE_FILTERS);
+const AGE_FILTERS = new Set<string>(BULK_AGE_FILTERS);
+const MAIL_FILTERS = new Set<string>(BULK_MAIL_FILTERS);
+const GROUPS = new Set<string>(BULK_GROUP_OPTIONS);
+const SORT_KEYS = new Set<BulkSortKey>(['domain', 'availability', 'confidence', 'risk', 'opportunity', 'activity', 'registrar', 'mutation']);
 const REVIEW_STATES = new Set<string>(BULK_REVIEW_STATES);
-const CASE_DISPOSITIONS = new Set(['', 'untracked', 'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action']);
+const CASE_DISPOSITIONS = new Set(['', 'untracked', ...CASE_DISPOSITION_OPTIONS.map((item) => item.value)]);
 const SIGNAL_FILTERS = new Set(['favicon', 'password', 'phishing', 'asset_reuse', 'idn']);
 
 function record(value: unknown): Record<string, unknown> {
@@ -117,14 +128,14 @@ function normalizeView(raw: unknown): BulkReviewPresetView {
     primaryFilter: setValue(value.primaryFilter, PRIMARY_FILTERS, 'all'),
     mutationFilter: text(value.mutationFilter, 60),
     signalFilters,
-    sourceFilter: setValue(value.sourceFilter, SOURCE_FILTERS),
-    lifecycleFilter: setValue(value.lifecycleFilter, LIFECYCLE_FILTERS),
-    ageFilter: setValue(value.ageFilter, AGE_FILTERS),
-    mailFilter: setValue(value.mailFilter, MAIL_FILTERS),
+    sourceFilter: setValue(value.sourceFilter, SOURCE_FILTERS) as BulkSourceFilter,
+    lifecycleFilter: setValue(value.lifecycleFilter, LIFECYCLE_FILTERS) as BulkLifecycleFilter,
+    ageFilter: setValue(value.ageFilter, AGE_FILTERS) as BulkAgeFilter,
+    mailFilter: setValue(value.mailFilter, MAIL_FILTERS) as BulkMailFilter,
     registrarFilter: text(value.registrarFilter, 200),
     caseDispositionFilter: setValue(value.caseDispositionFilter, CASE_DISPOSITIONS),
     reviewStateFilter: setValue(value.reviewStateFilter, new Set(['', ...BULK_REVIEW_STATES])) as BulkReviewFilter,
-    groupBy: setValue(value.groupBy, GROUPS),
+    groupBy: setValue(value.groupBy, GROUPS) as BulkGroupBy,
     sortKey,
     sortDirection: value.sortDirection === 1 ? 1 : -1,
   };

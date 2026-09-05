@@ -1,6 +1,7 @@
 import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import {
   assertDetectionRuleStoreBudget,
   buildDetectionRuleExport,
@@ -17,6 +18,7 @@ import {
   mergeDetectionRules,
   normalizeDetectionRule,
   normalizeDetectionRuleStore,
+  recoverDetectionRuleStore,
   normalizeRuleCondition,
   operatorsForRuleField,
   serializeDetectionRuleStore,
@@ -32,7 +34,7 @@ function snapshot(overrides = {}) {
 }
 
 function caseRecord(overrides = {}) {
-  return { id: 'case-1', domain: 'example.invalid', status: 'investigating', disposition: 'suspicious', tags: ['priority'], notes: [], source: 'lookup', evidenceHistory: [snapshot()], createdAt: '2026-07-14T00:00:00.000Z', updatedAt: '2026-07-14T00:00:00.000Z', ...overrides };
+  return { id: 'case-1', domain: 'example.invalid', status: 'reviewing', disposition: 'suspicious', tags: ['priority'], notes: [], source: 'lookup', evidenceHistory: [snapshot()], createdAt: '2026-07-14T00:00:00.000Z', updatedAt: '2026-07-14T00:00:00.000Z', ...overrides };
 }
 
 function rule(overrides = {}) {
@@ -55,7 +57,7 @@ test('normalizes allowlisted conditions and rejects executable or malformed inpu
 });
 
 test('normalizes and bounds a complete rule', () => {
-  const conditions = Array.from({ length: MAX_RULE_CONDITIONS + 3 }, () => ({ field: 'hasMx', operator: 'equals', value: true }));
+  const conditions = Array.from({ length: MAX_RULE_CONDITIONS }, () => ({ field: 'hasMx', operator: 'equals', value: true }));
   const result = normalizeDetectionRule(rule({ name: '  Match   mail  ', conditions, riskDelta: 999, tag: ' REVIEW ' }));
   assert.ok(result);
   assert.equal(result.name, 'Match mail');
@@ -74,10 +76,12 @@ test('rejects rules without names, ids, or valid conditions at the right boundar
   assert.equal(preservedInvalidId.id, null);
   assert.ok(typeof generatedId.id === 'string');
   assert.match(generatedId.id, /^[A-Za-z0-9_-]{1,64}$/);
+  assert.equal(normalizeDetectionRule(rule({ conditions: Array.from({ length: MAX_RULE_CONDITIONS + 1 }, () => ({ field: 'hasMx', operator: 'equals', value: true })) })), null);
 });
 
 test('evaluates boolean, numeric, enum, text, list and case-level conditions', () => {
-  const record = caseRecord();
+  const record = normalizeCaseStore([caseRecord()]).cases[0];
+  assert.ok(record);
   assert.equal(conditionMatchesCase({ field: 'hasPasswordField', operator: 'equals', value: true }, record), true);
   assert.equal(conditionMatchesCase({ field: 'riskScore', operator: 'at_least', value: 60 }, record), true);
   assert.equal(conditionMatchesCase({ field: 'availability', operator: 'equals', value: 'registered' }, record), true);
@@ -85,6 +89,10 @@ test('evaluates boolean, numeric, enum, text, list and case-level conditions', (
   assert.equal(conditionMatchesCase({ field: 'mutationTypes', operator: 'contains', value: 'unicode' }, record), true);
   assert.equal(conditionMatchesCase({ field: 'tags', operator: 'contains', value: 'priority' }, record), true);
   assert.equal(conditionMatchesCase({ field: 'hasDmarc', operator: 'equals', value: true }, record), false);
+  assert.equal(conditionMatchesCase({ field: 'status', operator: 'equals', value: 'reviewing' }, record), true);
+  assert.deepEqual(normalizeRuleCondition({ field: 'disposition', operator: 'equals', value: 'expected' }), { field: 'disposition', operator: 'equals', value: 'expected' });
+  assert.equal(normalizeRuleCondition({ field: 'status', operator: 'equals', value: 'investigating' }), null);
+  assert.equal(normalizeRuleCondition({ field: 'disposition', operator: 'equals', value: 'benign' }), null);
 });
 
 test('missing evidence fails safely instead of matching a negative finding', () => {
@@ -157,6 +165,10 @@ test('creates, updates, toggles and caps rules without source mutation', () => {
   assert.ok(updatedRecord);
   assert.equal(updatedRecord.enabled, false);
   assert.throws(() => createDetectionRule(Array.from({ length: MAX_DETECTION_RULES }, (_, index) => rule({ id: `r-${index}` })), rule()), /limited to/);
+  const mixed = [{ field: 'hasMx', operator: 'equals', value: true }, { field: 'riskScore', operator: 'at_least', value: 101 }];
+  assert.throws(() => createDetectionRule([], rule({ match: 'all', conditions: mixed })), /Condition 2/);
+  assert.throws(() => createDetectionRule([], rule({ match: 'any', conditions: mixed })), /Condition 2/);
+  assert.throws(() => updateDetectionRule(created.rules, created.record.id, { conditions: mixed }), /Condition 2/);
 });
 
 test('store recovery drops invalid, duplicate and excess records', () => {
@@ -165,6 +177,9 @@ test('store recovery drops invalid, duplicate and excess records', () => {
   assert.equal(result.version, DETECTION_RULE_SCHEMA_VERSION);
   assert.equal(result.rules.length, MAX_DETECTION_RULES);
   assert.equal(requiredValue(result.rules[0]).name, 'Login impersonation');
+  const recovery = recoverDetectionRuleStore({ rules: [rule(), rule({ id: 'mixed', conditions: [rule().conditions[0], { field: 'riskScore', operator: 'at_least', value: 101 }] })] });
+  assert.equal(recovery.store.rules.some((item) => item.id === 'mixed'), false);
+  assert.equal(recovery.rejected, 1);
 });
 
 test('import validates schema and version and merges by stable id', () => {
@@ -175,6 +190,9 @@ test('import validates schema and version and merges by stable id', () => {
   const replacement = result.rules.find((item) => item.id === 'rule-1');
   assert.ok(replacement);
   assert.equal(replacement.name, 'Replacement');
+  const mixed = rule({ id: 'mixed', conditions: [rule().conditions[0], { field: 'riskScore', operator: 'at_least', value: 101 }] });
+  const rejected = mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 1, rules: [mixed] });
+  assert.deepEqual({ rules: rejected.rules, skipped: rejected.skipped }, { rules: [], skipped: 1 });
 });
 
 test('serialization, budget and export expose only normalized portable data', () => {
