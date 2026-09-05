@@ -206,6 +206,13 @@ export type BrandProfile = {
   updatedAt: string;
 };
 
+export type BrandProfileFieldPatch = Partial<Pick<BrandProfile,
+  | 'allowlistedDomains'
+  | 'allowlistedRegistrars'
+  | 'desiredPostureBaselines'
+  | 'protectionAttestations'
+>>;
+
 export type BrandProfileStore = {
   version: typeof BRAND_PROFILE_SCHEMA_VERSION;
   profiles: BrandProfile[];
@@ -641,6 +648,37 @@ export function normalizeBrandProfile(
     createdAt,
     updatedAt: options.touch === true ? now : timestamp(value.updatedAt, createdAt),
   };
+}
+
+const BRAND_PROFILE_FIELD_PATCH_KEYS = Object.freeze([
+  'allowlistedDomains',
+  'allowlistedRegistrars',
+  'desiredPostureBaselines',
+  'protectionAttestations',
+] as const satisfies readonly (keyof BrandProfileFieldPatch)[]);
+
+/**
+ * Applies one field-owned edit to the transaction-current profile. Identity,
+ * timestamps, and every field outside the explicit patch remain owned by that
+ * current record rather than by the caller's potentially stale snapshot.
+ */
+export function applyBrandProfileFieldPatch(
+  existing: BrandProfile,
+  patch: BrandProfileFieldPatch,
+  options: Pick<NormalizeBrandProfileOptions, 'nowIso'> = {},
+): BrandProfile {
+  const merged: Record<string, unknown> = { ...existing };
+  const supplied = patch as Record<string, unknown>;
+  for (const key of BRAND_PROFILE_FIELD_PATCH_KEYS) {
+    if (Object.hasOwn(supplied, key)) merged[key] = supplied[key];
+  }
+  const normalized = normalizeBrandProfile(merged, {
+    existing,
+    nowIso: options.nowIso,
+    touch: true,
+  });
+  if (!normalized) throw new Error('The Brand Profile field update is invalid.');
+  return normalized;
 }
 
 function profileList(raw: unknown): unknown[] {

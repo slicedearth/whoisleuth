@@ -53,13 +53,13 @@ import {
 import {
   buildCaseClosureLinkContext,
   mergeCaseActions,
-  mergeCaseAssertions,
   mergeCaseClosureHistories,
-  mergeCaseDecisions,
-  mergeCaseEvidencePins,
-  mergeCaseManualTrail,
   mergeCaseObservedEffectHistories,
-  mergeCaseSightings,
+  MAX_CASE_ASSERTIONS,
+  MAX_CASE_DECISIONS,
+  MAX_CASE_EVIDENCE_PINS,
+  MAX_CASE_MANUAL_TRAIL_EVENTS,
+  MAX_CASE_SIGHTINGS,
   normalizeCaseActions,
   normalizeCaseAssertions,
   normalizeCaseClosureHistory,
@@ -97,6 +97,7 @@ type ImportPatch = {
   reviewReasonCode: string | null | undefined;
   brandProfileIds: string[];
   brandProfileReferencesOmitted: number;
+  authoredHistoryOmitted: number;
   source: string | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
@@ -290,6 +291,8 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, normalizedFallback, { ...timestampOptions, validEvidencePinIds: pinIds });
   const assertions = normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds, timestampOptions);
+  const decisions = normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds, timestampOptions);
+  const manualTrail = normalizeCaseManualTrail(record.manualTrail, normalizedFallback, timestampOptions);
   const sightings = normalizeCaseSightings(record.sightings, normalizedFallback, pinIds, timestampOptions);
   const observedEffects = normalizeCaseObservedEffectHistory(
     importedVersion >= 13 ? record.observedEffects : undefined,
@@ -310,6 +313,14 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   const brandProfileReferences = importedVersion >= 12
     ? inspectCaseBrandProfileIds(record.brandProfileIds)
     : { ids: [], omitted: 0 };
+  const authoredHistoryOmitted = [
+    [record.evidencePins, evidencePins],
+    [record.decisions, decisions],
+    [record.assertions, assertions],
+    [record.manualTrail, manualTrail],
+    [record.sightings, sightings],
+  ].reduce((total, [candidates, retained]) => total
+    + Math.max(0, (Array.isArray(candidates) ? candidates.length : 0) - (retained as unknown[]).length), 0);
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -320,6 +331,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       : undefined,
     brandProfileIds: brandProfileReferences.ids,
     brandProfileReferencesOmitted: brandProfileReferences.omitted,
+    authoredHistoryOmitted,
     source: importScalar(record.source, SOURCE_VALUES),
     evidenceHistory: normalizeEvidenceHistory(rawEvidence, {
       source: 'import',
@@ -328,10 +340,10 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       caseDomain: domain,
     }),
     evidencePins,
-    decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds, timestampOptions),
+    decisions,
     actions,
     assertions,
-    manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback, timestampOptions),
+    manualTrail,
     sightings,
     observedEffects,
     closures,
@@ -357,6 +369,26 @@ function unionNotes(a: CaseNote[], b: CaseNote[]): CaseNote[] {
   }
   const notes = [...byId.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
   return notes.slice(Math.max(0, notes.length - MAX_NOTES_PER_CASE));
+}
+
+function retainLocalAuthoredRecords<T extends { id: string }>(
+  local: readonly T[],
+  imported: readonly T[],
+  maximum: number,
+): { records: T[]; omitted: number } {
+  const records = [...local];
+  const retainedIds = new Set(records.map((item) => item.id));
+  let omitted = 0;
+  for (const item of imported) {
+    if (retainedIds.has(item.id)) continue;
+    if (records.length >= maximum) {
+      omitted += 1;
+      continue;
+    }
+    records.push(item);
+    retainedIds.add(item.id);
+  }
+  return { records, omitted };
 }
 
 // Additive, deduplicated union of two evidence histories. Identical material
@@ -410,15 +442,18 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
 function applyImportPatch(
   local: CaseRecord,
   patch: ImportPatch,
-): { record: CaseRecord; brandProfileReferencesOmitted: number } {
+): { record: CaseRecord; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
   const fallback = patch.updatedAt || local.updatedAt;
-  const evidencePins = mergeCaseEvidencePins(local.evidencePins, patch.evidencePins, fallback);
+  const pinSelection = retainLocalAuthoredRecords(local.evidencePins, patch.evidencePins, MAX_CASE_EVIDENCE_PINS);
+  const evidencePins = normalizeCaseEvidencePins(pinSelection.records, fallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = mergeCaseActions(local.actions, patch.actions, fallback, pinIds);
-  const assertions = mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds);
+  const assertionSelection = retainLocalAuthoredRecords(local.assertions, patch.assertions, MAX_CASE_ASSERTIONS);
+  const assertions = normalizeCaseAssertions(assertionSelection.records, fallback, pinIds);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
-  const sightings = mergeCaseSightings(local.sightings, patch.sightings, fallback, pinIds);
+  const sightingSelection = retainLocalAuthoredRecords(local.sightings, patch.sightings, MAX_CASE_SIGHTINGS);
+  const sightings = normalizeCaseSightings(sightingSelection.records, fallback, pinIds);
   const sightingIds = new Set(sightings.map((item) => item.id));
   const observedEffects = mergeCaseObservedEffectHistories(
     local.observedEffects,
@@ -436,6 +471,16 @@ function applyImportPatch(
     buildCaseClosureLinkContext(observedEffects, actions),
   );
   const brandProfileReferences = unionCaseBrandProfileIds(local.brandProfileIds, patch.brandProfileIds);
+  const decisionSelection = retainLocalAuthoredRecords(local.decisions, patch.decisions, MAX_CASE_DECISIONS);
+  const decisions = normalizeCaseDecisions(decisionSelection.records, fallback, pinIds);
+  const trailSelection = retainLocalAuthoredRecords(local.manualTrail, patch.manualTrail, MAX_CASE_MANUAL_TRAIL_EVENTS);
+  const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
+  const authoredHistoryOmitted = patch.authoredHistoryOmitted
+    + pinSelection.omitted
+    + decisionSelection.omitted
+    + assertionSelection.omitted
+    + trailSelection.omitted
+    + sightingSelection.omitted;
   return { record: {
     ...local,
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
@@ -445,10 +490,10 @@ function applyImportPatch(
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
     evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory, local.domain),
     evidencePins,
-    decisions: mergeCaseDecisions(local.decisions, patch.decisions, fallback, pinIds),
+    decisions,
     actions,
     assertions,
-    manualTrail: mergeCaseManualTrail(local.manualTrail, patch.manualTrail, fallback),
+    manualTrail,
     sightings,
     observedEffects,
     closures,
@@ -457,7 +502,7 @@ function applyImportPatch(
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
     updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,
-  }, brandProfileReferencesOmitted: brandProfileReferences.omitted };
+  }, brandProfileReferencesOmitted: brandProfileReferences.omitted, authoredHistoryOmitted };
 }
 
 function pickFreeId(preferred: unknown, domain: string, used: Set<string>): string {
@@ -584,12 +629,12 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
  * reinterpreted.
  * @param {CaseRecord[]} localCases
  * @param {unknown} importedRaw
- * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number }}
+ * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number, authoredHistoryOmitted: number }}
  */
 export function mergeCases(
   localCases: CaseRecord[],
   importedRaw: unknown,
-): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number } {
+): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
   assertBoundedJsonStructure(importedRaw, 'Case import', CASE_INPUT_JSON_LIMITS);
   const importedEnvelope = caseCollectionImportEnvelope(importedRaw);
   const importedVersion = parseStoreVersion(importedEnvelope);
@@ -614,6 +659,7 @@ export function mergeCases(
   const imported = boundedCaseList(importedEnvelope);
   let skipped = imported.omitted;
   let brandProfileReferencesOmitted = 0;
+  let authoredHistoryOmitted = 0;
   const fallback = new Date(0).toISOString();
   for (const item of imported.items) {
     const patch = extractImportPatch(item, supportedImportedVersion);
@@ -626,6 +672,7 @@ export function mergeCases(
       const merged = applyImportPatch(existing, patch);
       byDomain.set(patch.domain, merged.record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
+      authoredHistoryOmitted += merged.authoredHistoryOmitted;
       updated += 1;
     } else if (byDomain.size < MAX_CASES) {
       const record = caseFromPatch(patch, fallback);
@@ -633,6 +680,7 @@ export function mergeCases(
       usedIds.add(record.id);
       byDomain.set(patch.domain, record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted;
+      authoredHistoryOmitted += patch.authoredHistoryOmitted;
       added += 1;
     } else {
       skipped += 1;
@@ -644,5 +692,6 @@ export function mergeCases(
     updated,
     skipped,
     brandProfileReferencesOmitted,
+    authoredHistoryOmitted,
   };
 }

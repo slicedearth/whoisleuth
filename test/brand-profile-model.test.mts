@@ -2,6 +2,7 @@ import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyBrandProfileFieldPatch,
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA_VERSION,
   brandProfileStoreVersion,
@@ -72,6 +73,63 @@ test('normalizes semantic list fields and drops unusable values', () => {
   assert.deepEqual(result.allowlistedDomains, ['allow.invalid']);
   assert.deepEqual(result.allowlistedRegistrars, ['Example Registrar']);
   assert.deepEqual(result.dkimSelectors, ['mail.one']);
+});
+
+test('field-owned profile updates preserve transaction-current sibling fields', () => {
+  const current = requiredValue(normalizeBrandProfile(profile({
+    officialDomains: ['current.example.invalid'],
+    productNames: ['Concurrent product name'],
+    updatedAt: '2026-07-14T08:01:00.000Z',
+  })));
+  const allowlisted = applyBrandProfileFieldPatch(current, {
+    allowlistedDomains: ['allowed.example.invalid'],
+    allowlistedRegistrars: ['Reviewed Registrar'],
+  }, { nowIso: '2026-07-14T08:02:00.000Z' });
+  assert.deepEqual(allowlisted.officialDomains, ['current.example.invalid']);
+  assert.deepEqual(allowlisted.productNames, ['Concurrent product name']);
+  assert.deepEqual(allowlisted.allowlistedDomains, ['allowed.example.invalid']);
+
+  const attested = applyBrandProfileFieldPatch(allowlisted, {
+    protectionAttestations: [{
+      control: 'registrar_mfa',
+      state: 'observed',
+      assertedAt: NOW,
+      expiresAt: null,
+      note: 'Reviewed with the domain owner.',
+    }],
+  }, { nowIso: '2026-07-14T08:03:00.000Z' });
+  assert.equal(attested.protectionAttestations.length, 1);
+  assert.deepEqual(attested.allowlistedDomains, ['allowed.example.invalid']);
+
+  const baselined = applyBrandProfileFieldPatch(attested, {
+    desiredPostureBaselines: [{
+      version: 1,
+      domain: 'current.example.invalid',
+      nameservers: [],
+      ds: [],
+      mx: [],
+      caa: [],
+      tlsIssuer: '',
+      tlsSanPatterns: [],
+      tlsSpkiSha256: '',
+      registrarLock: 'unconfigured',
+      renewalReviewAt: null,
+      zoneIntent: 'unconfigured',
+      lifecycle: 'active',
+      recoveryDependency: '',
+      approvedChangeWindows: [],
+      suppressions: [],
+      note: '',
+      previousObservation: null,
+      updatedAt: NOW,
+    }],
+  }, { nowIso: '2026-07-14T08:04:00.000Z' });
+  assert.equal(baselined.desiredPostureBaselines.length, 1);
+  assert.deepEqual(baselined.productNames, ['Concurrent product name']);
+  assert.deepEqual(baselined.allowlistedDomains, ['allowed.example.invalid']);
+  assert.equal(baselined.id, current.id);
+  assert.equal(baselined.createdAt, current.createdAt);
+  assert.equal(baselined.updatedAt, '2026-07-14T08:04:00.000Z');
 });
 
 test('normalizes reviewed official channels and rights references without retaining credentials', () => {

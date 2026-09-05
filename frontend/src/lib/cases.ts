@@ -329,7 +329,7 @@ export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; del
   });
 }
 
-export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
@@ -341,6 +341,7 @@ export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]
         updated: result.updated,
         skipped: result.skipped,
         brandProfileReferencesOmitted: result.brandProfileReferencesOmitted,
+        authoredHistoryOmitted: result.authoredHistoryOmitted,
         pruned,
       },
     };

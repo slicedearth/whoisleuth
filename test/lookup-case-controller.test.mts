@@ -447,7 +447,9 @@ describe('Lookup case controller', () => {
   test('rejects incomplete or stale conclusion inputs before writing', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const controller = new LookupCaseController(fixtureApi());
-    assert.match((await controller.recordConclusion(null, [], 'suspicious', 'insufficient_evidence', 'Reason', [])).status, /Create or open/iu);
+    const absentConclusion = await controller.recordConclusion(null, [], 'suspicious', 'insufficient_evidence', 'Reason', []);
+    assert.match(absentConclusion.status, /Create or open/iu);
+    assert.equal(absentConclusion.mutationOutcome, 'rejected');
     assert.match((await controller.recordConclusion(record, [fixtureFact()], 'suspicious', 'insufficient_evidence', '   ', [{ field: 'dns.mx', stance: 'supports' }])).status, /Explain/iu);
     assert.match((await controller.recordConclusion(record, [fixtureFact()], 'suspicious', 'insufficient_evidence', 'Reason', [])).status, /at least one/iu);
     assert.match((await controller.recordConclusion(record, [fixtureFact()], 'suspicious', 'insufficient_evidence', 'Reason', [{ field: 'dns.a', stance: 'supports' }])).status, /no longer available/iu);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as model from '../frontend/src/lib/analysis/case-model.ts';
+import { MAX_CASE_EVIDENCE_PINS } from '../packages/cases/case-response-model.mts';
 import { requiredValue } from './value-assertions.mts';
 
 const ISO = '2026-05-01T00:00:00.000Z';
@@ -416,6 +417,36 @@ describe('current Case Brand Profile references', () => {
     }]));
     assert.deepEqual(overBound.cases[0]?.brandProfileIds, Array.from({ length: 8 }, (_, index) => `profile-${index}`));
     assert.equal(overBound.brandProfileReferencesOmitted, 32);
+  });
+});
+
+describe('bounded authored-history imports', () => {
+  test('preserves full local evidence history and reports an omitted imported record', () => {
+    const opened = model.openOrCreateCase([], { domain: 'bounded-history.example' }, ISO);
+    let cases = opened.cases;
+    for (let index = 0; index < MAX_CASE_EVIDENCE_PINS; index += 1) {
+      cases = model.updateCase(cases, opened.record.id, {
+        evidencePin: { label: `Local evidence ${index}`, value: `Observed value ${index}` },
+      }, new Date(Date.parse(ISO) + index * 1_000).toISOString()).cases;
+    }
+    const retainedIds = cases[0]?.evidencePins.map((item) => item.id) ?? [];
+    const merged = model.mergeCases(cases, {
+      version: 14,
+      cases: [{
+        domain: 'bounded-history.example',
+        evidencePins: [{
+          id: 'imported-extra-pin',
+          label: 'Imported extra evidence',
+          value: 'Must not evict local evidence',
+          createdAt: LATEST,
+        }],
+        createdAt: ISO,
+        updatedAt: LATEST,
+      }],
+    });
+
+    assert.deepEqual(merged.cases[0]?.evidencePins.map((item) => item.id), retainedIds);
+    assert.equal(merged.authoredHistoryOmitted, 1);
   });
 });
 

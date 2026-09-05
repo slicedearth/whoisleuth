@@ -12,6 +12,7 @@
   import type { ShortlistRecord } from '$lib/shortlist';
   import type { CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
+  import { failedLocalMutationOutcome, summarizeLocalMutationOutcomes, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import { canonicalBulkTargets, normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
@@ -407,14 +408,15 @@
     try{cases=await casesApi.loadCases();caseStatus=success;}
     catch{cases=committed.cases;casesSourceState='ready';caseStatus=`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;}
   }
-  async function trackCase(row:ScanResult){
+  async function trackCase(row:ScanResult):Promise<LocalMutationOutcome>{
     await ensurePrimaryResultContext();
-    if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating a case.';return;}
+    if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating a case.';return'rejected';}
     const s=row.saved;
     try{
       const committed=await casesApi.openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}});
       await reconcileBulkCaseSnapshot(committed,`${committed.created?`Opened a case for ${committed.record.domain}.`:`${committed.record.domain} already has a case.`}${prunedNote(committed.pruned)}`);
-    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}
+      return'committed';
+    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';return failedLocalMutationOutcome(cause);}
   }
   async function setRowDisposition(row:ScanResult,value:string){
     await ensurePrimaryResultContext();
@@ -579,7 +581,7 @@
   async function executeReviewedRetry(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}if(!retryPlan.rows.length||running)return;const domains=retryPlan.rows.map((row)=>row.domain);retryStatus=`Running ${domains.length} reviewed ${retryPlan.mode} retr${domains.length===1?'y':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Reviewed retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   async function exportDomainComparison(){if(!domainComparison)return;const exported=await buildBulkDomainComparisonExport(domainComparison);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the two-domain evidence comparison with an integrity digest.';}
   async function exportMailExposure(){if(profileSourceState!=='ready'){bulkReviewStatus='Brand Profile context is not ready, so the mail-exposure comparison remains inconclusive and cannot be exported yet.';return;}const exported=await buildBulkMailExposureExport(mailExposureReport);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the filtered mail-exposure review with an integrity digest.';}
-  async function createCasesSelected(){await ensurePrimaryResultContext();if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating cases.';return;}const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;for(const row of rows)await trackCase(row);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}
+  async function createCasesSelected(){if(caseMutationBusy)return;caseMutationBusy=true;try{await ensurePrimaryResultContext();if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating cases.';return;}const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;const outcomes:LocalMutationOutcome[]=[];for(const row of rows)outcomes.push(await trackCase(row));const summary=summarizeLocalMutationOutcomes(outcomes);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation: ${summary.committed} committed, ${summary.rejected} rejected${summary.unknown?`, ${summary.unknown} with unknown commit state; reload before retrying`:''}${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}finally{caseMutationBusy=false;}}
   async function setSelectedDisposition(value:string){
     if(caseMutationBusy)return;
     caseMutationBusy=true;

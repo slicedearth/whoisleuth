@@ -704,6 +704,9 @@ export function appendCaseEvidencePin(
   raw: unknown,
   now: string,
 ): CaseEvidencePin[] {
+  if (current.length >= MAX_CASE_EVIDENCE_PINS) {
+    throw new Error(`A Case can retain at most ${MAX_CASE_EVIDENCE_PINS} evidence pins. No existing evidence was removed.`);
+  }
   const item = record(raw);
   const created = normalizePin({ ...item, id: freshId('pin'), createdAt: now }, now);
   if (!created) throw new Error('An evidence pin requires a label and value.');
@@ -776,6 +779,9 @@ export function appendCaseDecision(
   now: string,
   validPinIds?: ReadonlySet<string>,
 ): CaseDecisionRecord[] {
+  if (current.length >= MAX_CASE_DECISIONS) {
+    throw new Error(`A Case can retain at most ${MAX_CASE_DECISIONS} decisions. No existing decision was removed.`);
+  }
   const item = record(raw);
   const created = normalizeDecision({ ...item, id: freshId('decision'), createdAt: now }, now, validPinIds);
   if (!created) throw new Error('A decision requires a summary and rationale.');
@@ -1604,6 +1610,9 @@ export function appendCaseAssertion(
   now: string,
   validPinIds?: ReadonlySet<string>,
 ): CaseAssertionRecord[] {
+  if (current.length >= MAX_CASE_ASSERTIONS) {
+    throw new Error(`A Case can retain at most ${MAX_CASE_ASSERTIONS} assertions. No existing assertion was removed.`);
+  }
   const item = record(raw);
   const created = normalizeAssertion({
     ...item,
@@ -1677,6 +1686,9 @@ export function appendCaseManualTrailEvent(
   raw: unknown,
   now: string,
 ): CaseManualTrailEvent[] {
+  if (current.length >= MAX_CASE_MANUAL_TRAIL_EVENTS) {
+    throw new Error(`A Case can retain at most ${MAX_CASE_MANUAL_TRAIL_EVENTS} investigation-trail entries. No existing entry was removed.`);
+  }
   const item = record(raw);
   const created = normalizeManualTrailEvent({ ...item, id: freshId('trail'), createdAt: now }, now);
   if (!created) throw new Error('An investigation-trail entry requires a summary.');
@@ -1764,6 +1776,9 @@ export function appendCaseSighting(
   now: string,
   validPinIds?: ReadonlySet<string>,
 ): CaseSightingRecord[] {
+  if (current.length >= MAX_CASE_SIGHTINGS) {
+    throw new Error(`A Case can retain at most ${MAX_CASE_SIGHTINGS} sightings. No existing sighting was removed.`);
+  }
   const item = record(raw);
   const created = normalizeCaseSighting({
     ...item,

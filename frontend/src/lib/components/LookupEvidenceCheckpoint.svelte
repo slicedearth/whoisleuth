@@ -9,6 +9,7 @@
     CaseEvidencePin,
     CaseTransitionExpectation,
   } from '$lib/cases';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
 
   let {
     facts,
@@ -22,7 +23,7 @@
     onsave: (
       selectedFields: string[],
       transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>,
-    ) => void | Promise<void>;
+    ) => Promise<LocalMutationOutcome>;
     actionBusy?: boolean;
     headingId?: string;
   } = $props();
@@ -66,7 +67,8 @@
 
   async function save() {
     if (actionBusy) return;
-    await onsave(selectedFields, transitionMode ? transitionExpectations : {});
+    const outcome = await onsave(selectedFields, transitionMode ? transitionExpectations : {});
+    if (!clearsLocalMutationDraft(outcome)) return;
     selectedFields = [];
     transitionExpectations = {};
     transitionMode = false;

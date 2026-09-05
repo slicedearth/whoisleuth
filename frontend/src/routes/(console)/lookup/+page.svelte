@@ -20,6 +20,7 @@
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { compareCaseEvidence, dispositionLabel as caseDispositionLabel, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation, type EvidenceChange } from '$lib/cases';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
+  import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
@@ -298,8 +299,8 @@
   async function performCaseAction(
     action:()=>Promise<LookupCaseActionResult>,
     afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
-  ):Promise<boolean>{
-    if(caseActionBusy)return false;
+  ):Promise<LocalMutationOutcome>{
+    if(caseActionBusy)return 'stale';
     const generation=++caseActionGeneration;
     const revision=lookupRevision;
     const domain=caseDomain;
@@ -307,11 +308,11 @@
     caseActionBusy=true;
     try{
       const next=await action();
-      if(generation!==caseActionGeneration||revision!==lookupRevision||domain!==caseDomain||(caseRecord?.id||'')!==recordId)return false;
+      if(generation!==caseActionGeneration||revision!==lookupRevision||domain!==caseDomain||(caseRecord?.id||'')!==recordId)return 'stale';
       caseRecord=next.record;
       caseStatus=next.status;
       afterPublish(next);
-      return true;
+      return next.mutationOutcome??'committed';
     }finally{
       if(generation===caseActionGeneration)caseActionBusy=false;
     }
@@ -362,7 +363,7 @@
     const changes=compareCaseEvidence(before,after);
     caseRecheckComparison={available:true,changes,observedAt:after.capturedAt,detail:changes.length?`${changes.length} comparable material change${changes.length===1?' was':'s were'} found.`:'No comparable material field change was found. This does not prove the page or behaviour is absent.'};
   }
-  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;await performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
     if(value==='acquisition'||value==='owned')return 'timeline';

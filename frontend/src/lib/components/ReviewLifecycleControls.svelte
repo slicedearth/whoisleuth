@@ -51,13 +51,16 @@
       return;
     }
     busy = true;
+    const itemId = item.id;
+    const submittedRationale = rationale.trim();
     try {
       await onreview(item, {
         disposition: selectedDisposition,
-        rationale: rationale.trim(),
+        rationale: submittedRationale,
         expiresAt: iso(expiresAt),
         reviewDueAt: iso(reviewDueAt),
       });
+      if (item.id !== itemId || rationale.trim() !== submittedRationale) return;
       rationale = '';
       disposition = '';
       expiresAt = '';

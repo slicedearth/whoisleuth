@@ -83,7 +83,9 @@
   let actionObserver: IntersectionObserver | null = null;
   let actionObservationVersion = 0;
   let handledLocation = '';
-  let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
+  type StoredEvidenceContext = Readonly<{ observations: number; relationships: number; partial: boolean; truncated: boolean; latestObservedAt: string }>;
+  const emptyStoredEvidenceContext = (): StoredEvidenceContext => ({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
+  let evidence = $state<StoredEvidenceContext>(emptyStoredEvidenceContext());
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
   const localContextPending = $derived(evidenceContextPending || profileContextPending || caseContextPending);
@@ -141,24 +143,24 @@
 
   async function refreshStoredContext() {
     const refreshVersion = ++localContextRefreshVersion;
+    const requestedGuide = guide;
+    const requestedIdentity = guideIdentity(requestedGuide);
     evidenceContextPending = true;
     profileContextPending = true;
     caseContextPending = true;
     localContextError = '';
     const [evidenceResult, profileResult, caseResult] = await Promise.allSettled([
-      refreshEvidence(),
-      refreshProfileContext(),
-      refreshCaseContext(),
+      refreshEvidence(requestedGuide),
+      refreshProfileContext(requestedGuide),
+      refreshCaseContext(requestedGuide),
     ]);
-    if (refreshVersion !== localContextRefreshVersion) return;
+    if (refreshVersion !== localContextRefreshVersion || requestedIdentity !== guideIdentity(guide)) return;
     evidenceContextAvailable = evidenceResult.status === 'fulfilled';
     profileContextAvailable = profileResult.status === 'fulfilled';
     caseContextAvailable = caseResult.status === 'fulfilled';
-    if (!evidenceContextAvailable) {
-      evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
-    }
-    if (!profileContextAvailable) contextProfile = null;
-    if (!caseContextAvailable) contextCase = null;
+    evidence = evidenceResult.status === 'fulfilled' ? evidenceResult.value : emptyStoredEvidenceContext();
+    contextProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+    contextCase = caseResult.status === 'fulfilled' ? caseResult.value : null;
     evidenceContextPending = false;
     profileContextPending = false;
     caseContextPending = false;
@@ -279,22 +281,18 @@
     void observeAction();
   }
 
-  async function refreshEvidence() {
-    if (!guide) {
-      evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
-      return;
-    }
+  async function refreshEvidence(requestedGuide: InvestigationGuide | null): Promise<StoredEvidenceContext> {
+    if (!requestedGuide) return emptyStoredEvidenceContext();
     const projection = await loadLocalInvestigationProjection();
-    const targetDomain = guide.focusDomain || guide.domain;
+    const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
     const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === targetDomain);
     if (!domainEntity) {
-      evidence = { observations: 0, relationships: 0, partial: false, truncated: projection.truncated, latestObservedAt: '' };
-      return;
+      return { ...emptyStoredEvidenceContext(), truncated: projection.truncated };
     }
     const observationIds = new Set(domainEntity.observationIds);
     const observations = projection.observations.filter((observation) => observationIds.has(observation.id));
     const relationships = projection.relationships.filter((relationship) => relationship.from === domainEntity.id || relationship.to === domainEntity.id);
-    evidence = {
+    return {
       observations: observations.length,
       relationships: relationships.length,
       partial: observations.some((observation) => observation.status === 'partial' || observation.complete !== true),
@@ -308,22 +306,16 @@
     };
   }
 
-  async function refreshProfileContext() {
-    if (!guide) {
-      contextProfile = null;
-      return;
-    }
-    contextProfile = await activeProfile();
+  async function refreshProfileContext(requestedGuide: InvestigationGuide | null): Promise<BrandProfile | null> {
+    if (!requestedGuide) return null;
+    return activeProfile();
   }
 
-  async function refreshCaseContext() {
-    if (!guide) {
-      contextCase = null;
-      return;
-    }
+  async function refreshCaseContext(requestedGuide: InvestigationGuide | null): Promise<CaseRecord | null> {
+    if (!requestedGuide) return null;
     const cases = await loadCases();
-    const targetDomain = guide.focusDomain || guide.domain;
-    contextCase = cases.find((record) => record.domain === targetDomain) || null;
+    const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
+    return cases.find((record) => record.domain === targetDomain) || null;
   }
 
   function endGuide() {

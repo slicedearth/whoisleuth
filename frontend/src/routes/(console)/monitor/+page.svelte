@@ -371,11 +371,12 @@
   function removeBrandProfileAssociation(record:CaseRecord,profileId:string){return changeBrandProfileAssociation(record,profileId,'remove');}
   async function saveTags(record:CaseRecord){
     const previous=[...record.tags];
+    const submittedDraft=tagDraft;
     try{
-      const next=caseTagsWithTypes(tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean),caseTypeIds(record.tags));if(previous.join('\\0')===next.join('\\0'))return;
+      const next=caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean),caseTypeIds(record.tags));if(previous.join('\\0')===next.join('\\0'))return;
       const committed=await editCase(record.id,{tags:next});
-      tagDraft=caseTagDraft(committed.record);
-      await reconcileCommittedCaseMutation(committed,`Updated tags for ${record.domain}.`);
+      if(expandedId===record.id&&tagDraft===submittedDraft)tagDraft=caseTagDraft(committed.record);
+      await reconcileCommittedCaseSnapshot(committed,`Updated tags for ${record.domain}.`,expandedId===record.id?committed.record:null);
       registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{
         const restored=await editCase(record.id,{tags:previous});
         if(expandedId===record.id)tagDraft=caseTagDraft(restored.record);
@@ -394,8 +395,8 @@
       let committed:Awaited<ReturnType<typeof addCaseNote>>;
       try{committed=await addCaseNote(record.id,body);}
       catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';return;}
-      noteDraft='';
-      await reconcileCommittedCaseMutation(committed,`Added a note to ${record.domain}.`);
+      if(expandedId===record.id&&noteDraft.trim()===body)noteDraft='';
+      await reconcileCommittedCaseSnapshot(committed,`Added a note to ${record.domain}.`,expandedId===record.id?committed.record:null);
     }finally{pendingNoteCaseIds=pendingNoteCaseIds.filter((id)=>id!==record.id);}
   }
   async function downloadCases(){try{await exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
@@ -417,7 +418,7 @@
     try{
       if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');
       const result=await importCases(parseBoundedJson(await file.text(),{label:'Case import',maximumBytes:MAX_CASE_IMPORT_BYTES}));
-      const success=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${result.brandProfileReferencesOmitted?`; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted===1?'':'s'} beyond the retained bounds`:''}.`;
+      const success=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${result.brandProfileReferencesOmitted?`; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted===1?'':'s'} beyond the retained bounds`:''}${result.authoredHistoryOmitted?`; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted===1?'':'s'}`:''}.`;
       await reconcileCommittedCaseSnapshot(result,success);
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}
     finally{input.value='';}

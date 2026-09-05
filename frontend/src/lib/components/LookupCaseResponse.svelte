@@ -16,6 +16,7 @@
   import { abuseRecipientKindLabel } from '$lib/analysis/abuse-recipient-resolver.ts';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import type { LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
@@ -90,7 +91,7 @@
     recordConclusion: (
       rationale: string,
       selections: readonly LookupConclusionEvidenceSelection[],
-    ) => Promise<boolean>;
+    ) => Promise<LocalMutationOutcome>;
     recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<boolean>;
     recordRecheckOutcome: (input: Readonly<{
       state: string;
@@ -166,7 +167,7 @@
 
   async function submitConclusion() {
     if (conclusionIncomplete) return;
-    if (await recordConclusion(conclusionRationale, conclusionEvidence)) {
+    if (clearsLocalMutationDraft(await recordConclusion(conclusionRationale, conclusionEvidence))) {
       conclusionRationale = '';
       conclusionEvidence = [];
     }

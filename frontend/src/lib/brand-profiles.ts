@@ -1,10 +1,12 @@
 import {
   buildBrandProfileExport,
+  applyBrandProfileFieldPatch,
   mergeBrandProfiles,
   normalizeBrandProfile,
   serializeBrandProfileStore,
   MAX_PROFILES,
   normalizeBrandProfileId,
+  type BrandProfileFieldPatch,
 } from './analysis/brand-profile-model.ts';
 import {
   parseProfileList,
@@ -128,11 +130,15 @@ export function isDomainAllowlisted(domain: string, profile: BrandProfile | null
   return profileDomainKind(domain, profile) !== null;
 }
 
-export async function upsertProfile(raw: unknown, editingId = ''): Promise<BrandProfile> {
+export async function upsertProfile(raw: unknown, editingId = '', expectedUpdatedAt: string | null = null): Promise<BrandProfile> {
   const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
     const existing = index >= 0 ? profiles[index] : undefined;
+    if (editingId && !existing) throw new Error('That Brand Profile no longer exists. It was not recreated.');
+    if (existing && expectedUpdatedAt !== null && existing.updatedAt !== expectedUpdatedAt) {
+      throw new Error('That Brand Profile changed after this editor opened. Review the current values before saving again.');
+    }
     const normalized = normalizeProfile(raw, existing, true);
     if (!normalized.name) throw new Error('Enter a brand name.');
     if (index >= 0) profiles[index] = normalized;
@@ -142,6 +148,26 @@ export async function upsertProfile(raw: unknown, editingId = ''): Promise<Brand
     }
     const document = boundedProfiles(profiles);
     const profile = document.find((item) => item.id === normalized.id) ?? normalized;
+    return { document, result: { profile, profiles: document } };
+  });
+  try { setActiveProfile(committed.profile.id); }
+  catch (cause) { throw new BrandProfileMutationCommittedError('save', committed.profile, committed.profiles, cause); }
+  return committed.profile;
+}
+
+export async function updateProfileFields(
+  profileId: string,
+  patch: BrandProfileFieldPatch,
+): Promise<BrandProfile> {
+  const committed = await updateBrowserLocalData('brand_profiles', (current) => {
+    const profiles = [...current] as BrandProfile[];
+    const index = profiles.findIndex((item) => item.id === profileId);
+    const existing = index >= 0 ? profiles[index] : undefined;
+    if (!existing) throw new Error('That Brand Profile no longer exists. It was not recreated.');
+    const normalized = applyBrandProfileFieldPatch(existing, patch) as BrandProfile;
+    profiles[index] = normalized;
+    const document = boundedProfiles(profiles);
+    const profile = document.find((item) => item.id === profileId) ?? normalized;
     return { document, result: { profile, profiles: document } };
   });
   try { setActiveProfile(committed.profile.id); }

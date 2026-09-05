@@ -181,6 +181,7 @@ export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSec
   skipped: number;
   pruned?: number;
   brandProfileReferencesOmitted?: number;
+  authoredHistoryOmitted?: number;
   selected: boolean;
   normalizedSettings?: WorkspaceSettings | null;
 }
@@ -207,6 +208,7 @@ interface WorkspaceMergeResult {
   skipped: number;
   pruned?: number;
   brandProfileReferencesOmitted?: number;
+  authoredHistoryOmitted?: number;
   profiles?: BrandProfile[];
   settings?: WorkspaceSettings;
   reason?: string;
@@ -761,6 +763,7 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         skipped: result.skipped ?? 0,
         pruned: result.pruned ?? 0,
         brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
+        authoredHistoryOmitted: result.authoredHistoryOmitted ?? 0,
         selected,
         normalizedSettings: result.settings || null,
       });
@@ -801,6 +804,7 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         skipped: dependentSection.recordCount,
         pruned: 0,
         brandProfileReferencesOmitted: 0,
+        authoredHistoryOmitted: 0,
         selected: false,
         normalizedSettings: dependentId === 'settings' ? null : dependentSection.normalizedSettings ?? null,
       };

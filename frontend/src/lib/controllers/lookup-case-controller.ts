@@ -18,6 +18,10 @@ import {
   type CheckpointFact,
 } from '../analysis/case-evidence-checkpoint.ts';
 import type { CaseTransitionExpectation } from '../analysis/case-response-model.ts';
+import {
+  failedLocalMutationOutcome,
+  type LocalMutationOutcome,
+} from '../local-mutation-outcome.ts';
 
 type CaseEvidenceInput = Record<string, unknown>;
 
@@ -35,6 +39,7 @@ type LookupCaseActionResult = Readonly<{
   record: CaseRecord | null;
   status: string;
   clearNote?: boolean;
+  mutationOutcome?: Exclude<LocalMutationOutcome, 'stale'>;
 }>;
 
 const DEFAULT_CASE_API: LookupCaseApi = {
@@ -225,22 +230,23 @@ export class LookupCaseController {
       return {
         record: null,
         status: 'Create or open the analyst case before recording a conclusion.',
+        mutationOutcome: 'rejected',
       };
     }
     const reviewedRationale = rationale.trim();
     if (!reviewedRationale) {
-      return { record, status: 'Explain the evidence-based rationale before recording this conclusion.' };
+      return { record, status: 'Explain the evidence-based rationale before recording this conclusion.', mutationOutcome: 'rejected' };
     }
     if (!selections.length) {
-      return { record, status: 'Select at least one observed fact for this conclusion.' };
+      return { record, status: 'Select at least one observed fact for this conclusion.', mutationOutcome: 'rejected' };
     }
     const selectionByField = new Map(selections.map((item) => [item.field, item.stance]));
     if (selectionByField.size !== selections.length) {
-      return { record, status: 'Each conclusion fact can be selected only once.' };
+      return { record, status: 'Each conclusion fact can be selected only once.', mutationOutcome: 'rejected' };
     }
     const pins = checkpointPinInputs(facts, selections.map((item) => item.field));
     if (pins.length !== selections.length) {
-      return { record, status: 'One or more selected facts are no longer available in this observation.' };
+      return { record, status: 'One or more selected facts are no longer available in this observation.', mutationOutcome: 'rejected' };
     }
     const evidence: CaseConclusionInput['evidence'] = pins.map((pin) => ({
       pin,
@@ -259,11 +265,13 @@ export class LookupCaseController {
       return {
         record: updated.record,
         status: `Recorded an evidence-linked analyst conclusion using ${evidence.length} selected fact${evidence.length === 1 ? '' : 's'}.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record,
         status: cause instanceof Error ? cause.message : 'Could not record the analyst conclusion.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -377,6 +385,7 @@ export class LookupCaseController {
       return {
         record: null,
         status: 'Create or open the analyst case before saving an evidence checkpoint.',
+        mutationOutcome: 'rejected',
       };
     }
     const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
@@ -384,6 +393,7 @@ export class LookupCaseController {
       return {
         record,
         status: 'Select at least one currently observed fact before saving a checkpoint.',
+        mutationOutcome: 'rejected',
       };
     }
     try {
@@ -391,6 +401,7 @@ export class LookupCaseController {
       return {
         record: updated.record,
         status: `Saved ${evidencePins.length} analyst-selected checkpoint fact${evidencePins.length === 1 ? '' : 's'}${evidencePins.some((pin) => pin.transitionExpectation) ? ' with a reviewed transition plan' : ''}.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
@@ -398,6 +409,7 @@ export class LookupCaseController {
         status: cause instanceof Error
           ? cause.message
           : 'Could not save the evidence checkpoint.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
