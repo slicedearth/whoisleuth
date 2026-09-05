@@ -228,6 +228,65 @@ describe('local investigation search index', () => {
     assert.equal(certificate.href, '/lookup?q=scan.invalid');
   });
 
+  test('searches canonical infrastructure retained only through imported Case observations', () => {
+    const certificateFingerprint = 'c'.repeat(64);
+    const importedSource = 'Provider report: Reviewed observations';
+    const index = indexFor(projectionInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-imported', 'observed.invalid', {
+        evidencePins: [
+          {
+            id: 'pin-ip',
+            field: 'A',
+            category: 'dns',
+            label: 'External DNS finding',
+            value: '192.0.2.44',
+            source: importedSource,
+            sourceSchema: {
+              collection: 'external_observations',
+              schema: 'whoisleuth.dns-observation-rows',
+              version: 1,
+            },
+            observedAt: EARLY,
+            completeness: 'complete',
+            limitations: ['Imported and not independently verified.'],
+            createdAt: LATE,
+          },
+          {
+            id: 'pin-certificate',
+            field: 'fingerprintSha256',
+            category: 'certificate',
+            label: 'External certificate finding',
+            value: certificateFingerprint,
+            source: importedSource,
+            sourceSchema: {
+              collection: 'external_observations',
+              schema: 'whoisleuth.certificate-observation-rows',
+              version: 1,
+            },
+            observedAt: LATE,
+            completeness: 'partial',
+            limitations: [],
+            createdAt: LATE,
+          },
+        ],
+      })] },
+    }));
+
+    const ip = requiredValue(searchInvestigationIndex(index, '192.0.2.44').results[0]);
+    const certificate = requiredValue(searchInvestigationIndex(index, certificateFingerprint).results[0]);
+    assert.equal(ip.entityType, 'ip_address');
+    assert.equal(ip.source, importedSource);
+    assert.equal(ip.sourceStore, 'cases');
+    assert.equal(ip.observedAt, EARLY);
+    assert.equal(ip.complete, true);
+    assert.equal(ip.href, '/monitor?case=case-imported');
+    assert.equal(certificate.entityType, 'certificate');
+    assert.equal(certificate.source, importedSource);
+    assert.equal(certificate.observedAt, LATE);
+    assert.equal(certificate.complete, false);
+    assert.equal(certificate.href, '/monitor?case=case-imported');
+  });
+
   test('searches analyst-retained relationship values and opens the exact Monitor record', () => {
     const retained = createRelationshipObservation({
       type: 'tracking_identifier',
