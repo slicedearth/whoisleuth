@@ -385,6 +385,12 @@ describe('privacy data-flow catalogue', () => {
     const browserRetention = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'analyst_cases')!;
     assert.equal(browserRetention.retention.mode, 'browser_deliberate');
     assert.ok(browserRetention.processingClasses.includes('browser_local_retention'));
+    const renderedCapture = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'rendered_web_capture')!;
+    assert.ok(renderedCapture.dataSent.includes('admitted_resource_request'));
+    assert.equal(renderedCapture.dataDeliberatelyNotSent.includes('complete_query_bearing_urls'), false);
+    assert.match(renderedCapture.nonInferences.join(' '), /exact URL, including path and query/iu);
+    const passiveAvailability = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'availability')!;
+    assert.ok(passiveAvailability.dataDeliberatelyNotSent.includes('complete_query_bearing_urls'));
 
     for (const flow of allBoundaries) {
       assert.ok(flow.outcomes.length > 0, flow.id);

@@ -592,6 +592,36 @@ describe('optional local rendered capture package', () => {
     }
   });
 
+  test('round-trips the exact host, title, and artifact bounds into partitioned Case findings', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-import-bound-test-'));
+    const destination = path.join(parent, 'capture');
+    const title = 'T'.repeat(300);
+    const subresourceUrls = Array.from(
+      { length: MAX_CAPTURE_HOSTS - 1 },
+      (_, index) => `https://asset-${String(index).padStart(2, '0')}.example.test/resource.js`,
+    );
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ title, subresourceUrls }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        now: () => '2026-08-01T00:00:00.000Z',
+      });
+      assert.equal(manifest.captures[0]?.requestDomains.length, MAX_CAPTURE_HOSTS);
+      assert.equal(manifest.captures[0]?.artifacts.length, 2);
+      const imported = parseWebCaptureManifest(manifest);
+      const retained = imported.findings.map((finding) => finding.summary).join(' ');
+      assert.ok(imported.findings.length > 1);
+      assert.ok(retained.includes(title));
+      for (const domain of manifest.captures[0]?.requestDomains ?? []) assert.ok(retained.includes(domain), domain);
+      for (const artifact of manifest.captures[0]?.artifacts ?? []) assert.ok(retained.includes(artifact.fileName));
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test('removes C1 and bidirectional controls from retained page titles', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-title-test-'));
     const destination = path.join(parent, 'capture');

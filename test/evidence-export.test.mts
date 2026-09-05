@@ -232,7 +232,24 @@ function fixtureResponse(): Record<string, unknown> {
         authorization: { authorized: true, error: null },
         hostname: { matches: true, error: null },
         validity: { status: 'valid' },
-        certificate: { fingerprintSha256: '2'.repeat(64) },
+        certificate: {
+          fingerprintSha256: '2'.repeat(64),
+          subjectAltNames: {
+            dnsNames: ['example.com'],
+            ipAddresses: ['93.184.216.34'],
+            classes: {
+              dns: 1,
+              ip: 1,
+              email: 1,
+              uri: 1,
+              directoryName: 1,
+              registeredId: 1,
+              otherName: 1,
+              unclassified: 1,
+            },
+            truncated: false,
+          },
+        },
         chain: [],
         findings: [],
       },
@@ -263,7 +280,16 @@ function fixtureResponse(): Record<string, unknown> {
           exact: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 22, source: 'captured-response-bytes' },
           normalizedHtml: { algorithm: 'sha256', value: 'b'.repeat(64), tokenCount: 12, truncated: false },
           visibleText: { algorithm: 'simhash64-v1', value: 'c'.repeat(16), tokenCount: 4, featureCount: 2, truncated: false },
-          domStructure: { algorithm: 'sha256', value: 'd'.repeat(64), nodeCount: 8, parser: 'static-tag-sequence-v1', truncated: false },
+          domStructure: {
+            algorithm: 'sha256',
+            value: 'd'.repeat(64),
+            nodeCount: 8,
+            parser: 'static-tag-sequence-v1',
+            truncated: false,
+            similarity: {
+              algorithm: 'simhash64-v1', value: '2'.repeat(16), tokenCount: 8, featureCount: 6, truncated: false,
+            },
+          },
           formStructure: { algorithm: 'sha256', value: 'e'.repeat(64), formCount: 1, controlCount: 2, truncated: false },
           resourceHosts: { algorithm: 'set-sha256', value: 'f'.repeat(64), values: ['cdn.example'], truncated: false },
           identifiers: { algorithm: 'set-sha256', value: '1'.repeat(64), values: [{ type: 'tag-container', value: 'GTM-AB12' }], truncated: false },
@@ -470,6 +496,8 @@ describe('lookup evidence export', () => {
     const bodyHash = recordValue(httpResponse.bodyHash);
     const tls = recordValue(availability.tls);
     const certificate = recordValue(tls.certificate);
+    const subjectAltNames = recordValue(certificate.subjectAltNames);
+    const sanClasses = recordValue(subjectAltNames.classes);
     const pageIdentity = recordValue(availability.pageIdentity);
     const canonical = recordValue(pageIdentity.canonical);
     const forms = recordValue(pageIdentity.forms);
@@ -477,6 +505,8 @@ describe('lookup evidence export', () => {
     const pageFingerprints = recordValue(pageIdentity.fingerprints);
     const exactFingerprint = recordValue(pageFingerprints.exact);
     const visibleTextFingerprint = recordValue(pageFingerprints.visibleText);
+    const domStructureFingerprint = recordValue(pageFingerprints.domStructure);
+    const domStructureSimilarity = recordValue(domStructureFingerprint.similarity);
     const resourceHostFingerprint = recordValue(pageFingerprints.resourceHosts);
     const trackingIdentifiers = arrayValue(pageIdentity.trackingIdentifiers).map(recordValue);
     const credentialSurface = recordValue(availability.credentialSurfaceProfile);
@@ -493,6 +523,7 @@ describe('lookup evidence export', () => {
     const opaqueParameters = arrayValue(httpsParameters.opaque).map(recordValue);
     const technology = recordValue(availability.technologyProfile);
     const technologyFindings = arrayValue(technology.findings).map(recordValue);
+    const technologyEvidence = arrayValue(technologyFindings[0]?.evidence).map(recordValue);
     const libraryProfile = recordValue(technology.browserLibraryProfile);
     const libraryFindings = arrayValue(libraryProfile.findings).map(recordValue);
     const securityPosture = recordValue(availability.securityPosture);
@@ -579,6 +610,16 @@ describe('lookup evidence export', () => {
     assert.equal(bodyHash.scope, 'complete-body');
     assert.equal(tls.connectedAddress, '93.184.216.34');
     assert.equal(certificate.fingerprintSha256, '2'.repeat(64));
+    assert.deepEqual(sanClasses, {
+      dns: 1,
+      ip: 1,
+      email: 1,
+      uri: 1,
+      directoryName: 1,
+      registeredId: 1,
+      otherName: 1,
+      unclassified: 1,
+    });
     assert.equal(pageIdentity.identityVersion, 3);
     assert.equal(canonical.url, 'https://example.com/');
     assert.equal(forms.postCount, 1);
@@ -588,6 +629,7 @@ describe('lookup evidence export', () => {
     assert.equal(pageFingerprints.fingerprintVersion, 1);
     assert.equal(exactFingerprint.value, 'a'.repeat(64));
     assert.equal(visibleTextFingerprint.value, 'c'.repeat(16));
+    assert.equal(domStructureSimilarity.value, '2'.repeat(16));
     assert.deepEqual(resourceHostFingerprint.values, ['cdn.example']);
     assert.equal(credentialSurface.credentialSurfaceVersion, 1);
     assert.equal(credentialCategories.password, 1);
@@ -597,6 +639,10 @@ describe('lookup evidence export', () => {
     assert.equal(requiredValue(opaqueParameters[0]).name, 'ech');
     assert.equal(technology.profileVersion, 3);
     assert.equal(requiredValue(technologyFindings[0]).name, 'Fixture Framework');
+    assert.equal(
+      requiredValue(technologyEvidence[0]).description,
+      'Static markup contains a fixture framework marker.',
+    );
     assert.equal(libraryProfile.profileVersion, 1);
     assert.equal(requiredValue(libraryFindings[0]).advisoryCount, 1);
     assert.equal(securityPosture.postureVersion, 1);

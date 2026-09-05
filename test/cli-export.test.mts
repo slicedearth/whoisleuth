@@ -536,7 +536,9 @@ describe('lookup evidence Markdown rendering', () => {
     assert.match(markdown, /### Observed network registration/);
     assert.match(markdown, /Example edge network/);
     assert.match(markdown, /edge or shared network rather than the origin host/);
-    assert.match(markdown, /Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package/);
+    assert.match(markdown, /bounded, privacy-minimised JSON evidence package/);
+    assert.match(markdown, /excludes raw registry and WHOIS payloads, contact records, authentication and session material, and unreviewed fields/);
+    assert.doesNotMatch(markdown, /full-fidelity|available only in the JSON evidence package/iu);
     assert.doesNotMatch(markdown, /publicContact|privateNestedValue|private-registrar/);
     assert.doesNotMatch(markdown, /Registrant Email/);
     assert.doesNotMatch(markdown, /Registry access suffix/);

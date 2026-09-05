@@ -136,6 +136,7 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   'scanMode', 'durationMs', 'complete', 'truncated', 'limitations',
   'diagnostics', 'detail', 'error', 'count', 'total', 'discarded', 'summary',
   'findings', 'id', 'label', 'tone', 'category', 'confidence', 'compatibility', 'role', 'roles', 'evidence',
+  'description',
   'value', 'values', 'name', 'type', 'types', 'mode', 'owner', 'target',
   'url', 'uri', 'href',
   'priority', 'ttl', 'records',
@@ -167,7 +168,8 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   'chain', 'chainTruncated', 'standardName', 'size', 'subject', 'issuer',
   'serialNumber', 'validFrom', 'validTo', 'fingerprintSha1',
   'fingerprintSha256', 'isCertificateAuthority', 'subjectAltNames',
-  'dnsNames', 'ipAddresses', 'otherNames', 'publicKey', 'bits', 'curve',
+  'dnsNames', 'ipAddresses', 'otherNames', 'classes', 'dns', 'ip', 'directoryName',
+  'registeredId', 'otherName', 'publicKey', 'bits', 'curve',
   'signature', 'oid', 'extendedKeyUsage', 'authorityInformationAccess',
   'ocsp', 'caIssuers', 'unknownMethods', 'extensionProfile', 'parsed', 'partial',
   'certificatePolicies', 'crlDistributionPoints', 'commonNames',
@@ -182,7 +184,7 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   'externalOrigins', 'embeddedOrigins', 'contactDomains', 'downloads',
   'explicitCount', 'riskyCount', 'riskyFileTypes', 'trackingIdentifiers',
   'fingerprints', 'fingerprintVersion', 'exact', 'normalizedHtml',
-  'visibleText', 'domStructure', 'formStructure', 'resourceHosts',
+  'visibleText', 'domStructure', 'similarity', 'formStructure', 'resourceHosts',
   'identifiers', 'featureCount', 'nodeCount', 'formCount', 'controlCount',
   'parser', 'tokenCount', 'tagsExamined', 'discardedUrls', 'formsObserved',
   'relationshipTagsExamined', 'relationshipUrlsDiscarded',
@@ -219,6 +221,9 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
 ]);
 const LOOKUP_AVAILABILITY_CREDENTIAL_CATEGORY_KEYS = new Set([
   'password', 'email', 'username', 'one_time_code', 'payment',
+]);
+const LOOKUP_AVAILABILITY_TLS_SAN_CLASS_KEYS = new Set([
+  'dns', 'ip', 'email', 'uri', 'directoryName', 'registeredId', 'otherName', 'unclassified',
 ]);
 const LOOKUP_AVAILABILITY_VALUE_PATHS = new Set([
   'dns.records.caa',
@@ -364,21 +369,21 @@ export function projectLookupEvidencePrivacySafeTree<T>(value: T): T {
 
 function projectLookupEvidenceAvailabilityPublicValue(
   value: unknown,
-  parentKey: string | null,
+  path: readonly string[],
   state: PortableProjectionState,
   depth: number,
 ): unknown {
   consumePortableProjectionEntry(state, depth);
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
-    const normalizedParent = normalizedEvidenceKey(parentKey || '');
+    const normalizedParent = normalizedEvidenceKey(path.at(-1) || '');
     if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value);
     if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
     return projectPortableString(value);
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidenceAvailabilityPublicValue(item, parentKey, state, depth + 1));
+      .map((item) => projectLookupEvidenceAvailabilityPublicValue(item, path, state, depth + 1));
   }
   const source = recordOrNull(value);
   if (!source) return null;
@@ -386,7 +391,26 @@ function projectLookupEvidenceAvailabilityPublicValue(
   for (const [key, item] of Object.entries(source).slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) {
     if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
       || privateEvidenceKey(key, item)) continue;
-    output[key] = projectLookupEvidenceAvailabilityPublicValue(item, key, state, depth + 1);
+    const parentPath = path.join('.');
+    const sanClassCount = parentPath === 'tls.certificate.subjectAltNames.classes'
+      && LOOKUP_AVAILABILITY_TLS_SAN_CLASS_KEYS.has(key)
+      && Number.isSafeInteger(item)
+      && Number(item) >= 0
+      && Number(item) <= LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS;
+    if (['dns', 'ip', 'directoryName', 'registeredId', 'otherName'].includes(key)
+      && !sanClassCount) continue;
+    if (parentPath === 'tls.certificate.subjectAltNames.classes'
+      && LOOKUP_AVAILABILITY_TLS_SAN_CLASS_KEYS.has(key)
+      && !sanClassCount) continue;
+    if (key === 'classes'
+      && (parentPath !== 'tls.certificate.subjectAltNames' || !recordOrNull(item))) continue;
+    if (key === 'similarity'
+      && (parentPath !== 'pageIdentity.fingerprints.domStructure'
+        || (item !== null && !recordOrNull(item)))) continue;
+    if (key === 'description'
+      && (parentPath !== 'technologyProfile.findings.evidence'
+        || typeof item !== 'string')) continue;
+    output[key] = projectLookupEvidenceAvailabilityPublicValue(item, [...path, key], state, depth + 1);
   }
   return output;
 }
@@ -416,11 +440,27 @@ function projectLookupEvidenceAvailabilityValue(
     if (!LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS.has(key)
       || privateEvidenceKey(key, item)) continue;
     const parentPath = path.join('.');
+    const boundedCount = Number.isSafeInteger(item)
+      && Number(item) >= 0
+      && Number(item) <= LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS;
+    const credentialCategoryCount = parentPath === 'credentialSurfaceProfile.inputs.categories'
+      && boundedCount;
+    const sanClassCount = parentPath === 'tls.certificate.subjectAltNames.classes'
+      && LOOKUP_AVAILABILITY_TLS_SAN_CLASS_KEYS.has(key)
+      && boundedCount;
     if (LOOKUP_AVAILABILITY_CREDENTIAL_CATEGORY_KEYS.has(key)
-      && (parentPath !== 'credentialSurfaceProfile.inputs.categories'
-        || !Number.isSafeInteger(item)
-        || Number(item) < 0
-        || Number(item) > LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)) continue;
+      && !credentialCategoryCount
+      && !sanClassCount) continue;
+    if (['dns', 'ip', 'directoryName', 'registeredId', 'otherName'].includes(key)
+      && !sanClassCount) continue;
+    if (key === 'classes'
+      && (parentPath !== 'tls.certificate.subjectAltNames' || !recordOrNull(item))) continue;
+    if (key === 'similarity'
+      && (parentPath !== 'pageIdentity.fingerprints.domStructure'
+        || (item !== null && !recordOrNull(item)))) continue;
+    if (key === 'description'
+      && (parentPath !== 'technologyProfile.findings.evidence'
+        || typeof item !== 'string')) continue;
     if (key === 'owner'
       && (!LOOKUP_AVAILABILITY_OWNER_PATHS.has(parentPath) || typeof item !== 'string')) continue;
     if (key === 'value'
@@ -454,7 +494,7 @@ function projectLookupEvidenceAvailabilityWithKeys(
     if (privateEvidenceKey(key, item)) continue;
     output[key] = currentPrivacyRules
       ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1)
-      : projectLookupEvidenceAvailabilityPublicValue(item, key, state, 1);
+      : projectLookupEvidenceAvailabilityPublicValue(item, [key], state, 1);
   }
   if (registryContactsExcluded) output.registryContactsExcluded = true;
   const pageIdentity = recordOrNull(source.pageIdentity);

@@ -35,6 +35,7 @@ export const EXTERNAL_FINDING_CATEGORIES = [
   'registration',
   'reputation',
 ] as const;
+export const MAX_EXTERNAL_FINDING_SUMMARY_LENGTH = 900;
 export type ExternalFindingCategory = typeof EXTERNAL_FINDING_CATEGORIES[number];
 export type ExternalFindingEvidenceClass = 'deployment_observation' | 'provider_report';
 export type ExternalFindingStructuredObservation = Readonly<{
@@ -304,7 +305,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       domain,
       category: item.category as ExternalFindingCategory,
       evidenceClass,
-      summary: requiredText(item.summary, 900, `Finding ${index + 1} summary`),
+      summary: requiredText(item.summary, MAX_EXTERNAL_FINDING_SUMMARY_LENGTH, `Finding ${index + 1} summary`),
       observedAt: iso(item.observedAt, `Finding ${index + 1} observation time`) as string,
       completeness: item.completeness as ExternalFinding['completeness'],
       limitations: limitations(item.limitations, index),
@@ -501,7 +502,7 @@ export function mergeExternalFindingsIntoCases(
 function targetedFinding(finding: ExternalFinding, caseDomain: string): ExternalFinding {
   if (finding.domain === caseDomain) return finding;
   const prefix = `Captured hostname ${finding.domain}. `;
-  const maximumSummaryLength = 900;
+  const maximumSummaryLength = MAX_EXTERNAL_FINDING_SUMMARY_LENGTH;
   const remaining = maximumSummaryLength - prefix.length;
   const summary = remaining > 1 && finding.summary.length > remaining
     ? `${prefix}${finding.summary.slice(0, remaining - 1).trimEnd()}…`

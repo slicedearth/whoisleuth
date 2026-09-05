@@ -152,6 +152,47 @@ describe('sanitised web-capture import', () => {
     assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artefact bytes/iu);
   });
 
+  test('partitions maximum bounded manifest metadata without slicing supported evidence', () => {
+    const title = 'T'.repeat(300);
+    const requestDomains = Array.from(
+      { length: 30 },
+      (_, index) => `asset-${String(index).padStart(2, '0')}-${'x'.repeat(24)}.example.test`,
+    );
+    const artifacts = [{
+      kind: 'screenshot', fileName: 'maximum-capture.png', mimeType: 'image/png',
+      sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 10_000,
+      width: 1024, height: 768,
+    }, {
+      kind: 'dom_digest', fileName: 'maximum-dom-digest.json', mimeType: 'application/json',
+      sha256: 'b'.repeat(64), bytes: 1_000,
+    }];
+    const document = parseWebCaptureManifest({
+      schema: WEB_CAPTURE_MANIFEST_SCHEMA,
+      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
+      captures: [{
+        domain: 'one.example.test', capturedAt: '2026-08-01T00:00:00Z', completeness: 'partial',
+        limitations: ['One bounded request was unavailable.'],
+        page: { title, finalOrigin: 'https://one.example.test' },
+        requestDomains,
+        technologies: [],
+        artifacts,
+      }, {
+        domain: 'two.example.test', capturedAt: '2026-08-01T00:01:00Z', completeness: 'complete',
+        page: { title: 'Second capture', finalOrigin: 'https://two.example.test' },
+        requestDomains: [], technologies: [], artifacts,
+      }],
+    });
+    const first = document.findings.filter((finding) => finding.domain === 'one.example.test');
+    assert.ok(first.length > 1);
+    assert.ok(first.every((finding) => finding.completeness === 'partial' && finding.summary.length <= 900));
+    const retained = first.map((finding) => finding.summary).join(' ');
+    assert.ok(retained.includes(title));
+    for (const domain of requestDomains) assert.ok(retained.includes(domain), domain);
+    assert.match(retained, /maximum-capture\.png.*maximum-dom-digest\.json/isu);
+    assert.ok(document.findings.some((finding) => finding.domain === 'two.example.test'));
+  });
+
   test('accepts current screenshot perceptual hashes and rejects reader-only version 1', () => {
     const current = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,

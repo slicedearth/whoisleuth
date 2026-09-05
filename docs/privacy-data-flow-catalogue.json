@@ -1525,7 +1525,6 @@
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
