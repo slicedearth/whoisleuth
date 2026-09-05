@@ -528,9 +528,14 @@ function timestamp(value: unknown): string | null {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function normalizeExactUrl(value: unknown): string | null {
-  const candidate = text(value, MAX_EXACT_URL_LENGTH);
+function normalizeExactUrl(value: unknown, rejectOverlong: boolean): string | null {
+  if (typeof value !== 'string' || CONTROL_RE.test(value)) return null;
+  const candidate = value.trim();
   if (!candidate) return null;
+  if (candidate.length > MAX_EXACT_URL_LENGTH) {
+    if (rejectOverlong) throw new Error(`Each exact HTTP(S) URL is limited to ${MAX_EXACT_URL_LENGTH} characters; shorten or remove the overlong URL before continuing.`);
+    return null;
+  }
   try {
     const parsed = new URL(candidate);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
@@ -540,7 +545,7 @@ function normalizeExactUrl(value: unknown): string | null {
   }
 }
 
-function normalizeUrls(value: unknown): string[] {
+function normalizeUrls(value: unknown, rejectOverlong = false): string[] {
   const source = Array.isArray(value)
     ? value
     : typeof value === 'string'
@@ -548,7 +553,7 @@ function normalizeUrls(value: unknown): string[] {
       : [];
   const unique = new Set<string>();
   for (const item of source.slice(0, MAX_ABUSIVE_URLS * 2)) {
-    const normalized = normalizeExactUrl(item);
+    const normalized = normalizeExactUrl(item, rejectOverlong);
     if (normalized) unique.add(normalized);
     if (unique.size >= MAX_ABUSIVE_URLS) break;
   }
@@ -1243,7 +1248,7 @@ export function buildCaseResponseReviewInputs(
     incident: {
       category,
       affectedParty: text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH),
-      abusiveUrls: normalizeUrls(input.abusiveUrls),
+      abusiveUrls: normalizeUrls(input.abusiveUrls, true),
       observedHarm: text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH),
       observedAt: timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null,
     },
@@ -1737,7 +1742,7 @@ export async function buildCaseResponsePacket(
 ): Promise<{ json: CaseResponsePacket; markdown: string; email: string }> {
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH);
   const affectedParty = text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH);
-  const abusiveUrls = normalizeUrls(input.abusiveUrls);
+  const abusiveUrls = normalizeUrls(input.abusiveUrls, true);
   const observedHarm = text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH);
   const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
   const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;

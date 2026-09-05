@@ -101,6 +101,18 @@ interface SyntheticCandidateInput {
   riskFactors: SyntheticRiskFactor[];
   provenance: SyntheticProvenance;
   relationship: SyntheticRelationship | null;
+  facts: {
+    hasMx: boolean | null;
+    hasSpf: boolean | null;
+    hasDmarc: boolean | null;
+    activityStatus: 'active' | 'parked' | null;
+    websiteComplete: boolean;
+    httpSecurityHeaders: readonly string[] | null;
+    hasPasswordField: boolean | null;
+    formAction: 'external' | 'same_origin' | null;
+    certificateObserved: boolean;
+    certificateHostnameMatched: boolean | null;
+  };
   evidence: {
     registry: SyntheticRegistryEvidence;
     dns: SyntheticDnsEvidence;
@@ -115,12 +127,13 @@ type SyntheticObservation = Omit<CaseEvidenceSnapshot, 'id' | 'fingerprint' | 'f
 
 export interface SyntheticDemoCandidate extends Omit<
   SyntheticCandidateInput,
-  'changeEvidence' | 'signals' | 'riskFactors' | 'provenance' | 'relationship' | 'evidence'
+  'changeEvidence' | 'signals' | 'riskFactors' | 'provenance' | 'relationship' | 'facts' | 'evidence'
 > {
   signals: readonly string[];
   riskFactors: readonly Readonly<SyntheticRiskFactor>[];
   provenance: Readonly<Omit<SyntheticProvenance, 'hostnames'> & { hostnames: readonly string[] }>;
   relationship: Readonly<SyntheticRelationship> | null;
+  facts: Readonly<SyntheticCandidateInput['facts']>;
   evidence: Readonly<{
     registry: Readonly<SyntheticRegistryEvidence>;
     dns: Readonly<Omit<SyntheticDnsEvidence, 'nameservers'> & { nameservers: readonly string[] }>;
@@ -195,8 +208,6 @@ export const SYNTHETIC_DEMO_PROFILE = deepFreeze(syntheticProfile);
 function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate {
   const { changeEvidence, ...candidate } = value;
   const availability = value.availability.toLowerCase();
-  const hasMx = /\bMX\b/i.test(value.evidence.dns.mail);
-  const hasSpf = /\bSPF\b/i.test(value.evidence.dns.mail);
   const baseline: SyntheticObservation = {
     capturedAt: '2026-06-26T11:15:00.000Z',
     source: 'lookup',
@@ -214,27 +225,27 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     createdDate: value.evidence.registry.registeredAt === 'Not observed' ? null : value.evidence.registry.registeredAt,
     expiryDate: null,
     nameservers: value.evidence.dns.nameservers,
-    hasMx,
-    hasSpf,
-    hasDmarc: false,
-    activityStatus: /parked/i.test(value.evidence.website.status) ? 'parked' : /inconclusive/i.test(value.evidence.website.status) ? 'unreachable' : 'active',
+    hasMx: value.facts.hasMx,
+    hasSpf: value.facts.hasSpf,
+    hasDmarc: value.facts.hasDmarc,
+    activityStatus: value.facts.activityStatus,
     websiteProbeDetail: value.evidence.website.detail,
     pageTitle: value.id === 'credential-lure' ? 'Northstar account access' : null,
     httpSummaryVersion: 1,
-    httpEvidenceStatus: /inconclusive/i.test(value.evidence.website.status) ? 'inconclusive' : 'success',
-    httpFinalOrigin: `https://${value.domain}`,
-    httpResponseStatus: /inconclusive/i.test(value.evidence.website.status) ? null : 200,
-    httpTransportSecurity: 'https',
-    httpRedirectCount: 0,
-    httpCrossOriginRedirect: false,
-    httpHttpsDowngrade: false,
-    httpContentType: 'text/html',
-    httpSecurityHeaders: ['content-security-policy'],
+    httpEvidenceStatus: value.facts.websiteComplete ? 'success' : 'inconclusive',
+    httpFinalOrigin: value.facts.websiteComplete ? `https://${value.domain}` : null,
+    httpResponseStatus: value.facts.websiteComplete ? 200 : null,
+    httpTransportSecurity: value.facts.websiteComplete ? 'https' : null,
+    httpRedirectCount: value.facts.websiteComplete ? 0 : null,
+    httpCrossOriginRedirect: value.facts.websiteComplete ? false : null,
+    httpHttpsDowngrade: value.facts.websiteComplete ? false : null,
+    httpContentType: value.facts.websiteComplete ? 'text/html' : null,
+    httpSecurityHeaders: value.facts.httpSecurityHeaders ? [...value.facts.httpSecurityHeaders] : null,
     faviconMatch: false,
     faviconNearMatch: false,
     reusesOfficialAssets: false,
-    hasPasswordField: value.id === 'credential-lure',
-    hasExternalFormAction: value.id === 'credential-lure',
+    hasPasswordField: value.facts.hasPasswordField,
+    hasExternalFormAction: value.facts.formAction === null ? null : value.facts.formAction === 'external',
     phishingLanguageMatch: value.id === 'credential-lure' ? 'Reviewed English account-verification language' : null,
     privacyProtected: null,
     idnReferenceMatch: false,
@@ -253,6 +264,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     riskFactors: Object.freeze(value.riskFactors.map((factor) => Object.freeze({ ...factor }))),
     provenance: Object.freeze({ ...value.provenance, hostnames: Object.freeze([...value.provenance.hostnames]) }),
     relationship: value.relationship ? Object.freeze({ ...value.relationship }) : null,
+    facts: Object.freeze({ ...value.facts, httpSecurityHeaders: value.facts.httpSecurityHeaders ? Object.freeze([...value.facts.httpSecurityHeaders]) : null }),
     evidence: Object.freeze({
       registry: Object.freeze({ ...value.evidence.registry }),
       dns: Object.freeze({ ...value.evidence.dns, nameservers: Object.freeze([...value.evidence.dns.nameservers]) }),
@@ -275,6 +287,7 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     ],
     provenance: { source: 'Certificate Transparency', firstObservedAt: '2026-06-24T08:30:00.000Z', lastObservedAt: '2026-06-26T11:10:00.000Z', certificateCount: 2, hostnames: ['northstar-login.example', 'www.northstar-login.example'] },
     relationship: { label: 'Shared nameserver', value: 'ns1.shared-example.invalid', relatedCandidates: 2 },
+    facts: { hasMx: true, hasSpf: true, hasDmarc: false, activityStatus: 'active', websiteComplete: true, httpSecurityHeaders: [], hasPasswordField: true, formAction: 'external', certificateObserved: true, certificateHostnameMatched: true },
     evidence: {
       registry: { status: 'Registered', registrar: 'Example Registrar (synthetic)', registeredAt: '2026-06-24', source: 'Registry RDAP fixture' },
       dns: {
@@ -307,6 +320,7 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     riskFactors: [{ label: 'Character mutation', points: 14 }, { label: 'Recent infrastructure relationship', points: 20 }],
     provenance: { source: 'Generated candidate', firstObservedAt: null, lastObservedAt: null, certificateCount: 0, hostnames: [] },
     relationship: { label: 'Shared nameserver', value: 'ns1.shared-example.invalid', relatedCandidates: 2 },
+    facts: { hasMx: false, hasSpf: null, hasDmarc: null, activityStatus: 'parked', websiteComplete: true, httpSecurityHeaders: ['content-security-policy'], hasPasswordField: false, formAction: null, certificateObserved: false, certificateHostnameMatched: null },
     evidence: {
       registry: { status: 'Registered', registrar: 'Example Registrar (synthetic)', registeredAt: '2025-11-08', source: 'Registry RDAP fixture' },
       dns: {
@@ -331,6 +345,7 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     riskFactors: [{ label: 'Exact official label', points: 28 }, { label: 'Incomplete deep evidence', points: 24 }],
     provenance: { source: 'Generated candidate', firstObservedAt: null, lastObservedAt: null, certificateCount: 0, hostnames: [] },
     relationship: null,
+    facts: { hasMx: null, hasSpf: null, hasDmarc: null, activityStatus: null, websiteComplete: false, httpSecurityHeaders: null, hasPasswordField: null, formAction: null, certificateObserved: false, certificateHostnameMatched: null },
     evidence: {
       registry: { status: 'Inconclusive', registrar: 'Not observed', registeredAt: 'Not observed', source: 'Registry fixture' },
       dns: { status: 'Not evaluated', nameservers: [], mail: 'Not evaluated', soa: '', source: 'DNS fixture' },
@@ -444,7 +459,19 @@ export function syntheticDemoLookupView(id: string) {
   const certificate = candidate.evidence.certificate;
   const conclusive = candidate.availability !== 'Unknown';
   const observedAt = candidate.provenance.lastObservedAt || '2026-06-26T11:15:00.000Z';
-  const active = candidate.id === 'credential-lure';
+  const active = candidate.facts.activityStatus === 'active';
+  const postureFindings = conclusive ? [
+    ...(candidate.facts.websiteComplete ? [{ id: 'https-transport', category: 'Transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The fixed homepage fixture uses HTTPS.', evidence: ['HTTP fixture'] }] : []),
+    ...(candidate.facts.certificateHostnameMatched === true ? [{ id: 'certificate-hostname', category: 'Certificate', state: 'observed', tone: 'configured', label: 'Certificate hostname matched', detail: 'The fixed certificate fixture includes the candidate hostname.', evidence: ['TLS fixture'] }] : []),
+    ...(candidate.facts.websiteComplete && !(candidate.facts.httpSecurityHeaders ?? []).includes('content-security-policy') ? [
+      { id: 'csp-header', category: 'Browser policy', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The fixed response-header fixture does not contain this policy.', evidence: ['HTTP fixture'] },
+    ] : []),
+    ...(active ? [
+      { id: 'password-form', category: 'Page behaviour', state: 'potential_exposure', tone: 'review', label: 'Password form observed', detail: 'A password field appears in the fixed static page fixture.', evidence: ['Page fixture'] },
+    ] : []),
+  ] : [
+    { id: 'collection-unavailable', category: 'Collection', state: 'unavailable', tone: 'neutral', label: 'Posture evidence unavailable', detail: 'The synthetic deep collection is intentionally inconclusive.', evidence: [] },
+  ];
   const fixtureAddress = candidate.id === 'character-edit' ? '203.0.113.45' : '203.0.113.44';
   return {
     assessment: {
@@ -619,7 +646,7 @@ export function syntheticDemoLookupView(id: string) {
             observations: dns.nameservers.slice(0, 2).map((nameserver) => ({
               nameserver,
               state: 'success',
-              values: ['10 mail.example.test'],
+              values: candidate.facts.hasMx === true ? ['10 mail.example.test'] : [],
               error: '',
               truncated: false,
               discarded: 0,
@@ -630,12 +657,12 @@ export function syntheticDemoLookupView(id: string) {
       } : null,
     },
     http: {
-      status: /inconclusive/i.test(website.status) ? 'Partial' : 'Success',
-      complete: !/inconclusive/i.test(website.status),
+      status: candidate.facts.websiteComplete ? 'Success' : 'Partial',
+      complete: candidate.facts.websiteComplete,
       rows: [
         { label: 'Observation', value: website.detail },
-        { label: 'Final origin', value: `https://${candidate.domain}` },
-        { label: 'Response', value: /inconclusive/i.test(website.status) ? 'Not observed' : 'HTTP 200' },
+        { label: 'Final origin', value: candidate.facts.websiteComplete ? `https://${candidate.domain}` : 'Not observed' },
+        { label: 'Response', value: candidate.facts.websiteComplete ? 'HTTP 200' : 'Not observed' },
       ],
       crossOriginRedirect: false,
       httpsDowngrade: false,
@@ -676,23 +703,19 @@ export function syntheticDemoLookupView(id: string) {
       classifiedCount: active ? 3 : 0,
       categories: { password: active ? 1 : 0, email: active ? 1 : 0, username: active ? 1 : 0, oneTimeCode: 0, payment: 0 },
       methods: { missing: 0, get: 0, post: active ? 1 : 0, dialog: 0, other: 0 },
-      actions: { sameOrigin: active ? 1 : 0, external: 0, missing: 0, cleartext: 0, unclassified: 0 },
+      actions: { sameOrigin: candidate.facts.formAction === 'same_origin' ? 1 : 0, external: candidate.facts.formAction === 'external' ? 1 : 0, missing: 0, cleartext: 0, unclassified: 0 },
       limitations: ['Fixed semantic-input fixture; no field values or complete form destinations are retained.'],
     },
     securityPosture: {
       status: conclusive ? 'Success' : 'Partial',
       complete: conclusive,
-      summary: conclusive ? { observed: 2, potentialExposure: active ? 1 : 0, observedAbsence: active ? 1 : 0, unavailable: 0 } : { observed: 0, potentialExposure: 0, observedAbsence: 0, unavailable: 4 },
-      findings: conclusive ? [
-        { id: 'https-transport', category: 'Transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The fixed homepage fixture uses HTTPS.', evidence: ['HTTP fixture'] },
-        { id: 'certificate-hostname', category: 'Certificate', state: 'observed', tone: 'configured', label: 'Certificate hostname matched', detail: 'The fixed certificate fixture includes the candidate hostname.', evidence: ['TLS fixture'] },
-        ...(active ? [
-          { id: 'csp-header', category: 'Browser policy', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The fixed response-header fixture does not contain this policy.', evidence: ['HTTP fixture'] },
-          { id: 'password-form', category: 'Page behaviour', state: 'potential_exposure', tone: 'review', label: 'Password form observed', detail: 'A password field appears in the fixed static page fixture.', evidence: ['Page fixture'] },
-        ] : []),
-      ] : [
-        { id: 'collection-unavailable', category: 'Collection', state: 'unavailable', tone: 'neutral', label: 'Posture evidence unavailable', detail: 'The synthetic deep collection is intentionally inconclusive.', evidence: [] },
-      ],
+      summary: {
+        observed: postureFindings.filter((finding) => finding.state === 'observed').length,
+        potentialExposure: postureFindings.filter((finding) => finding.state === 'potential_exposure').length,
+        observedAbsence: postureFindings.filter((finding) => finding.state === 'observed_absence').length,
+        unavailable: postureFindings.filter((finding) => finding.state === 'unavailable').length,
+      },
+      findings: postureFindings,
       limitations: ['Fixed derived findings for demonstration only; no active vulnerability test was performed.'],
     },
     technology: {
@@ -741,8 +764,8 @@ export function syntheticDemoLookupView(id: string) {
       provenance: 'This fixed reserved-address fixture demonstrates the network-context presentation only. It is not a public endpoint observation and does not identify hosting, ownership, control, intent, or maliciousness.',
     },
     tls: {
-      status: certificate.status === 'Observed' ? 'Success' : 'Partial',
-      complete: certificate.status === 'Observed',
+      status: candidate.facts.certificateObserved ? 'Success' : 'Partial',
+      complete: candidate.facts.certificateObserved,
       rows: [
         { label: 'Observation', value: certificate.detail },
         { label: 'Hostname', value: candidate.domain },
@@ -754,8 +777,8 @@ export function syntheticDemoLookupView(id: string) {
       alternativeNamesTruncated: false,
       chain: [],
       chainTruncated: false,
-      validFrom: certificate.status === 'Observed' ? '2026-07-01T00:00:00.000Z' : null,
-      validTo: certificate.status === 'Observed' ? '2026-10-01T00:00:00.000Z' : null,
+      validFrom: candidate.facts.certificateObserved ? '2026-07-01T00:00:00.000Z' : null,
+      validTo: candidate.facts.certificateObserved ? '2026-10-01T00:00:00.000Z' : null,
       observedAt,
       validationDetails: [{ label: 'Source', value: certificate.source }],
       limitations: ['This is a fixed certificate fixture; certificate presence does not establish site activity or intent.'],

@@ -362,8 +362,11 @@ export function createRelationshipObservation(
     throw new Error('That relationship does not contain a supported bounded value and at least one valid domain.');
   }
   const now = new Date().toISOString();
-  const observedAt = timestamp(options.observedAt) || now;
+  const observedAt = Object.hasOwn(options, 'observedAt') ? timestamp(options.observedAt) : now;
   const retainedAt = timestamp(options.retainedAt) || now;
+  if (!observedAt) {
+    throw new Error('A relationship observation needs the contributing scan observation time; an unknown time is not replaced with the retention time.');
+  }
   const canonical = canonicalIdentity(type, normalizedValue, domains);
   const metadata = TYPE_METADATA[type];
   return {

@@ -145,6 +145,17 @@ test('small or fragmented cohorts do not manufacture outliers', () => {
   assert.equal(fragmented.rows.some((item) => item.findings.some((finding) => finding.dimension === 'registrar')), false);
 });
 
+test('display placeholders and unavailable registration sources cannot form a registrar baseline', () => {
+  const unavailable = Array.from({ length: 4 }, (_, index) => row(`missing-${index}.example`, {
+    registrar: '—',
+    saved: { ...row('temporary.example').saved, registrarName: '—' },
+    sourceCoverage: [{ source: 'rdap', state: 'unavailable' }],
+  }));
+  const matrix = buildBulkPeerOutlierMatrix([...unavailable, row('observed.example')]);
+  assert.equal(matrix.dimensions.some((item) => item.id === 'registrar'), false);
+  assert.equal(matrix.rows.some((item) => item.domain === 'observed.example' && item.findings.some((finding) => finding.dimension === 'registrar')), false);
+});
+
 test('peer outliers compare bounded relationship evidence without adding collection', () => {
   const rows = [
     row('one.example'),

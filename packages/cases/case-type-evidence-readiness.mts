@@ -40,8 +40,26 @@ type CheckDefinition = Readonly<{
   id: CaseTypeReadinessCheckId;
   label: string;
   why: string;
-  test: (record: CaseRecord, searchable: string) => Readonly<{ present: boolean; evidence: string }>;
+  test: (record: CaseRecord) => Readonly<{ present: boolean; evidence: string }>;
 }>;
+
+const NON_OBSERVATION_SOURCE_STATES = new Set(['blocked', 'disabled', 'error', 'failed', 'inconclusive', 'not_found', 'not_reported', 'rate_limited', 'skipped', 'stale', 'unavailable', 'unsupported']);
+
+function qualifiedPins(record: CaseRecord) {
+  return record.evidencePins.filter((pin) => pin.source.trim()
+    && !NON_OBSERVATION_SOURCE_STATES.has(String(pin.sourceState ?? '').trim().toLowerCase().replaceAll('-', '_')));
+}
+
+function typedObservation(
+  record: CaseRecord,
+  pinType: RegExp,
+  sightingCategories: ReadonlySet<string>,
+): boolean {
+  return qualifiedPins(record).some((pin) => pinType.test(`${pin.category ?? ''} ${pin.field ?? ''}`.toLowerCase()))
+    || record.sightings.some((sighting) => sighting.source.trim()
+      && !['expired', 'not_reproduced'].includes(sighting.state)
+      && sightingCategories.has(sighting.category));
+}
 
 const CHECKS: Readonly<Record<CaseTypeReadinessCheckId, CheckDefinition>> = Object.freeze({
   exact_incident_target: Object.freeze({
@@ -56,55 +74,56 @@ const CHECKS: Readonly<Record<CaseTypeReadinessCheckId, CheckDefinition>> = Obje
     id: 'timed_observation', label: 'Timed source observation',
     why: 'Lets a recipient distinguish what was observed from when it was observed.',
     test: (record: CaseRecord) => {
-      const count = record.evidencePins.length + record.sightings.length;
+      const count = qualifiedPins(record).length + record.sightings.filter((sighting) => sighting.source.trim() && !['expired', 'not_reproduced'].includes(sighting.state)).length;
       return { present: count > 0, evidence: count ? `${count} retained timed observation${count === 1 ? '' : 's'}` : 'No retained evidence pin or sighting' };
     },
   }),
   observed_behaviour: Object.freeze({
     id: 'observed_behaviour', label: 'Observed behaviour or content',
     why: 'Supports the allegation with a recorded behaviour rather than a domain name or resemblance alone.',
-    test: (_record: CaseRecord, searchable: string) => ({
-      present: /\b(?:content|form|http|page|redirect|title|website|web|login|credential|checkout|message|profile|post)\b/u.test(searchable),
-      evidence: /\b(?:content|form|http|page|redirect|title|website|web|login|credential|checkout|message|profile|post)\b/u.test(searchable)
+    test: (record: CaseRecord) => {
+      const present = typedObservation(record, /\b(?:content|form|http|page|redirect|title|website|web|credential|message|profile|post)\b/u, new Set(['website']));
+      return { present, evidence: present
         ? 'A retained record describes web, message, account, or content behaviour'
-        : 'No retained behaviour or content observation was identified',
-    }),
+        : 'No retained behaviour or content observation was identified' };
+    },
   }),
   domain_context: Object.freeze({
     id: 'domain_context', label: 'Registration, DNS, or infrastructure context',
     why: 'Separates domain-level context from content, identity, and analyst conclusions.',
-    test: (_record: CaseRecord, searchable: string) => ({
-      present: /\b(?:rdap|whois|registrar|registry|dns|nameserver|certificate|tls|hosting|network|asn|registration)\b/u.test(searchable),
-      evidence: /\b(?:rdap|whois|registrar|registry|dns|nameserver|certificate|tls|hosting|network|asn|registration)\b/u.test(searchable)
+    test: (record: CaseRecord) => {
+      const present = typedObservation(record, /\b(?:rdap|whois|registrar|registry|dns|nameserver|certificate|tls|hosting|network|asn|registration|delegation|infrastructure)\b/u, new Set(['registration', 'delegation', 'certificate', 'infrastructure']));
+      return { present, evidence: present
         ? 'A retained record provides domain or infrastructure context'
-        : 'No retained registration, DNS, certificate, or infrastructure context was identified',
-    }),
+        : 'No retained registration, DNS, certificate, or infrastructure context was identified' };
+    },
   }),
   message_delivery: Object.freeze({
     id: 'message_delivery', label: 'Message or delivery evidence',
     why: 'Connects a reported message to its displayed identity, delivery path, and authentication results.',
-    test: (_record: CaseRecord, searchable: string) => ({
-      present: /\b(?:email|message|received|reply-to|return-path|spf|dkim|dmarc|arc|mail)\b/u.test(searchable),
-      evidence: /\b(?:email|message|received|reply-to|return-path|spf|dkim|dmarc|arc|mail)\b/u.test(searchable)
+    test: (record: CaseRecord) => {
+      const present = typedObservation(record, /\b(?:email|message|received|reply-to|return-path|spf|dkim|dmarc|arc|mail)\b/u, new Set(['mail']));
+      return { present, evidence: present
         ? 'A retained record refers to message or mail evidence'
-        : 'No retained message or delivery evidence was identified',
-    }),
+        : 'No retained message or delivery evidence was identified' };
+    },
   }),
   technical_payload: Object.freeze({
     id: 'technical_payload', label: 'Technical payload indicator',
     why: 'Records the file, hash, delivery mechanism, or other technical observation behind a malware assessment.',
-    test: (_record: CaseRecord, searchable: string) => ({
-      present: /\b(?:malware|payload|sha-?256|hash|download|executable|script|file)\b/u.test(searchable),
-      evidence: /\b(?:malware|payload|sha-?256|hash|download|executable|script|file)\b/u.test(searchable)
+    test: (record: CaseRecord) => {
+      const present = typedObservation(record, /\b(?:malware|payload|sha-?256|hash|download|executable|script|file)\b/u, new Set());
+      return { present, evidence: present
         ? 'A retained record identifies a payload, file, hash, or delivery mechanism'
-        : 'No retained payload, file, hash, or delivery observation was identified',
-    }),
+        : 'No retained payload, file, hash, or delivery observation was identified' };
+    },
   }),
   official_or_rights_context: Object.freeze({
     id: 'official_or_rights_context', label: 'Official identity or rights context',
     why: 'Records the affected identity, official reference, or rights basis without treating it as proof of infringement.',
-    test: (record: CaseRecord, searchable: string) => {
-      const present = record.brandProfileIds.length > 0 || /\b(?:official|trademark|copyright|rights holder|rights owner|registration number)\b/u.test(searchable);
+    test: (record: CaseRecord) => {
+      const present = record.brandProfileIds.length > 0
+        || typedObservation(record, /\b(?:official|trademark|copyright|rights|registration_number)\b/u, new Set());
       return { present, evidence: present ? 'A Brand Profile association or retained rights/official reference is present' : 'No Brand Profile association or retained rights/official reference was identified' };
     },
   }),
@@ -149,15 +168,6 @@ const TYPE_CHECKS: Readonly<Record<CaseTypeId, Readonly<{ required: readonly Cas
   other: typeChecks([...COMMON], ['exact_incident_target', 'observed_behaviour', 'domain_context', 'reviewed_response_route']),
 });
 
-function searchableCaseEvidence(record: CaseRecord): string {
-  return [
-    ...record.evidencePins.flatMap((pin) => [pin.label, pin.field, pin.category, pin.source, pin.value]),
-    ...record.sightings.flatMap((sighting) => [sighting.category, sighting.source]),
-    ...record.assertions.map((assertion) => assertion.statement),
-    ...record.decisions.flatMap((decision) => [decision.summary, decision.rationale, decision.confidenceBasis]),
-  ].filter((value): value is string => typeof value === 'string').join(' ').toLowerCase();
-}
-
 export function buildCaseTypeEvidenceReadiness(record: CaseRecord): CaseTypeReadiness {
   const selectedTypes = caseTypeIds(record.tags);
   if (!selectedTypes.length) return Object.freeze({
@@ -183,12 +193,11 @@ export function buildCaseTypeEvidenceReadiness(record: CaseRecord): CaseTypeRead
       appliesTo.set(id, labels);
     }
   }
-  const searchable = searchableCaseEvidence(record);
   const rows = CASE_TYPE_READINESS_CHECK_IDS.flatMap((id): CaseTypeReadinessRow[] => {
     const rowImportance = importance.get(id);
     if (!rowImportance) return [];
     const check = CHECKS[id];
-    const result = check.test(record, searchable);
+    const result = check.test(record);
     return [Object.freeze({
       id,
       label: check.label,

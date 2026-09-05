@@ -446,9 +446,10 @@
     await ensureRelationshipContext();
     if(relationshipsSourceState!=='ready'||!relationshipApi){relationshipRetentionStatus='Retained relationship observations are unavailable. Reload before recording a relationship.';return;}
     try{
+      const retainedAt=new Date().toISOString();
       const result=await relationshipApi.retainRelationshipObservation(relationship,{
-        observedAt:new Date().toISOString(),
-        retainedAt:new Date().toISOString(),
+        observedAt:scanStartedAt,
+        retainedAt,
         complete:!relationshipSummary.truncated,
         truncated:relationshipSummary.truncated,
         limitations:relationshipSummary.limitations,

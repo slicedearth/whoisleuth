@@ -123,3 +123,30 @@ test('multiple selected types merge checks without downgrading a required check'
     ['Phishing', 'Malware distribution'],
   );
 });
+
+test('free-text plans and negated assertions do not satisfy typed malware evidence', () => {
+  let record = createCase({
+    domain: 'review.example',
+    tags: caseTagsWithTypes([], ['malware_distribution']),
+  }, NOW);
+  record = updateCase([record], record.id, {
+    assertion: {
+      kind: 'next_step',
+      statement: 'Collect a payload hash later; no malware file was observed.',
+      rationale: 'This is a collection plan, not retained technical evidence.',
+    },
+  }, NOW).record;
+  assert.equal(buildCaseTypeEvidenceReadiness(record).rows.find((row) => row.id === 'technical_payload')?.state, 'missing');
+
+  record = updateCase([record], record.id, {
+    evidencePin: {
+      label: 'Reviewed file digest',
+      field: 'file.sha256',
+      category: 'malware',
+      source: 'Analyst-selected local artefact',
+      value: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      observedAt: NOW,
+    },
+  }, NOW).record;
+  assert.equal(buildCaseTypeEvidenceReadiness(record).rows.find((row) => row.id === 'technical_payload')?.state, 'present');
+});

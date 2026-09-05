@@ -125,8 +125,17 @@ function sourceCoverage(row: ScanResult): string | null {
   return sources.length ? `limited: ${sources.join(' | ')}` : 'limited';
 }
 
+function observedRegistrar(row: ScanResult): string | null {
+  const registrationSourceObserved = row.sourceCoverage.some((source) =>
+    ['availability', 'rdap', 'whois'].includes(source.source)
+    && ['complete', 'partial'].includes(source.state));
+  if (!registrationSourceObserved) return null;
+  const value = text(row.saved.registrarName, 180) || text(row.registrar, 180);
+  return value && value !== '—' ? value : null;
+}
+
 function dimensionValue(row: ScanResult, dimension: BulkPeerDimensionId): string | null {
-  if (dimension === 'registrar') return text(row.registrar, 180) || null;
+  if (dimension === 'registrar') return observedRegistrar(row);
   if (dimension === 'nameserver_set') return normalizedSet(row.nameservers);
   if (dimension === 'mail_posture') return mailPosture(row);
   if (dimension === 'activity') return text(row.activity, 80) || null;

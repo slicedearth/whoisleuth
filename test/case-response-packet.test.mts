@@ -11,6 +11,7 @@ import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSIVE_URLS,
+  MAX_EXACT_URL_LENGTH,
   MAX_RESPONSE_ACTION_HISTORY,
   RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
   RESPONSE_PACKET_PROFILES,
@@ -314,6 +315,8 @@ describe('case response packet', () => {
     await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: [] }, NOW), /required/u);
     await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['javascript:alert(1)'] }, NOW), /required/u);
     await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['https://user:secret@report.example/'] }, NOW), /required/u);
+    const overlong = `https://report.example/${'a'.repeat(MAX_EXACT_URL_LENGTH)}`;
+    await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: [overlong] }, NOW), new RegExp(`limited to ${MAX_EXACT_URL_LENGTH} characters`, 'u'));
   });
 
   test('bounds URLs and excludes contact candidates not owned by the selected Case action', async () => {
