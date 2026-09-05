@@ -23,8 +23,12 @@ import {
 } from './maintainer-tool-helpers.mts';
 
 export const FRONTEND_BUILD_INTEGRITY_FORMAT = 'frontend-build-identity';
-export const FRONTEND_BUILD_INTEGRITY_VERSION = 1 as const;
+export const FRONTEND_BUILD_INTEGRITY_VERSION = 2 as const;
 export const FRONTEND_BUILD_INTEGRITY_MARKER = 'frontend/build-identity.json';
+export const FRONTEND_BROWSER_ARTIFACT_PATHS = Object.freeze([
+  'frontend/build',
+  FRONTEND_BUILD_INTEGRITY_MARKER,
+] as const);
 
 // Playwright currently transpiles its TypeScript configuration through a
 // CommonJS loader. Keep this module importable from that boundary by avoiding
@@ -78,6 +82,18 @@ type TreeIdentity = Readonly<{
   files: readonly FileIdentity[];
 }>;
 
+export type FrontendBrowserModuleChunk = Readonly<{
+  source: string;
+  output: string;
+  bytes: number;
+  sha256: string;
+}>;
+
+type FrontendBrowserTestSupport = Readonly<{
+  digestSha256: string;
+  modules: readonly FrontendBrowserModuleChunk[];
+}>;
+
 type PlannedFile = Readonly<{
   filename: string;
   path: string;
@@ -103,6 +119,7 @@ export type FrontendBuildIntegritySnapshot = Readonly<{
   served: TreeIdentity;
   viteManifestSha256: string;
   manifestOutputs: readonly string[];
+  browserTestSupport: FrontendBrowserTestSupport;
   htmlDocuments: number;
   immutableReferences: number;
 }>;
@@ -281,7 +298,12 @@ function resolvedBuildRevision(repositoryRoot: string, environment: NodeJS.Proce
   return /^[a-f0-9]{7,64}$/u.test(value) ? value : 'local';
 }
 
-function manifestOutputPaths(source: Buffer): ReadonlySet<string> {
+type FrontendManifestIdentity = Readonly<{
+  outputs: ReadonlySet<string>;
+  browserModules: readonly Readonly<{ source: string; output: string }>[];
+}>;
+
+function frontendManifestIdentity(source: Buffer): FrontendManifestIdentity {
   const manifest = parseBoundedJsonObject(source.toString('utf8'), {
     label: 'Frontend Vite manifest',
     maximumBytes: MAX_MANIFEST_BYTES,
@@ -291,6 +313,7 @@ function manifestOutputPaths(source: Buffer): ReadonlySet<string> {
     throw new TypeError('Frontend Vite manifest has an invalid entry count.');
   }
   const outputs = new Set<string>();
+  const browserModules: Array<Readonly<{ source: string; output: string }>> = [];
   for (const [key, raw] of entries) {
     if (!key || key.length > MAX_PATH_LENGTH || hasMaintainerUnsafeCharacters(key)
       || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -314,8 +337,54 @@ function manifestOutputPaths(source: Buffer): ReadonlySet<string> {
       outputs.add(output);
       if (outputs.size > MAX_FILES) throw new TypeError('Frontend Vite manifest exceeds its output limit.');
     }
+    if (key.startsWith('src/')) {
+      const moduleSource = boundedSafeRelativePath(key, 'Frontend Vite source module', MAX_PATH_LENGTH);
+      const output = boundedSafeRelativePath(entry.file, `Frontend Vite module ${moduleSource} output`, MAX_PATH_LENGTH);
+      if (!output.startsWith('_app/immutable/') || !output.endsWith('.js')) {
+        throw new TypeError(`Frontend Vite source module does not resolve to an immutable JavaScript chunk: ${moduleSource}.`);
+      }
+      browserModules.push(Object.freeze({ source: moduleSource, output }));
+    }
   }
-  return outputs;
+  browserModules.sort((left, right) => compareCodeUnits(left.source, right.source));
+  if (browserModules.length < 1 || browserModules.length > MAX_MANIFEST_ENTRIES
+    || new Set(browserModules.map((item) => item.source)).size !== browserModules.length) {
+    throw new TypeError('Frontend Vite browser-module inventory is empty, duplicated, or exceeds its bound.');
+  }
+  return Object.freeze({ outputs, browserModules: Object.freeze(browserModules) });
+}
+
+function browserTestSupport(
+  viteManifestSha256: string,
+  modules: readonly Readonly<{ source: string; output: string }>[],
+  served: TreeIdentity,
+): FrontendBrowserTestSupport {
+  const servedByPath = new Map(served.files.map((item) => [item.path, item]));
+  const digest = createHash('sha256');
+  digest.update(viteManifestSha256, 'ascii');
+  digest.update('\n', 'ascii');
+  const retained = modules.map((module) => {
+    const file = servedByPath.get(module.output);
+    if (!file) {
+      throw new TypeError(`Frontend browser-test module is absent from the served build: ${module.source}.`);
+    }
+    const item = Object.freeze({
+      source: module.source,
+      output: module.output,
+      bytes: file.bytes,
+      sha256: file.sha256,
+    });
+    digest.update(item.source, 'utf8');
+    digest.update('\0', 'ascii');
+    digest.update(item.output, 'utf8');
+    digest.update('\0', 'ascii');
+    digest.update(String(item.bytes), 'ascii');
+    digest.update('\0', 'ascii');
+    digest.update(item.sha256, 'ascii');
+    digest.update('\n', 'ascii');
+    return item;
+  });
+  return Object.freeze({ digestSha256: digest.digest('hex'), modules: Object.freeze(retained) });
 }
 
 function exactFileSet(label: string, actual: readonly FileIdentity[], expected: readonly FileIdentity[]): void {
@@ -387,7 +456,8 @@ function createSnapshotOnce(
   const served = outputIdentity(repositoryRoot, 'frontend/build');
   const manifestPath = path.join(repositoryRoot, 'frontend/.svelte-kit/output/client/.vite/manifest.json');
   const manifestSource = readBoundedStableRegularFileSync(manifestPath, MAX_MANIFEST_BYTES, 'Frontend Vite manifest');
-  const manifestOutputs = manifestOutputPaths(manifestSource);
+  const manifest = frontendManifestIdentity(manifestSource);
+  const manifestOutputs = manifest.outputs;
   const immutableClientFiles = client.files.filter((item) => item.path.startsWith('_app/immutable/'));
   const orderedManifestOutputs = [...manifestOutputs].sort(compareCodeUnits);
   if (JSON.stringify(immutableClientFiles.map((item) => item.path)) !== JSON.stringify(orderedManifestOutputs)) {
@@ -399,6 +469,7 @@ function createSnapshotOnce(
   ]);
   exactFileSet('Frontend served build', served.files, expectedServed.files);
   const html = htmlIntegrity(repositoryRoot, served, manifestOutputs);
+  const viteManifestSha256 = sha256Bytes(manifestSource);
   if (revision !== resolvedBuildRevision(repositoryRoot, environment)) {
     throw new TypeError('Frontend source revision changed while build integrity was measured.');
   }
@@ -413,8 +484,13 @@ function createSnapshotOnce(
     }),
     source,
     served,
-    viteManifestSha256: sha256Bytes(manifestSource),
+    viteManifestSha256,
     manifestOutputs: Object.freeze(orderedManifestOutputs),
+    browserTestSupport: browserTestSupport(
+      viteManifestSha256,
+      manifest.browserModules,
+      served,
+    ),
     htmlDocuments: html.documents,
     immutableReferences: html.immutableReferences,
   });
@@ -468,7 +544,7 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
   });
   exactKeys(parsed, [
     'format', 'version', 'runtime', 'source', 'served', 'viteManifestSha256',
-    'manifestOutputs', 'htmlDocuments', 'immutableReferences',
+    'manifestOutputs', 'browserTestSupport', 'htmlDocuments', 'immutableReferences',
   ], 'Frontend build-integrity marker');
   if (parsed.format !== FRONTEND_BUILD_INTEGRITY_FORMAT || parsed.version !== FRONTEND_BUILD_INTEGRITY_VERSION) {
     throw new TypeError('Frontend build-integrity marker uses an unsupported format or version.');
@@ -503,6 +579,36 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
     || Number(parsed.immutableReferences) > MAX_REFERENCES) {
     throw new TypeError('Frontend build-integrity summary is malformed.');
   }
+  const retainedSource = parseTreeIdentity(parsed.source, 'Frontend build-integrity source');
+  const served = parseTreeIdentity(parsed.served, 'Frontend build-integrity served build');
+  const support = record(parsed.browserTestSupport, 'Frontend build-integrity browser-test support');
+  exactKeys(support, ['digestSha256', 'modules'], 'Frontend build-integrity browser-test support');
+  if (!Array.isArray(support.modules) || support.modules.length < 1 || support.modules.length > MAX_MANIFEST_ENTRIES
+    || typeof support.digestSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(support.digestSha256)) {
+    throw new TypeError('Frontend build-integrity browser-test support is malformed.');
+  }
+  const servedByPath = new Map(served.files.map((item) => [item.path, item]));
+  const modules = support.modules.map((value, index) => {
+    const item = record(value, `Frontend browser-test module ${index + 1}`);
+    exactKeys(item, ['source', 'output', 'bytes', 'sha256'], `Frontend browser-test module ${index + 1}`);
+    const moduleSource = boundedSafeRelativePath(item.source, `Frontend browser-test module ${index + 1} source`, MAX_PATH_LENGTH);
+    const output = boundedSafeRelativePath(item.output, `Frontend browser-test module ${index + 1} output`, MAX_PATH_LENGTH);
+    const servedFile = servedByPath.get(output);
+    if (!moduleSource.startsWith('src/') || !output.startsWith('_app/immutable/') || !output.endsWith('.js')
+      || !manifestOutputs.includes(output) || !servedFile
+      || item.bytes !== servedFile.bytes || item.sha256 !== servedFile.sha256) {
+      throw new TypeError(`Frontend browser-test module ${index + 1} does not match the declared served build.`);
+    }
+    return Object.freeze({ source: moduleSource, output, bytes: servedFile.bytes, sha256: servedFile.sha256 });
+  });
+  if (new Set(modules.map((item) => item.source)).size !== modules.length
+    || JSON.stringify(modules.map((item) => item.source)) !== JSON.stringify(modules.map((item) => item.source).sort(compareCodeUnits))) {
+    throw new TypeError('Frontend browser-test modules must use unique sorted source identities.');
+  }
+  const rebuiltSupport = browserTestSupport(parsed.viteManifestSha256, modules, served);
+  if (support.digestSha256 !== rebuiltSupport.digestSha256) {
+    throw new TypeError('Frontend browser-test support does not match its manifest and served-build identity.');
+  }
   return Object.freeze({
     format: FRONTEND_BUILD_INTEGRITY_FORMAT,
     version: FRONTEND_BUILD_INTEGRITY_VERSION,
@@ -512,13 +618,26 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
       architecture: runtime.architecture,
       revision: runtime.revision,
     }),
-    source: parseTreeIdentity(parsed.source, 'Frontend build-integrity source'),
-    served: parseTreeIdentity(parsed.served, 'Frontend build-integrity served build'),
+    source: retainedSource,
+    served,
     viteManifestSha256: parsed.viteManifestSha256,
     manifestOutputs: Object.freeze(manifestOutputs),
+    browserTestSupport: rebuiltSupport,
     htmlDocuments: Number(parsed.htmlDocuments),
     immutableReferences: Number(parsed.immutableReferences),
   });
+}
+
+export function frontendProductionChunk(
+  snapshot: FrontendBuildIntegritySnapshot,
+  source: string,
+): string {
+  const safeSource = boundedSafeRelativePath(source, 'Frontend production module source', MAX_PATH_LENGTH);
+  const module = snapshot.browserTestSupport.modules.find((item) => item.source === safeSource);
+  if (!module) {
+    throw new TypeError(`Frontend build browser-test support does not declare a production chunk for ${safeSource}.`);
+  }
+  return `/${module.output}`;
 }
 
 function renderSnapshot(snapshot: FrontendBuildIntegritySnapshot): string {

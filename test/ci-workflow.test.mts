@@ -59,18 +59,6 @@ const PLAYWRIGHT_CONFIG = fs.readFileSync(
   path.join(__dirname, '..', 'playwright.config.ts'),
   'utf8',
 );
-const BALANCED_SUITE_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'tools', 'playwright-balanced-suite.mts'),
-  'utf8',
-);
-const BALANCED_SHARD_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'tools', 'playwright-balanced-shard.mts'),
-  'utf8',
-);
-const PERFORMANCE_RUNNER_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'tools', 'playwright-performance-authority.mts'),
-  'utf8',
-);
 const E2E_FIXTURES_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'e2e', 'fixtures.ts'),
   'utf8',
@@ -297,7 +285,6 @@ describe('continuous integration workflow', () => {
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm run security:retire$/gmu), 1);
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm run frontend:build:integrity$/gmu), 2);
     assert.match(browserBuildJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
-    assert.match(browserBuildJob, /^\s{10}path: \|\s*\n\s{12}frontend\/build\s*\n\s{12}frontend\/build-identity\.json$/mu);
     assert.match(browserBuildJob, /^\s{10}if-no-files-found: error$/mu);
     assert.match(browserBuildJob, /^\s{10}retention-days: 1$/mu);
     assert.match(browserBuildJob, /^\s{10}compression-level: 6$/mu);
@@ -482,16 +469,6 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
       'node tools/playwright-performance-authority.mts',
     );
-    assert.match(PERFORMANCE_RUNNER_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
-    assert.match(PERFORMANCE_RUNNER_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
-    assert.match(BALANCED_SHARD_SOURCE, /assertFrontendBuildIntegrity\(REPOSITORY_ROOT\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /aggregatePlaywrightShardTimings\(reports\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /buildVerificationTimingUpdateCandidate\(\[/u);
-    assert.match(BALANCED_SUITE_SOURCE, /runFunctionalRunsSerially\(functionalRuns/u);
-    assert.doesNotMatch(BALANCED_SUITE_SOURCE, /Promise\.all\(functionalRuns\.map/u);
-    assert.match(BALANCED_SUITE_SOURCE, /-serial-shards`/u);
     assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');
     assert.deepEqual(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, [
       'e2e/console-loading.spec.ts',

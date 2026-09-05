@@ -12,15 +12,18 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { describe, test } from 'node:test';
 
 import {
   assertFrontendBuildIntegrity,
   cleanFrontendBuildArtifacts,
   FRONTEND_BUILD_INTEGRITY_MARKER,
+  frontendProductionChunk,
   parseFrontendBuildIntegritySnapshot,
   recordFrontendBuildIntegrity,
 } from '../tools/frontend-build-integrity.mts';
+import { createHostedBrowserWorkspace } from '../tools/hosted-browser-workspace.mts';
 
 const REVISION = '0123456789abcdef0123456789abcdef01234567';
 const ENVIRONMENT = Object.freeze({ WHOISLEUTH_BUILD_REVISION: REVISION });
@@ -45,7 +48,10 @@ function write(root: string, relative: string, source: string | Buffer): void {
 function fixtureRepository(context: { after(callback: () => void): void }): string {
   const root = mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-frontend-integrity-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const directory of SOURCE_DIRECTORIES) mkdirSync(path.join(root, directory), { recursive: true });
+  for (const directory of SOURCE_DIRECTORIES) {
+    mkdirSync(path.join(root, directory), { recursive: true });
+    write(root, `${directory}/.fixture`, `${directory}\n`);
+  }
   for (const relative of SOURCE_FILES) write(root, relative, `${relative}\n`);
   write(root, 'frontend/src/app.ts', 'export const app = true;\n');
 
@@ -82,6 +88,21 @@ function markerObject(root: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(root, FRONTEND_BUILD_INTEGRITY_MARKER), 'utf8')) as Record<string, unknown>;
 }
 
+function initialiseFixtureCheckout(root: string): void {
+  write(root, '.gitignore', [
+    'node_modules/',
+    'frontend/build/',
+    'frontend/build-identity.json',
+    'frontend/.svelte-kit/',
+    '',
+  ].join('\n'));
+  mkdirSync(path.join(root, 'node_modules'));
+  for (const args of [['init', '--quiet'], ['add', '--all']] as const) {
+    const child = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(child.status, 0, child.stderr);
+  }
+}
+
 describe('frontend build integrity', () => {
   test('records deterministic served bytes and verifies them after an absolute-root move', (context) => {
     const root = fixtureRepository(context);
@@ -90,6 +111,8 @@ describe('frontend build integrity', () => {
     assert.equal(first.served.fileCount, 4);
     assert.equal(first.htmlDocuments, 2);
     assert.equal(first.immutableReferences, 2);
+    assert.equal(first.browserTestSupport.modules.length, 1);
+    assert.equal(frontendProductionChunk(first, 'src/app.ts'), '/_app/immutable/entry/app.A.js');
     assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), first);
 
     const copied = mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-frontend-integrity-copy-'));
@@ -119,7 +142,24 @@ describe('frontend build integrity', () => {
     );
 
     assert.equal(existsSync(path.join(artifact, 'frontend/.svelte-kit')), false);
-    assert.deepEqual(assertFrontendBuildIntegrity(artifact, ENVIRONMENT), retained);
+    const verified = assertFrontendBuildIntegrity(artifact, ENVIRONMENT);
+    assert.deepEqual(verified, retained);
+    assert.equal(frontendProductionChunk(verified, 'src/app.ts'), '/_app/immutable/entry/app.A.js');
+  });
+
+  test('materialises local browser verification from only checkout files and declared artefacts', (context) => {
+    const root = fixtureRepository(context);
+    initialiseFixtureCheckout(root);
+    const retained = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const workspace = createHostedBrowserWorkspace(root, ENVIRONMENT);
+    context.after(workspace.dispose);
+
+    assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
+    assert.equal(existsSync(path.join(workspace.root, 'frontend/build/index.html')), true);
+    const verified = assertFrontendBuildIntegrity(workspace.root, {
+      WHOISLEUTH_BUILD_REVISION: retained.runtime.revision,
+    });
+    assert.equal(frontendProductionChunk(verified, 'src/app.ts'), '/_app/immutable/entry/app.A.js');
   });
 
   test('rejects an aggregate-oversized sparse output before reading file contents', (context) => {
@@ -174,7 +214,7 @@ describe('frontend build integrity', () => {
 
     assert.throws(() => parseFrontendBuildIntegritySnapshot('{'), /JSON|parse/u);
     assert.throws(
-      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: 2 })),
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: 3 })),
       /unsupported format or version/u,
     );
     assert.throws(
@@ -203,6 +243,27 @@ describe('frontend build integrity', () => {
       sha256: '0'.repeat(64),
     }));
     assert.throws(() => parseFrontendBuildIntegritySnapshot(JSON.stringify(excessiveFiles)), /invalid file inventory/u);
+
+    const missingSupport = structuredClone(retained) as Record<string, any>;
+    delete missingSupport.browserTestSupport;
+    assert.throws(
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify(missingSupport)),
+      /exact fields/u,
+    );
+
+    const staleSupport = structuredClone(retained) as Record<string, any>;
+    staleSupport.browserTestSupport.modules = [];
+    assert.throws(
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify(staleSupport)),
+      /browser-test support is malformed/u,
+    );
+
+    const mismatchedSupport = structuredClone(retained) as Record<string, any>;
+    mismatchedSupport.browserTestSupport.modules[0].output = '_app/immutable/assets/app.A.css';
+    assert.throws(
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify(mismatchedSupport)),
+      /does not match the declared served build/u,
+    );
   });
 
   test('rejects stale, missing, external, and traversing generated asset references', (context) => {

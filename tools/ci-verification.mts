@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -234,9 +235,13 @@ function assertFrontendBuildArtifactFlow(workflow: string): void {
     `uses: ${DOWNLOAD_ARTIFACT_ACTION.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s+# v8\\.0\\.1`,
     'u',
   );
+  const declaredArtifactBlock = [
+    '          path: |',
+    ...FRONTEND_BROWSER_ARTIFACT_PATHS.map((item) => `            ${item}`),
+  ].join('\n');
   if (!exactUpload.test(upload)
     || !upload.includes(`          name: ${CI_FRONTEND_BUILD_ARTIFACT_NAME}`)
-    || !upload.includes('          path: |\n            frontend/build\n            frontend/build-identity.json')
+    || !upload.includes(declaredArtifactBlock)
     || !upload.includes('          if-no-files-found: error')
     || !upload.includes('          retention-days: 1')
     || !upload.includes('          compression-level: 6')

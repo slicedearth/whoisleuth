@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
-import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { createHostedBrowserWorkspace, type HostedBrowserWorkspace } from './hosted-browser-workspace.mts';
 import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
 import {
   aggregatePlaywrightShardTimings,
@@ -22,8 +22,6 @@ import {
 } from './verification-timing-profile.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
-const SHARD_RUNNER = path.join(REPOSITORY_ROOT, 'tools', 'playwright-balanced-shard.mts');
 const DEFAULT_BASE_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const activeChildren = new Set<ChildProcess>();
@@ -88,11 +86,16 @@ function runBuild(): void {
   if (child.status !== 0) throw new Error(`Frontend build failed with exit code ${child.status ?? 2}.`);
 }
 
-function runProcess(label: string, args: readonly string[], environment: NodeJS.ProcessEnv): Promise<number> {
+function runProcess(
+  executionRoot: string,
+  label: string,
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv,
+): Promise<number> {
   return new Promise((resolve, reject) => {
     process.stdout.write(`Starting ${label}.\n`);
     const child = spawn(process.execPath, args, {
-      cwd: REPOSITORY_ROOT,
+      cwd: executionRoot,
       env: environment,
       stdio: 'inherit',
     });
@@ -111,11 +114,17 @@ function runProcess(label: string, args: readonly string[], environment: NodeJS.
   });
 }
 
-function runEnvironment(port: number, kind: 'functional' | 'performance', shard?: string): NodeJS.ProcessEnv {
+function runEnvironment(
+  port: number,
+  kind: 'functional' | 'performance',
+  revision: string,
+  shard?: string,
+): NodeJS.ProcessEnv {
   return {
     ...process.env,
     CI: '1',
     WHOISLEUTH_E2E_USE_BUILD: '1',
+    WHOISLEUTH_BUILD_REVISION: revision,
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_KIND: kind,
     ...(shard ? { WHOISLEUTH_PLAYWRIGHT_SHARD: shard } : {}),
@@ -123,8 +132,8 @@ function runEnvironment(port: number, kind: 'functional' | 'performance', shard?
   };
 }
 
-function resultData(environment: NodeJS.ProcessEnv): unknown {
-  const filename = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
+function resultData(executionRoot: string, environment: NodeJS.ProcessEnv): unknown {
+  const filename = path.join(executionRoot, playwrightRunArtifacts(environment).jsonResults);
   return JSON.parse(readFileSync(filename, 'utf8')) as unknown;
 }
 
@@ -178,10 +187,14 @@ export async function runFunctionalRunsSerially(
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
+  let workspace: HostedBrowserWorkspace | null = null;
   try {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
-    assertFrontendBuildIntegrity(REPOSITORY_ROOT);
+    workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
+    const executionRoot = workspace.root;
+    const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
+    const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
 
     if (interruptionRequested) return 130;
 
@@ -189,10 +202,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const ports = await selectPortRange(plan.shardCount + 1);
     try {
       if (interruptionRequested) return 130;
-      const performanceEnvironment = runEnvironment(ports[plan.shardCount]!, 'performance');
+      const performanceEnvironment = runEnvironment(
+        ports[plan.shardCount]!,
+        'performance',
+        workspace.revision,
+      );
       const performanceExit = await runProcess(
+        executionRoot,
         'isolated performance authority',
-        playwrightPerformanceAuthorityArguments(PLAYWRIGHT_CLI),
+        playwrightPerformanceAuthorityArguments(playwrightCli),
         performanceEnvironment,
       );
       if (interruptionRequested) return 130;
@@ -200,12 +218,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
 
       const functionalRuns = plan.shards.map((shard, index) => {
         const identity = `${shard.shard}/${plan.shardCount}`;
-        const environment = runEnvironment(ports[index]!, 'functional', identity);
+        const environment = runEnvironment(ports[index]!, 'functional', workspace!.revision, identity);
         return Object.freeze({
           label: `functional shard ${identity}`,
           environment,
           port: ports[index]!,
-          args: Object.freeze([SHARD_RUNNER, `--run=${identity}`]),
+          args: Object.freeze([shardRunner, `--run=${identity}`]),
         });
       });
       // Hosted CI assigns each shard its own runner. Launching all four on one
@@ -214,15 +232,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       // Preserve the exact shard plan and reports, but give each local shard the
       // same isolated execution opportunity as its hosted counterpart.
       const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
-        execute: (run) => runProcess(run.label, run.args, run.environment),
+        execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
         verifyPortFree: (run) => requirePortRangeFree([run.port]),
         isInterrupted: () => interruptionRequested,
       });
       if (functionalResult.interrupted) return 130;
       if (functionalResult.exits.some((code) => code !== 0)) return 2;
 
-      const performanceResult = resultData(performanceEnvironment);
-      const functionalResults = functionalRuns.map((run) => resultData(run.environment));
+      const performanceResult = resultData(executionRoot, performanceEnvironment);
+      const functionalResults = functionalRuns.map((run) => resultData(executionRoot, run.environment));
       process.stdout.write(verifyHostedBrowserHealth(functionalResults));
       const summaries = [
         resultSummary(performanceEnvironment, performanceResult),
@@ -247,6 +265,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
     return interruptionRequested ? 130 : 2;
+  } finally {
+    workspace?.dispose();
   }
 }
 

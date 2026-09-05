@@ -1,9 +1,12 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import {
+  assertFrontendBuildIntegrity,
+  frontendProductionChunk,
+  type FrontendBuildIntegritySnapshot,
+} from '../tools/frontend-build-integrity.mts';
 import { caseRecord } from './case-test-fixtures';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
@@ -16,18 +19,12 @@ import {
   readNavigationReadinessMark,
 } from './performance-sampling';
 
-type ClientManifest = Readonly<Record<string, Readonly<{ file?: string }>>>;
-
 const CASES_KEY = 'whois-rdap-cases-v1';
+let productionBuild: FrontendBuildIntegritySnapshot | null = null;
 
-async function productionChunk(source: string): Promise<string> {
-  const manifest = JSON.parse(await readFile(
-    join(process.cwd(), 'frontend', '.svelte-kit', 'output', 'client', '.vite', 'manifest.json'),
-    'utf8',
-  )) as ClientManifest;
-  const file = manifest[source]?.file;
-  if (!file) throw new TypeError(`The production manifest does not own ${source}.`);
-  return `/${file}`;
+function productionChunk(source: string): string {
+  productionBuild ??= assertFrontendBuildIntegrity(process.cwd());
+  return frontendProductionChunk(productionBuild, source);
 }
 
 function isChunk(route: Route, pathname: string): boolean {
