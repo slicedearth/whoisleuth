@@ -1,9 +1,29 @@
 <script lang="ts">
+  import Pagination from './Pagination.svelte';
   import type { CtCertificateGroup } from '$lib/analysis/ct-results.ts';
+  const PAGE_SIZE = 12;
   let { groups, truncated = false }: { groups: readonly CtCertificateGroup[]; truncated?: boolean } = $props();
+  let page = $state(1);
+  let pageScope = $state('');
 
   const shared = $derived(groups.filter((group) => group.domains.length > 1));
   const wildcard = $derived(groups.filter((group) => group.wildcardObserved));
+  const pageCount = $derived(Math.max(1, Math.ceil(groups.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleGroups = $derived(groups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const firstVisible = $derived(groups.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0);
+  const lastVisible = $derived(firstVisible + visibleGroups.length - 1);
+
+  function setPage(value: number): void {
+    page = Math.max(1, Math.min(pageCount, Math.trunc(value) || 1));
+  }
+
+  $effect(() => {
+    const nextScope = JSON.stringify(groups.map((group) => group.certificateKey));
+    if (nextScope === pageScope) return;
+    pageScope = nextScope;
+    page = 1;
+  });
 </script>
 
 {#if groups.length}
@@ -14,16 +34,17 @@
     </header>
     <p class="intro">Each group contains names observed together in one public certificate record. Verify shared issuance independently.</p>
     <div class="group-grid independent-grid">
-      {#each groups.slice(0, 12) as group, index (group.certificateKey)}
+      {#each visibleGroups as group, index (group.certificateKey)}
         <article>
-          <div class="group-head"><strong>Certificate group {index + 1}</strong>{#if group.wildcardObserved}<span>Wildcard</span>{/if}</div>
+          <div class="group-head"><strong>Certificate group {firstVisible + index}</strong>{#if group.wildcardObserved}<span>Wildcard</span>{/if}</div>
           {#if group.observedAt}<small>Logged <time datetime={group.observedAt}>{group.observedAt.slice(0, 10)}</time></small>{/if}
           <div class="domains">{#each group.domains as domain}<code>{domain}</code>{/each}</div>
           {#if group.hostnames.length > group.domains.length}<details><summary>{group.hostnames.length} observed names</summary><div class="hosts">{#each group.hostnames as hostname}<code>{hostname}</code>{/each}</div></details>{/if}
         </article>
       {/each}
     </div>
-    {#if groups.length > 12 || truncated}<p class="limit">Showing the 12 highest-commonality groups from {groups.length} retained groups.{truncated ? ' The group projection reached its independent cap; the domain result set retains its own completeness state.' : ''}</p>{/if}
+    <p class="limit" role="status">Showing {firstVisible}–{lastVisible} of {groups.length} retained issuance groups; at most {PAGE_SIZE} groups are rendered per page.{truncated ? ' The group projection reached its independent cap; the domain result set retains its own completeness state.' : ''}</p>
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Certificate issuance group pages" />
   </section>
 {/if}
 
