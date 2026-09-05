@@ -19,6 +19,7 @@
   import { parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
+  import type { RelationshipRetentionAdmission } from '$lib/analysis/relationship-admission-preview.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { BULK_SCORE_CSV_HEADERS, bulkScoreCsvFields, ctCsvFields } from '$lib/analysis/bulk-export.ts';
   import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
@@ -119,7 +120,7 @@
   let sourceFilter=$state<BulkSourceFilter>('');let lifecycleFilter=$state<BulkLifecycleFilter>('');let ageFilter=$state<BulkAgeFilter>('');let mailFilter=$state<BulkMailFilter>('');let registrarFilter=$state('');let caseDispositionFilter=$state('');let groupBy=$state<BulkGroupBy>('');
   let status = $state(''); let controller: AbortController|null = null; let pauseResolvers: Array<()=>void> = [];
   let activeScanSnapshot: (()=>ScanResult[])|null = null;
-  let scanGeneration = 0;
+  let scanGeneration = $state(0);
   let indicatorFormat=$state<'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp'>('domains');let indicatorWildcards=$state(false);let indicatorStatus=$state('');
   let watchlistName = $state(''); let saveStatus = $state('');
   let profile = $state<BrandProfile|null>(null);
@@ -212,6 +213,7 @@
   const provenanceByDomain=$derived(new Map((handoff?.candidates||[]).map(candidate=>[candidate.domain.toLowerCase(),candidate])));
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const relationshipSourceIdentities=$derived([...new Set(results.flatMap((row)=>row.sourceCoverage.map((source)=>source.source)))].sort().slice(0,20));
+  const relationshipSourceContextId=$derived(`${scanGeneration}\u0000${currentBulkSessionId||'transient'}\u0000${scanStartedAt}`);
   const parsedInput=$derived(parseDomainInput(input));
   const scanTargets=$derived(canonicalBulkTargets(parsedInput.entries));
   const equivalentTargetCount=$derived(Math.max(0,parsedInput.entries.length-scanTargets.length));
@@ -441,23 +443,36 @@
   function setSortKey(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey!==next){sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
   function loadDomains(domains:string[]){input=domains.join('\n');status=`Loaded ${domains.length} related domains into the scan queue.`;document.querySelector('.queue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
-  async function retainObservation(relationship:Record<string,unknown>){
+  function sameRelationshipAdmissionTexts(left:readonly string[],right:readonly string[]){return left.length===right.length&&left.every((value,index)=>value===right[index]);}
+  function relationshipAdmissionMatchesCurrent(admission:RelationshipRetentionAdmission){
+    return admission.sourceContextId===relationshipSourceContextId
+      && admission.observedAt===scanStartedAt
+      && admission.complete===!relationshipSummary.truncated
+      && admission.truncated===relationshipSummary.truncated
+      && sameRelationshipAdmissionTexts(admission.sourceIdentities,relationshipSourceIdentities)
+      && sameRelationshipAdmissionTexts(admission.limitations,relationshipSummary.limitations)
+      && relationshipSummary.groups.some((relationship)=>relationshipObservationId(relationship)===relationshipObservationId(admission.relationship));
+  }
+  async function retainObservation(admission:RelationshipRetentionAdmission):Promise<LocalMutationOutcome>{
     relationshipRetentionStatus='';
+    if(!relationshipAdmissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed. Open a fresh retention preview before recording the relationship.';return'stale';}
     await ensureRelationshipContext();
-    if(relationshipsSourceState!=='ready'||!relationshipApi){relationshipRetentionStatus='Retained relationship observations are unavailable. Reload before recording a relationship.';return;}
+    if(!relationshipAdmissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed while retention was loading. Open a fresh preview before recording the relationship.';return'stale';}
+    if(relationshipsSourceState!=='ready'||!relationshipApi){relationshipRetentionStatus='Retained relationship observations are unavailable. Reload before recording a relationship.';return'rejected';}
     try{
       const retainedAt=new Date().toISOString();
-      const result=await relationshipApi.retainRelationshipObservation(relationship,{
-        observedAt:scanStartedAt,
+      const result=await relationshipApi.retainRelationshipObservation(admission.relationship,{
+        observedAt:admission.observedAt,
         retainedAt,
-        complete:!relationshipSummary.truncated,
-        truncated:relationshipSummary.truncated,
-        limitations:relationshipSummary.limitations,
+        complete:admission.complete,
+        truncated:admission.truncated,
+        limitations:admission.limitations,
         sourceVersion:RELATIONSHIP_EVIDENCE_VERSION,
       });
       retainedRelationshipIds=new Set([...retainedRelationshipIds,result.record.id]);
       relationshipRetentionStatus=`${result.added?'Retained':'Refreshed'} ${result.record.label.toLowerCase()} for ${result.record.domains.length} domain${result.record.domains.length===1?'':'s'} in this browser${result.pruned?`; pruned ${result.pruned} older observation${result.pruned===1?'':'s'} to stay within storage`:''}.`;
-    }catch(cause){relationshipRetentionStatus=cause instanceof Error?cause.message:'Could not retain that relationship observation.';}
+      return'committed';
+    }catch(cause){relationshipRetentionStatus=cause instanceof Error?cause.message:'Could not retain that relationship observation.';return failedLocalMutationOutcome(cause);}
   }
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
   async function toggleSaved(row:ScanResult){await ensurePrimaryResultContext();if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before changing it.';return;}const api=shortlistApi;const previous=shortlist.find((item)=>item.domain===row.domain);try{const added=await api.toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await api.loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;registerAnalystUndo({kind:'shortlist_membership',action:added?'Added to shortlist':'Removed from shortlist',affectedRecord:row.domain,undo:async()=>{if(previous)await api.setShortlistSelection([previous],true);else await api.setShortlistSelection([shortlistPayload(row)],false);shortlist=await api.loadShortlist();return `${row.domain} ${previous?'restored to':'removed from'} the shortlist.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
@@ -522,7 +537,7 @@
   }
   function failedResult(domain:string,message:string,snapshot:BulkScanProfileSnapshot):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const officialDomains=snapshot.sourceState==='ready'?(snapshot.profile?.officialDomains||[]):[];const idn=analyzeDomainIdn(domain,officialDomains);const profileValue=snapshot.sourceState==='ready'?false:null;return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:null,error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:snapshot.mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,idnReferenceMatch:snapshot.sourceState==='ready'?Boolean(idn?.referenceMatches.length):null,pageBaselineMatch:null,hasActiveBrandProfile:snapshot.sourceState==='ready'?Boolean(snapshot.profile):null,riskFactors:[],mutationTypes,profileContext:snapshot.provenance,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},officialDomains),sourceCoverage:[{source:'lookup',state:'error'}]};}
   async function saveCurrentBulkSession(){await ensureBulkSessionsContext();if(bulkSessionsSourceState!=='ready'||!bulkSessionsApi){bulkSessionStatus='Saved Bulk sessions are unavailable. Reload before saving.';return;}const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const sessionResults=results.map(toBulkSessionResult);const result=await bulkSessionsApi.saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:sessionResults,profileContext:summarizeBulkProfileContexts(sessionResults),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await bulkSessionsApi.loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
-  function loadSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before loading a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for browser-local Brand Profile context to finish loading before restoring a saved session.';return;}currentBulkSessionId=session.id;bulkSessionName=session.name;mode=session.mode;input=session.domains.join('\n');const current=currentProfileContext();let quarantined=0;results=session.results.map((row)=>{const restored=fromBulkSessionResult(row,current.sourceState==='ready'?(profile?.officialDomains||[]):[]);const reconciled=reconcileBulkResultProfileContext(restored,current);if(reconciled.saved.profileContext.sourceState!=='ready')quarantined+=1;return reconciled;});completed=results.length;total=session.domains.length;page=1;scanStartedAt=session.startedAt;status=`Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.${quarantined?` Withheld profile-derived trust, matches, and Risk for ${quarantined} row${quarantined===1?'':'s'} whose saved provenance does not match the current settled profile context.`:''}`;void ensurePrimaryResultContext();requestAnimationFrame(()=>document.querySelector('#results')?.scrollIntoView({behavior:'auto'}));}
+  function loadSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before loading a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for browser-local Brand Profile context to finish loading before restoring a saved session.';return;}scanGeneration+=1;currentBulkSessionId=session.id;bulkSessionName=session.name;mode=session.mode;input=session.domains.join('\n');const current=currentProfileContext();let quarantined=0;results=session.results.map((row)=>{const restored=fromBulkSessionResult(row,current.sourceState==='ready'?(profile?.officialDomains||[]):[]);const reconciled=reconcileBulkResultProfileContext(restored,current);if(reconciled.saved.profileContext.sourceState!=='ready')quarantined+=1;return reconciled;});completed=results.length;total=session.domains.length;page=1;scanStartedAt=session.startedAt;status=`Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.${quarantined?` Withheld profile-derived trust, matches, and Risk for ${quarantined} row${quarantined===1?'':'s'} whose saved provenance does not match the current settled profile context.`:''}`;void ensurePrimaryResultContext();requestAnimationFrame(()=>document.querySelector('#results')?.scrollIntoView({behavior:'auto'}));}
   async function resumeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before resuming a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for browser-local Brand Profile context to finish loading before resuming a saved session.';return;}loadSavedBulkSession(session);const settled=new Set(session.results.map((row)=>row.domain));const pending=session.domains.filter((domain)=>!settled.has(domain));if(!pending.length){bulkSessionStatus='Every queued domain already has a settled result. Use Retry failed to repeat error rows.';return;}await run(pending,false);await saveCurrentBulkSession();}
   async function removeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before deleting a saved session.';return;}if(!confirm(`Delete the saved session “${session.name}”?`))return;await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{bulkSessions=await bulkSessionsApi.deleteBulkSession(session.id);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
   async function downloadBulkSessions(){await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{await bulkSessionsApi.exportBulkSessions();bulkSessionStatus=`Exported ${bulkSessions.length} saved session${bulkSessions.length===1?'':'s'}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not export saved Bulk sessions.';}}
@@ -774,7 +789,7 @@
       <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
         <DeferredSurface
           load={()=>import('$lib/components/BulkRelationships.svelte')}
-          props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',observedAt:scanStartedAt,sourceIdentities:relationshipSourceIdentities}}
+          props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',observedAt:scanStartedAt,sourceIdentities:relationshipSourceIdentities,sourceContextId:relationshipSourceContextId}}
           loadingLabel="Loading relationship analysis."
           unavailableLabel="Relationship analysis could not be loaded."
         />

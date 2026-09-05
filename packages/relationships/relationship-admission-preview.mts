@@ -5,6 +5,26 @@ export const MAX_RELATIONSHIP_ADMISSION_TEXT = 500;
 
 export type RelationshipAdmissionAction = 'expand' | 'retain';
 
+export type RelationshipAdmissionGroup = Readonly<{
+  type: string;
+  label: string;
+  method: string;
+  value: string;
+  normalizedValue: string;
+  domains: readonly string[];
+  description: string;
+}>;
+
+export type RelationshipRetentionAdmission = Readonly<{
+  relationship: RelationshipAdmissionGroup;
+  sourceContextId: string;
+  observedAt: string;
+  sourceIdentities: readonly string[];
+  complete: boolean;
+  truncated: boolean;
+  limitations: readonly string[];
+}>;
+
 export type RelationshipAdmissionPreview = Readonly<{
   version: typeof RELATIONSHIP_ADMISSION_PREVIEW_VERSION;
   action: RelationshipAdmissionAction;
