@@ -349,6 +349,39 @@ describe('offline message-header review', () => {
     assert.equal(document.alignment.fromToReplyTo, 'unavailable');
   });
 
+  test('ignores address-like text in quoted local parts, display names, and comments', () => {
+    const document = buildCliMailHeaderReview([
+      'From: "private@localpart.test"@sender.test, "Decoy decoy@display.test" <person@second.test>',
+      'Reply-To: person(comment@ignored.test)@reply.test',
+      'Return-Path: <bounce@sender.test> (reported@comment.test)',
+    ].join('\r\n'), ISO);
+    assert.deepEqual(document.identity.fromDomains, ['second.test', 'sender.test']);
+    assert.deepEqual(document.identity.replyToDomains, ['reply.test']);
+    assert.deepEqual(document.identity.returnPathDomains, ['sender.test']);
+    assert.doesNotMatch(JSON.stringify(document), /localpart|display|ignored|comment/u);
+  });
+
+  test('reads authentication methods only at lexical result-clause boundaries', () => {
+    const document = buildCliMailHeaderReview([
+      'Authentication-Results: mx.example.test; dkim=pass reason="reported spf=fail in diagnostic";',
+      ' spf = pass smtp.mailfrom=sender.test; dmarc=pass (reported arc=fail); arc=none',
+      'Authentication-Results: backup.example.test; spf=pass; spf=pass; dkim=pass',
+      'From: "private@localpart.test"@sender.test',
+    ].join('\r\n'), ISO);
+    assert.deepEqual(document.authentication.spf, { state: 'pass', observations: 3 });
+    assert.deepEqual(document.authentication.dkim, { state: 'pass', observations: 2 });
+    assert.deepEqual(document.authentication.dmarc, { state: 'pass', observations: 1 });
+    assert.deepEqual(document.authentication.arc, { state: 'none', observations: 1 });
+    assert.deepEqual(document.identity.fromDomains, ['sender.test']);
+
+    const ambiguous = buildCliMailHeaderReview([
+      'Authentication-Results: mx.example.test; dkim=pass reason="unterminated spf=fail',
+      'From: person@example.test',
+    ].join('\r\n'), ISO);
+    assert.deepEqual(ambiguous.authentication.dkim, { state: 'unknown', observations: 0 });
+    assert.deepEqual(ambiguous.authentication.spf, { state: 'unknown', observations: 0 });
+  });
+
   test('accepts a header-only file with one trailing line ending', () => {
     const document = buildCliMailHeaderReview('From: analyst@example.test\r\n', ISO);
     assert.deepEqual(document.identity.fromDomains, ['example.test']);
