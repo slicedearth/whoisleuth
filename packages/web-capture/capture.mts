@@ -69,7 +69,8 @@ type CaptureArguments = Readonly<{
 }>;
 
 type CaptureDependencies = Readonly<{
-  launchBrowser(): Promise<Browser>;
+  launchBrowser(timeoutMs: number): Promise<Browser>;
+  startArtifactWriter?: typeof startAnchoredArtifactWriter;
   resolveAddresses?: typeof resolvePublicAddresses;
   fetchResource?: CaptureFetchResource;
   readResponse?: typeof readBytesCapped;
@@ -757,6 +758,7 @@ export async function captureRenderedPage(
     throw error;
   }
   const reservationStats = await lstat(targetDirectory);
+  const captureStartedAt = Date.now();
   const expectedUid = typeof process.getuid === 'function' ? process.getuid() : null;
   assertPrivateDirectoryReservation(reservationStats, expectedUid);
   const reservation = { dev: reservationStats.dev, ino: reservationStats.ino };
@@ -773,6 +775,10 @@ export async function captureRenderedPage(
       browser?.close(),
     ].filter((operation): operation is Promise<void> => Boolean(operation)));
   }, dependencies.deadlineScheduler);
+  const remainingTimeoutMs = () => Math.max(
+    1,
+    argumentsValue.timeoutMs - Math.max(0, Date.now() - captureStartedAt),
+  );
   async function writeArtifact(fileName: string, value: string | Buffer): Promise<void> {
     if (!dependencies.writeArtifact) await assertPublishedDirectoryIdentity(targetDirectory, reservation);
     const operation = dependencies.writeArtifact
@@ -797,10 +803,24 @@ export async function captureRenderedPage(
   }
   try {
     if (!dependencies.writeArtifact) {
-      anchoredWriter = await deadline.run(startAnchoredArtifactWriter(targetDirectory, reservation, expectedUid));
+      const writerAcquisition = (dependencies.startArtifactWriter ?? startAnchoredArtifactWriter)(
+        targetDirectory,
+        reservation,
+        expectedUid,
+      );
+      void writerAcquisition.then((lateWriter) => {
+        if (!deadline.expired() || anchoredWriter === lateWriter) return;
+        void lateWriter.finish(true).catch(() => lateWriter.terminate());
+      }, () => {});
+      anchoredWriter = await deadline.run(writerAcquisition);
       await deadline.run(assertPublishedDirectoryIdentity(targetDirectory, reservation));
     }
-    browser = await deadline.run(dependencies.launchBrowser());
+    const browserAcquisition = dependencies.launchBrowser(remainingTimeoutMs());
+    void browserAcquisition.then((lateBrowser) => {
+      if (!deadline.expired() || browser === lateBrowser) return;
+      void lateBrowser.close().catch(() => {});
+    }, () => {});
+    browser = await deadline.run(browserAcquisition);
     context = await deadline.run(browser.newContext({
       viewport: VIEWPORT,
       serviceWorkers: 'block',

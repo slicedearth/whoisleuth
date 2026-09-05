@@ -119,4 +119,51 @@ describe('external findings converters', () => {
     assert.equal(report.document.findings[0]?.structuredObservation?.issuer, 'Example issuing CA');
     assert.equal(report.rejected, 1);
   });
+
+  test('rejects certificate identifiers that only begin with a valid digest', () => {
+    const report = convertSupportedExternalFindings({
+      schema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+      schemaVersion: 1,
+      observations: [
+        { domain: 'example.test', fingerprintSha256: 'a'.repeat(64), observedAt },
+        { domain: 'example.test', fingerprintSha256: 'a'.repeat(65), observedAt },
+        { domain: 'example.test', fingerprintSha256: `${'a'.repeat(64)}z`, observedAt },
+      ],
+    }, 'certificate-observations-v1');
+    assert.equal(report.accepted, 1);
+    assert.equal(report.rejected, 2);
+    assert.equal(report.document.findings[0]?.structuredObservation?.value, 'a'.repeat(64));
+  });
+
+  test('rejects DNS values that cannot be retained exactly within the field bound', () => {
+    const exact = `v=fixture ${'x'.repeat(490)}`;
+    assert.equal(exact.length, 500);
+    const report = convertSupportedExternalFindings({
+      schema: DNS_OBSERVATION_ROWS_SCHEMA,
+      schemaVersion: 1,
+      observations: [
+        { domain: 'example.test', type: 'TXT', value: exact, observedAt },
+        { domain: 'example.test', type: 'TXT', value: `${exact}x`, observedAt },
+      ],
+    }, 'dns-observations-v1');
+    assert.equal(report.accepted, 1);
+    assert.equal(report.rejected, 1);
+    assert.equal(report.document.findings[0]?.structuredObservation?.value, exact);
+    assert.equal(report.truncated, false);
+  });
+
+  test('requires explicit and calendar-valid observation timezones', () => {
+    const report = convertSupportedExternalFindings({
+      schema: DOMAIN_OBSERVATION_ROWS_SCHEMA,
+      schemaVersion: 1,
+      observations: [
+        { domain: 'example.test', source: 'Inventory', status: 'present', observedAt },
+        { domain: 'example.test', source: 'Inventory', status: 'present', observedAt: '2026-09-05T10:00:00' },
+        { domain: 'example.test', source: 'Inventory', status: 'present', observedAt: '2026-02-30T10:00:00Z' },
+      ],
+    }, 'domain-observations-v1');
+    assert.equal(report.accepted, 1);
+    assert.equal(report.rejected, 2);
+    assert.equal(report.document.findings[0]?.observedAt, observedAt);
+  });
 });

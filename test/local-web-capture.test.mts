@@ -841,6 +841,93 @@ describe('optional local rendered capture package', () => {
     }
   });
 
+  test('closes a browser acquired after the total deadline exactly once', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-browser-test-'));
+    const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    let resolveLaunch!: (browser: Browser) => void;
+    let signalLaunch!: () => void;
+    let signalClose!: () => void;
+    const launchStarted = new Promise<void>((resolve) => { signalLaunch = resolve; });
+    const browserClosed = new Promise<void>((resolve) => { signalClose = resolve; });
+    let closeCount = 0;
+    let contextCount = 0;
+    let launchTimeout = 0;
+    const lateBrowser = {
+      newContext: async () => { contextCount += 1; throw new Error('late browser must not create a context'); },
+      close: async () => { closeCount += 1; signalClose(); },
+    } as unknown as Browser;
+    try {
+      const capture = captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async (timeoutMs) => {
+          launchTimeout = timeoutMs;
+          signalLaunch();
+          return new Promise<Browser>((resolve) => { resolveLaunch = resolve; });
+        },
+        writeArtifact: async () => { throw new Error('late browser must not write artefacts'); },
+        deadlineScheduler: deadline.scheduler,
+      });
+      await launchStarted;
+      assert.ok(launchTimeout > 0 && launchTimeout <= 1_000);
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
+      resolveLaunch(lateBrowser);
+      await browserClosed;
+      assert.equal(closeCount, 1);
+      assert.equal(contextCount, 0);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('cleans an anchored writer acquired after the total deadline exactly once', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-writer-test-'));
+    const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    type Writer = Awaited<ReturnType<typeof startAnchoredArtifactWriter>>;
+    let resolveWriter!: (writer: Writer) => void;
+    let signalStart!: () => void;
+    let signalFinish!: () => void;
+    const writerStarted = new Promise<void>((resolve) => { signalStart = resolve; });
+    const writerFinished = new Promise<void>((resolve) => { signalFinish = resolve; });
+    let finishCount = 0;
+    let terminateCount = 0;
+    const lateWriter: Writer = {
+      write: async () => { throw new Error('late writer must not write artefacts'); },
+      finish: async (cleanup) => {
+        assert.equal(cleanup, true);
+        finishCount += 1;
+        signalFinish();
+      },
+      terminate: () => { terminateCount += 1; },
+    };
+    try {
+      const capture = captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async () => { throw new Error('late writer must stop browser launch'); },
+        startArtifactWriter: async () => {
+          signalStart();
+          return new Promise<Writer>((resolve) => { resolveWriter = resolve; });
+        },
+        deadlineScheduler: deadline.scheduler,
+      });
+      await writerStarted;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
+      resolveWriter(lateWriter);
+      await writerFinished;
+      assert.equal(finishCount, 1);
+      assert.equal(terminateCount, 0);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test('aborts an admitted direct resource fetch at the shared total deadline', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-fetch-deadline-test-'));
     const destination = path.join(parent, 'capture');

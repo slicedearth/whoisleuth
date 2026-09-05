@@ -15,6 +15,7 @@ import {
   MAX_CONVERSION_INPUT_ROWS,
   SUPPORTED_OBSERVATION_ROWS_VERSION,
 } from '../contracts/external-observation-interchange.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 export {
   CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -117,14 +118,13 @@ export function convertExternalFindingRows(value: unknown, fallbackSource = 'Ext
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return null;
-  return new Date(value).toISOString();
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function requiredText(value: unknown, maximum: number): string | null {
   if (typeof value !== 'string' || CONTROL_RE.test(value)) return null;
-  const normalized = value.replace(/\s+/gu, ' ').trim();
-  return normalized ? normalized.slice(0, maximum) : null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maximum ? normalized : null;
 }
 
 function supportedRowsRoot(

@@ -158,6 +158,23 @@ describe('explainable page-baseline comparison', () => {
     assert.equal(comparison.hasStrongPageIdentityReviewMatch(result), false);
   });
 
+  test('keeps incomplete non-truncated baselines partial and out of strong matches', () => {
+    const incompleteReference = requiredValue(comparison.comparePageBaselines(
+      stored({ complete: false, truncated: false }),
+      stored(),
+    ));
+    const incompleteObserved = requiredValue(comparison.comparePageBaselines(
+      stored(),
+      stored({ complete: false, truncated: false }),
+    ));
+
+    for (const result of [incompleteReference, incompleteObserved]) {
+      assert.equal(result.partial, true);
+      assert.equal(result.counts.same, 6);
+      assert.equal(comparison.hasStrongPageIdentityReviewMatch(result), false);
+    }
+  });
+
   test('requires two complete strong components for the shared review marker', () => {
     const weak = requiredValue(comparison.comparePageBaselines(stored(), stored({
       normalizedHtml: { algorithm: 'sha256', value: SHA_D, tokenCount: 20, truncated: false },
