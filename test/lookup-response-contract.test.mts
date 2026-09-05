@@ -1059,7 +1059,7 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(threatIntelligence.providers.length, MAX_THREAT_INTELLIGENCE_PROVIDERS + 6);
   });
 
-  test('keeps only the first separately attributed record for each provider', () => {
+  test('collapses only identical separately attributed records for each provider', () => {
     const provider = (detail: string) => ({
       schema: THREAT_INTELLIGENCE_SCHEMA,
       version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
@@ -1071,17 +1071,46 @@ describe('Lookup HTTP response contract', () => {
       observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [] },
     });
     const parsed = parseLookupHttpResponse(response({
-      threatIntelligence: { version: 1, providers: [provider('First'), provider('Second'), provider('Third')] },
+      threatIntelligence: { version: 1, providers: [provider('Same'), provider('Same'), provider('Same')] },
     }));
     assert.equal(parsed.ok, true);
 
     const view = createLookupViewModel(parsed.value);
     assert.equal(view.threatIntelligenceProviders.length, 1);
-    assert.equal(view.threatIntelligenceProviders[0]?.detail, 'First');
+    assert.equal(view.threatIntelligenceProviders[0]?.detail, 'Same');
     assert.equal(
       recordValue(view.threatIntelligenceProviders[0]?.provider).label,
       'URLhaus malware-host records',
     );
+  });
+
+  test('projects conflicting duplicate providers as an order-independent partial source', () => {
+    const provider = (state: string, findings: unknown[]) => ({
+      schema: THREAT_INTELLIGENCE_SCHEMA,
+      version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlhaus_host', label: 'Wire label' },
+      target: THREAT_TARGET,
+      state,
+      detail: state,
+      findings,
+      observation: { observedAt: '2026-07-01T00:00:00.000Z', limitations: [], complete: true, truncated: false },
+    });
+    const clean = provider('not_found', []);
+    const finding = provider('success', [{
+      id: 'malware-record', category: 'malware', severity: 'high', confidence: 'high', detail: 'Provider record', tags: [],
+    }]);
+    const projected = (providers: unknown[]) => {
+      const parsed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers } }));
+      assert.equal(parsed.ok, true);
+      return requiredValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]);
+    };
+    const forward = projected([clean, finding]);
+    const reverse = projected([finding, clean]);
+    assert.deepEqual(forward, reverse);
+    assert.equal(forward.state, 'partial');
+    assert.deepEqual(forward.findings, []);
+    assert.equal(recordValue(forward.observation).complete, false);
+    assert.match(String(forward.detail), /Conflicting records/u);
   });
 
   test('bounds nested provider evidence and permits only attributed HTTPS record links', () => {
@@ -1549,6 +1578,54 @@ describe('compact Bulk Lookup HTTP response contract', () => {
       'portal.example.test',
     );
     assert.equal(parsed.ok, true);
+  });
+
+  test('binds compact evidence to the exact public-suffix-aware registrable target', () => {
+    const valid = compactResponse({
+      query: 'login.portal.example.co.uk',
+      inputHostname: 'login.portal.example.co.uk',
+      registrableDomain: 'example.co.uk',
+      isSubdomain: true,
+      availability: {
+        ...compactResponse().availability,
+        domain: 'example.co.uk',
+      },
+    });
+    assert.equal(parseCompactLookupHttpResponse(valid, 'login.portal.example.co.uk').ok, true);
+
+    for (const domain of ['co.uk', 'portal.example.co.uk']) {
+      const mismatched = {
+        ...valid,
+        registrableDomain: domain,
+        availability: { ...valid.availability, domain },
+      };
+      assert.equal(parseCompactLookupHttpResponse(mismatched, 'login.portal.example.co.uk').ok, false);
+    }
+
+    const privateSuffixPolicy = compactResponse({
+      query: 'tenant.github.io',
+      inputHostname: 'tenant.github.io',
+      registrableDomain: 'github.io',
+      isSubdomain: true,
+      availability: { ...compactResponse().availability, domain: 'github.io' },
+    });
+    assert.equal(parseCompactLookupHttpResponse(privateSuffixPolicy, 'tenant.github.io').ok, true);
+  });
+
+  test('rejects echoed compact request metadata outside its actual scope', () => {
+    for (const overrides of [
+      { query: 'example.test' },
+      { inputHostname: 'example.test' },
+      { registrableDomain: 'portal.example.test' },
+      { isSubdomain: false },
+    ]) {
+      const raw = createLookupHttpResponse(
+        'portal.example.test',
+        { type: 'domain', inputHostname: 'portal.example.test', registrableDomain: 'example.test', isSubdomain: true },
+        compactResponse(),
+      );
+      assert.equal(parseCompactLookupHttpResponse({ ...raw, ...overrides }, 'portal.example.test').ok, false);
+    }
   });
 
   test('rejects rich homepage metadata at the compact boundary', () => {

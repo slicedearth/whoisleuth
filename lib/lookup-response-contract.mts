@@ -401,18 +401,45 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
   };
 }
 
+function projectThreatProviders(values: readonly unknown[], expectedDomain: string): JsonObject[] {
+  const grouped = new Map<string, { first: JsonObject; signatures: Set<string> }>();
+  for (const value of values.slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)) {
+    const provider = normalizeThreatProvider(value, expectedDomain);
+    if (!provider) continue;
+    const providerId = String(record(provider.provider).id || '');
+    if (!providerId) continue;
+    const signature = JSON.stringify(provider);
+    const existing = grouped.get(providerId);
+    if (existing) {
+      existing.signatures.add(signature);
+    } else {
+      grouped.set(providerId, { first: provider, signatures: new Set([signature]) });
+    }
+  }
+  return [...grouped.values()].slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS).map(({ first, signatures }) => (
+    signatures.size === 1
+      ? first
+      : {
+          ...first,
+          state: 'partial',
+          detail: 'Conflicting records were returned for this provider; no conclusive provider projection is available.',
+          findings: [],
+          observation: {
+            observedAt: null,
+            limitations: ['Conflicting records for the same provider identity were withheld rather than resolved by array order.'],
+            complete: false,
+            truncated: null,
+          },
+        }
+  ));
+}
+
 function optionalBoundedText(value: unknown, maxLength: number): boolean {
   return value === undefined || (
     typeof value === 'string'
     && value.length <= maxLength
     && !CONTROL_CHAR_RE.test(value)
   );
-}
-
-function compactDomainMatches(value: unknown, expectedDomain: unknown): boolean {
-  const domain = normalizedDomain(value);
-  const expected = normalizedDomain(expectedDomain);
-  return Boolean(domain && expected && (domain === expected || expected.endsWith(`.${domain}`)));
 }
 
 function validCompactBulkComparison(value: unknown): value is CompactBulkComparisonEvidence {
@@ -1015,6 +1042,8 @@ function parseCompactLookupHttpResponse(
 
   const availability = value.availability;
   const diagnostics = value.diagnostics;
+  const expectedHostname = normalizedDomain(expectedDomain);
+  const expectedRegistrableDomain = canonicalRegistrableDomain(expectedDomain);
   const compactPageIdentity = isJsonObject(availability) && isJsonObject(availability.pageIdentity)
     ? availability.pageIdentity
     : null;
@@ -1024,9 +1053,11 @@ function parseCompactLookupHttpResponse(
     : null;
   if (
     !isJsonObject(availability)
+    || !expectedHostname
+    || !expectedRegistrableDomain
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
     || availability.applicable !== true
-    || !compactDomainMatches(availability.domain, expectedDomain)
+    || normalizedDomain(availability.domain) !== expectedRegistrableDomain
     || typeof availability.state !== 'string'
     || !COMPACT_AVAILABILITY_STATES.has(availability.state as CompactLookupAvailabilityState)
     || typeof availability.confidence !== 'string'
@@ -1036,14 +1067,16 @@ function parseCompactLookupHttpResponse(
       && !validCompactBulkComparison(availability.bulkComparison))
     || compactPageIdentity !== null && Object.hasOwn(compactPageIdentity, 'publicationMetadata')
     || compactHttpResponse !== null && Object.hasOwn(compactHttpResponse, 'deliveryMetadata')
-    || (value.query !== undefined && !compactDomainMatches(value.query, expectedDomain))
+    || (value.query !== undefined && normalizedDomain(value.query) !== expectedHostname)
     || (value.type !== undefined && value.type !== 'domain')
-    || (value.inputHostname !== undefined && !compactDomainMatches(value.inputHostname, expectedDomain))
+    || (value.inputHostname !== undefined && normalizedDomain(value.inputHostname) !== expectedHostname)
     || (
       value.registrableDomain !== undefined
-      && normalizedDomain(value.registrableDomain) !== normalizedDomain(availability.domain)
+      && normalizedDomain(value.registrableDomain) !== expectedRegistrableDomain
     )
-    || (value.isSubdomain !== undefined && typeof value.isSubdomain !== 'boolean')
+    || (value.isSubdomain !== undefined
+      && (typeof value.isSubdomain !== 'boolean'
+        || value.isSubdomain !== (expectedHostname !== expectedRegistrableDomain)))
     || !isJsonObject(diagnostics)
     || Object.keys(diagnostics).length > MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS
     || diagnostics.version !== 7
@@ -1153,21 +1186,10 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     ? canonicalRegistrableDomain(response.registrableDomain)
       ?? canonicalRegistrableDomain(availability.domain)
     : null;
-  const seenThreatIntelligenceProviders = new Set<string>();
   const providers = expectedThreatDomain
     && rawThreatIntelligence.version === THREAT_INTELLIGENCE_ENVELOPE_VERSION
     && Array.isArray(rawThreatIntelligence.providers)
-    ? rawThreatIntelligence.providers
-        .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)
-        .map((provider) => normalizeThreatProvider(provider, expectedThreatDomain))
-        .filter((provider): provider is JsonObject => provider !== null)
-        .filter((provider) => {
-          const providerId = String(record(provider.provider).id || '');
-          if (!providerId || seenThreatIntelligenceProviders.has(providerId)) return false;
-          seenThreatIntelligenceProviders.add(providerId);
-          return true;
-        })
-        .slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS)
+    ? projectThreatProviders(rawThreatIntelligence.providers, expectedThreatDomain)
     : [];
   const threatIntelligence: JsonObject = providers.length
     ? { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers }

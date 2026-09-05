@@ -60,7 +60,7 @@ type ReportOptions = {
   includeAttribution?: boolean;
   includeNotes?: boolean;
 };
-type ReportReason = 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
+type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname'>;
 type ReportTimelineEntry = {
@@ -269,12 +269,9 @@ export function buildCaseReport(
         const previous = chronological[i - 1];
         if (!previous) continue;
         const rawChanges = compareCaseEvidence(previous, snapshot);
-        const allIncomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
-        const hostnameContextChanged = allIncomparableReasons.includes('observation-context');
-        incomparableReasons = allIncomparableReasons.filter(
-          (reason) => reason !== 'observation-context',
-        ) as ReportReason[];
-        if (rawChanges.length > 0) {
+        incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot) as ReportReason[];
+        const hostnameContextChanged = incomparableReasons.includes('observation-context');
+        if (rawChanges.length > 0 && !hostnameContextChanged) {
           changes = rawChanges.map((change) => ({
             field: change.field,
             label: change.label,
@@ -284,7 +281,7 @@ export function buildCaseReport(
           }));
         } else if (snapshot.fingerprint !== previous.fingerprint
           && incomparableReasons.length === 0
-          && !hostnameContextChanged) {
+        ) {
           incomparableReasons = ['other'];
         }
         hasIncomparableChange = incomparableReasons.length > 0;
@@ -546,6 +543,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       }
       if (entry.hasIncomparableChange) {
         const reasons = Array.isArray(entry.incomparableReasons) ? entry.incomparableReasons : [];
+        if (reasons.includes('observation-context')) lines.push('> Observation targets differ or are unknown. Field-level additions, removals and beneficial changes are withheld because their scopes cannot be compared reliably. Exact hostnames remain excluded from this report.');
         if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('opportunity-model')) lines.push('> Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');

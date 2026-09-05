@@ -52,6 +52,35 @@ function diagnosticLabel(source: SourceStatus): string {
   return source.status ? statusLabel(source.status) : 'unknown';
 }
 
+export type RegistrationTraceState =
+  | 'complete'
+  | 'partial'
+  | 'unavailable'
+  | 'not_found'
+  | 'unsupported'
+  | 'skipped'
+  | 'disabled'
+  | 'rate_limited'
+  | 'error';
+
+export function registrationTraceState(
+  statusRaw: unknown,
+  options: { hasPublication: boolean; partial?: boolean },
+): RegistrationTraceState {
+  const status = boundedTechnologyText(statusRaw, 40).toLowerCase().replaceAll(' ', '_');
+  if (status === 'success' || status === 'complete' || status === 'completed') {
+    return options.partial === true || !options.hasPublication ? 'partial' : 'complete';
+  }
+  if (['partial', 'incomplete', 'truncated', 'limited'].includes(status)) return 'partial';
+  if (status === 'not_found') return 'not_found';
+  if (status === 'unsupported') return 'unsupported';
+  if (['skipped', 'omitted'].includes(status)) return 'skipped';
+  if (status === 'disabled') return 'disabled';
+  if (status === 'rate_limited') return 'rate_limited';
+  if (['error', 'failed', 'failure', 'timeout', 'invalid_response'].includes(status)) return 'error';
+  return 'unavailable';
+}
+
 function attemptSummary(source: SourceStatus): string | null {
   return Array.isArray(source.attempts) && source.attempts.length
     ? `attempts: ${source.attempts.slice(0, 3)
@@ -121,6 +150,8 @@ export function buildLookupRegistryDisplay(input: {
   registrarRdap: SourceStatus;
   registrarRdapParsed: JsonRecord;
   registrarPublicationComparison: PublicationComparison;
+  rdapDiagnostic: SourceStatus;
+  whoisDiagnostic: SourceStatus;
 }) {
   const {
     result,
@@ -132,6 +163,8 @@ export function buildLookupRegistryDisplay(input: {
     registrarRdap,
     registrarRdapParsed,
     registrarPublicationComparison,
+    rdapDiagnostic,
+    whoisDiagnostic,
   } = input;
   const matrixTone = (sourceState: string | undefined, comparisonStatus: string): string => {
     if (sourceState === 'value') {
@@ -257,6 +290,15 @@ export function buildLookupRegistryDisplay(input: {
   );
 
   return {
+    registrationTrace: {
+      registry: registrationTraceState(rdapDiagnostic.status, {
+        hasPublication: Object.keys(rdapParsed).length > 0,
+        partial: rdapParsed.serverTruncated === true,
+      }),
+      whois: registrationTraceState(whoisDiagnostic.status, {
+        hasPublication: Object.keys(whoisParsed).length > 0,
+      }),
+    },
     comparisonMetrics,
     comparisonRows,
     rdapPartialDetail: rdapParsed.serverTruncated

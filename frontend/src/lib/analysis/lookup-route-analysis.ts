@@ -225,6 +225,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     registrarRdap,
     registrarRdapParsed,
     registrarPublicationComparison,
+    rdapDiagnostic,
+    whoisDiagnostic,
   });
   const idnAnalysis = result?.type === 'domain'
     ? analyzeDomainIdn(
@@ -377,8 +379,13 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasSpf: availability.hasSpf,
     hasDmarc: availability.hasDmarc,
     httpStatus: httpResponse.status,
-    pageObserved: pageIdentity.source === 'html',
-    tlsObserved: tlsEvidence.source === 'tls' && tlsEvidence.status !== 'skipped',
+    pageObserved: pageIdentity.source === 'html'
+      && ['success', 'partial'].includes(String(pageIdentity.status)),
+    tlsObserved: tlsEvidence.source === 'tls'
+      && ['success', 'partial'].includes(String(tlsEvidence.status))
+      && (Boolean(boundedTechnologyText(tlsEvidence.protocol, 40))
+        || Boolean(boundedTechnologyText(tlsEvidence.connectedAddress, 80))
+        || Object.keys(tlsCertificate).length > 0),
   });
   const acquisitionDueDiligence = buildAcquisitionDueDiligence({
     availability,
@@ -536,7 +543,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     status: show(availability.state),
   };
   const caseEvidence = {
-    inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
+    // Availability, DNS, HTTP, TLS and page observations are collected for
+    // caseDomain. Preserve that real observation scope in Case history rather
+    // than borrowing the separately retained submitted-hostname context.
+    inputHostname: caseDomain || null,
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,

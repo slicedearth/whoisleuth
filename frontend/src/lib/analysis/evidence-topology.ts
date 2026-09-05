@@ -203,14 +203,19 @@ export function buildLookupEvidenceTopologyNodes(input: LookupEvidenceTopologyIn
     });
   }
   if (dnsEvidence.source === 'dns') {
+    const dnsStatus = normalizeEvidenceTopologyStatus(dnsEvidence.status, {
+      complete: dnsEvidence.complete !== false,
+      truncated: dnsEvidence.truncated === true,
+    });
     nodes.push({
       id: 'dns',
       label: 'DNS',
-      detail: dnsEvidence.complete === false ? 'Collection is explicitly partial' : 'Record families collected',
-      status: normalizeEvidenceTopologyStatus(dnsEvidence.status, {
-        complete: dnsEvidence.complete !== false,
-        truncated: dnsEvidence.truncated === true,
-      }),
+      detail: dnsStatus === 'partial'
+        ? 'Collection is explicitly partial'
+        : ['success', 'complete', 'observed'].includes(dnsStatus)
+          ? 'Record families collected'
+          : display(dnsEvidence.status),
+      status: dnsStatus,
       href: '#evidence-dns',
       side: 'right',
       glyph: 'D',
@@ -356,24 +361,31 @@ export function normalizeEvidenceTopologyStatus(
   value: unknown,
   options: { complete?: boolean; truncated?: boolean } = {},
 ): EvidenceTopologyStatus {
-  if (options.complete === false || options.truncated === true) return 'partial';
   const status = boundedText(value, 40).toLowerCase().replaceAll(' ', '_');
-  if (status === 'success') return 'success';
-  if (status === 'completed') return 'complete';
-  if (['complete', 'supported', 'observed', 'registered', 'active', 'available'].includes(status)) {
-    return status as EvidenceTopologyStatus;
-  }
-  if (['partial', 'incomplete', 'truncated', 'limited'].includes(status)) return 'partial';
-  if (['warning', 'conflict', 'mismatch'].includes(status)) return 'warning';
-  if (status === 'inconclusive') return 'inconclusive';
-  if (status === 'not_found') return 'not_found';
-  if (['unavailable', 'not_applicable'].includes(status)) return 'unavailable';
-  if (status === 'unsupported') return 'unsupported';
-  if (['skipped', 'omitted'].includes(status)) return 'skipped';
-  if (status === 'disabled') return 'disabled';
-  if (status === 'rate_limited') return 'rate_limited';
-  if (['error', 'failed', 'failure', 'timeout', 'invalid_response'].includes(status)) return 'error';
-  return 'unknown';
+  let normalized: EvidenceTopologyStatus;
+  if (status === 'success') normalized = 'success';
+  else if (status === 'completed') normalized = 'complete';
+  else if (['complete', 'supported', 'observed', 'registered', 'active', 'available'].includes(status)) {
+    normalized = status as EvidenceTopologyStatus;
+  } else if (['partial', 'incomplete', 'truncated', 'limited'].includes(status)) normalized = 'partial';
+  else if (['warning', 'conflict', 'mismatch'].includes(status)) normalized = 'warning';
+  else if (status === 'inconclusive') normalized = 'inconclusive';
+  else if (status === 'not_found') normalized = 'not_found';
+  else if (['unavailable', 'not_applicable'].includes(status)) normalized = 'unavailable';
+  else if (status === 'unsupported') normalized = 'unsupported';
+  else if (['skipped', 'omitted'].includes(status)) normalized = 'skipped';
+  else if (status === 'disabled') normalized = 'disabled';
+  else if (status === 'rate_limited') normalized = 'rate_limited';
+  else if (['error', 'failed', 'failure', 'timeout', 'invalid_response'].includes(status)) normalized = 'error';
+  else normalized = 'unknown';
+
+  const observedStates: readonly EvidenceTopologyStatus[] = [
+    'success', 'complete', 'supported', 'observed', 'registered', 'active', 'available',
+  ];
+  return observedStates.includes(normalized)
+    && (options.complete === false || options.truncated === true)
+    ? 'partial'
+    : normalized;
 }
 
 function yPositions(ids: string[], height: number) {

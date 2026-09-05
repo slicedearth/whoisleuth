@@ -287,7 +287,7 @@
           </form>
 
           <section class="case-tool monitoring-tool" aria-labelledby="lookup-case-monitoring-title">
-            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the exact hostname with the current Lookup settings.</p></div>
+            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
             {#if watchlistSourceState === 'loading'}
               <p class="field-note" role="status">Checking browser-local watchlists…</p>
             {:else if watchlistSourceState === 'unavailable'}
@@ -295,7 +295,7 @@
             {:else if linkedWatchlistNames.length}
               <p class="linked-watchlists">Linked watchlist{linkedWatchlistNames.length === 1 ? '' : 's'}: {#each linkedWatchlistNames as name, index}<a href={`/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`}>{name}</a>{index < linkedWatchlistNames.length - 1 ? ', ' : ''}{/each}</p>
             {:else}
-              <p class="field-note">This exact hostname is not in a readable browser-local watchlist.</p>
+              <p class="field-note">This observation target is not in a readable browser-local watchlist.</p>
             {/if}
             {#if record.status === 'monitoring' && watchlistSourceState === 'ready' && !linkedWatchlistNames.length}
               <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change the Case status in Monitor.</p>

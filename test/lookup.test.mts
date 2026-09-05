@@ -208,7 +208,9 @@ describe('runUnifiedLookup', () => {
     assert.equal(parsedRdap.domain, 'EXAMPLE.COM');
     assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
-    assert.equal(result.availability.inputHostname, 'login.example.com');
+    assert.equal(Object.hasOwn(result.availability, 'inputHostname'), false);
+    assert.equal(Object.hasOwn(result.availability, 'registrableDomain'), false);
+    assert.equal(Object.hasOwn(result.availability, 'isSubdomain'), false);
     assert.equal(result.diagnostics.version, 8);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
@@ -646,8 +648,7 @@ describe('runUnifiedLookup', () => {
 
     assert.deepEqual(calls, { rdap: 1, whois: 1, availability: 1 });
     assert.deepEqual(result.availability, {
-      applicable: true, domain: 'example.es', inputHostname: 'example.es',
-      registrableDomain: 'example.es', isSubdomain: false, ...availability,
+      applicable: true, ...availability, domain: 'example.es',
     });
     assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.registryAccess, {
@@ -961,7 +962,7 @@ describe('runUnifiedLookup', () => {
     });
     assert.deepEqual(
       result.availability,
-      { applicable: true, domain: 'example.com', inputHostname: 'login.example.com', registrableDomain: 'example.com', isSubdomain: true, ...availability }
+      { applicable: true, ...availability, domain: 'example.com' }
     );
     assert.equal(registrarRdapResult(result).status, 'not_found');
     assert.equal(result.diagnostics.rdap.status, 'success');

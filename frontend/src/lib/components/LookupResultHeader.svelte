@@ -35,7 +35,7 @@
     <p class="eyebrow">Result</p>
     <h2>{title}</h2>
     {#if isSubdomain}
-      <p>Showing registry data for {registrableDomain}; submitted hostname: {inputHostname}.</p>
+      <p>Registry, DNS, website, TLS and page observations use {registrableDomain}. The submitted hostname was {inputHostname}; separately requested hostname-scoped sources remain labelled with their own target.</p>
     {/if}
   </div>
   <div class="result-actions">

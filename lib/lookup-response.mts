@@ -218,11 +218,12 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
       const result = availabilityResult.value;
       availability = {
         applicable: true,
-        domain: classified.value,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        isSubdomain: classified.isSubdomain,
         ...result,
+        // Every observation nested in the availability envelope is collected
+        // against this registrable target. Request context remains on the
+        // top-level response; exact-host sources such as security.txt retain
+        // their own requested/final URL attribution.
+        domain: classified.value,
       };
     } else {
       availability = {

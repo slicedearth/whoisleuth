@@ -154,7 +154,7 @@ describe('Case exact submitted hostname', () => {
     assert.equal(current.cases[0]?.evidenceHistory[0]?.inputHostname, 'login.example.test');
   });
 
-  test('round-trips the field while the report excludes it and makes no environmental-change claim', () => {
+  test('round-trips the field while the report excludes it and qualifies incompatible observation scope', () => {
     const first = model.createCase({
       domain: 'example.test',
       source: 'lookup',
@@ -176,7 +176,8 @@ describe('Case exact submitted hostname', () => {
     assert.equal(serialized.includes('login.example.test'), false);
     assert.equal(serialized.includes('account.example.test'), false);
     assert.equal(report.json.evidenceTimeline[1]?.changes, null);
-    assert.equal(report.json.evidenceTimeline[1]?.hasIncomparableChange, false);
-    assert.deepEqual(report.json.evidenceTimeline[1]?.incomparableReasons, []);
+    assert.equal(report.json.evidenceTimeline[1]?.hasIncomparableChange, true);
+    assert.deepEqual(report.json.evidenceTimeline[1]?.incomparableReasons, ['observation-context']);
+    assert.match(report.markdown, /Observation targets differ or are unknown/u);
   });
 });

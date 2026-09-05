@@ -7,6 +7,7 @@ import {
   buildLookupPageDisplay,
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
+import { registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
 import {
   deliveryMetadataDisplay,
   publicationMetadataDisplay,
@@ -46,6 +47,15 @@ test('keeps generic Lookup display fallbacks bounded and makes joined-value omis
   const cyclic: Record<string, unknown> = {};
   cyclic.name = cyclic;
   assert.equal(show(cyclic), '…');
+});
+
+test('derives registration authority trace state from source health rather than placeholder rows', () => {
+  assert.equal(registrationTraceState('skipped', { hasPublication: true }), 'skipped');
+  assert.equal(registrationTraceState('disabled', { hasPublication: true }), 'disabled');
+  assert.equal(registrationTraceState('error', { hasPublication: true }), 'error');
+  assert.equal(registrationTraceState('unsupported', { hasPublication: true }), 'unsupported');
+  assert.equal(registrationTraceState('success', { hasPublication: false }), 'partial');
+  assert.equal(registrationTraceState('success', { hasPublication: true }), 'complete');
 });
 
 test('projects fixed homepage metadata without retaining source values or inventing absence', () => {
@@ -501,6 +511,8 @@ test('keeps registry comparison and source diagnostics separately attributed', (
       attempts: [{ outcome: 'timeout' }, { outcome: 'success' }],
     },
     registrarRdapParsed: {},
+    rdapDiagnostic: { status: 'success' },
+    whoisDiagnostic: { status: 'complete' },
     registrarPublicationComparison: {
       fields: [
         {
@@ -558,6 +570,7 @@ test('keeps registry comparison and source diagnostics separately attributed', (
   assert.equal(registry.registrarRdap.comparisonRows[0]?.tone, 'danger');
   assert.equal(registry.whoisContactRoles[0]?.contacts[0]?.identity, 'Abuse desk');
   assert.equal(registry.registrarRdap.label, 'partial');
+  assert.deepEqual(registry.registrationTrace, { registry: 'partial', whois: 'complete' });
   assert.match(registry.diagnosticDetail({
     status: 'partial',
     attempts: [{ outcome: 'timeout' }, { outcome: 'success' }],
