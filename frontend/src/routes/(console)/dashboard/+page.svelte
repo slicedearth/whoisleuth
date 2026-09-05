@@ -18,6 +18,7 @@
     type DashboardWorkspaceState,
   } from '$lib/analysis/dashboard-workspace-state.ts';
   import { publicHomepage } from '$lib/workspaces';
+  import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
 
 
   type WorkflowAction = { href: string; label: string; detail: string; icon: IntelligenceIconName; taskPack?: true };
@@ -121,8 +122,7 @@
     if (unexpectedFailure) throw unexpectedFailure.reason;
 
     if (workspaceState === 'returning') {
-      const requiredAttentionSources = ['cases', 'watchlists', 'bulk_sessions', 'brand_profiles', 'analyst_review_state'];
-      if (requiredAttentionSources.some((source) => !documents.has(source))) {
+      if (ANALYST_REVIEW_REQUIRED_COLLECTION_IDS.some((source) => !documents.has(source))) {
         attentionUnavailable = true;
       } else {
         let modules;

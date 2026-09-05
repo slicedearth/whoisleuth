@@ -54,6 +54,7 @@
   import { loadAnalystReviewState, saveAnalystReviewDecision } from '$lib/analyst-review-state';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildEvidenceDebtReview } from '$lib/analysis/evidence-debt-review.ts';
+  import { analystReviewRequiredSourceState } from '$lib/analysis/analyst-review-source-state.ts';
   import {
     analystReviewDismissalReasonLabel,
     type AnalystReviewDismissalReason,
@@ -162,6 +163,15 @@
   let customRuleCount=$state(0);
   let detectionRules=$state<DetectionRule[]>([]);
   let detectionRulesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  const reviewInboxSourceState=$derived(analystReviewRequiredSourceState({
+    cases:casesSourceState,
+    watchlists:watchlistsSourceState,
+    bulk_sessions:bulkSessionsSourceState,
+    brand_profiles:brandProfilesSourceState,
+    detection_rules:detectionRulesSourceState,
+    website_snapshots:websiteSnapshotsSourceState,
+    analyst_review_state:analystReviewStateSourceState,
+  }));
   let localContextStatus=$state('');
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
   const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
@@ -550,7 +560,7 @@
 <PageHeading eyebrow={monitorWorkflow.eyebrow} title="Monitor" description={monitorWorkflow.description} />
 
 <MonitorViewTabs {view} counts={{
-  inbox:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&analystReviewStateSourceState==='ready'&&brandProfilesSourceState==='ready'&&detectionRulesSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?reviewInboxCount:null,
+  inbox:reviewInboxSourceState==='ready'?reviewInboxCount:null,
   timeline:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?retainedTimeline.counts.all:null,
   cases:casesSourceState==='ready'?cases.length:null,
   campaigns:campaignsSourceState==='ready'?campaignCount:null,
@@ -559,7 +569,7 @@
   watchlists:watchlistsSourceState==='ready'?names.length:null,
   certificates:certificateReviewCount,
 }} countStates={{
-  inbox:[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,analystReviewStateSourceState,brandProfilesSourceState,detectionRulesSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':reviewInboxCount===null?'loading':'ready',
+  inbox:reviewInboxSourceState==='ready'?(reviewInboxCount===null?'loading':'ready'):reviewInboxSourceState,
   timeline:[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('loading')?'loading':'ready',
   cases:casesSourceState,
   campaigns:campaignsSourceState,
@@ -574,11 +584,11 @@
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   <BrandProtectionOperationsReport records={cases} sourceState={casesSourceState} />
   <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
-  {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&analystReviewStateSourceState==='ready'&&brandProfilesSourceState==='ready'&&detectionRulesSourceState==='ready'&&websiteSnapshotsSourceState==='ready'}
+  {#if reviewInboxSourceState==='ready'}
     <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
-    <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||analystReviewStateSourceState==='loading'||brandProfilesSourceState==='loading'||detectionRulesSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
+    <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
   {/if}
   {#if casesSourceState==='ready'}
     <CaseDecisionQuality report={decisionQuality} />
