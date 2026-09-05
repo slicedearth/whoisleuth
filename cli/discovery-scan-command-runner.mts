@@ -3,7 +3,7 @@ import { normalizeSelectedDnsResolvers } from '../lib/dns-resolver-selection.mts
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import type { CliArguments } from './arguments.mts';
 import { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
-import type { BulkLookupResult } from './bulk.mts';
+import type { BulkCollectionContext, BulkLookupResult } from './bulk.mts';
 import {
   buildDiscoveryScanDocument,
   formatDiscoveryScanCsv,
@@ -83,6 +83,9 @@ async function runDiscoveryScanCommand(
   const classify = dependencies.classifyQuery || classifyQuery;
   const allowlist = await readAllowlist(args.allowlistSource, dependencies, context, classify);
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
+  const collectionContext: BulkCollectionContext = resolverServers.length
+    ? { dnsResolver: 'analyst_selected', resolverServers: [...resolverServers] }
+    : { dnsResolver: 'system_default', resolverServers: [] };
   const checkpoint = args.checkpoint
     ? await checkpointWriter({
         path: args.checkpoint,
@@ -93,6 +96,20 @@ async function runDiscoveryScanCommand(
         ...(dependencies.now ? { now: dependencies.now } : {}),
       })
     : null;
+  for (const item of checkpoint?.initialResults ?? []) {
+    const retainedContext = item.collectionContext;
+    const contextMatches = retainedContext
+      ? retainedContext.dnsResolver === collectionContext.dnsResolver
+        && retainedContext.resolverServers.length === collectionContext.resolverServers.length
+        && retainedContext.resolverServers.every((server, index) => server === collectionContext.resolverServers[index])
+      : collectionContext.dnsResolver === 'system_default';
+    if (!contextMatches) {
+      throw new CliUsageError('Bulk checkpoint collection context does not match the current DNS resolver selection.');
+    }
+    if (item.observedAt === null || item.observedAt === undefined) {
+      throw new CliUsageError('Discovery resume requires an observation time for every retained checkpoint result.');
+    }
+  }
   const indicator = context.beginProgress(`Collecting 0 of ${queries.length} generated candidates`);
   let completed = checkpoint?.initialResults.length || 0;
   const resumedItems = new Map((checkpoint?.initialResults ?? []).map((item) => [item.index, item]));
@@ -115,6 +132,7 @@ async function runDiscoveryScanCommand(
           ...item,
           observedAt: context.now(),
           collectionOrigin: 'current_run' as const,
+          collectionContext,
         };
         settledItems.set(item.index, observed);
         completed += 1;
@@ -127,6 +145,7 @@ async function runDiscoveryScanCommand(
       ...item,
       observedAt: null,
       collectionOrigin: 'current_run' as const,
+      collectionContext,
     });
   } finally {
     context.endProgress();

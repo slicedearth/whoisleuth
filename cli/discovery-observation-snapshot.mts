@@ -21,6 +21,7 @@ type Observation = {
   registrationObservedAt: string | null;
   dnsObservedAt: string | null;
   latestAttemptAt: string;
+  collectionOrigin: 'current_run' | 'resumed_checkpoint';
   latestAttemptState: 'error' | 'partial' | 'success';
   latestRegistrationState: 'observed' | 'unavailable';
   latestDnsState: string;
@@ -114,7 +115,11 @@ function normalizeObservation(value: unknown): Observation | null {
     if (declaredObservedAt !== observedAt) return null;
     const latestRegistrationState = item.latestRegistrationState;
     const latestDnsState = item.latestDnsState;
+    const collectionOrigin = item.collectionOrigin === undefined
+      ? 'current_run'
+      : item.collectionOrigin;
     if (!['observed', 'unavailable'].includes(String(latestRegistrationState))
+      || !['current_run', 'resumed_checkpoint'].includes(String(collectionOrigin))
       || typeof latestDnsState !== 'string' || !latestDnsState || latestDnsState.length > 40
       || /[\u0000-\u001f\u007f]/u.test(latestDnsState)) return null;
     if (latestRegistrationState === 'observed' && registrationObservedAt === null) return null;
@@ -124,6 +129,7 @@ function normalizeObservation(value: unknown): Observation | null {
       registrationObservedAt,
       dnsObservedAt,
       latestAttemptAt: normalizedTimestamp(item.latestAttemptAt, 'Discovery latest-attempt time') ?? '',
+      collectionOrigin: collectionOrigin as Observation['collectionOrigin'],
       latestAttemptState: item.latestAttemptState as Observation['latestAttemptState'],
       latestRegistrationState: latestRegistrationState as Observation['latestRegistrationState'],
       latestDnsState,
@@ -207,6 +213,13 @@ function currentAttempt(
   generatedAt: string,
   deep: boolean,
 ): CurrentAttempt {
+  const suppliedObservedAt = item.observedAt === null || item.observedAt === undefined
+    ? null
+    : normalizedTimestamp(item.observedAt, 'Discovery checkpoint observation time');
+  if (item.collectionOrigin === 'resumed_checkpoint' && !suppliedObservedAt) {
+    throw new CliUsageError('Discovery resume requires a valid observation time for retained checkpoint evidence.');
+  }
+  const attemptAt = suppliedObservedAt ?? generatedAt;
   const availability = item.ok ? record(record(item.result).availability) : {};
   const currentAvailabilityState = availabilityState(item) || 'unknown';
   const registrationObserved = item.ok && currentAvailabilityState !== 'unknown';
@@ -217,9 +230,9 @@ function currentAttempt(
   const dns = dnsComplete || (dnsRetainable && !previousDnsRetainable)
     ? currentDns
     : previousDnsRetainable ? previous.dns : currentDns;
-  const registrationObservedAt = registrationObserved ? generatedAt : previous?.registrationObservedAt ?? null;
+  const registrationObservedAt = registrationObserved ? attemptAt : previous?.registrationObservedAt ?? null;
   const dnsObservedAt = dnsComplete || (dnsRetainable && !previousDnsRetainable)
-    ? generatedAt
+    ? attemptAt
     : previous?.dnsObservedAt ?? null;
   const unavailableComponents: Array<'dns' | 'registration'> = [];
   if (!registrationObserved) unavailableComponents.push('registration');
@@ -242,7 +255,8 @@ function currentAttempt(
       observedAt: latestObservedAt(registrationObservedAt, dnsObservedAt),
       registrationObservedAt,
       dnsObservedAt,
-      latestAttemptAt: generatedAt,
+      latestAttemptAt: attemptAt,
+      collectionOrigin: item.collectionOrigin ?? 'current_run',
       latestAttemptState: attemptState,
       latestRegistrationState: registrationObserved ? 'observed' : 'unavailable',
       latestDnsState: deep ? currentDns.status : 'not_requested',

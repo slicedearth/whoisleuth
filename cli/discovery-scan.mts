@@ -167,6 +167,12 @@ function buildScanItem(
     dnsSummary: bulkDnsSummary(item),
     review: { lane: review.lane, reasons: review.reasons },
     relationshipIds: [...relationshipIds],
+    observedAt: item.observedAt ?? null,
+    collectionOrigin: item.collectionOrigin ?? 'current_run',
+    collectionContext: item.collectionContext ?? {
+      dnsResolver: 'system_default' as const,
+      resolverServers: [],
+    },
     ...(item.ok ? {
       availability: result.availability,
       diagnostics: result.diagnostics,

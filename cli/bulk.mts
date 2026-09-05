@@ -31,6 +31,11 @@ type BulkLookupOptions = {
   dnsResolverServers?: readonly string[];
 };
 
+type BulkCollectionContext = Readonly<{
+  dnsResolver: 'analyst_selected' | 'system_default';
+  resolverServers: readonly string[];
+}>;
+
 type BulkLookupSuccess = {
   index: number;
   query: string;
@@ -39,6 +44,7 @@ type BulkLookupSuccess = {
   result: unknown;
   observedAt?: string | null;
   collectionOrigin?: 'current_run' | 'resumed_checkpoint';
+  collectionContext?: BulkCollectionContext;
 };
 
 type BulkLookupFailure = {
@@ -48,6 +54,7 @@ type BulkLookupFailure = {
   error: string;
   observedAt?: string | null;
   collectionOrigin?: 'current_run' | 'resumed_checkpoint';
+  collectionContext?: BulkCollectionContext;
 };
 
 type BulkLookupResult = BulkLookupSuccess | BulkLookupFailure;
@@ -204,6 +211,7 @@ export {
 };
 export type {
   BoundedTextStream,
+  BulkCollectionContext,
   BulkLookupFailure,
   BulkLookupOptions,
   BulkLookupResult,

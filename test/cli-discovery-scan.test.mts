@@ -422,6 +422,130 @@ describe('discover-scan runner', () => {
     });
     assert.match(document.limitations.join(' '), /selected resolver applies to DNS record and delegation evidence only/iu);
     assert.ok(received.every((options) => options.fast === true && options.compact === true));
+    assert.equal(document.results[0].observedAt, '2026-08-01T00:00:00.000Z');
+    assert.equal(document.results[0].collectionOrigin, 'current_run');
+    assert.deepEqual(document.results[0].collectionContext, {
+      dnsResolver: 'analyst_selected', resolverServers: ['8.8.8.8'],
+    });
     assert.equal(stderr.value(), '');
+  });
+
+  test('preserves retained observation time and origin across complete and mixed resumes', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-discovery-resume-'));
+    const generatedAt = '2026-09-05T00:00:00.000Z';
+    const retainedAt = '2026-08-01T00:00:00.000Z';
+    const selected = candidates().slice(0, 2);
+    const context = { dnsResolver: 'analyst_selected' as const, resolverServers: ['8.8.8.8'] };
+    const generator = async () => ({
+      MAX_GENERATION_TLDS: 20,
+      MUTATION_FAMILY_IDS: ['character_omission'],
+      MUTATION_LABELS: { character_omission: 'Character omission' },
+      normalizeMutationFamilyIds: () => [],
+      normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+      generateTyposquatCandidateSet: () => ({ inputValid: true, candidates: selected, version: 1 }),
+    });
+    const retained = selected.map((candidate, index) => ({
+      ...success(index, candidate.domain),
+      observedAt: retainedAt,
+      collectionOrigin: 'resumed_checkpoint' as const,
+      collectionContext: context,
+    }));
+    try {
+      const completeStdout = capture();
+      let completeCollections = 0;
+      const completeCode = await runCli([
+        'discover-scan', 'brand.example', '--scan-limit', '2', '--resolver', '8.8.8.8',
+        '--checkpoint', 'fixture-state.json', '--resume', '--json',
+      ], {
+        stdout: completeStdout.stream,
+        stderr: capture().stream,
+        now: () => generatedAt,
+        loadTyposquatGenerator: generator,
+        classifyQuery: classified,
+        createBulkCheckpointWriter: async () => ({
+          initialResults: retained,
+          record: () => {},
+          flush: async () => {},
+        }),
+        runUnifiedLookup: async () => { completeCollections += 1; return compactResult('unused.example'); },
+      });
+      assert.equal(completeCode, EXIT_CODES.SUCCESS);
+      assert.equal(completeCollections, 0);
+      const complete = JSON.parse(completeStdout.value());
+      assert.ok(complete.results.every((item: Record<string, unknown>) => item.observedAt === retainedAt));
+      assert.ok(complete.results.every((item: Record<string, unknown>) => item.collectionOrigin === 'resumed_checkpoint'));
+
+      const mixedStdout = capture();
+      let mixedCollections = 0;
+      const snapshot = path.join(directory, 'observed.json');
+      const mixedCode = await runCli([
+        'discover-scan', 'brand.example', '--deep', '--scan-limit', '2', '--resolver', '8.8.8.8',
+        '--checkpoint', 'fixture-state.json', '--resume', '--observation-snapshot', snapshot, '--json',
+      ], {
+        stdout: mixedStdout.stream,
+        stderr: capture().stream,
+        now: () => generatedAt,
+        loadTyposquatGenerator: generator,
+        classifyQuery: classified,
+        createBulkCheckpointWriter: async () => ({
+          initialResults: retained.slice(0, 1),
+          record: () => {},
+          flush: async () => {},
+        }),
+        runUnifiedLookup: async () => { mixedCollections += 1; throw new Error('fixture collection unavailable'); },
+      });
+      assert.equal(mixedCode, EXIT_CODES.PARTIAL_FAILURE);
+      assert.equal(mixedCollections, 1);
+      const mixed = JSON.parse(mixedStdout.value());
+      assert.equal(mixed.results[0].observedAt, retainedAt);
+      assert.equal(mixed.results[0].collectionOrigin, 'resumed_checkpoint');
+      assert.equal(mixed.results[1].observedAt, generatedAt);
+      assert.equal(mixed.results[1].collectionOrigin, 'current_run');
+      const stored = JSON.parse(await readFile(snapshot, 'utf8'));
+      assert.equal(stored.observations[0].registrationObservedAt, retainedAt);
+      assert.equal(stored.observations[0].dnsObservedAt, retainedAt);
+      assert.equal(stored.observations[0].latestAttemptAt, retainedAt);
+      assert.equal(stored.observations[0].collectionOrigin, 'resumed_checkpoint');
+      assert.equal(stored.observations[1].latestAttemptAt, generatedAt);
+      assert.equal(stored.observations[1].collectionOrigin, 'current_run');
+      assert.equal(stored.observations[1].latestAttemptState, 'error');
+      assert.equal(stored.observations[1].observedAt, null);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects retained checkpoints from a different DNS resolver context', async () => {
+    let collectionCalls = 0;
+    const code = await runCli([
+      'discover-scan', 'brand.example', '--scan-limit', '1', '--resolver', '8.8.8.8',
+      '--checkpoint', 'fixture-state.json', '--resume', '--json',
+    ], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      now: () => '2026-09-05T00:00:00.000Z',
+      loadTyposquatGenerator: async () => ({
+        MAX_GENERATION_TLDS: 20,
+        MUTATION_FAMILY_IDS: ['character_omission'],
+        MUTATION_LABELS: { character_omission: 'Character omission' },
+        normalizeMutationFamilyIds: () => [],
+        normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+        generateTyposquatCandidateSet: () => ({ inputValid: true, candidates: candidates(), version: 1 }),
+      }),
+      classifyQuery: classified,
+      createBulkCheckpointWriter: async () => ({
+        initialResults: [{
+          ...success(0, 'one.example'),
+          observedAt: '2026-08-01T00:00:00.000Z',
+          collectionOrigin: 'resumed_checkpoint',
+          collectionContext: { dnsResolver: 'analyst_selected', resolverServers: ['9.9.9.9'] },
+        }],
+        record: () => {},
+        flush: async () => {},
+      }),
+      runUnifiedLookup: async () => { collectionCalls += 1; return compactResult('one.example'); },
+    });
+    assert.equal(code, EXIT_CODES.USAGE);
+    assert.equal(collectionCalls, 0);
   });
 });

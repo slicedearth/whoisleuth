@@ -797,6 +797,7 @@ describe('resumable Bulk checkpoints', () => {
         availability: lookupResult(queries[0]!).availability,
         diagnostics: lookupResult(queries[0]!).diagnostics,
       },
+      collectionContext: { dnsResolver: 'analyst_selected', resolverServers: ['8.8.8.8'] },
     };
     try {
       const writer = await createBulkCheckpointWriter({ path, queries, deep: false, resume: false, classifyQuery: classifiedDomain, now: () => NOW });
@@ -808,6 +809,9 @@ describe('resumable Bulk checkpoints', () => {
       assert.deepEqual(checkpoint.results.map((item) => item.query), ['one.example']);
       assert.equal(checkpoint.version, 2);
       assert.equal(checkpoint.results[0]?.observedAt, NOW);
+      assert.deepEqual(checkpoint.results[0]?.collectionContext, {
+        dnsResolver: 'analyst_selected', resolverServers: ['8.8.8.8'],
+      });
 
       const zoneLess = JSON.parse(checkpointText);
       zoneLess.startedAt = '2026-08-01T00:00:00';
@@ -820,6 +824,13 @@ describe('resumable Bulk checkpoints', () => {
       fullResponse.results[0].result.rdap = { raw: 'not compact evidence' };
       assert.throws(
         () => parseBulkCheckpoint(JSON.stringify(fullResponse), { queries, deep: false, classifyQuery: classifiedDomain }),
+        /invalid or duplicate result/u,
+      );
+
+      const malformedContext = JSON.parse(checkpointText);
+      malformedContext.results[0].collectionContext.resolverServers = [''];
+      assert.throws(
+        () => parseBulkCheckpoint(JSON.stringify(malformedContext), { queries, deep: false, classifyQuery: classifiedDomain }),
         /invalid or duplicate result/u,
       );
 
@@ -837,6 +848,7 @@ describe('resumable Bulk checkpoints', () => {
       const resumed = await createBulkCheckpointWriter({ path, queries, deep: false, resume: true, classifyQuery: classifiedDomain, now: () => NOW });
       assert.deepEqual(resumed.initialResults.map((item) => item.query), ['one.example']);
       assert.equal(resumed.initialResults[0]?.collectionOrigin, 'resumed_checkpoint');
+      assert.deepEqual(resumed.initialResults[0]?.collectionContext, first.collectionContext);
       await assert.rejects(
         createBulkCheckpointWriter({ path, queries: ['changed.example'], deep: false, resume: true, classifyQuery: classifiedDomain }),
         /does not match/u,
