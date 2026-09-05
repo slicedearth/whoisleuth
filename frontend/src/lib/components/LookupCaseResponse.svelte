@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     CASE_DISPOSITIONS,
+    isReviewedCaseDisposition,
     CASE_OBSERVED_EFFECT_STATES,
     CASE_PIN_COMPLETENESS,
     CASE_REVIEW_REASONS,
@@ -127,7 +128,7 @@
   const incidentUrlDetails = $derived(parseIncidentUrlContext(currentIncidentUrl));
   const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null));
   const conclusionIncomplete = $derived(
-    caseDisposition === 'unreviewed'
+    !isReviewedCaseDisposition(caseDisposition)
       || !caseReviewReason
       || !conclusionRationale.trim()
       || !conclusionEvidence.some((item) => item.stance === 'supports'),
@@ -253,8 +254,8 @@
           <form class="case-tool conclusion-tool" onsubmit={(event) => { event.preventDefault(); void submitConclusion(); }}>
             <div><strong>Record conclusion</strong><p>Bind the analyst disposition and rationale to the exact normalised facts considered. Risk remains supporting context, not the conclusion.</p></div>
             <div class="classification-fields">
-              <label class="field" for="lookup-case-disposition">Disposition<select id="lookup-case-disposition" value={caseDisposition} onchange={(event) => setCaseDisposition(event.currentTarget.value)} disabled={actionBusy}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
-              <label class="field" for="lookup-case-review-reason">Review reason<select id="lookup-case-review-reason" value={caseReviewReason} onchange={(event) => setCaseReviewReason(event.currentTarget.value)} disabled={actionBusy || caseDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+              <label class="field" for="lookup-case-disposition">Disposition<select id="lookup-case-disposition" value={caseDisposition} onchange={(event) => setCaseDisposition(event.currentTarget.value)} disabled={actionBusy}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
+              <label class="field" for="lookup-case-review-reason">Review reason<select id="lookup-case-review-reason" value={caseReviewReason} onchange={(event) => setCaseReviewReason(event.currentTarget.value)} disabled={actionBusy || !isReviewedCaseDisposition(caseDisposition)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             </div>
             <label class="field" for="lookup-case-conclusion-rationale">Rationale<textarea id="lookup-case-conclusion-rationale" bind:value={conclusionRationale} rows="3" maxlength="2000" placeholder="Explain what the evidence supports, what remains uncertain, and why this disposition is appropriate." disabled={actionBusy}></textarea></label>
             <details class="conclusion-evidence">

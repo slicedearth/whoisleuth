@@ -38,6 +38,7 @@ import {
   RISK_CALIBRATION_DATASET_VERSION,
   RISK_CALIBRATION_REPORT_SCHEMA,
   RISK_CALIBRATION_REPORT_VERSION,
+  RISK_CALIBRATION_DISPOSITIONS,
   serializeRiskCalibrationSnapshot,
   snapshotRiskCalibrationReportForSerialization,
   SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
@@ -71,11 +72,7 @@ export {
 export const RISK_CALIBRATION_THRESHOLDS = RISK_CALIBRATION_SUMMARY_THRESHOLDS;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const DISPOSITIONS = new Set([
-  'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
-]);
-const POSITIVE_DISPOSITIONS = new Set(['confirmed_abuse']);
-const NEGATIVE_DISPOSITIONS = new Set(['false_positive', 'expected']);
+const DISPOSITIONS: ReadonlySet<string> = new Set(RISK_CALIBRATION_DISPOSITIONS);
 const AVAILABILITY_STATES = new Set(['registered', 'for_sale', 'expiring', 'available', 'unknown', 'error']);
 const ACTIVITY_STATES = new Set(['active', 'parked', 'unreachable', 'no_site']);
 const BOOLEAN_FIELDS = [
@@ -92,6 +89,14 @@ type ProjectedThreatIntelligence = RiskCalibrationThreatIntelligence;
 type CalibrationEvidence = Mutable<RiskCalibrationEvidence>;
 type CalibrationDisposition = RiskCalibrationDisposition;
 type MetricClass = 'positive' | 'negative' | 'excluded';
+const DISPOSITION_METRIC_CLASSES = Object.freeze({
+  unreviewed: 'excluded',
+  suspicious: 'excluded',
+  confirmed_abuse: 'positive',
+  false_positive: 'negative',
+  expected: 'negative',
+  closed_no_action: 'excluded',
+} as const satisfies Record<CalibrationDisposition, MetricClass>);
 type CalibrationRecord = {
   -readonly [Key in keyof RiskCalibrationRecord]: Key extends 'evidence'
     ? CalibrationEvidence
@@ -181,6 +186,10 @@ type RiskCalibrationReport = {
     persisted: false;
   };
 };
+
+function isRiskCalibrationDisposition(value: string): value is CalibrationDisposition {
+  return DISPOSITIONS.has(value);
+}
 
 function object(value: unknown, field: string): UnknownRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -358,7 +367,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     const domain = boundedString(record.domain, `${prefix}.domain`, MAX_RISK_CALIBRATION_DOMAIN_LENGTH).toLowerCase().replace(/\.$/, '');
     if (!isValidAsciiDomainName(domain, { requireDot: true })) throw new CliUsageError(`${prefix}.domain must be a valid ASCII DNS hostname, not an IP address.`);
     const analystDisposition = boundedString(record.analystDisposition, `${prefix}.analystDisposition`, MAX_RISK_CALIBRATION_DISPOSITION_LENGTH);
-    if (!DISPOSITIONS.has(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
+    if (!isRiskCalibrationDisposition(analystDisposition)) throw new CliUsageError(`${prefix}.analystDisposition is unsupported.`);
     let reviewReasonCode: string | undefined;
     if (record.reviewReasonCode !== null && record.reviewReasonCode !== undefined) {
       reviewReasonCode = boundedString(record.reviewReasonCode, `${prefix}.reviewReasonCode`, MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH);
@@ -367,7 +376,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     return {
       id,
       domain,
-      analystDisposition: analystDisposition as CalibrationDisposition,
+      analystDisposition,
       ...(reviewReasonCode ? { reviewReasonCode } : {}),
       evidence: projectEvidence(record.evidence, `${prefix}.evidence`),
     };
@@ -430,9 +439,7 @@ function metricsForThreshold(records: readonly CalibrationScoredRecord[], thresh
 }
 
 function metricClass(disposition: CalibrationDisposition): MetricClass {
-  if (POSITIVE_DISPOSITIONS.has(disposition)) return 'positive';
-  if (NEGATIVE_DISPOSITIONS.has(disposition)) return 'negative';
-  return 'excluded';
+  return DISPOSITION_METRIC_CLASSES[disposition];
 }
 
 function scoreBand(score: number | null): string {

@@ -21,6 +21,7 @@ import type {
   CaseConclusionInput,
   CasePatch,
   CaseRecord,
+  ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
@@ -45,16 +46,21 @@ export type RiskCalibrationExportPreview = Readonly<{
   excluded: number;
   records: readonly Readonly<{
     domain: string;
-    analystDisposition: string;
+    analystDisposition: ReviewedCaseDisposition;
     reviewReasonCode: string | null;
   }>[];
 }>;
 
 export {
   CASE_DISPOSITIONS,
+  DEFAULT_DISPOSITION,
   CASE_REVIEW_REASONS,
   CASE_STATUSES,
   caseLookupTarget,
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  isReviewedCaseDisposition,
   compareCaseEvidence,
   dispositionLabel,
   latestCaseEvidence,
@@ -146,6 +152,7 @@ export type {
   CaseNote,
   CasePatch,
   CaseRecord,
+  ReviewedCaseDisposition,
   EvidenceChange,
   EvidenceFactor,
 } from './analysis/case-model.ts';

@@ -555,7 +555,7 @@ describe('offline artifact verifier', () => {
     assert.equal(report.checks.contentIntegrity, 'verified');
 
     const changed = structuredClone(pack);
-    changed.cases[0]!.status = 'closed';
+    Reflect.set(changed.cases[0]!, 'status', 'closed');
     await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /would be repaired|failed its SHA-256/iu);
   });
 

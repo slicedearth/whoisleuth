@@ -3,12 +3,12 @@ import test from 'node:test';
 import { buildCaseDecisionQualityReport } from '../frontend/src/lib/analysis/case-decision-quality.ts';
 import { buildCaseTypeEvidenceReadiness } from '../frontend/src/lib/analysis/case-type-evidence-readiness.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
-import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
+import type { CaseDisposition, CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
 import { caseIncidentTargetAssertion, caseTagsWithTypes } from '../packages/cases/case-workflow-metadata.mts';
 
 const NOW = '2026-09-01T08:00:00.000Z';
 
-function caseRecord(id: string, domain: string, disposition: string): CaseRecord {
+function caseRecord(id: string, domain: string, disposition: CaseDisposition): CaseRecord {
   return {
     id, domain, disposition, status: 'reviewing', reviewReasonCode: null, brandProfileIds: [], tags: [], notes: [], source: 'lookup',
     evidenceHistory: [{
@@ -50,8 +50,8 @@ test('case decision quality finds inconsistent dispositions and unsupported reas
 
 test('flags strong or operational states that have no supporting decision path', () => {
   const confirmed = caseRecord('confirmed', 'confirmed.example', 'confirmed_abuse');
-  const escalated = { ...caseRecord('escalated', 'escalated.example', 'suspicious'), status: 'escalated', reviewReasonCode: 'other' };
-  const monitoring = { ...caseRecord('monitoring', 'monitoring.example', 'suspicious'), status: 'monitoring', reviewReasonCode: 'other' };
+  const escalated: CaseRecord = { ...caseRecord('escalated', 'escalated.example', 'suspicious'), status: 'escalated', reviewReasonCode: 'other' };
+  const monitoring: CaseRecord = { ...caseRecord('monitoring', 'monitoring.example', 'suspicious'), status: 'monitoring', reviewReasonCode: 'other' };
   const report = buildCaseDecisionQualityReport([confirmed, escalated, monitoring]);
   assert.equal(report.counts.strong_disposition_without_evidence, 1);
   assert.equal(report.counts.escalation_without_action, 1);

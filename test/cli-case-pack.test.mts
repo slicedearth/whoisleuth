@@ -189,7 +189,7 @@ describe('CLI case pack', () => {
 
     const leaked = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     (leaked.cases as Array<Record<string, unknown>>)[0]!.brandProfileIds = ['Profile_A'];
-    assert.throws(() => verifyCliCasePack(resign(leaked)), /invalid Brand Profile redaction manifest|mismatched Case report projection/iu);
+    assert.throws(() => verifyCliCasePack(resign(leaked)), /brandProfileIds excluded by its audience|invalid Brand Profile redaction manifest|mismatched Case report projection/iu);
 
     const reportLeak = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     const reportPacket = reportLeak.packet as Record<string, unknown>;
@@ -375,11 +375,11 @@ describe('CLI case pack', () => {
 
     const trustedRecipient = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     ((trustedRecipient.cases as Array<Record<string, unknown>>)[0]!.actions as Array<Record<string, unknown>>)[0]!.recipient = 'leak';
-    assert.throws(() => verifyCliCasePack(resign(trustedRecipient)), /unredacted action recipient/iu);
+    assert.throws(() => verifyCliCasePack(resign(trustedRecipient)), /actions excluded by its audience|unredacted action recipient/iu);
 
     const trustedTarget = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     ((trustedTarget.cases as Array<Record<string, unknown>>)[0]!.manualTrail as Array<Record<string, unknown>>)[0]!.target = 'leak';
-    assert.throws(() => verifyCliCasePack(resign(trustedTarget)), /manual-trail target excluded/iu);
+    assert.throws(() => verifyCliCasePack(resign(trustedTarget)), /manualTrail excluded by its audience|manual-trail target excluded/iu);
 
     const nested = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     (nested.packet as Record<string, unknown>).unexpected = { actions: [{ recipient: 'leak' }], notes: ['leak'] };

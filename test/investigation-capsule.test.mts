@@ -17,6 +17,7 @@ import {
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { projectDecisionFacts } from '../packages/evidence/decision-fact.mts';
+import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 
 const brief = {
   schema: 'whoisleuth.investigation-brief' as const,
@@ -146,7 +147,7 @@ test('offline verification rejects re-digested capsule contract and graph-linkag
 
 test('investigation capsule includes analyst records only when deliberately selected', async () => {
   const maximumPinReferences = Array.from({ length: MAX_DECISION_PIN_REFERENCES }, (_, index) => `pin-${index}`);
-  const caseRecord = {
+  const caseRecord: CaseRecord = {
     id: 'case-1', domain: 'example.test', status: 'reviewing', disposition: 'unreviewed', brandProfileIds: [], tags: [], notes: [{ id: 'note', body: 'excluded note', createdAt: '2026-08-04T00:00:00.000Z' }], source: 'lookup', evidenceHistory: [], evidencePins: [], actions: [], manualTrail: [], sightings: [],
     observedEffects: { reviews: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },

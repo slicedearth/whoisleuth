@@ -82,10 +82,10 @@ describe('domain normalization', () => {
 
 describe('status and disposition validation', () => {
   test('accepts every documented machine value', () => {
-    for (const status of ['new', 'reviewing', 'monitoring', 'escalated', 'resolved']) {
+    for (const { value: status } of model.CASE_STATUSES) {
       assert.equal(model.isValidStatus(status), true);
     }
-    for (const disp of ['unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action']) {
+    for (const { value: disp } of model.CASE_DISPOSITIONS) {
       assert.equal(model.isValidDisposition(disp), true);
     }
   });

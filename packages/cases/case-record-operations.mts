@@ -27,8 +27,12 @@ import {
 } from './case-response-model.mts';
 import {
   CASE_SCHEMA_VERSION,
+  CASE_STATUSES,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
+  type CaseDisposition,
+  type CaseStatus,
+  type CaseStatusOption,
   type CaseEvidenceSnapshot,
   type CaseInput,
   type CasePatch,
@@ -39,6 +43,8 @@ import {
   EVIDENCE_SOURCE_SET,
   caseTimestampOrNull,
   deterministicId,
+  isValidDisposition,
+  isValidStatus,
   makeId,
   normalizeDisposition,
   normalizeDomain,
@@ -70,6 +76,57 @@ export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
 export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
 const OBJECTIVE_PREFIX = 'Objective: ';
 const RETENTION_SEPARATOR = ' | URL retained: ';
+
+type CaseStatusOperationPolicy = Readonly<{
+  closed: boolean;
+  closureRequired: boolean;
+  directEdit: 'allowed' | 'existing_only';
+}>;
+const CASE_STATUS_OPERATION_POLICIES = Object.freeze({
+  new: { closed: false, closureRequired: false, directEdit: 'allowed' },
+  reviewing: { closed: false, closureRequired: false, directEdit: 'allowed' },
+  monitoring: { closed: false, closureRequired: false, directEdit: 'allowed' },
+  escalated: { closed: false, closureRequired: false, directEdit: 'allowed' },
+  resolved: { closed: true, closureRequired: true, directEdit: 'existing_only' },
+} as const satisfies Record<CaseStatus, CaseStatusOperationPolicy>);
+
+type CaseDispositionDecisionPolicy = Readonly<{
+  reviewed: boolean;
+  supportsDefensiveResponse: boolean;
+}>;
+const CASE_DISPOSITION_DECISION_POLICIES = Object.freeze({
+  unreviewed: { reviewed: false, supportsDefensiveResponse: false },
+  suspicious: { reviewed: true, supportsDefensiveResponse: true },
+  confirmed_abuse: { reviewed: true, supportsDefensiveResponse: true },
+  false_positive: { reviewed: true, supportsDefensiveResponse: false },
+  expected: { reviewed: true, supportsDefensiveResponse: false },
+  closed_no_action: { reviewed: true, supportsDefensiveResponse: false },
+} as const satisfies Record<CaseDisposition, CaseDispositionDecisionPolicy>);
+export type ReviewedCaseDisposition = {
+  [K in CaseDisposition]: (typeof CASE_DISPOSITION_DECISION_POLICIES)[K]['reviewed'] extends true ? K : never;
+}[CaseDisposition];
+
+export function caseStatusRequiresClosure(value: unknown): boolean {
+  return isValidStatus(value) && CASE_STATUS_OPERATION_POLICIES[value].closureRequired;
+}
+
+export function caseStatusIsClosed(value: unknown): boolean {
+  return isValidStatus(value) && CASE_STATUS_OPERATION_POLICIES[value].closed;
+}
+
+export function isReviewedCaseDisposition(value: unknown): value is ReviewedCaseDisposition {
+  return isValidDisposition(value) && CASE_DISPOSITION_DECISION_POLICIES[value].reviewed;
+}
+
+export function caseDispositionSupportsDefensiveResponse(value: unknown): boolean {
+  return isValidDisposition(value) && CASE_DISPOSITION_DECISION_POLICIES[value].supportsDefensiveResponse;
+}
+
+export function caseStatusOptionsForDirectEdit(currentStatus: CaseStatus): readonly CaseStatusOption[] {
+  return CASE_STATUSES.filter((option) => (
+    CASE_STATUS_OPERATION_POLICIES[option.value].directEdit === 'allowed' || option.value === currentStatus
+  ));
+}
 
 export type IncidentUrlContext = Readonly<{
   exactUrl: string;
@@ -257,7 +314,7 @@ export function normalizeCase(
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
-    status: normalizedStatus === 'resolved'
+    status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'
       : normalizedStatus,
@@ -321,7 +378,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   const closures = input.closure !== undefined
     ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions)
     : normalizeCaseClosureHistory(undefined, now);
-  if (normalizeStatus(input.status) === 'resolved' && input.closure === undefined) {
+  if (caseStatusRequiresClosure(normalizeStatus(input.status)) && input.closure === undefined) {
     throw new Error('Opening a resolved case requires a deliberate closure reason and its linked review context.');
   }
   return {
@@ -489,7 +546,7 @@ export function updateCase(
   if (patch.closure !== undefined) {
     closures = appendCaseClosure(closures, patch.closure, now, observedEffects, actions);
   }
-  if (patch.status === 'resolved' && patch.closure === undefined) {
+  if (caseStatusRequiresClosure(patch.status) && patch.closure === undefined) {
     throw new Error('Resolve this case through the deliberate closure review so the reason and evidence state remain explicit.');
   }
   const record: CaseRecord = {
@@ -553,7 +610,7 @@ export function recordCaseConclusion(
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const disposition = normalizeDisposition(input.disposition);
   const reviewReasonCode = normalizeReviewReasonCode(input.reviewReasonCode);
-  if (disposition === 'unreviewed') {
+  if (!isReviewedCaseDisposition(disposition)) {
     throw new Error('Select a reviewed disposition before recording a conclusion.');
   }
   if (!reviewReasonCode) {

@@ -163,13 +163,16 @@ export const RISK_CALIBRATION_REPORT_INTERPRETATION_KEYS = Object.freeze([
 ] as const);
 
 export type RiskCalibrationDatasetVersion = typeof SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS[number];
-export type RiskCalibrationDisposition =
-  | 'unreviewed'
-  | 'suspicious'
-  | 'confirmed_abuse'
-  | 'false_positive'
-  | 'expected'
-  | 'closed_no_action';
+/** Stable disposition identities admitted by the versioned calibration schema. */
+export const RISK_CALIBRATION_DISPOSITIONS = Object.freeze([
+  'unreviewed',
+  'suspicious',
+  'confirmed_abuse',
+  'false_positive',
+  'expected',
+  'closed_no_action',
+] as const);
+export type RiskCalibrationDisposition = typeof RISK_CALIBRATION_DISPOSITIONS[number];
 
 export type RiskCalibrationThreatIntelligence = Readonly<{
   providers: readonly Readonly<{
@@ -1315,9 +1318,7 @@ const FACTOR_SPEC = objectOf([
 const REPORT_RECORD_SPEC = objectOf([
   { key: 'id', value: boundedText(MAX_RISK_CALIBRATION_RECORD_ID_LENGTH) },
   { key: 'domain', value: boundedText(MAX_RISK_CALIBRATION_DOMAIN_LENGTH) },
-  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, [
-    'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
-  ]) },
+  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, RISK_CALIBRATION_DISPOSITIONS) },
   { key: 'reviewReasonCode', value: nullable(boundedText(MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH)) },
   { key: 'interoperabilityTags', value: arrayOf(boundedText(MAX_RISK_CALIBRATION_STRING_LENGTH), 0, 32) },
   { key: 'metricClass', value: boundedText(16, ['positive', 'negative', 'excluded']) },
@@ -1385,9 +1386,7 @@ const DATASET_EVIDENCE_SPEC = objectOf([
 const DATASET_RECORD_SPEC = objectOf([
   { key: 'id', value: boundedText(MAX_RISK_CALIBRATION_RECORD_ID_LENGTH, null, 1, canonicalRiskCalibrationIdentifier) },
   { key: 'domain', value: boundedText(MAX_RISK_CALIBRATION_DOMAIN_LENGTH, null, 1, validRiskCalibrationDomain) },
-  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, [
-    'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
-  ]) },
+  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, RISK_CALIBRATION_DISPOSITIONS) },
   { key: 'reviewReasonCode', value: boundedText(MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH, RISK_CALIBRATION_REVIEW_REASON_VALUES), optional: true },
   { key: 'evidence', value: DATASET_EVIDENCE_SPEC },
 ]);

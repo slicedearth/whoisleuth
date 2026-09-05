@@ -17,6 +17,9 @@ import {
   MAX_TAGS_PER_CASE,
   MAX_TAG_LENGTH,
   type CaseNote,
+  type CaseDisposition,
+  type CaseSource,
+  type CaseStatus,
 } from './case-record-contracts.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
@@ -32,7 +35,7 @@ import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 // The provenance recorded on an individual evidence snapshot. Distinct from a
 // case's `source`: a snapshot can be imported, and a case opened by hand
 // ('manual') has no snapshot provenance of its own.
-export const EVIDENCE_SOURCE_SET = new Set(EVIDENCE_SOURCES);
+export const EVIDENCE_SOURCE_SET: ReadonlySet<string> = new Set(EVIDENCE_SOURCES);
 export const DEFAULT_EVIDENCE_SOURCE = 'unknown';
 // Deterministic "more informative source wins" order used when a materially
 // identical capture is seen again from a different source. A direct scan beats
@@ -45,14 +48,14 @@ export const EVIDENCE_SOURCE_RANK = {
   unknown: 0,
 };
 
-const STATUS_VALUES: Set<string> = new Set(CASE_STATUSES.map((item) => item.value));
-const DISPOSITION_VALUES: Set<string> = new Set(CASE_DISPOSITIONS.map((item) => item.value));
+const STATUS_VALUES: ReadonlySet<string> = new Set(CASE_STATUSES.map((item) => item.value));
+const DISPOSITION_VALUES: ReadonlySet<string> = new Set(CASE_DISPOSITIONS.map((item) => item.value));
 const REVIEW_REASON_VALUES: Set<string> = new Set(CASE_REVIEW_REASONS.map((item) => item.value).filter(Boolean));
-const SOURCE_VALUES: Set<string> = new Set(CASE_SOURCES.map((item) => item.value));
+const SOURCE_VALUES: ReadonlySet<string> = new Set(CASE_SOURCES.map((item) => item.value));
 
-const STATUS_LABELS = Object.fromEntries(CASE_STATUSES.map((item) => [item.value, item.label]));
-const DISPOSITION_LABELS = Object.fromEntries(CASE_DISPOSITIONS.map((item) => [item.value, item.label]));
-const SOURCE_LABELS = Object.fromEntries(CASE_SOURCES.map((item) => [item.value, item.label]));
+const STATUS_LABELS = new Map<CaseStatus, string>(CASE_STATUSES.map((item) => [item.value, item.label]));
+const DISPOSITION_LABELS = new Map<CaseDisposition, string>(CASE_DISPOSITIONS.map((item) => [item.value, item.label]));
+const SOURCE_LABELS = new Map<CaseSource, string>(CASE_SOURCES.map((item) => [item.value, item.label]));
 
 // Availability tokens that actually assert something about the domain. Anything
 // else ('unknown', 'error', empty) is not, on its own, material evidence.
@@ -84,20 +87,23 @@ export function objectRecord(value: unknown): Record<string, unknown> {
 }
 
 export function statusLabel(value: unknown): string {
-  return (typeof value === 'string' ? STATUS_LABELS[value] : '') || String(value || '');
+  return isValidStatus(value) ? STATUS_LABELS.get(value)! : String(value || '');
 }
 export function dispositionLabel(value: unknown): string {
-  return (typeof value === 'string' ? DISPOSITION_LABELS[value] : '') || String(value || '');
+  return isValidDisposition(value) ? DISPOSITION_LABELS.get(value)! : String(value || '');
 }
 export function sourceLabel(value: unknown): string {
-  return (typeof value === 'string' ? SOURCE_LABELS[value] : '') || String(value || '');
+  return isValidSource(value) ? SOURCE_LABELS.get(value)! : String(value || '');
 }
 
-export function isValidStatus(value: unknown): value is string {
+export function isValidStatus(value: unknown): value is CaseStatus {
   return typeof value === 'string' && STATUS_VALUES.has(value);
 }
-export function isValidDisposition(value: unknown): value is string {
+export function isValidDisposition(value: unknown): value is CaseDisposition {
   return typeof value === 'string' && DISPOSITION_VALUES.has(value);
+}
+export function isValidSource(value: unknown): value is CaseSource {
+  return typeof value === 'string' && SOURCE_VALUES.has(value);
 }
 
 /** Fresh, safe, effectively-unique id for a brand-new local record. */
@@ -167,17 +173,17 @@ export function normalizeEvidenceHostnameForCase(value: unknown, caseDomain: unk
   return canonicalRegistrableDomain(hostname) === canonicalCase ? hostname : null;
 }
 
-export function normalizeStatus(value: unknown): string {
-  return typeof value === 'string' && STATUS_VALUES.has(value) ? value : DEFAULT_STATUS;
+export function normalizeStatus(value: unknown): CaseStatus {
+  return isValidStatus(value) ? value : DEFAULT_STATUS;
 }
-export function normalizeDisposition(value: unknown): string {
-  return typeof value === 'string' && DISPOSITION_VALUES.has(value) ? value : DEFAULT_DISPOSITION;
+export function normalizeDisposition(value: unknown): CaseDisposition {
+  return isValidDisposition(value) ? value : DEFAULT_DISPOSITION;
 }
 export function normalizeReviewReasonCode(value: unknown): string | null {
   return typeof value === 'string' && REVIEW_REASON_VALUES.has(value) ? value : null;
 }
-export function normalizeSource(value: unknown): string {
-  return typeof value === 'string' && SOURCE_VALUES.has(value) ? value : DEFAULT_SOURCE;
+export function normalizeSource(value: unknown): CaseSource {
+  return isValidSource(value) ? value : DEFAULT_SOURCE;
 }
 
 /** Parsed ISO string, or null when missing/invalid (used for import ordering). */

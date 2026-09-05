@@ -1,7 +1,9 @@
 import {
   addCaseNote,
+  dispositionLabel,
   editCase,
   getCaseByDomain,
+  isReviewedCaseDisposition,
   openCase,
   recordCaseConclusion,
   recordCaseInvestigationContext,
@@ -192,8 +194,9 @@ export class LookupCaseController {
         status: 'Create or open the analyst case before recording a classification.',
       };
     }
-    const reason = disposition === 'unreviewed' ? '' : reviewReasonCode;
-    if (disposition !== 'unreviewed' && !reason) {
+    const reviewedDisposition = isReviewedCaseDisposition(disposition);
+    const reason = reviewedDisposition ? reviewReasonCode : '';
+    if (reviewedDisposition && !reason) {
       return {
         record,
         status: 'Select the reviewed reason before saving this disposition.',
@@ -252,7 +255,7 @@ export class LookupCaseController {
       pin,
       stance: selectionByField.get(pin.field ?? '') ?? 'unresolved',
     }));
-    const summary = `Analyst conclusion: ${disposition.replaceAll('_', ' ')}`;
+    const summary = `Analyst conclusion: ${dispositionLabel(disposition)}`;
     try {
       const conclude = this.#api.conclude ?? recordCaseConclusion;
       const updated = await conclude(record.id, {

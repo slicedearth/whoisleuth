@@ -1,3 +1,5 @@
+import { dispositionLabel, isReviewedCaseDisposition } from './case-model.ts';
+
 export const INVESTIGATION_HANDOFF_READINESS_VERSION = 1;
 
 export type InvestigationHandoffCheckState = 'pass' | 'caution' | 'block';
@@ -69,6 +71,7 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
   const assertions = records(caseRecord.assertions, 50);
   const actions = records(caseRecord.actions, 50);
   const disposition = typeof caseRecord.disposition === 'string' ? caseRecord.disposition : '';
+  const dispositionReviewed = isReviewedCaseDisposition(disposition);
   const openHypotheses = openAssertions(assertions, 'hypothesis');
   const openUnknowns = openAssertions(assertions, 'unknown');
   const openContradictions = openAssertions(assertions, 'contradiction');
@@ -92,9 +95,9 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
     {
       id: 'disposition',
       label: 'Disposition reviewed',
-      state: retained && disposition && disposition !== 'unreviewed' ? 'pass' : retained ? 'caution' : 'block',
-      detail: retained && disposition && disposition !== 'unreviewed'
-        ? `The case disposition is ${disposition.replaceAll('_', ' ')}.`
+      state: retained && dispositionReviewed ? 'pass' : retained ? 'caution' : 'block',
+      detail: retained && dispositionReviewed
+        ? `The case disposition is ${dispositionLabel(disposition)}.`
         : 'The case still has an unreviewed disposition.',
     },
     {
@@ -133,7 +136,7 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
   const cautions = checks.filter((item) => item.state === 'caution').length;
   const status = !retained
     ? 'not_retained'
-    : !decisions.length || !disposition || disposition === 'unreviewed'
+    : !decisions.length || !dispositionReviewed
       ? 'needs_decision'
       : cautions
         ? 'review_cautions'

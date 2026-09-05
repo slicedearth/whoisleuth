@@ -21,7 +21,11 @@ import {
   normalizeBrandProfileStore,
 } from '../packages/workspace/brand-profile-model.mts';
 import { CASE_STATUSES } from '../packages/cases/case-record-contracts.mts';
-import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
+import {
+  caseStatusRequiresClosure,
+  createCase,
+  updateCase,
+} from '../packages/cases/case-record-operations.mts';
 import {
   appendCaseDecision,
   CASE_ACTION_STATES,
@@ -122,7 +126,7 @@ describe('bounded verification state machines', () => {
         let record = createCase({ domain: 'case-state.example', source: 'manual' }, NOW);
         let cases = [record];
         for (const status of statusSequence) {
-          if (status === 'resolved') {
+          if (caseStatusRequiresClosure(status)) {
             assert.throws(() => updateCase(cases, record.id, { status }, NOW), /deliberate closure review/u);
           } else {
             ({ cases, record } = updateCase(cases, record.id, { status }, NOW));

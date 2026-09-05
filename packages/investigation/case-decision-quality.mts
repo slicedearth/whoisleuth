@@ -1,4 +1,8 @@
-import { latestCaseEvidence } from '../cases/case-model.mts';
+import {
+  dispositionLabel,
+  isReviewedCaseDisposition,
+  latestCaseEvidence,
+} from '../cases/case-model.mts';
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
 
 export const CASE_DECISION_QUALITY_VERSION = 1;
@@ -35,8 +39,6 @@ export type CaseDecisionQualityReport = Readonly<{
   limitation: string;
 }>;
 
-const REVIEWED_DISPOSITIONS = new Set(['suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action']);
-
 function caseHref(caseId: string): string {
   return `/monitor?view=cases&case=${encodeURIComponent(caseId)}#case-response-${encodeURIComponent(caseId)}`;
 }
@@ -58,18 +60,18 @@ export function buildCaseDecisionQualityReport(rawRecords: readonly CaseRecord[]
   const byFingerprint = new Map<string, CaseRecord[]>();
   for (const record of records) {
     const latest = latestCaseEvidence(record);
-    if (latest?.fingerprint && REVIEWED_DISPOSITIONS.has(record.disposition)) {
+    if (latest?.fingerprint && isReviewedCaseDisposition(record.disposition)) {
       const group = byFingerprint.get(latest.fingerprint) ?? [];
       group.push(record);
       byFingerprint.set(latest.fingerprint, group);
     }
-    if (REVIEWED_DISPOSITIONS.has(record.disposition) && !record.reviewReasonCode) {
+    if (isReviewedCaseDisposition(record.disposition) && !record.reviewReasonCode) {
       add(findings, {
         id: `reason:${record.id}`,
         kind: 'disposition_without_reason',
         severity: 'medium',
         title: `Record why ${record.domain} was dispositioned`,
-        detail: `The case is marked ${record.disposition.replaceAll('_', ' ')} without a structured review reason.`,
+        detail: `The case is marked ${dispositionLabel(record.disposition)} without a structured review reason.`,
         caseIds: [record.id], domains: [record.domain], href: caseHref(record.id),
       });
     }
@@ -149,7 +151,7 @@ export function buildCaseDecisionQualityReport(rawRecords: readonly CaseRecord[]
       kind: 'inconsistent_disposition',
       severity: 'high',
       title: 'Review inconsistent dispositions for equivalent retained evidence',
-      detail: `${sorted.length} cases share the same latest evidence fingerprint but have different reviewed dispositions: ${dispositions.map((item) => item.replaceAll('_', ' ')).join(', ')}.`,
+      detail: `${sorted.length} cases share the same latest evidence fingerprint but have different reviewed dispositions: ${dispositions.map(dispositionLabel).join(', ')}.`,
       caseIds: sorted.map((record) => record.id),
       domains: sorted.map((record) => record.domain),
       href: caseHref(sorted[0]!.id),

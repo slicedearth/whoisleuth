@@ -79,13 +79,13 @@ type CaseReportJson = {
   case: {
     id: string;
     domain: string;
-    status: string;
-    disposition: string;
+    status: CaseRecord['status'];
+    disposition: CaseRecord['disposition'];
     reviewReasonCode: string | null;
     brandProfileIds: string[];
     interoperabilityTags: string[];
     tags: string[];
-    source: string;
+    source: CaseRecord['source'];
     openedAt: string;
     updatedAt: string;
     notesIncluded: boolean;

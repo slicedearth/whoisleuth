@@ -151,7 +151,7 @@
   let shortlistApi:ShortlistApi|null=null;
   let casesApi:CasesApi|null=null;
   let primaryResultContextLoad:Promise<void>|null=null;
-  let caseOptions=$state<CasesApi['CASE_DISPOSITIONS']>([]);
+  let caseOptions=$state<ReadonlyArray<CasesApi['CASE_DISPOSITIONS'][number]>>([]);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));

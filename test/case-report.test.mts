@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';
+import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 
 // ---------------------------------------------------------------------------
@@ -46,8 +47,8 @@ function snapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function caseRecord(overrides: Record<string, unknown> = {}) {
-  return {
+function caseRecord(overrides: Record<string, unknown> = {}): CaseRecord {
+  const base = {
     id: 'case-1',
     domain: 'test.invalid',
     status: 'new',
@@ -67,8 +68,10 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: ISO,
     updatedAt: ISO,
-    ...overrides,
-  };
+  } satisfies CaseRecord;
+  // Individual tests deliberately inject future or malformed runtime fields
+  // through this boundary; ordinary typed fixtures remain checked above.
+  return { ...base, ...overrides } as CaseRecord;
 }
 
 // ---------------------------------------------------------------------------

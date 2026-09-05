@@ -8,7 +8,7 @@
     type BrowserHandoffDisclosureFormat,
     type BrowserLookupHandoff,
   } from '$lib/analysis/browser-lookup-handoff.ts';
-  import { editCase, loadCases, type CaseRecord } from '$lib/cases';
+  import { caseStatusIsClosed, editCase, loadCases, type CaseRecord } from '$lib/cases';
 
   let input = $state('');
   let destinationKind = $state<BrowserHandoffDestinationKind>('lookup');
@@ -23,7 +23,7 @@
 
   onMount(() => {
     void loadCases().then((records) => {
-      cases = records.filter((record) => record.status !== 'resolved').slice(0, 500);
+      cases = records.filter((record) => !caseStatusIsClosed(record.status)).slice(0, 500);
     }).catch(() => {
       message = 'Saved cases are unavailable. You can still prepare and open a handoff.';
     });

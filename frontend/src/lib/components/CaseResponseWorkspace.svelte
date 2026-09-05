@@ -19,6 +19,9 @@
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
     caseInvestigationContext,
+    caseStatusIsClosed,
+    dispositionLabel,
+    isReviewedCaseDisposition,
     editCase,
     type CaseActionRecord,
     type CaseActionState,
@@ -663,7 +666,7 @@
     <dl class="case-context" aria-label="Current Case context">
       <div class="context-objective"><dt>Objective</dt><dd>{investigationContext.objective}</dd></div>
       <div><dt>Incident URL</dt><dd>{investigationContext.urlRetention === 'exact' ? investigationContext.incidentUrl : `${investigationContext.incidentUrl} (origin only)`}</dd></div>
-      <div><dt>Disposition</dt><dd>{record.disposition.replaceAll('_', ' ')}</dd></div>
+      <div><dt>Disposition</dt><dd>{dispositionLabel(record.disposition)}</dd></div>
       <div><dt>Evidence</dt><dd>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} linked conclusion${evidenceLinkedDecisionCount === 1 ? '' : 's'}` : 'Conclusion link needed'}</dd></div>
       <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
     </dl>
@@ -707,7 +710,7 @@
         {/if}
         <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
           <div class="two-columns">
-            <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+            <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
             <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>
           <label class="field">Conclusion summary<input bind:value={decisionSummary} maxlength="80" required placeholder="What should the Case record conclude?"></label>
@@ -771,7 +774,7 @@
             </div>
             <button class="btn" type="submit" disabled={mutationBusy || effectState === 'not_checked' || !effectSource.trim()}>Record independent outcome</button>
           </form>
-          {#if record.observedEffects.reviews.length && record.status !== 'resolved'}
+          {#if record.observedEffects.reviews.length && !caseStatusIsClosed(record.status)}
             <form class="quick-form closure-quick" onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
               <h6>Close deliberately</h6>
               <div class="two-columns">
@@ -855,7 +858,7 @@
     <summary>Record an analyst decision</summary>
     <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
       <div class="two-columns">
-        <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+        <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
         <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       </div>
       <label class="field">Decision summary<input bind:value={decisionSummary} maxlength="80" required></label>

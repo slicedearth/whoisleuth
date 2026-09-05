@@ -2,6 +2,7 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.mts';
+import { caseDispositionSupportsDefensiveResponse } from './case-record-operations.mts';
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,
@@ -357,8 +358,8 @@ export type CaseResponsePacket = {
   case: {
     id: string;
     domain: string;
-    status: string;
-    disposition: string;
+    status: CaseRecord['status'];
+    disposition: CaseRecord['disposition'];
     updatedAt: string;
   };
   incident: {
@@ -976,7 +977,7 @@ export function buildCaseResponsePreflight(
   const retainedPinIds = new Set(caseRecord.evidencePins.map((pin) => pin.id));
   const evidenceLinkedDecisionCount = caseRecord.decisions.filter((decision) =>
     decision.evidencePinIds.some((evidencePinId) => retainedPinIds.has(evidencePinId))).length;
-  const responseDisposition = ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition);
+  const responseDisposition = caseDispositionSupportsDefensiveResponse(caseRecord.disposition);
   const reviewedActionCount = caseRecord.actions.filter((action) =>
     ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;
   const profile = responsePacketProfile(input.profile);
@@ -1031,6 +1032,8 @@ export function buildCaseResponsePreflight(
             : 'The browser or blocklist profile requires a manually reviewed submission destination recorded as a Case action.'
           : `${profile.label} has no fixed external contact-kind requirement.`,
     },
+    // Packet v9 retains its established machine-token wording for immutable
+    // fixture compatibility; interactive Case surfaces use the canonical label.
     {
       id: 'case_disposition',
       label: 'Case disposition',

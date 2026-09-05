@@ -1,9 +1,6 @@
 import {
-  CASE_DISPOSITIONS,
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
-  CASE_SOURCES,
-  CASE_STATUSES,
   DEFAULT_DISPOSITION,
   DEFAULT_SOURCE,
   DEFAULT_STATUS,
@@ -19,9 +16,15 @@ import {
   normalizeTags,
   objectRecord,
   safeId,
+  isValidDisposition,
+  isValidSource,
+  isValidStatus,
+  type CaseDisposition,
   type CaseEvidenceSnapshot,
   type CaseNote,
   type CaseRecord,
+  type CaseSource,
+  type CaseStatus,
   type CaseStore,
 } from './case-record-model.mts';
 import {
@@ -78,11 +81,6 @@ import {
   type CaseSightingRecord,
 } from './case-response-model.mts';
 
-const STATUS_VALUES = new Set(CASE_STATUSES.map((item) => item.value));
-const DISPOSITION_VALUES = new Set(
-  CASE_DISPOSITIONS.map((item) => item.value),
-);
-const SOURCE_VALUES = new Set(CASE_SOURCES.map((item) => item.value));
 export const MAX_CASE_INPUT_RECORDS = 2_000;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -92,13 +90,13 @@ function compareCodeUnits(left: string, right: string): number {
 type ImportPatch = {
   domain: string;
   rawId: string | null;
-  status: string | undefined;
-  disposition: string | undefined;
+  status: CaseStatus | undefined;
+  disposition: CaseDisposition | undefined;
   reviewReasonCode: string | null | undefined;
   brandProfileIds: string[];
   brandProfileReferencesOmitted: number;
   authoredHistoryOmitted: number;
-  source: string | undefined;
+  source: CaseSource | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
   decisions: CaseDecisionRecord[];
@@ -257,10 +255,6 @@ function boundedCaseList(raw: unknown): { items: unknown[]; omitted: number } {
  * @returns {CaseRecord}
  */
 
-function importScalar(value: unknown, valid: Set<string>): string | undefined {
-  return typeof value === 'string' && valid.has(value) ? value : undefined;
-}
-
 /**
  * Validates one imported record into a patch. Unlike normalizeCase, absent or
  * invalid scalar fields stay `undefined` (never defaulted) and a missing/invalid
@@ -324,15 +318,15 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
-    status: importScalar(record.status, STATUS_VALUES),
-    disposition: importScalar(record.disposition, DISPOSITION_VALUES),
+    status: isValidStatus(record.status) ? record.status : undefined,
+    disposition: isValidDisposition(record.disposition) ? record.disposition : undefined,
     reviewReasonCode: Object.hasOwn(record, 'reviewReasonCode')
       ? normalizeReviewReasonCode(record.reviewReasonCode)
       : undefined,
     brandProfileIds: brandProfileReferences.ids,
     brandProfileReferencesOmitted: brandProfileReferences.omitted,
     authoredHistoryOmitted,
-    source: importScalar(record.source, SOURCE_VALUES),
+    source: isValidSource(record.source) ? record.source : undefined,
     evidenceHistory: normalizeEvidenceHistory(rawEvidence, {
       source: 'import',
       fallback: importFallback,

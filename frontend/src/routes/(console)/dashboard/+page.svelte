@@ -18,6 +18,7 @@
     type DashboardWorkspaceState,
   } from '$lib/analysis/dashboard-workspace-state.ts';
   import { publicHomepage } from '$lib/workspaces';
+  import { caseStatusIsClosed } from '$lib/cases';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
 
 
@@ -110,7 +111,7 @@
 
     counts = {
       cases: documents.has('cases') ? caseRecords.length : null,
-      openCases: documents.has('cases') ? caseRecords.filter((record) => record.status !== 'resolved').length : null,
+      openCases: documents.has('cases') ? caseRecords.filter((record) => !caseStatusIsClosed(record.status)).length : null,
       watchlists: documents.has('watchlists') ? Object.keys(watchlists).length : null,
       profiles: documents.has('brand_profiles') ? profiles.length : null,
     };
