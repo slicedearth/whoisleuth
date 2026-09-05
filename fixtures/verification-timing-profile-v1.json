@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "c794001f0d2c2ff22499eecfc9d46fae11b9b24ba95eaf73a532295329e04031",
+  "inventoryFingerprint": "237b89c942d796e3c628c0fe345624cd1e9d949379c6de3e4ceb39ba9b7a76f6",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -17,18 +17,18 @@
       "sampleCount": 1
     },
     {
-      "id": "unit-local-repair-20260905",
-      "lane": "unit",
-      "environmentClass": "local-darwin-arm64-node24",
-      "sampleBasis": "median-of-three-complete-unit-runs",
-      "sampleCount": 3
-    },
-    {
       "id": "browser-local-repair-20260905",
       "lane": "browser",
       "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
       "sampleBasis": "complete-balanced-production-build-four-shards",
       "sampleCount": 4
+    },
+    {
+      "id": "unit-local-structural-ownership-20260906",
+      "lane": "unit",
+      "environmentClass": "local-darwin-arm64-node26",
+      "sampleBasis": "median-of-three-complete-unit-runs",
+      "sampleCount": 3
     }
   ],
   "files": [
@@ -434,3292 +434,3299 @@
     {
       "file": "test/abort.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/abuse-recipient-resolver.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/acquisition-decision-packet.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 35,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/acquisition-due-diligence.test.mts",
       "lane": "unit",
-      "weightMs": 9,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/activation-context.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-evidence-pivots.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-review-inbox.test.mts",
       "lane": "unit",
-      "weightMs": 75,
+      "weightMs": 102,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-review-local-projections.test.mts",
       "lane": "unit",
       "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-review-state.test.mts",
       "lane": "unit",
-      "weightMs": 30,
+      "weightMs": 39,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-taxonomy.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/analyst-undo.test.mts",
       "lane": "unit",
       "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/anchored-artifact-writer.test.mts",
       "lane": "unit",
-      "weightMs": 6142,
+      "weightMs": 6490,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/api-error-status.test.mts",
       "lane": "unit",
-      "weightMs": 9,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/architecture-boundaries.test.mts",
       "lane": "unit",
-      "weightMs": 1093,
+      "weightMs": 1214,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/archive-inspect.test.mts",
       "lane": "unit",
-      "weightMs": 575,
+      "weightMs": 710,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/artifact-integrity-v2.test.mts",
       "lane": "unit",
-      "weightMs": 658,
+      "weightMs": 898,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/artifact-verify.test.mts",
       "lane": "unit",
-      "weightMs": 1394,
+      "weightMs": 1636,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/auth.test.mts",
       "lane": "unit",
-      "weightMs": 44,
+      "weightMs": 55,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/availability-contact.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/availability-date.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/availability-dns.test.mts",
       "lane": "unit",
-      "weightMs": 61,
+      "weightMs": 62,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/availability-feature-policy.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-file.test.mts",
       "lane": "unit",
-      "weightMs": 104,
+      "weightMs": 134,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-gzip.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-json-response.test.mts",
       "lane": "unit",
-      "weightMs": 49,
+      "weightMs": 52,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-json.test.mts",
       "lane": "unit",
-      "weightMs": 226,
+      "weightMs": 272,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-local-search.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-relationship-graph.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bounded-zip-extraction.test.mts",
       "lane": "unit",
-      "weightMs": 36,
+      "weightMs": 40,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-asset-register.test.mts",
       "lane": "unit",
-      "weightMs": 103,
+      "weightMs": 124,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-certificate-event-replay.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-mimicry-review.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-profile-model.test.mts",
       "lane": "unit",
-      "weightMs": 85,
+      "weightMs": 114,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-profile-preference.test.mts",
       "lane": "unit",
       "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-protection-operations-report.test.mts",
       "lane": "unit",
-      "weightMs": 22,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/brand-review-inbox.test.mts",
       "lane": "unit",
-      "weightMs": 79,
+      "weightMs": 105,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-library-profile.test.mts",
       "lane": "unit",
-      "weightMs": 213,
+      "weightMs": 226,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-local-data-definitions.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 18,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-local-data-provider.test.mts",
       "lane": "unit",
-      "weightMs": 206,
+      "weightMs": 221,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-local-data-service.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-local-timestamp-contract.test.mts",
       "lane": "unit",
-      "weightMs": 1807,
+      "weightMs": 2441,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/browser-lookup-handoff.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-comparison-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-export.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-limits.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-lookup-controller.test.mts",
       "lane": "unit",
-      "weightMs": 27,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-mail-exposure.test.mts",
       "lane": "unit",
-      "weightMs": 10,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-pacing.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-peer-outliers.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-result-model.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-review-model.test.mts",
       "lane": "unit",
-      "weightMs": 18,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-review-workflow.test.mts",
       "lane": "unit",
-      "weightMs": 31,
+      "weightMs": 39,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-route-model.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-scan-controller.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-scan-normalizer.test.mts",
       "lane": "unit",
       "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-session-model.test.mts",
       "lane": "unit",
-      "weightMs": 52,
+      "weightMs": 61,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-sort.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-source-coverage.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/bulk-triage.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/campaign-cohort-review.test.mts",
       "lane": "unit",
-      "weightMs": 366,
+      "weightMs": 643,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/campaign-model.test.mts",
       "lane": "unit",
-      "weightMs": 65,
+      "weightMs": 81,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/campaign-review-summary.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/campaign-temporal-review.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 29,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/candidate-handoff.test.mts",
       "lane": "unit",
-      "weightMs": 391,
+      "weightMs": 483,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/capabilities.test.mts",
       "lane": "unit",
-      "weightMs": 8,
+      "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/capability-manifest.test.mts",
       "lane": "unit",
-      "weightMs": 26,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-contract-doc.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-decision-quality.test.mts",
       "lane": "unit",
-      "weightMs": 20,
+      "weightMs": 31,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-domain-facades.test.mts",
       "lane": "unit",
-      "weightMs": 40,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-evidence-checkpoint.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-input-hostname.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 28,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-lifecycle-calendar.test.mts",
       "lane": "unit",
-      "weightMs": 36,
+      "weightMs": 50,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-model.test.mts",
       "lane": "unit",
-      "weightMs": 529,
+      "weightMs": 780,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-portability-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 226,
+      "weightMs": 299,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
+    },
+    {
+      "file": "test/case-record-ownership.test.mts",
+      "lane": "unit",
+      "weightMs": 13,
+      "sampleCount": 3,
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-relationship-clusters.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 24,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-relationship-graph-export.test.mts",
       "lane": "unit",
-      "weightMs": 43,
+      "weightMs": 45,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-relationship-graph.test.mts",
       "lane": "unit",
-      "weightMs": 31,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-relationship-table.test.mts",
       "lane": "unit",
-      "weightMs": 62,
+      "weightMs": 71,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-relationships.test.mts",
       "lane": "unit",
-      "weightMs": 59,
+      "weightMs": 81,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-report.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 14,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-response-model.test.mts",
       "lane": "unit",
-      "weightMs": 96,
+      "weightMs": 118,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-response-packet.test.mts",
       "lane": "unit",
-      "weightMs": 86,
+      "weightMs": 131,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-sighting-chronology.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-sighting-stix-export.test.mts",
       "lane": "unit",
       "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-supported-contract-baseline.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/case-workflow-metadata.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/certificate-extension-profile.test.mts",
       "lane": "unit",
-      "weightMs": 10,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/certificate-policy-review.test.mts",
       "lane": "unit",
       "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/certificate-review-inbox.test.mts",
       "lane": "unit",
-      "weightMs": 43,
+      "weightMs": 50,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ci-workflow.test.mts",
       "lane": "unit",
-      "weightMs": 592,
+      "weightMs": 790,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cisa-kev-catalog-status.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cisa-kev-catalog.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/classify.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-automation-workflows.test.mts",
       "lane": "unit",
-      "weightMs": 664,
+      "weightMs": 808,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-bulk.test.mts",
       "lane": "unit",
-      "weightMs": 296,
+      "weightMs": 377,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-case-pack.test.mts",
       "lane": "unit",
-      "weightMs": 370,
+      "weightMs": 473,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-ci-report.test.mts",
       "lane": "unit",
-      "weightMs": 339,
+      "weightMs": 400,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-collection-preflight.test.mts",
       "lane": "unit",
-      "weightMs": 275,
+      "weightMs": 325,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-command-registry.test.mts",
       "lane": "unit",
-      "weightMs": 2475,
+      "weightMs": 3042,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-compare.test.mts",
       "lane": "unit",
-      "weightMs": 158,
+      "weightMs": 197,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-config-profile.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-cryptographic-mail.test.mts",
       "lane": "unit",
-      "weightMs": 213,
+      "weightMs": 244,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-csv.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-ct-search.test.mts",
       "lane": "unit",
-      "weightMs": 269,
+      "weightMs": 309,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-discover.test.mts",
       "lane": "unit",
-      "weightMs": 50,
+      "weightMs": 64,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-discovery-scan.test.mts",
       "lane": "unit",
-      "weightMs": 314,
+      "weightMs": 361,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-doctor-completion.test.mts",
       "lane": "unit",
-      "weightMs": 11244,
+      "weightMs": 14315,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-domain-control-monitor.test.mts",
       "lane": "unit",
-      "weightMs": 164,
+      "weightMs": 189,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-domain-control-observations.test.mts",
       "lane": "unit",
-      "weightMs": 42,
+      "weightMs": 51,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-export.test.mts",
       "lane": "unit",
-      "weightMs": 504,
+      "weightMs": 581,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-fail-policy.test.mts",
       "lane": "unit",
-      "weightMs": 324,
+      "weightMs": 354,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-http.test.mts",
       "lane": "unit",
-      "weightMs": 263,
+      "weightMs": 344,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-input.test.mts",
       "lane": "unit",
-      "weightMs": 1146,
+      "weightMs": 1355,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-interactive-launcher.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-investigation-plan.test.mts",
       "lane": "unit",
-      "weightMs": 112,
+      "weightMs": 127,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-investigation-run.test.mts",
       "lane": "unit",
-      "weightMs": 330,
+      "weightMs": 395,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-lookalike-calibration.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-lookup-brief.test.mts",
       "lane": "unit",
-      "weightMs": 73,
+      "weightMs": 71,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-lookup-browser.test.mts",
       "lane": "unit",
-      "weightMs": 513,
+      "weightMs": 579,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-lookup-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 165,
+      "weightMs": 250,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-mail-review.test.mts",
       "lane": "unit",
-      "weightMs": 154,
+      "weightMs": 173,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-output-file.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-package-boundary.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-package.test.mts",
       "lane": "unit",
-      "weightMs": 784,
+      "weightMs": 912,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-page-compare.test.mts",
       "lane": "unit",
-      "weightMs": 133,
+      "weightMs": 153,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-posture.test.mts",
       "lane": "unit",
-      "weightMs": 245,
+      "weightMs": 246,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-process.test.mts",
       "lane": "unit",
-      "weightMs": 4908,
+      "weightMs": 6367,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-published-workflow.test.mts",
       "lane": "unit",
-      "weightMs": 207,
+      "weightMs": 310,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-registry-cohort.test.mts",
       "lane": "unit",
-      "weightMs": 260,
+      "weightMs": 277,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-registry-doctor.test.mts",
       "lane": "unit",
-      "weightMs": 20,
+      "weightMs": 28,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-registry-maintenance.test.mts",
       "lane": "unit",
-      "weightMs": 59,
+      "weightMs": 91,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-registry-support.test.mts",
       "lane": "unit",
-      "weightMs": 33,
+      "weightMs": 61,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-release-workflow.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-risk-calibration.test.mts",
       "lane": "unit",
-      "weightMs": 148,
+      "weightMs": 188,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-sharing-review.test.mts",
       "lane": "unit",
-      "weightMs": 40,
+      "weightMs": 57,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-terminal-presentation.test.mts",
       "lane": "unit",
-      "weightMs": 295,
+      "weightMs": 351,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli-tls.test.mts",
       "lane": "unit",
-      "weightMs": 271,
+      "weightMs": 327,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cli.test.mts",
       "lane": "unit",
-      "weightMs": 3877,
+      "weightMs": 5051,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/client-behavior-profile.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/client-response-contracts.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/collection-preflight.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/common-infrastructure.test.mts",
       "lane": "unit",
-      "weightMs": 48,
+      "weightMs": 81,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/comparison-ledger-architecture.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 27,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/comparison-ledger.test.mts",
       "lane": "unit",
-      "weightMs": 627,
+      "weightMs": 769,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/console-workflow-state.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/contact-route-function.test.mts",
       "lane": "unit",
       "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/contact-route.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/core-protocol-properties.test.mts",
       "lane": "unit",
-      "weightMs": 121,
+      "weightMs": 173,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/coverage.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/credential-surface-profile.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 25,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/cryptographic-assurance.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/css-custom-properties.test.mts",
       "lane": "unit",
-      "weightMs": 69,
+      "weightMs": 75,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ct-event-intake.test.mts",
       "lane": "unit",
-      "weightMs": 25,
+      "weightMs": 30,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ct-history.test.mts",
       "lane": "unit",
-      "weightMs": 1550,
+      "weightMs": 1820,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ct-query.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ct-results.test.mts",
       "lane": "unit",
-      "weightMs": 49,
+      "weightMs": 70,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ct-search.test.mts",
       "lane": "unit",
-      "weightMs": 69,
+      "weightMs": 90,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dashboard-workspace-state.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/decision-fact.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 24,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/defensive-indicator-export.test.mts",
       "lane": "unit",
       "weightMs": 59,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/deferred-module.test.mts",
       "lane": "unit",
       "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/demo-model.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dependency-review-workflow.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/deployment-self-check.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 34,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/detection-rule-model.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 25,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/disclosure-policy-health.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/disclosure-route-review.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/discover-candidate-sort.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/discover-review-cues.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/distributed-operation-budget.test.mts",
       "lane": "unit",
-      "weightMs": 22,
+      "weightMs": 32,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dns-change-rehearsal.test.mts",
       "lane": "unit",
       "weightMs": 9,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dns-convergence-review.test.mts",
       "lane": "unit",
-      "weightMs": 23,
+      "weightMs": 31,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dns-delegation-health.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dns-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 57,
+      "weightMs": 53,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dns-mx.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dnssec-chain-validation.test.mts",
       "lane": "unit",
-      "weightMs": 115,
+      "weightMs": 125,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/dnssec-evidence-validation.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/documentation-contract.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/documentation-links.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-assurance.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 22,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-change-packet.test.mts",
       "lane": "unit",
-      "weightMs": 28,
+      "weightMs": 31,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-change-review.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-centre.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 27,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-flight-recorder-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 62,
+      "weightMs": 107,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-flight-recorder.test.mts",
       "lane": "unit",
-      "weightMs": 370,
+      "weightMs": 376,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-lifecycle-metadata.test.mts",
       "lane": "unit",
-      "weightMs": 143,
+      "weightMs": 150,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 22,
+      "weightMs": 24,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-manifest.test.mts",
       "lane": "unit",
-      "weightMs": 66,
+      "weightMs": 85,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-monitor-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 80,
+      "weightMs": 113,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-passport.test.mts",
       "lane": "unit",
-      "weightMs": 517,
+      "weightMs": 642,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-review-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 79,
+      "weightMs": 132,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-control-runtime.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 29,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-portfolio-review.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-posture-analysis.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 29,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-posture-matrix.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-posture-orchestration.test.mts",
       "lane": "unit",
-      "weightMs": 28,
+      "weightMs": 37,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-posture-parsers.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/domain-posture.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 31,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/encrypted-dns-contract.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/error-detail.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-coverage-ledger.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-debt-review.test.mts",
       "lane": "unit",
-      "weightMs": 73,
+      "weightMs": 117,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-display.test.mts",
       "lane": "unit",
-      "weightMs": 10,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-export.test.mts",
       "lane": "unit",
-      "weightMs": 257,
+      "weightMs": 354,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-quality-properties.test.mts",
       "lane": "unit",
-      "weightMs": 38,
+      "weightMs": 43,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-signing.test.mts",
       "lane": "unit",
-      "weightMs": 149,
+      "weightMs": 132,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-status-tone.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-storage-measurement.test.mts",
       "lane": "unit",
-      "weightMs": 3041,
+      "weightMs": 4126,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/evidence-topology.test.mts",
       "lane": "unit",
-      "weightMs": 8,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/external-findings-converters.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/external-findings-import.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/external-intelligence-import.test.mts",
       "lane": "unit",
-      "weightMs": 31,
+      "weightMs": 34,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/external-intelligence-risk.test.mts",
       "lane": "unit",
       "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/extracted-domain-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 27,
+      "weightMs": 33,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/fast-check-config.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/favicon-discovery.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/feature-policy.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/first-use-analyst-study.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/frontend-build-integrity.test.mts",
       "lane": "unit",
-      "weightMs": 294,
+      "weightMs": 560,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/frontend-loading-report.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/hostname.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/html-signals.test.mts",
       "lane": "unit",
-      "weightMs": 171,
+      "weightMs": 220,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/http-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 32,
+      "weightMs": 51,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/http-summary.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/http.test.mts",
       "lane": "unit",
-      "weightMs": 33,
+      "weightMs": 36,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/idle-preload.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/idn-confusables.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/idn-registry-policy.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/incremental-lookup-qualification.test.mts",
       "lane": "unit",
-      "weightMs": 55,
+      "weightMs": 65,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/incremental-lookup-staging-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/incremental-lookup-transport-spike.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/interchange-report.test.mts",
       "lane": "unit",
-      "weightMs": 841,
+      "weightMs": 1013,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-capsule.test.mts",
       "lane": "unit",
-      "weightMs": 25,
+      "weightMs": 31,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-context-preview.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-guide-loading.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-guide.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 18,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-handoff-readiness.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-lineage.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 18,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-manifest.test.mts",
       "lane": "unit",
-      "weightMs": 242,
+      "weightMs": 257,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-playbook-interchange.test.mts",
       "lane": "unit",
-      "weightMs": 8,
+      "weightMs": 9,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-projection-reader.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-projection.test.mts",
       "lane": "unit",
-      "weightMs": 215,
+      "weightMs": 302,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-search.test.mts",
       "lane": "unit",
-      "weightMs": 65,
+      "weightMs": 75,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/investigation-template-model.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/ip-prefix.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 9,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/iso-timestamp.test.mts",
       "lane": "unit",
-      "weightMs": 183,
+      "weightMs": 240,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/layout-request-bounds.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-codeql.test.mts",
       "lane": "unit",
-      "weightMs": 878,
+      "weightMs": 923,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-context-load.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-data-platform-evaluation.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-geoip-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-mutation-outcome.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-rendered-capture-handoff.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/local-web-capture.test.mts",
       "lane": "unit",
-      "weightMs": 8304,
+      "weightMs": 10347,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/login.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 38,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/logout.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-asset-graph.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 34,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-at-a-glance-model.test.mts",
       "lane": "unit",
-      "weightMs": 9,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-cache.test.mts",
       "lane": "unit",
-      "weightMs": 311,
+      "weightMs": 450,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-capability-matrix.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-case-controller.test.mts",
       "lane": "unit",
-      "weightMs": 32,
+      "weightMs": 36,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-claim-passport.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 28,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-claim-readiness.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-decision-review-model.test.mts",
       "lane": "unit",
-      "weightMs": 17,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-decision-support.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 25,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-display-evidence-families.test.mts",
       "lane": "unit",
-      "weightMs": 33,
+      "weightMs": 28,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-display-model.test.mts",
       "lane": "unit",
-      "weightMs": 52,
+      "weightMs": 69,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-evidence-impact.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-evidence-quality-model.test.mts",
       "lane": "unit",
-      "weightMs": 18,
+      "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-evidence-replay-diff.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-evidence-replay.test.mts",
       "lane": "unit",
-      "weightMs": 164,
+      "weightMs": 217,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-investigation-brief.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-page-actions.test.mts",
       "lane": "unit",
       "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-presentation.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-readable-report.test.mts",
       "lane": "unit",
-      "weightMs": 56,
+      "weightMs": 74,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-request-controller.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-request.test.mts",
       "lane": "unit",
-      "weightMs": 59,
+      "weightMs": 70,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-response-contract.test.mts",
       "lane": "unit",
-      "weightMs": 111,
+      "weightMs": 129,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-review-action-model.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-route-analysis.test.mts",
       "lane": "unit",
-      "weightMs": 157,
+      "weightMs": 226,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-snapshot-input.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-source-progress.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-source-refresh.test.mts",
       "lane": "unit",
       "weightMs": 40,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-summary-model.test.mts",
       "lane": "unit",
-      "weightMs": 29,
+      "weightMs": 41,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-task-guidance.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup-watchlist-handoff.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/lookup.test.mts",
       "lane": "unit",
-      "weightMs": 159,
+      "weightMs": 209,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/mail-report-workbench.test.mts",
       "lane": "unit",
-      "weightMs": 648,
+      "weightMs": 862,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/maintainer-duplication-report.test.mts",
       "lane": "unit",
-      "weightMs": 3039,
+      "weightMs": 3582,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/maintenance-file-boundaries.test.mts",
       "lane": "unit",
-      "weightMs": 1062,
+      "weightMs": 1443,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/manifest-artifact-identity.test.mts",
       "lane": "unit",
-      "weightMs": 142,
+      "weightMs": 171,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/misp-indicator-export.test.mts",
       "lane": "unit",
-      "weightMs": 38,
+      "weightMs": 46,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/model-contract-properties.test.mts",
       "lane": "unit",
-      "weightMs": 97,
+      "weightMs": 115,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/monitor-route-controller.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/nameserver-preflight-review.test.mts",
       "lane": "unit",
       "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/netlify-api-error-boundaries.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/netlify-network-guard.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/netlify-network-handler-contracts.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/netlify-static-headers.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/observation-envelope.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 22,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/observation-interchange.test.mts",
       "lane": "unit",
-      "weightMs": 16,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/observation.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/observed-network-context.test.mts",
       "lane": "unit",
-      "weightMs": 27,
+      "weightMs": 30,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/offline-evidence-review.test.mts",
       "lane": "unit",
-      "weightMs": 43,
+      "weightMs": 70,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/offline-investigation-scenarios.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/operation-budget.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/outbound-identity.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/outbound-request-bounds.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/owned-domain-posture-review.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/page-baseline.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/page-fingerprints.test.mts",
       "lane": "unit",
-      "weightMs": 197,
+      "weightMs": 225,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/page-language-signals.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/page-role-profile.test.mts",
       "lane": "unit",
-      "weightMs": 43,
+      "weightMs": 41,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/page-similarity.test.mts",
       "lane": "unit",
-      "weightMs": 10,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/parent-domain-campaign-review.test.mts",
       "lane": "unit",
-      "weightMs": 201,
+      "weightMs": 275,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/perceptual-hash.test.mts",
       "lane": "unit",
-      "weightMs": 29,
+      "weightMs": 40,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/platform-reporting-routes.test.mts",
       "lane": "unit",
       "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/playwright-results-summary.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 22,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/playwright-run-artifacts.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/portable-domain-facades.test.mts",
       "lane": "unit",
-      "weightMs": 188,
+      "weightMs": 210,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/portable-generator.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/privacy-contract.test.mts",
       "lane": "unit",
-      "weightMs": 18,
+      "weightMs": 41,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/privacy-data-flow-catalogue.test.mts",
       "lane": "unit",
-      "weightMs": 357,
+      "weightMs": 389,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/production-coverage.test.mts",
       "lane": "unit",
       "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/production-dependency-audit.test.mts",
       "lane": "unit",
-      "weightMs": 127,
+      "weightMs": 155,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/provider-policy-admission.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/provider-policy-freshness.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/provider-reporting-routes.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/public-guide.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 23,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/public-product-catalogue.test.mts",
       "lane": "unit",
-      "weightMs": 46,
+      "weightMs": 58,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/public-resources.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/public-session.test.mts",
       "lane": "unit",
       "weightMs": 1,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/published-cli-check.test.mts",
       "lane": "unit",
-      "weightMs": 100,
+      "weightMs": 134,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rate-limit.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-bootstrap.test.mts",
       "lane": "unit",
-      "weightMs": 9,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-capabilities.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-extension-drift-audit.test.mts",
       "lane": "unit",
       "weightMs": 69,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-failover.test.mts",
       "lane": "unit",
-      "weightMs": 19,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-nameserver-search.test.mts",
       "lane": "unit",
-      "weightMs": 23,
+      "weightMs": 25,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-parsing.test.mts",
       "lane": "unit",
-      "weightMs": 425,
+      "weightMs": 593,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-reference-oracle.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 13,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-registry-fixtures.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 18,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-reverse-search-preview.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-search-workbench.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rdap-transport.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 25,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registrar-rdap.test.mts",
       "lane": "unit",
-      "weightMs": 20,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registrar-standing.test.mts",
       "lane": "unit",
-      "weightMs": 77,
+      "weightMs": 207,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registration-disclosure-plan.test.mts",
       "lane": "unit",
       "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-capabilities.test.mts",
       "lane": "unit",
-      "weightMs": 35,
+      "weightMs": 46,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-collection-admission.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-comparison.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-dates.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-drift-audit.test.mts",
       "lane": "unit",
-      "weightMs": 26,
+      "weightMs": 30,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-drift-workflow.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-fixture-tooling.test.mts",
       "lane": "unit",
-      "weightMs": 23,
+      "weightMs": 24,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-insights.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 8,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-standards-coverage.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/registry-support-view.test.mts",
       "lane": "unit",
-      "weightMs": 74,
+      "weightMs": 95,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/relationship-admission-preview.test.mts",
       "lane": "unit",
-      "weightMs": 3,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/relationship-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 33,
+      "weightMs": 52,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/relationship-observation-model.test.mts",
       "lane": "unit",
-      "weightMs": 39,
+      "weightMs": 50,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/release-version-check.test.mts",
       "lane": "unit",
-      "weightMs": 1076,
+      "weightMs": 1333,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/response-policy.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/retained-artifact-diff.test.mts",
       "lane": "unit",
-      "weightMs": 83,
+      "weightMs": 110,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/retained-evidence-timeline.test.mts",
       "lane": "unit",
-      "weightMs": 20,
+      "weightMs": 28,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/retire-browser-catalog.test.mts",
       "lane": "unit",
-      "weightMs": 138,
+      "weightMs": 147,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/reviewed-accuracy-tooling.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/risk-calibration-contract.test.mts",
       "lane": "unit",
-      "weightMs": 231,
+      "weightMs": 307,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/risk-calibration-dashboard.test.mts",
       "lane": "unit",
-      "weightMs": 40,
+      "weightMs": 49,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/risk-calibration-export.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/risk-calibration-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 49,
+      "weightMs": 74,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/rpki-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/safe-fetch-provenance.test.mts",
       "lane": "unit",
-      "weightMs": 27,
+      "weightMs": 36,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/safe-fetch.test.mts",
       "lane": "unit",
-      "weightMs": 10,
+      "weightMs": 15,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/saved-lookup.test.mts",
       "lane": "unit",
-      "weightMs": 51,
+      "weightMs": 62,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-crypto.test.mts",
       "lane": "unit",
-      "weightMs": 36,
+      "weightMs": 46,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-cycle.test.mts",
       "lane": "unit",
-      "weightMs": 31,
+      "weightMs": 33,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-dispatcher.test.mts",
       "lane": "unit",
-      "weightMs": 67,
+      "weightMs": 71,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-function.test.mts",
       "lane": "unit",
-      "weightMs": 9,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-management-function.test.mts",
       "lane": "unit",
-      "weightMs": 55,
+      "weightMs": 66,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-management.test.mts",
       "lane": "unit",
       "weightMs": 52,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-model.test.mts",
       "lane": "unit",
-      "weightMs": 474,
+      "weightMs": 551,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-netlify-store.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 16,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-repository.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitor-runtime.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 46,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scheduled-monitoring-client.test.mts",
       "lane": "unit",
-      "weightMs": 30,
+      "weightMs": 40,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-compatibility.test.mts",
       "lane": "unit",
-      "weightMs": 5279,
+      "weightMs": 6360,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-contract-ownership.test.mts",
       "lane": "unit",
-      "weightMs": 1,
+      "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-lifecycle-registry.test.mts",
       "lane": "unit",
-      "weightMs": 379,
+      "weightMs": 461,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-lifecycle-repository.test.mts",
       "lane": "unit",
-      "weightMs": 13472,
+      "weightMs": 16619,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-lifecycle-v3.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-lifecycle-v4.test.mts",
       "lane": "unit",
-      "weightMs": 36,
+      "weightMs": 48,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/schema-source-coverage.test.mts",
       "lane": "unit",
-      "weightMs": 5673,
+      "weightMs": 7020,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/scoring.test.mts",
       "lane": "unit",
-      "weightMs": 30,
+      "weightMs": 33,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/security-txt.test.mts",
       "lane": "unit",
-      "weightMs": 20,
+      "weightMs": 26,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/server-api-errors.test.mts",
       "lane": "unit",
-      "weightMs": 141,
+      "weightMs": 147,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/server-routing.test.mts",
       "lane": "unit",
-      "weightMs": 116,
+      "weightMs": 118,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/server-typescript-boundary.test.mts",
       "lane": "unit",
-      "weightMs": 2,
+      "weightMs": 4,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/service-binding-dns.test.mts",
       "lane": "unit",
-      "weightMs": 47,
+      "weightMs": 61,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/service-dependency-review.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/service-dependency-signature-audit.test.mts",
       "lane": "unit",
       "weightMs": 3,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/shared-contract-bounds.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/shared-domain-facades.test.mts",
       "lane": "unit",
-      "weightMs": 316,
+      "weightMs": 432,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/shortlist-model.test.mts",
       "lane": "unit",
-      "weightMs": 63,
+      "weightMs": 98,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/smtp-transport-review.test.mts",
       "lane": "unit",
-      "weightMs": 31,
+      "weightMs": 53,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/source-health.test.mts",
       "lane": "unit",
-      "weightMs": 75,
+      "weightMs": 110,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/source-reliability-dashboard.test.mts",
       "lane": "unit",
-      "weightMs": 28,
+      "weightMs": 38,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/source-reliability.test.mts",
       "lane": "unit",
-      "weightMs": 208,
+      "weightMs": 238,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/specialist-workflow-benchmark.test.mts",
       "lane": "unit",
-      "weightMs": 434,
+      "weightMs": 567,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/sslbl-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/sslbl-snapshot-status.test.mts",
       "lane": "unit",
-      "weightMs": 12,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/sslbl-snapshot.test.mts",
       "lane": "unit",
-      "weightMs": 7,
+      "weightMs": 9,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/staged-secret-check.test.mts",
       "lane": "unit",
-      "weightMs": 89,
+      "weightMs": 125,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/static-page-pattern-packs.test.mts",
       "lane": "unit",
       "weightMs": 14,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/stix-indicator-export.test.mts",
       "lane": "unit",
-      "weightMs": 40,
+      "weightMs": 46,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/stix-schema-conformance.test.mts",
       "lane": "unit",
-      "weightMs": 512,
+      "weightMs": 645,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/structured-data-identity.test.mts",
       "lane": "unit",
-      "weightMs": 13,
+      "weightMs": 21,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/synthetic-analyst-journeys.test.mts",
       "lane": "unit",
-      "weightMs": 302,
+      "weightMs": 353,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-example-review.test.mts",
       "lane": "unit",
-      "weightMs": 84,
+      "weightMs": 104,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-fixture-review.test.mts",
       "lane": "unit",
-      "weightMs": 43,
+      "weightMs": 45,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-review-candidate.test.mts",
       "lane": "unit",
-      "weightMs": 133,
+      "weightMs": 178,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-reviewed-fixtures.test.mts",
       "lane": "unit",
-      "weightMs": 46,
+      "weightMs": 53,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-signature-benchmark.test.mts",
       "lane": "unit",
-      "weightMs": 239,
+      "weightMs": 298,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-signature-scaffold.test.mts",
       "lane": "unit",
       "weightMs": 9,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/technology-source-verify.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 19,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/test-duration-reporter.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 20,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/theme-assets.test.mts",
       "lane": "unit",
-      "weightMs": 8,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/theme.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/third-party-notices.test.mts",
       "lane": "unit",
-      "weightMs": 150,
+      "weightMs": 161,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/threat-intelligence-contract.test.mts",
       "lane": "unit",
-      "weightMs": 63,
+      "weightMs": 84,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/threat-provider-conformance.test.mts",
       "lane": "unit",
-      "weightMs": 32,
+      "weightMs": 45,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/threatfox-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 38,
+      "weightMs": 59,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/timeout-covers-body-read.test.mts",
       "lane": "unit",
-      "weightMs": 136,
+      "weightMs": 137,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/tls-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 34,
+      "weightMs": 48,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/tlsa-evidence.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 7,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/trust-store-comparison.test.mts",
       "lane": "unit",
-      "weightMs": 14,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/typescript-boundary.test.mts",
       "lane": "unit",
-      "weightMs": 22,
+      "weightMs": 39,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/typosquat-generator.test.mts",
       "lane": "unit",
-      "weightMs": 52,
+      "weightMs": 72,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/unicode-confusable-projection.test.mts",
       "lane": "unit",
-      "weightMs": 28,
+      "weightMs": 52,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/urlhaus-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 40,
+      "weightMs": 61,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/urlscan-intelligence.test.mts",
       "lane": "unit",
-      "weightMs": 41,
+      "weightMs": 57,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/utils.test.mts",
       "lane": "unit",
-      "weightMs": 1120,
+      "weightMs": 1518,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/verification-architecture.test.mts",
       "lane": "unit",
-      "weightMs": 999,
+      "weightMs": 1359,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/verification-state-machines.test.mts",
       "lane": "unit",
-      "weightMs": 257,
+      "weightMs": 329,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/visualization-models.test.mts",
       "lane": "unit",
-      "weightMs": 401,
+      "weightMs": 546,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/wacz-evidence-import.test.mts",
       "lane": "unit",
-      "weightMs": 251,
+      "weightMs": 318,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/warc-evidence-import.test.mts",
       "lane": "unit",
-      "weightMs": 24,
+      "weightMs": 27,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/watchlist-history.test.mts",
       "lane": "unit",
       "weightMs": 36,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/watchlist-store.test.mts",
       "lane": "unit",
-      "weightMs": 169,
+      "weightMs": 213,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/web-capture-import.test.mts",
       "lane": "unit",
-      "weightMs": 11,
+      "weightMs": 12,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/website-activity.test.mts",
       "lane": "unit",
-      "weightMs": 93,
+      "weightMs": 124,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/website-profile-clusters.test.mts",
       "lane": "unit",
-      "weightMs": 15,
+      "weightMs": 17,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/website-security-posture.test.mts",
       "lane": "unit",
       "weightMs": 10,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/website-snapshot-model.test.mts",
       "lane": "unit",
-      "weightMs": 424,
+      "weightMs": 476,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/website-technology.test.mts",
       "lane": "unit",
-      "weightMs": 139,
+      "weightMs": 181,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-address-failover.test.mts",
       "lane": "unit",
-      "weightMs": 4,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-authority.test.mts",
       "lane": "unit",
-      "weightMs": 26,
+      "weightMs": 45,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-contacts.test.mts",
       "lane": "unit",
-      "weightMs": 29,
+      "weightMs": 36,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-deadline.test.mts",
       "lane": "unit",
-      "weightMs": 6,
+      "weightMs": 5,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-encoding.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-query-profile.test.mts",
       "lane": "unit",
-      "weightMs": 5,
+      "weightMs": 6,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-referral-guard.test.mts",
       "lane": "unit",
-      "weightMs": 8,
+      "weightMs": 11,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/whois-registry-fixtures.test.mts",
       "lane": "unit",
-      "weightMs": 168,
+      "weightMs": 209,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-archive-crypto.test.mts",
       "lane": "unit",
-      "weightMs": 3124,
+      "weightMs": 3377,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-archive.test.mts",
       "lane": "unit",
-      "weightMs": 247,
+      "weightMs": 367,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-domain-facades.test.mts",
       "lane": "unit",
-      "weightMs": 93,
+      "weightMs": 110,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-import-failure.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-portability-lifecycle.test.mts",
       "lane": "unit",
-      "weightMs": 54,
+      "weightMs": 77,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/workspace-rollback.test.mts",
       "lane": "unit",
       "weightMs": 2,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
       "file": "test/zone-intent-review.test.mts",
       "lane": "unit",
-      "weightMs": 21,
+      "weightMs": 29,
       "sampleCount": 3,
-      "provenanceId": "unit-local-repair-20260905"
+      "provenanceId": "unit-local-structural-ownership-20260906"
     }
   ]
 }

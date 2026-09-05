@@ -77,6 +77,15 @@ Pass repository-relative paths after `--` to verify a smaller declared change,
 or add `--list` to inspect the plan without running it. This is an iteration
 boundary, not release evidence.
 
+For mechanical changes, edit the domain owner first: CLI option grammar belongs
+to `cli/command-reference.mts`; Case identities and transitions belong to the
+Case contracts and operations; Case persistence and audience treatment belongs
+to `case-record-projection.mts`. Generated help, completion and public reference
+outputs derive from those owners. Browser tests consume only the served build
+and private build-identity marker declared by the frontend build owner. The
+focused plan selects the affected derived consumers while immutable historical
+fixtures remain independent compatibility evidence.
+
 The parity command requires the exact `.nvmrc` runtime, a Node 26 executable on
 `PATH` for the CLI compatibility lane, and a clean worktree. Set
 `WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime

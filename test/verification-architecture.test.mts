@@ -326,6 +326,64 @@ describe('verification architecture contracts', () => {
     );
   });
 
+  test('selects derived coverage for each structural change owner', () => {
+    const rehearsals = [
+      {
+        kind: 'isolated presentation',
+        path: 'frontend/src/lib/components/LookupAtAGlance.svelte',
+        owner: 'frontend user-facing routes and components',
+        unit: 'test/model-contract-properties.test.mts',
+        browser: 'e2e/lookup-interaction-design.spec.ts',
+        specialised: 'architecture',
+        excluded: 'cli-package',
+      },
+      {
+        kind: 'Case status decision',
+        path: 'packages/cases/case-record-operations.mts',
+        owner: 'Case domain and response lifecycle',
+        unit: 'test/case-record-ownership.test.mts',
+        browser: 'e2e/cases.spec.ts',
+        specialised: 'privacy-catalogue',
+      },
+      {
+        kind: 'CLI option',
+        path: 'cli/command-reference.mts',
+        owner: 'CLI command and installed-package surface',
+        unit: 'test/cli-command-registry.test.mts',
+        browser: null,
+        specialised: 'cli-package',
+      },
+      {
+        kind: 'portable Case field',
+        path: 'packages/cases/case-record-projection.mts',
+        owner: 'Case domain and response lifecycle',
+        unit: 'test/cli-case-pack.test.mts',
+        browser: 'e2e/case-import-workflows.spec.ts',
+        specialised: 'schema-inventory',
+      },
+      {
+        kind: 'browser-test support artefact',
+        path: 'tools/frontend-build-integrity.mts',
+        owner: 'maintainer verification tooling',
+        unit: 'test/frontend-build-integrity.test.mts',
+        browser: 'e2e/deferred-recovery.spec.ts',
+        specialised: 'browser-build',
+      },
+    ] as const;
+
+    for (const rehearsal of rehearsals) {
+      const assignment = buildVerificationOwnershipPlan([rehearsal.path]).assignments[0]!;
+      assert.equal(assignment.ownershipArea, rehearsal.owner, rehearsal.kind);
+      assert.ok(assignment.focusedUnitChecks.includes(rehearsal.unit), rehearsal.kind);
+      if (rehearsal.browser) assert.ok(assignment.focusedBrowserChecks.includes(rehearsal.browser), rehearsal.kind);
+      else assert.deepEqual(assignment.focusedBrowserChecks, [], rehearsal.kind);
+      assert.ok(assignment.mandatorySpecialisedChecks.includes(rehearsal.specialised), rehearsal.kind);
+      if ('excluded' in rehearsal) {
+        assert.equal(assignment.mandatorySpecialisedChecks.includes(rehearsal.excluded), false, rehearsal.kind);
+      }
+    }
+  });
+
   test('plans shared browser support changes against the complete functional inventory', () => {
     const functionalInventory = readVerificationTestInventory()
       .filter(isPlaywrightFunctionalSpec)
@@ -465,7 +523,7 @@ describe('verification architecture contracts', () => {
     }
   });
 
-  test('runs a real production build and loading report for build-boundary tooling', () => {
+  test('runs a real production build, loading report and recovery check for build-boundary tooling', () => {
     const ownership = buildVerificationOwnershipPlan(['tools/frontend-build-integrity.mts']);
     const execution = buildFocusedVerificationExecution(ownership);
     const ids = execution.commands.map((command) => command.id);
@@ -476,7 +534,7 @@ describe('verification architecture contracts', () => {
     assert.ok(loading > build);
     assert.equal(ids.filter((id) => id === 'build').length, 1);
     assert.equal(execution.cleanupBrowserArtifacts, true);
-    assert.deepEqual(execution.browserSpecs, []);
+    assert.deepEqual(execution.browserSpecs, ['e2e/deferred-recovery.spec.ts']);
   });
 
   test('closes application-version changes over derived fixtures, documentation, and release gates', () => {

@@ -125,7 +125,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'case-domain', area: 'Case domain and response lifecycle', priority: 40,
     matches: (value: string) => value.startsWith('packages/cases/'),
-    focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts', 'test/case-portability-lifecycle.test.mts', 'test/model-contract-properties.test.mts'),
+    focusedUnit: unit('test/case-model.test.mts', 'test/case-record-ownership.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts', 'test/case-portability-lifecycle.test.mts', 'test/model-contract-properties.test.mts'),
     focusedBrowser: browser(
       'e2e/cases.spec.ts',
       'e2e/case-evidence-workflows.spec.ts',
@@ -133,6 +133,26 @@ const RULES: readonly VerificationRule[] = Object.freeze([
       'e2e/case-import-workflows.spec.ts',
     ),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'critical-mutation', 'analyst-journey-assurance'),
+    browserRequired: true,
+  }),
+  Object.freeze({
+    id: 'case-projection-impact', area: 'Case persistence and audience projections', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => [
+      'packages/cases/case-record-contracts.mts',
+      'packages/cases/case-record-projection.mts',
+      'packages/cases/case-storage-model.mts',
+      'packages/contracts/case-portability.mts',
+      'cli/case-pack.mts',
+    ].includes(value),
+    focusedUnit: unit(
+      'test/case-record-ownership.test.mts',
+      'test/case-portability-lifecycle.test.mts',
+      'test/cli-case-pack.test.mts',
+      'test/artifact-verify.test.mts',
+    ),
+    focusedBrowser: browser('e2e/case-import-workflows.spec.ts', 'e2e/cases.spec.ts'),
+    specialised: specialised('schema-inventory', 'privacy-catalogue', 'cli-package'),
     browserRequired: true,
   }),
   Object.freeze({
@@ -181,6 +201,24 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-process.test.mts', 'test/cli-investigation-run.test.mts'),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'cli-package', 'release-contract', 'staged-security'),
+    browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'cli-command-contract-impact', area: 'CLI command grammar and generated references', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => [
+      'packages/contracts/cli-command-semantics.mts',
+      'packages/contracts/cli-command-catalogue.mts',
+      'cli/command-reference.mts',
+      'cli/command-argument-grammar.mts',
+      'cli/arguments.mts',
+      'cli/command-catalogue.mts',
+      'cli/completion.mts',
+      'cli/manual.mts',
+    ].includes(value),
+    focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-process.test.mts'),
+    focusedBrowser: browser(),
+    specialised: specialised('capability-catalogue', 'privacy-catalogue', 'schema-inventory', 'cli-package', 'release-contract'),
     browserRequired: false,
   }),
   Object.freeze({
@@ -401,6 +439,27 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedBrowser: browser(),
     specialised: specialised('browser-build', 'browser-loading-report'),
     browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'browser-test-artifact-impact', area: 'browser test artefact hand-off', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => [
+      '.github/workflows/ci.yml',
+      'tools/ci-verification.mts',
+      'tools/frontend-build-integrity.mts',
+      'tools/hosted-browser-workspace.mts',
+      'tools/playwright-balanced-suite.mts',
+      'tools/playwright-balanced-shard.mts',
+      'e2e/deferred-recovery.spec.ts',
+    ].includes(value),
+    focusedUnit: unit(
+      'test/frontend-build-integrity.test.mts',
+      'test/ci-workflow.test.mts',
+      'test/verification-architecture.test.mts',
+    ),
+    focusedBrowser: browser('e2e/deferred-recovery.spec.ts'),
+    specialised: specialised('browser-build', 'browser-timing-plan', 'workflow-closure'),
+    browserRequired: true,
   }),
   Object.freeze({
     id: 'unit-tests', area: 'unit and model verification', priority: 30,
