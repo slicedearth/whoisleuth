@@ -1,10 +1,14 @@
 import {
   MAX_WEBSITE_SNAPSHOTS,
+  canonicalWebsiteSourceState,
   compareWebsiteSnapshots,
   normalizeWebsiteProfileSnapshot,
+  reconciledWebsiteSourceState,
+  websiteSnapshotFieldComplete,
+  websiteSnapshotFieldSource,
+  websiteWithReconciledSources,
   type WebsiteProfileSnapshot,
   type WebsiteSnapshotChange,
-  type WebsiteSnapshotSource,
 } from './website-snapshot-model.ts';
 import {
   comparisonLedgerCollector,
@@ -19,48 +23,12 @@ import {
   type RawComparisonLedgerSide,
 } from './comparison-ledger-contract.ts';
 
-const MAX_RECONCILED_WEBSITE_SOURCES = 16;
 const RELEVANT_WEBSITE_SOURCE_IDS = Object.freeze(['dns', 'http', 'tls']);
 const UNAVAILABLE_WEBSITE_SOURCE_STATES = new Set(['blocked', 'error', 'not_found', 'rate_limited', 'unavailable', 'unsupported']);
 
 function websiteCompleteness(snapshot: WebsiteProfileSnapshot): ComparisonLedgerCompleteness {
   if (snapshot.complete && !snapshot.truncated) return 'complete';
   return snapshot.truncated || !snapshot.complete ? 'partial' : 'not_reported';
-}
-
-function canonicalWebsiteSourceState(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/gu, '_');
-}
-
-function websiteSourceStateSeverity(value: string): number {
-  if (UNAVAILABLE_WEBSITE_SOURCE_STATES.has(value)) return 2;
-  return ['complete', 'success'].includes(value) ? 0 : 1;
-}
-
-function reconciledWebsiteSources(snapshot: WebsiteProfileSnapshot): WebsiteSnapshotSource[] {
-  const selected = new Map<string, Readonly<{ state: string; severity: number }>>();
-  for (const source of snapshot.sources.slice(0, MAX_RECONCILED_WEBSITE_SOURCES)) {
-    const sourceId = source.source.trim().toLowerCase();
-    if (!sourceId) continue;
-    const state = canonicalWebsiteSourceState(source.state);
-    const severity = websiteSourceStateSeverity(state);
-    const current = selected.get(sourceId);
-    if (!current || severity > current.severity || (severity === current.severity && state.localeCompare(current.state) < 0)) {
-      selected.set(sourceId, { state, severity });
-    }
-  }
-  return [...selected.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([source, value]) => ({ source, state: value.state }));
-}
-
-function websiteWithReconciledSources(snapshot: WebsiteProfileSnapshot): WebsiteProfileSnapshot {
-  return { ...snapshot, sources: reconciledWebsiteSources(snapshot) };
-}
-
-function reconciledWebsiteSourceState(snapshot: WebsiteProfileSnapshot, sourceId: string): string | null {
-  const canonicalId = sourceId.trim().toLowerCase();
-  return reconciledWebsiteSources(snapshot).find((source) => source.source === canonicalId)?.state ?? null;
 }
 
 function websiteRetainedCompleteness(snapshot: WebsiteProfileSnapshot): ComparisonLedgerCompleteness {
@@ -84,30 +52,9 @@ function websiteFamily(field: string): string {
   return field.split('.')[0] || 'website';
 }
 
-function websiteFieldSource(field: string): string {
-  if (field.startsWith('certificate.')) return 'tls';
-  if (field.startsWith('source.')) return field.slice('source.'.length);
-  if (field.startsWith('dependency.')) {
-    const recordType = field.slice('dependency.'.length).split(':')[0];
-    return recordType === 'HTTP' ? 'http' : 'dns';
-  }
-  if (['technology', 'posture', 'identity', 'identityValues'].some((family) => field.startsWith(family))) return 'http';
-  return '';
-}
-
 function completeWebsiteSourceState(value: string): boolean {
   const state = canonicalWebsiteSourceState(value);
   return state === 'complete' || state === 'success';
-}
-
-function websiteFamilyComplete(snapshot: WebsiteProfileSnapshot, field: string): boolean {
-  const sourceName = websiteFieldSource(field);
-  const retainedSource = sourceName ? reconciledWebsiteSourceState(snapshot, sourceName) : null;
-  const retainedSourceComplete = !retainedSource || completeWebsiteSourceState(retainedSource);
-  if (field.startsWith('certificate.')) {
-    return Boolean(snapshot.certificate?.complete && !snapshot.certificate.truncated && retainedSourceComplete);
-  }
-  return snapshot.complete && !snapshot.truncated && retainedSourceComplete;
 }
 
 function websiteSourceState(snapshot: WebsiteProfileSnapshot, field: string): string {
@@ -119,7 +66,7 @@ function websiteSourceState(snapshot: WebsiteProfileSnapshot, field: string): st
     if (retained && !completeWebsiteSourceState(retained)) return retained;
     return snapshot.certificate.complete ? retained ?? 'complete' : 'partial';
   }
-  const sourceName = websiteFieldSource(field);
+  const sourceName = websiteSnapshotFieldSource(field);
   const retained = sourceName ? reconciledWebsiteSourceState(snapshot, sourceName) : null;
   return retained ?? (websiteCompleteness(snapshot) === 'complete' ? 'complete' : 'partial');
 }
@@ -145,12 +92,16 @@ function websiteChangeState(
   if (change.field.startsWith('source.')) return 'collection_changed';
   if (change.state === 'added') return 'added';
   if (change.state === 'removed') {
-    if (websiteFamilyComplete(later, change.field)) return 'removed';
+    if (websiteSnapshotFieldComplete(later, change.field)) return 'removed';
     const state = websiteSourceState(later, change.field);
     if (state === 'unsupported') return 'unsupported';
     return ['error', 'unavailable', 'not_found'].includes(state) ? 'unavailable' : 'incomplete';
   }
-  if (change.state === 'incomparable') return 'collection_changed';
+  if (change.state === 'incomparable') {
+    return change.field === 'completeness' || change.field.endsWith('.profileVersion')
+      ? 'collection_changed'
+      : 'incomplete';
+  }
   if (change.state === 'unavailable') {
     const state = websiteSourceState(later, change.field);
     if (state === 'unsupported') return 'unsupported';
@@ -166,7 +117,7 @@ function websiteChangeCompleteness(
 ): ComparisonLedgerCompleteness {
   if (state === 'unavailable' || state === 'unsupported') return 'unavailable';
   if (state === 'added' || state === 'removed' || state === 'different') {
-    return websiteFamilyComplete(later, change.field) ? 'complete' : 'partial';
+    return websiteSnapshotFieldComplete(later, change.field) ? 'complete' : 'partial';
   }
   return 'partial';
 }

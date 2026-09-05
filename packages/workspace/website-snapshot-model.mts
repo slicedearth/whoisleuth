@@ -393,17 +393,104 @@ export function mergeWebsiteSnapshots(localRaw: unknown, incomingRaw: unknown) {
   return { snapshots, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
 }
 
+const MAX_RECONCILED_WEBSITE_SOURCES = 16;
+const UNAVAILABLE_WEBSITE_SOURCE_STATES = new Set([
+  'blocked', 'error', 'not_found', 'rate_limited', 'unavailable', 'unsupported',
+]);
+
+export function canonicalWebsiteSourceState(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/gu, '_');
+}
+
+function websiteSourceStateSeverity(value: string): number {
+  if (UNAVAILABLE_WEBSITE_SOURCE_STATES.has(value)) return 2;
+  return ['complete', 'success'].includes(value) ? 0 : 1;
+}
+
+export function reconciledWebsiteSources(snapshot: WebsiteProfileSnapshot): WebsiteSnapshotSource[] {
+  const selected = new Map<string, Readonly<{ state: string; severity: number }>>();
+  for (const sourceEntry of snapshot.sources.slice(0, MAX_RECONCILED_WEBSITE_SOURCES)) {
+    const sourceId = sourceEntry.source.trim().toLowerCase();
+    if (!sourceId) continue;
+    const state = canonicalWebsiteSourceState(sourceEntry.state);
+    const severity = websiteSourceStateSeverity(state);
+    const current = selected.get(sourceId);
+    if (!current || severity > current.severity || (severity === current.severity && state.localeCompare(current.state) < 0)) {
+      selected.set(sourceId, { state, severity });
+    }
+  }
+  return [...selected.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([sourceName, value]) => ({ source: sourceName, state: value.state }));
+}
+
+export function websiteWithReconciledSources(snapshot: WebsiteProfileSnapshot): WebsiteProfileSnapshot {
+  return { ...snapshot, sources: reconciledWebsiteSources(snapshot) };
+}
+
+export function reconciledWebsiteSourceState(
+  snapshot: WebsiteProfileSnapshot,
+  sourceId: string,
+): string | null {
+  const canonicalId = sourceId.trim().toLowerCase();
+  return reconciledWebsiteSources(snapshot)
+    .find((sourceEntry) => sourceEntry.source === canonicalId)?.state ?? null;
+}
+
+function completeWebsiteSourceState(value: string): boolean {
+  const state = canonicalWebsiteSourceState(value);
+  return state === 'complete' || state === 'success';
+}
+
+export function websiteSnapshotFieldSource(field: string): string {
+  if (field.startsWith('certificate.')) return 'tls';
+  if (field.startsWith('source.')) return field.slice('source.'.length);
+  if (field.startsWith('dependency.')) {
+    const recordType = field.slice('dependency.'.length).split(':')[0];
+    return recordType === 'HTTP' ? 'http' : 'dns';
+  }
+  if (['technology', 'posture', 'identity'].some((family) => field.startsWith(family))) return 'http';
+  return '';
+}
+
+export function websiteSnapshotFieldComplete(snapshot: WebsiteProfileSnapshot, field: string): boolean {
+  const sourceName = websiteSnapshotFieldSource(field);
+  const retainedSource = sourceName ? reconciledWebsiteSourceState(snapshot, sourceName) : null;
+  const retainedSourceComplete = !retainedSource || completeWebsiteSourceState(retainedSource);
+  if (field.startsWith('certificate.')) {
+    return Boolean(snapshot.certificate?.complete && !snapshot.certificate.truncated && retainedSourceComplete);
+  }
+  return snapshot.complete && !snapshot.truncated && retainedSourceComplete;
+}
+
+export function websiteSnapshotComparisonEvidenceComplete(snapshot: WebsiteProfileSnapshot): boolean {
+  return websiteSnapshotFieldComplete(snapshot, 'technology')
+    && websiteSnapshotFieldComplete(snapshot, 'posture')
+    && websiteSnapshotFieldComplete(snapshot, 'identity')
+    && websiteSnapshotFieldComplete(snapshot, 'dependency.CNAME')
+    && (!snapshot.certificate || websiteSnapshotFieldComplete(snapshot, 'certificate.observation'));
+}
+
 function compareMap(
   field: string,
   before: ReadonlyMap<string, string>,
   after: ReadonlyMap<string, string>,
+  options: Readonly<{
+    beforeComplete?: (key: string) => boolean;
+    afterComplete?: (key: string) => boolean;
+  }> = {},
 ): WebsiteSnapshotChange[] {
   const changes: WebsiteSnapshotChange[] = [];
   for (const key of [...new Set([...before.keys(), ...after.keys()])].sort()) {
     const left = before.get(key) ?? null;
     const right = after.get(key) ?? null;
     if (left === right) continue;
-    changes.push({ field: `${field}.${key}`, state: left === null ? 'added' : right === null ? 'removed' : 'changed', before: left, after: right });
+    const state = left === null
+      ? options.beforeComplete?.(key) === false ? 'incomparable' : 'added'
+      : right === null
+        ? options.afterComplete?.(key) === false ? 'incomparable' : 'removed'
+        : 'changed';
+    changes.push({ field: `${field}.${key}`, state, before: left, after: right });
   }
   return changes;
 }
@@ -413,6 +500,7 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   if (!before || !after || before.domain !== after.domain) {
     return {
       compatible: false,
+      complete: false,
       changes: [{ field: 'snapshot', state: 'incomparable', before: before?.domain ?? null, after: after?.domain ?? null }] as WebsiteSnapshotChange[],
       dependencyTransitions: [] as WebsiteDependencyTransition[],
     };
@@ -432,6 +520,10 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       'technology',
       new Map(before.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}|${item.roles.join(',')}`])),
       new Map(after.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}|${item.roles.join(',')}`])),
+      {
+        beforeComplete: () => websiteSnapshotFieldComplete(before, 'technology'),
+        afterComplete: () => websiteSnapshotFieldComplete(after, 'technology'),
+      },
     ) : [{
       field: 'technology.profileVersion',
       state: technologyComparability === 'detector_changed' ? 'changed' as const : 'incomparable' as const,
@@ -442,6 +534,10 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       'posture',
       new Map(before.posture.map((item) => [item.id, item.state])),
       new Map(after.posture.map((item) => [item.id, item.state])),
+      {
+        beforeComplete: () => websiteSnapshotFieldComplete(before, 'posture'),
+        afterComplete: () => websiteSnapshotFieldComplete(after, 'posture'),
+      },
     ) : [{
       field: 'posture.profileVersion',
       state: postureComparability === 'detector_changed' ? 'changed' as const : 'incomparable' as const,
@@ -453,6 +549,10 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       'dependency',
       new Map(before.dependencies.map((item) => [`${item.recordType}:${item.target}`, `${item.state}|${item.qualification}`])),
       new Map(after.dependencies.map((item) => [`${item.recordType}:${item.target}`, `${item.state}|${item.qualification}`])),
+      {
+        beforeComplete: (key) => websiteSnapshotFieldComplete(before, `dependency.${key}`),
+        afterComplete: (key) => websiteSnapshotFieldComplete(after, `dependency.${key}`),
+      },
     ),
   ];
   const dependencyTransitions: WebsiteDependencyTransition[] = [];
@@ -475,9 +575,9 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
         state: 'active_to_unresolved',
         detail: 'An earlier active dependency is unresolved in the later retained observation. Resolver or collection failure remains possible.',
       });
-    } else if (!left && right) {
+    } else if (!left && right && websiteSnapshotFieldComplete(before, `dependency.${key}`)) {
       dependencyTransitions.push({ target: right.target, recordType: right.recordType, state: 'added', detail: 'This dependency first appears in the later retained snapshot.' });
-    } else if (left && !right && after.complete) {
+    } else if (left && !right && websiteSnapshotFieldComplete(after, `dependency.${key}`)) {
       dependencyTransitions.push({ target: left.target, recordType: left.recordType, state: 'removed', detail: 'This dependency is not represented in the later complete snapshot. It may have been intentionally removed or replaced.' });
     }
     if (dependencyTransitions.length >= 20) break;
@@ -493,16 +593,28 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       'identityValues.resourceHosts',
       new Map(before.identityValues.resourceHosts.map((item) => [item, item])),
       new Map(after.identityValues.resourceHosts.map((item) => [item, item])),
+      {
+        beforeComplete: () => websiteSnapshotFieldComplete(before, 'identityValues.resourceHosts'),
+        afterComplete: () => websiteSnapshotFieldComplete(after, 'identityValues.resourceHosts'),
+      },
     ),
     ...compareMap(
       'identityValues.trackingIdentifiers',
       new Map(before.identityValues.trackingIdentifiers.map((item) => [`${item.type}:${item.value}`, item.value])),
       new Map(after.identityValues.trackingIdentifiers.map((item) => [`${item.type}:${item.value}`, item.value])),
+      {
+        beforeComplete: () => websiteSnapshotFieldComplete(before, 'identityValues.trackingIdentifiers'),
+        afterComplete: () => websiteSnapshotFieldComplete(after, 'identityValues.trackingIdentifiers'),
+      },
     ),
     ...compareMap(
       'identityValues.formActionOrigins',
       new Map(before.identityValues.formActionOrigins.map((item) => [item, item])),
       new Map(after.identityValues.formActionOrigins.map((item) => [item, item])),
+      {
+        beforeComplete: () => websiteSnapshotFieldComplete(before, 'identityValues.formActionOrigins'),
+        afterComplete: () => websiteSnapshotFieldComplete(after, 'identityValues.formActionOrigins'),
+      },
     ),
   );
   if (before.certificate || after.certificate) {
@@ -546,6 +658,10 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   }
   return {
     compatible: true,
+    complete: websiteSnapshotComparisonEvidenceComplete(before)
+      && websiteSnapshotComparisonEvidenceComplete(after)
+      && technologyComparability === 'comparable'
+      && postureComparability === 'comparable',
     profileComparability: {
       technology: technologyComparability,
       securityPosture: postureComparability,

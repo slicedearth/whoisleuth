@@ -56,6 +56,12 @@ describe('browser-local source reliability dashboard', () => {
     assert.equal(rdap?.tone, 'attention');
     assert.equal(reliabilityRateLabel(rdap?.failureRate ?? null), '17%');
     assert.equal(reliabilityDurationLabel(rdap?.p95DurationMs ?? null), '900 ms');
+    const whois = dashboard.rows.find((row) => row.source === 'whois');
+    assert.equal(whois?.stateSamples, 6);
+    assert.equal(whois?.eligibleStateSamples, 0);
+    assert.equal(whois?.failureRate, null);
+    assert.equal(whois?.tone, 'limited');
+    assert.match(whois?.sampleLabel ?? '', /No collected samples.*6 skipped or unsupported/u);
   });
 
   test('rejects retained targets, inconsistent state counts, and oversized input', () => {

@@ -66,6 +66,30 @@ test('certificate policy review preserves bounded CAA account and validation con
   assert.equal(review.findings.find((item) => item.id === 'caa')?.state, 'aligned');
 });
 
+test('certificate policy review retains explicit issue and issuewild denial policies', () => {
+  for (const tag of ['issue', 'issuewild'] as const) {
+    const review = buildCertificatePolicyReview({
+      dnsEvidence: { source: 'dns', status: 'success', complete: true, truncated: false },
+      dnsRecords: { caa: [{ tag, value: ';', critical: 0 }] },
+      tlsEvidence: { source: 'tls', status: 'success', complete: true, truncated: false },
+      tlsIssuer: { organization: 'Example Issuer' },
+      tlsAltNames: { dnsNames: tag === 'issuewild' ? ['*.example.test'] : ['example.test'] },
+    });
+    assert.deepEqual(review.caaAuthorizations, [{
+      tag,
+      issuer: '',
+      critical: 0,
+      accountUris: [],
+      validationMethods: [],
+      unrecognizedParameters: [],
+    }]);
+    const caa = review.findings.find((item) => item.id === 'caa');
+    assert.equal(caa?.state, 'apparently_outside_current_policy');
+    assert.deepEqual(caa?.expected, ['No issuer authorised']);
+    assert.match(caa?.detail ?? '', /explicitly authorises no issuer/u);
+  }
+});
+
 test('certificate policy review reports apparent mismatch without claiming historic violation', () => {
   const review = buildCertificatePolicyReview({
     dnsEvidence: { source: 'dns', status: 'success', complete: true },
@@ -158,4 +182,24 @@ test('certificate policy review treats complete names outside reviewed patterns 
   const finding = review.findings.find((item) => item.id === 'expected_san');
   assert.equal(finding?.state, 'changed');
   assert.match(finding?.detail ?? '', /outside the reviewed patterns/u);
+});
+
+test('certificate policy review keeps a partial or truncated SAN set indeterminate', () => {
+  for (const tlsAltNames of [
+    { dnsNames: ['example.test'], dnsNameCount: 2, truncated: true },
+    { dnsNames: ['example.test'], dnsNameCount: 2, truncated: false },
+  ]) {
+    const review = buildCertificatePolicyReview({
+      dnsEvidence: { source: 'dns', status: 'success', complete: true },
+      dnsRecords: { caa: [] },
+      tlsEvidence: { source: 'tls', status: 'partial', complete: false, truncated: true },
+      tlsIssuer: { organization: 'Example Issuer' },
+      tlsAltNames,
+      baseline,
+    });
+    const finding = review.findings.find((item) => item.id === 'expected_san');
+    assert.equal(finding?.state, 'indeterminate');
+    assert.deepEqual(finding?.observed, ['example.test']);
+    assert.match(finding?.detail ?? '', /partial or truncated/u);
+  }
 });

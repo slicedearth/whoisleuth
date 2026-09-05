@@ -11,6 +11,8 @@ type DurationTrend = 'faster' | 'slower' | 'steady' | 'unmeasured';
 export type SourceReliabilityDashboardRow = Readonly<{
   source: string;
   stateSamples: number;
+  eligibleStateSamples: number;
+  uncollectedStateSamples: number;
   observationSamples: number;
   timingSamples: number;
   failureRate: number | null;
@@ -157,7 +159,7 @@ function timelineTrend(value: unknown, label: string): DurationTrend {
 }
 
 function rowTone(row: Omit<SourceReliabilityDashboardRow, 'tone' | 'sampleLabel'>): ReliabilityTone {
-  if (row.stateSamples < 5) return 'limited';
+  if (row.eligibleStateSamples < 5) return 'limited';
   if ((row.failureRate ?? 0) > 0.1 || (row.partialRate ?? 0) > 0.25 || (row.rateLimitedRate ?? 0) > 0.05) return 'attention';
   if ((row.failureRate ?? 0) === 0 && (row.partialRate ?? 0) <= 0.1) return 'healthy';
   return 'neutral';
@@ -236,6 +238,9 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
       return sum + valueCount;
     }, 0);
     if (countedStates !== stateSamples) throw new Error(`${source.source} has inconsistent state samples.`);
+    const uncollectedStateSamples = ['disabled', 'not_applicable', 'skipped', 'unsupported']
+      .reduce((sum, state) => sum + (stateCounts.get(state) ?? 0), 0);
+    const eligibleStateSamples = stateSamples - uncollectedStateSamples;
     const rates = record(source.rates, `${source.source} rates`);
     exactKeys(rates, RATE_KEYS, `${source.source} rates`);
     const failureRate = rate(rates.failure, `${source.source} failure rate`);
@@ -272,19 +277,30 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
     const base = {
       source: source.source,
       stateSamples,
+      eligibleStateSamples,
+      uncollectedStateSamples,
       observationSamples,
       timingSamples,
-      failureRate,
-      partialRate,
+      failureRate: expectedRate(
+        (stateCounts.get('error') ?? 0) + (stateCounts.get('unavailable') ?? 0),
+        eligibleStateSamples,
+      ),
+      partialRate: expectedRate(stateCounts.get('partial') ?? 0, eligibleStateSamples),
       truncatedRate,
-      rateLimitedRate,
+      rateLimitedRate: expectedRate(rateLimitedCount, eligibleStateSamples),
       p95DurationMs: observationP95 ?? timingP95,
       durationTrend: timelineTrend(source.durationTimeline, `${source.source} duration timeline`),
     } as const;
     return Object.freeze({
       ...base,
       tone: rowTone(base),
-      sampleLabel: stateSamples < 5 ? 'Limited sample' : `${stateSamples} state samples`,
+      sampleLabel: eligibleStateSamples === 0
+        ? `No collected samples · ${uncollectedStateSamples} skipped or unsupported`
+        : eligibleStateSamples < 5
+          ? `Limited sample · ${eligibleStateSamples} eligible of ${stateSamples}`
+          : uncollectedStateSamples
+            ? `${eligibleStateSamples} eligible · ${uncollectedStateSamples} skipped or unsupported`
+            : `${eligibleStateSamples} eligible samples`,
     });
   }).sort((left, right) => {
     const priority = { attention: 0, limited: 1, neutral: 2, healthy: 3 } as const;

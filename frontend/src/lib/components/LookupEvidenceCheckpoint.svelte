@@ -151,7 +151,7 @@
           </article>
         {/each}
       </div>
-      <p class="limit">A failed or incomplete later lookup never replaces the saved checkpoint. Missing, unavailable, conflicting, and not-recorded states remain distinct from a material change.</p>
+      <p class="limit">A failed, incomplete, or differently scoped later lookup never replaces the saved checkpoint. Missing, unavailable, conflicting, incomparable, and not-recorded states remain distinct from a material change.</p>
     </details>
   {/if}
 </section>

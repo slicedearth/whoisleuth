@@ -81,10 +81,13 @@ export function parseCaaAuthorizations(value: unknown): CaaAuthorization[] {
     const candidate = record(item);
     const tag = text(candidate.tag ?? candidate.issue, 32).toLowerCase();
     const rawValue = text(candidate.value ?? candidate.issue, 300);
-    if (!['issue', 'issuewild', 'iodef'].includes(tag) || !rawValue) continue;
+    if (!['issue', 'issuewild', 'iodef'].includes(tag) || (!rawValue && tag === 'iodef')) continue;
     const [rawIssuer = '', ...rawParameters] = rawValue.split(';');
     const issuer = caaParameterValue(rawIssuer).toLowerCase();
-    if (!issuer) continue;
+    const explicitDenial = (tag === 'issue' || tag === 'issuewild')
+      && !issuer
+      && rawValue.startsWith(';');
+    if (!issuer && !explicitDenial) continue;
     const accountUris: string[] = [];
     const validationMethods: string[] = [];
     const unrecognizedParameters: string[] = [];
@@ -189,7 +192,22 @@ function caaFinding(input: Readonly<{
           ],
     };
   }
-  const expected = applicable.map((item) => item.issuer);
+  const issuerAuthorizations = applicable.map((item) => item.issuer).filter(Boolean);
+  const expected = issuerAuthorizations.length ? issuerAuthorizations : ['No issuer authorised'];
+  if (!issuerAuthorizations.length) {
+    return {
+      id: 'caa',
+      label: 'Current CAA and observed issuer',
+      state: input.issuer ? 'apparently_outside_current_policy' : 'indeterminate',
+      observed: input.issuer ? [input.issuer] : [],
+      expected,
+      detail: input.issuer
+        ? 'The applicable current CAA issue policy explicitly authorises no issuer, while a certificate issuer was observed.'
+        : 'The applicable current CAA issue policy explicitly authorises no issuer, but no comparable certificate issuer was retained.',
+      sources: ['DNS', 'TLS certificate'],
+      limitations: fixedLimitations,
+    };
+  }
   const identifiers = issuerIdentifiers(input.issuer);
   if (!input.issuer || !identifiers.length) {
     return {
@@ -203,7 +221,7 @@ function caaFinding(input: Readonly<{
       limitations: fixedLimitations,
     };
   }
-  const aligned = identifiers.some((identifier) => expected.includes(identifier));
+  const aligned = identifiers.some((identifier) => issuerAuthorizations.includes(identifier));
   return {
     id: 'caa',
     label: 'Current CAA and observed issuer',
@@ -275,6 +293,7 @@ export function certificateSanPatternMatches(pattern: string, observed: string):
 function sanBaselineFinding(
   observedNames: readonly string[],
   expectedPatterns: readonly string[],
+  comparable: boolean,
 ): CertificatePolicyFinding {
   if (!expectedPatterns.length) {
     return {
@@ -286,6 +305,20 @@ function sanBaselineFinding(
       detail: 'No reviewed SAN pattern is configured for this official domain.',
       sources: ['TLS certificate', 'Brand Profile'],
       limitations: ['SAN expectations are analyst-authored posture context, not externally verified ownership or control.'],
+    };
+  }
+  if (!comparable) {
+    return {
+      id: 'expected_san',
+      label: 'Reviewed expected certificate names',
+      state: 'indeterminate',
+      observed: observedNames,
+      expected: expectedPatterns,
+      detail: observedNames.length
+        ? 'Some certificate names were retained, but the TLS name set is partial or truncated and cannot establish missing or additional names.'
+        : 'Expected SAN patterns are configured, but current settled TLS evidence did not provide comparable names.',
+      sources: ['TLS certificate', 'Brand Profile'],
+      limitations: ['Certificate names are compared only when the retained TLS source and name set are complete and untruncated.'],
     };
   }
   if (!observedNames.length) {
@@ -337,13 +370,26 @@ export function buildCertificatePolicyReview(input: Readonly<{
   const tlsEvidence = record(input.tlsEvidence);
   const issuer = issuerText(input.tlsIssuer);
   const spki = text(record(input.tlsPublicKey).fingerprintSha256, 64).toLowerCase();
-  const alternativeNames = record(input.tlsAltNames).dnsNames;
+  const tlsAltNames = record(input.tlsAltNames);
+  const alternativeNames = tlsAltNames.dnsNames;
   const observedNames = Array.isArray(alternativeNames)
     ? [...new Set(alternativeNames
       .slice(0, 64)
       .map((item) => text(item, 253).toLowerCase().replace(/\.$/u, ''))
       .filter(Boolean))]
     : [];
+  const declaredDnsNameCount = Number.isSafeInteger(tlsAltNames.dnsNameCount)
+    && Number(tlsAltNames.dnsNameCount) >= 0
+    ? Number(tlsAltNames.dnsNameCount)
+    : null;
+  const tlsNamesComparable = tlsEvidence.source === 'tls'
+    && ['complete', 'success'].includes(text(tlsEvidence.status, 40).toLowerCase())
+    && tlsEvidence.complete === true
+    && tlsEvidence.truncated !== true
+    && tlsAltNames.truncated !== true
+    && Array.isArray(alternativeNames)
+    && alternativeNames.length <= 64
+    && (declaredDnsNameCount === null || declaredDnsNameCount === observedNames.length);
   const wildcard = observedNames.some((item) => item.startsWith('*.'));
   const caaPolicy = record(dnsEvidence.caaPolicy);
   const effectivePolicy = caaPolicy.policyVersion === 1;
@@ -368,7 +414,7 @@ export function buildCertificatePolicyReview(input: Readonly<{
         expected: input.baseline.tlsIssuer,
         source: 'TLS certificate',
       }),
-      sanBaselineFinding(observedNames, input.baseline.tlsSanPatterns),
+      sanBaselineFinding(observedNames, input.baseline.tlsSanPatterns, tlsNamesComparable),
       exactBaselineFinding({
         id: 'expected_spki',
         label: 'Reviewed expected certificate public key',
