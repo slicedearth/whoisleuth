@@ -66,7 +66,8 @@ describe('website technology profile', () => {
       html: `
         <main data-mage-init='{"fixture":{}}'></main>
         <link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/store.css">
-        <script src="https://cdn11.bigcommerce.com/s/fixture/stencil-utils.js"></script>
+        <main data-module="stencil-utils"></main>
+        <script src="https://cdn11.bigcommerce.com/s/fixture/theme.js"></script>
       `,
       resourceOrigins: ['https://cdn11.bigcommerce.com'],
     });
@@ -297,10 +298,35 @@ describe('website technology profile', () => {
     assert.deepEqual(analyze({
       resourceOrigins: ['https://cdn11.bigcommerce.com'],
     }).findings, []);
-    assert.equal(finding(analyze({
+    const embeddedOnly = finding(analyze({
       html: '<script src="https://cdn11.bigcommerce.com/s/fixture/stencil-utils.js"></script>',
       resourceOrigins: ['https://cdn11.bigcommerce.com'],
-    }), 'bigcommerce').confidence, 'medium');
+    }), 'bigcommerce');
+    assert.equal(embeddedOnly.confidence, 'medium');
+    assert.deepEqual(embeddedOnly.roles, ['embedded_dependency']);
+    assert.equal(embeddedOnly.evidence.length, 1);
+
+    const independent = finding(analyze({
+      html: '<main data-module="stencil-utils"></main><script src="https://cdn11.bigcommerce.com/s/fixture/theme.js"></script>',
+      resourceOrigins: ['https://cdn11.bigcommerce.com'],
+    }), 'bigcommerce');
+    assert.deepEqual(independent.roles, ['application_platform', 'embedded_dependency']);
+  });
+
+  test('does not attribute an off-origin platform-like asset path to the current page', () => {
+    const wordpress = finding(analyze({
+      html: '<img src="https://assets.example.test/wp-content/uploads/image.png">',
+      resourceOrigins: ['https://assets.example.test'],
+    }), 'wordpress');
+    assert.deepEqual(wordpress.roles, ['embedded_dependency']);
+    assert.equal(wordpress.evidence[0]?.role, 'embedded_dependency');
+
+    const bigcommerce = finding(analyze({
+      html: '<img src="https://cdn11.bigcommerce.com/s-example/images/logo.png">',
+      resourceOrigins: ['https://cdn11.bigcommerce.com'],
+    }), 'bigcommerce');
+    assert.deepEqual(bigcommerce.roles, ['embedded_dependency']);
+    assert.equal(bigcommerce.evidence.length, 1);
   });
 
   test('keeps delivery and application technologies separately attributed', () => {

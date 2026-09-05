@@ -257,8 +257,13 @@ function normalizeCaa(records: unknown): NormalizedRecords<CaaRecord> {
   for (const record of Array.isArray(records) ? records : []) {
     const entry = record && typeof record === 'object' ? record as Record<string, unknown> : {};
     const critical = Number(entry.critical);
-    const tag = String(entry.tag || '').trim().toLowerCase();
-    const value = String(entry.value || '').trim();
+    const nodeTags = ['issue', 'issuewild', 'iodef'].filter((tag) => Object.hasOwn(entry, tag));
+    const hasPair = Object.hasOwn(entry, 'tag') || Object.hasOwn(entry, 'value');
+    const tag = hasPair
+      ? String(entry.tag || '').trim().toLowerCase()
+      : nodeTags.length === 1 ? nodeTags[0]! : '';
+    const rawValue = hasPair ? entry.value : tag ? entry[tag] : undefined;
+    const value = typeof rawValue === 'string' ? rawValue.trim() : '';
     if (!Number.isInteger(critical) || critical < 0 || critical > 255 || !/^[a-z0-9-]{1,15}$/.test(tag) || !value || value.length > MAX_POLICY_LENGTH || /[\u0000-\u001f\u007f]/.test(value)) {
       discarded += 1;
       continue;
@@ -621,6 +626,35 @@ async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOp
         records: result.records,
       };
     }
+    if (result.truncated || result.discarded > 0) {
+      return {
+        ...createObservation({
+          status: 'partial',
+          observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+          scanMode: 'deep',
+          source: 'dns',
+          durationMs: Math.max(0, now() - started),
+          complete: false,
+          truncated: result.truncated,
+          limitations,
+          diagnostics: {
+            tree: {
+              status: 'partial',
+              detail: `The CAA answer at ${owner} contained discarded or truncated records, so parent inheritance was not evaluated.`,
+              count: queries.length,
+              truncated: result.truncated,
+              discarded: result.discarded,
+            },
+          },
+        }),
+        policyVersion: 1,
+        queryLimit,
+        queriedOwners: queries,
+        effectiveOwner: null,
+        inherited: null,
+        records: [] as CaaRecord[],
+      };
+    }
   }
 
   return {
@@ -832,7 +866,7 @@ async function collectReverseDnsIntelligence(
   const now = options.now || Date.now;
   const started = now();
   const ptr = await query(
-    () => (options.resolver || dns.resolvePtr)(address),
+    () => (options.resolver || dns.reverse)(address),
     normalizePtr,
     timeoutMs,
   );

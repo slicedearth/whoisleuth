@@ -25,6 +25,9 @@ import {
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HtmlSignalOptions = {
   baseUrl?: string;
+  effectiveBaseUrl?: string;
+  documentOrigin?: string;
+  baseHrefState?: 'absent' | 'valid' | 'invalid';
   tagMarkup?: string;
   sourceTruncated?: boolean;
   exactBodyHash?: unknown;
@@ -42,7 +45,6 @@ type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'medi
 type ResourceReference = { type: ResourceType; value: string };
 type TrackingIdentifier = { type: string; value: string };
 
-const MAX_TITLE_LENGTH = 200;
 const MAX_EXTERNAL_ASSET_HOSTS = 20;
 const MAX_IDENTITY_TAGS = 512;
 const MAX_IDENTITY_TAG_LENGTH = 4096;
@@ -63,12 +65,6 @@ const MAX_URLS_PER_TAG = 20;
 const PAGE_IDENTITY_VERSION = 3;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const HAS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
-
-const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
-
-// A password input is the single strongest static-HTML tell that a page is
-// asking for credentials, regardless of what it claims to be.
-const PASSWORD_FIELD_RE = /<input\b[^>]*\btype\s*=\s*["']?password["']?/i;
 
 // <img>/<script>/<link> tags loading a resource from an absolute, external
 // URL - a common phishing-kit tell is hotlinking the real brand's own logo/
@@ -126,12 +122,6 @@ function extractExternalAssetHosts(html: string, ownDomain: string): string[] {
     if (hosts.size >= MAX_EXTERNAL_ASSET_HOSTS) break;
   }
   return [...hosts];
-}
-
-function extractPageTitle(html: string): string | null {
-  const match = html.match(TITLE_RE);
-  if (!match) return null;
-  return boundedHtmlText(match[1], MAX_TITLE_LENGTH, true);
 }
 
 function parseAttributes(tag: string): Map<string, string> {
@@ -322,9 +312,10 @@ function trackingIdentifiers(html: string): { values: TrackingIdentifier[]; trun
 }
 
 function extractPageRelationships(html: string, domain: string, options: HtmlSignalOptions = {}) {
-  const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const baseUrl = resolvedBaseUrl(domain, options.effectiveBaseUrl ?? documentUrl);
   const markup = typeof options.tagMarkup === 'string' ? options.tagMarkup : markupForTagParsing(html);
-  const baseOrigin = new URL(baseUrl).origin;
+  const baseOrigin = options.documentOrigin ?? new URL(documentUrl).origin;
   const resourceKeys = new Set<string>();
   const resourceOrigins = new Set<string>();
   const embeddedOrigins = new Set<string>();
@@ -454,11 +445,16 @@ function metaRefreshTarget(content: unknown): string | null {
 }
 
 function extractPageIdentity(html: string, domain: string, options: HtmlSignalOptions = {}) {
-  const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const baseAnalysis = options.effectiveBaseUrl === undefined
+    ? analyzeStaticHtml(html, { baseUrl: documentUrl })
+    : null;
+  const baseUrl = resolvedBaseUrl(domain, options.effectiveBaseUrl ?? baseAnalysis?.effectiveBaseUrl ?? documentUrl);
+  const baseHrefState = options.baseHrefState ?? baseAnalysis?.baseHrefState ?? 'absent';
   const tagMarkup = markupForTagParsing(html);
-  const parsedBase = new URL(baseUrl);
-  const baseOrigin = parsedBase.origin;
-  const baseUsesHttps = parsedBase.protocol === 'https:';
+  const parsedDocument = new URL(documentUrl);
+  const baseOrigin = options.documentOrigin ?? parsedDocument.origin;
+  const baseUsesHttps = parsedDocument.protocol === 'https:';
   const externalFormOrigins = new Set<string>();
   let documentLanguage: string | null = null;
   let canonical: NormalizedIdentityUrl | null = null;
@@ -548,19 +544,23 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
   const queryOmitted = [canonical, metaRefresh, openGraphUrl].some((item) => item?.queryOmitted);
   const pathTruncated = [canonical, metaRefresh, openGraphUrl].some((item) => item?.pathTruncated);
   const sourceTruncated = options.sourceTruncated === true;
-  const relationships = extractPageRelationships(html, domain, { baseUrl, tagMarkup });
+  const relationships = extractPageRelationships(html, domain, { baseUrl: documentUrl, effectiveBaseUrl: baseUrl, documentOrigin: baseOrigin, tagMarkup });
   const fingerprints = createPageFingerprints(html, {
-    baseUrl,
+    // Retained fingerprint algorithms pre-date document-base handling. Keep
+    // their response-URL normalization stable until a versioned fingerprint
+    // migration is intentionally introduced.
+    baseUrl: documentUrl,
     exactBodyHash: options.exactBodyHash,
     sourceTruncated,
     resources: relationships.resources,
     trackingIdentifiers: relationships.trackingIdentifiers,
     identifiersTruncated: relationships.diagnostics.trackingIdentifiersTruncated === true,
   });
-  const truncated = sourceTruncated || tagLimitReached || formLimitReached || originLimitReached
+  const truncated = sourceTruncated || baseHrefState === 'invalid' || tagLimitReached || formLimitReached || originLimitReached
     || pathTruncated || relationships.truncated || fingerprints.truncated;
   const limitations: string[] = ['Static HTML metadata only; JavaScript-rendered changes are not evaluated.'];
   if (sourceTruncated) limitations.push('Homepage body capture reached its byte limit; identity fields may be incomplete.');
+  if (baseHrefState === 'invalid') limitations.push('The first bounded document base URL was invalid; relative URL relationships use the response URL and remain partial.');
   if (tagLimitReached) limitations.push(`Page identity parsing reached the ${MAX_IDENTITY_TAGS}-tag or ${MAX_IDENTITY_TAG_LENGTH}-character tag limit.`);
   if (formLimitReached) limitations.push(`Only the first ${MAX_FORMS} forms were summarized.`);
   if (originLimitReached) limitations.push(`Only the first ${MAX_FORM_ACTION_ORIGINS} external form-action origins were retained.`);
@@ -697,15 +697,21 @@ function buildPagePublicationMetadata(
 }
 
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
-  const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
+  const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const htmlAnalysis = analyzeStaticHtml(html, { baseUrl: documentUrl, includeVisibleText: true });
+  const effectiveBaseUrl = htmlAnalysis.effectiveBaseUrl ?? documentUrl;
+  const documentOrigin = new URL(documentUrl).origin;
+  const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, {
+    ...options,
+    baseUrl: documentUrl,
+    effectiveBaseUrl,
+    documentOrigin,
+    baseHrefState: htmlAnalysis.baseHrefState,
+  });
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
   const includeTechnologyProfile = pageIdentity && options.includeTechnologyProfile !== false;
   const includeDerivedPageProfiles = Boolean(pageIdentity);
-  const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
-  const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile || includeDerivedPageProfiles
-    ? analyzeStaticHtml(html, { baseUrl, includeVisibleText: true })
-    : null;
   const pageIdentityOutput: (NonNullable<typeof pageIdentity> & {
     publicationMetadata?: ReturnType<typeof buildPagePublicationMetadata>;
   }) | null = pageIdentity && htmlAnalysis && options.includePublicationMetadata !== false
@@ -717,18 +723,16 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
         ),
       }
     : pageIdentity;
-  const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis ?? undefined);
+  const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis);
   return {
-    pageTitle: extractPageTitle(html),
-    hasPasswordField: PASSWORD_FIELD_RE.test(html),
+    pageTitle: htmlAnalysis.title,
+    hasPasswordField: htmlAnalysis.forms.categories.password > 0,
     phishingLanguageMatch: pageLanguageSignal?.label ?? null,
     hasExternalFormAction: pageIdentity
       ? pageIdentity.forms.externalActionOrigins.length > 0
       : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
-    cspMetaPolicy: htmlAnalysis
-      ? analyzeCspMetaPolicies(htmlAnalysis.cspMetaPolicies, htmlAnalysis.cspMetaLimitReached)
-      : null,
+    cspMetaPolicy: analyzeCspMetaPolicies(htmlAnalysis.cspMetaPolicies, htmlAnalysis.cspMetaLimitReached),
     pageIdentity: pageIdentityOutput,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
       htmlAnalysis,
@@ -737,7 +741,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     }) : null,
     structuredDataIdentity: includeStructuredDataIdentity && htmlAnalysis ? analyzeStructuredDataIdentity({
       htmlAnalysis,
-      baseUrl,
+      baseUrl: effectiveBaseUrl,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,
@@ -747,12 +751,14 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       httpServer: options.httpServer,
       responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,
+      effectiveBaseUrl,
+      documentOrigin,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,
     pageRoleProfile: includeDerivedPageProfiles && htmlAnalysis ? analyzePageRole({
       htmlAnalysis,
-      pageTitle: extractPageTitle(html),
+      pageTitle: htmlAnalysis.title,
       activityStatus: options.activityStatus,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,

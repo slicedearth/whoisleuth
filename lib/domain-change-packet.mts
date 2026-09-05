@@ -63,22 +63,49 @@ function changeSummary(
   const beforeRows = rows(before);
   const afterRows = rows(after);
   const keys = [...new Set([...beforeRows.keys(), ...afterRows.keys()])].sort();
-  return Object.freeze(keys.slice(0, 500).flatMap((key) => {
+  const authorityCollectionComplete = (review: ReturnType<typeof reviewDomainChange>): boolean => {
+    const representative = review.authoritativeRecordMatrix[0];
+    return Boolean(representative
+      && representative.observations.length >= 2
+      && representative.observations.every((item) => item.state === 'observed'));
+  };
+  const rowEvidence = (
+    review: ReturnType<typeof reviewDomainChange>,
+    row: ReturnType<typeof reviewDomainChange>['authoritativeRecordMatrix'][number] | undefined,
+  ): Readonly<{ state: 'complete' | 'partial' | 'unavailable' | 'inconsistent' | 'insufficient'; values: readonly string[] }> => {
+    if (!row) return Object.freeze({
+      state: authorityCollectionComplete(review) ? 'complete' : 'unavailable',
+      values: Object.freeze([]),
+    });
+    if (row.observations.some((item) => item.state !== 'observed')) {
+      return Object.freeze({ state: 'partial', values: Object.freeze([]) });
+    }
+    if (row.state === 'different') return Object.freeze({ state: 'inconsistent', values: Object.freeze([]) });
+    if (row.state !== 'aligned') return Object.freeze({ state: 'insufficient', values: Object.freeze([]) });
+    return Object.freeze({
+      state: 'complete',
+      values: Object.freeze([...new Set(row.observations.flatMap((item) => item.values))].sort()),
+    });
+  };
+  const changed: Array<Readonly<{ owner: string; type: string; beforeValues: readonly string[]; afterValues: readonly string[] }>> = [];
+  for (const key of keys.slice(0, 500)) {
     const left = beforeRows.get(key);
     const right = afterRows.get(key);
-    const leftValues = left?.observations.flatMap((item) => item.values) ?? [];
-    const rightValues = right?.observations.flatMap((item) => item.values) ?? [];
-    const beforeValues = [...new Set(leftValues)].sort();
-    const afterValues = [...new Set(rightValues)].sort();
-    if (JSON.stringify(beforeValues) === JSON.stringify(afterValues)) return [];
     const [owner, type] = key.split('\u0000');
-    return [Object.freeze({
+    const beforeEvidence = rowEvidence(before, left);
+    const afterEvidence = rowEvidence(after, right);
+    if (beforeEvidence.state !== 'complete' || afterEvidence.state !== 'complete') {
+      continue;
+    }
+    if (JSON.stringify(beforeEvidence.values) === JSON.stringify(afterEvidence.values)) continue;
+    changed.push(Object.freeze({
       owner: owner ?? '',
       type: type ?? '',
-      beforeValues: Object.freeze(beforeValues),
-      afterValues: Object.freeze(afterValues),
-    })];
-  }));
+      beforeValues: beforeEvidence.values,
+      afterValues: afterEvidence.values,
+    }));
+  }
+  return Object.freeze(changed);
 }
 
 export async function buildDomainChangePacket(
@@ -127,6 +154,7 @@ export async function buildDomainChangePacket(
     limitations: Object.freeze([
       'This packet is assembled only from analyst-supplied observations and planning metadata and makes no network request or configuration change.',
       'A ready result means the supplied bounded checks passed; it does not prove control, propagation completion, successful recovery, or absence of unobserved dependencies.',
+      'Authoritative record-set changes are reported only when both sides contain complete consistent observations; gate reasons describe incomplete comparisons.',
       'The integrity digest detects later changes to this packet but does not authenticate its author. Use a separately managed signing key when signer authentication is required.',
     ]),
   });

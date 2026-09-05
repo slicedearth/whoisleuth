@@ -870,6 +870,9 @@ function validateNegativeProof(
   if (exactNsec) {
     const verification = verifyRrset(response, exactNsec.owner, DNS_TYPE_NSEC, keys, zone, now);
     if (verification.state !== 'valid') return verification;
+    if (exactNsec.data.types.has(DNS_TYPE_CNAME)) {
+      return { state: 'unsupported', detail: 'The validated NSEC owner is an alias; the target RRset cannot be treated as authenticated absence without a validated alias walk.' };
+    }
     const delegation = exactNsec.data.types.has(DNS_TYPE_NS) && !exactNsec.data.types.has(DNS_TYPE_SOA);
     if (!exactNsec.data.types.has(missingType) && (!requireDelegation || delegation)) {
       return { state: 'valid', detail: 'A validated NSEC record proved the requested RRset absent.' };
@@ -904,6 +907,9 @@ function validateNegativeProof(
       if (verification.state === 'unsupported') sawUnsupported = true;
       else sawBogus = true;
       continue;
+    }
+    if (exact && record.data.types.has(DNS_TYPE_CNAME)) {
+      return { state: 'unsupported', detail: 'The validated NSEC3 owner is an alias; the target RRset cannot be treated as authenticated absence without a validated alias walk.' };
     }
     if (exact && record.data.types.has(missingType)) return { state: 'bogus', detail: 'The validated NSEC3 bitmap contains the RR type reported as absent.' };
     if (requireDelegation && exact && (!record.data.types.has(DNS_TYPE_NS) || record.data.types.has(DNS_TYPE_SOA))) return { state: 'bogus', detail: 'The validated NSEC3 record did not identify a parent-side delegation.' };

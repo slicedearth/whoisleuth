@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { promises as dns } from 'node:dns';
 import {
   collectDnsIntelligence,
   collectEffectiveCaaPolicy,
@@ -74,9 +75,13 @@ test('MX, policy, and CAA normalization retains only bounded material records', 
   assert.deepEqual(normalizeCaa([
     { critical: 0, tag: 'issue', value: 'ca.example' },
     { critical: 0, tag: 'ISSUE', value: 'ca.example' },
+    { critical: 128, issuewild: 'wild-ca.example' },
     { critical: 300, tag: 'issue', value: 'bad.example' },
   ]), {
-    records: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
+    records: [
+      { critical: 0, tag: 'issue', value: 'ca.example' },
+      { critical: 128, tag: 'issuewild', value: 'wild-ca.example' },
+    ],
     truncated: false,
     discarded: 1,
   });
@@ -144,6 +149,24 @@ test('effective CAA stops on resolver failure instead of treating it as absence'
   assert.equal(result.inherited, null);
   assert.deepEqual(queried, ['shop.example.test', 'example.test']);
   assert.match(String(recordValue(recordValue(result.diagnostics.tree)).error), /resolver unavailable/);
+});
+
+test('effective CAA stops parent inheritance when the direct RRset was discarded', async () => {
+  const queried: string[] = [];
+  const result = await collectEffectiveCaaPolicy('shop.example.test', {
+    resolver: async (owner) => {
+      queried.push(owner);
+      return owner === 'shop.example.test'
+        ? [{ critical: 0, unexpected: 'not-a-caa-shape' }]
+        : [{ critical: 0, issue: 'parent-ca.example' }];
+    },
+  });
+
+  assert.equal(result.status, 'partial');
+  assert.equal(result.complete, false);
+  assert.equal(result.effectiveOwner, null);
+  assert.deepEqual(queried, ['shop.example.test']);
+  assert.equal(result.queriedOwners[0]?.discarded, 1);
 });
 
 test('effective CAA discloses the eight-owner cap without querying closer to the root', async () => {
@@ -398,6 +421,23 @@ test('reverse DNS retains bounded normalized PTR names as non-authoritative cont
   assert.deepEqual(result.records.ptr, ['ptr1.example', 'ptr2.example']);
   assert.equal(recordValue(result.diagnostics.ptr).discarded, 1);
   assert.match(result.limitations.join(' '), /does not prove hosting control/i);
+});
+
+test('reverse DNS default binding uses the address-oriented resolver for IPv4 and IPv6', async (context) => {
+  const queried: string[] = [];
+  context.mock.method(dns, 'reverse', async (address: string) => {
+    queried.push(address);
+    return [`ptr-${queried.length}.example`];
+  });
+  context.mock.method(dns, 'resolvePtr', async () => {
+    throw new Error('The owner-name PTR resolver must not be called.');
+  });
+
+  const ipv4 = await collectReverseDnsIntelligence('192.0.2.10', { isEligibleAddress: () => true });
+  const ipv6 = await collectReverseDnsIntelligence('2001:db8::10', { isEligibleAddress: () => true });
+  assert.deepEqual(queried, ['192.0.2.10', '2001:db8::10']);
+  assert.deepEqual(ipv4.records.ptr, ['ptr-1.example']);
+  assert.deepEqual(ipv6.records.ptr, ['ptr-2.example']);
 });
 
 test('reverse DNS distinguishes no PTR data, resolver failure, and ineligible addresses', async () => {

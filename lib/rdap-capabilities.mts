@@ -308,7 +308,7 @@ export function inspectRdapCapabilities(
     if (unique.size >= MAX_RDAP_CAPABILITY_DECLARATIONS) break;
   }
   const declarations = [...unique].sort().map((value): RdapExtensionDeclaration => {
-    const entry = EXTENSION_CATALOG[value];
+    const entry = Object.hasOwn(EXTENSION_CATALOG, value) ? EXTENSION_CATALOG[value] : undefined;
     return entry
       ? {
           identifier: value,

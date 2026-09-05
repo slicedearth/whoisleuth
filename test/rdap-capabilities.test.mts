@@ -79,6 +79,24 @@ describe('RDAP capability inspection', () => {
     assert.equal(result.unknownIdentifiers.length, 20);
   });
 
+  test('treats inherited object-property names as neutral unknown declarations', () => {
+    const result = inspectRdapCapabilities({
+      conformance: ['constructor', '__proto__', 'toString'],
+      conformanceTruncated: false,
+    }, 'success');
+    assert.deepEqual(result.declarations.map((entry) => ({
+      identifier: entry.identifier,
+      category: entry.category,
+      registered: entry.registered,
+      status: entry.status,
+    })), [
+      { identifier: '__proto__', category: 'unknown', registered: null, status: 'unknown' },
+      { identifier: 'constructor', category: 'unknown', registered: null, status: 'unknown' },
+      { identifier: 'tostring', category: 'unknown', registered: null, status: 'unknown' },
+    ]);
+    assert.deepEqual(result.unknownIdentifiers, ['__proto__', 'constructor', 'tostring']);
+  });
+
   test('does not mutate source records', () => {
     const input = {
       conformance: ['rdap_level_0', 'sorting'],

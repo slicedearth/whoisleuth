@@ -52,6 +52,12 @@ describe('pageTitle', () => {
     assert.equal(extractHtmlSignals('<title></title>', 'example.com').pageTitle, null);
   });
 
+  test('ignores title-like text in comments and scripts', () => {
+    const html = '<!-- <title>Comment title</title> --><script>const value = "<title>Script title</title>";</script><title>Document title</title>';
+    assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Document title');
+    assert.equal(extractHtmlSignals('<!-- <title>Comment title</title> --><script>"<title>Script title</title>"</script>', 'example.com').pageTitle, null);
+  });
+
   test('truncates a very long title', () => {
     const longTitle = 'A'.repeat(300);
     const result = requiredValue(extractHtmlSignals(`<title>${longTitle}</title>`, 'example.com').pageTitle);
@@ -87,6 +93,17 @@ describe('hasPasswordField', () => {
 
   test('is false with no password field', () => {
     assert.equal(extractHtmlSignals('<input type="text" name="q">', 'example.com').hasPasswordField, false);
+  });
+
+  test('ignores password-like attributes and markup in comments or scripts', () => {
+    const result = extractHtmlSignals(`
+      <!-- <input type="password"> -->
+      <script>const field = '<input type="password">';</script>
+      <input data-type="password" type="text">
+      <input type="passwordless">
+    `, 'example.com', { includeCredentialSurfaceProfile: true });
+    assert.equal(result.hasPasswordField, false);
+    assert.equal(requiredValue(result.credentialSurfaceProfile).inputs.categories.password, 0);
   });
 });
 
@@ -254,6 +271,58 @@ describe('pageIdentity', () => {
       <form action="https://z.example/three"></form>
     `);
     assert.deepEqual(result.forms.externalActionOrigins, ['https://a.example', 'https://z.example']);
+  });
+
+  test('resolves relative relationships against the first valid document base and compares the response origin', () => {
+    const result = extractHtmlSignals(`
+      <head>
+        <base href="https://collector.example.test/root/">
+        <base href="https://ignored.example.test/">
+      </head>
+      <body>
+        <form action="submit"><input type="password"></form>
+        <img src="asset.png">
+      </body>
+    `, 'example.com', {
+      baseUrl: 'https://example.com/start/index.html',
+      includeCredentialSurfaceProfile: true,
+      observedAt,
+    });
+    const pageIdentity = requiredValue(result.pageIdentity);
+    const credentialSurface = requiredValue(result.credentialSurfaceProfile);
+    assert.equal(result.hasExternalFormAction, true);
+    assert.deepEqual(pageIdentity.forms.externalActionOrigins, ['https://collector.example.test']);
+    assert.deepEqual(pageIdentity.resources.externalOrigins, ['https://collector.example.test']);
+    assert.equal(credentialSurface.forms.actions.external, 1);
+    assert.equal(credentialSurface.forms.actions.sameOrigin, 0);
+  });
+
+  test('keeps ordinary relative actions on the response origin without a document base', () => {
+    const result = extractHtmlSignals('<form action="submit"><input type="password"></form>', 'example.com', {
+      baseUrl: 'https://example.com/start/index.html',
+      includeCredentialSurfaceProfile: true,
+    });
+    assert.equal(result.hasExternalFormAction, false);
+    assert.deepEqual(requiredValue(result.pageIdentity).forms.externalActionOrigins, []);
+    assert.equal(requiredValue(result.credentialSurfaceProfile).forms.actions.sameOrigin, 1);
+  });
+
+  test('treats an invalid first document base as partial and ignores later bases', () => {
+    const result = extractHtmlSignals(`
+      <head><base href="javascript:invalid"><base href="https://ignored.example.test/"></head>
+      <form action="submit"><input type="password"></form>
+    `, 'example.com', {
+      baseUrl: 'https://example.com/start/index.html',
+      includeCredentialSurfaceProfile: true,
+    });
+    const pageIdentity = requiredValue(result.pageIdentity);
+    const credentialSurface = requiredValue(result.credentialSurfaceProfile);
+    assert.equal(result.hasExternalFormAction, false);
+    assert.equal(pageIdentity.status, 'partial');
+    assert.deepEqual(pageIdentity.forms.externalActionOrigins, []);
+    assert.match(pageIdentity.limitations.join(' '), /document base URL was invalid/u);
+    assert.equal(credentialSurface.forms.actions.sameOrigin, 1);
+    assert.equal(credentialSurface.status, 'partial');
   });
 
   test('bounds forms while preserving explicit partial provenance', () => {

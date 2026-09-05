@@ -57,11 +57,14 @@ type TechnologyInput = {
   resourceOrigins?: unknown;
   responseHeaders?: unknown;
   htmlAnalysis?: StaticHtmlAnalysis;
+  effectiveBaseUrl?: unknown;
+  documentOrigin?: unknown;
   observedAt?: unknown;
   sourceTruncated?: unknown;
 };
 type MatchContext = {
   html: string;
+  applicationHtml: string;
   generator: string;
   httpServer: string;
   resourceHosts: Set<string>;
@@ -69,6 +72,7 @@ type MatchContext = {
 };
 type SignatureEvidence = Omit<TechnologyEvidence, 'role'> & {
   role?: TechnologyEvidenceRole;
+  roleFor?: (context: MatchContext) => TechnologyEvidenceRole | undefined;
   confidence: TechnologyConfidence;
   matches: (context: MatchContext) => boolean;
 };
@@ -79,6 +83,7 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
   minimumEvidenceMatches?: 2;
   requiresNonResourceEvidence?: boolean;
+  allowEmbeddedOnly?: boolean;
 };
 type TechnologySignatureDescriptor = Readonly<{
   id: string;
@@ -115,6 +120,33 @@ function normalizedResourceHosts(value: unknown): Set<string> {
     }
   }
   return hosts;
+}
+
+function applicationMarkup(
+  markup: string,
+  resourceHosts: Set<string>,
+  effectiveBaseUrl: unknown,
+  documentOrigin: unknown,
+): string {
+  let resolutionBase: URL;
+  try {
+    resolutionBase = new URL(typeof effectiveBaseUrl === 'string' ? effectiveBaseUrl : 'https://document.invalid/');
+  } catch {
+    resolutionBase = new URL('https://document.invalid/');
+  }
+  const comparedOrigin = typeof documentOrigin === 'string' && /^https?:\/\//iu.test(documentOrigin)
+    ? documentOrigin
+    : null;
+  return markup.replace(/\s(src|href|poster|data)="([^"]*)"/giu, (attribute, name: string, value: string) => {
+    try {
+      const parsed = new URL(value, resolutionBase);
+      const knownExternalHost = resourceHosts.has(parsed.hostname.toLowerCase());
+      const offOrigin = comparedOrigin ? parsed.origin !== comparedOrigin : knownExternalHost;
+      return knownExternalHost && offOrigin ? ` ${name.toLowerCase()}=""` : attribute;
+    } catch {
+      return attribute;
+    }
+  });
 }
 
 const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
@@ -185,6 +217,18 @@ function htmlEvidence(markers: string[], description: string, confidence: Techno
   };
 }
 
+function resourcePathEvidence(markers: string[], description: string, confidence: TechnologyConfidence = 'high'): SignatureEvidence {
+  return {
+    source: 'static HTML',
+    description,
+    confidence,
+    matches: ({ html }) => markers.some((marker) => html.includes(marker)),
+    roleFor: ({ applicationHtml }) => markers.some((marker) => applicationHtml.includes(marker))
+      ? undefined
+      : 'embedded_dependency',
+  };
+}
+
 function resourceEvidence(hosts: string[], description: string): SignatureEvidence {
   return {
     source: 'resource origin',
@@ -232,7 +276,10 @@ function responseHeaderEvidence(
 function evidenceRole(
   signature: TechnologySignature,
   evidence: SignatureEvidence,
+  context?: MatchContext,
 ): TechnologyEvidenceRole {
+  const contextualRole = context ? evidence.roleFor?.(context) : undefined;
+  if (contextualRole) return contextualRole;
   if (evidence.role) return evidence.role;
   if (evidence.source === 'resource origin') return 'embedded_dependency';
   if (signature.category === 'delivery platform') return 'observed_edge';
@@ -247,7 +294,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'wordpress', name: 'WordPress', category: 'content management',
     evidence: [
       generatorEvidence(/^wordpress(?:\s|$)/i, 'Generator metadata identifies WordPress.'),
-      htmlEvidence(['/wp-content/', '/wp-includes/'], 'Static resource paths use WordPress conventions.', 'medium'),
+      resourcePathEvidence(['/wp-content/', '/wp-includes/'], 'Static resource paths use WordPress conventions.', 'medium'),
     ],
   },
   {
@@ -314,8 +361,9 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'bigcommerce', name: 'BigCommerce', category: 'commerce',
     minimumEvidenceMatches: 2,
+    allowEmbeddedOnly: true,
     evidence: [
-      htmlEvidence(['cdn11.bigcommerce.com/s-', 'stencil-utils'], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
+      resourcePathEvidence(['cdn11.bigcommerce.com/s-', 'stencil-utils'], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
       resourcePatternEvidence(/^cdn\d+\.bigcommerce\.com$/i, 'A retained resource origin uses BigCommerce storefront delivery infrastructure.'),
     ],
   },
@@ -528,27 +576,48 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   }) : null;
   const context: MatchContext = {
     html: htmlAnalysis.markup,
+    applicationHtml: '',
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
     httpServer: boundedLowercase(input.httpServer, MAX_SERVER_INPUT),
     resourceHosts: normalizedResourceHosts(input.resourceOrigins),
     responseHeaders: normalizedResponseHeaders(input.responseHeaders),
   };
+  context.applicationHtml = applicationMarkup(
+    context.html,
+    context.resourceHosts,
+    input.effectiveBaseUrl,
+    input.documentOrigin,
+  );
   const findings: TechnologyFinding[] = [];
 
   for (const signature of TECHNOLOGY_SIGNATURES) {
-    const matched = signature.evidence.filter((evidence) => evidence.matches(context));
-    if (matched.length < (signature.minimumEvidenceMatches || 1)) continue;
-    if (signature.requiresNonResourceEvidence && matched.every((evidence) => evidence.source === 'resource origin')) continue;
-    const matchedEvidence = matched.slice(0, MAX_EVIDENCE_PER_TECHNOLOGY).map((evidence) => ({
+    const matched = signature.evidence
+      .filter((evidence) => evidence.matches(context))
+      .map((evidence) => ({ evidence, role: evidenceRole(signature, evidence, context) }));
+    const nonEmbeddedMatches = matched.filter((entry) => entry.role !== 'embedded_dependency');
+    const minimumEvidenceMatches = signature.minimumEvidenceMatches || 1;
+    const qualifiesForPlatform = matched.length >= minimumEvidenceMatches
+      && (minimumEvidenceMatches === 1 || nonEmbeddedMatches.length > 0)
+      && (!signature.requiresNonResourceEvidence || nonEmbeddedMatches.length > 0);
+    const contextualEmbeddedEvidence = matched.filter((entry) => (
+      entry.role === 'embedded_dependency' && entry.evidence.roleFor !== undefined
+    ));
+    const selected = qualifiesForPlatform
+      ? matched
+      : signature.allowEmbeddedOnly
+        ? contextualEmbeddedEvidence.slice(0, 1)
+        : [];
+    if (selected.length === 0) continue;
+    const matchedEvidence = selected.slice(0, MAX_EVIDENCE_PER_TECHNOLOGY).map(({ evidence, role }) => ({
       source: evidence.source,
-      role: evidenceRole(signature, evidence),
+      role,
       description: evidence.description,
     }));
     findings.push({
       id: signature.id,
       name: signature.name,
       category: signature.category,
-      confidence: matched.some((evidence) => evidence.confidence === 'high') ? 'high' : 'medium',
+      confidence: selected.some(({ evidence }) => evidence.confidence === 'high') ? 'high' : 'medium',
       roles: TECHNOLOGY_EVIDENCE_ROLE_ORDER.filter((role) => matchedEvidence.some((evidence) => evidence.role === role)),
       evidence: matchedEvidence,
     });

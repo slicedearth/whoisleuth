@@ -62,6 +62,33 @@ function normalizedPublishedUri(value: string, schemes: Set<string>): string | n
     const url = new URL(value.trim());
     if (!schemes.has(url.protocol) || url.username || url.password) return null;
     if (url.protocol === 'https:' && !url.hostname) return null;
+    if (url.protocol === 'mailto:') {
+      let recipients: string[];
+      try {
+        recipients = decodeURIComponent(url.pathname).split(',');
+      } catch {
+        return null;
+      }
+      if (!recipients.length || recipients.some((recipient) => {
+        const separator = recipient.lastIndexOf('@');
+        if (separator <= 0 || separator === recipient.length - 1) return true;
+        const local = recipient.slice(0, separator);
+        const mailDomain = recipient.slice(separator + 1).toLowerCase();
+        return !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/iu.test(local)
+          || local.startsWith('.') || local.endsWith('.') || local.includes('..')
+          || !canonicalHostname(mailDomain);
+      })) return null;
+    }
+    if (url.protocol === 'tel:') {
+      let number: string;
+      try {
+        number = decodeURIComponent(url.pathname);
+      } catch {
+        return null;
+      }
+      if (!/^\+?[0-9(). -]+(?:;[a-z0-9-]+=[a-z0-9.-]+)*$/iu.test(number)
+        || (number.match(/[0-9]/gu)?.length ?? 0) < 3) return null;
+    }
     url.search = '';
     url.hash = '';
     return url.toString().slice(0, MAX_SECURITY_TXT_URL_LENGTH);
@@ -203,7 +230,7 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
   const finalComparisonUrl = options.finalUrl ? normalizedCanonicalComparisonUrl(options.finalUrl) : null;
   const canonicalMatches = boundedCanonical.values.length && finalUrl && finalComparisonUrl
     ? canonicalComparison.slice(0, MAX_SECURITY_TXT_VALUES)
-        .some((value) => value.toLowerCase() === finalComparisonUrl.toLowerCase())
+        .some((value) => value === finalComparisonUrl)
     : null;
   const stale = Boolean(expiresAt && Date.parse(expiresAt) <= (options.now ?? Date.now()));
   const requiredMalformed = boundedContacts.values.length === 0 || expires.length !== 1;

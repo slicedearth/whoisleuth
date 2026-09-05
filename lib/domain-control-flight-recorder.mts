@@ -330,7 +330,10 @@ function values(value: unknown, label: string): string[] {
   const output = new Set<string>();
   for (let index = 0; index < input.length; index += 1) {
     const normalized = text(input[index], `${label}[${index}]`, MAX_FLIGHT_RECORDER_VALUE_LENGTH).toLowerCase();
-    if (normalized && output.size < MAX_FLIGHT_RECORDER_VALUES) output.add(normalized);
+    if (normalized) output.add(normalized);
+    if (output.size > MAX_FLIGHT_RECORDER_VALUES) {
+      throw new TypeError(`${label} must contain at most ${MAX_FLIGHT_RECORDER_VALUES} unique normalized values.`);
+    }
   }
   return [...output].sort(ordinalCompare);
 }

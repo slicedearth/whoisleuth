@@ -86,6 +86,17 @@ describe('MTA-STS policy transport', () => {
     assert.equal(result.contentType, 'text/plain; charset=utf-8');
     assert.match(result.text, /mode: testing/u);
   });
+
+  test('rejects partial and non-200 successful policy responses', async () => {
+    for (const status of [201, 206]) {
+      const result = await fetchMtaStsPolicy('example.test', async () => new Response(
+        'version: STSv1\nmode: enforce\nmx: mx.example.test\nmax_age: 86400\n',
+        { status, headers: { 'content-type': 'text/plain', ...(status === 206 ? { 'content-range': 'bytes 0-63/128' } : {}) } },
+      ));
+      assert.equal(result.text, '');
+      assert.match(requiredValue(result.error), new RegExp(`HTTP ${status}`, 'u'));
+    }
+  });
 });
 
 describe('buildPostureReport', () => {
@@ -115,6 +126,20 @@ describe('buildPostureReport', () => {
     const report = buildPostureReport('example.com', input);
     assert.equal(byId(report, 'mta_sts').status, 'danger');
     assert.match(byId(report, 'mta_sts').detail, /backup\.example\.com/);
+  });
+
+  test('withholds MTA-STS coverage when MX evidence failed or is malformed', () => {
+    const failed = strongInput();
+    failed.mx = query([], 'MX resolver timed out');
+    const failedCheck = byId(buildPostureReport('example.com', failed), 'mta_sts');
+    assert.equal(failedCheck.status, 'info');
+    assert.match(failedCheck.summary, /coverage could not be evaluated/iu);
+
+    const malformed = strongInput();
+    malformed.mx = query([{ priority: 10, exchange: 'bad host' }]);
+    const malformedCheck = byId(buildPostureReport('example.com', malformed), 'mta_sts');
+    assert.equal(malformedCheck.status, 'info');
+    assert.match(malformedCheck.summary, /coverage is incomplete/iu);
   });
 
   test('does not claim a DNS policy is absent when its query failed', () => {
@@ -163,6 +188,17 @@ describe('buildPostureReport', () => {
 
     input.spf = query(['v=spf1 include:_spf.example.net -all']);
     assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'warning');
+
+    for (const policy of [
+      'v=spf1 ip4:192.0.2.0/24 -all',
+      'v=spf1 ip6:2001:db8::/32 -all',
+      'v=spf1 ?ip4:192.0.2.1 -all',
+    ]) {
+      input.spf = query([policy]);
+      assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'warning', policy);
+    }
+    input.spf = query(['v=spf1 -ip4:192.0.2.0/24 -all']);
+    assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'pass');
   });
 
   test('keeps retired DKIM selector publication separate from active key validation', () => {

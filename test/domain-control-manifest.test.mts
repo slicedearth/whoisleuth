@@ -208,6 +208,21 @@ describe('domain control manifests', () => {
     );
     assert.equal(tailReads, 0);
 
+    const tooManyUniqueValues = Array.from({ length: 33 }, (_, index) => `ns-${index}.example.test`);
+    assert.throws(
+      () => reviewDomainControlManifest(reviewInput({ ...field(), values: tooManyUniqueValues }), generatedAt),
+      /invalid observation/iu,
+    );
+
+    const duplicateValues = Array.from({ length: 128 }, (_, index) => `ns-${index % 32}.example.test`);
+    const duplicateReport = reviewDomainControlManifest(
+      reviewInput({ ...field(), values: duplicateValues.reverse() }),
+      generatedAt,
+    );
+    const nameservers = duplicateReport.domains[0]?.comparisons.find((item) => item.field === 'nameservers');
+    assert.equal(nameservers?.state, 'drift');
+    assert.equal(nameservers?.observed.length, 32);
+
     const customValues = ['ns1.example.test'];
     Object.assign(customValues, { extra: true });
     assert.throws(
