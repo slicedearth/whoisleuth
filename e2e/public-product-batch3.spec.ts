@@ -153,6 +153,28 @@ test('keeps CLI catalogue filters shareable across reloads', async ({ page }) =>
   await expect(page).toHaveURL(/\?q=workflow&mode=offline&common=1#commands$/u);
 });
 
+test('preserves CLI filter and router state across public Back and Forward navigation', async ({ page }) => {
+  await page.goto('/cli');
+  const search = page.getByTestId('public-cli-catalogue').getByRole('searchbox', { name: 'Search commands' });
+  await search.fill('lookup');
+  await expect(page).toHaveURL(/\/cli\?q=lookup$/u);
+
+  await page.getByRole('navigation', { name: 'Public navigation' })
+    .getByRole('link', { name: 'Resources', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/cli\?q=lookup$/u);
+  await expect(page.getByRole('heading', { name: 'WHOISleuth CLI', exact: true })).toBeVisible();
+  await expect(page.getByTestId('public-cli-catalogue')).toBeVisible();
+  await expect(search).toHaveValue('lookup');
+
+  await page.goForward();
+  await expect(page).toHaveURL('/resources');
+  await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+});
+
 test('opens a directly linked CLI command without loading unrelated command details', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/cli#command-workflow-plan');

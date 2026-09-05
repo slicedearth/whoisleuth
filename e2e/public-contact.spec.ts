@@ -79,6 +79,14 @@ test('contact handoff keeps the draft local and reveals only the selected role r
     /subject=A%20bounded%20privacy%20request&body=Contact%20category%3A%20Privacy%20request/u,
   );
   await expect(page.getByText('Nothing has been sent.')).toBeVisible();
+
+  await page.getByLabel('Subject').fill('Updated local subject');
+  await page.getByLabel('Message').fill('Updated local message.');
+  await expect(draftLink).toHaveAttribute(
+    'href',
+    'mailto:privacy@example.test?subject=Updated%20local%20subject&body=Contact%20category%3A%20Privacy%20request%0A%0AUpdated%20local%20message.',
+  );
+  expect(submissions).toEqual([{ category: 'privacy', token: 'browser-test-token' }]);
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 320, height: 700 });

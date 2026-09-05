@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { pushState, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
   import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
   import { preloadOnIdle } from '$lib/idle-preload';
@@ -102,14 +104,14 @@
 
   function navigateToCommand(event: MouseEvent, id: string): void {
     event.preventDefault();
-    history.pushState(null, '', `#command-${id}`);
+    pushState(`#command-${id}`, page.state);
     void revealCommand(id);
   }
 
   async function returnToResults(event: MouseEvent): Promise<void> {
     event.preventDefault();
     const returnId = expandedId;
-    history.pushState(null, '', '#commands');
+    pushState('#commands', page.state);
     expandedId = '';
     await tick();
     requestAnimationFrame(() => {
@@ -176,7 +178,9 @@
       if (value) url.searchParams.set(key, value);
       else url.searchParams.delete(key);
     }
-    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    const href = `${url.pathname}${url.search}${url.hash}`;
+    if (href === `${location.pathname}${location.search}${location.hash}`) return;
+    replaceState(href, page.state);
   }
 
   function adjacentCommand(direction: -1 | 1) {
