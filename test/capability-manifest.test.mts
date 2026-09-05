@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
@@ -55,7 +57,7 @@ import {
 import { CLI_COMMAND_SEMANTICS } from '../packages/contracts/cli-command-semantics.mts';
 import { buildBulkCollectionPreflight, buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 import { renderCapabilityManifestMarkdown } from '../tools/capability-manifest-renderer.mts';
-import { OUTPUT_PATH, retainedDocument } from '../tools/capability-manifest.mts';
+import { OUTPUT_PATH, retainedDocument, writeAtomically } from '../tools/capability-manifest.mts';
 
 const EXPECTED_CAPABILITY_IDS = [
   'lookup',
@@ -514,5 +516,19 @@ describe('canonical capability manifest', () => {
     assert.equal(readFileSync(OUTPUT_PATH, 'utf8'), expected);
     assert.match(expected, new RegExp(`${CLI_COMMANDS.length} installed CLI operations`, 'u'));
     assert.match(expected, /budget-exhausted document outcomes remain explicit/u);
+  });
+
+  test('does not remove a temporary file owned by another capability writer', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-capability-writer-'));
+    const output = path.join(root, 'capability.md');
+    const existingTemporary = `${output}.tmp`;
+    try {
+      writeFileSync(existingTemporary, 'other writer', 'utf8');
+      writeAtomically('current capability document', output);
+      assert.equal(readFileSync(output, 'utf8'), 'current capability document');
+      assert.equal(readFileSync(existingTemporary, 'utf8'), 'other writer');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

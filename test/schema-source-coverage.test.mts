@@ -249,6 +249,33 @@ describe('schema source coverage', () => {
     assert.deepEqual(result.definitions, []);
   });
 
+  test('reports source lines for JSON keys, values, writers, and malformed identities', () => {
+    const result = discoverSchemaIdentifiersInSource([
+      '{',
+      '  "whoisleuth.key-contract": true,',
+      '  "nested": {',
+      '    "schema": "whoisleuth.writer-contract",',
+      '    "malformed": { "schema": "whoisleuth.bad..suffix" },',
+      '    "reference": "https://whoisleuth.com/reference"',
+      '  }',
+      '}',
+    ].join('\n'), 'fixture.json');
+    assert.deepEqual(
+      result.occurrences.map((item) => [item.identifier, item.line]),
+      [
+        ['whoisleuth.key-contract', 2],
+        ['whoisleuth.writer-contract', 4],
+        ['whoisleuth.com', 6],
+      ],
+    );
+    assert.deepEqual(result.emitters.map((item) => [item.identifier, item.line]), [
+      ['whoisleuth.writer-contract', 4],
+    ]);
+    assert.ok(result.dynamicConstructions.some((item) => (
+      item.reason === 'malformed_schema_identifier' && item.line === 5
+    )));
+  });
+
   test('discovers JSON keys without prefix false positives and bounds deep input', () => {
     const result = discoverSchemaIdentifiersInSource(JSON.stringify({
       'whoisleuth.key-contract': true,

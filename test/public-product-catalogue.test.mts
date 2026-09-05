@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
@@ -37,6 +39,7 @@ import {
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { FRONTEND_ROUTE_GZIP_BUDGETS } from '../tools/frontend-loading-report.mts';
+import { writeAtomically } from '../tools/public-product-catalogue.mts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -161,5 +164,19 @@ describe('public product catalogue', () => {
       assert.doesNotMatch(source, /PracticalWorkflow|Discover, Verify, Package, Recheck|practical loop/iu, path);
     }
     assert.deepEqual(METHODOLOGY_TOPICS.find((topic) => topic.id === 'jobs')?.states, ['investigate', 'respond', 'assure']);
+  });
+
+  test('does not remove a temporary file owned by another public-product writer', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-public-product-writer-'));
+    const output = path.join(root, 'generated.ts');
+    const existingTemporary = `${output}.tmp`;
+    try {
+      writeFileSync(existingTemporary, 'other writer', 'utf8');
+      writeAtomically(output, 'current generated module');
+      assert.equal(readFileSync(output, 'utf8'), 'current generated module');
+      assert.equal(readFileSync(existingTemporary, 'utf8'), 'other writer');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

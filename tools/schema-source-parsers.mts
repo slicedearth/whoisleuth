@@ -51,6 +51,7 @@ export const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['cli/retained-artifact-diff.mts', 'reader', 1, 'Requires bounded retained documents to declare the same marker.'],
   ['cli/risk-calibration.mts', 'writer', 1, 'Copies the validated calibration marker into report metadata.'],
   ['cli/sharing-review.mts', 'writer', 1, 'Projects a bounded reviewed artifact marker.'],
+  ['frontend/src/lib/analysis/case-evidence-checkpoint.ts', 'reader', 1, 'Compares a retained, normalised source-schema identity without selecting a schema handler.'],
   ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 1, 'Compares the marker selected by a canonical collection definition.'],
   ['frontend/src/lib/components/CaseRenderedCapture.svelte', 'reader', 1, 'Dispatches a selected local capture through the canonical manifest reader.'],
   ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 4, 'Dispatches bounded local imports through reviewed marker families.'],
@@ -1139,22 +1140,27 @@ function discoverTypeScriptSource(
 }
 
 function discoverJsonSource(source: string, file: string): SourceFileDiscovery {
-  scanBoundedJson(source, {
-    maximumDepth: MAX_SCHEMA_SOURCE_JSON_DEPTH,
-    maximumKeys: MAX_SCHEMA_SOURCE_JSON_VALUES,
-    maximumValues: MAX_SCHEMA_SOURCE_JSON_VALUES,
-    maximumContainerItems: MAX_SCHEMA_SOURCE_JSON_CONTAINER_ITEMS,
-  });
-  let value: unknown;
-  try {
-    value = JSON.parse(source) as unknown;
-  } catch {
-    throw new TypeError(`Schema source ${file} must contain valid JSON.`);
-  }
   const occurrences: SourceOccurrence[] = [];
   const dynamicConstructions: DynamicConstruction[] = [];
   const emitters: SourceSchemaEmitter[] = [];
-  const recordValue = (item: string) => {
+  const lineStarts = [0];
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    if (code === 10 || (code === 13 && source.charCodeAt(index + 1) !== 10)) {
+      lineStarts.push(index + 1);
+    }
+  }
+  const lineForOffset = (offset: number): number => {
+    let low = 0;
+    let high = lineStarts.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (lineStarts[middle]! <= offset) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+  const recordValue = (item: string, line: number) => {
     for (const match of item.matchAll(CASE_INSENSITIVE_TOKEN_PATTERN)) {
       const raw = match[0];
       if (!raw) continue;
@@ -1162,57 +1168,42 @@ function discoverJsonSource(source: string, file: string): SourceFileDiscovery {
         if (dynamicConstructions.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
           throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
         }
-        dynamicConstructions.push({ file, line: 1, identifier: raw.toLowerCase(), reason: 'case_changed' });
+        dynamicConstructions.push({ file, line, identifier: raw.toLowerCase(), reason: 'case_changed' });
       } else {
         if (occurrences.length >= MAX_SCHEMA_SOURCE_OCCURRENCES) {
           throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
         }
-        occurrences.push({ identifier: raw, file, line: 1 });
+        occurrences.push({ identifier: raw, file, line });
       }
     }
   };
-  const stack: unknown[] = [value];
-  let visited = 0;
-  while (stack.length) {
-    const item = stack.pop();
-    visited += 1;
-    if (visited > MAX_SCHEMA_SOURCE_JSON_VALUES) {
-      throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_JSON_VALUES} JSON values.`);
-    }
-    if (typeof item === 'string') {
-      recordValue(item);
-      continue;
-    }
-    if (Array.isArray(item)) {
-      for (const member of item) stack.push(member);
-      continue;
-    }
-    if (item && typeof item === 'object') {
-      for (const [key, member] of Object.entries(item as Record<string, unknown>)) {
-        recordValue(key);
-        if (key === 'schema' && typeof member === 'string') {
-          const found = tokens(member);
-          if (found.length === 1 && found[0] === member) {
-            if (emitters.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
-              throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-            }
-            emitters.push({ identifier: member, file, line: 1, symbol: null, role: 'writer' });
-          } else if (hasLocalSchemaPrefix(member)) {
-            if (dynamicConstructions.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
-              throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-            }
-            dynamicConstructions.push({
-              file,
-              line: 1,
-              identifier: null,
-              reason: 'malformed_schema_identifier',
-            });
-          }
-        }
-        stack.push(member);
+  scanBoundedJson(source, {
+    maximumDepth: MAX_SCHEMA_SOURCE_JSON_DEPTH,
+    maximumKeys: MAX_SCHEMA_SOURCE_JSON_VALUES,
+    maximumValues: MAX_SCHEMA_SOURCE_JSON_VALUES,
+    maximumContainerItems: MAX_SCHEMA_SOURCE_JSON_CONTAINER_ITEMS,
+  }, (entry) => {
+    const line = lineForOffset(entry.offset);
+    recordValue(entry.value, line);
+    if (entry.kind !== 'value' || entry.propertyKey !== 'schema') return;
+    const found = tokens(entry.value);
+    if (found.length === 1 && found[0] === entry.value) {
+      if (emitters.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
+        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
       }
+      emitters.push({ identifier: entry.value, file, line, symbol: null, role: 'writer' });
+    } else if (hasLocalSchemaPrefix(entry.value)) {
+      if (dynamicConstructions.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
+        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
+      }
+      dynamicConstructions.push({
+        file,
+        line,
+        identifier: null,
+        reason: 'malformed_schema_identifier',
+      });
     }
-  }
+  });
   return {
     occurrences,
     definitions: [],

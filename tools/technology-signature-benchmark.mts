@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import {
   MAX_EVIDENCE_PER_TECHNOLOGY,
   MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH,
+  TECHNOLOGY_CATEGORIES,
+  TECHNOLOGY_EVIDENCE_SOURCES,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
 } from '../lib/website-technology.mts';
@@ -66,24 +68,9 @@ export const TECHNOLOGY_REVIEW_FRESHNESS_DAYS = 365;
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
-const CATEGORIES = new Set([
-  'application runtime',
-  'content management',
-  'commerce',
-  'site builder',
-  'web framework',
-  'static site generator',
-  'web server',
-  'delivery platform',
-]);
+const CATEGORIES = new Set<string>(TECHNOLOGY_CATEGORIES);
 const CONFIDENCE_LEVELS = new Set(['high', 'medium']);
-const EVIDENCE_SOURCES = new Set([
-  'generator metadata',
-  'static HTML',
-  'resource origin',
-  'HTTP server header',
-  'passive response header',
-]);
+const EVIDENCE_SOURCES = new Set<string>(TECHNOLOGY_EVIDENCE_SOURCES);
 const FIXTURE_KINDS = new Set(['positive', 'negative', 'overlap', 'mixed', 'truncation']);
 
 function record(value: unknown): UnknownRecord {
@@ -106,6 +93,21 @@ function timestamp(value: unknown): string {
   const parsed = value instanceof Date ? value.getTime() : Date.parse(String(value));
   if (!Number.isFinite(parsed)) throw new TypeError('Technology benchmark generation time must be valid.');
   return new Date(parsed).toISOString();
+}
+
+export function countTechnologyDetectionFailures(
+  fixtures: readonly Pick<FixtureResult, 'unexpectedIds' | 'forbiddenObservedIds'>[],
+  eligibleIds?: ReadonlySet<string>,
+): Readonly<{ collisionMatches: number; falsePositiveMatches: number }> {
+  const includes = (id: string) => eligibleIds?.has(id) ?? true;
+  return Object.freeze({
+    collisionMatches: fixtures.reduce((sum, fixture) => (
+      sum + fixture.unexpectedIds.filter(includes).length
+    ), 0),
+    falsePositiveMatches: fixtures.reduce((sum, fixture) => (
+      sum + fixture.forbiddenObservedIds.filter(includes).length
+    ), 0),
+  });
 }
 
 function reviewedSourceOriginByFixtureId(): ReadonlyMap<string, string> {
@@ -300,9 +302,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       .filter((fixture) => fixture.kind === 'overlap')
       .flatMap((fixture) => fixture.expectedIds)
       .filter((id) => signatureIds.has(id)).length;
-    const falsePositiveMatches = fixtures
-      .flatMap((fixture) => [...new Set([...fixture.unexpectedIds, ...fixture.forbiddenObservedIds])])
-      .filter((id) => signatureIds.has(id)).length;
+    const failureCounts = countTechnologyDetectionFailures(fixtures, signatureIds);
     return [category, Object.freeze({
       signatures: signatureIds.size,
       evidenceRules: TECHNOLOGY_SIGNATURE_CATALOGUE
@@ -314,10 +314,10 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       unexpectedMatches,
       deliberateNonmatches,
       overlapExpectedMatches,
-      collisionMatches: unexpectedMatches,
-      falsePositiveMatches,
+      collisionMatches: failureCounts.collisionMatches,
+      falsePositiveMatches: failureCounts.falsePositiveMatches,
       collisionRate: ratio(unexpectedMatches, observedMatches),
-      falsePositiveRate: ratio(falsePositiveMatches, deliberateNonmatches),
+      falsePositiveRate: ratio(failureCounts.falsePositiveMatches, deliberateNonmatches),
     })];
   })));
   const expectedMatches = fixtures.reduce((sum, fixture) => sum + fixture.expectedIds.length, 0);
@@ -328,11 +328,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     (sum, fixture) => sum + fixture.negativeFor.length,
     0,
   );
-  const falsePositiveMatches = fixtures
-    .reduce((sum, fixture) => sum + new Set([
-      ...fixture.unexpectedIds,
-      ...fixture.forbiddenObservedIds,
-    ]).size, 0);
+  const { falsePositiveMatches } = countTechnologyDetectionFailures(fixtures);
   const failedFixtures = fixtures.filter((fixture) => fixture.status === 'fail').length;
   const failedReviewedFixtures = reviewedFixtures.filter((fixture) => fixture.status === 'fail').length;
   const passingReviewedFixtureIds = new Set(
@@ -459,10 +455,9 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     (sum, fixture) => sum + fixture.negativeFor.length,
     0,
   );
-  const reviewedFalsePositiveMatches = reviewedFixtures.reduce((sum, fixture) => sum + new Set([
-    ...fixture.unexpectedIds,
-    ...fixture.forbiddenObservedIds,
-  ]).size, 0);
+  const { falsePositiveMatches: reviewedFalsePositiveMatches } = countTechnologyDetectionFailures(
+    reviewedFixtures,
+  );
   const unknownObservedIds = fixtures
     .flatMap((fixture) => fixture.observedIds)
     .filter((id) => !catalogueById.has(id));

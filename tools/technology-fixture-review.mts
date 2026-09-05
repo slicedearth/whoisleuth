@@ -24,7 +24,7 @@ import {
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import {
-  canonicalControlFreeTimestamp,
+  canonicalObservationReviewTimestamps,
   exactObjectKeys as assertExactKeys,
   optionalJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
@@ -53,7 +53,9 @@ const SHARED_VENDOR_HOSTS = new Set([
   'editmysite.com',
   'cloudfront.net',
 ]);
-const SHARED_VENDOR_HOST_PATTERNS = [/^cdn\d+\.bigcommerce\.com$/iu];
+const SHARED_VENDOR_HOST_RECONSTRUCTIONS: ReadonlyArray<readonly [RegExp, string]> = Object.freeze([
+  [/^cdn\d+\.bigcommerce\.com$/iu, 'cdn11.bigcommerce.com'],
+]);
 const SAFE_MARKERS: ReadonlyArray<Readonly<{ marker: string; output: string }>> = Object.freeze([
   { marker: '/wp-content/', output: '<link href="/wp-content/fixture.css">' },
   { marker: '/wp-includes/', output: '<script src="/wp-includes/fixture.js"></script>' },
@@ -150,10 +152,6 @@ function text(value: unknown, label: string, maximum: number): string {
   return normalized;
 }
 
-function timestamp(value: unknown, label: string): string {
-  return canonicalControlFreeTimestamp(value, label);
-}
-
 function normalizeHeader(
   value: unknown,
   label: string,
@@ -233,12 +231,13 @@ function normalizeOrigins(value: unknown): string[] {
       throw new TypeError('Resource origins must not include credentials, paths, queries, or fragments.');
     }
     const host = parsed.hostname.toLowerCase();
-    if (!SHARED_VENDOR_HOSTS.has(host)
-      && ![...SHARED_VENDOR_HOSTS].some((suffix) => host.endsWith(`.${suffix}`))
-      && !SHARED_VENDOR_HOST_PATTERNS.some((pattern) => pattern.test(host))) {
+    const sharedHost = [...SHARED_VENDOR_HOSTS].find((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+    const reconstructedHost = sharedHost
+      ?? SHARED_VENDOR_HOST_RECONSTRUCTIONS.find(([pattern]) => pattern.test(host))?.[1];
+    if (!reconstructedHost) {
       throw new TypeError('Resource origin is not an approved shared vendor host.');
     }
-    origins.add(`${parsed.protocol}//${host}`);
+    origins.add(`https://${reconstructedHost}`);
   }
   return [...origins].sort();
 }
@@ -287,8 +286,10 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
   assertExactKeys(input, TECHNOLOGY_INPUT_KEYS, 'Technology evidence input');
   const id = text(source.id, 'Fixture id', 80).toLowerCase();
   if (!ID_RE.test(id)) throw new TypeError('Fixture id must be a lowercase hyphenated identifier.');
-  const reviewedAt = timestamp(source.reviewedAt, 'Reviewed time');
-  const observedAt = timestamp(source.observedAt, 'Observed time');
+  const { reviewedAt, observedAt } = canonicalObservationReviewTimestamps(
+    source.observedAt,
+    source.reviewedAt,
+  );
   const licenseBasis = text(source.licenseBasis, 'Licence basis', 40);
   if (!LICENCE_BASES.has(licenseBasis)) throw new TypeError('Licence basis is not supported.');
   if ((Array.isArray(source.expectedIds) && source.expectedIds.length > MAX_TECHNOLOGY_REVIEW_IDS)

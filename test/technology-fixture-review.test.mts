@@ -34,6 +34,13 @@ describe('reviewed technology-fixture contribution tool', () => {
     }));
     assert.equal(fixture.reviewedAt, '2026-07-28T23:00:00.000Z');
     assert.equal(fixture.observedAt, '2026-07-27T23:00:00.000Z');
+    assert.throws(
+      () => buildReviewedTechnologyFixture(input({
+        observedAt: '2026-07-30T10:00:00.000Z',
+        reviewedAt: '2026-07-29T10:00:00.000Z',
+      })),
+      /must not follow review time/u,
+    );
   });
 
   test('retains only minimised factual evidence and explicit privacy metadata', () => {
@@ -168,13 +175,14 @@ describe('reviewed technology-fixture contribution tool', () => {
       input: {
         generator: 'Webflow',
         html: '<html data-wf-page="private-page-id"></html>',
-        resourceOrigins: ['https://cloudfront.net'],
+        resourceOrigins: ['https://fixture-tenant.cloudfront.net'],
       },
     }));
     const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
 
     assert.deepEqual(fixture, checkedIn);
     assert.doesNotMatch(JSON.stringify(fixture), /private-page-id/u);
+    assert.doesNotMatch(JSON.stringify(fixture), /fixture-tenant/u);
   });
 
   test('reproduces licensed repository evidence without retaining upstream values', () => {

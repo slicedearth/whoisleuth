@@ -56,6 +56,18 @@ export function canonicalControlFreeTimestamp(value: unknown, label: string): st
   return normalized;
 }
 
+export function canonicalObservationReviewTimestamps(
+  observedValue: unknown,
+  reviewedValue: unknown,
+): Readonly<{ observedAt: string; reviewedAt: string }> {
+  const observedAt = canonicalControlFreeTimestamp(observedValue, 'Observation time');
+  const reviewedAt = canonicalControlFreeTimestamp(reviewedValue, 'Review time');
+  if (Date.parse(observedAt) > Date.parse(reviewedAt)) {
+    throw new TypeError('Observation time must not follow review time.');
+  }
+  return Object.freeze({ observedAt, reviewedAt });
+}
+
 export function sanitizedMaintainerText(value: unknown, fallback: string, maximum: number): string {
   const text = typeof value === 'string'
     ? value.replace(UNSAFE_TEXT_GLOBAL_RE, ' ').replace(/\s+/gu, ' ').trim()

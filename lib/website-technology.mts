@@ -25,17 +25,26 @@ import {
   TECHNOLOGY_PROFILE_VERSION,
 } from './lookup-child-profile-contract.mts';
 
-type TechnologyCategory =
-  | 'application runtime'
-  | 'content management'
-  | 'commerce'
-  | 'site builder'
-  | 'web framework'
-  | 'static site generator'
-  | 'web server'
-  | 'delivery platform';
+const TECHNOLOGY_CATEGORIES = Object.freeze([
+  'application runtime',
+  'content management',
+  'commerce',
+  'site builder',
+  'web framework',
+  'static site generator',
+  'web server',
+  'delivery platform',
+] as const);
+type TechnologyCategory = (typeof TECHNOLOGY_CATEGORIES)[number];
 type TechnologyConfidence = 'high' | 'medium';
-type TechnologyEvidenceSource = 'generator metadata' | 'static HTML' | 'resource origin' | 'HTTP server header' | 'passive response header';
+const TECHNOLOGY_EVIDENCE_SOURCES = Object.freeze([
+  'generator metadata',
+  'static HTML',
+  'resource origin',
+  'HTTP server header',
+  'passive response header',
+] as const);
+type TechnologyEvidenceSource = (typeof TECHNOLOGY_EVIDENCE_SOURCES)[number];
 type TechnologyEvidence = {
   source: TechnologyEvidenceSource;
   role: TechnologyEvidenceRole;
@@ -673,6 +682,8 @@ export {
   MAX_TECHNOLOGY_HTML_CHARS,
   MAX_TECHNOLOGY_TAGS,
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
+  TECHNOLOGY_CATEGORIES,
+  TECHNOLOGY_EVIDENCE_SOURCES,
   TECHNOLOGY_PROFILE_VERSION,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
@@ -683,6 +694,7 @@ export type {
   TechnologyCategory,
   TechnologyConfidence,
   TechnologyEvidence,
+  TechnologyEvidenceSource,
   TechnologyEvidenceRole,
   TechnologyFinding,
   TechnologyInput,

@@ -27,6 +27,12 @@ describe('STIX 2.1 schema conformance gate', () => {
 
   test('rejects malformed and oversized bundles without network access', async () => {
     await assert.rejects(validateStixBundle('{"type":"bundle","objects":[{}]}'), /schema validation failed/u);
+    const malformedId = JSON.parse(conformanceBundles()[0]!) as { id: string };
+    malformedId.id = 'bundle--invalid';
+    await assert.rejects(
+      validateStixBundle(JSON.stringify(malformedId)),
+      /bundle envelope.*pattern/iu,
+    );
     assert.throws(() => parseBundle('[]'), /must be an object/u);
   });
 

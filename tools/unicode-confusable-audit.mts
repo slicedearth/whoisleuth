@@ -25,6 +25,7 @@ import {
 import {
   generateConfusableProjection,
   renderConfusableProjectionModule,
+  type ConfusableProjection,
 } from '../lib/unicode-confusable-projection.mts';
 import CALIBRATION_CASES from '../fixtures/idn-confusable-calibration.mts';
 
@@ -43,10 +44,26 @@ type Confusion = Readonly<{
   falseNegative: number;
 }>;
 type AuditArguments = Readonly<{ source: string | null; write: boolean; json: boolean }>;
+type AuditedProjection = Readonly<{
+  mappingVersion: string;
+  source: ConfusableProjection['source'];
+  policy: Readonly<{
+    acceptedScripts: readonly string[];
+    sourceCodePoints: number;
+    skeletonPerAscii: number;
+    generationPerAscii: number;
+    totalMappings: number;
+  }>;
+  skeletonGroups: Readonly<Record<string, string>>;
+  generationGroups: Readonly<Record<string, string>>;
+  stats: ConfusableProjection['stats'];
+}>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
   stdout?: WritableLike;
   stderr?: WritableLike;
+  generateProjection?: (source: unknown) => ConfusableProjection;
+  writeProjection?: (filename: string, content: string, encoding: 'utf8') => Promise<void>;
 }>;
 
 export const UNICODE_CONFUSABLE_AUDIT_SCHEMA = 'whoisleuth.unicode-confusable-audit';
@@ -210,33 +227,33 @@ function candidateCounts(label: string, groups: Readonly<Record<string, string>>
   });
 }
 
-function validateCheckedInProjection(): string[] {
+function validateProjection(projection: AuditedProjection): string[] {
   const failures: string[] = [];
-  const skeletonEntries = Object.values(GENERATED_CONFUSABLE_GROUPS)
+  const skeletonEntries = Object.values(projection.skeletonGroups)
     .reduce((total, values) => total + [...values].length, 0);
-  const generationEntries = Object.values(GENERATED_GENERATION_CONFUSABLE_GROUPS)
+  const generationEntries = Object.values(projection.generationGroups)
     .reduce((total, values) => total + [...values].length, 0);
-  if (skeletonEntries > MAX_PROJECTED_CONFUSABLES) failures.push('The checked-in skeleton projection exceeds its total mapping limit.');
-  if (skeletonEntries !== GENERATED_CONFUSABLE_STATS.projectedMappings) failures.push('The checked-in skeleton count does not match its metadata.');
-  if (generationEntries !== GENERATED_CONFUSABLE_STATS.generationMappings) failures.push('The checked-in generation count does not match its metadata.');
-  for (const [ascii, values] of Object.entries(GENERATED_CONFUSABLE_GROUPS)) {
+  if (skeletonEntries > MAX_PROJECTED_CONFUSABLES) failures.push('The skeleton projection exceeds its total mapping limit.');
+  if (skeletonEntries !== projection.stats.projectedMappings) failures.push('The skeleton count does not match its metadata.');
+  if (generationEntries !== projection.stats.generationMappings) failures.push('The generation count does not match its metadata.');
+  for (const [ascii, values] of Object.entries(projection.skeletonGroups)) {
     if (!/^[a-z]$/u.test(ascii) || [...values].length > MAX_SKELETON_CONFUSABLES_PER_ASCII) {
       failures.push(`Skeleton group ${ascii} violates its per-letter limit.`);
     }
   }
-  for (const [ascii, values] of Object.entries(GENERATED_GENERATION_CONFUSABLE_GROUPS)) {
+  for (const [ascii, values] of Object.entries(projection.generationGroups)) {
     if (!/^[a-z]$/u.test(ascii) || [...values].length > MAX_GENERATION_CONFUSABLES_PER_ASCII) {
       failures.push(`Generation group ${ascii} violates its per-letter limit.`);
       continue;
     }
     for (const substitution of values) {
-      if (!GENERATED_CONFUSABLE_GROUPS[ascii]?.includes(substitution)) {
+      if (!projection.skeletonGroups[ascii]?.includes(substitution)) {
         failures.push(`Generation character U+${substitution.codePointAt(0)?.toString(16).toUpperCase()} is absent from skeleton group ${ascii}.`);
       }
       if (!domainToASCII(`${substitution}.example`).startsWith('xn--')) {
         failures.push(`Generation character U+${substitution.codePointAt(0)?.toString(16).toUpperCase()} is not an IDNA candidate.`);
       }
-      if (skeletonWithConfusableGroups(substitution, GENERATED_CONFUSABLE_GROUPS) !== ascii) {
+      if (skeletonWithConfusableGroups(substitution, projection.skeletonGroups) !== ascii) {
         failures.push(`Generation character U+${substitution.codePointAt(0)?.toString(16).toUpperCase()} does not round-trip to ${ascii}.`);
       }
     }
@@ -244,13 +261,16 @@ function validateCheckedInProjection(): string[] {
   return failures.slice(0, 20);
 }
 
-export function buildUnicodeConfusableAudit(calibrationValue: unknown = CALIBRATION_CASES) {
+export function buildUnicodeConfusableAudit(
+  calibrationValue: unknown = CALIBRATION_CASES,
+  projection: AuditedProjection = checkedInProjectionShape(),
+) {
   const cases = normalizeCalibrationCases(calibrationValue);
   const current = confusionFor(cases, REVIEWED_SKELETON_CONFUSABLES);
-  const proposed = confusionFor(cases, GENERATED_CONFUSABLE_GROUPS);
+  const proposed = confusionFor(cases, projection.skeletonGroups);
   const seeds = CALIBRATION_SEEDS.slice(0, MAX_CALIBRATION_SEEDS).map((seed) => {
     const currentVolume = candidateCounts(seed, REVIEWED_GENERATION_CONFUSABLES);
-    const proposedVolume = candidateCounts(seed, GENERATED_GENERATION_CONFUSABLE_GROUPS);
+    const proposedVolume = candidateCounts(seed, projection.generationGroups);
     return Object.freeze({
       seed,
       currentCandidates: currentVolume.totalCandidates,
@@ -269,7 +289,7 @@ export function buildUnicodeConfusableAudit(calibrationValue: unknown = CALIBRAT
   const proposedCandidates = seeds.reduce((total, item) => total + item.proposedCandidates, 0);
   const totalGrowthRatio = ratio(proposedCandidates - currentCandidates, currentCandidates);
   const maximumSeedGrowthRatio = Math.max(...seeds.map((item) => item.growthRatio), 0);
-  const projectionFailures = validateCheckedInProjection();
+  const projectionFailures = validateProjection(projection);
   const gates = Object.freeze({
     coverageImproved: proposed.truePositive > current.truePositive,
     noNewFalsePositives: proposed.falsePositive <= current.falsePositive,
@@ -281,11 +301,11 @@ export function buildUnicodeConfusableAudit(calibrationValue: unknown = CALIBRAT
   return Object.freeze({
     schema: UNICODE_CONFUSABLE_AUDIT_SCHEMA,
     version: UNICODE_CONFUSABLE_AUDIT_VERSION,
-    mappingVersion: GENERATED_CONFUSABLE_MAPPING_VERSION,
+    mappingVersion: projection.mappingVersion,
     status: Object.values(gates).every(Boolean) ? 'pass' : 'fail',
-    source: GENERATED_CONFUSABLE_SOURCE,
-    policy: GENERATED_CONFUSABLE_POLICY,
-    projection: GENERATED_CONFUSABLE_STATS,
+    source: projection.source,
+    policy: projection.policy,
+    projection: projection.stats,
     calibration: Object.freeze({
       cases: cases.length,
       positiveCases: cases.filter((item) => item.expectedMatch).length,
@@ -344,7 +364,7 @@ async function readBoundedSource(filename: string): Promise<string> {
   }
 }
 
-function checkedInProjectionShape() {
+function checkedInProjectionShape(): AuditedProjection {
   return {
     mappingVersion: GENERATED_CONFUSABLE_MAPPING_VERSION,
     source: GENERATED_CONFUSABLE_SOURCE,
@@ -375,27 +395,38 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
     const parsed = parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
     let sourceCheck = 'not supplied';
+    let projection = checkedInProjectionShape();
+    let generatedProjection: ConfusableProjection | null = null;
     if (parsed.source) {
       const source = await readBoundedSource(path.resolve(repositoryRoot, parsed.source));
-      const projection = generateConfusableProjection(source);
+      generatedProjection = (options.generateProjection ?? generateConfusableProjection)(source);
+      projection = generatedProjection;
       sourceCheck = isDeepStrictEqual(
         {
-          mappingVersion: projection.mappingVersion,
-          source: projection.source,
-          policy: projection.policy,
-          skeletonGroups: projection.skeletonGroups,
-          generationGroups: projection.generationGroups,
-          stats: projection.stats,
+          mappingVersion: generatedProjection.mappingVersion,
+          source: generatedProjection.source,
+          policy: generatedProjection.policy,
+          skeletonGroups: generatedProjection.skeletonGroups,
+          generationGroups: generatedProjection.generationGroups,
+          stats: generatedProjection.stats,
         },
         checkedInProjectionShape(),
       ) ? 'matches checked-in projection' : 'drift detected';
-      if (parsed.write) {
+    }
+    const report = buildUnicodeConfusableAudit(CALIBRATION_CASES, projection);
+    if (parsed.write) {
+      if (report.status === 'pass' && generatedProjection) {
         const outputPath = path.join(repositoryRoot, 'lib/generated/unicode-confusables-17.mts');
-        await writeFile(outputPath, renderConfusableProjectionModule(projection), 'utf8');
+        await (options.writeProjection ?? writeFile)(
+          outputPath,
+          renderConfusableProjectionModule(generatedProjection),
+          'utf8',
+        );
         sourceCheck = 'wrote checked-in projection';
+      } else {
+        sourceCheck = 'candidate failed audit; projection not written';
       }
     }
-    const report = buildUnicodeConfusableAudit();
     stdout.write(parsed.json
       ? `${JSON.stringify({ ...report, sourceCheck }, null, 2)}\n`
       : `${formatAudit(report, sourceCheck)}\n`);

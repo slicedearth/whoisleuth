@@ -18,6 +18,14 @@ type BoundedJsonParseOptions = Readonly<{
   limits?: BoundedJsonLimits;
 }>;
 
+type BoundedJsonStringToken = Readonly<{
+  value: string;
+  offset: number;
+  kind: 'key' | 'value';
+  propertyKey?: string;
+}>;
+type BoundedJsonStringObserver = (entry: BoundedJsonStringToken) => void;
+
 function syntaxError(): never {
   throw new TypeError('Artefact input is not valid JSON.');
 }
@@ -116,7 +124,11 @@ export function assertBoundedJsonStructure(
   visit(value, 0);
 }
 
-export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): void {
+export function scanBoundedJson(
+  raw: string,
+  limits: BoundedJsonLimits = {},
+  observeString?: BoundedJsonStringObserver,
+): void {
   const maximumDepth = limits.maximumDepth ?? MAX_BOUNDED_JSON_DEPTH;
   const maximumKeys = limits.maximumKeys ?? MAX_BOUNDED_JSON_KEYS;
   const maximumValues = limits.maximumValues ?? MAX_BOUNDED_JSON_VALUES;
@@ -128,14 +140,16 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
   const whitespace = () => {
     while (index < raw.length && /[\t\n\r ]/u.test(raw[index]!)) index += 1;
   };
-  const stringToken = (): string => {
+  const stringToken = (): Readonly<{ value: string; offset: number }> => {
     const start = index;
     index += 1;
     while (index < raw.length) {
       const character = raw[index]!;
       if (character === '"') {
         index += 1;
-        try { return JSON.parse(raw.slice(start, index)) as string; } catch { syntaxError(); }
+        try {
+          return { value: JSON.parse(raw.slice(start, index)) as string, offset: start };
+        } catch { syntaxError(); }
       }
       if (character === '\\') {
         index += 1;
@@ -166,7 +180,7 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
     }
     index += match[0].length;
   };
-  const value = (depth: number): void => {
+  const value = (depth: number, propertyKey?: string): void => {
     values += 1;
     if (values > maximumValues) {
       throw new TypeError(`Artefact JSON exceeds the ${maximumValues}-value limit.`);
@@ -176,7 +190,11 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
     }
     whitespace();
     const character = raw[index];
-    if (character === '"') { stringToken(); return; }
+    if (character === '"') {
+      const parsedString = stringToken();
+      observeString?.({ ...parsedString, kind: 'value', ...(propertyKey === undefined ? {} : { propertyKey }) });
+      return;
+    }
     if (character === '{') {
       index += 1;
       whitespace();
@@ -184,7 +202,8 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
       if (raw[index] === '}') { index += 1; return; }
       while (index < raw.length) {
         if (raw[index] !== '"') syntaxError();
-        const key = stringToken();
+        const parsedKey = stringToken();
+        const key = parsedKey.value;
         if (seen.size >= maximumContainerItems) {
           throw new TypeError(`Artefact JSON contains a container with more than ${maximumContainerItems} items.`);
         }
@@ -195,10 +214,11 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
         if (seen.has(key)) throw new TypeError('Artefact JSON contains a duplicate object key.');
         if (!isSafeJsonObjectKey(key)) throw new TypeError('Artefact JSON contains an unsafe object key.');
         seen.add(key);
+        observeString?.({ ...parsedKey, kind: 'key' });
         whitespace();
         if (raw[index] !== ':') syntaxError();
         index += 1;
-        value(depth + 1);
+        value(depth + 1, key);
         whitespace();
         if (raw[index] === '}') { index += 1; return; }
         if (raw[index] !== ',') syntaxError();
@@ -238,7 +258,12 @@ export function scanBoundedJson(raw: string, limits: BoundedJsonLimits = {}): vo
   if (index !== raw.length) syntaxError();
 }
 
-export type { BoundedJsonLimits, BoundedJsonParseOptions };
+export type {
+  BoundedJsonLimits,
+  BoundedJsonParseOptions,
+  BoundedJsonStringObserver,
+  BoundedJsonStringToken,
+};
 
 export function parseBoundedJson(
   raw: string,
