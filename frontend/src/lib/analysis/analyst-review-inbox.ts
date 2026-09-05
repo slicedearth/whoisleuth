@@ -1,9 +1,8 @@
 import {
   caseLookupTarget,
-  caseStatusIsClosed,
-  isReviewedCaseDisposition,
   type CaseRecord,
 } from './case-model.ts';
+import { caseStatusIsClosed, isReviewedCaseDisposition } from './case-record-decisions.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import {

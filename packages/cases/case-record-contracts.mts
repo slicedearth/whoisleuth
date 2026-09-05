@@ -33,6 +33,16 @@ import {
   MAX_TAGS_PER_CASE,
 } from '../contracts/case-portability.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
+import {
+  CASE_DISPOSITIONS,
+  CASE_STATUSES,
+  DEFAULT_DISPOSITION,
+  DEFAULT_STATUS,
+  type CaseDisposition,
+  type CaseDispositionOption,
+  type CaseStatus,
+  type CaseStatusOption,
+} from './case-record-decisions.mts';
 
 export {
   CASE_IMPORT_VERSIONS,
@@ -58,26 +68,18 @@ export {
   MAX_TAGS_PER_CASE,
 };
 
-export const CASE_STATUSES = Object.freeze([
-  { value: 'new', label: 'New' },
-  { value: 'reviewing', label: 'Reviewing' },
-  { value: 'monitoring', label: 'Monitoring' },
-  { value: 'escalated', label: 'Escalated' },
-  { value: 'resolved', label: 'Resolved' },
-] as const);
-export type CaseStatus = typeof CASE_STATUSES[number]['value'];
-export type CaseStatusOption = typeof CASE_STATUSES[number];
-
-export const CASE_DISPOSITIONS = Object.freeze([
-  { value: 'unreviewed', label: 'Unreviewed' },
-  { value: 'suspicious', label: 'Suspicious' },
-  { value: 'confirmed_abuse', label: 'Confirmed abuse' },
-  { value: 'false_positive', label: 'False positive' },
-  { value: 'expected', label: 'Expected' },
-  { value: 'closed_no_action', label: 'Closed without action' },
-] as const);
-export type CaseDisposition = typeof CASE_DISPOSITIONS[number]['value'];
-export type CaseDispositionOption = typeof CASE_DISPOSITIONS[number];
+export {
+  CASE_DISPOSITIONS,
+  CASE_STATUSES,
+  DEFAULT_DISPOSITION,
+  DEFAULT_STATUS,
+};
+export type {
+  CaseDisposition,
+  CaseDispositionOption,
+  CaseStatus,
+  CaseStatusOption,
+};
 
 export const CASE_REVIEW_REASONS: Array<{ value: string; label: string }> = ANALYST_REVIEW_REASONS.map((item) => ({ ...item }));
 
@@ -92,8 +94,6 @@ export type CaseSource = typeof CASE_SOURCES[number]['value'];
 
 export const EVIDENCE_SOURCES = Object.freeze(['lookup', 'bulk', 'monitor', 'import', 'unknown'] as const);
 export type CaseEvidenceSource = typeof EVIDENCE_SOURCES[number];
-export const DEFAULT_STATUS = 'new' satisfies CaseStatus;
-export const DEFAULT_DISPOSITION = 'unreviewed' satisfies CaseDisposition;
 export const DEFAULT_SOURCE = 'unknown' satisfies CaseSource;
 
 export type CaseNote = { id: string; body: string; createdAt: string };

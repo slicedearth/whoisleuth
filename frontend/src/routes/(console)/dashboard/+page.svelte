@@ -18,7 +18,7 @@
     type DashboardWorkspaceState,
   } from '$lib/analysis/dashboard-workspace-state.ts';
   import { publicHomepage } from '$lib/workspaces';
-  import { caseStatusIsClosed } from '$lib/cases';
+  import { caseStatusIsClosed } from '$lib/analysis/case-record-decisions.ts';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
 
 

@@ -339,7 +339,7 @@ describe('verification architecture contracts', () => {
       },
       {
         kind: 'Case status decision',
-        path: 'packages/cases/case-record-operations.mts',
+        path: 'packages/cases/case-record-decisions.mts',
         owner: 'Case domain and response lifecycle',
         unit: 'test/case-record-ownership.test.mts',
         browser: 'e2e/cases.spec.ts',

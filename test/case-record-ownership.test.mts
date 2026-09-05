@@ -3,21 +3,23 @@ import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import {
-  CASE_DISPOSITIONS,
-  CASE_STATUSES,
   CASE_AUDIENCE_SENSITIVE_FIELD_NAMES,
   CASE_FIELD_RULES,
   CASE_RECORD_FIELD_NAMES,
   buildCaseExport,
-  caseDispositionSupportsDefensiveResponse,
-  caseStatusOptionsForDirectEdit,
-  caseStatusRequiresClosure,
-  isReviewedCaseDisposition,
   normalizeCaseStore,
   projectCaseForAudience,
   projectCaseForDurableWrite,
   serializeCaseStore,
 } from '../packages/cases/case-model.mts';
+import {
+  CASE_DISPOSITIONS,
+  CASE_STATUSES,
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusOptionsForDirectEdit,
+  caseStatusRequiresClosure,
+  isReviewedCaseDisposition,
+} from '../packages/cases/case-record-decisions.mts';
 import { RULE_FIELD_DEFINITIONS } from '../packages/workspace/detection-rule-model.mts';
 
 const NOW = '2026-08-22T00:00:00.000Z';

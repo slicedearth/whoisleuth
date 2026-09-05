@@ -2,11 +2,9 @@
 // record normalization, and analyst updates.
 
 import {
-  CASE_DISPOSITIONS,
   CASE_SCHEMA_VERSION,
   CASE_REVIEW_REASONS,
   CASE_SOURCES,
-  CASE_STATUSES,
   DEFAULT_DISPOSITION,
   DEFAULT_SOURCE,
   DEFAULT_STATUS,
@@ -21,6 +19,12 @@ import {
   type CaseSource,
   type CaseStatus,
 } from './case-record-contracts.mts';
+import {
+  dispositionLabel,
+  isValidDisposition,
+  isValidStatus,
+  statusLabel,
+} from './case-record-decisions.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 
@@ -48,13 +52,9 @@ export const EVIDENCE_SOURCE_RANK = {
   unknown: 0,
 };
 
-const STATUS_VALUES: ReadonlySet<string> = new Set(CASE_STATUSES.map((item) => item.value));
-const DISPOSITION_VALUES: ReadonlySet<string> = new Set(CASE_DISPOSITIONS.map((item) => item.value));
 const REVIEW_REASON_VALUES: Set<string> = new Set(CASE_REVIEW_REASONS.map((item) => item.value).filter(Boolean));
 const SOURCE_VALUES: ReadonlySet<string> = new Set(CASE_SOURCES.map((item) => item.value));
 
-const STATUS_LABELS = new Map<CaseStatus, string>(CASE_STATUSES.map((item) => [item.value, item.label]));
-const DISPOSITION_LABELS = new Map<CaseDisposition, string>(CASE_DISPOSITIONS.map((item) => [item.value, item.label]));
 const SOURCE_LABELS = new Map<CaseSource, string>(CASE_SOURCES.map((item) => [item.value, item.label]));
 
 // Availability tokens that actually assert something about the domain. Anything
@@ -86,25 +86,20 @@ export function objectRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export function statusLabel(value: unknown): string {
-  return isValidStatus(value) ? STATUS_LABELS.get(value)! : String(value || '');
-}
-export function dispositionLabel(value: unknown): string {
-  return isValidDisposition(value) ? DISPOSITION_LABELS.get(value)! : String(value || '');
-}
 export function sourceLabel(value: unknown): string {
   return isValidSource(value) ? SOURCE_LABELS.get(value)! : String(value || '');
 }
 
-export function isValidStatus(value: unknown): value is CaseStatus {
-  return typeof value === 'string' && STATUS_VALUES.has(value);
-}
-export function isValidDisposition(value: unknown): value is CaseDisposition {
-  return typeof value === 'string' && DISPOSITION_VALUES.has(value);
-}
 export function isValidSource(value: unknown): value is CaseSource {
   return typeof value === 'string' && SOURCE_VALUES.has(value);
 }
+
+export {
+  dispositionLabel,
+  isValidDisposition,
+  isValidStatus,
+  statusLabel,
+};
 
 /** Fresh, safe, effectively-unique id for a brand-new local record. */
 export function makeId(): string {

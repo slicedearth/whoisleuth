@@ -50,6 +50,7 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'frontend/src/lib/analysis/case-evidence-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-evidence-model.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analysis/case-migration-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-migration-model.mts' }),
+  Object.freeze({ source: 'frontend/src/lib/analysis/case-record-decisions.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-record-decisions.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analysis/case-record-operations.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-record-operations.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analysis/case-storage-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-storage-model.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analysis/ct-query.ts', category: 'compatibility_re_export', owner: 'lib/ct-query.mts' }),

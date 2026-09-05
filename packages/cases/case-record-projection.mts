@@ -1,6 +1,6 @@
 import type { CaseRecord } from './case-record-contracts.mts';
 import { PUBLIC_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
-import { caseStatusIsClosed } from './case-record-operations.mts';
+import { caseStatusIsClosed } from './case-record-decisions.mts';
 
 export type CaseAudience = 'internal' | 'public' | 'trusted';
 export type CaseFieldTreatment = 'exclude' | 'preserve' | 'redact' | 'transform';

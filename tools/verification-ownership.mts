@@ -140,6 +140,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     impactOnly: true,
     matches: (value: string) => [
       'packages/cases/case-record-contracts.mts',
+      'packages/cases/case-record-decisions.mts',
       'packages/cases/case-record-projection.mts',
       'packages/cases/case-storage-model.mts',
       'packages/contracts/case-portability.mts',

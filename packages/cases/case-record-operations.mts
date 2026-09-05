@@ -27,24 +27,26 @@ import {
 } from './case-response-model.mts';
 import {
   CASE_SCHEMA_VERSION,
-  CASE_STATUSES,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
-  type CaseDisposition,
-  type CaseStatus,
-  type CaseStatusOption,
   type CaseEvidenceSnapshot,
   type CaseInput,
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
 import {
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  caseStatusRequiresClosure,
+  isReviewedCaseDisposition,
+  type ReviewedCaseDisposition,
+} from './case-record-decisions.mts';
+import {
   DEFAULT_EVIDENCE_SOURCE,
   EVIDENCE_SOURCE_SET,
   caseTimestampOrNull,
   deterministicId,
-  isValidDisposition,
-  isValidStatus,
   makeId,
   normalizeDisposition,
   normalizeDomain,
@@ -71,62 +73,20 @@ import {
   updateCaseInvestigationBranch,
 } from './case-investigation-branch-model.mts';
 
+export {
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  caseStatusRequiresClosure,
+  isReviewedCaseDisposition,
+};
+export type { ReviewedCaseDisposition };
+
 export const MAX_CASE_OBJECTIVE_LENGTH = 320;
 export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
 export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
 const OBJECTIVE_PREFIX = 'Objective: ';
 const RETENTION_SEPARATOR = ' | URL retained: ';
-
-type CaseStatusOperationPolicy = Readonly<{
-  closed: boolean;
-  closureRequired: boolean;
-  directEdit: 'allowed' | 'existing_only';
-}>;
-const CASE_STATUS_OPERATION_POLICIES = Object.freeze({
-  new: { closed: false, closureRequired: false, directEdit: 'allowed' },
-  reviewing: { closed: false, closureRequired: false, directEdit: 'allowed' },
-  monitoring: { closed: false, closureRequired: false, directEdit: 'allowed' },
-  escalated: { closed: false, closureRequired: false, directEdit: 'allowed' },
-  resolved: { closed: true, closureRequired: true, directEdit: 'existing_only' },
-} as const satisfies Record<CaseStatus, CaseStatusOperationPolicy>);
-
-type CaseDispositionDecisionPolicy = Readonly<{
-  reviewed: boolean;
-  supportsDefensiveResponse: boolean;
-}>;
-const CASE_DISPOSITION_DECISION_POLICIES = Object.freeze({
-  unreviewed: { reviewed: false, supportsDefensiveResponse: false },
-  suspicious: { reviewed: true, supportsDefensiveResponse: true },
-  confirmed_abuse: { reviewed: true, supportsDefensiveResponse: true },
-  false_positive: { reviewed: true, supportsDefensiveResponse: false },
-  expected: { reviewed: true, supportsDefensiveResponse: false },
-  closed_no_action: { reviewed: true, supportsDefensiveResponse: false },
-} as const satisfies Record<CaseDisposition, CaseDispositionDecisionPolicy>);
-export type ReviewedCaseDisposition = {
-  [K in CaseDisposition]: (typeof CASE_DISPOSITION_DECISION_POLICIES)[K]['reviewed'] extends true ? K : never;
-}[CaseDisposition];
-
-export function caseStatusRequiresClosure(value: unknown): boolean {
-  return isValidStatus(value) && CASE_STATUS_OPERATION_POLICIES[value].closureRequired;
-}
-
-export function caseStatusIsClosed(value: unknown): boolean {
-  return isValidStatus(value) && CASE_STATUS_OPERATION_POLICIES[value].closed;
-}
-
-export function isReviewedCaseDisposition(value: unknown): value is ReviewedCaseDisposition {
-  return isValidDisposition(value) && CASE_DISPOSITION_DECISION_POLICIES[value].reviewed;
-}
-
-export function caseDispositionSupportsDefensiveResponse(value: unknown): boolean {
-  return isValidDisposition(value) && CASE_DISPOSITION_DECISION_POLICIES[value].supportsDefensiveResponse;
-}
-
-export function caseStatusOptionsForDirectEdit(currentStatus: CaseStatus): readonly CaseStatusOption[] {
-  return CASE_STATUSES.filter((option) => (
-    CASE_STATUS_OPERATION_POLICIES[option.value].directEdit === 'allowed' || option.value === currentStatus
-  ));
-}
 
 export type IncidentUrlContext = Readonly<{
   exactUrl: string;

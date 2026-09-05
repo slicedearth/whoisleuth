@@ -1,4 +1,5 @@
-import { caseStatusIsClosed, type CaseRecord } from './case-model.ts';
+import type { CaseRecord } from './case-model.ts';
+import { caseStatusIsClosed } from './case-record-decisions.ts';
 import type { AnalystReviewInboxItem } from './analyst-review-inbox.ts';
 import type {
   AnalystReviewLifecycle,

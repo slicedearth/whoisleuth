@@ -1,4 +1,4 @@
-import { dispositionLabel, isReviewedCaseDisposition } from './case-model.ts';
+import { dispositionLabel, isReviewedCaseDisposition } from './case-record-decisions.ts';
 
 export const INVESTIGATION_HANDOFF_READINESS_VERSION = 1;
 

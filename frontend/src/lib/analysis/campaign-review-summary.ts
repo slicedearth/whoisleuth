@@ -1,8 +1,5 @@
-import {
-  isReviewedCaseDisposition,
-  latestCaseEvidence,
-  type CaseRecord,
-} from './case-record-model.ts';
+import { latestCaseEvidence, type CaseRecord } from './case-record-model.ts';
+import { isReviewedCaseDisposition } from './case-record-decisions.ts';
 
 export type CampaignReviewCue = Readonly<{
   id: 'credential_surface' | 'identity_relationship' | 'mail_surface' | 'redirect_review';

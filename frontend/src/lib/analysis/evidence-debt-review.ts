@@ -1,4 +1,5 @@
-import { caseStatusIsClosed, type CaseRecord } from './case-model.ts';
+import type { CaseRecord } from './case-model.ts';
+import { caseStatusIsClosed } from './case-record-decisions.ts';
 import {
   BULK_REVIEW_STALE_AFTER_DAYS,
 } from './bulk-retry-plan.ts';
