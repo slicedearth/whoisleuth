@@ -8,11 +8,20 @@ export type CaseFieldTreatment = 'exclude' | 'preserve' | 'redact' | 'transform'
 type CaseProjectionProfile = 'durable' | CaseAudience;
 type CompleteCaseRecord = Required<CaseRecord>;
 type CaseField = keyof CompleteCaseRecord;
+type CaseAudienceExclusion = Readonly<{
+  label: string;
+  order: number;
+}>;
 type CaseFieldRule<K extends CaseField> = Readonly<{
   key: K;
   treatment: Readonly<Record<CaseProjectionProfile, CaseFieldTreatment>>;
   nestedSensitiveFields: readonly string[];
+  audienceExclusions: Readonly<Partial<Record<CaseAudience, CaseAudienceExclusion>>>;
   value: (record: CaseRecord, profile: CaseProjectionProfile) => CompleteCaseRecord[K];
+}>;
+type CaseFieldRuleOptions = Readonly<{
+  nestedSensitiveFields?: readonly string[];
+  audienceExclusions?: Readonly<Partial<Record<CaseAudience, CaseAudienceExclusion>>>;
 }>;
 
 const PRESERVE = Object.freeze({
@@ -31,13 +40,26 @@ function fieldRule<K extends CaseField>(
   key: K,
   treatment: Readonly<Record<CaseProjectionProfile, CaseFieldTreatment>>,
   value: CaseFieldRule<K>['value'],
-  nestedSensitiveFields: readonly string[] = [],
+  options: CaseFieldRuleOptions = {},
 ): CaseFieldRule<K> {
+  const audienceExclusions = Object.freeze(Object.fromEntries(
+    Object.entries(options.audienceExclusions ?? {}).map(([audience, exclusion]) => [
+      audience,
+      Object.freeze({ ...exclusion }),
+    ]),
+  )) as Readonly<Partial<Record<CaseAudience, CaseAudienceExclusion>>>;
+  for (const audience of ['internal', 'trusted', 'public'] as const) {
+    const requiresExplanation = treatment[audience] === 'exclude' || treatment[audience] === 'redact';
+    if (requiresExplanation !== Boolean(audienceExclusions[audience])) {
+      throw new TypeError(`Case field ${key} must explain every redacted or excluded ${audience} treatment exactly once.`);
+    }
+  }
   return Object.freeze({
     key,
     treatment,
     value,
-    nestedSensitiveFields: Object.freeze([...nestedSensitiveFields]),
+    nestedSensitiveFields: Object.freeze([...(options.nestedSensitiveFields ?? [])]),
+    audienceExclusions,
   });
 }
 
@@ -95,13 +117,20 @@ const CASE_FIELD_RULES = Object.freeze({
   reviewReasonCode: fieldRule('reviewReasonCode', PRESERVE, (record) => record.reviewReasonCode ?? null),
   brandProfileIds: fieldRule('brandProfileIds', PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public' ? [] : [...record.brandProfileIds]
-  )),
+  ), {
+    audienceExclusions: { public: { label: 'Brand Profile references', order: 2 } },
+  }),
   tags: fieldRule('tags', PRESERVE, (record) => [...record.tags]),
   notes: fieldRule('notes', SHARED_EXCLUDE, (record, profile) => (
     profile === 'trusted' || profile === 'public'
       ? []
       : record.notes.map((item) => ({ ...item }))
-  )),
+  ), {
+    audienceExclusions: {
+      trusted: { label: 'Case notes', order: 1 },
+      public: { label: 'Case notes', order: 1 },
+    },
+  }),
   source: preservedField('source'),
   evidenceHistory: fieldRule('evidenceHistory', PRESERVE, (record) => structuredClone(record.evidenceHistory)),
   evidencePins: fieldRule('evidencePins', PRESERVE, (record) => structuredClone(record.evidencePins)),
@@ -112,29 +141,53 @@ const CASE_FIELD_RULES = Object.freeze({
       : profile === 'trusted'
         ? structuredClone(record.actions).map((item) => ({ ...item, recipient: '[redacted]' }))
         : structuredClone(record.actions)
-  ), ['recipient']),
+  ), {
+    nestedSensitiveFields: ['recipient'],
+    audienceExclusions: {
+      trusted: { label: 'Recipient values', order: 2 },
+      public: { label: 'Actions and recipient values', order: 3 },
+    },
+  }),
   assertions: fieldRule('assertions', PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public' ? [] : structuredClone(record.assertions)
-  )),
+  ), {
+    audienceExclusions: { public: { label: 'Analyst assertions', order: 4 } },
+  }),
   manualTrail: fieldRule('manualTrail', SHARED_REDACT, (record, profile) => (
     profile === 'trusted' || profile === 'public'
       ? structuredClone(record.manualTrail).map((item) => ({ ...item, target: null }))
       : structuredClone(record.manualTrail)
-  ), ['target']),
+  ), {
+    nestedSensitiveFields: ['target'],
+    audienceExclusions: {
+      trusted: { label: 'Manual trail targets', order: 3 },
+      public: { label: 'Manual trail targets', order: 6 },
+    },
+  }),
   sightings: fieldRule('sightings', PRESERVE, (record) => structuredClone(record.sightings)),
   observedEffects: fieldRule('observedEffects', PUBLIC_REDACT, (record, profile) => (
     profile === 'public'
       ? publicObservedEffectHistory(record.observedEffects.preV13HistoryUnavailable)
       : structuredClone(record.observedEffects)
-  )),
+  ), {
+    audienceExclusions: {
+      public: { label: 'Independent observed-effect reviews and closure history', order: 8 },
+    },
+  }),
   closures: fieldRule('closures', PUBLIC_REDACT, (record, profile) => (
     profile === 'public'
       ? publicClosureHistory(record.closures.preV13HistoryUnavailable)
       : structuredClone(record.closures)
-  )),
+  ), {
+    audienceExclusions: {
+      public: { label: 'Independent observed-effect reviews and closure history', order: 8 },
+    },
+  }),
   branches: fieldRule('branches', PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public' ? [] : structuredClone(record.branches ?? [])
-  )),
+  ), {
+    audienceExclusions: { public: { label: 'Investigation branches', order: 5 } },
+  }),
   createdAt: preservedField('createdAt'),
   updatedAt: preservedField('updatedAt'),
 } satisfies { [K in CaseField]: CaseFieldRule<K> });
@@ -171,9 +224,51 @@ export const CASE_AUDIENCE_SENSITIVE_FIELD_NAMES = Object.freeze([...new Set(
 )]);
 export const CASE_RECORD_FIELD_NAMES = Object.freeze(Object.values(CASE_FIELD_RULES).map((rule) => rule.key));
 
-const INTERNAL_EXCLUSIONS = Object.freeze(['Raw upstream payloads and credentials are outside the case schema.']);
-const TRUSTED_EXCLUSIONS = Object.freeze(['Case notes', 'Recipient values', 'Manual trail targets', 'Raw upstream payloads and credentials']);
-const PUBLIC_EXCLUSIONS = Object.freeze([
+const OUTSIDE_SCHEMA_EXCLUSIONS = Object.freeze({
+  internal: Object.freeze({ label: 'Raw upstream payloads and credentials are outside the case schema.', order: 1 }),
+  trusted: Object.freeze({ label: 'Raw upstream payloads and credentials', order: 4 }),
+  public: Object.freeze({ label: 'Raw upstream payloads and credentials', order: 7 }),
+} as const satisfies Record<CaseAudience, CaseAudienceExclusion>);
+
+function currentAudienceExclusions(audience: CaseAudience): readonly string[] {
+  const entries = [
+    ...Object.values(CASE_FIELD_RULES).flatMap((rule) => (
+      rule.audienceExclusions[audience] ? [rule.audienceExclusions[audience]] : []
+    )),
+    OUTSIDE_SCHEMA_EXCLUSIONS[audience],
+  ] as CaseAudienceExclusion[];
+  const orderByLabel = new Map<string, number>();
+  const labelByOrder = new Map<number, string>();
+  for (const entry of entries) {
+    if (!entry.label || entry.label.length > 160 || entry.label.trim() !== entry.label
+      || !Number.isSafeInteger(entry.order) || entry.order < 1 || entry.order > 64) {
+      throw new TypeError('Case audience exclusion metadata is malformed or exceeds its bound.');
+    }
+    const prior = orderByLabel.get(entry.label);
+    if (prior !== undefined && prior !== entry.order) {
+      throw new TypeError(`Case audience exclusion ${entry.label} has conflicting presentation order.`);
+    }
+    const priorLabel = labelByOrder.get(entry.order);
+    if (priorLabel !== undefined && priorLabel !== entry.label) {
+      throw new TypeError(`Case audience exclusions ${priorLabel} and ${entry.label} share a presentation order.`);
+    }
+    orderByLabel.set(entry.label, entry.order);
+    labelByOrder.set(entry.order, entry.label);
+  }
+  return Object.freeze([...orderByLabel]
+    .sort((left, right) => left[1] - right[1])
+    .map(([label]) => label));
+}
+
+const CURRENT_AUDIENCE_EXCLUSIONS = Object.freeze({
+  internal: currentAudienceExclusions('internal'),
+  trusted: currentAudienceExclusions('trusted'),
+  public: currentAudienceExclusions('public'),
+} as const satisfies Record<CaseAudience, readonly string[]>);
+
+// Schema 12 is an immutable public compatibility contract and deliberately
+// remains independent of the current field-policy projection.
+const PUBLIC_V12_EXCLUSIONS = Object.freeze([
   'Case notes',
   'Brand Profile references',
   'Actions and recipient values',
@@ -181,17 +276,15 @@ const PUBLIC_EXCLUSIONS = Object.freeze([
   'Investigation branches',
   'Manual trail targets',
   'Raw upstream payloads and credentials',
-  'Independent observed-effect reviews and closure history',
 ]);
-const PUBLIC_V12_EXCLUSIONS = Object.freeze(PUBLIC_EXCLUSIONS.slice(0, -1));
 
 export function caseAudienceExclusions(
   audience: CaseAudience,
   caseVersion: number,
 ): readonly string[] {
-  if (audience === 'internal') return INTERNAL_EXCLUSIONS;
-  if (audience === 'trusted') return TRUSTED_EXCLUSIONS;
-  return caseVersion === PUBLIC_CASE_SCHEMA_VERSION ? PUBLIC_V12_EXCLUSIONS : PUBLIC_EXCLUSIONS;
+  return audience === 'public' && caseVersion === PUBLIC_CASE_SCHEMA_VERSION
+    ? PUBLIC_V12_EXCLUSIONS
+    : CURRENT_AUDIENCE_EXCLUSIONS[audience];
 }
 
 export { CASE_FIELD_RULES };

@@ -479,7 +479,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     } catch {
       throw new TypeError('The CLI case pack contains invalid Brand Profile references.');
     }
-    if (currentCaseSchema) assertCurrentReportProjection(report, rawCase as unknown as CaseRecord);
+    if (currentCaseSchema) assertCurrentReportProjection(report, normalisedCase);
   }
 
   const omitted = redactionManifest.brandProfileReferencesOmitted;

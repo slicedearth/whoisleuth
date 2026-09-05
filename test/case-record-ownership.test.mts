@@ -71,6 +71,15 @@ describe('Case decision and projection ownership', () => {
       assert.equal(Object.isFrozen(rule), true);
       assert.equal(Object.isFrozen(rule.treatment), true);
       assert.equal(Object.isFrozen(rule.nestedSensitiveFields), true);
+      assert.equal(Object.isFrozen(rule.audienceExclusions), true);
+      for (const audience of ['internal', 'trusted', 'public'] as const) {
+        const requiresExplanation = rule.treatment[audience] === 'exclude'
+          || rule.treatment[audience] === 'redact';
+        assert.equal(Boolean(rule.audienceExclusions[audience]), requiresExplanation);
+        if (rule.audienceExclusions[audience]) {
+          assert.equal(Object.isFrozen(rule.audienceExclusions[audience]), true);
+        }
+      }
     }
 
     const durable = projectCaseForDurableWrite(record);

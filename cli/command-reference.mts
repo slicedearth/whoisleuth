@@ -225,9 +225,6 @@ function commonOptionsSeedForCommand(command: CliCommand): readonly CliOption[] 
   return command === 'registry-scaffold' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
 }
 
-const STANDARD_CONCURRENCY_VALUES = Object.freeze(['1', '2', '3', '4', '5', '6', '7', '8']);
-const LIMITED_CONCURRENCY_VALUES = Object.freeze(['1', '2', '3']);
-
 function positional(
   name: string,
   valueKind: CliPositionalValueKind,
@@ -403,22 +400,6 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
 } as const satisfies Readonly<Record<string, CliOptionDefinition>>);
 
 type CliOption = keyof typeof CLI_OPTION_DEFINITIONS;
-
-const VALUE_OPTIONS = Object.freeze(Object.fromEntries(
-  Object.entries(CLI_OPTION_DEFINITIONS)
-    .map(([option, definition]) => [option, Object.freeze([...new Set(
-      (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[]).flatMap((command) => definition.values(command)),
-    )])] as const)
-    .filter(([, values]) => values.length > 0),
-)) as Readonly<Partial<Record<CliOption, readonly string[]>>>;
-const FILE_OPTIONS = Object.freeze(Object.entries(CLI_OPTION_DEFINITIONS)
-  .filter(([, definition]) => (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[])
-    .every((command) => definition.valueKind(command) === 'file'))
-  .map(([option]) => option)) as readonly CliOption[];
-const TEXT_OPTIONS = Object.freeze(Object.entries(CLI_OPTION_DEFINITIONS)
-  .filter(([, definition]) => (Object.keys(CLI_COMMAND_SEMANTICS) as CliCommand[])
-    .every((command) => definition.valueKind(command) === 'text'))
-  .map(([option]) => option)) as readonly CliOption[];
 
 function constraint(
   value: CliGrammarConstraint,
@@ -1712,14 +1693,6 @@ const FILE_POSITIONAL_COMMANDS: readonly CliCommand[] = Object.freeze(
 const CLI_COMMAND_BY_NAME = Object.freeze(Object.fromEntries(
   CLI_COMMAND_REGISTRY.map((definition) => [definition.command, definition]),
 )) as Readonly<Record<CliCommand, CliCommandDefinition>>;
-const FILE_OPTIONS_BY_COMMAND = Object.freeze(Object.fromEntries(
-  CLI_COMMAND_REGISTRY
-    .map((definition) => [definition.command, Object.freeze(definition.grammar.options
-      .filter((option) => option.valueKind === 'file' && !FILE_OPTIONS.includes(option.option as CliOption))
-      .map((option) => option.option))] as const)
-    .filter(([, options]) => options.length > 0),
-)) as Readonly<Partial<Record<CliCommand, readonly string[]>>>;
-
 function isCliCommand(value: unknown): value is CliCommand {
   return typeof value === 'string' && Object.hasOwn(CLI_COMMAND_BY_NAME, value);
 }
@@ -1844,19 +1817,12 @@ export {
   COMMAND_DESCRIPTIONS,
   COMMAND_DETAILS,
   COMMAND_USAGE,
-  COMMON_OPTIONS,
-  FILE_OPTIONS,
-  FILE_OPTIONS_BY_COMMAND,
   FILE_POSITIONAL_COMMANDS,
   HELP,
   HELP_COMMANDS_BY_GROUP,
   INVESTIGATION_PLAN_RECIPES,
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
-  LIMITED_CONCURRENCY_VALUES,
   OPTIONS_BY_COMMAND,
-  STANDARD_CONCURRENCY_VALUES,
-  TEXT_OPTIONS,
-  VALUE_OPTIONS,
   cliMetaActionForInvocation,
   cliInvocationNetworkEffect,
   commandOptionSpec,
