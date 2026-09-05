@@ -936,6 +936,86 @@ describe('resumable Bulk checkpoints', () => {
     }
   });
 
+  test('rejects flush promptly after a saved write failure even when later results arrive', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-failure-'));
+    const path = join(directory, 'bulk.json');
+    const queries = ['one.example', 'two.example'];
+    let releaseWrite: (() => void) | undefined;
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries,
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+        writeFile: async () => {
+          await new Promise<void>((resolve) => { releaseWrite = resolve; });
+          throw new Error('checkpoint storage unavailable');
+        },
+      });
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      writer.record({
+        index: 0,
+        query: queries[0]!,
+        ok: true,
+        classified: classifiedDomain(queries[0]!),
+        result: { availability: lookupResult(queries[0]!).availability, diagnostics: lookupResult(queries[0]!).diagnostics },
+      });
+      releaseWrite?.();
+      await assert.rejects(writer.flush(), /checkpoint storage unavailable/u);
+      writer.record({
+        index: 1,
+        query: queries[1]!,
+        ok: true,
+        classified: classifiedDomain(queries[1]!),
+        result: { availability: lookupResult(queries[1]!).availability, diagnostics: lookupResult(queries[1]!).diagnostics },
+      });
+      await assert.rejects(writer.flush(), /checkpoint storage unavailable/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects a checkpoint byte-bound failure without rescheduling forever', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-bound-'));
+    const path = join(directory, 'bulk.json');
+    const queries = Array.from({ length: 520 }, (_, index) => `item-${index}.example`);
+    let releaseWrite: (() => void) | undefined;
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries,
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+        writeFile: async () => {
+          await new Promise<void>((resolve) => { releaseWrite = resolve; });
+          return path;
+        },
+      });
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      for (const [index, query] of queries.entries()) {
+        writer.record({
+          index,
+          query,
+          ok: true,
+          classified: classifiedDomain(query),
+          result: {
+            availability: { ...lookupResult(query).availability, retainedDetail: 'x'.repeat(32_000) },
+            diagnostics: lookupResult(query).diagnostics,
+          },
+        });
+      }
+      releaseWrite?.();
+      await assert.rejects(writer.flush(), /limited to 16777216 bytes/u);
+      await assert.rejects(writer.flush(), /limited to 16777216 bytes/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test('keeps completed output when the final checkpoint write fails', async () => {
     const stdout = capture();
     const stderr = capture();

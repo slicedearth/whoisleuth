@@ -241,8 +241,9 @@ async function createBulkCheckpointWriter(options: Readonly<{
   }
 
   function scheduleWrite(): void {
+    if (writeFailure) return;
     dirty = true;
-    if (activeWrite || writeFailure) return;
+    if (activeWrite) return;
     const pending = drainWrites();
     activeWrite = pending;
     void pending.then(
@@ -280,6 +281,7 @@ async function createBulkCheckpointWriter(options: Readonly<{
     },
     async flush(): Promise<void> {
       while (activeWrite || dirty) {
+        if (writeFailure && !activeWrite) break;
         if (!activeWrite) scheduleWrite();
         if (activeWrite) await activeWrite;
       }
