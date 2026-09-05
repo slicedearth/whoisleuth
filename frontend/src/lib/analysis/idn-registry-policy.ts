@@ -73,6 +73,136 @@ function codePoint(value: string | null): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 0x10ffff ? parsed : null;
 }
 
+function xmlTagEnd(value: string, start: number): number {
+  let quote = '';
+  for (let index = start; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    if (quote) {
+      if (character === quote) quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '>') return index;
+  }
+  return -1;
+}
+
+function localXmlName(value: string): string {
+  return value.split(':').at(-1)?.toLowerCase() ?? '';
+}
+
+function scanLgrRepertoire(xml: string): Readonly<{
+  ranges: CodePointRange[];
+  sequenceCount: number;
+  elementCount: number;
+}> {
+  const ranges: CodePointRange[] = [];
+  const stack: string[] = [];
+  let sequenceCount = 0;
+  let elementCount = 0;
+  let rootSeen = false;
+  let rootClosed = false;
+  let cursor = 0;
+
+  while (cursor < xml.length) {
+    const open = xml.indexOf('<', cursor);
+    const textOutsideRoot = open < 0 ? xml.slice(cursor) : xml.slice(cursor, open);
+    if ((!rootSeen || rootClosed) && textOutsideRoot.trim()) {
+      throw new TypeError('The registry table XML contains text outside its LGR root element.');
+    }
+    if (open < 0) break;
+
+    if (xml.startsWith('<!--', open)) {
+      const end = xml.indexOf('-->', open + 4);
+      if (end < 0) throw new TypeError('The registry table XML contains an unterminated comment.');
+      cursor = end + 3;
+      continue;
+    }
+    if (xml.startsWith('<![CDATA[', open)) {
+      if (!stack.length) throw new TypeError('The registry table XML contains CDATA outside its LGR root element.');
+      const end = xml.indexOf(']]>', open + 9);
+      if (end < 0) throw new TypeError('The registry table XML contains an unterminated CDATA section.');
+      cursor = end + 3;
+      continue;
+    }
+    if (xml.startsWith('<?', open)) {
+      const end = xml.indexOf('?>', open + 2);
+      if (end < 0) throw new TypeError('The registry table XML contains an unterminated processing instruction.');
+      cursor = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<!', open)) {
+      throw new TypeError('The registry table XML contains an unsupported declaration.');
+    }
+
+    const end = xmlTagEnd(xml, open + 1);
+    if (end < 0) throw new TypeError('The registry table XML contains an unterminated element.');
+    const rawTag = xml.slice(open + 1, end).trim();
+    if (rawTag.startsWith('/')) {
+      const closing = /^\/\s*([A-Za-z_][\w.:-]*)\s*$/u.exec(rawTag)?.[1] ?? '';
+      const expected = stack.pop() ?? '';
+      if (!closing || closing !== expected) {
+        throw new TypeError('The registry table XML contains mismatched elements.');
+      }
+      if (!stack.length) rootClosed = true;
+      cursor = end + 1;
+      continue;
+    }
+
+    if (rootClosed) throw new TypeError('The registry table XML contains more than one root element.');
+    const selfClosing = /\/\s*$/u.test(rawTag);
+    const start = /^([A-Za-z_][\w.:-]*)([\s\S]*)$/u.exec(rawTag);
+    const qualifiedName = start?.[1] ?? '';
+    if (!qualifiedName) throw new TypeError('The registry table XML contains a malformed element.');
+    const elementName = localXmlName(qualifiedName);
+    let attributes = start?.[2] ?? '';
+    if (selfClosing) attributes = attributes.replace(/\/\s*$/u, '');
+    if (!stack.length) {
+      if (rootSeen || elementName !== 'lgr') {
+        throw new TypeError('The selected XML does not have an LGR root element.');
+      }
+      rootSeen = true;
+    }
+
+    const insideRepertoireData = stack.length === 2 && localXmlName(stack[0] ?? '') === 'lgr' && localXmlName(stack[1] ?? '') === 'data';
+    if (insideRepertoireData && (elementName === 'char' || elementName === 'range')) {
+      elementCount += 1;
+      if (elementCount > MAX_IDN_POLICY_ELEMENTS) {
+        throw new TypeError(`Registry table XML exceeds ${MAX_IDN_POLICY_ELEMENTS} character and range elements.`);
+      }
+      if (elementName === 'char') {
+        const raw = attribute(attributes, 'cp');
+        if (raw) {
+          const sequence = raw.split(/\s+/u).filter(Boolean);
+          if (sequence.length !== 1) sequenceCount += 1;
+          else {
+            const parsed = codePoint(sequence[0] ?? null);
+            if (parsed !== null) ranges.push({ start: parsed, end: parsed });
+          }
+        }
+      } else {
+        const first = codePoint(attribute(attributes, 'first-cp'));
+        const last = codePoint(attribute(attributes, 'last-cp'));
+        if (first !== null && last !== null && first <= last) ranges.push({ start: first, end: last });
+      }
+      if (ranges.length > MAX_IDN_POLICY_RANGES) {
+        throw new TypeError(`Registry table XML exceeds ${MAX_IDN_POLICY_RANGES} retained ranges.`);
+      }
+    }
+
+    if (!selfClosing) stack.push(qualifiedName);
+    else if (!stack.length) rootClosed = true;
+    cursor = end + 1;
+  }
+
+  if (!rootSeen) throw new TypeError('The selected XML does not have an LGR root element.');
+  if (stack.length || !rootClosed) throw new TypeError('The registry table XML contains unclosed elements.');
+  return { ranges, sequenceCount, elementCount };
+}
+
 function mergeRanges(values: readonly CodePointRange[]): CodePointRange[] {
   const sorted = [...values].sort((left, right) => left.start - right.start || left.end - right.end);
   const merged: Array<{ start: number; end: number }> = [];
@@ -108,38 +238,7 @@ export function parseRegistryIdnPolicy(input: {
   if (/<!DOCTYPE|<!ENTITY/i.test(input.xml)) {
     throw new TypeError('Registry table XML containing document types or entities is not accepted.');
   }
-  if (!/<(?:[A-Za-z_][\w.-]*:)?lgr\b/i.test(input.xml)) {
-    throw new TypeError('The selected XML does not contain an LGR root element.');
-  }
-
-  const ranges: CodePointRange[] = [];
-  let sequenceCount = 0;
-  let elementCount = 0;
-  const element = /<(?:[A-Za-z_][\w.-]*:)?(char|range)\b([^>]*)>/gi;
-  for (let match = element.exec(input.xml); match; match = element.exec(input.xml)) {
-    elementCount += 1;
-    if (elementCount > MAX_IDN_POLICY_ELEMENTS) {
-      throw new TypeError(`Registry table XML exceeds ${MAX_IDN_POLICY_ELEMENTS} character and range elements.`);
-    }
-    if (match[1]?.toLowerCase() === 'char') {
-      const raw = attribute(match[2] ?? '', 'cp');
-      if (!raw) continue;
-      const sequence = raw.split(/\s+/).filter(Boolean);
-      if (sequence.length !== 1) {
-        sequenceCount += 1;
-        continue;
-      }
-      const parsed = codePoint(sequence[0] ?? null);
-      if (parsed !== null) ranges.push({ start: parsed, end: parsed });
-    } else {
-      const start = codePoint(attribute(match[2] ?? '', 'first-cp'));
-      const end = codePoint(attribute(match[2] ?? '', 'last-cp'));
-      if (start !== null && end !== null && start <= end) ranges.push({ start, end });
-    }
-    if (ranges.length > MAX_IDN_POLICY_RANGES) {
-      throw new TypeError(`Registry table XML exceeds ${MAX_IDN_POLICY_RANGES} retained ranges.`);
-    }
-  }
+  const { ranges, sequenceCount, elementCount } = scanLgrRepertoire(input.xml);
   if (!elementCount || !ranges.length) {
     throw new TypeError('The registry table did not contain any supported single-code-point entries.');
   }

@@ -133,7 +133,10 @@ describe('bounded STIX and MISP import preview', () => {
     );
 
     const misp = parseExternalIntelligenceDocument(mispEvent(), DIGEST);
-    assert.equal(misp.items.find((item) => item.entityType === 'ipv4')?.createdAt, '2026-07-28T01:00:00.000Z');
+    const timestampOnly = misp.items.find((item) => item.entityType === 'ipv4');
+    assert.equal(timestampOnly?.observedAt, null);
+    assert.equal(timestampOnly?.createdAt, null);
+    assert.equal(timestampOnly?.modifiedAt, '2026-07-28T01:00:00.000Z');
     const malformedMisp = mispEvent();
     (malformedMisp.Event.Attribute[0] as Record<string, unknown>).first_seen = '2026-01-15T12:00:00.000';
     assert.throws(() => parseExternalIntelligenceDocument(malformedMisp, DIGEST), /explicit timezone/u);
@@ -151,6 +154,8 @@ describe('bounded STIX and MISP import preview', () => {
     assert.equal(indicator?.confidence, 72);
     assert.deepEqual(indicator?.labels, ['phishing', 'review']);
     assert.deepEqual(indicator?.markings, ['TLP:AMBER']);
+    assert.equal(indicator?.observedAt, null);
+    assert.match(preview.limitations.join(' '), /valid_from.*not relabelled as an observation time/u);
     assert.equal(preview.items.find((item) => item.entityType === 'asn')?.entityValue, 'AS64496');
   });
 
@@ -236,6 +241,9 @@ describe('external intelligence case merge', () => {
     const restored = normalizeCaseStore(merged.cases).cases[0];
     assert.equal(restored?.assertions[0]?.provenance?.entityValue, 'host.candidate.invalid');
     assert.deepEqual(restored?.assertions[0]?.provenance?.labels, ['confidence:medium', 'tlp:amber']);
+    const timestampOnly = restored?.assertions.find((item) => item.provenance?.entityType === 'ipv4');
+    assert.equal(timestampOnly?.provenance?.observedAt, null);
+    assert.equal(timestampOnly?.provenance?.modifiedAt, '2026-07-28T01:00:00.000Z');
   });
 
   test('is idempotent and never creates a case for a missing selection', () => {

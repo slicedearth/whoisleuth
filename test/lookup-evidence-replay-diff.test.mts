@@ -143,6 +143,30 @@ describe('offline Lookup evidence replay diff', () => {
     assert.throws(() => buildLookupEvidenceReplayDiff(replay(), replay({ target: 'other.test' })), /same target/iu);
   });
 
+  test('preserves case-sensitive URL paths while normalising only the authority', () => {
+    const source = [{ id: 'http', label: 'HTTP', state: 'success', complete: true, observedAt: OBSERVED_AT, limitations: [] }];
+    const fact = (value: string) => [{
+      id: 'website.final-url',
+      label: 'Final website URL',
+      value,
+      sourceId: 'http',
+      source: 'HTTP',
+      sourceState: 'success',
+      sourceComplete: true,
+    }];
+    const changedPath = buildLookupEvidenceReplayDiff(
+      replay({ sources: source, facts: fact('https://EXAMPLE.test/Account') }),
+      replay({ sources: source, facts: fact('https://example.test/account') }),
+    );
+    assert.equal(changedPath.rows.find((item) => item.id === 'fact:website.final-url')?.kind, 'observed_change');
+
+    const sameAuthority = buildLookupEvidenceReplayDiff(
+      replay({ sources: source, facts: fact('HTTPS://EXAMPLE.test/Account') }),
+      replay({ sources: source, facts: fact('https://example.test/Account') }),
+    );
+    assert.equal(sameAuthority.rows.find((item) => item.id === 'fact:website.final-url')?.kind, 'unchanged');
+  });
+
   test('separates complete metadata changes from partial and legacy representation differences', () => {
     const publication = publicationMetadataDisplay(pagePublicationMetadataFixture());
     const delivery = deliveryMetadataDisplay(httpDeliveryMetadataFixture());

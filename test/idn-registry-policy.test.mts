@@ -45,10 +45,30 @@ describe('local registry IDN table review', () => {
     assert.deepEqual(reviews[1]?.unlistedCodePoints, ['U+00E9']);
   });
 
+  test('ignores comment and CDATA examples outside the active LGR repertoire', async () => {
+    const xml = `<?xml version="1.0"?><lgr><metadata><char cp="00E9"/><data><char cp="00E4"/></data></metadata><data>
+      <char cp="0061"/>
+      <!-- Example only: <char cp="00E9"/> -->
+      <![CDATA[<char cp="00E4"/>]]>
+    </data></lgr>`;
+    const parsed = parseRegistryIdnPolicy({
+      suffix: 'test',
+      sourceName: 'comment-fixture.xml',
+      sourceDigestSha256: await digestRegistryIdnPolicySource(xml),
+      xml,
+    });
+    assert.equal(parsed.codePointCount, 1);
+    assert.deepEqual(reviewRegistryIdnCandidates(parsed, [
+      { domain: domainToASCII('é.test') },
+      { domain: domainToASCII('ä.test') },
+    ]).map((item) => item.state), ['not_listed', 'not_listed']);
+  });
+
   test('rejects active XML constructs, malformed provenance, and excessive ranges', async () => {
     const digest = await digestRegistryIdnPolicySource(XML);
     assert.throws(() => parseRegistryIdnPolicy({ suffix: 'test', sourceName: 'x.xml', sourceDigestSha256: digest, xml: '<!DOCTYPE lgr><lgr><char cp="0061"/></lgr>' }), /document types/i);
     assert.throws(() => parseRegistryIdnPolicy({ suffix: 'test', sourceName: 'x.xml', sourceDigestSha256: 'bad', xml: XML }), /digest/i);
     assert.throws(() => parseRegistryIdnPolicy({ suffix: 'bad suffix', sourceName: 'x.xml', sourceDigestSha256: digest, xml: XML }), /DNS-safe/i);
+    assert.throws(() => parseRegistryIdnPolicy({ suffix: 'test', sourceName: 'x.xml', sourceDigestSha256: digest, xml: '<wrapper><lgr><char cp="0061"/></lgr></wrapper>' }), /LGR root/i);
   });
 });

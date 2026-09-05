@@ -12,8 +12,46 @@ export type LookupEvidenceReplayDiffRow = Readonly<{
   explanation: string;
 }>;
 
-function sameText(left: unknown, right: unknown): boolean {
+function sameCanonicalText(left: unknown, right: unknown): boolean {
   return String(left ?? '').trim().toLowerCase() === String(right ?? '').trim().toLowerCase();
+}
+
+function sameExactText(left: unknown, right: unknown): boolean {
+  return String(left ?? '').trim() === String(right ?? '').trim();
+}
+
+const CASE_INSENSITIVE_FACTS = new Set([
+  'registration.domain',
+  'registration.nameservers',
+  'website.activity',
+  'tls.connected-address',
+  'tls.certificate-fingerprint',
+  'page.password-field',
+  'page.external-form-action',
+]);
+
+function sameUrl(left: unknown, right: unknown): boolean {
+  try {
+    const before = new URL(String(left ?? '').trim());
+    const after = new URL(String(right ?? '').trim());
+    return before.protocol.toLowerCase() === after.protocol.toLowerCase()
+      && before.hostname.toLowerCase() === after.hostname.toLowerCase()
+      && before.port === after.port
+      && before.username === after.username
+      && before.password === after.password
+      && before.pathname === after.pathname
+      && before.search === after.search
+      && before.hash === after.hash;
+  } catch {
+    return sameExactText(left, right);
+  }
+}
+
+function sameFactValue(id: string, left: unknown, right: unknown): boolean {
+  if (id === 'website.final-url') return sameUrl(left, right);
+  return CASE_INSENSITIVE_FACTS.has(id)
+    ? sameCanonicalText(left, right)
+    : sameExactText(left, right);
 }
 
 function explicitlyCompleteSourceState(state: string, complete: boolean | null): boolean {
@@ -71,7 +109,7 @@ function appendMetadataRows(
   for (const rowId of rowIds) {
     const beforeRow = before.rows.find((item) => item.id === rowId);
     const afterRow = after.rows.find((item) => item.id === rowId);
-    const unchanged = Boolean(beforeRow && afterRow && sameText(beforeRow.value, afterRow.value));
+    const unchanged = Boolean(beforeRow && afterRow && sameExactText(beforeRow.value, afterRow.value));
     const complete = before.complete && after.complete;
     const kind = unchanged ? 'unchanged' : complete ? 'observed_change' : 'collection_quality_difference';
     rows.push({
@@ -120,7 +158,7 @@ export function buildLookupEvidenceReplayDiff(
     const label = before?.label ?? after?.label ?? id;
     const sourcesExplicitlyComplete = factSourceExplicitlyComplete(before, after, left)
       && factSourceExplicitlyComplete(after, before, right);
-    const unchanged = before && after && sameText(before.value, after.value);
+    const unchanged = before && after && sameFactValue(id, before.value, after.value);
     const sourceChanged = Boolean(before && after && before.sourceId !== after.sourceId);
     const kind = sourceChanged
       ? 'collection_quality_difference'
