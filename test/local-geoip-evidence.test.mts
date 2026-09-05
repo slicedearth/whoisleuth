@@ -60,4 +60,37 @@ describe('local GeoIP evidence', () => {
     assert.equal(database.rejectedCount, 1);
     assert.equal(lookupLocalGeoIp(database, '198.51.100.1').state, 'partial');
   });
+
+  test('deduplicates equal canonical prefixes and rejects conflicting attribution', () => {
+    const common = {
+      sourceLabel: 'Synthetic fixture',
+      databaseVersion: '1',
+      license: 'Test data only',
+    };
+    const database = buildLocalGeoIpDatabase({
+      ...common,
+      records: [
+        { network: '192.0.2.0/24', countryCode: 'AU', region: 'Fixture region' },
+        { network: '192.0.2.1/24', countryCode: 'AU', region: 'Fixture region' },
+      ],
+    });
+    assert.equal(database.records.length, 1);
+    assert.equal(database.rejectedCount, 0);
+    assert.equal(lookupLocalGeoIp(database, '192.0.2.10').match?.countryCode, 'AU');
+
+    assert.throws(() => buildLocalGeoIpDatabase({
+      ...common,
+      records: [
+        { network: '192.0.2.0/24', countryCode: 'AU' },
+        { network: '192.0.2.1/24', countryCode: 'NZ' },
+      ],
+    }), /conflicting evidence.*192\.0\.2\.0\/24/iu);
+    assert.throws(() => buildLocalGeoIpDatabase({
+      ...common,
+      records: [
+        { network: '192.0.2.1/24', countryCode: 'NZ' },
+        { network: '192.0.2.0/24', countryCode: 'AU' },
+      ],
+    }), /conflicting evidence.*192\.0\.2\.0\/24/iu);
+  });
 });

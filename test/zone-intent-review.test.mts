@@ -103,6 +103,70 @@ _443._tcp 300 IN TLSA 3 1 1 AABB
     assert.equal(result.counts.aligned, 2);
   });
 
+  test('retains the canonical prior owner when BIND omits it', () => {
+    const result = reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA,
+      version: 1,
+      origin: 'example.test',
+      desired: {
+        format: 'bind',
+        zoneText: `www 300 IN A 192.0.2.1
+    300 IN A 192.0.2.2
+absolute.example.net. 300 IN A 192.0.2.3
+    300 IN A 192.0.2.4
+$ORIGIN child.example.test.
+    300 IN A 192.0.2.5`,
+      },
+      observed: {
+        state: 'observed', source: 'Fixture', observedAt: NOW,
+        records: [
+          { owner: 'www.example.test', type: 'A', value: '192.0.2.1' },
+          { owner: 'www.example.test', type: 'A', value: '192.0.2.2' },
+          { owner: 'absolute.example.net', type: 'A', value: '192.0.2.3' },
+          { owner: 'absolute.example.net', type: 'A', value: '192.0.2.4' },
+          { owner: 'absolute.example.net', type: 'A', value: '192.0.2.5' },
+        ],
+      },
+    }, NOW);
+
+    assert.equal(result.complete, true);
+    assert.deepEqual(
+      [...new Set(result.desired.records.map((record) => record.owner))],
+      ['absolute.example.net', 'www.example.test'],
+    );
+  });
+
+  test('admits only the exact Null MX form and canonicalises equivalent IPv6 values', () => {
+    assert.equal(normaliseRdata('MX', '0 .', 'example.test', 'master-file').value, '0 .');
+    assert.throws(() => normaliseRdata('MX', '10 .', 'example.test', 'master-file'), /preference 0/iu);
+    assert.equal(normaliseRdata('AAAA', '2001:0DB8:0:0:0:0:0:1', null).value, '2001:db8::1');
+
+    const result = reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA,
+      version: 1,
+      origin: 'example.test',
+      desired: {
+        format: 'bind',
+        zoneText: '@ 300 IN MX 0 .\n@ 300 IN AAAA 2001:0DB8:0:0:0:0:0:1',
+      },
+      observed: {
+        state: 'observed', source: 'Fixture', observedAt: NOW,
+        records: [
+          { owner: '@', type: 'MX', value: '0 .' },
+          { owner: '@', type: 'AAAA', value: '2001:db8::1' },
+        ],
+      },
+    }, NOW);
+    assert.equal(result.complete, true);
+    assert.equal(result.counts.aligned, 2);
+
+    assert.throws(() => reviewZoneIntent({
+      schema: ZONE_INTENT_INPUT_SCHEMA, version: 1, origin: 'example.test',
+      desired: { format: 'records', records: [{ owner: '@', type: 'MX', value: '1 .' }] },
+      observed: { state: 'observed', source: 'Fixture', observedAt: NOW, records: [] },
+    }, NOW), /preference 0/iu);
+  });
+
   test('keeps incomplete observations from becoming missing-record conclusions', () => {
     const result = reviewZoneIntent({
       schema: ZONE_INTENT_INPUT_SCHEMA, version: 1, origin: 'example.test',

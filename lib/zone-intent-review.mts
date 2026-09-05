@@ -165,7 +165,11 @@ export function normaliseRdata(
   if (type === 'A' || type === 'AAAA') {
     const family = type === 'A' ? 4 : 6;
     if (tokens.length !== 1 || isIP(tokens[0] ?? '') !== family) throw new TypeError(`${type} data must contain one valid address.`);
-    return { value: (tokens[0] as string).toLowerCase(), valueTreatment: 'normalised' };
+    const supplied = tokens[0] as string;
+    const normalised = family === 4
+      ? supplied.split('.').map((part) => String(Number(part))).join('.')
+      : new URL(`http://[${supplied}]/`).hostname.slice(1, -1).toLowerCase();
+    return { value: normalised, valueTreatment: 'normalised' };
   }
   if (type === 'CNAME' || type === 'NS') {
     if (tokens.length !== 1) throw new TypeError(`${type} data must contain one hostname.`);
@@ -173,7 +177,11 @@ export function normaliseRdata(
   }
   if (type === 'MX') {
     if (tokens.length !== 2) throw new TypeError('MX data must contain preference and exchange.');
-    return { value: `${integerToken(tokens[0] as string, 0, 65_535, 'MX preference')} ${host(tokens[1] as string, 'MX exchange')}`, valueTreatment: 'normalised' };
+    const preference = integerToken(tokens[0] as string, 0, 65_535, 'MX preference');
+    const exchangeToken = tokens[1] as string;
+    if (exchangeToken === '.' && preference !== 0) throw new TypeError('A Null MX exchange must use preference 0.');
+    const exchange = exchangeToken === '.' ? '.' : host(exchangeToken, 'MX exchange');
+    return { value: `${preference} ${exchange}`, valueTreatment: 'normalised' };
   }
   if (type === 'CAA') {
     if (tokens.length < 3) throw new TypeError('CAA data must contain flags, tag, and value.');
@@ -342,15 +350,16 @@ function parseBindZone(zoneText: unknown, initialOrigin: string): { records: Zon
       if (directive === '$ORIGIN') {
         if (tokens.length !== 2) throw new TypeError('$ORIGIN requires one domain name.');
         origin = domainName(tokens[1], origin, '$ORIGIN', 'master-file');
-        lastOwner = origin;
         continue;
       }
       if (directive === '$TTL') continue;
       if (directive?.startsWith('$')) throw new TypeError(`${directive} is deliberately unsupported.`);
       let offset = 0;
-      const ownerToken = entry.ownerOmitted ? lastOwner : tokens[offset++];
-      if (!ownerToken) throw new TypeError('Record owner is missing.');
-      const owner = ownerName(ownerToken, origin, 'record owner', 'master-file');
+      const ownerToken = entry.ownerOmitted ? null : tokens[offset++];
+      if (!entry.ownerOmitted && !ownerToken) throw new TypeError('Record owner is missing.');
+      const owner = entry.ownerOmitted
+        ? lastOwner
+        : ownerName(ownerToken, origin, 'record owner', 'master-file');
       lastOwner = owner;
       let ttl: number | null = null;
       if (/^\d+$/u.test(tokens[offset] ?? '')) ttl = integerToken(tokens[offset++] as string, 0, 0x7fff_ffff, 'record TTL');

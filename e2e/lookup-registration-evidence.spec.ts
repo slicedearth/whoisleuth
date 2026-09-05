@@ -8,6 +8,7 @@ import {
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { buildRegistryInsights } from '../lib/registry-insights.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -27,6 +28,34 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('bounded RDAP contact roles and repeated channels render in Lookup', async ({ page }) => {
+  const rdapParsed = {
+    domain: 'EXAMPLE.COM', handle: 'DOMAIN-1', statuses: ['active'], nameservers: ['NS1.EXAMPLE.COM'],
+    nameserverDetails: [{ name: 'NS1.EXAMPLE.COM', addresses: ['192.0.2.10'] }],
+    dsData: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }],
+    objectClassName: 'domain', language: 'en', conformance: ['rdap_level_0', 'redacted_0'],
+    lifecycle: { databaseUpdatedDate: '2026-07-13T03:04:05.000Z' },
+    serverTruncated: true,
+    serverTruncationReasons: ['object truncated due to authorization'],
+    redactions: [{ name: 'Registrant Email', method: 'removal', reason: 'Server Policy', prePath: '$.entities[0]' }],
+    variants: [{ relation: ['registered'], idnTable: 'Example table', variantNames: [{ unicodeName: 'éxample.com' }] }],
+    entitiesByRole: {
+      registrant: [{
+        handle: 'CONTACT-1', name: 'Example Contact', organizations: ['Example Org'],
+        emails: ['first@example.com', 'second@example.com'], phones: ['+61 1', '+61 2'],
+        addresses: ['1 Main St', '2 Branch St'], publicIds: [], links: [],
+      }],
+      abuse: [{
+        handle: 'ABUSE-1', name: null, organizations: [], emails: ['abuse@example.com'],
+        phones: [], addresses: [], publicIds: [], links: [],
+      }],
+    },
+  };
+  const partialRegistryInsights = buildRegistryInsights({
+    rdapParsed,
+    rdapStatus: 'success',
+    whoisParsed: {},
+    whoisStatus: 'partial',
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -40,30 +69,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
           { outcome: 'rate_limited', selected: false },
           { outcome: 'success', selected: true },
         ],
-        parsed: {
-          domain: 'EXAMPLE.COM', handle: 'DOMAIN-1', statuses: ['active'], nameservers: ['NS1.EXAMPLE.COM'],
-          nameserverDetails: [{ name: 'NS1.EXAMPLE.COM', addresses: ['192.0.2.10'] }],
-          dsData: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }],
-          objectClassName: 'domain', language: 'en', conformance: ['rdap_level_0', 'redacted_0'],
-          lifecycle: { databaseUpdatedDate: '2026-07-13T03:04:05.000Z' },
-          serverTruncated: true,
-          serverTruncationReasons: ['object truncated due to authorization'],
-          redactions: [{ name: 'Registrant Email', method: 'removal', reason: 'Server Policy', prePath: '$.entities[0]' }],
-          variants: [{ relation: ['registered'], idnTable: 'Example table', variantNames: [{ unicodeName: 'éxample.com' }] }],
-          entitiesByRole: {
-            registrant: [{
-              handle: 'CONTACT-1', name: 'Example Contact', organizations: ['Example Org'],
-              emails: ['first@example.com', 'second@example.com'], phones: ['+61 1', '+61 2'],
-              addresses: ['1 Main St', '2 Branch St'], publicIds: [], links: [],
-            }],
-            abuse: [{
-              handle: 'ABUSE-1', name: null, organizations: [], emails: ['abuse@example.com'],
-              phones: [], addresses: [], publicIds: [], links: [],
-            }],
-          },
-        },
+        parsed: rdapParsed,
       },
       whois: { parsed: {}, chain: [] },
+      registryInsights: partialRegistryInsights,
       diagnostics: {
         rdap: { status: 'success', attempts: [{ outcome: 'rate_limited' }, { outcome: 'success' }] },
         whois: { status: 'partial' }, availability: { status: 'complete' },
@@ -74,6 +83,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
+  const registryInsightsDetails = page.locator('details.registry-insights');
+  await registryInsightsDetails.locator(':scope > summary').click();
+  await expect(registryInsightsDetails.getByText('Redemption: unavailable · pending delete: unavailable')).toBeVisible();
+  await expect(registryInsightsDetails.getByText('Client lock state unavailable · Server lock state unavailable')).toBeVisible();
   const rdapSection = page.locator('.sources > details').first();
   await expect(rdapSection).not.toHaveAttribute('open', '');
   const publishedContacts = rdapSection.getByText('Published contacts · 2 roles', { exact: true });

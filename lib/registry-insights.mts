@@ -159,22 +159,23 @@ function disclosure(
   };
 }
 
-function lifecycle(statusesValue: unknown) {
+function lifecycle(statusesValue: unknown, evidenceState: PublicationState) {
   const rawStatuses = strings(statusesValue);
   const normalized = rawStatuses.map(normalizedStatus);
   const has = (value: string) => normalized.includes(value);
-  const pendingDelete = has('pendingdelete');
-  const redemption = has('redemptionperiod');
-  const pendingTransfer = has('pendingtransfer');
-  const serverHold = has('serverhold');
-  const clientHold = has('clienthold');
+  const observedState = (value: string): boolean | null => has(value) ? true : evidenceState === 'complete' ? false : null;
+  const pendingDelete = observedState('pendingdelete');
+  const redemption = observedState('redemptionperiod');
+  const pendingTransfer = observedState('pendingtransfer');
+  const serverHold = observedState('serverhold');
+  const clientHold = observedState('clienthold');
   const serverLocks = normalized.filter((value) => /^server(?:delete|renew|transfer|update)prohibited$/u.test(value));
   const clientLocks = normalized.filter((value) => /^client(?:delete|renew|transfer|update)prohibited$/u.test(value));
 
-  let stage = 'registered';
-  let label = 'Registered';
-  let acquisitionPath = ['Continue monitoring registry status and expiry.'];
-  if (pendingDelete) {
+  let stage = 'unknown';
+  let label = 'Lifecycle unavailable';
+  let acquisitionPath = ['Obtain a qualifying registry or WHOIS publication before interpreting lifecycle or lock state.'];
+  if (pendingDelete === true) {
     stage = 'pending_delete';
     label = 'Pending delete';
     acquisitionPath = [
@@ -182,7 +183,7 @@ function lifecycle(statusesValue: unknown) {
       'Monitor for deletion without assuming a release time or successful registration.',
       'Use a registrar or registry-supported acquisition path when policy permits.',
     ];
-  } else if (redemption) {
+  } else if (redemption === true) {
     stage = 'redemption';
     label = 'Redemption period';
     acquisitionPath = [
@@ -190,14 +191,18 @@ function lifecycle(statusesValue: unknown) {
       'Monitor for restoration or a later pending-delete transition.',
       'Do not treat the domain as available or guaranteed to drop.',
     ];
-  } else if (pendingTransfer) {
+  } else if (pendingTransfer === true) {
     stage = 'pending_transfer';
     label = 'Pending transfer';
     acquisitionPath = ['A registrar transfer is pending; this is not an availability signal.'];
-  } else if (serverHold || clientHold) {
+  } else if (serverHold === true || clientHold === true) {
     stage = 'hold';
     label = 'Registration hold';
     acquisitionPath = ['A hold affects delegation or publication; it does not mean the registration is available.'];
+  } else if (evidenceState === 'complete' || rawStatuses.length > 0) {
+    stage = 'registered';
+    label = 'Registered';
+    acquisitionPath = ['Continue monitoring registry status and expiry.'];
   }
 
   return {
@@ -209,8 +214,8 @@ function lifecycle(statusesValue: unknown) {
     pendingTransfer,
     hold: { client: clientHold, server: serverHold },
     locks: {
-      client: clientLocks.length > 0,
-      server: serverLocks.length > 0,
+      client: clientLocks.length > 0 ? true : evidenceState === 'complete' ? false : null,
+      server: serverLocks.length > 0 ? true : evidenceState === 'complete' ? false : null,
       clientStatuses: clientLocks,
       serverStatuses: serverLocks,
     },
@@ -308,7 +313,18 @@ export function buildRegistryInsights(input: {
         : counts.equivalent
           ? 'consistent'
           : 'unavailable';
-  const statuses = strings(rdap.statuses).length ? rdap.statuses : whois.statuses;
+  const publications = [
+    publicationDiagnostic('registry_rdap', input.rdapParsed, input.rdapStatus, input.rdapFetchedAt),
+    publicationDiagnostic('whois', input.whoisParsed, input.whoisStatus, input.whoisQueriedAt),
+    publicationDiagnostic('registrar_rdap', input.registrarRdapParsed, input.registrarRdapStatus, input.registrarRdapFetchedAt),
+  ];
+  const lifecycleCandidates = [
+    { statuses: strings(rdap.statuses), state: publications[0]!.state },
+    { statuses: strings(whois.statuses), state: publications[1]!.state },
+  ].filter((candidate) => candidate.state !== 'unavailable');
+  const lifecycleSource = lifecycleCandidates.find((candidate) => candidate.statuses.length)
+    ?? lifecycleCandidates[0]
+    ?? { statuses: [], state: 'unavailable' as const };
   const routes = [
     ...contactRoute('registry', rdap.abuse, 'Registry RDAP abuse entity'),
     ...contactRoute('registrar', rdap.registrar, 'Registry RDAP registrar entity'),
@@ -330,7 +346,7 @@ export function buildRegistryInsights(input: {
       whois: disclosure('whois', input.whoisParsed, input.whoisStatus),
       limitation: 'Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant.',
     },
-    lifecycle: lifecycle(statuses),
+    lifecycle: lifecycle(lifecycleSource.statuses, lifecycleSource.state),
     reconciliation: {
       state: reconciliationState,
       conflictCount,
@@ -348,11 +364,7 @@ export function buildRegistryInsights(input: {
               ? 'The comparable fields are normalised as equivalent.'
               : 'No comparable fields were available.',
     },
-    publications: [
-      publicationDiagnostic('registry_rdap', input.rdapParsed, input.rdapStatus, input.rdapFetchedAt),
-      publicationDiagnostic('whois', input.whoisParsed, input.whoisStatus, input.whoisQueriedAt),
-      publicationDiagnostic('registrar_rdap', input.registrarRdapParsed, input.registrarRdapStatus, input.registrarRdapFetchedAt),
-    ],
+    publications,
     rdapCapabilities: {
       registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus),
       registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus),

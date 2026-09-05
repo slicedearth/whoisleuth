@@ -54,6 +54,54 @@ describe('DNS convergence review', () => {
     assert.equal(partial.gate.pass, false);
   });
 
+  test('does not report convergence without a comparable scope', () => {
+    const emptySnapshot = (observer: string) => ({
+      observer,
+      source: `${observer} fixture resolver`,
+      observedAt: NOW,
+      state: 'observed' as const,
+      records: [],
+    });
+    const unscoped = reviewDnsConvergence({
+      schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 1, domain: 'example.test', expected: null,
+      snapshots: [emptySnapshot('Resolver A'), emptySnapshot('Resolver B')],
+    }, NOW);
+    assert.equal(unscoped.rows.length, 0);
+    assert.equal(unscoped.state, 'review');
+    assert.equal(unscoped.gate.pass, false);
+    assert.match(unscoped.gate.reasons[0] ?? '', /no comparable/iu);
+
+    const explicitlyEmpty = reviewDnsConvergence({
+      schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 1, domain: 'example.test',
+      expected: [{ owner: '@', type: 'MX', values: [] }],
+      snapshots: [emptySnapshot('Resolver A'), emptySnapshot('Resolver B')],
+    }, NOW);
+    assert.equal(explicitlyEmpty.rows[0]?.state, 'converged');
+    assert.equal(explicitlyEmpty.gate.pass, true);
+  });
+
+  test('compares equivalent IPv6 spellings by address value', () => {
+    const ipv6Snapshot = (observer: string, value: string) => ({
+      observer,
+      source: `${observer} fixture resolver`,
+      observedAt: NOW,
+      state: 'observed' as const,
+      records: [{ owner: '@', type: 'AAAA', value, ttl: 300 }],
+    });
+    const review = reviewDnsConvergence({
+      schema: DNS_CONVERGENCE_INPUT_SCHEMA,
+      version: 1,
+      domain: 'example.test',
+      expected: [{ owner: '@', type: 'AAAA', values: ['2001:db8::1'] }],
+      snapshots: [
+        ipv6Snapshot('Resolver A', '2001:0DB8:0:0:0:0:0:1'),
+        ipv6Snapshot('Resolver B', '2001:db8::1'),
+      ],
+    }, NOW);
+    assert.equal(review.rows[0]?.state, 'converged');
+    assert.equal(review.gate.pass, true);
+  });
+
   test('requires two distinct observers and rejects records on unavailable snapshots', () => {
     assert.throws(() => reviewDnsConvergence({
       schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 1, domain: 'example.test', expected: null,

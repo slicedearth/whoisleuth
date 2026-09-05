@@ -214,6 +214,12 @@
     return '?';
   };
   const sourceStateLabel = (state: string): string => state.replaceAll('_', ' ');
+  const lifecycleFlagLabel = (value: unknown): string => value === true ? 'observed' : value === false ? 'not observed' : 'unavailable';
+  const lifecycleLockLabel = (value: unknown, kind: string): string => value === true
+    ? `${kind} lock observed`
+    : value === false
+      ? `no ${kind.toLowerCase()} lock observed`
+      : `${kind} lock state unavailable`;
 </script>
 
 {#if resultType === 'domain'}
@@ -432,11 +438,11 @@
       <article>
         <span>Lifecycle</span>
         <strong>{display(lifecycle.label)}</strong>
-        <small>Redemption: {lifecycle.redemption === true ? 'observed' : 'not observed'} · pending delete: {lifecycle.pendingDelete === true ? 'observed' : 'not observed'}</small>
+        <small>Redemption: {lifecycleFlagLabel(lifecycle.redemption)} · pending delete: {lifecycleFlagLabel(lifecycle.pendingDelete)}</small>
       </article>
       <article>
         <span>Registration locks</span>
-        <strong>{lifecycleLocks.client === true ? 'Client lock observed' : 'No client lock observed'} · {lifecycleLocks.server === true ? 'server lock observed' : 'no server lock observed'}</strong>
+        <strong>{lifecycleLockLabel(lifecycleLocks.client, 'Client')} · {lifecycleLockLabel(lifecycleLocks.server, 'Server')}</strong>
         <small>These point-in-time statuses do not prove protection remains enabled.</small>
       </article>
       <article>
