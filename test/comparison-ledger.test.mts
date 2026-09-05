@@ -948,6 +948,46 @@ describe('retained comparison adapters', () => {
     assert.ok(details.rows.some((row) => row.field === 'Bulk collection mode' && row.state === 'collection_changed'));
   });
 
+  test('does not compare Risk across different ready Brand Profile revisions', () => {
+    const earlierContext = {
+      sourceState: 'ready',
+      activeProfileId: 'profile-one',
+      profileUpdatedAt: EARLIER,
+      limitation: '',
+    };
+    const laterContext = {
+      sourceState: 'ready',
+      activeProfileId: 'profile-one',
+      profileUpdatedAt: LATER,
+      limitation: '',
+    };
+    const earlier = bulkSession('bulk-profile-earlier', 'Earlier profile', EARLIER, [
+      bulkResult('profile-score.reservation.invalid', {
+        risk: 20,
+        hasActiveBrandProfile: true,
+        profileContext: earlierContext,
+      }),
+    ], { profileContext: earlierContext });
+    const later = bulkSession('bulk-profile-later', 'Later profile', LATER, [
+      bulkResult('profile-score.reservation.invalid', {
+        risk: 80,
+        hasActiveBrandProfile: true,
+        profileContext: laterContext,
+      }),
+    ], { profileContext: laterContext });
+    const input = {
+      bulkSessions: [earlier, later],
+      bulkPairs: [{ earlierSessionId: earlier.id, laterSessionId: later.id }],
+    };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items[0]?.completeness, 'partial');
+    const details = buildComparisonLedgerDetails(input, { itemIds: index.items[0]?.id });
+    const risk = details.rows.find((row) => row.field === 'Risk score');
+    assert.equal(risk?.state, 'not_compared');
+    assert.match(risk?.limitations.join(' ') ?? '', /same ready Brand Profile provenance/iu);
+    assert.equal(details.rows.some((row) => row.field === 'Risk score' && row.state === 'different'), false);
+  });
+
   test('keeps registrar provenance conservative across RDAP and WHOIS source switches', () => {
     const earlier = bulkSession('bulk-rdap-registrar', 'RDAP registrar', EARLIER, [
       bulkResult('registrar-source.reservation.invalid', {

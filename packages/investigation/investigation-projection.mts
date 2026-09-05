@@ -119,6 +119,20 @@ export interface InvestigationSchemaVersions {
   externalObservation?: number | null;
 }
 
+export const INVESTIGATION_SCHEMA_VERSION_FIELDS = Object.freeze([
+  'case',
+  'riskModel',
+  'httpSummary',
+  'brandProfile',
+  'pageBaseline',
+  'pageIdentity',
+  'pageFingerprint',
+  'campaign',
+  'relationshipEvidence',
+  'relationshipObservation',
+  'externalObservation',
+] as const satisfies readonly (keyof InvestigationSchemaVersions)[]);
+
 export interface InvestigationEntity {
   id: string;
   type: InvestigationEntityType;

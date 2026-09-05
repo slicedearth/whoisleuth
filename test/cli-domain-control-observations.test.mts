@@ -65,7 +65,9 @@ describe('CLI domain-control observations', () => {
 
   test('does not relabel registry DS metadata as a DNS delegation observation', () => {
     const value = lookup();
-    value.rdap.parsed.dsData = [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }];
+    Object.assign(value.rdap.parsed, {
+      dsData: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }],
+    });
     delete (value.availability.dns as Record<string, unknown>).delegation;
     const observation = domainControlObservationFromSavedLookup(parseSavedLookupDocument(JSON.stringify(value)));
     const delegation = observation.fields.find((field) => field.id === 'delegation_ds');

@@ -281,7 +281,8 @@ describe('browser-local readable Lookup report', () => {
 
   test('reports absent technology roles as unreported without inventing indicators', () => {
     const source = lookupResponse();
-    delete object(source.availability).technologyProfile;
+    const availability = source.availability as unknown as Record<string, unknown>;
+    delete availability.technologyProfile;
     const report = buildLookupReadableReport(source, {
       applicationVersion: '1.35.0',
       generatedAt: '2026-07-26T02:00:00.000Z',

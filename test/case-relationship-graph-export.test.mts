@@ -19,9 +19,12 @@ import {
 import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 import {
+  buildInvestigationCaseRelationships,
   type CaseRelationshipObservation,
   type CaseRelationshipSummary,
 } from '../frontend/src/lib/analysis/case-relationships.ts';
+import { buildInvestigationProjection } from '../frontend/src/lib/analysis/investigation-projection.ts';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -36,7 +39,7 @@ function summary(overrides: Partial<CaseRelationshipSummary> = {}): CaseRelation
     status: 'success',
     complete: true,
     truncated: false,
-    schemaVersions: { caseVersion: 2, ignored: 999 },
+    schemaVersions: { case: 2, ignored: 999 },
     limitations: [],
   }));
   return {
@@ -147,11 +150,56 @@ describe('relationship graph interchange export', () => {
     assert.equal(firstPath.scopeDistance, 1);
     const firstObservation = relationship.observations[0] as Record<string, unknown> | undefined;
     assert.ok(firstObservation);
-    assert.deepEqual(firstObservation.schemaVersions, { caseVersion: 2 });
+    assert.deepEqual(firstObservation.schemaVersions, { case: 2 });
     assert.equal(document.graph.truncated, true);
     const finalLimitation = document.limitations.at(-1);
     assert.ok(finalLimitation);
     assert.match(finalLimitation, /Transient focus, pin, hide/);
+  });
+
+  test('preserves canonical projection schema provenance through every graph format', () => {
+    const evidence = (capturedAt: string) => ({
+      capturedAt,
+      scanDepth: 'deep',
+      source: 'lookup',
+      inputHostname: null,
+      availability: 'registered',
+      nameservers: ['ns.shared.invalid'],
+    });
+    const caseRecord = (id: string, domain: string, capturedAt: string) => ({
+      id,
+      domain,
+      status: 'reviewing',
+      disposition: 'unreviewed',
+      source: 'lookup',
+      evidenceHistory: [evidence(capturedAt)],
+      createdAt: capturedAt,
+      updatedAt: capturedAt,
+    });
+    const projection = buildInvestigationProjection({
+      cases: {
+        version: CASE_SCHEMA_VERSION,
+        cases: [
+          caseRecord('case-a', 'a.invalid', '2026-07-01T00:00:00.000Z'),
+          caseRecord('case-b', 'b.invalid', '2026-07-02T00:00:00.000Z'),
+        ],
+      },
+    }, { generatedAt: NOW });
+    const relationshipSummary = buildInvestigationCaseRelationships(projection);
+    const document = buildRelationshipGraphDocument(relationshipSummary, { generatedAt: NOW });
+    const relationship = document.graph.nodes.find((node) => node.kind === 'relationship');
+    assert.ok(relationship && Array.isArray(relationship.observations));
+    const observation = relationship.observations[0] as Record<string, unknown> | undefined;
+    assert.ok(observation);
+    assert.deepEqual(observation.schemaVersions, { case: CASE_SCHEMA_VERSION });
+
+    const json = buildRelationshipGraphExport(relationshipSummary, { generatedAt: NOW, format: 'json' }).content;
+    const graphml = buildRelationshipGraphExport(relationshipSummary, { generatedAt: NOW, format: 'graphml' }).content;
+    const gexf = buildRelationshipGraphExport(relationshipSummary, { generatedAt: NOW, format: 'gexf' }).content;
+    assert.match(json, new RegExp(`"case"\\s*:\\s*${CASE_SCHEMA_VERSION}`, 'u'));
+    assert.match(graphml, new RegExp(`&quot;case&quot;:${CASE_SCHEMA_VERSION}`, 'u'));
+    assert.match(gexf, new RegExp(`&quot;case&quot;:${CASE_SCHEMA_VERSION}`, 'u'));
+    for (const output of [json, graphml, gexf]) assert.doesNotMatch(output, /ignored|caseVersion/u);
   });
 
   test('is deterministic for equivalent case order and excludes transient view state', () => {

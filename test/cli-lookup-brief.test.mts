@@ -66,12 +66,16 @@ describe('CLI Lookup brief', () => {
       ],
     });
     assert.ok(parsed);
-    source.rdap.parsed = { ...parsed, registrar: { name: 'Example Registrar' } };
+    Object.assign(source.rdap, {
+      parsed: { ...parsed, registrar: { name: 'Example Registrar' } },
+    });
     const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
     assert.equal(brief.facts.find((item) => item.id === 'created')?.value, '2024-01-02T00:00:00.000Z');
     assert.equal(brief.facts.find((item) => item.id === 'expires')?.value, '2028-03-04T00:00:00.000Z');
 
-    source.rdap.parsed = { registrar: { name: 'Example Registrar' }, lifecycle: {} };
+    Object.assign(source.rdap, {
+      parsed: { registrar: { name: 'Example Registrar' }, lifecycle: {} },
+    });
     const missing = buildCliLookupBrief(JSON.stringify(source), NOW);
     assert.equal(missing.facts.some((item) => item.id === 'created' || item.id === 'expires'), false);
   });

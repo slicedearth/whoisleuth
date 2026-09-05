@@ -65,6 +65,18 @@ function dataset(records = [record()]) {
   };
 }
 
+function riskExplanation(score: number) {
+  const baseline = requiredValue(explainRiskScore({ availability: 'registered' }));
+  return {
+    ...baseline,
+    score,
+    rawScore: score,
+    capped: false,
+    factors: [],
+    families: [],
+  };
+}
+
 describe('risk-calibrate arguments and bounded input', () => {
   test('accepts a file or stdin with terminal and JSON output', () => {
     assert.deepEqual(parseCliArguments(['risk-calibrate', 'dataset.json']), {
@@ -279,11 +291,11 @@ describe('offline Risk calibration report', () => {
       record({ id: 'missed-positive', domain: 'missed.test', analystDisposition: 'confirmed_abuse' }),
       record({ id: 'false-positive', domain: 'flagged.test', analystDisposition: 'expected' }),
     ])));
-    const report = buildRiskCalibrationReport(parsed, (input) => ({
-      modelVersion: RISK_MODEL_VERSION,
-      score: input.domain === 'missed.test' ? 0 : 100,
-      factors: [],
-    }), { modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD });
+    const report = buildRiskCalibrationReport(
+      parsed,
+      (input) => riskExplanation(input.domain === 'missed.test' ? 0 : 100),
+      { modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD },
+    );
     const current = requiredValue(report.thresholds.find((item) => item.threshold === RISK_REVIEW_THRESHOLD));
     assert.deepEqual({
       truePositive: current.truePositive,
@@ -299,9 +311,7 @@ describe('offline Risk calibration report', () => {
       record({ id: 'became-unscored', domain: 'removed.test' }),
       record({ id: 'became-scored', domain: 'added.test' }),
     ])));
-    const explanation = (score: number | null) => score === null ? null : ({
-      modelVersion: RISK_MODEL_VERSION, score, factors: [],
-    });
+    const explanation = (score: number | null) => score === null ? null : riskExplanation(score);
     const report = buildRiskCalibrationReport(parsed, (input) => (
       input.domain === 'removed.test' ? null : explanation(input.domain === 'added.test' ? 60 : null)
     ), {

@@ -16,7 +16,7 @@ const BASE = {
   currentDs: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'a'.repeat(64) }],
   currentMx: [{ priority: 10, exchange: 'mail.example.net' }],
   currentCaa: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
-  currentCriticalAddresses: [{ hostname: 'www.example.test', addresses: ['192.0.2.20'] }],
+  currentCriticalAddresses: [{ hostname: 'www.example.test', addresses: ['93.184.216.34'] }],
   currentRegistrationStatuses: ['clientTransferProhibited'],
   currentTlsSpkiSha256: 'b'.repeat(64),
   proposedNameservers: 'ns3.example.net\nns4.example.net',
@@ -24,7 +24,7 @@ const BASE = {
   proposedDs: `12345 13 2 ${'a'.repeat(64)}`,
   proposedMx: '10 mail.example.net',
   proposedCaa: '0 issue ca.example',
-  proposedCriticalAddresses: 'www.example.test 192.0.2.20',
+  proposedCriticalAddresses: 'www.example.test 93.184.216.34',
   dnssecChange: 'unchanged' as const,
   registrarLockChange: 'unchanged' as const,
   certificateKeyChange: 'unchanged' as const,
@@ -97,11 +97,48 @@ describe('DNS change rehearsal', () => {
     const result = buildDnsChangeRehearsal({
       ...BASE,
       proposedNameservers: 'ns1.example.test ns2.example.net',
-      proposedGlue: 'ns1.example.test 192.0.2.53 2001:db8::53',
+      proposedGlue: 'ns1.example.test 93.184.216.34',
       dnssecChange: 'rotate',
     });
     assert.equal(result.findings.find((item) => item.id === 'glue')?.state, 'ready');
     assert.match(result.findings.find((item) => item.id === 'dnssec')?.detail ?? '', /overlap/i);
+  });
+
+  test('blocks malformed, non-public, mixed-invalid, and over-bound intended values', () => {
+    for (const proposedGlue of [
+      'ns1.example.test :::',
+      'ns1.example.test 127.0.0.1',
+      'ns1.example.test 93.184.216.34 127.0.0.1',
+      'ns1.example.test 93.184.216.34 93.184.216.35 93.184.216.36',
+    ]) {
+      const result = buildDnsChangeRehearsal({
+        ...BASE,
+        proposedNameservers: 'ns1.example.test',
+        proposedGlue,
+      });
+      assert.equal(result.ready, false, proposedGlue);
+      assert.equal(result.findings.find((item) => item.id === 'intended_input')?.state, 'blocked');
+    }
+
+    const mixedNameservers = buildDnsChangeRehearsal({
+      ...BASE,
+      proposedNameservers: 'ns3.example.net invalid_name',
+    });
+    assert.equal(mixedNameservers.ready, false);
+    assert.match(mixedNameservers.findings.find((item) => item.id === 'intended_input')?.detail ?? '', /1 invalid/u);
+  });
+
+  test('blocks rather than approving a silently shortened nameserver set', () => {
+    const retained = Array.from({ length: MAX_REHEARSAL_NAMESERVERS }, (_, index) => `ns${index}.example.net`);
+    const result = buildDnsChangeRehearsal({
+      ...BASE,
+      currentNameservers: retained,
+      registryNameservers: retained,
+      proposedNameservers: [...retained, 'ns8.example.net'].join(' '),
+    });
+    assert.equal(result.proposed.nameservers.length, MAX_REHEARSAL_NAMESERVERS);
+    assert.equal(result.ready, false);
+    assert.match(result.findings.find((item) => item.id === 'intended_input')?.detail ?? '', /1 over-bound/u);
   });
 
   test('bounds nameservers and keeps incomplete observed evidence unknown', () => {

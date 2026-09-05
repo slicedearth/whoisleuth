@@ -27,7 +27,9 @@ export const MAX_RELATIONSHIP_GRAPH_HIDDEN = 12;
 export const MAX_RELATIONSHIP_GRAPH_GROUP_CASES = 8;
 
 const VIEWBOX_WIDTH = 900;
-const VIEWBOX_HEIGHT = 640;
+const MINIMUM_VIEWBOX_HEIGHT = 640;
+const NODE_TOP = 24;
+const NODE_GAP = 8;
 const CASE_X = 30;
 const RELATIONSHIP_X = 570;
 const NODE_WIDTH = 300;
@@ -147,11 +149,18 @@ function label(value: unknown, maxLength = 40): string {
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
 }
 
-function yPosition(index: number, count: number): number {
-  if (count <= 1) return (VIEWBOX_HEIGHT - NODE_HEIGHT) / 2;
-  const top = 24;
-  const available = VIEWBOX_HEIGHT - (top * 2) - NODE_HEIGHT;
-  return top + (available * index / (count - 1));
+function graphHeight(caseCount: number, relationshipCount: number): number {
+  const count = Math.max(caseCount, relationshipCount);
+  const required = (NODE_TOP * 2)
+    + (count * NODE_HEIGHT)
+    + (Math.max(0, count - 1) * NODE_GAP);
+  return Math.max(MINIMUM_VIEWBOX_HEIGHT, required);
+}
+
+function yPosition(index: number, count: number, height: number): number {
+  if (count <= 1) return (height - NODE_HEIGHT) / 2;
+  const available = height - (NODE_TOP * 2) - NODE_HEIGHT;
+  return NODE_TOP + (available * index / (count - 1));
 }
 
 function boundedNodeIds(
@@ -175,15 +184,16 @@ function positionGraph(
   relationshipNodes: CaseRelationshipGraphRelationshipNode[],
   edges: CaseRelationshipGraphEdge[],
 ) {
+  const height = graphHeight(caseNodes.length, relationshipNodes.length);
   const positionedCases = caseNodes.map((node, index) => ({
     ...node,
     x: CASE_X,
-    y: yPosition(index, caseNodes.length),
+    y: yPosition(index, caseNodes.length, height),
   }));
   const positionedRelationships = relationshipNodes.map((node, index) => ({
     ...node,
     x: RELATIONSHIP_X,
-    y: yPosition(index, relationshipNodes.length),
+    y: yPosition(index, relationshipNodes.length, height),
   }));
   const nodes = [...positionedCases, ...positionedRelationships];
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
@@ -200,6 +210,7 @@ function positionGraph(
     }];
   });
   return {
+    height,
     nodes,
     caseNodes: positionedCases,
     relationshipNodes: positionedRelationships,
@@ -401,7 +412,7 @@ export function projectCaseRelationshipGraph(
   return {
     version: CASE_RELATIONSHIP_GRAPH_VERSION,
     width: VIEWBOX_WIDTH,
-    height: VIEWBOX_HEIGHT,
+    height: viewed.height,
     nodes: viewed.nodes,
     caseNodes: viewed.caseNodes,
     relationshipNodes: viewed.relationshipNodes,

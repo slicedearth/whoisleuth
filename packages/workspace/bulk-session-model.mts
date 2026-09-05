@@ -680,10 +680,11 @@ function sourceStateMap(value: BulkSessionResult): Map<string, string> {
   return new Map(value.sourceCoverage.map((item) => [item.source, item.state]));
 }
 
-function comparableRisk(previous: BulkSessionResult, current: BulkSessionResult): boolean {
+export function areBulkRiskScoresComparable(previous: BulkSessionResult, current: BulkSessionResult): boolean {
   return previous.profileContext.sourceState === 'ready'
     && current.profileContext.sourceState === 'ready'
     && sameProfileContext(previous.profileContext, current.profileContext)
+    && previous.scanDepth === current.scanDepth
     && previous.risk !== null
     && current.risk !== null
     && previous.riskModelVersion !== null
@@ -693,7 +694,7 @@ function comparableRisk(previous: BulkSessionResult, current: BulkSessionResult)
 function resultChanges(previous: BulkSessionResult, current: BulkSessionResult): string[] {
   const changes: string[] = [];
   if (previous.availability !== current.availability) changes.push(`Registration: ${previous.availability} → ${current.availability}`);
-  if (comparableRisk(previous, current) && previous.risk !== current.risk) {
+  if (areBulkRiskScoresComparable(previous, current) && previous.risk !== current.risk) {
     changes.push(`Risk: ${previous.risk ?? 'unavailable'} → ${current.risk ?? 'unavailable'}`);
   }
   if (previous.registrar !== current.registrar) changes.push(`Registrar: ${previous.registrar} → ${current.registrar}`);
@@ -744,7 +745,7 @@ export function compareBulkSessions(
       removed += 1;
       rows.push({ domain, changes: ['Absent from the later settled result set.'] });
     } else {
-      if (!comparableRisk(previous, next)) riskIncomparable = true;
+      if (!areBulkRiskScoresComparable(previous, next)) riskIncomparable = true;
       const changes = resultChanges(previous, next);
       if (changes.length) rows.push({ domain, changes });
       else unchanged += 1;
@@ -763,7 +764,7 @@ export function compareBulkSessions(
       'A source-state change may reflect collection availability rather than a change to the domain.',
       'A missing row means it was not completed in that saved session; it does not establish domain removal.',
       ...(riskIncomparable
-        ? ['Risk deltas are omitted unless both rows retain the same ready Brand Profile provenance and the same versioned Risk model.']
+        ? ['Risk deltas are omitted unless both rows retain the same ready Brand Profile provenance, scan depth, and versioned Risk model.']
         : []),
     ],
   };
