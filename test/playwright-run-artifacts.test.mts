@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  playwrightJsonReporterEnvironment,
+  playwrightJsonResultsPath,
   playwrightRunArtifacts,
   playwrightRunIdentity,
 } from '../tools/playwright-run-artifacts.mts';
@@ -18,15 +20,23 @@ describe('Playwright run artefact ownership', () => {
   });
 
   test('isolates functional shards and the performance authority', () => {
-    assert.deepEqual(playwrightRunArtifacts({
+    const environment = {
       WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
       WHOISLEUTH_PLAYWRIGHT_SHARD: '3/4',
-    }), {
+    };
+    assert.deepEqual(playwrightRunArtifacts(environment), {
       identity: 'shard-3-of-4',
       authFile: 'playwright/.auth/shard-3-of-4.json',
       jsonResults: 'playwright-results/shard-3-of-4.json',
       htmlReport: 'playwright-report/shard-3-of-4',
       testResults: 'test-results/shard-3-of-4',
+    });
+    assert.equal(
+      playwrightJsonResultsPath('/tmp/browser-workspace', environment),
+      '/tmp/browser-workspace/playwright-results/shard-3-of-4.json',
+    );
+    assert.deepEqual(playwrightJsonReporterEnvironment('/tmp/browser-workspace', environment), {
+      PLAYWRIGHT_JSON_OUTPUT_FILE: '/tmp/browser-workspace/playwright-results/shard-3-of-4.json',
     });
     assert.equal(playwrightRunIdentity({ WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'performance' }), 'performance');
   });

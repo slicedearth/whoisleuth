@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -154,6 +155,7 @@ describe('frontend build integrity', () => {
     const workspace = createHostedBrowserWorkspace(root, ENVIRONMENT);
     context.after(workspace.dispose);
 
+    assert.equal(workspace.root, realpathSync(workspace.root));
     assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
     assert.equal(existsSync(path.join(workspace.root, 'frontend/build/index.html')), true);
     const verified = assertFrontendBuildIntegrity(workspace.root, {

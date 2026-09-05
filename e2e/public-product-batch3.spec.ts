@@ -1,6 +1,4 @@
 import type { Page, Request } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   CASE_SCHEMA_VERSION,
@@ -12,6 +10,7 @@ import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-co
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { productionChunkPath } from './production-build';
 
 function collectInvestigationRequests(page: Page): string[] {
   const requests: string[] = [];
@@ -255,14 +254,10 @@ test('renders methodology and deferred coverage from fixed metadata without requ
 test('contains an optional chunk preload failure without a page error', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  const builtManifest = JSON.parse(
-    readFileSync(join(process.cwd(), 'frontend', '.svelte-kit', 'output', 'client', '.vite', 'manifest.json'), 'utf8'),
-  ) as Record<string, { file: string }>;
-  const coverageChunkPath = builtManifest['src/lib/components/PublicCoverageCatalogue.svelte']?.file;
-  if (!coverageChunkPath) throw new TypeError('The production manifest does not own the capability catalogue chunk.');
+  const coverageChunkPath = productionChunkPath('src/lib/components/PublicCoverageCatalogue.svelte');
   const isCoverageChunk = (url: string) => {
     const pathname = new URL(url).pathname;
-    return pathname === `/${coverageChunkPath}`;
+    return pathname === coverageChunkPath;
   };
   await page.route('**/*', (route) => (isCoverageChunk(route.request().url())
     ? route.fulfill({ status: 200, contentType: 'text/javascript', body: 'throw new Error("synthetic chunk failure");' })

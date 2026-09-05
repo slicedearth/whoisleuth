@@ -554,29 +554,59 @@ describe('continuous integration workflow', () => {
       verifyPortFree: async (run) => {
         verifiedPorts.push(run.port);
       },
+      readResult: (run) => run.label,
       isInterrupted: () => interrupted,
     });
     assert.deepEqual(interruptedLaunches, ['functional shard 1/4']);
     assert.deepEqual(verifiedPorts, [4_180]);
-    assert.deepEqual(interruptedResult, { exits: [2], interrupted: true });
+    assert.deepEqual(interruptedResult, { exits: [2], reports: [], interrupted: true });
 
     const ordinaryLaunches: string[] = [];
+    let liveResult = '';
     const ordinaryResult = await runFunctionalRunsSerially(runs, {
       execute: async (run) => {
         ordinaryLaunches.push(run.label);
+        liveResult = `${run.label} report`;
         return run.label.endsWith('2/4') ? 2 : 0;
       },
       verifyPortFree: async () => undefined,
+      readResult: () => liveResult,
       isInterrupted: () => false,
     });
     assert.deepEqual(ordinaryLaunches, runs.map((run) => run.label));
-    assert.deepEqual(ordinaryResult, { exits: [0, 2, 0], interrupted: false });
+    assert.deepEqual(ordinaryResult, {
+      exits: [0, 2, 0],
+      reports: ['functional shard 1/4 report', 'functional shard 3/4 report'],
+      interrupted: false,
+    });
+
+    const launchesBeforeMissingReport: string[] = [];
+    await assert.rejects(
+      runFunctionalRunsSerially(runs, {
+        execute: async (run) => {
+          launchesBeforeMissingReport.push(run.label);
+          return 0;
+        },
+        verifyPortFree: async () => undefined,
+        readResult: () => {
+          throw new Error('Functional shard report is missing.');
+        },
+        isInterrupted: () => false,
+      }),
+      /Functional shard report is missing/u,
+    );
+    assert.deepEqual(launchesBeforeMissingReport, ['functional shard 1/4']);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
     for (const { entry, source } of E2E_SOURCES) {
       assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);
       assert.doesNotMatch(source, /\bsetTimeout\s*\(/u, `${entry} uses a fixed timer delay`);
+      assert.doesNotMatch(
+        source,
+        /frontend\/\.svelte-kit\/output/u,
+        `${entry} reads undeclared frontend builder output`,
+      );
     }
   });
 

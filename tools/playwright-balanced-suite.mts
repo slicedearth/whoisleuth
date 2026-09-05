@@ -1,20 +1,32 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
 import { createHostedBrowserWorkspace, type HostedBrowserWorkspace } from './hosted-browser-workspace.mts';
-import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
+import {
+  localPortIsFree,
+  npmExecutableName,
+  readBoundedStableRegularFileSync,
+} from './maintainer-tool-helpers.mts';
 import {
   aggregatePlaywrightShardTimings,
   renderBrowserShardTimingSummary,
 } from './playwright-shard-aggregate.mts';
-import { summarizePlaywrightResults, type PlaywrightResultSummary } from './playwright-results-summary.mts';
-import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
+import {
+  MAX_PLAYWRIGHT_RESULTS_BYTES,
+  summarizePlaywrightResults,
+  type PlaywrightResultSummary,
+} from './playwright-results-summary.mts';
+import {
+  playwrightJsonReporterEnvironment,
+  playwrightJsonResultsPath,
+  playwrightRunArtifacts,
+} from './playwright-run-artifacts.mts';
 import {
   buildBalancedBrowserShardPlan,
   buildVerificationTimingUpdateCandidate,
@@ -39,6 +51,7 @@ type FunctionalRun = Readonly<{
 type FunctionalRunDependencies = Readonly<{
   execute: (run: FunctionalRun) => Promise<number>;
   verifyPortFree: (run: FunctionalRun) => Promise<void>;
+  readResult: (run: FunctionalRun) => unknown;
   isInterrupted: () => boolean;
 }>;
 
@@ -115,12 +128,13 @@ function runProcess(
 }
 
 function runEnvironment(
+  executionRoot: string,
   port: number,
   kind: 'functional' | 'performance',
   revision: string,
   shard?: string,
 ): NodeJS.ProcessEnv {
-  return {
+  const environment = {
     ...process.env,
     CI: '1',
     WHOISLEUTH_E2E_USE_BUILD: '1',
@@ -130,11 +144,20 @@ function runEnvironment(
     ...(shard ? { WHOISLEUTH_PLAYWRIGHT_SHARD: shard } : {}),
     ...(kind === 'performance' ? { WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' } : {}),
   };
+  return {
+    ...environment,
+    ...playwrightJsonReporterEnvironment(executionRoot, environment),
+  };
 }
 
 function resultData(executionRoot: string, environment: NodeJS.ProcessEnv): unknown {
-  const filename = path.join(executionRoot, playwrightRunArtifacts(environment).jsonResults);
-  return JSON.parse(readFileSync(filename, 'utf8')) as unknown;
+  const filename = playwrightJsonResultsPath(executionRoot, environment);
+  const bytes = readBoundedStableRegularFileSync(
+    filename,
+    MAX_PLAYWRIGHT_RESULTS_BYTES,
+    `Playwright ${playwrightRunArtifacts(environment).identity} result data`,
+  );
+  return JSON.parse(bytes.toString('utf8')) as unknown;
 }
 
 function resultSummary(environment: NodeJS.ProcessEnv, parsed: unknown): PlaywrightResultSummary {
@@ -171,19 +194,37 @@ function stopChildren(): void {
 export async function runFunctionalRunsSerially(
   runs: readonly FunctionalRun[],
   dependencies: FunctionalRunDependencies,
-): Promise<Readonly<{ exits: readonly number[]; interrupted: boolean }>> {
+): Promise<Readonly<{ exits: readonly number[]; reports: readonly unknown[]; interrupted: boolean }>> {
   const exits: number[] = [];
+  const reports: unknown[] = [];
   for (const run of runs) {
     if (dependencies.isInterrupted()) {
-      return Object.freeze({ exits: Object.freeze(exits), interrupted: true });
+      return Object.freeze({
+        exits: Object.freeze(exits),
+        reports: Object.freeze(reports),
+        interrupted: true,
+      });
     }
-    exits.push(await dependencies.execute(run));
+    const exit = await dependencies.execute(run);
+    exits.push(exit);
     await dependencies.verifyPortFree(run);
+    // Each hosted functional shard must publish its result before that runner
+    // completes. Enforce the same boundary locally before another expensive
+    // shard starts, and retain the parsed report for final aggregation.
+    if (exit === 0) reports.push(dependencies.readResult(run));
     if (dependencies.isInterrupted()) {
-      return Object.freeze({ exits: Object.freeze(exits), interrupted: true });
+      return Object.freeze({
+        exits: Object.freeze(exits),
+        reports: Object.freeze(reports),
+        interrupted: true,
+      });
     }
   }
-  return Object.freeze({ exits: Object.freeze(exits), interrupted: false });
+  return Object.freeze({
+    exits: Object.freeze(exits),
+    reports: Object.freeze(reports),
+    interrupted: false,
+  });
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
@@ -203,6 +244,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     try {
       if (interruptionRequested) return 130;
       const performanceEnvironment = runEnvironment(
+        executionRoot,
         ports[plan.shardCount]!,
         'performance',
         workspace.revision,
@@ -215,10 +257,11 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       );
       if (interruptionRequested) return 130;
       if (performanceExit !== 0) return performanceExit;
+      const performanceResult = resultData(executionRoot, performanceEnvironment);
 
       const functionalRuns = plan.shards.map((shard, index) => {
         const identity = `${shard.shard}/${plan.shardCount}`;
-        const environment = runEnvironment(ports[index]!, 'functional', workspace!.revision, identity);
+        const environment = runEnvironment(executionRoot, ports[index]!, 'functional', workspace!.revision, identity);
         return Object.freeze({
           label: `functional shard ${identity}`,
           environment,
@@ -234,13 +277,13 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
         execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
         verifyPortFree: (run) => requirePortRangeFree([run.port]),
+        readResult: (run) => resultData(executionRoot, run.environment),
         isInterrupted: () => interruptionRequested,
       });
       if (functionalResult.interrupted) return 130;
       if (functionalResult.exits.some((code) => code !== 0)) return 2;
 
-      const performanceResult = resultData(executionRoot, performanceEnvironment);
-      const functionalResults = functionalRuns.map((run) => resultData(executionRoot, run.environment));
+      const functionalResults = functionalResult.reports;
       process.stdout.write(verifyHostedBrowserHealth(functionalResults));
       const summaries = [
         resultSummary(performanceEnvironment, performanceResult),

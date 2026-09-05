@@ -10,6 +10,7 @@ import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
+import { playwrightJsonReporterEnvironment } from './playwright-run-artifacts.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
@@ -42,6 +43,14 @@ export function main(args = process.argv.slice(2)): number {
       + `${selection.shard.files.length} specs, ${selection.shard.plannedWeightMs} ms planned weight; `
       + `${selection.plan.unavoidableImbalanceMs} ms projected imbalance.\n`,
     );
+    const childEnvironment = {
+      ...process.env,
+      CI: '1',
+      WHOISLEUTH_E2E_USE_BUILD: '1',
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
+      WHOISLEUTH_PLAYWRIGHT_SHARD: `${selection.shard.shard}/${selection.plan.shardCount}`,
+      WHOISLEUTH_PLAYWRIGHT_PLANNED_WEIGHT_MS: String(selection.shard.plannedWeightMs),
+    };
     const child = spawnSync(
       process.execPath,
       [
@@ -56,12 +65,8 @@ export function main(args = process.argv.slice(2)): number {
       {
         cwd: REPOSITORY_ROOT,
         env: {
-          ...process.env,
-          CI: '1',
-          WHOISLEUTH_E2E_USE_BUILD: '1',
-          WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
-          WHOISLEUTH_PLAYWRIGHT_SHARD: `${selection.shard.shard}/${selection.plan.shardCount}`,
-          WHOISLEUTH_PLAYWRIGHT_PLANNED_WEIGHT_MS: String(selection.shard.plannedWeightMs),
+          ...childEnvironment,
+          ...playwrightJsonReporterEnvironment(REPOSITORY_ROOT, childEnvironment),
         },
         stdio: 'inherit',
       },

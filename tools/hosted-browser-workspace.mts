@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
 } from 'node:fs';
@@ -141,7 +142,11 @@ export function createHostedBrowserWorkspace(
     });
     complete = true;
     return Object.freeze({
-      root: temporaryRoot,
+      // Node canonicalises an executed module before exposing import.meta.url.
+      // Return the same canonical spelling so absolute runner paths still
+      // satisfy their entry-point guard on platforms where tmpdir crosses a
+      // filesystem alias (for example /var to /private/var on macOS).
+      root: realpathSync(temporaryRoot),
       revision: snapshot.runtime.revision,
       dispose: () => rmSync(temporaryRoot, { recursive: true, force: true }),
     });

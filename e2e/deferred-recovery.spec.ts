@@ -2,14 +2,10 @@ import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
-import {
-  assertFrontendBuildIntegrity,
-  frontendProductionChunk,
-  type FrontendBuildIntegritySnapshot,
-} from '../tools/frontend-build-integrity.mts';
 import { caseRecord } from './case-test-fixtures';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { productionChunkPath } from './production-build';
 import {
   beginBrowserInteractionReadiness,
   installNavigationReadinessMark,
@@ -20,12 +16,6 @@ import {
 } from './performance-sampling';
 
 const CASES_KEY = 'whois-rdap-cases-v1';
-let productionBuild: FrontendBuildIntegritySnapshot | null = null;
-
-function productionChunk(source: string): string {
-  productionBuild ??= assertFrontendBuildIntegrity(process.cwd());
-  return frontendProductionChunk(productionBuild, source);
-}
 
 function isChunk(route: Route, pathname: string): boolean {
   return new URL(route.request().url()).pathname === pathname;
@@ -147,7 +137,7 @@ test('CLI navigation readiness waits for working client-side filtering', async (
 
 test('Case preparation readiness cannot complete while its deferred workspace is held', async ({ page }) => {
   const caseId = 'held-response-preparation';
-  const chunkPath = await productionChunk('src/lib/components/CaseResponseWorkspace.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/CaseResponseWorkspace.svelte');
   let releaseChunk = () => {};
   const chunkReleased = new Promise<void>((resolve) => { releaseChunk = resolve; });
   let requestSeen = false;
@@ -223,7 +213,7 @@ test('Case preparation readiness cannot complete while its deferred workspace is
 
 test('a pending protected module reaches a terminal reload state and ignores late completion', async ({ page }) => {
   test.slow();
-  const chunkPath = await productionChunk('src/lib/components/WebsiteProfileClusters.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/WebsiteProfileClusters.svelte');
   let releaseChunk = () => {};
   let markRequested = () => {};
   const requested = new Promise<void>((resolve) => { markRequested = resolve; });
@@ -272,7 +262,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
 });
 
 test('a cached CLI module failure recovers only after the accessible reload action', async ({ page }) => {
-  const chunkPath = await productionChunk('src/lib/generated/public-cli-catalogue.ts');
+  const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');
   const requestCount = await failChunkOnce(page, chunkPath);
 
   await page.goto('/cli#command-commands');
@@ -291,7 +281,7 @@ test('a cached CLI module failure recovers only after the accessible reload acti
 });
 
 test('public examples and demo stages terminate failed module activation with reload recovery', async ({ page }) => {
-  const examplesChunk = await productionChunk('src/lib/generated/public-examples.ts');
+  const examplesChunk = productionChunkPath('src/lib/generated/public-examples.ts');
   await failChunkOnce(page, examplesChunk);
   await page.goto('/examples');
   const example = page.locator('article[data-example="case-handoff"]');
@@ -303,7 +293,7 @@ test('public examples and demo stages terminate failed module activation with re
   await expect(examplesAlert.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expect(exampleButton).toBeDisabled();
 
-  const demoChunk = await productionChunk('src/lib/components/demo-stages/brands.ts');
+  const demoChunk = productionChunkPath('src/lib/components/demo-stages/brands.ts');
   await failChunkOnce(page, demoChunk);
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
