@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
+import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-renderer.mts';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
@@ -97,6 +98,20 @@ export type VerificationOwnershipPlan = Readonly<{
 const unit = (...values: string[]) => Object.freeze(values);
 const browser = (...values: string[]) => Object.freeze(values);
 const specialised = (...values: SpecialisedCheck[]) => Object.freeze(values);
+
+function functionalBrowserInventory(): readonly string[] {
+  const values = readdirSync(path.join(REPOSITORY_ROOT, 'e2e'), { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => `e2e/${entry.name}`)
+    .filter(isPlaywrightFunctionalSpec)
+    .sort();
+  if (values.length < 1 || values.length > MAX_VERIFICATION_CHANGED_PATHS) {
+    throw new TypeError('Functional browser verification inventory is missing or unbounded.');
+  }
+  return Object.freeze(values);
+}
+
+const FUNCTIONAL_BROWSER_INVENTORY = functionalBrowserInventory();
 
 const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
@@ -394,6 +409,15 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     specialised: specialised('architecture'), browserRequired: false,
   }),
   Object.freeze({
+    id: 'browser-support-impact', area: 'shared browser setup and support verification', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => value.startsWith('e2e/') && !value.endsWith('.spec.ts'),
+    focusedUnit: unit('test/verification-architecture.test.mts'),
+    focusedBrowser: FUNCTIONAL_BROWSER_INVENTORY,
+    specialised: specialised('browser-timing-plan', 'analyst-journey-assurance'),
+    browserRequired: true,
+  }),
+  Object.freeze({
     id: 'browser-tests', area: 'browser and analyst-journey verification', priority: 30,
     matches: (value: string) => value.startsWith('e2e/'),
     focusedUnit: unit('test/synthetic-analyst-journeys.test.mts'), focusedBrowser: browser(),
@@ -645,6 +669,18 @@ export function checkVerificationOwnershipMap() {
       throw new TypeError(`Verification impact rule ${rule.id} does not match the maintained inventory.`);
     }
   }
+  const browserRequiredSupportPaths = inventory.filter((file) => (
+    file.startsWith('e2e/')
+    && !file.endsWith('.spec.ts')
+    && matchingRules(file).some((rule) => rule.browserRequired)
+  ));
+  for (const supportPath of browserRequiredSupportPaths) {
+    const assignment = buildVerificationOwnershipPlan([supportPath]).assignments[0];
+    if (!assignment || assignment.focusedBrowserChecks.length !== FUNCTIONAL_BROWSER_INVENTORY.length
+      || assignment.focusedBrowserChecks.some((file) => !isPlaywrightFunctionalSpec(file))) {
+      throw new TypeError(`Browser-required support path ${supportPath} is not plannable against the functional inventory.`);
+    }
+  }
   const schemaOwners = SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => [
     family.owner,
     ...('metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []),
@@ -680,6 +716,7 @@ export function checkVerificationOwnershipMap() {
     privacyProfiles: PRIVACY_DATA_FLOW_CATALOGUE.schemaPrivacyProfiles.length,
     privacyConsumerFlows: PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.length,
     blockingDependencyRules: dependencyRules.length,
+    browserRequiredSupportPaths: browserRequiredSupportPaths.length,
     fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES.length,
   });
 }

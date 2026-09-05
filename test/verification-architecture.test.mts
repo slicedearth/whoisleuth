@@ -308,6 +308,7 @@ describe('verification architecture contracts', () => {
     assert.equal(closure.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES.length);
     assert.ok(closure.schemaFamilies > 0 && closure.capabilities > 0 && closure.cliOperations > 0);
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
+    assert.ok(closure.browserRequiredSupportPaths > 0);
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
@@ -322,6 +323,37 @@ describe('verification architecture contracts', () => {
     assert.throws(
       () => assertDeclaredVerificationTest('e2e/accessibility.setup.ts', 'browser'),
       /invalid test-file identity/u,
+    );
+  });
+
+  test('plans shared browser support changes against the complete functional inventory', () => {
+    const functionalInventory = readVerificationTestInventory()
+      .filter(isPlaywrightFunctionalSpec)
+      .sort();
+    const supportPaths = [
+      'e2e/auth.setup.ts',
+      'e2e/fixtures.ts',
+      'e2e/helpers.ts',
+    ];
+
+    for (const supportPath of supportPaths) {
+      const assignment = buildVerificationOwnershipPlan([supportPath]).assignments[0]!;
+      assert.equal(assignment.ownershipArea, 'browser and analyst-journey verification');
+      assert.ok(assignment.impactAreas.includes('shared browser setup and support verification'));
+      assert.deepEqual(assignment.focusedBrowserChecks, functionalInventory);
+      assert.equal(assignment.focusedBrowserChecks.includes('e2e/auth.setup.ts'), false);
+      assert.equal(assignment.userFacingBrowserRequired, true);
+    }
+
+    const mixed = buildVerificationOwnershipPlan([
+      'e2e/helpers.ts',
+      'e2e/dashboard.spec.ts',
+    ]);
+    assert.deepEqual(mixed.focusedBrowserChecks, functionalInventory);
+    assert.equal(mixed.assignments.length, 2);
+    assert.deepEqual(
+      buildFocusedVerificationExecution(mixed).browserSpecs,
+      functionalInventory,
     );
   });
 
