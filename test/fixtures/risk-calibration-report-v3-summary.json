@@ -129,7 +129,7 @@
       "recall": 0,
       "specificity": null,
       "falsePositiveRate": null,
-      "f1": null,
+      "f1": 0,
       "balancedAccuracy": null,
       "confidence95": {
         "precision": null,
@@ -150,7 +150,7 @@
       "recall": 0,
       "specificity": null,
       "falsePositiveRate": null,
-      "f1": null,
+      "f1": 0,
       "balancedAccuracy": null,
       "confidence95": {
         "precision": null,

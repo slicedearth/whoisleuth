@@ -156,7 +156,10 @@ describe('technology review candidate intake', () => {
     const reconstructedIds = new Set<string>();
     let index = 0;
     for (const fixture of TECHNOLOGY_SIGNATURE_FIXTURES) {
-      const profile = analyzeWebsiteTechnology(fixture.input);
+      const profile = analyzeWebsiteTechnology({
+        ...fixture.input,
+        observedAt: '2026-08-05T09:00:00.000Z',
+      });
       if (profile.status !== 'success' || !profile.findings.length) continue;
       index += 1;
       const expectedIds = profile.findings.map((finding) => finding.id).sort();

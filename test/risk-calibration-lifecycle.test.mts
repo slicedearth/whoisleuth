@@ -65,8 +65,8 @@ const EXPECTED_FIXTURES = [
   {
     id: 'risk-calibration-report-v3-detailed',
     path: 'test/fixtures/risk-calibration-report-v3-detailed.json',
-    bytes: 7_026,
-    sha256: '5c0c435e81478e90bc0b64aa7c20fd82d131b5261a57d9550df3f03334bc20e1',
+    bytes: 7_020,
+    sha256: 'a5cba1681c170c79f8891037f47efc93e0ae6ce5d247418ff3f1c9a81a352922',
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
     role: 'current',
@@ -76,8 +76,8 @@ const EXPECTED_FIXTURES = [
   {
     id: 'risk-calibration-report-v3-summary',
     path: 'test/fixtures/risk-calibration-report-v3-summary.json',
-    bytes: 5_486,
-    sha256: 'b06c312eed14680ce30fd58a84a93908d29ea9e71bfee8174b90df286b730549',
+    bytes: 5_480,
+    sha256: '71b7fe1ee613b2ab32bd1f5646ee765985022c904224e1a08f4577c1d1d06240',
     schema: RISK_CALIBRATION_REPORT_SCHEMA,
     version: RISK_CALIBRATION_REPORT_VERSION,
     role: 'current',

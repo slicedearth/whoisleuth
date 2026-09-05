@@ -25,17 +25,11 @@ import {
   type RawComparisonLedgerSide,
 } from './comparison-ledger-contract.mts';
 
-function bulkCompleteness(session: BulkSession): ComparisonLedgerCompleteness {
-  return session.state === 'complete' ? 'complete' : session.state === 'partial' ? 'partial' : 'unavailable';
-}
+function bulkCompleteness(session: BulkSession): ComparisonLedgerCompleteness { return session.state === 'complete' ? 'complete' : session.state === 'partial' ? 'partial' : 'unavailable'; }
 
-function sourceMap(result: BulkSessionResult): Map<string, BulkSessionSourceState> {
-  return new Map(result.sourceCoverage.map((item) => [item.source, item.state]));
-}
+function sourceMap(result: BulkSessionResult): Map<string, BulkSessionSourceState> { return new Map(result.sourceCoverage.map((item) => [item.source, item.state])); }
 
-function namedBulkSourceState(result: BulkSessionResult, source: string): string {
-  return result.sourceCoverage.find((item) => item.source === source)?.state ?? 'not_reported';
-}
+function namedBulkSourceState(result: BulkSessionResult, source: string): string { return result.sourceCoverage.find((item) => item.source === source)?.state ?? 'not_reported'; }
 
 function bulkFamilyState(result: BulkSessionResult, family: string): string {
   if (family === 'model') return 'derived';
