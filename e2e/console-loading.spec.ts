@@ -1,5 +1,7 @@
+import { performance as hostPerformance } from 'node:perf_hooks';
 import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
-import type { CDPSession, Page, TestInfo } from '@playwright/test';
+import type { CDPSession, Locator, Page, TestInfo } from '@playwright/test';
+import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
   PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
@@ -37,7 +39,7 @@ type RuntimeProbe = Readonly<{
 
 type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   schema: 'whoisleuth.console-loading-measurement';
-  version: 2;
+  version: 3;
   mode: 'authenticated_local_chromium_cold_load';
   readinessClock: 'navigation_start_to_animation_frame';
   path: ConsoleRoute['path'];
@@ -45,35 +47,40 @@ type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   encodedTransferBytes: number;
   completedRequestCount: number;
   usableMs: number;
+  hostReadyMs: number;
   limitations: readonly string[];
 }>;
 
 type ConsoleLoadingSampleSet = Readonly<{
   schema: 'whoisleuth.console-loading-sample-set';
-  version: 2;
+  version: 3;
   mode: 'authenticated_local_chromium_repeated_cold_load';
   path: ConsoleRoute['path'];
   budget: ConsoleRoute['budget'];
   sampleCount: number;
   usableMsMedian: number;
   usableMsMaximum: number;
+  hostReadyMsMedian: number;
+  hostReadyMsMaximum: number;
   longTaskTotalMsMedian: number;
   longTaskTotalMsMaximum: number;
   samples: readonly ConsoleLoadingMeasurement[];
   limitations: readonly string[];
 }>;
 
-// Calibrated from nine browser-marked samples across three clean isolated
+// Calibrated from nine browser-marked samples across three isolated
 // local production-build runs on 2026-09-05. The maxima include first-route
 // process and browser-cache variance instead of relying only on warmed suite
 // timings. Browser marks exclude host assertion polling from route readiness.
+// The CLI row was remeasured after component-owned client initialisation and
+// a working filter response became part of its readiness contract.
 // Transfer ceilings add 20% and round up to 64 KiB; readiness and long-task
 // ceilings add 50% and round up to 50 ms and 10 ms respectively. Layout
 // ceilings add 50% and round up to 0.005, with small zero-observation floors.
 const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
   '/lookup': Object.freeze({ encodedTransferBytes: 2_125_921, usableMs: 511.3, longTaskTotalMs: 92, layoutShiftScore: 0 }),
   '/monitor': Object.freeze({ encodedTransferBytes: 1_831_989, usableMs: 341.1, longTaskTotalMs: 0, layoutShiftScore: 0.0064 }),
-  '/cli': Object.freeze({ encodedTransferBytes: 513_179, usableMs: 91.8, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
+  '/cli': Object.freeze({ encodedTransferBytes: 513_272, usableMs: 139.2, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
 });
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
@@ -90,6 +97,10 @@ function coldLoadBudget(path: keyof typeof CONSOLE_LOADING_OBSERVED_MAXIMA): Con
 }
 
 const routes: readonly ConsoleRoute[] = Object.freeze([
+  // Lookup and Monitor render their declared targets only after the protected
+  // session and browser-local workspace gates complete in the client. The
+  // public CLI route is prerendered, so it also requires its component-owned
+  // initialisation signal to exclude enabled but inert static controls.
   Object.freeze({
     path: '/lookup',
     heading: 'Lookup',
@@ -117,6 +128,7 @@ const routes: readonly ConsoleRoute[] = Object.freeze([
     readinessTargets: Object.freeze([
       Object.freeze({ selector: 'h1', exactText: 'WHOISleuth CLI' }),
       Object.freeze({ selector: '.filters input[type="search"]', requireEnabled: true }),
+      Object.freeze({ selector: '[data-testid="public-cli-catalogue"][data-client-ready="true"]' }),
     ]),
     budget: coldLoadBudget('/cli'),
   }),
@@ -215,6 +227,18 @@ async function browserRuntimeProbe(page: Page): Promise<RuntimeProbe> {
   });
 }
 
+async function verifyCliSearchBehaviour(page: Page, search: Locator): Promise<void> {
+  const catalogue = page.getByTestId('public-cli-catalogue');
+  const status = catalogue.getByRole('status');
+  await search.fill('workflow-plan');
+  await expect(status).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
+  const command = catalogue.locator('article[data-command="workflow-plan"]');
+  await expect(command).toBeVisible();
+  await expect(command.locator(':scope > .command-row > button')).toBeEnabled();
+  await search.fill('');
+  await expect(status).toHaveText(`Showing ${CLI_COMMANDS.length} of ${CLI_COMMANDS.length} commands.`);
+}
+
 async function measureConsoleRoute(
   page: Page,
   route: ConsoleRoute,
@@ -225,6 +249,7 @@ async function measureConsoleRoute(
   const transfer = attachTransferProbe(session);
   await session.send('Network.enable');
   try {
+    const hostStartedAt = hostPerformance.now();
     await page.goto(route.path, { waitUntil: 'domcontentloaded' });
     const usableMs = await readNavigationReadinessMark(page);
     await page.getByRole('heading', { name: route.heading, exact: true }).waitFor();
@@ -235,24 +260,28 @@ async function measureConsoleRoute(
         : page.getByRole('searchbox', { name: 'Search commands' });
     await readyControl.waitFor();
     await expect(readyControl).toBeEnabled();
+    if (route.readyControl === 'cli-search') await verifyCliSearchBehaviour(page, readyControl);
+    const hostReadyMs = Math.round((hostPerformance.now() - hostStartedAt) * 100) / 100;
     await page.waitForLoadState('networkidle');
     const measurement: ConsoleLoadingMeasurement = Object.freeze({
       schema: 'whoisleuth.console-loading-measurement',
-      version: 2,
+      version: 3,
       mode: 'authenticated_local_chromium_cold_load',
       readinessClock: 'navigation_start_to_animation_frame',
       path: route.path,
       budget: route.budget,
       ...transfer(),
       usableMs,
+      hostReadyMs,
       ...await browserRuntimeProbe(page),
       limitations: Object.freeze([
         'This is a local production-style server measurement, not production latency.',
         'The desktop Chromium result does not represent mobile hardware or visitor network conditions.',
-        'Usable time is a browser-side navigation mark captured on the first animation frame where the route heading and primary control are visible and enabled.',
-        'Host command and assertion-polling duration is excluded from usable time.',
+        'Usable time is a browser-side navigation mark captured on the first animation frame where the route heading and primary control are ready; prerendered interactive surfaces also require a component-owned client initialisation signal.',
+        'Host navigation, command and readiness-assertion duration is excluded from usable time and retained separately as hostReadyMs.',
+        'The CLI route additionally proves that its search control changes and restores the rendered command result set after the readiness mark.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
-        'Ceilings are reviewed regression limits derived from repeated clean local production-build runs with documented headroom.',
+        'Ceilings are reviewed regression limits derived from repeated isolated local production-build runs with documented headroom.',
         'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
@@ -286,19 +315,22 @@ for (const route of routes) {
     }
     const sampleSet: ConsoleLoadingSampleSet = Object.freeze({
       schema: 'whoisleuth.console-loading-sample-set',
-      version: 2,
+      version: 3,
       mode: 'authenticated_local_chromium_repeated_cold_load',
       path: route.path,
       budget: route.budget,
       sampleCount: measurements.length,
       usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
       usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+      hostReadyMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostReadyMs)),
+      hostReadyMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostReadyMs)),
       longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
       longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
       samples: Object.freeze([...measurements]),
       limitations: Object.freeze([
         'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
         'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
+        'Browser readiness and host navigation/assertion duration remain separate; only browser readiness is compared with the usable-time budget.',
         'Every sample remains subject to transfer and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
       ]),
     });

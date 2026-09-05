@@ -83,8 +83,20 @@ const DEFERRED_INTERACTIONS_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'e2e', 'deferred-interactions.spec.ts'),
   'utf8',
 );
+const DEFERRED_RECOVERY_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'e2e', 'deferred-recovery.spec.ts'),
+  'utf8',
+);
 const PERFORMANCE_SAMPLING_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'e2e', 'performance-sampling.ts'),
+  'utf8',
+);
+const PUBLIC_CLI_EXPLORER_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'frontend', 'src', 'lib', 'components', 'PublicCliExplorer.svelte'),
+  'utf8',
+);
+const BULK_PAGE_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'frontend', 'src', 'routes', '(console)', 'bulk', '+page.svelte'),
   'utf8',
 );
 const E2E_DIRECTORY = path.join(__dirname, '..', 'e2e');
@@ -502,8 +514,15 @@ describe('continuous integration workflow', () => {
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /runtime\.readyAt = performance\.now\(\)/u);
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /runtime\.animationFrame = requestAnimationFrame\(poll\)/u);
     assert.match(PERFORMANCE_SAMPLING_SOURCE, /scope\.__whoisleuthNavigationReadyAt = performance\.now\(\)/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /visibility\?: 'visible' \| 'attached'/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export async function isBrowserInteractionReadinessMarked/u);
+    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export async function isNavigationReadinessMarked/u);
     assert.match(consoleOutsideAuthority, /const usableMs = await readNavigationReadinessMark\(page\);/u);
     assert.match(consoleOutsideAuthority, /readinessClock: 'navigation_start_to_animation_frame'/u);
+    assert.match(consoleOutsideAuthority, /hostReadyMsMedian/u);
+    assert.match(consoleOutsideAuthority, /verifyCliSearchBehaviour\(page, readyControl\)/u);
+    assert.match(consoleOutsideAuthority, /data-client-ready="true"/u);
+    assert.match(PUBLIC_CLI_EXPLORER_SOURCE, /data-client-ready=\{clientReady \? 'true' : 'false'\}/u);
     assert.match(consoleOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
     assert.match(consoleOutsideAuthority, /resetPerformanceSampleState\(page\)/u);
     assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
@@ -525,6 +544,12 @@ describe('continuous integration workflow', () => {
     assert.match(deferredOutsideAuthority, /const \{ browserReadyMs: usableMs \} = await readBrowserInteractionReadiness\(options\.page\);/u);
     assert.match(deferredOutsideAuthority, /readinessClock: 'browser_event_to_animation_frame'/u);
     assert.match(deferredOutsideAuthority, /hostActionMsMedian/u);
+    assert.match(deferredOutsideAuthority, /readyPresentation: 'visible_usable' \| 'attached_hidden'/u);
+    assert.match(deferredOutsideAuthority, /interaction: 'bulk_analysis_transition'/u);
+    assert.match(deferredOutsideAuthority, /interaction: 'case_response_preparation'/u);
+    assert.match(BULK_PAGE_SOURCE, /data-analysis-preload-ready=\{analysisPreloadReady \? 'true' : 'false'\}/u);
+    assert.match(DEFERRED_RECOVERY_SOURCE, /CLI navigation readiness waits for working client-side filtering/u);
+    assert.match(DEFERRED_RECOVERY_SOURCE, /Case preparation readiness cannot complete while its deferred workspace is held/u);
     assert.doesNotMatch(deferredOutsideAuthority, /const usableMs = round\(performance\.now\(\) -/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.completedAssetRequestCount[^\n]+\)\.toBeGreaterThan/u);
     assert.match(deferredOutsideAuthority, /expect\(measurement\.assetEncodedTransferBytes\)\.toBeLessThanOrEqual/u);

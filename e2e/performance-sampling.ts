@@ -12,11 +12,12 @@ export type BrowserReadinessTarget = Readonly<{
   selector: string;
   exactText?: string;
   requireEnabled?: boolean;
+  visibility?: 'visible' | 'attached';
 }>;
 
 export type BrowserInteractionReadiness = Readonly<{
   start: Readonly<{
-    event: 'change' | 'click' | 'input' | 'keydown';
+    event: 'change' | 'click' | 'input' | 'keydown' | 'pointerover';
     selector?: string;
     key?: string;
     controlOrMeta?: boolean;
@@ -38,6 +39,9 @@ function validateReadinessTargets(targets: readonly BrowserReadinessTarget[]): v
     }
     if (target.exactText !== undefined && target.exactText.length > 500) {
       throw new TypeError('Browser readiness text must remain within the maintained bound.');
+    }
+    if (target.visibility !== undefined && target.visibility !== 'visible' && target.visibility !== 'attached') {
+      throw new TypeError('Browser readiness visibility is unsupported.');
     }
   }
 }
@@ -69,7 +73,7 @@ export async function beginBrowserInteractionReadiness(
     };
     const targetReady = (target: BrowserReadinessTarget): boolean => (
       [...document.querySelectorAll(target.selector)].some((element) => {
-        if (!visible(element)) return false;
+        if (target.visibility !== 'attached' && !visible(element)) return false;
         if (target.exactText !== undefined && normalizeText(element.textContent ?? '') !== normalizeText(target.exactText)) return false;
         if (target.requireEnabled && (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true')) return false;
         return true;
@@ -139,6 +143,15 @@ export async function readBrowserInteractionReadiness(page: Page): Promise<Brows
   });
 }
 
+export async function isBrowserInteractionReadinessMarked(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & {
+      __whoisleuthInteractionReadiness?: { readyAt: number | null };
+    };
+    return typeof scope.__whoisleuthInteractionReadiness?.readyAt === 'number';
+  });
+}
+
 export async function abortBrowserInteractionReadiness(page: Page): Promise<void> {
   await page.evaluate(() => {
     const scope = globalThis as typeof globalThis & {
@@ -161,8 +174,9 @@ export async function installNavigationReadinessMark(
     const targetReady = (target: BrowserReadinessTarget): boolean => (
       [...document.querySelectorAll(target.selector)].some((element) => {
         const style = getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
-          || element.getClientRects().length === 0) return false;
+        if (target.visibility !== 'attached'
+          && (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
+          || element.getClientRects().length === 0)) return false;
         if (target.exactText !== undefined && normalizeText(element.textContent ?? '') !== normalizeText(target.exactText)) return false;
         if (target.requireEnabled && (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true')) return false;
         return true;
@@ -190,6 +204,13 @@ export async function readNavigationReadinessMark(page: Page): Promise<number> {
       throw new Error('Browser navigation readiness mark is unavailable.');
     }
     return Math.round(scope.__whoisleuthNavigationReadyAt * 100) / 100;
+  });
+}
+
+export async function isNavigationReadinessMarked(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & { __whoisleuthNavigationReadyAt?: number | null };
+    return typeof scope.__whoisleuthNavigationReadyAt === 'number';
   });
 }
 

@@ -23,8 +23,10 @@ type InteractionId =
   | 'demo_later_stage'
   | 'monitor_relationships_view'
   | 'brands_portfolio_workbench'
+  | 'bulk_analysis_transition'
   | 'bulk_cohort_outliers'
   | 'lookup_dns_evidence'
+  | 'case_response_preparation'
   | 'case_response_packet'
   | 'dashboard_command_palette';
 
@@ -49,11 +51,12 @@ type RuntimeProbe = Readonly<{
 
 type DeferredInteractionMeasurement = Readonly<{
   schema: 'whoisleuth.deferred-interaction-measurement';
-  version: 2;
+  version: 3;
   mode: 'authenticated_local_chromium_production_build';
   readinessClock: 'browser_event_to_animation_frame';
   interaction: InteractionId;
   path: string;
+  readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
   assetEncodedTransferBytes: number;
   completedAssetRequestCount: number;
@@ -73,10 +76,11 @@ type DeferredInteractionMeasurement = Readonly<{
 
 type DeferredInteractionSampleSet = Readonly<{
   schema: 'whoisleuth.deferred-interaction-sample-set';
-  version: 2;
+  version: 3;
   mode: 'authenticated_local_chromium_repeated_interaction';
   interaction: InteractionId;
   path: string;
+  readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
   sampleCount: number;
   usableMsMedian: number;
@@ -89,15 +93,19 @@ type DeferredInteractionSampleSet = Readonly<{
   limitations: readonly string[];
 }>;
 
-// Calibrated from nine browser-marked samples across three clean isolated
+// Calibrated from nine browser-marked samples across three isolated
 // local production-build runs on 2026-09-05. Browser event-to-frame marks
 // exclude host command, keyboard-dispatch and assertion-polling time.
 // The CLI filter row measures one real keyboard refinement after a prefilled
 // multi-result query. That keeps the browser recent-input semantics while
 // excluding artificial driver time for a no-delay multi-character sequence.
-// The Case response row measures deliberate disclosure of the already-prepared
-// workspace. Case expansion and its host-side readiness assertions are setup,
-// not part of the browser-visible reveal interval.
+// Case expansion/preparation and response disclosure are distinct rows. The
+// first ends when the workspace is attached inside its closed disclosure; the
+// second ends only when that prepared workspace and its controls are visible.
+// Bulk Analysis likewise owns a separate transition/preload row before the
+// cohort-outlier disclosure is measured. Those four rows were remeasured as
+// distinct populations; they are not compared with the retired combined Case
+// interval or with setup work from the earlier Bulk disclosure row.
 // The public Case handoff was remeasured on 2026-09-05 after the current Case
 // contract added type-specific readiness and reviewed response context. Its
 // generated example remains one deferred asset; the ceiling tracks the
@@ -113,9 +121,11 @@ const INTERACTION_OBSERVED_MAXIMA = Object.freeze({
   demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, usableMs: 187.4, longTaskTotalMs: 56, layoutShiftScore: 0 }),
   monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, usableMs: 63.5, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, usableMs: 31.2, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 30.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  bulk_analysis_transition: Object.freeze({ assetEncodedTransferBytes: 60_308, usableMs: 33.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 29.4, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, usableMs: 55.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 19.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  case_response_preparation: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 46.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 14.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
   dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 17.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
 });
 
@@ -372,6 +382,7 @@ type DeferredInteractionOptions = Readonly<{
   browserReadiness: BrowserInteractionReadiness;
   ready: Locator;
   readyControl?: Locator;
+  readyPresentation?: 'visible_usable' | 'attached_hidden';
   budget?: InteractionBudget;
   requireAsset?: boolean;
 }>;
@@ -381,6 +392,7 @@ async function measureDeferredInteractionSample(
   sample: number,
 ): Promise<DeferredInteractionMeasurement> {
   const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const readyPresentation = options.readyPresentation ?? 'visible_usable';
   await options.page.waitForLoadState('networkidle');
   const probe = await beginInteractionProbe(options.page);
   try {
@@ -389,7 +401,12 @@ async function measureDeferredInteractionSample(
     await options.action();
     const hostActionMs = round(performance.now() - hostStartedAt);
     const { browserReadyMs: usableMs } = await readBrowserInteractionReadiness(options.page);
-    await expect(options.ready, `${options.interaction} must render its deferred target`).toBeVisible();
+    if (readyPresentation === 'attached_hidden') {
+      await expect(options.ready, `${options.interaction} must prepare its deferred target`).toBeAttached();
+      await expect(options.ready, `${options.interaction} must keep its prepared target inside the closed disclosure`).toBeHidden();
+    } else {
+      await expect(options.ready, `${options.interaction} must render its deferred target`).toBeVisible();
+    }
     if (options.readyControl) {
       await expect(options.readyControl, `${options.interaction} must expose a usable control`).toBeVisible();
       await expect(options.readyControl).toBeEnabled();
@@ -398,11 +415,12 @@ async function measureDeferredInteractionSample(
     if (!captured) throw new Error(`The ${options.interaction} measurement probe closed before recording.`);
     const measurement: DeferredInteractionMeasurement = Object.freeze({
       schema: 'whoisleuth.deferred-interaction-measurement',
-      version: 2,
+      version: 3,
       mode: 'authenticated_local_chromium_production_build',
       readinessClock: 'browser_event_to_animation_frame',
       interaction: options.interaction,
       path: options.path,
+      readyPresentation,
       budget,
       assetEncodedTransferBytes: captured.assetEncodedTransferBytes,
       completedAssetRequestCount: captured.completedAssetRequestCount,
@@ -420,13 +438,16 @@ async function measureDeferredInteractionSample(
       limitations: Object.freeze([
         'This is a local production-build interaction measurement, not production latency.',
         'The desktop Chromium process does not represent all visitor hardware or network conditions.',
-        'Usable time starts at the triggering browser event and ends on the first animation frame where the declared target and control are visible and enabled.',
+        'Usable time starts at the triggering browser event and ends on the first animation frame where the phase-specific declared readiness targets are satisfied.',
+        readyPresentation === 'attached_hidden'
+          ? 'This phase is ready when its target is attached inside a deliberately closed disclosure; the target is prepared but not yet visible or usable.'
+          : 'This phase is ready only when its target and declared control are visible and usable.',
         'Host command, keyboard dispatch and assertion-polling duration is excluded from usable time; host action duration is retained separately as diagnostic context.',
         'Transfer includes same-origin JavaScript and CSS completed after the explicit action.',
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Residual layout shift includes every entry during a short post-readiness stability window.',
-        'Ceilings are reviewed regression limits derived from repeated clean local production-build runs with documented headroom.',
+        'Ceilings are reviewed regression limits derived from repeated isolated local production-build runs with documented headroom.',
         'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
       ]),
     });
@@ -462,6 +483,7 @@ async function measureDeferredInteractionSample(
 
 async function measureDeferredInteraction(options: DeferredInteractionOptions): Promise<DeferredInteractionSampleSet> {
   const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const readyPresentation = options.readyPresentation ?? 'visible_usable';
   const measurements: DeferredInteractionMeasurement[] = [];
   for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
     await resetPerformanceSampleState(options.page);
@@ -470,10 +492,11 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
   }
   const sampleSet: DeferredInteractionSampleSet = Object.freeze({
     schema: 'whoisleuth.deferred-interaction-sample-set',
-    version: 2,
+    version: 3,
     mode: 'authenticated_local_chromium_repeated_interaction',
     interaction: options.interaction,
     path: options.path,
+    readyPresentation,
     budget,
     sampleCount: measurements.length,
     usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
@@ -606,6 +629,35 @@ function bulkResponse(target: string) {
       availability: { status: 'complete' },
     },
   };
+}
+
+async function installBulkLookupFixture(page: Page): Promise<void> {
+  await page.route('**/api/lookup?*', async (route) => {
+    const target = new URL(route.request().url()).searchParams.get('q') ?? '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(bulkResponse(target)),
+    });
+  });
+}
+
+async function prepareBulkResults(page: Page): Promise<void> {
+  await page.goto('/bulk');
+  await page.locator('#domains').fill(['alpha.test', 'beta.test', 'gamma.test'].join('\n'));
+  await page.getByRole('button', { name: 'Scan 3 domains' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
+}
+
+async function prepareCaseResponseFixture(page: Page, caseId: string): Promise<void> {
+  await migrateLegacyBrowserData(page, {
+    [CASES_KEY]: {
+      version: CASE_SCHEMA_VERSION,
+      cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
+    },
+  }, { clearStorage: true, destination: '/monitor?view=cases' });
+  await expect(page.locator(`#case-head-${caseId}`)).toBeVisible();
 }
 
 test('measures a deferred public CLI command detail without collection', async ({ page }, testInfo) => {
@@ -808,34 +860,68 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures a deferred Bulk cohort-analysis workspace after collection completes', async ({ page }, testInfo) => {
+test('measures the Bulk Analysis transition and its deferred preload after collection completes', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 393, height: 852 });
-  await page.route('**/api/lookup?*', async (route) => {
-    const target = new URL(route.request().url()).searchParams.get('q') ?? '';
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(bulkResponse(target)),
-    });
+  await installBulkLookupFixture(page);
+  const resultViews = page.getByRole('group', { name: 'Bulk result view' });
+  const analysisView = resultViews.getByRole('button', { name: 'Analysis', exact: true });
+  const analysisPanel = page.locator('#bulk-analysis-panel');
+  const cohortToggle = analysisPanel.getByRole('button', { name: /Cohort outliers/u });
+
+  await measureDeferredInteraction({
+    page,
+    testInfo,
+    interaction: 'bulk_analysis_transition',
+    path: '/bulk',
+    prepare: async () => {
+      await prepareBulkResults(page);
+      await expect(analysisView).toHaveAttribute('aria-pressed', 'false');
+      await expect(analysisPanel).toBeHidden();
+      await page.mouse.move(0, 0);
+    },
+    action: () => analysisView.click(),
+    browserReadiness: {
+      // The click's real pointer approach owns the preload, so the browser
+      // interval starts before the component imports rather than at onclick.
+      start: {
+        event: 'pointerover',
+        selector: '.mobile-result-switcher button[aria-controls="bulk-analysis-panel"]',
+      },
+      targets: [
+        { selector: '#bulk-analysis-panel.mobile-view-active[data-analysis-preload-ready="true"]' },
+        {
+          selector: '.mobile-result-switcher button[aria-controls="bulk-analysis-panel"][aria-pressed="true"]',
+          requireEnabled: true,
+        },
+      ],
+    },
+    ready: analysisPanel,
+    readyControl: cohortToggle,
   });
+  await expect(analysisView).toHaveAttribute('aria-pressed', 'true');
+  await expect(analysisPanel).toHaveAttribute('data-analysis-preload-ready', 'true');
+  await expectNoHorizontalOverflow(page);
+});
+
+test('measures the prepared Bulk cohort-analysis disclosure after collection completes', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await installBulkLookupFixture(page);
   const outlierHeading = page.getByRole('heading', { name: 'Local cohort outliers' });
   const resultViews = page.getByRole('group', { name: 'Bulk result view' });
   const analysisView = resultViews.getByRole('button', { name: 'Analysis', exact: true });
+  const analysisPanel = page.locator('#bulk-analysis-panel');
   await measureDeferredInteraction({
     page,
     testInfo,
     interaction: 'bulk_cohort_outliers',
     path: '/bulk',
     prepare: async () => {
-      await page.goto('/bulk');
-      await page.locator('#domains').fill(['alpha.test', 'beta.test', 'gamma.test'].join('\n'));
-      await page.getByRole('button', { name: 'Scan 3 domains' }).click();
-      await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
-      await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
-      // Entering Analysis owns the best-effort preload. The measured
-      // disclosure is therefore a request-free interaction with that module.
+      await prepareBulkResults(page);
+      // The separately measured Analysis transition owns its best-effort
+      // preload. This row deliberately measures only the prepared disclosure.
       await analysisView.click();
       await expect(analysisView).toHaveAttribute('aria-pressed', 'true');
+      await expect(analysisPanel).toHaveAttribute('data-analysis-preload-ready', 'true');
       await expect(outlierHeading).toHaveCount(0);
     },
     action: async () => {
@@ -897,7 +983,48 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures the deferred Case response and packet workspace', async ({ page }, testInfo) => {
+test('measures Case expansion through hidden response-workspace preparation', async ({ page }, testInfo) => {
+  const caseId = 'deferred-preparation-case';
+  const caseHeading = page.locator(`#case-head-${caseId}`);
+  const caseBody = page.locator(`#case-body-${caseId}`);
+  const disclosure = page.locator(`#case-response-${caseId}`);
+  const summary = disclosure.locator(':scope > summary');
+  const responseWorkspace = disclosure.locator('.response-workspace');
+
+  await measureDeferredInteraction({
+    page,
+    testInfo,
+    interaction: 'case_response_preparation',
+    path: '/monitor',
+    prepare: async () => {
+      await prepareCaseResponseFixture(page, caseId);
+      await expect(disclosure).toHaveCount(0);
+    },
+    action: async () => {
+      await caseHeading.focus();
+      await page.keyboard.press('Enter');
+    },
+    browserReadiness: {
+      start: { event: 'click', selector: `#case-head-${caseId}` },
+      targets: [
+        { selector: `#case-body-${caseId}` },
+        { selector: `#case-response-${caseId}` },
+        { selector: `#case-response-${caseId} .response-workspace`, visibility: 'attached' },
+        { selector: `#case-response-${caseId} > summary`, requireEnabled: true },
+      ],
+    },
+    ready: responseWorkspace,
+    readyControl: summary,
+    readyPresentation: 'attached_hidden',
+    requireAsset: false,
+  });
+  await expect(caseHeading).toHaveAttribute('aria-expanded', 'true');
+  await expect(caseBody).toBeVisible();
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expectNoHorizontalOverflow(page);
+});
+
+test('measures disclosure of the prepared Case response and packet workspace', async ({ page }, testInfo) => {
   const caseId = 'deferred-response-case';
   const caseHeading = page.locator(`#case-head-${caseId}`);
   const disclosure = page.locator(`#case-response-${caseId}`);
@@ -911,13 +1038,7 @@ test('measures the deferred Case response and packet workspace', async ({ page }
     interaction: 'case_response_packet',
     path: '/monitor',
     prepare: async () => {
-      await migrateLegacyBrowserData(page, {
-        [CASES_KEY]: {
-          version: CASE_SCHEMA_VERSION,
-          cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
-        },
-      }, { clearStorage: true, destination: '/monitor?view=cases' });
-      await expect(caseHeading).toBeVisible();
+      await prepareCaseResponseFixture(page, caseId);
       await expect(disclosure).toHaveCount(0);
       await caseHeading.click();
       await expect(disclosure).toBeVisible();

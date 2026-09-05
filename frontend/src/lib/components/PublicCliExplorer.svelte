@@ -26,6 +26,7 @@
   let loadGeneration = 0;
   let active = true;
   let urlSyncReady = $state(false);
+  let clientReady = $state(false);
   const moduleController = new AbortController();
   const runnableWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => recipe.runnableByWorkflowRun);
   const planningWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => !recipe.runnableByWorkflowRun);
@@ -201,6 +202,7 @@
     addEventListener('hashchange', openHashCommand);
     addEventListener('popstate', readFiltersFromLocation);
     const cancelPreload = preloadOnIdle(preloadCatalogue);
+    clientReady = true;
     return () => {
       active = false;
       loadGeneration += 1;
@@ -220,7 +222,12 @@
   });
 </script>
 
-<section class="catalogue" aria-labelledby="cli-catalogue-title" data-testid="public-cli-catalogue">
+<section
+  class="catalogue"
+  aria-labelledby="cli-catalogue-title"
+  data-testid="public-cli-catalogue"
+  data-client-ready={clientReady ? 'true' : 'false'}
+>
   <div class="catalogue-heading">
     <div><p class="eyebrow">Command reference</p><h2 id="cli-catalogue-title">All commands</h2><p>Search {PUBLIC_CLI_INDEX.commandCount} commands generated from the installed registry.</p></div>
     <span>{filtered.length} shown</span>

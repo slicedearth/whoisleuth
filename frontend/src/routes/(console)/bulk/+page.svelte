@@ -101,6 +101,8 @@
   import { registerAnalystUndo } from '$lib/analyst-undo';
   const moduleController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
+  let analysisPreloadGeneration = 0;
+  let analysisPreloadReady = $state(false);
 
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
@@ -343,12 +345,18 @@
     if(next==='review')preloadModule(()=>import('$lib/components/BulkReviewCockpit.svelte'));
     else if(next==='list')preloadModule(()=>import('$lib/components/BulkResultsTable.svelte'));
     else{
+      const generation=++analysisPreloadGeneration;
+      analysisPreloadReady=false;
       const loads:Array<Promise<unknown>>=[import('$lib/components/BulkMailExposureReview.svelte'),import('$lib/components/BulkPeerOutliers.svelte')];
       if(domainComparison)loads.push(import('$lib/components/BulkDomainComparison.svelte'));
       if(groupBy)loads.push(import('$lib/components/BulkGroupSummary.svelte'));
       if(relationshipSummary.groups.length||relationshipSummary.limitations.length)loads.push(import('$lib/components/BulkRelationships.svelte'));
       if(coverage)loads.push(import('$lib/components/BulkCoverage.svelte'));
-      preloadModule(()=>Promise.all(loads));
+      const preload=Promise.all(loads);
+      void preload.then(()=>{
+        if(!moduleController.signal.aborted&&generation===analysisPreloadGeneration)analysisPreloadReady=true;
+      },()=>undefined);
+      preloadModule(()=>preload);
     }
   }
   $effect(()=>{if(results.length)preloadResultView(mobileResultView);});
@@ -751,7 +759,12 @@
       {/if}
     </div>
 
-    <div id="bulk-analysis-panel" class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel analysis-result-panel">
+    <div
+      id="bulk-analysis-panel"
+      class:mobile-view-active={mobileResultView==='analysis'}
+      class="mobile-result-panel analysis-result-panel"
+      data-analysis-preload-ready={analysisPreloadReady ? 'true' : 'false'}
+    >
       {#if mobileResultView==='analysis'}
       <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture." onpreload={()=>preloadModule(()=>import('$lib/components/BulkMailExposureReview.svelte'))}>
         <DeferredSurface
