@@ -5,9 +5,44 @@ import {
   qualifyLookupProgressResponse,
 } from '../lib/lookup-progress-qualification.mts';
 import {
+  createLookupProgressFinal,
+  createLookupProgressSource,
+  createLookupProgressStart,
+  encodeLookupProgressEvent,
+} from '../lib/lookup-progress.mts';
+import {
   buildIncrementalLookupQualificationReport,
   main,
 } from '../tools/incremental-lookup-qualification.mts';
+
+const QUALIFICATION_FINAL = Object.freeze({ schema: 'fixture.lookup', version: 1 });
+
+function prebufferedQualificationResponse(chunks: readonly string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  }), {
+    status: 200,
+    headers: {
+      'content-type': 'application/x-ndjson',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+}
+
+function qualificationLines(): string[] {
+  const sources = ['rdap', 'whois'] as const;
+  return [
+    encodeLookupProgressEvent(createLookupProgressStart('deep', sources)),
+    encodeLookupProgressEvent(createLookupProgressSource(1, 'rdap', 'success', { status: 'success' }, { complete: true })),
+    encodeLookupProgressEvent(createLookupProgressSource(2, 'whois', 'partial', { status: 'partial' })),
+    encodeLookupProgressEvent(createLookupProgressFinal(3, sources, QUALIFICATION_FINAL)),
+  ];
+}
 
 describe('incremental Lookup production-qualification harness', () => {
   test('handles help and rejects unexpected command-line arguments', async () => {
@@ -33,6 +68,34 @@ describe('incremental Lookup production-qualification harness', () => {
       { id: 'netlify', state: 'not_enabled', productionQualified: false },
     ]);
     assert.match(report.productionGate.join(' '), /real authenticated staging adapter/iu);
+  });
+
+  test('does not use a slow consumer to qualify already-buffered multi-chunk delivery', async () => {
+    const lines = qualificationLines();
+    let delayedClock = 0;
+    const delayed = await qualifyLookupProgressResponse(prebufferedQualificationResponse(lines), {
+      expectedFinal: QUALIFICATION_FINAL,
+      timeoutMs: 2_000,
+      readDelayMs: 250,
+      maximumFirstEventMs: 100,
+      minimumEventSpanMs: 250,
+      now: () => delayedClock,
+      sleep: async (milliseconds) => { delayedClock += milliseconds; },
+    });
+    assert.equal(delayed.chunks, 4);
+    assert.equal(delayed.eventSpanMs, 750);
+    assert.equal(delayed.bufferingDetected, null);
+
+    const uncontaminated = await qualifyLookupProgressResponse(prebufferedQualificationResponse(lines), {
+      expectedFinal: QUALIFICATION_FINAL,
+      timeoutMs: 2_000,
+      maximumFirstEventMs: 100,
+      minimumEventSpanMs: 250,
+      now: () => 0,
+    });
+    assert.equal(uncontaminated.chunks, 4);
+    assert.equal(uncontaminated.eventSpanMs, 0);
+    assert.equal(uncontaminated.bufferingDetected, true);
   });
 
   test('rejects authentication expiry, incompatible media, and absent bodies before parsing', async () => {

@@ -2,7 +2,7 @@ import {
   PUBLIC_RESOURCE_SLUGS,
   type PublicResourceSlug,
 } from '../../../lib/public-resource-routes.mts';
-import { PLATFORM_REPORTING_RESOURCE_REFERENCES } from './analysis/platform-reporting-routes.ts';
+import { PLATFORM_REPORTING_RESOURCE_REFERENCES } from '../../../packages/cases/platform-reporting-routes.mts';
 
 export type PublicResourceSection = Readonly<{
   title: string;

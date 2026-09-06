@@ -10,12 +10,12 @@
   import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
   import BrandAssetRegisterSummary from '$lib/components/BrandAssetRegisterSummary.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { activeProfileId, deleteProfile, exportProfiles, importProfiles, isBrandProfileMutationCommittedError, loadProfiles, MAX_PROFILE_IMPORT_BYTES, normalizeProfile, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfileId, deleteProfile, exportProfiles, importProfiles, isBrandProfileMutationCommittedError, loadProfiles, MAX_PROFILE_IMPORT_BYTES, normalizeProfile, parseList, setActiveProfile, updateProfileFields, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
-  import type { DesiredPostureBaseline, ProtectionAttestation } from '$lib/analysis/brand-profile-model.ts';
+  import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
@@ -36,7 +36,7 @@
   type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
   type ProfilePersistenceResult={committed:true}|{committed:false;message:string};
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
-  let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
+  let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let editingRevision=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
   let auditGeneration=0;let auditController:AbortController|null=null;
   let cases=$state<CaseRecord[]>([]);
   let relationships=$state<RelationshipObservation[]>([]);
@@ -46,6 +46,7 @@
   let activePreferenceSourceState=$state<BrandReviewSourceState>('loading');
   let certificateReplayUnavailable=$state(false);
   let name=$state(''),official=$state(''),products=$state(''),tlds=$state('com, net, org'),partners=$state(''),selectors=$state(''),retiredSelectors=$state(''),mailProtectionProfile=$state('standard'),trademarkOwner=$state(''),trademarkRegistration=$state(''),faviconHash=$state(''),faviconPHash=$state('');
+  let officialChannels=$state<OfficialChannel[]>([]),rightsReferences=$state<RightsReference[]>([]);
   let pageBaseline=$state<ReturnType<typeof normalizePageBaseline>>(null),capturingIdentity=$state(false);
   let identityCaptureGeneration=0;let identityCaptureController:AbortController|null=null;
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -80,7 +81,7 @@
   const siteIdentityReason=$derived(siteIdentityDisabled?siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.':'');
   const postureReason=$derived(postureDisabled?postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.':'');
   function closeActivePreferenceSource(){cancelAudit();activeId='';auditResults=[];activePreferenceSourceState='unavailable';}
-  function closeProfileSource(){cancelAudit();cancelIdentityCapture();profiles=[];editing='';showForm=false;pageBaseline=null;profileSourceState='unavailable';}
+  function closeProfileSource(){cancelAudit();cancelIdentityCapture();profiles=[];editing='';editingRevision='';showForm=false;pageBaseline=null;profileSourceState='unavailable';}
   function closeCaseSource(){cases=[];caseSourceState='unavailable';certificateReplayUnavailable=true;}
   function closeRelationshipSource(){relationships=[];relationshipSourceState='unavailable';}
   function profileFailureMessage(cause:unknown,fallback:string){if(cause instanceof BrowserLocalDataError){closeProfileSource();return `${fallback} ${cause.message} Browser-local Brand Profiles are unavailable; reload to retry.`;}return cause instanceof Error?cause.message:fallback;}
@@ -140,11 +141,11 @@
   async function focusEditor(){await tick();document.getElementById('brand-profile-name')?.focus();}
   function cancelIdentityCapture(){identityCaptureGeneration+=1;identityCaptureController?.abort();identityCaptureController=null;capturingIdentity=false;if(message==='Capturing official-site identity…')message='';}
   function closeEditor(){if(savingProfile)return;cancelIdentityCapture();showForm=false;}
-  function clearForm(prefillDomain=''){cancelIdentityCapture();editing='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';selectors='';retiredSelectors='';mailProtectionProfile='standard';trademarkOwner='';trademarkRegistration='';faviconHash='';faviconPHash='';pageBaseline=null;showForm=true;void focusEditor();}
+  function clearForm(prefillDomain=''){cancelIdentityCapture();editing='';editingRevision='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';selectors='';retiredSelectors='';mailProtectionProfile='standard';trademarkOwner='';trademarkRegistration='';officialChannels=[];rightsReferences=[];faviconHash='';faviconPHash='';pageBaseline=null;showForm=true;void focusEditor();}
   function setEditorValue(field:EditorField,value:string){if(field==='name')name=value;else if(field==='official'){const previousDomain=parseList(official,true)[0]||'';official=value;const nextDomain=parseList(official,true)[0]||'';if(nextDomain!==previousDomain){cancelIdentityCapture();if(pageBaseline?.domain!==nextDomain){pageBaseline=null;faviconHash='';faviconPHash='';}}}else if(field==='products')products=value;else if(field==='tlds')tlds=value;else if(field==='partners')partners=value;else if(field==='selectors')selectors=value;else if(field==='retiredSelectors')retiredSelectors=value;else if(field==='mailProtectionProfile')mailProtectionProfile=value;else if(field==='trademarkOwner')trademarkOwner=value;else if(field==='trademarkRegistration')trademarkRegistration=value;else faviconHash=value;}
-  function edit(profile:BrandProfile){cancelIdentityCapture();editing=profile.id;name=profile.name;official=profile.officialDomains.join('\n');products=profile.productNames.join(', ');tlds=profile.tlds.join(', ');partners=profile.approvedPartnerDomains.join('\n');selectors=profile.dkimSelectors.join(', ');retiredSelectors=profile.retiredDkimSelectors.join(', ');mailProtectionProfile=profile.mailProtectionProfile;trademarkOwner=profile.trademarkOwner;trademarkRegistration=profile.trademarkRegistration;faviconHash=profile.officialFaviconHash;faviconPHash=profile.officialFaviconPHash;pageBaseline=normalizePageBaseline(profile.pageBaseline);showForm=true;void focusEditor();}
+  function edit(profile:BrandProfile){cancelIdentityCapture();editing=profile.id;editingRevision=profile.updatedAt;name=profile.name;official=profile.officialDomains.join('\n');products=profile.productNames.join(', ');tlds=profile.tlds.join(', ');partners=profile.approvedPartnerDomains.join('\n');selectors=profile.dkimSelectors.join(', ');retiredSelectors=profile.retiredDkimSelectors.join(', ');mailProtectionProfile=profile.mailProtectionProfile;trademarkOwner=profile.trademarkOwner;trademarkRegistration=profile.trademarkRegistration;officialChannels=profile.officialChannels.map((item)=>({...item}));rightsReferences=profile.rightsReferences.map((item)=>({...item}));faviconHash=profile.officialFaviconHash;faviconPHash=profile.officialFaviconPHash;pageBaseline=normalizePageBaseline(profile.pageBaseline);showForm=true;void focusEditor();}
   type ProfileCommitIssue='active-preference'|'reread'|null;
-  type ProfileCommitOptions=Readonly<{preserveCompletedAudit?:boolean}>;
+  type ProfileCommitOptions=Readonly<{preserveCompletedAudit?:boolean;expectedUpdatedAt?:string|null}>;
   type CompletedAuditSnapshot=Readonly<{profileId:string;profileFingerprint:string;results:readonly AuditResult[]}>;
   function captureCompletedAudit():CompletedAuditSnapshot|null{const current=active;if(!current||auditing||auditController!==null||!auditResults.length)return null;return{profileId:current.id,profileFingerprint:auditProfileFingerprint(current),results:[...auditResults]};}
   function restoreCompletedAudit(snapshot:CompletedAuditSnapshot|null){if(!snapshot||profileSourceState!=='ready'||activePreferenceSourceState!=='ready')return;const current=profiles.find((profile)=>profile.id===activeId)||null;if(!current||current.id!==snapshot.profileId||auditProfileFingerprint(current)!==snapshot.profileFingerprint)return;auditResults=[...snapshot.results];}
@@ -155,9 +156,25 @@
     const completedAudit=options.preserveCompletedAudit?captureCompletedAudit():null;
     cancelAudit();
     let profile:BrandProfile;
-    try{profile=await upsertProfile(raw,editingId);}
+    try{profile=await upsertProfile(raw,editingId,options.expectedUpdatedAt??null);}
     catch(cause){
       if(!isBrandProfileMutationCommittedError(cause)||cause.operation!=='save'||!cause.profile){restoreCompletedAudit(completedAudit);throw cause;}
+      installCommittedProfileSnapshot(cause.profiles);
+      restoreCompletedAudit(completedAudit);
+      return{profile:cause.profile,issue:'active-preference'};
+    }
+    try{await refreshProfiles();restoreCompletedAudit(completedAudit);return{profile,issue:null};}
+    catch{restoreCompletedAudit(completedAudit);return{profile,issue:profileSourceState==='unavailable'?'reread':'active-preference'};}
+  }
+  async function commitProfileFieldWrite(profileId:string,patch:Parameters<typeof updateProfileFields>[1],options:ProfileCommitOptions={}):Promise<{profile:BrandProfile;issue:ProfileCommitIssue}>{
+    const completedAudit=options.preserveCompletedAudit?captureCompletedAudit():null;
+    cancelAudit();
+    let profile:BrandProfile;
+    const expectedUpdatedAt=editing===profileId?editingRevision:null;
+    try{profile=await updateProfileFields(profileId,patch,expectedUpdatedAt);if(editing===profileId)editingRevision=profile.updatedAt;}
+    catch(cause){
+      if(!isBrandProfileMutationCommittedError(cause)||cause.operation!=='save'||!cause.profile){restoreCompletedAudit(completedAudit);throw cause;}
+      if(editing===profileId)editingRevision=cause.profile.updatedAt;
       installCommittedProfileSnapshot(cause.profiles);
       restoreCompletedAudit(completedAudit);
       return{profile:cause.profile,issue:'active-preference'};
@@ -183,7 +200,7 @@
     message='Saving Brand Profile…';
     try{
       const existing=editing?profiles.find((profile)=>profile.id===editing):null;
-      const result=await commitProfileWrite({name,officialDomains:parseList(official,true),productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:existing?.allowlistedDomains||[],allowlistedRegistrars:existing?.allowlistedRegistrars||[],dkimSelectors:parseList(selectors,true),retiredDkimSelectors:parseList(retiredSelectors,true),mailProtectionProfile,protectionAttestations:existing?.protectionAttestations||[],desiredPostureBaselines:existing?.desiredPostureBaselines||[],trademarkOwner,trademarkRegistration,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing);
+      const result=await commitProfileWrite({name,officialDomains:parseList(official,true),officialChannels,productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:existing?.allowlistedDomains||[],allowlistedRegistrars:existing?.allowlistedRegistrars||[],dkimSelectors:parseList(selectors,true),retiredDkimSelectors:parseList(retiredSelectors,true),mailProtectionProfile,protectionAttestations:existing?.protectionAttestations||[],desiredPostureBaselines:existing?.desiredPostureBaselines||[],trademarkOwner,trademarkRegistration,rightsReferences,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing,{expectedUpdatedAt:editing?editingRevision:null});
       showForm=false;
       message=result.issue?`Saved "${result.profile.name}". ${committedIssueText(result.issue)}`:`Saved "${result.profile.name}" and set it active.`;
     }catch(cause){message=profileFailureMessage(cause,'Could not save profile.');}
@@ -204,11 +221,11 @@
     message=`Deleted "${profile.name}". ${issue?`${committedIssueText(issue,'deletion')} `:''}${associationState}`;
     return true;
   }
-  async function saveAttestations(attestations:ProtectionAttestation[]){if(!active)return;try{const result=await commitProfileWrite({...active,protectionAttestations:attestations},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved reviewed account controls. ${committedIssueText(result.issue)}`:'Saved reviewed account controls. Expired statements remain visible until reviewed again.';}catch(cause){message=profileWriteFailureMessage(cause,'Could not save reviewed account controls.');}}
-  async function saveAllowlist(allowlistedDomains:string[],allowlistedRegistrars:string[]):Promise<boolean>{if(!active){message='No active Brand Profile is available.';return false;}try{const result=await commitProfileWrite({...active,allowlistedDomains,allowlistedRegistrars},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved the allowlist for "${active.name}". ${committedIssueText(result.issue)}`:`Saved the allowlist for "${active.name}".`;return true;}catch(cause){message=profileWriteFailureMessage(cause,'Could not save the allowlist.');return false;}}
-  async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileWrite({...active,desiredPostureBaselines},active.id,{preserveCompletedAudit:true});message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');message=failure;return{committed:false,message:failure};}}
+  async function saveAttestations(attestations:ProtectionAttestation[]){if(!active)return;try{const result=await commitProfileFieldWrite(active.id,{protectionAttestations:attestations},{preserveCompletedAudit:true});message=result.issue?`Saved reviewed account controls. ${committedIssueText(result.issue)}`:'Saved reviewed account controls. Expired statements remain visible until reviewed again.';}catch(cause){message=profileWriteFailureMessage(cause,'Could not save reviewed account controls.');}}
+  async function saveAllowlist(allowlistedDomains:string[],allowlistedRegistrars:string[]):Promise<boolean>{if(!active){message='No active Brand Profile is available.';return false;}const profileId=active.id;const profileName=active.name;try{const result=await commitProfileFieldWrite(profileId,{allowlistedDomains,allowlistedRegistrars},{preserveCompletedAudit:true});message=result.issue?`Saved the allowlist for "${profileName}". ${committedIssueText(result.issue)}`:`Saved the allowlist for "${profileName}".`;return true;}catch(cause){message=profileWriteFailureMessage(cause,'Could not save the allowlist.');return false;}}
+  async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileFieldWrite(active.id,{desiredPostureBaselines},{preserveCompletedAudit:true});message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');message=failure;return{committed:false,message:failure};}}
   async function saveBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{return persistBaselines(desiredPostureBaselines);}
-  async function savePassportProfile(profile:BrandProfile):Promise<ProfilePersistenceResult>{try{const result=await commitProfileWrite(profile,profile.id);message=result.issue?`Imported and saved the selected domain-control passport fields. ${committedIssueText(result.issue)}`:'Imported the selected domain-control passport fields.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save imported domain-control fields.');message=failure;return{committed:false,message:failure};}}
+  async function savePassportProfile(profile:BrandProfile,expectedUpdatedAt:string):Promise<ProfilePersistenceResult>{try{const result=await commitProfileWrite(profile,profile.id,{expectedUpdatedAt});message=result.issue?`Imported and saved the selected domain-control passport fields. ${committedIssueText(result.issue)}`:'Imported the selected domain-control passport fields.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save imported domain-control fields.');message=failure;return{committed:false,message:failure};}}
   async function retainObservation(report:DomainPostureHttpResponse){if(!active)return;const baseline=active.desiredPostureBaselines.find((item)=>item.domain===report.domain);if(!baseline){message='Configure expected domain settings before retaining an observation.';return;}const observation=buildDesiredPostureObservation(report);const history=[...(baseline.observationHistory||(baseline.previousObservation?[baseline.previousObservation]:[])).filter((item)=>item.observedAt!==observation.observedAt),observation].sort((left,right)=>Date.parse(left.observedAt)-Date.parse(right.observedAt)).slice(-12);const saved=await persistBaselines(active.desiredPostureBaselines.map((item)=>item.domain===report.domain?{...item,previousObservation:observation,observationHistory:history,updatedAt:new Date().toISOString()}:item));if(saved.committed&&profileSourceState==='ready'&&activePreferenceSourceState==='ready')message=`Saved the ${report.checkedAt} settings observation for ${report.domain}.`;}
   function cancelAudit(){auditGeneration+=1;auditController?.abort();auditController=null;auditing=false;auditResults=[];}
   function auditProfileFingerprint(profile:BrandProfile){const normalized=normalizeProfile(profile);return JSON.stringify([normalized.id,normalized.officialDomains,normalized.mailProtectionProfile,normalized.dkimSelectors,normalized.retiredDkimSelectors]);}
@@ -270,7 +287,7 @@
 {:else}
   <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 {/if}
-{#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
+{#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {officialChannels} {rightsReferences} setOfficialChannels={(value)=>officialChannels=value} setRightsReferences={(value)=>rightsReferences=value} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
 <div class="brand-views" role="tablist" aria-label="Brands views">
   <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
   <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onpointerenter={()=>preloadBrandsView('assets')} onfocus={()=>preloadBrandsView('assets')} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
@@ -287,27 +304,27 @@
         <label for="brand-workbench">Tool<select id="brand-workbench" value={brandWorkbench??''} onfocus={()=>preloadBrandWorkbench(brandWorkbench??'control')} oninput={(event)=>preloadBrandWorkbench(event.currentTarget.value)} onchange={(event)=>void selectBrandWorkbench(event.currentTarget.value)}><option value="">Choose a tool</option>{#each brandWorkbenchOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
       </section>
       {#if brandWorkbench==='control'}
-        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='portfolio'}
-        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='posture'}
-        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='baselines'}
-        <DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} />
+        <DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} placeholder="workspace" />
       {:else if brandWorkbench==='passport'}
-        <DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'}
-        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='attestations'}
-        <DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='mail'}
-        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." />
+        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" />
       {/if}
     {/if}
   </div>
 {:else}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-assets">
-    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} />
+    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
   </div>
 {/if}
 

@@ -12,6 +12,7 @@ import {
   type JsonObject,
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
+import { technologyEvidenceRoles } from './technology-evidence-role.mts';
 import {
   DECISION_FACT_PRESENTATION_LABELS,
   projectDecisionFacts,
@@ -43,8 +44,43 @@ function selectedObjectValues(value: JsonObject, keys: readonly string[]): Recor
 }
 
 function projectedRegistrar(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'string') {
+    const name = value
+      .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+      .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, 300);
+    return name ? { name } : null;
+  }
   if (!isJsonObject(value)) return null;
   return selectedObjectValues(value, ['name', 'org', 'handle']);
+}
+
+function projectedTechnologyProfile(value: unknown): Record<string, unknown> | null {
+  if (!isJsonObject(value)) return null;
+  const findings = (Array.isArray(value.findings) ? value.findings : [])
+    .slice(0, 50)
+    .filter(isJsonObject)
+    .map((finding) => {
+      const name = typeof finding.name === 'string'
+        ? finding.name
+            .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+            .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+            .replace(/\s+/gu, ' ')
+            .trim()
+            .slice(0, 120)
+        : '';
+      const roles = technologyEvidenceRoles(finding);
+      return name && roles.length > 0 ? { name, roles } : null;
+    })
+    .filter((finding) => finding !== null);
+  return {
+    ...selectedObjectValues(value, [
+      'profileVersion', 'status', 'observedAt', 'complete', 'truncated', 'limitations',
+    ]),
+    findings,
+  };
 }
 
 function projectedEndpoint(value: unknown): string | null {
@@ -212,6 +248,7 @@ function projectedAvailability(value: JsonObject): Record<string, unknown> {
   const tlsCertificate = isJsonObject(tlsSource.certificate)
     ? selectedObjectValues(tlsSource.certificate, ['fingerprintSha256'])
     : {};
+  const technologyProfile = projectedTechnologyProfile(value.technologyProfile);
 
   return {
     ...selectedObjectValues(value, [
@@ -242,6 +279,7 @@ function projectedAvailability(value: JsonObject): Record<string, unknown> {
       validity: tlsValidity,
       certificate: tlsCertificate,
     },
+    ...(technologyProfile ? { technologyProfile } : {}),
   };
 }
 

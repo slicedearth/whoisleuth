@@ -5,10 +5,14 @@ import {
   type CaseRecord,
 } from './case-record-model.mts';
 import { normalizeCaseStore } from './case-migration-model.mts';
+import { projectCaseForDurableWrite } from './case-record-projection.mts';
 
 /** The exact versioned string persisted by the browser storage adapter. */
 export function serializeCaseStore(cases: CaseRecord[]): string {
-  return JSON.stringify({ version: CASE_SCHEMA_VERSION, cases });
+  return JSON.stringify({
+    version: CASE_SCHEMA_VERSION,
+    cases: cases.map(projectCaseForDurableWrite),
+  });
 }
 
 function byteLength(text: string): number {
@@ -119,6 +123,6 @@ export function buildCaseExport(
   return {
     version: CASE_SCHEMA_VERSION,
     exportedAt: nowIso || new Date().toISOString(),
-    cases: normalizeCaseStore(cases).cases,
+    cases: normalizeCaseStore(cases).cases.map(projectCaseForDurableWrite),
   };
 }

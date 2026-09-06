@@ -127,6 +127,14 @@ function mergeSingleton(target: UnknownRecord, field: string, value: string): vo
   target[field] = value;
 }
 
+function addResourceOrigin(input: UnknownRecord, technologyId: string): void {
+  const value = RESOURCE_ORIGINS[technologyId];
+  if (!value) throw new TypeError(`${technologyId} has no reviewed resource-origin reconstruction.`);
+  const origins = input.resourceOrigins instanceof Set ? input.resourceOrigins as Set<string> : new Set<string>();
+  origins.add(value);
+  input.resourceOrigins = origins;
+}
+
 function addEvidence(
   input: UnknownRecord,
   technologyId: string,
@@ -152,14 +160,11 @@ function addEvidence(
     const fragments = input.html instanceof Set ? input.html as Set<string> : new Set<string>();
     fragments.add(value);
     input.html = fragments;
+    if (technologyId === 'bigcommerce') addResourceOrigin(input, technologyId);
     return;
   }
   if (source === 'resource origin') {
-    const value = RESOURCE_ORIGINS[technologyId];
-    if (!value) throw new TypeError(`${technologyId} has no reviewed resource-origin reconstruction.`);
-    const origins = input.resourceOrigins instanceof Set ? input.resourceOrigins as Set<string> : new Set<string>();
-    origins.add(value);
-    input.resourceOrigins = origins;
+    addResourceOrigin(input, technologyId);
     return;
   }
   const value = RESPONSE_HEADERS[technologyId];

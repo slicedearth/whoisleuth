@@ -57,6 +57,8 @@ function profile(): BrandProfile {
     approvedPartnerDomains: [],
     allowlistedDomains: [],
     allowlistedRegistrars: [],
+    officialChannels: [],
+    rightsReferences: [],
     dkimSelectors: ['private-selector'],
     retiredDkimSelectors: [],
     mailProtectionProfile: 'standard',

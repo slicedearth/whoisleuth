@@ -2,7 +2,7 @@
 // catalogue is static, freshness-bounded and never makes a request or submits
 // a complaint. Analysts must open, verify and complete each provider process.
 
-import type { CaseTypeId } from '../../../../packages/cases/case-workflow-metadata.mts';
+import type { CaseTypeId } from './case-workflow-metadata.mts';
 
 export type IncidentPlatformId = 'facebook' | 'instagram' | 'linkedin' | 'telegram' | 'tiktok' | 'x' | 'youtube';
 export type PlatformReportingChannel = 'email' | 'url';
@@ -37,6 +37,7 @@ export type PlatformReportingResolution = Readonly<{
 
 const REVIEWED_AT = '2026-09-04';
 const REVIEW_AFTER = '2027-03-04';
+const REVIEW_WARNING_DAYS = 30;
 const GENERAL_TYPES: readonly CaseTypeId[] = Object.freeze([]);
 const IP_TYPES: readonly CaseTypeId[] = Object.freeze(['trademark_infringement', 'copyright_infringement', 'counterfeit_goods']);
 
@@ -143,6 +144,30 @@ export const PLATFORM_REPORTING_RESOURCE_REFERENCES = Object.freeze([
   Object.freeze({ label: 'YouTube reporting guidance', href: 'https://support.google.com/youtube/answer/2802027?hl=en', description: 'Official instructions for reporting a channel, video or other YouTube content.' }),
   Object.freeze({ label: 'LinkedIn content reporting guidance', href: 'https://www.linkedin.com/help/linkedin/answer/a1339420', description: 'Official instructions for reporting profiles, Pages, messages and content.' }),
 ]);
+
+export function platformReportingCatalogueHealth(now: Date = new Date()) {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    throw new TypeError('Platform reporting-route health requires a valid review time.');
+  }
+  const reviewedAt = `${REVIEWED_AT}T00:00:00.000Z`;
+  const reviewAfter = `${REVIEW_AFTER}T00:00:00.000Z`;
+  const reviewedMs = Date.parse(reviewedAt);
+  const reviewAfterMs = Date.parse(reviewAfter);
+  const warningMs = reviewAfterMs - (REVIEW_WARNING_DAYS * 86_400_000);
+  const state = now.getTime() >= reviewAfterMs
+    ? 'stale'
+    : now.getTime() >= warningMs
+      ? 'limited'
+      : 'current';
+  return Object.freeze({
+    state,
+    reviewedAt,
+    reviewAfter,
+    ageDays: Math.max(0, Math.floor((now.getTime() - reviewedMs) / 86_400_000)),
+    reviewDueInDays: Math.ceil((reviewAfterMs - now.getTime()) / 86_400_000),
+    routeCount: PLATFORM_REPORTING_ROUTES.length,
+  });
+}
 
 function matchesHost(hostname: string, roots: readonly string[]): boolean {
   return roots.some((root) => hostname === root || hostname.endsWith(`.${root}`));

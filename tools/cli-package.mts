@@ -65,10 +65,18 @@ export type CliPackageReport = Readonly<{
   archiveSha256: string | null;
 }>;
 
+export type CliPackageInventory = Readonly<{
+  runtimeGraphModuleCount: number;
+  packageGraphModuleCount: number;
+  compilerSourceCount: number;
+  packedEntryCount: number;
+}>;
+
 type CliPackageOptions = Readonly<{
   publicationEnabled?: boolean;
   artifactDirectory?: string;
   expectedTag?: string;
+  observeInventory?: (inventory: CliPackageInventory) => void;
 }>;
 
 type ParsedArguments = Readonly<{
@@ -94,28 +102,26 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The executable and compatibility-root dependency graphs remain capped at
-// their reviewed 342-module and 344-module closures.
+// The measured 2.3.0 candidate contains 346 executable-graph modules, 348
+// package-graph modules, 336 compiler sources and 347 packed entries. Fixed
+// count ceilings retain roughly 10-15% headroom for small module extraction;
+// byte and process limits below continue to bound its real processing cost.
 // Two browser-safe domain-control paths remain explicit package roots because
-// released CLI archives permitted those deep imports. Structural extraction
-// does not change the independent source or packed-byte limits.
-export const MAX_CLI_RUNTIME_MODULES = 342;
-export const MAX_CLI_PACKAGE_MODULES = 344;
+// released CLI archives permitted those deep imports.
+export const MAX_CLI_RUNTIME_MODULES = 384;
+export const MAX_CLI_PACKAGE_MODULES = 386;
 // Type-only and JSON compiler inputs are captured in addition to the runtime
-// dependency graph. They may emit no runtime code, but the reviewed 332-input
-// closure remains bounded because TypeScript reads it while producing the
-// candidate.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 332;
+// dependency graph. They may emit no runtime code, but remain subject to this
+// finite count plus the independent compiler-context byte ceilings.
+export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 384;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-// Keep the reviewed 343-entry closure exact; packed and unpacked byte ceilings
-// remain independent controls.
-export const MAX_CLI_PACKAGE_ENTRIES = 343;
+export const MAX_CLI_PACKAGE_ENTRIES = 400;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 80;
+export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 81;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
@@ -299,6 +305,12 @@ export function selectCliPackageSources(
     if (!selected.has(required)) throw new TypeError(`Dependency graph is missing required CLI source ${required}.`);
   }
   return Object.freeze([...selected].sort());
+}
+
+function dependencyGraphModuleCount(graphValue: unknown): number {
+  const graph = record(graphValue, 'Dependency graph');
+  if (!Array.isArray(graph.modules)) throw new TypeError('Dependency graph modules must be an array.');
+  return graph.modules.length;
 }
 
 export function buildCliPackageManifest(
@@ -758,12 +770,27 @@ function parsePackResult(value: unknown): JsonRecord {
   return record(value[0], 'npm pack result');
 }
 
-function packedFiles(packResult: JsonRecord): readonly string[] {
+export function validatePackedCliFiles(
+  packResult: JsonRecord,
+  requiredEntries: readonly string[] = [],
+): readonly string[] {
   if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_ENTRIES) {
     const observed = Array.isArray(packResult.files) ? packResult.files.length : 0;
     throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_ENTRIES}.`);
   }
-  return Object.freeze(packResult.files.map((entry, index) => safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)));
+  const entries = Object.freeze(packResult.files.map((entry, index) => (
+    safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
+  )));
+  for (const required of requiredEntries) {
+    if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
+  }
+  if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
+    throw new TypeError('Packed CLI contains an excluded application or test path.');
+  }
+  if (entries.some((entry) => /\.(?:[cm]?ts|svelte|map)$/u.test(entry))) {
+    throw new TypeError('Packed CLI contains source or source-map files instead of compiled runtime files.');
+  }
+  return entries;
 }
 
 async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {
@@ -810,6 +837,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       maximumModules: MAX_CLI_PACKAGE_MODULES,
       requiredSources: CLI_PACKAGE_ENTRY_MODULES,
     });
+    const runtimeGraphModuleCount = dependencyGraphModuleCount(runtimeGraph);
+    const packageGraphModuleCount = dependencyGraphModuleCount(packageGraph);
     if (executableSources.some((source) => !runtimeSources.includes(source))) {
       throw new TypeError('CLI package roots do not preserve the complete executable dependency graph.');
     }
@@ -924,11 +953,6 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       env: commonEnvironment,
     });
     const packResult = parsePackResult(JSON.parse(packOutput));
-    const entries = packedFiles(packResult);
-    const packedBytes = positiveInteger(packResult.size, 'Packed CLI bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
-    const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
-    const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
-    const tarball = path.join(artifactsRoot, filename);
     const requiredEntries = [
       'bin/whoisleuth.mjs',
       'cli/runner.mjs',
@@ -946,15 +970,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'third-party-notices.txt',
       ...CLI_PACKAGE_SUPPORT_FILES.map(([, destination]) => destination),
     ];
-    for (const required of requiredEntries) {
-      if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
-    }
-    if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
-      throw new TypeError('Packed CLI contains an excluded application or test path.');
-    }
-    if (entries.some((entry) => /\.(?:[cm]?ts|svelte|map)$/u.test(entry))) {
-      throw new TypeError('Packed CLI contains source or source-map files instead of compiled runtime files.');
-    }
+    const entries = validatePackedCliFiles(packResult, requiredEntries);
+    const packedBytes = positiveInteger(packResult.size, 'Packed CLI bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
+    const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
+    const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
+    const tarball = path.join(artifactsRoot, filename);
     await Promise.all([
       assertCliPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
       assertCliPackageSourceSnapshot(repositoryRoot, supportSnapshot),
@@ -1140,6 +1160,29 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     if (!discoveryScanHelp.includes('whoisleuth discover-scan') || !discoveryScanHelp.includes('This command performs network collection.')) {
       throw new TypeError('Installed discover-scan help did not preserve its explicit network boundary.');
     }
+    const mailHeaderFixture = path.join(temporaryRoot, 'message.eml');
+    await writeFile(mailHeaderFixture, [
+      'Authentication-Results: mx.example.test; spf=pass; dkim=pass; dmarc=pass',
+      'From: private-person@example.test',
+      'Subject: private subject',
+      '',
+      'private body',
+    ].join('\r\n'), { encoding: 'utf8', mode: 0o600 });
+    const mailHeaderReview = record(JSON.parse(await runInstalledCheck(
+      executable,
+      ['mail-headers', mailHeaderFixture, '--json'],
+      'mail-header review',
+    )), 'Installed mail-header review');
+    const mailHeaderProvenance = record(mailHeaderReview.provenance, 'Installed mail-header provenance');
+    if (mailHeaderReview.schema !== 'whoisleuth.cli.mail-header-review'
+      || mailHeaderProvenance.bodyRetained !== false
+      || mailHeaderProvenance.attachmentsRetained !== false
+      || mailHeaderProvenance.localPartsRetained !== false
+      || JSON.stringify(mailHeaderReview).includes('private-person')
+      || JSON.stringify(mailHeaderReview).includes('private subject')
+      || JSON.stringify(mailHeaderReview).includes('private body')) {
+      throw new TypeError('Installed offline mail-header review did not preserve its privacy boundary.');
+    }
 
     const commandHelpChecks: string[] = [];
     const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
@@ -1192,6 +1235,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'registry-support',
       'discover',
       'discover-scan-network-boundary',
+      'mail-header-review',
       'domain-control-deep-imports',
       ...installedHandlerChecks,
       ...commandHelpChecks,
@@ -1200,13 +1244,20 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       throw new TypeError(`Installed CLI checks exceed the reviewed ${MAX_CLI_PACKAGE_INSTALLED_CHECKS}-check ceiling.`);
     }
 
+    const inventory = Object.freeze({
+      runtimeGraphModuleCount,
+      packageGraphModuleCount,
+      compilerSourceCount: sources.length,
+      packedEntryCount: entries.length,
+    });
+    options.observeInventory?.(inventory);
     const report = Object.freeze({
       schema: CLI_PACKAGE_REPORT_SCHEMA,
       version: CLI_PACKAGE_REPORT_VERSION,
       packageName,
       packageVersion,
-      sourceModuleCount: sources.length,
-      packedEntryCount: entries.length,
+      sourceModuleCount: inventory.compilerSourceCount,
+      packedEntryCount: inventory.packedEntryCount,
       packedBytes,
       unpackedBytes,
       runtimeDependencies,
@@ -1225,11 +1276,20 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
   }
 }
 
-export function formatCliPackageReport(report: CliPackageReport): string {
+export function formatCliPackageReport(
+  report: CliPackageReport,
+  inventory?: CliPackageInventory,
+): string {
   return [
     'WHOISleuth scoped CLI package check',
     `Package: ${report.packageName}@${report.packageVersion}`,
-    `Dependency-closure modules: ${report.sourceModuleCount}`,
+    ...(inventory
+      ? [
+          `Runtime dependency graph: ${inventory.runtimeGraphModuleCount} modules`,
+          `Package dependency graph: ${inventory.packageGraphModuleCount} modules`,
+        ]
+      : []),
+    `Compiler source closure: ${report.sourceModuleCount} sources`,
     `Packed entries: ${report.packedEntryCount}`,
     `Archive bytes: ${report.packedBytes} packed / ${report.unpackedBytes} unpacked`,
     `Runtime dependencies: ${Object.entries(report.runtimeDependencies).map(([name, version]) => `${name}@${version}`).join(', ')}`,
@@ -1282,12 +1342,14 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   try {
     const parsed = parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
+    let inventory: CliPackageInventory | undefined;
     const report = await checkCliPackage(repositoryRoot, {
       publicationEnabled: parsed.publicationEnabled,
       ...(parsed.artifactDirectory ? { artifactDirectory: parsed.artifactDirectory } : {}),
       ...(parsed.expectedTag ? { expectedTag: parsed.expectedTag } : {}),
+      observeInventory: (measured) => { inventory = measured; },
     });
-    stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatCliPackageReport(report)}\n`);
+    stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatCliPackageReport(report, inventory)}\n`);
     return 0;
   } catch (error) {
     stderr.write(`${error instanceof Error ? error.message : 'CLI package check failed.'}\n`);

@@ -227,9 +227,7 @@ function thresholdMetrics(
   const recall = ratio(truePositive, truePositive + falseNegative);
   const specificity = ratio(trueNegative, trueNegative + falsePositive);
   const falsePositiveRate = ratio(falsePositive, falsePositive + trueNegative);
-  const f1 = precision === null || recall === null || precision + recall === 0
-    ? null
-    : Number(((2 * precision * recall) / (precision + recall)).toFixed(4));
+  const f1 = ratio(2 * truePositive, 2 * truePositive + falsePositive + falseNegative);
   const balancedAccuracy = recall === null || specificity === null
     ? null
     : Number(((recall + specificity) / 2).toFixed(4));

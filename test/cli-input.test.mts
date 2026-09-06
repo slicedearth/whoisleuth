@@ -7,7 +7,7 @@ import { PassThrough, Readable } from 'node:stream';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { readCliTextInput } from '../cli/input.mts';
+import { readCliHeaderInput, readCliTextInput } from '../cli/input.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 const execFileAsync = promisify(execFile);
@@ -58,6 +58,39 @@ test('rejects a pre-aborted input without opening a path', async () => {
     readCliTextInput('/path/that/must/not/open', null, { maximumBytes: 64, label: 'Fixture', signal: controller.signal }),
     /Cancelled|aborted/iu,
   );
+});
+
+test('reads only a bounded message-header prefix from files and stdin', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-header-input-'));
+  try {
+    const file = path.join(directory, 'message.eml');
+    const header = 'From: analyst@example.test\r\nSubject: private';
+    const body = `\r\n\r\n${'body-data'.repeat(32_768)}`;
+    await writeFile(file, Buffer.concat([Buffer.from(header + body, 'utf8'), Buffer.from([0xff])]));
+    assert.equal(await readCliHeaderInput(file, null, { maximumBytes: 128, label: 'Header fixture' }), header);
+    assert.equal(await readCliHeaderInput(null, Readable.from([
+      'From: analyst@example.test\r\nSubject: private\r\n',
+      `\r\n${'unretained-body'.repeat(1_000)}`,
+    ]), { maximumBytes: 128, label: 'Header fixture' }), header);
+    await assert.rejects(
+      readCliHeaderInput(null, Readable.from(['X-Test: ', 'a'.repeat(129)]), { maximumBytes: 128, label: 'Header fixture' }),
+      /limited to 128 bytes before the message body/iu,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('cancels header input while standard input remains open', async () => {
+  const controller = new AbortController();
+  const input = new PassThrough();
+  const pending = readCliHeaderInput(null, input, {
+    maximumBytes: 128,
+    label: 'Header fixture',
+    signal: controller.signal,
+  });
+  controller.abort(new DOMException('Cancelled', 'AbortError'));
+  await assert.rejects(pending, /Cancelled|aborted/iu);
 });
 
 test('the repository CLI rejects a named-pipe operand without blocking', {

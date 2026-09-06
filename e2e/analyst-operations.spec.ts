@@ -27,6 +27,7 @@ function readyForReviewAction(): CaseActionRecord {
     recipient: 'Reserved registrar review route',
     contactSource: 'Fixture contact source',
     routeObservedAt: OBSERVED_AT,
+    routeReviewAfter: null,
     contactLimitations: ['No contact was attempted.'],
     dueAt: null,
     followUpAt: null,
@@ -85,6 +86,8 @@ function certificateProfile() {
     approvedPartnerDomains: [],
     allowlistedDomains: [],
     allowlistedRegistrars: [],
+    officialChannels: [],
+    rightsReferences: [],
     dkimSelectors: [],
     retiredDkimSelectors: [],
     mailProtectionProfile: 'standard',
@@ -196,6 +199,60 @@ function countCollectionRequests(page: Page): { count: () => number } {
   });
   return { count: () => requests };
 }
+
+test('calendar export includes only selected follow-ups and keeps Case context opt-in', async ({ page }) => {
+  const collectionRequests = countCollectionRequests(page);
+  const action = {
+    ...readyForReviewAction(),
+    recipient: 'Private fixture response owner',
+    dueAt: '2030-06-01T00:00:00.000Z',
+    followUpAt: '2030-06-08T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: CASE_SCHEMA_VERSION,
+      cases: [{
+        ...caseRecord({
+          id: 'case-calendar-export',
+          domain: 'calendar-export.invalid',
+          actions: [action],
+          createdAt: OBSERVED_AT,
+          updatedAt: OBSERVED_AT,
+        }),
+        tags: ['case-type:phishing'],
+      }],
+    },
+  }, { destination: '/monitor?view=inbox' });
+
+  const lifecycle = page.getByRole('region', { name: 'Contact and lifecycle review' });
+  const exportButton = lifecycle.getByRole('button', { name: 'Export selected (0)' });
+  await expect(exportButton).toBeDisabled();
+  await lifecycle.getByLabel('Event type').selectOption('action_follow_up');
+  await lifecycle.getByRole('button', { name: 'Select matching (1)' }).click();
+
+  const defaultDownload = page.waitForEvent('download');
+  await lifecycle.getByRole('button', { name: 'Export selected (1)' }).click();
+  const defaultBody = Buffer.concat(await (await (await defaultDownload).createReadStream()).toArray()).toString('utf8');
+  const defaultCalendar = defaultBody.replaceAll(/\r\n[ \t]/gu, '');
+  expect(defaultCalendar.match(/BEGIN:VEVENT/gu)).toHaveLength(1);
+  expect(defaultCalendar).toMatch(/SUMMARY:Case action follow-up · WS-/u);
+  expect(defaultCalendar).not.toMatch(/calendar-export\.invalid|Private fixture response owner|Phishing/u);
+
+  await lifecycle.locator('details.calendar-privacy > summary').click();
+  await lifecycle.getByLabel('Include investigated domain').check();
+  await lifecycle.getByLabel('Include recipient or internal owner').check();
+  await lifecycle.getByLabel('Include Case types and event details').check();
+  const disclosedDownload = page.waitForEvent('download');
+  await lifecycle.getByRole('button', { name: 'Export selected (1)' }).click();
+  const disclosedBody = Buffer.concat(await (await (await disclosedDownload).createReadStream()).toArray()).toString('utf8');
+  const disclosedCalendar = disclosedBody.replaceAll(/\r\n[ \t]/gu, '');
+  expect(disclosedCalendar).toContain('calendar-export.invalid');
+  expect(disclosedCalendar).toContain('Private fixture response owner');
+  expect(disclosedCalendar).toContain('Case types: Phishing');
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  expect(collectionRequests.count()).toBe(0);
+});
 
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {
   const collectionRequests = countCollectionRequests(page);

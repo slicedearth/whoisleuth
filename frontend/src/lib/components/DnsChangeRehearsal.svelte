@@ -97,7 +97,7 @@
       </label>
       <label class="field">
         Proposed in-bailiwick glue
-        <textarea bind:value={proposedGlue} rows="3" placeholder="ns1.example.test 192.0.2.53"></textarea>
+        <textarea bind:value={proposedGlue} rows="3" placeholder="ns1.example.test [public IP address]"></textarea>
         <small>Optional. Enter one nameserver followed by up to two public addresses per line.</small>
       </label>
       <label class="field">
@@ -117,7 +117,7 @@
       </label>
       <label class="field">
         Critical intended addresses
-        <textarea bind:value={proposedCriticalAddresses} rows="3" placeholder="www.example.test 192.0.2.20"></textarea>
+        <textarea bind:value={proposedCriticalAddresses} rows="3" placeholder="www.example.test [public IP address]"></textarea>
         <small>Enter a critical hostname followed by up to two intended A or AAAA values per line.</small>
       </label>
       <label class="field">

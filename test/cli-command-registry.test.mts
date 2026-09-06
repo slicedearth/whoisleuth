@@ -46,6 +46,10 @@ import { WORKFLOW_COMMAND_HANDLERS } from '../cli/workflow-command-runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PUBLIC_GUIDANCE } from '../packages/contracts/public-product.mts';
 import {
+  CLI_COMMAND_SEMANTICS,
+  CLI_HELP_GROUP_ORDER,
+} from '../packages/contracts/cli-command-semantics.mts';
+import {
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -56,56 +60,6 @@ import {
 } from './support/shell-completion-harness.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
-
-const MINIMUM_ARGUMENTS: Readonly<Record<CliCommand, readonly string[]>> = Object.freeze({
-  completion: ['completion', 'bash'],
-  doctor: ['doctor'],
-  commands: ['commands'],
-  manual: ['manual'],
-  manifest: ['manifest', 'artefact.json', '--workflow', 'review'],
-  'map-observations': ['map-observations'],
-  'oam-export': ['oam-export'],
-  lookup: ['lookup', 'example.test'],
-  bulk: ['bulk'],
-  'ct-search': ['ct-search', 'example'],
-  'ct-intake': ['ct-intake'],
-  discover: ['discover', 'example.test'],
-  'discover-scan': ['discover-scan', 'example.test', '--plan'],
-  posture: ['posture', 'example.test'],
-  http: ['http', 'example.test'],
-  tls: ['tls', 'example.test'],
-  'dnssec-validate': ['dnssec-validate', 'example.test', '--resolver', '192.0.2.53', '--trust-anchor', 'anchor.json', '--owned-or-authorized'],
-  'mail-transport': ['mail-transport', '--resolver', '192.0.2.53', '--trust-anchor', 'anchor.json', '--owned-or-authorized', '--active-probe'],
-  'registry-support': ['registry-support', 'example.test'],
-  'registry-doctor': ['registry-doctor'],
-  'registry-cohort': ['registry-cohort'],
-  'registry-scaffold': ['registry-scaffold', '--profile', 'example', '--suffix', 'test', '--scenario', 'registered'],
-  'risk-calibrate': ['risk-calibrate'],
-  'lookalike-calibrate': ['lookalike-calibrate'],
-  'verify-artifact': ['verify-artifact'],
-  'interchange-report': ['interchange-report'],
-  'inspect-archive': ['inspect-archive'],
-  'sign-artifact': ['sign-artifact', '--private-key-file', 'private.pem'],
-  'verify-signature': ['verify-signature'],
-  'source-report': ['source-report'],
-  compare: ['compare'],
-  'page-compare': ['page-compare', 'left.json', 'right.json'],
-  'mail-review': ['mail-review'],
-  'review-evidence': ['review-evidence'],
-  brief: ['brief'],
-  'case-pack': ['case-pack', '--audience', 'internal', '--reviewed'],
-  'domain-control': ['domain-control'],
-  'monitor-once': ['monitor-once'],
-  assurance: ['assurance'],
-  'change-packet': ['change-packet'],
-  'sharing-review': ['sharing-review', '--marking', 'amber', '--recipient-scope', 'community', '--purpose', 'Reviewed handoff', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed'],
-  'workflow-plan': ['workflow-plan', 'domain-triage', 'example.test'],
-  'workflow-run': ['workflow-run', 'domain-triage', 'example.test'],
-  diff: ['diff', 'left.json', 'right.json'],
-  reconcile: ['reconcile', 'left.json', 'right.json'],
-  timeline: ['timeline', 'left.json', 'right.json'],
-  export: ['export'],
-});
 
 function assertDeepFrozen(value: unknown, path = 'registry', seen = new Set<object>()): void {
   if (value === null || typeof value !== 'object' || seen.has(value)) return;
@@ -155,6 +109,33 @@ function optionValue(command: CliCommand, option: string): string {
   return option === '--configuration-digest' ? `sha256:${'a'.repeat(64)}` : 'fixture';
 }
 
+function minimumArguments(command: CliCommand): readonly string[] {
+  const definition = commandDefinition(command);
+  const argv: string[] = [command];
+  for (const positional of definition.grammar.positionals) {
+    for (let index = 0; index < positional.minimum; index += 1) {
+      argv.push(positional.valueKind === 'enum'
+        ? positional.values[0]!
+        : positional.valueKind === 'file' ? `${positional.name}-${index + 1}.json` : 'fixture');
+    }
+  }
+  const requiredOptions = definition.grammar.constraints
+    .filter((constraint): constraint is Extract<CliGrammarConstraint, { kind: 'required' }> => constraint.kind === 'required')
+    .flatMap((constraint) => constraint.options);
+  for (const option of requiredOptions) {
+    const specification = commandOptionSpec(command, option)!;
+    argv.push(option, ...(specification.arity === 1 ? [optionValue(command, option)] : []));
+  }
+  // Recipe discovery is a purpose-specific mode: the mechanical grammar permits
+  // either two positional values or one of these discovery options.
+  if (command === 'workflow-plan') argv.push('--list');
+  return Object.freeze(argv);
+}
+
+const MINIMUM_ARGUMENTS = Object.freeze(Object.fromEntries(
+  CLI_COMMANDS.map((command) => [command, minimumArguments(command)]),
+)) as Readonly<Record<CliCommand, readonly string[]>>;
+
 function ensureOption(argv: readonly string[], command: CliCommand, option: string, value?: string): string[] {
   const specification = commandOptionSpec(command, option);
   assert.ok(specification, `${command} ${option}`);
@@ -173,27 +154,19 @@ function referencedConstraintOptions(constraint: CliGrammarConstraint): readonly
 }
 
 describe('canonical CLI command registry', () => {
-  test('keeps each command\'s maintained metadata in one typed seed', () => {
-    const source = readFileSync(new URL('../cli/command-reference.mts', import.meta.url), 'utf8');
-    assert.equal([...source.matchAll(/: commandSeed\(\{/gu)].length, CLI_COMMAND_REGISTRY.length);
-    for (const retiredParallelMap of [
-      'COMMAND_USAGE_SEED',
-      'COMMAND_DETAILS_SEED',
-      'COMMAND_COLLECTION_SEED',
-      'OPTIONS_BY_COMMAND_SEED',
-      'POSITIONALS_BY_COMMAND_SEED',
-      'GRAMMAR_CONSTRAINTS_SEED',
-      'COMMAND_DESCRIPTIONS_SEED',
-      'HANDLER_OWNER_BY_COMMAND',
-      'NETWORK_EFFECT_BY_COMMAND',
-      'COMMON_COMMANDS',
-      'SCHEMA_IDENTIFIERS_BY_COMMAND',
-      'PRIMARY_ARTEFACTS_BY_COMMAND',
-    ]) assert.doesNotMatch(source, new RegExp(`\\b${retiredParallelMap}\\b`, 'u'));
-  });
-
-  test('keeps one ordered, unique, deeply immutable command contract', () => {
+  test('keeps one ordered, unique, deeply immutable exported command contract', () => {
+    const assertCanonicalProjection = (definitions: readonly Readonly<{ command: string; order: number }>[]) => {
+      if (new Set(definitions.map((definition) => definition.command)).size !== definitions.length
+        || definitions.some((definition, order) => definition.order !== order)) {
+        throw new TypeError('CLI command projection is duplicated or out of order.');
+      }
+    };
     assert.ok(CLI_COMMAND_REGISTRY.length > 0);
+    assert.doesNotThrow(() => assertCanonicalProjection(CLI_COMMAND_REGISTRY));
+    assert.throws(() => assertCanonicalProjection([
+      ...CLI_COMMAND_REGISTRY,
+      { ...CLI_COMMAND_REGISTRY[0]!, order: CLI_COMMAND_REGISTRY.length },
+    ]), /duplicated or out of order/u);
     assert.deepEqual(CLI_COMMANDS, CLI_COMMAND_REGISTRY.map((definition) => definition.command));
     assert.equal(new Set(CLI_COMMANDS).size, CLI_COMMANDS.length);
     assertDeepFrozen(CLI_COMMAND_REGISTRY);
@@ -207,9 +180,15 @@ describe('canonical CLI command registry', () => {
     assert.equal(isCliCommand('not-a-command'), false);
 
     const helpCommands = Object.values(HELP_COMMANDS_BY_GROUP).flat();
+    assert.deepEqual(Object.keys(HELP_COMMANDS_BY_GROUP), [...CLI_HELP_GROUP_ORDER]);
     assert.equal(helpCommands.length, CLI_COMMANDS.length);
     assert.deepEqual([...helpCommands].sort(), [...CLI_COMMANDS].sort());
     assert.equal(new Set(helpCommands).size, CLI_COMMANDS.length);
+    assert.equal(CLI_HELP_GROUP_ORDER.every((group) => HELP_COMMANDS_BY_GROUP[group].length > 0), true);
+    assert.deepEqual(Object.keys(CLI_COMMAND_SEMANTICS), [...CLI_COMMANDS]);
+    for (const definition of CLI_COMMAND_REGISTRY) {
+      assert.equal(definition.help.group, CLI_COMMAND_SEMANTICS[definition.command].group);
+    }
   });
 
   test('owns typed option grammar, bounded values, ranges, occurrences, and constraints', () => {
@@ -223,6 +202,7 @@ describe('canonical CLI command registry', () => {
       for (const option of definition.grammar.options) {
         assert.equal(commandOptionSpec(definition.command, option.option), option);
         assert.equal(option.arity, option.valueKind === 'flag' ? 0 : 1);
+        assert.equal(typeof option.acceptsOptionLikeValue, 'boolean');
         assert.equal(option.values.length > 0, option.valueKind === 'enum' || option.valueKind === 'policy_list');
         assert.equal(option.integerRanges.length > 0, option.valueKind === 'integer');
         assert.equal(option.metaAction, option.option === '--help' ? 'help' : null);

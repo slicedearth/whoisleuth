@@ -168,4 +168,29 @@ describe('Unicode confusable maintenance command', () => {
     assert.match(stderr.value(), /pinned SHA-256/);
     assert.doesNotMatch(stderr.value(), /ARMENIAN|DESERET/);
   });
+
+  test('audits a generated candidate before permitting its write', async () => {
+    const source = await readFile(FIXTURE_PATH, 'utf8');
+    const candidate = generateConfusableProjectionWithPolicy(source, {
+      unicodeVersion: '17.0.0',
+      url: 'https://unicode.example/security/confusables.txt',
+      sha256: FIXTURE_SHA256,
+      license: 'Unicode-3.0',
+      mappingVersion: 'fixture-bounded-v1',
+    });
+    let writes = 0;
+    const stdout = capture();
+    const stderr = capture();
+    assert.equal(await main(['--source', FIXTURE_PATH, '--write', '--json'], {
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      generateProjection: () => candidate,
+      writeProjection: async () => { writes += 1; },
+    }), 1);
+    const report = JSON.parse(stdout.value());
+    assert.equal(report.status, 'fail');
+    assert.equal(report.sourceCheck, 'candidate failed audit; projection not written');
+    assert.equal(writes, 0);
+    assert.equal(stderr.value(), '');
+  });
 });

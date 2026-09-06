@@ -293,7 +293,7 @@ fi
 
 function fishCompletion(): string {
   const commandLines = CLI_COMMANDS.map((command) => (
-    `complete -c whoisleuth -n '__fish_use_subcommand' -a '${command}' -d '${COMMAND_DESCRIPTIONS[command]}'`
+    `__whoisleuth_add_command '${command}' '${COMMAND_DESCRIPTIONS[command]}'`
   ));
   const optionGroups = new Map<string, { option: string; arity: 0 | 1; file: boolean; commands: CliCommand[] }>();
   for (const definition of CLI_COMMAND_REGISTRY) {
@@ -401,6 +401,9 @@ function __whoisleuth_command_is
     test (count \$words) -ge 2; or return 1
     contains -- \$words[2] $argv
 end
+function __whoisleuth_add_command
+    complete -c whoisleuth -n '__fish_use_subcommand' -a \$argv[1] -d \$argv[2]
+end
 function __whoisleuth_integer_values
     set -l value $argv[1]
     while test $value -le $argv[2]
@@ -464,6 +467,7 @@ ${[HELP_META_ACTION, VERSION_META_ACTION].map((action) => (
     `complete -c whoisleuth -n '__fish_use_subcommand' -s ${shortMetaAlias(action).slice(1)} -l ${longMetaAlias(action).slice(2)}`
   )).join('\n')}
 ${commandLines.join('\n')}
+functions -e __whoisleuth_add_command
 ${positionalEnumLines.join('\n')}
 complete -c whoisleuth -n '__whoisleuth_file_position' -F
 ${optionLines.join('\n')}

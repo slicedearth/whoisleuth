@@ -134,7 +134,11 @@ test('dashboard local search reports an unavailable store without remaining in a
   await failBrowserLocalReads(page);
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
 
-  await expect(page.locator('.summary-error')).toContainText('One or more required browser-local collections are unavailable.');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.summary-error')).toContainText(
+    'One or more required browser-local collections are unavailable.',
+    { timeout: 15_000 },
+  );
   await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Search saved work' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);

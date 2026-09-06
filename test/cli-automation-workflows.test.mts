@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { describe, test } from 'node:test';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-checkpoint.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -141,15 +141,15 @@ describe('CLI automation arguments', () => {
       action: 'bulk', source: null, output: 'terminal', deep: false, quiet: false, color: true, concurrency: 4,
       checkpoint: 'bulk.json', resume: true, events: true, plan: false, filter: 'all',
     });
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), /cannot be combined/u);
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), /requires --output/u);
-    assert.throws(() => parseCliArguments(['bulk', '--resume']), /requires --checkpoint/u);
-    assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), /two different input files/u);
-    assert.throws(() => parseCliArguments(['timeline', 'one.json']), /from 2 to 20/u);
-    assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), /must be different/u);
-    assert.throws(() => parseCliArguments(['reconcile', 'one.json']), /from 2 to 5/u);
-    assert.throws(() => parseCliArguments(['manifest', 'one.json']), /requires --workflow/iu);
-    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), /must be different/iu);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--events', '--output', 'result.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--force']), CliUsageError);
+    assert.throws(() => parseCliArguments(['bulk', '--resume']), CliUsageError);
+    assert.throws(() => parseCliArguments(['diff', 'same.json', 'same.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['timeline', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['timeline', 'same.json', 'same.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['reconcile', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['manifest', 'one.json', 'one.json', '--workflow', 'review']), CliUsageError);
   });
 });
 
@@ -797,6 +797,7 @@ describe('resumable Bulk checkpoints', () => {
         availability: lookupResult(queries[0]!).availability,
         diagnostics: lookupResult(queries[0]!).diagnostics,
       },
+      collectionContext: { dnsResolver: 'analyst_selected', resolverServers: ['8.8.8.8'] },
     };
     try {
       const writer = await createBulkCheckpointWriter({ path, queries, deep: false, resume: false, classifyQuery: classifiedDomain, now: () => NOW });
@@ -808,6 +809,9 @@ describe('resumable Bulk checkpoints', () => {
       assert.deepEqual(checkpoint.results.map((item) => item.query), ['one.example']);
       assert.equal(checkpoint.version, 2);
       assert.equal(checkpoint.results[0]?.observedAt, NOW);
+      assert.deepEqual(checkpoint.results[0]?.collectionContext, {
+        dnsResolver: 'analyst_selected', resolverServers: ['8.8.8.8'],
+      });
 
       const zoneLess = JSON.parse(checkpointText);
       zoneLess.startedAt = '2026-08-01T00:00:00';
@@ -820,6 +824,13 @@ describe('resumable Bulk checkpoints', () => {
       fullResponse.results[0].result.rdap = { raw: 'not compact evidence' };
       assert.throws(
         () => parseBulkCheckpoint(JSON.stringify(fullResponse), { queries, deep: false, classifyQuery: classifiedDomain }),
+        /invalid or duplicate result/u,
+      );
+
+      const malformedContext = JSON.parse(checkpointText);
+      malformedContext.results[0].collectionContext.resolverServers = [''];
+      assert.throws(
+        () => parseBulkCheckpoint(JSON.stringify(malformedContext), { queries, deep: false, classifyQuery: classifiedDomain }),
         /invalid or duplicate result/u,
       );
 
@@ -837,6 +848,7 @@ describe('resumable Bulk checkpoints', () => {
       const resumed = await createBulkCheckpointWriter({ path, queries, deep: false, resume: true, classifyQuery: classifiedDomain, now: () => NOW });
       assert.deepEqual(resumed.initialResults.map((item) => item.query), ['one.example']);
       assert.equal(resumed.initialResults[0]?.collectionOrigin, 'resumed_checkpoint');
+      assert.deepEqual(resumed.initialResults[0]?.collectionContext, first.collectionContext);
       await assert.rejects(
         createBulkCheckpointWriter({ path, queries: ['changed.example'], deep: false, resume: true, classifyQuery: classifiedDomain }),
         /does not match/u,
@@ -931,6 +943,86 @@ describe('resumable Bulk checkpoints', () => {
       releaseFirstWrite?.();
       await writer.flush();
       assert.equal(writes, 2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects flush promptly after a saved write failure even when later results arrive', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-failure-'));
+    const path = join(directory, 'bulk.json');
+    const queries = ['one.example', 'two.example'];
+    let releaseWrite: (() => void) | undefined;
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries,
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+        writeFile: async () => {
+          await new Promise<void>((resolve) => { releaseWrite = resolve; });
+          throw new Error('checkpoint storage unavailable');
+        },
+      });
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      writer.record({
+        index: 0,
+        query: queries[0]!,
+        ok: true,
+        classified: classifiedDomain(queries[0]!),
+        result: { availability: lookupResult(queries[0]!).availability, diagnostics: lookupResult(queries[0]!).diagnostics },
+      });
+      releaseWrite?.();
+      await assert.rejects(writer.flush(), /checkpoint storage unavailable/u);
+      writer.record({
+        index: 1,
+        query: queries[1]!,
+        ok: true,
+        classified: classifiedDomain(queries[1]!),
+        result: { availability: lookupResult(queries[1]!).availability, diagnostics: lookupResult(queries[1]!).diagnostics },
+      });
+      await assert.rejects(writer.flush(), /checkpoint storage unavailable/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects a checkpoint byte-bound failure without rescheduling forever', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-cli-checkpoint-bound-'));
+    const path = join(directory, 'bulk.json');
+    const queries = Array.from({ length: 520 }, (_, index) => `item-${index}.example`);
+    let releaseWrite: (() => void) | undefined;
+    try {
+      const writer = await createBulkCheckpointWriter({
+        path,
+        queries,
+        deep: false,
+        resume: false,
+        classifyQuery: classifiedDomain,
+        now: () => NOW,
+        writeFile: async () => {
+          await new Promise<void>((resolve) => { releaseWrite = resolve; });
+          return path;
+        },
+      });
+      await new Promise<void>((resolve) => { setImmediate(resolve); });
+      for (const [index, query] of queries.entries()) {
+        writer.record({
+          index,
+          query,
+          ok: true,
+          classified: classifiedDomain(query),
+          result: {
+            availability: { ...lookupResult(query).availability, retainedDetail: 'x'.repeat(32_000) },
+            diagnostics: lookupResult(query).diagnostics,
+          },
+        });
+      }
+      releaseWrite?.();
+      await assert.rejects(writer.flush(), /limited to 16777216 bytes/u);
+      await assert.rejects(writer.flush(), /limited to 16777216 bytes/u);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

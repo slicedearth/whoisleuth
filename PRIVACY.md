@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 4 September 2026.
+Last updated: 5 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -79,18 +79,23 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 14 can retain
-the exact normalised submitted hostname on a new evidence snapshot and the
-observation time of a reviewed response route. Published v2 Case schema 13 and
-exact public v1 Case schema 12 remain readable and migrate directly; migrated
-fields can remain null because WHOISleuth does not reconstruct them from weaker
-evidence. Case report v10 JSON and Markdown do not add the snapshot hostname.
+Creating or refreshing a Case is deliberate. Current Case schema 15 can retain
+the exact normalised submitted hostname on a new evidence snapshot, analyst
+decision confidence and its basis, and a response route's observation and
+review times. Exact public v1 Case schema 12 and published-v2 schemas 13 and 14
+remain readable and migrate directly; migrated fields can remain null, unknown
+or blank because WHOISleuth does not reconstruct them from weaker evidence.
+Case report v11 JSON and Markdown do not add the snapshot hostname.
 
 A Case can also retain controlled classifications and exact HTTP(S) incident
 links as browser-local Case metadata. Exact links can contain public paths,
 queries and fragments, so they can be sensitive even when embedded credentials
 are rejected. They remain local until the analyst opens, exports or otherwise
 shares them.
+
+Brand Profiles can retain official-channel URLs and handles, rights owners,
+registration identifiers, jurisdictions, source URLs and review notes. These
+records can be sensitive and remain browser-local until deliberately exported.
 
 Public CLI Case packs clear identifiers, actions, observed-effect reviews and
 closure records for the public audience. Trusted and internal Case packs and
@@ -211,6 +216,12 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+The offline `mail-headers` command parses only the bounded header block from a
+selected message or standard input. Its output can retain a header digest,
+domain-only identity and routing, reported authentication states, and
+observation counts. It does not retain address local parts, display names,
+subject, body, attachments, or raw header values, and makes no network request.
+
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit
 owned-or-authorised acknowledgement. Mail transport also requires a separate
@@ -230,10 +241,10 @@ envelopes before preview or merge; omission never deletes destination data.
 Imported evidence remains attributed to its file and declared source and is not
 treated as freshly collected or true merely because it parsed.
 
-The current writer emits workspace archive version 7. Exact versions 5 and 6
+The current writer emits workspace archive version 8. Exact versions 5, 6 and 7
 remain readable. Version 5 migrates to an explicitly empty Analyst Review Item
 section without inventing decisions; version 6 migrates its existing sections
-directly. Versions 1 through 4 are unsupported. Future versions fail without
+directly, and version 7 gains only current default fields. Versions 1 through 4 are unsupported. Future versions fail without
 empty import, reset, deletion or rewrite. Release 1.47.4 can export the exact
 version-5 and Case-schema-12 public baseline before moving to v2.
 
@@ -253,6 +264,10 @@ Different exports have different sensitivity:
   contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
+- selected Case follow-up calendars identify only the stable Case reference by
+  default. Investigated domains, recipients, Case types and event details are
+  separate opt-ins, and a calendar or synchronisation provider can retain any
+  field the analyst chooses to include; and
 - defensive exports contain reviewed selected domains and rollback metadata but
   are never uploaded or applied automatically.
 

@@ -1,4 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
+import { caseStatusIsClosed } from './case-record-decisions.ts';
 import {
   BULK_REVIEW_STALE_AFTER_DAYS,
 } from './bulk-retry-plan.ts';
@@ -307,7 +308,7 @@ function buildCaseCandidates(
   retention: MutableRetention,
 ): { candidates: Candidate[]; totalPins: number } {
   const active = cases.slice(0, 500).filter((record) => {
-    if (record.status === 'resolved') {
+    if (caseStatusIsClosed(record.status)) {
       retention.resolvedCasesExcluded += 1;
       return false;
     }

@@ -65,15 +65,17 @@ export type InvestigationEntityType =
 export type InvestigationScanDepth = 'fast' | 'deep' | 'unknown';
 export type InvestigationSourceState = 'absent' | 'invalid' | 'unsupported' | 'supported';
 export type InvestigationObservationStatus = 'success' | 'partial';
-export type InvestigationObservationKind =
-  | 'case_evidence'
-  | 'case_external_observation'
-  | 'case_record'
-  | 'brand_profile'
-  | 'brand_page_baseline'
-  | 'campaign_record'
-  | 'scan_relationship_evidence'
-  | 'retained_relationship_observation';
+export const INVESTIGATION_OBSERVATION_KINDS = Object.freeze([
+  'case_evidence',
+  'case_external_observation',
+  'case_record',
+  'brand_profile',
+  'brand_page_baseline',
+  'campaign_record',
+  'scan_relationship_evidence',
+  'retained_relationship_observation',
+] as const);
+export type InvestigationObservationKind = (typeof INVESTIGATION_OBSERVATION_KINDS)[number];
 export type InvestigationStoreName = 'cases' | 'campaigns' | 'brandProfiles' | 'relationshipRows' | 'relationshipObservations';
 export type InvestigationRelationshipType =
   | 'domain_uses_nameserver_set'
@@ -118,6 +120,20 @@ export interface InvestigationSchemaVersions {
   relationshipObservation?: number | null;
   externalObservation?: number | null;
 }
+
+export const INVESTIGATION_SCHEMA_VERSION_FIELDS = Object.freeze([
+  'case',
+  'riskModel',
+  'httpSummary',
+  'brandProfile',
+  'pageBaseline',
+  'pageIdentity',
+  'pageFingerprint',
+  'campaign',
+  'relationshipEvidence',
+  'relationshipObservation',
+  'externalObservation',
+] as const satisfies readonly (keyof InvestigationSchemaVersions)[]);
 
 export interface InvestigationEntity {
   id: string;

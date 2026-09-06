@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
@@ -9,6 +11,7 @@ import {
 } from '../cli/investigation-plan.mts';
 import { registryStandardsCoverageSnapshot } from '../lib/registry-capabilities.mts';
 import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.mts';
+import { CLI_HELP_GROUP_ORDER } from '../packages/contracts/cli-command-semantics.mts';
 import {
   CLI_PUBLIC_GUIDANCE,
   COVERAGE_DISTINCTIONS,
@@ -36,6 +39,7 @@ import {
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { FRONTEND_ROUTE_GZIP_BUDGETS } from '../tools/frontend-loading-report.mts';
+import { writeAtomically } from '../tools/public-product-catalogue.mts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -52,6 +56,7 @@ describe('public product catalogue', () => {
     const catalogue = publicCliCatalogue();
     const workflows = buildWorkflowRecipeCatalogue();
     assert.equal(catalogue.commandCount, CLI_COMMAND_REGISTRY.length);
+    assert.deepEqual(catalogue.groups, CLI_HELP_GROUP_ORDER);
     assert.deepEqual(catalogue.commands.map((command) => command.id), CLI_COMMAND_REGISTRY.map((command) => command.command));
     assert.deepEqual(catalogue.workflows.recipes, workflows.recipes);
     assert.deepEqual(catalogue.workflows.limitations, workflows.limitations);
@@ -92,11 +97,15 @@ describe('public product catalogue', () => {
     assert.equal(new Set(first.examples.map((example) => example.id)).size, first.examples.length);
     assert.ok(first.examples.some((example) => example.format === 'terminal'));
     assert.ok(first.examples.some((example) => example.format === 'JSON'));
-    assert.equal(first.examples.every((example) => example.synthetic && (
-      example.content.startsWith(example.notice)
-      || (JSON.parse(example.content) as { synthetic?: unknown; notice?: unknown }).synthetic === true
-    )), true);
-    assert.equal(first.examples.every((example) => example.content.includes(example.notice)), true);
+    assert.equal(first.examples.every((example) => example.synthetic), true);
+    for (const example of first.examples) {
+      if (example.format === 'terminal') {
+        assert.equal(example.content.startsWith(example.notice), true, example.id);
+        continue;
+      }
+      const document = JSON.parse(example.content) as { cases?: readonly { tags?: readonly string[] }[] };
+      assert.equal(document.cases?.every((item) => item.tags?.includes('synthetic')) ?? false, true, example.id);
+    }
     assert.ok(first.examples.some((example) => example.large));
     const content = strings(first).join('\n');
     assert.match(content, /example\.test/u);
@@ -106,7 +115,8 @@ describe('public product catalogue', () => {
     assert.doesNotMatch(content, /-----BEGIN (?:OPENSSH |RSA |EC )?PRIVATE KEY-----/u);
     assert.doesNotMatch(content, /(?:^|[\r\n])(?:Cookie|Set-Cookie|Authorization):/iu);
     assert.doesNotMatch(content, /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu);
-    assert.equal(strings(first).every((value) => !/\b(?:com|net|org|io)\b/u.test(value) || value.includes('command')), true);
+    const publicHostnames = content.match(/\b[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.(?:com|net|org|io)\b/giu) ?? [];
+    assert.deepEqual([...new Set(publicHostnames)], ['github.com']);
   });
 
   test('retains byte-exact generated frontend projections without browser execution imports', () => {
@@ -154,5 +164,19 @@ describe('public product catalogue', () => {
       assert.doesNotMatch(source, /PracticalWorkflow|Discover, Verify, Package, Recheck|practical loop/iu, path);
     }
     assert.deepEqual(METHODOLOGY_TOPICS.find((topic) => topic.id === 'jobs')?.states, ['investigate', 'respond', 'assure']);
+  });
+
+  test('does not remove a temporary file owned by another public-product writer', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-public-product-writer-'));
+    const output = path.join(root, 'generated.ts');
+    const existingTemporary = `${output}.tmp`;
+    try {
+      writeFileSync(existingTemporary, 'other writer', 'utf8');
+      writeAtomically(output, 'current generated module');
+      assert.equal(readFileSync(output, 'utf8'), 'current generated module');
+      assert.equal(readFileSync(existingTemporary, 'utf8'), 'other writer');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

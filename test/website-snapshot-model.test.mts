@@ -185,6 +185,35 @@ describe('website profile snapshots', () => {
     assert.ok(partial.changes.some((change) => change.field === 'completeness' && change.state === 'incomparable'));
   });
 
+  test('does not infer removals from an incomplete later website family', () => {
+    const comparison = compareWebsiteSnapshots(
+      snapshot('snapshot-one'),
+      snapshot('snapshot-two', LATER, {
+        complete: false,
+        truncated: true,
+        technologies: [],
+        identityValues: {
+          resourceHosts: [],
+          trackingIdentifiers: [],
+          formActionOrigins: [],
+        },
+        dependencies: [],
+        sources: [{ source: 'http', state: 'partial' }, { source: 'dns', state: 'partial' }],
+      }),
+    );
+    assert.equal(comparison.compatible, true);
+    assert.equal(comparison.complete, false);
+    for (const field of [
+      'technology.cms-one',
+      'identityValues.resourceHosts.assets.snapshot.invalid',
+      'dependency.CNAME:service.example.net',
+    ]) {
+      assert.equal(comparison.changes.find((change) => change.field === field)?.state, 'incomparable');
+    }
+    assert.equal(comparison.changes.some((change) => !change.field.startsWith('source.') && change.state === 'removed'), false);
+    assert.equal(comparison.dependencyTransitions.some((transition) => transition.state === 'removed'), false);
+  });
+
   test('enforces global and per-domain retention caps and supports explicit deletion', () => {
     let retained: unknown = [];
     for (let index = 0; index < MAX_WEBSITE_SNAPSHOTS + 20; index += 1) {

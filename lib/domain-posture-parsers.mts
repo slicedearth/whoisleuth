@@ -3,6 +3,7 @@
 // synthetic records and the Express/Netlify paths share identical behavior.
 
 import { createPublicKey } from 'node:crypto';
+import { isIP } from 'node:net';
 
 type TagList = {
   tags: Record<string, string>;
@@ -54,6 +55,7 @@ function parseSpfRecords(records: unknown) {
     terminalPolicy: string | null;
     redirect: string | null;
     includes: string[];
+    authorizingTerms: string[];
     dnsLookupTerms: number;
     issues: string[];
   } = {
@@ -63,6 +65,7 @@ function parseSpfRecords(records: unknown) {
     terminalPolicy: null,
     redirect: null,
     includes: [],
+    authorizingTerms: [],
     dnsLookupTerms: 0,
     issues: [],
   };
@@ -79,6 +82,97 @@ function parseSpfRecords(records: unknown) {
   const record = spfRecords[0];
   if (!record) return result;
   const terms = record.split(/\s+/).slice(1).filter(Boolean);
+  let invalidSyntax = false;
+  const modifierNames = new Set<string>();
+  const literalDomain = (value: string, label: string): boolean => {
+    if (!value) {
+      result.issues.push(`${label} requires a domain-spec.`);
+      invalidSyntax = true;
+      return false;
+    }
+    if (value.includes('%')) {
+      result.issues.push(`${label} uses SPF macros that this bounded audit does not evaluate.`);
+      return true;
+    }
+    const hostname = value.toLowerCase().replace(/\.$/u, '');
+    if (hostname.length > 253 || !hostname.includes('.') || !hostname.split('.').every((part) => /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/u.test(part))) {
+      result.issues.push(`${label} has an invalid literal domain-spec.`);
+      return false;
+    }
+    return true;
+  };
+  for (const term of terms) {
+    const qualifier = /^[+?~-]/u.test(term) ? term[0]! : '+';
+    const body = qualifier === '+' && term[0] !== '+' ? term : term.slice(1);
+    const lower = body.toLowerCase();
+    const modifier = body.match(/^([a-z][a-z0-9_.-]*)=(.*)$/iu);
+    if (modifier) {
+      const name = modifier[1]!.toLowerCase();
+      const value = modifier[2]!;
+      if (modifierNames.has(name)) {
+        result.issues.push(`Duplicate SPF modifier: ${name}.`);
+        invalidSyntax = true;
+      }
+      modifierNames.add(name);
+      if (name === 'redirect') {
+        literalDomain(value, 'The redirect modifier');
+        if (qualifier !== '+') {
+          result.issues.push('SPF modifiers cannot have a qualifier.');
+          invalidSyntax = true;
+        }
+        result.authorizingTerms.push(term);
+      } else if (name === 'exp') {
+        literalDomain(value, 'The exp modifier');
+      } else {
+        result.issues.push(`The ${name} SPF modifier is not evaluated by this bounded audit.`);
+      }
+      continue;
+    }
+    if (lower === 'all') continue;
+    const include = body.match(/^include:(.*)$/iu);
+    if (include) {
+      literalDomain(include[1]!, 'The include mechanism');
+      if (qualifier !== '-') result.authorizingTerms.push(term);
+      continue;
+    }
+    const exists = body.match(/^exists:(.*)$/iu);
+    if (exists) {
+      literalDomain(exists[1]!, 'The exists mechanism');
+      if (qualifier !== '-') result.authorizingTerms.push(term);
+      continue;
+    }
+    const ptr = body.match(/^ptr(?::(.*))?$/iu);
+    if (ptr) {
+      if (ptr[1] !== undefined) literalDomain(ptr[1], 'The ptr mechanism');
+      if (qualifier !== '-') result.authorizingTerms.push(term);
+      continue;
+    }
+    const address = body.match(/^(ip4|ip6):(.*)$/iu);
+    if (address) {
+      const family = address[1]!.toLowerCase() === 'ip4' ? 4 : 6;
+      const [literal, prefix, ...extra] = address[2]!.split('/');
+      const maximumPrefix = family === 4 ? 32 : 128;
+      if (extra.length || isIP(literal || '') !== family || (prefix !== undefined && (!/^\d+$/u.test(prefix) || Number(prefix) > maximumPrefix))) {
+        result.issues.push(`The ${address[1]!.toLowerCase()} mechanism has an invalid address or prefix length.`);
+        invalidSyntax = true;
+      }
+      if (qualifier !== '-') result.authorizingTerms.push(term);
+      continue;
+    }
+    const hostMechanism = body.match(/^(a|mx)(?::([^/]+))?(?:\/(\d+))?(?:\/\/(\d+))?$/iu);
+    if (hostMechanism) {
+      if (hostMechanism[2] !== undefined) literalDomain(hostMechanism[2], `The ${hostMechanism[1]!.toLowerCase()} mechanism`);
+      if ((hostMechanism[3] !== undefined && Number(hostMechanism[3]) > 32)
+        || (hostMechanism[4] !== undefined && Number(hostMechanism[4]) > 128)) {
+        result.issues.push(`The ${hostMechanism[1]!.toLowerCase()} mechanism has an invalid prefix length.`);
+        invalidSyntax = true;
+      }
+      if (qualifier !== '-') result.authorizingTerms.push(term);
+      continue;
+    }
+    result.issues.push(`Unsupported or malformed SPF term: ${term}.`);
+    invalidSyntax = true;
+  }
   const allIndex = terms.findIndex((term) => /^[+?~-]?all$/i.test(term));
   const allTerm = allIndex === -1 ? null : terms[allIndex];
   const redirectTerm = terms.find((term) => /^redirect=/i.test(term));
@@ -106,7 +200,7 @@ function parseSpfRecords(records: unknown) {
     result.issues.push('No all mechanism or redirect modifier defines a terminal policy.');
   }
 
-  result.valid = true;
+  result.valid = !invalidSyntax;
   return result;
 }
 
@@ -348,8 +442,14 @@ function parseDkimRecords(selector: string, records: unknown) {
       result.issues.push('The DKIM public key is not bounded valid base64.');
     } else {
       try {
+        const decodedKey = Buffer.from(encodedKey, 'base64');
+        if (result.keyType === 'ed25519' && decodedKey.length !== 32) {
+          throw new Error('Ed25519 DKIM keys use an exact 32-byte raw public key.');
+        }
         const key = createPublicKey({
-          key: Buffer.from(encodedKey, 'base64'),
+          key: result.keyType === 'ed25519'
+            ? Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), decodedKey])
+            : decodedKey,
           format: 'der',
           type: 'spki',
         });
@@ -368,7 +468,9 @@ function parseDkimRecords(selector: string, records: unknown) {
         }
       } catch {
         result.keyParseState = 'invalid';
-        result.issues.push('The DKIM public key could not be parsed as SubjectPublicKeyInfo.');
+        result.issues.push(result.keyType === 'ed25519'
+          ? 'The Ed25519 DKIM public key must be exactly 32 raw bytes.'
+          : 'The DKIM public key could not be parsed as SubjectPublicKeyInfo.');
       }
     }
   }

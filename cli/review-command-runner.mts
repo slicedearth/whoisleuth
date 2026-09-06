@@ -25,6 +25,11 @@ import {
   buildCliMailReview,
   formatCliMailReview,
 } from './mail-review.mts';
+import {
+  MAX_MAIL_HEADER_INPUT_BYTES,
+  buildCliMailHeaderReview,
+  formatCliMailHeaderReview,
+} from './mail-header-review.mts';
 import { buildCliPageComparison, formatCliPageComparison } from './page-compare.mts';
 import {
   MAX_SOURCE_RELIABILITY_INPUT_BYTES,
@@ -231,6 +236,31 @@ async function runMailReviewCommand(
   return EXIT_CODES.SUCCESS;
 }
 
+async function runMailHeadersCommand(
+  args: Extract<ReviewCommandArguments, { action: 'mail-headers' }>,
+  dependencies: CliDependencies,
+  context: CliCommandContext,
+): Promise<number> {
+  context.setFailureLabel('Mail-header review');
+  let input: string;
+  try {
+    input = dependencies.readMailHeaderInput
+      ? await dependencies.readMailHeaderInput(args.source)
+      : await context.readHeaderInput(args.source, MAX_MAIL_HEADER_INPUT_BYTES, 'Mail-header input');
+  } catch (error) {
+    if (error instanceof CliUsageError) throw error;
+    throw new CliUsageError(`Could not read mail-header input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+  }
+  if (!input.trim()) throw new CliUsageError('mail-headers requires one message or header file, or headers on stdin.');
+  const document = buildCliMailHeaderReview(input, context.now());
+  if (!args.quiet) {
+    context.writeStdout(args.output === 'json'
+      ? formatJsonDocument(document)
+      : context.terminal(formatCliMailHeaderReview(document), args.color));
+  }
+  return EXIT_CODES.SUCCESS;
+}
+
 async function runOfflineEvidenceReviewCommand(
   args: Extract<ReviewCommandArguments, { action: 'review-evidence' }>,
   dependencies: CliDependencies,
@@ -318,6 +348,7 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'compare': runCompareCommand,
   'page-compare': runPageCompareCommand,
   'mail-review': runMailReviewCommand,
+  'mail-headers': runMailHeadersCommand,
   'review-evidence': runOfflineEvidenceReviewCommand,
   'brief': runBriefOrCasePackCommand,
   'case-pack': runBriefOrCasePackCommand,

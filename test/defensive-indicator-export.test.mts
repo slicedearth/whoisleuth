@@ -57,13 +57,16 @@ test('dnsmasq format emits one bounded address rule per domain', () => {
   assert.match(exported.content, /address=\/candidate\.invalid\/0\.0\.0\.0\n$/);
 });
 
-test('RPZ format uses absolute owners, excludes wildcard coverage by default, and uses a valid 32-bit serial', () => {
+test('RPZ format uses policy-zone-relative owners, excludes wildcard coverage by default, and uses a valid 32-bit serial', () => {
   const exported = buildDefensiveIndicatorExport([result('candidate.invalid')], { format: 'rpz', generatedAt: NOW });
   assert.match(exported.content, /@ IN SOA localhost\. root\.localhost\. \((\d+) 60 60 60 60\)/);
   const serial = Number(exported.content.match(/\((\d+) 60/)?.[1]);
   assert.ok(Number.isSafeInteger(serial) && serial >= 0 && serial <= 0xffffffff);
-  assert.match(exported.content, /candidate\.invalid\. CNAME \./);
-  assert.doesNotMatch(exported.content, /\*\.candidate\.invalid\. CNAME \./);
+  assert.match(exported.content, /\ncandidate\.invalid CNAME \.\n/u);
+  assert.doesNotMatch(exported.content, /\ncandidate\.invalid\. CNAME/u);
+  assert.doesNotMatch(exported.content, /\*\.candidate\.invalid CNAME \./);
+  const owner = exported.content.split('\n').find((line) => line.endsWith(' CNAME .'))?.split(' ', 1)[0];
+  assert.equal(`${owner}.policy.example.test`, 'candidate.invalid.policy.example.test');
   assert.equal(exported.filename, 'whoisleuth-defensive-domains-2026-07-14.zone');
 });
 
@@ -73,7 +76,7 @@ test('RPZ wildcard coverage requires an explicit opt-in and is recorded in the m
     generatedAt: NOW,
     includeWildcards: true,
   });
-  assert.match(exported.content, /\*\.candidate\.invalid\. CNAME \./);
+  assert.match(exported.content, /\*\.candidate\.invalid CNAME \./);
   assert.equal(JSON.parse(exported.manifestContent).includeWildcards, true);
   assert.equal(JSON.parse(exported.rollbackContent).removes[0].includeWildcard, true);
 });

@@ -10,6 +10,7 @@ tasks.
 - Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
+- Bash, zsh and PowerShell (`pwsh`) for the completion contract tests
 
 Use the committed lockfile. Do not replace it with an independently resolved
 dependency tree.
@@ -77,16 +78,48 @@ Pass repository-relative paths after `--` to verify a smaller declared change,
 or add `--list` to inspect the plan without running it. This is an iteration
 boundary, not release evidence.
 
-The parity command requires the exact `.nvmrc` runtime, a Node 26 executable on
+For mechanical changes, edit the domain owner first: CLI option grammar belongs
+to `cli/command-reference.mts`; Case status and disposition decisions belong to
+`case-record-decisions.mts`; Case persistence and audience treatment belongs to
+`case-record-projection.mts`. Generated help, completion and public reference
+outputs derive from those owners. Browser tests consume only the served build
+and private build-identity marker declared by the frontend build owner. The
+focused plan selects the affected derived consumers while immutable historical
+fixtures remain independent compatibility evidence.
+
+The local CI command requires the exact `.nvmrc` runtime, a Node 26 executable on
 `PATH` for the CLI compatibility lane, and a clean worktree. Set
 `WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime
-is installed outside `PATH`. The command performs the locked install and
+is installed outside `PATH`. Before package, unit or build work begins, it
+probes the shells required by the unit lane and reports missing or unusable
+executables together; it does not install or skip them. The command performs the locked install and
 changed-line security scan before the maintained quality, coverage, build,
 production-browser and secondary CLI-runtime gates. Ordinary interactive
-browser work can use `npm run test:e2e`, which excludes machine-timing ceilings
-so a focused functional run cannot contend with its own performance
-measurement. Report exact failures, retries, flakes and skips rather than
-describing a retried run as clean.
+browser work can use `npm run test:e2e`; the full CI command also runs the
+isolated performance measurements. Report exact failures, retries, flakes and
+skips rather than describing a retried run as clean.
+
+Performance measurements remain part of every complete local and hosted CI
+run. Reports retain three samples, medians, maxima, browser-side readiness,
+host-side duration, long tasks, and execution context. Elapsed times are
+observations, not release limits derived from a development machine. Review
+changes using repeated measurements of the same workload under comparable
+conditions; a different host's duration alone does not establish a regression
+or prove acceptable user experience. Any future blocking performance objective
+must state its user-facing requirement, representative workload and execution
+conditions instead of inheriting a prior machine's observed speed.
+
+Functional readiness, request boundaries, asset-transfer limits, layout checks
+and bounded test timeouts remain mandatory. Shared command and build contracts
+provide workflow consistency; they do not claim identical operating systems,
+hardware performance or coverage of every supported platform.
+
+Hosted jobs invoke the same executable `preflight`, `quality`, `unit`,
+`browser-build` and `cli-runtime` groups owned by `verification:ci`. Maintainers
+can run one already-prepared lane with `npm run verification:ci --
+--group=<name>`; group mode preserves the lane's runtime and prerequisite checks
+but deliberately does not perform the full command's clean-commit guard,
+dependency installation, browser orchestration or final cleanup.
 
 The coverage gate measures all loaded production TypeScript, enforces the
 global line, branch and function floors, and retains stricter per-file floors
@@ -128,6 +161,14 @@ npm run test:e2e:stress
 ```
 
 Diagnose a failure before retrying it.
+
+Failed or interrupted local suites print the location of their retained private
+diagnostics directory. It keeps bounded reports, traces and screenshots, without
+the temporary checkout, build, dependencies or authentication files. The summary
+records any omitted files or subtrees; interrupted reports may be incomplete.
+Remove the directory after reviewing it. Successful suites remove their entire
+temporary workspace. A cleanup error is reported as a failure and leaves the
+workspace for manual inspection.
 
 ## Maintainer checks
 

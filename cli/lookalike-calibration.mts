@@ -9,7 +9,9 @@ const MAX_LOOKALIKE_CALIBRATION_BYTES = 2 * 1024 * 1024;
 const MAX_LOOKALIKE_CALIBRATION_RECORDS = 5_000;
 const MIN_LOOKALIKE_CALIBRATION_SAMPLE = 20;
 
-const DISPOSITIONS = ['suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action'] as const;
+// Version 1 intentionally admits reviewed Case dispositions only. This local
+// schema remains an independent compatibility decision from the live Case model.
+const DISPOSITIONS = Object.freeze(['suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action'] as const);
 type Disposition = typeof DISPOSITIONS[number];
 type UnknownRecord = Record<string, unknown>;
 
@@ -53,7 +55,9 @@ function ratio(value: number, total: number): number {
 }
 
 function emptyCounts(): Record<Disposition, number> {
-  return { suspicious: 0, confirmed_abuse: 0, false_positive: 0, expected: 0, closed_no_action: 0 };
+  const counts = {} as Record<Disposition, number>;
+  for (const disposition of DISPOSITIONS) counts[disposition] = 0;
+  return counts;
 }
 
 function buildLookalikeCalibration(raw: string, generatedAt = new Date().toISOString()): LookalikeCalibrationReport {

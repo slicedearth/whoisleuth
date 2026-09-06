@@ -16,8 +16,13 @@ export const WORKSPACE_CONTRACT_OWNER = 'packages/contracts/workspace-portabilit
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 6;
-export const BRAND_PROFILE_SCHEMA_VERSION = 7;
-export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([PUBLIC_BRAND_PROFILE_SCHEMA_VERSION, BRAND_PROFILE_SCHEMA_VERSION]);
+export const LATEST_PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 7;
+export const BRAND_PROFILE_SCHEMA_VERSION = 8;
+export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
+  PUBLIC_BRAND_PROFILE_SCHEMA_VERSION,
+  LATEST_PUBLIC_BRAND_PROFILE_SCHEMA_VERSION,
+  BRAND_PROFILE_SCHEMA_VERSION,
+]);
 export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
@@ -27,7 +32,10 @@ export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_PROFILE_NAME_LENGTH = 100;
 export const MAX_PROFILE_TEXT_LENGTH = 200;
 export const MAX_PROFILE_DOMAIN_LENGTH = 253;
+export const MAX_PROFILE_URL_LENGTH = 2_048;
 export const MAX_PROFILE_TLD_LENGTH = 63;
+export const MAX_OFFICIAL_CHANNELS = 30;
+export const MAX_RIGHTS_REFERENCES = 30;
 export const MAX_DKIM_SELECTOR_LENGTH = 253;
 export const MAX_DKIM_SELECTORS = 10;
 export const MAX_PROTECTION_ATTESTATIONS = 6;
@@ -177,7 +185,7 @@ export const INVESTIGATION_TEMPLATE_BROWSER_STORE_LIFECYCLE_SCHEMA = 'whoisleuth
 export const BULK_REVIEW_BROWSER_STORE_LIFECYCLE_SCHEMA = 'whoisleuth.browser.bulk-review-store';
 
 export const WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
-  'BRAND_PROFILE_SCHEMA', 'BRAND_PROFILE_SCHEMA_VERSION', 'BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS', 'SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS',
+  'BRAND_PROFILE_SCHEMA', 'PUBLIC_BRAND_PROFILE_SCHEMA_VERSION', 'LATEST_PUBLIC_BRAND_PROFILE_SCHEMA_VERSION', 'BRAND_PROFILE_SCHEMA_VERSION', 'BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS', 'SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS',
   'CAMPAIGN_SCHEMA', 'CAMPAIGN_SCHEMA_VERSION', 'CAMPAIGN_BROWSER_SUPPORTED_VERSIONS', 'CAMPAIGN_EXPORT_SUPPORTED_VERSIONS',
   'WATCHLIST_SCHEMA', 'WATCHLIST_SCHEMA_VERSION', 'WATCHLIST_BROWSER_SUPPORTED_VERSIONS', 'WATCHLIST_EXPORT_SUPPORTED_VERSIONS',
   'SHORTLIST_SCHEMA', 'SHORTLIST_SCHEMA_VERSION', 'SHORTLIST_BROWSER_SUPPORTED_VERSIONS', 'SUPPORTED_SHORTLIST_SCHEMA_VERSIONS',
@@ -196,7 +204,8 @@ export const WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
 
 export const WORKSPACE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
   'MAX_PROFILES', 'MAX_PROFILE_VALUES', 'MAX_PROFILE_VALUE_INPUTS', 'MAX_PROFILE_STORE_BYTES', 'MAX_PROFILE_IMPORT_BYTES',
-  'MAX_PROFILE_NAME_LENGTH', 'MAX_PROFILE_TEXT_LENGTH', 'MAX_PROFILE_DOMAIN_LENGTH', 'MAX_PROFILE_TLD_LENGTH', 'MAX_DKIM_SELECTOR_LENGTH',
+  'MAX_PROFILE_NAME_LENGTH', 'MAX_PROFILE_TEXT_LENGTH', 'MAX_PROFILE_DOMAIN_LENGTH', 'MAX_PROFILE_URL_LENGTH', 'MAX_PROFILE_TLD_LENGTH',
+  'MAX_OFFICIAL_CHANNELS', 'MAX_RIGHTS_REFERENCES', 'MAX_DKIM_SELECTOR_LENGTH',
   'MAX_DKIM_SELECTORS', 'MAX_PROTECTION_ATTESTATIONS', 'MAX_DESIRED_POSTURE_BASELINES', 'MAX_DESIRED_POSTURE_RECORDS',
   'MAX_DESIRED_POSTURE_SUPPRESSIONS', 'MAX_DESIRED_POSTURE_OBSERVATIONS', 'MAX_DESIRED_POSTURE_CHANGE_WINDOWS',
   'MAX_CAMPAIGNS', 'MAX_CAMPAIGN_DOMAINS', 'MAX_CAMPAIGN_NAME_LENGTH', 'MAX_CAMPAIGN_DESCRIPTION_LENGTH',
@@ -251,7 +260,7 @@ export const BRAND_PROFILE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_PROFILE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Exact public version 6 profiles migrate directly to version 7, which gives each approved change window a durable opaque identity; other historical stores are outside the compatibility boundary.',
+  note: 'Supported version 6 and 7 profiles migrate directly to version 8. Version 7 gives each approved change window a durable opaque identity; version 8 adds bounded official-channel and rights-reference records.',
 });
 export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -719,7 +728,7 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "version": 6,
     "role": "historical",
     "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.browser.brand.v7",
+    "expectedOutputFixtureId": "workspace.browser.brand.v8",
     "scope": "repository",
     "shapeId": "workspace.browser.brand.shape"
   },
@@ -731,6 +740,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.browser.brand-profile-store",
     "version": 7,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.browser.brand.v8",
+    "scope": "repository",
+    "shapeId": "workspace.browser.brand.shape"
+  },
+  {
+    "id": "workspace.browser.brand.v8",
+    "path": "test/fixtures/workspace-lifecycle/browser-brand-v8.json",
+    "bytes": 37,
+    "sha256": "6c2310d9da626cb8acd88a47ccb60fa46051a63b23675cdc4801794ec5cc52e3",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.browser.brand-profile-store",
+    "version": 8,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
@@ -901,7 +924,7 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "version": 6,
     "role": "historical",
     "expectation": "normalises_to_current_output",
-    "expectedOutputFixtureId": "workspace.portable.brand.v7",
+    "expectedOutputFixtureId": "workspace.portable.brand.v8",
     "scope": "repository",
     "shapeId": "workspace.portable.brand.shape"
   },
@@ -913,6 +936,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.brand-profiles",
     "version": 7,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.portable.brand.v8",
+    "scope": "repository",
+    "shapeId": "workspace.portable.brand.shape"
+  },
+  {
+    "id": "workspace.portable.brand.v8",
+    "path": "test/fixtures/workspace-lifecycle/portable-brand-v8.json",
+    "bytes": 122,
+    "sha256": "4e4af17a0e19cb841ea50fe150caa3de79b978311b51a334ed7f6f3d2e1c6a1c",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.brand-profiles",
+    "version": 8,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,

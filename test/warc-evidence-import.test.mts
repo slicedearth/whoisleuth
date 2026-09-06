@@ -28,6 +28,7 @@ function record(type: string, block: Uint8Array, options: Readonly<{
   target?: string;
   date?: string;
   digest?: string | null;
+  extraHeaders?: readonly string[];
 }> = {}): Uint8Array {
   const digest = options.digest === null
     ? null
@@ -39,6 +40,7 @@ function record(type: string, block: Uint8Array, options: Readonly<{
     `WARC-Record-ID: <urn:uuid:${type}-fixture>`,
     ...(options.target ? [`WARC-Target-URI: ${options.target}`] : []),
     ...(digest ? [`WARC-Block-Digest: ${digest}`] : []),
+    ...(options.extraHeaders ?? []),
     'Content-Type: application/http; msgtype=response',
     `Content-Length: ${block.byteLength}`,
     '',
@@ -118,6 +120,20 @@ describe('portable WARC evidence import', () => {
     assert.equal(report.document.findings[0]?.completeness, 'partial');
     assert.match(report.exclusions.join(' '), /Request records/u);
     assert.doesNotMatch(JSON.stringify(report), /private=value|\/secret/u);
+  });
+
+  test('keeps matching block integrity separate from every declared WARC truncation reason', async () => {
+    for (const reason of ['length', 'time', 'disconnect', 'unspecified']) {
+      const block = responseBlock();
+      const report = await parseWarcEvidenceArchive(archive(record('response', block, {
+        target: 'https://example.test/',
+        extraHeaders: [`WARC-Truncated: ${reason}`],
+      })), 'capture.warc');
+      const finding = report.document.findings[0];
+      assert.equal(finding?.completeness, 'partial', reason);
+      assert.match(finding?.limitations.join(' ') ?? '', new RegExp(`WARC-Truncated declared ${reason}`, 'u'));
+      assert.match(finding?.limitations.join(' ') ?? '', /Block-Digest matched/u);
+    }
   });
 
   test('rejects sensitive, downloadable, mismatched, and excessive archives', async () => {

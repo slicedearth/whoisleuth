@@ -4,19 +4,30 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   isPlaywrightFunctionalSpec,
+  PERFORMANCE_TIMING_POLICY,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+  PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS,
+  installNavigationReadinessMark,
+  performanceMeasurementContext,
+  performanceSampleMedian,
+  summarizePerformanceTimings,
+  resetPerformanceSampleState,
+  resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
 import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
-  CI_BROWSER_PREREQUISITE_SCRIPTS,
+  CI_BROWSER_BUILD_SCRIPTS,
+  CI_COMMAND_GROUPS,
   CI_CLI_RUNTIME_NODE_MAJOR,
   CI_CLI_RUNTIME_SCRIPTS,
+  CI_FRONTEND_BUILD_ARTIFACT_NAME,
   CI_HOSTED_ONLY_BROWSER_SCRIPTS,
   CI_PREFLIGHT_SCRIPTS,
   CI_QUALITY_SCRIPTS,
@@ -24,18 +35,25 @@ import {
   assertHostedCiParity,
   assertLocalCiRuntime,
   assertPlaywrightBrowserCacheWritable,
+  ciCommandGroupScripts,
   expectedHostedCiScriptPlan,
   formatLocalCiPlan,
+  parseCiVerificationArguments,
   playwrightBrowserCacheDirectory,
   readHostedCiScriptPlan,
+  runCiCommandGroup,
   selectNodeRuntimeExecutable,
 } from '../tools/ci-verification.mts';
 import {
   buildToolchainCompatibilityReport,
   main as toolchainCompatibilityMain,
+  resolveUnitTestExecutables,
   satisfiesCaretAlternatives,
+  unitTestExecutableEnvironment,
 } from '../tools/toolchain-compatibility.mts';
+import { runFunctionalRunsSerially } from '../tools/playwright-balanced-suite.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
+import { assertAppliedBrowserSafety } from '../tools/analyst-journey-assurance.mts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
@@ -52,34 +70,6 @@ const PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW = fs.readFileSync(
   path.join(__dirname, '..', '.github', 'workflows', 'dependency-audit.yml'),
   'utf8',
 );
-const PLAYWRIGHT_CONFIG = fs.readFileSync(
-  path.join(__dirname, '..', 'playwright.config.ts'),
-  'utf8',
-);
-const BALANCED_SUITE_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'tools', 'playwright-balanced-suite.mts'),
-  'utf8',
-);
-const PERFORMANCE_RUNNER_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'tools', 'playwright-performance-authority.mts'),
-  'utf8',
-);
-const E2E_FIXTURES_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'e2e', 'fixtures.ts'),
-  'utf8',
-);
-const CONSOLE_LOADING_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'e2e', 'console-loading.spec.ts'),
-  'utf8',
-);
-const DEFERRED_INTERACTIONS_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'e2e', 'deferred-interactions.spec.ts'),
-  'utf8',
-);
-const PERFORMANCE_SAMPLING_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'e2e', 'performance-sampling.ts'),
-  'utf8',
-);
 const E2E_DIRECTORY = path.join(__dirname, '..', 'e2e');
 const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
   .filter((entry) => entry.endsWith('.ts'))
@@ -89,6 +79,10 @@ const E2E_SOURCES = fs.readdirSync(E2E_DIRECTORY)
   }));
 const PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'package.json'),
+  'utf8',
+)) as { scripts?: Record<string, string> };
+const FRONTEND_PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'frontend', 'package.json'),
   'utf8',
 )) as { scripts?: Record<string, string> };
 
@@ -140,28 +134,32 @@ describe('continuous integration workflow', () => {
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
     assert.match(WORKFLOW, /^\s{2}quality:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}unit:\s*$/mu);
+    assert.match(WORKFLOW, /^\s{2}browser-build:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}browser:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}browser-health:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}cli-runtime:\s*$/mu);
     assert.match(WORKFLOW, /^\s{2}verify:\s*$/mu);
     assert.match(WORKFLOW, /^concurrency:\s*\n\s{2}group: ci-/mu);
     assert.match(WORKFLOW, /^\s{2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
-    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 5);
+    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser-build\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
+    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 6);
     const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
-    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
+    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser-build:/u.exec(WORKFLOW)?.[1]);
+    const browserBuildJob = requiredValue(/\n  browser-build:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
+    const browserJob = requiredValue(/\n  browser:\n([\s\S]*?)\n  browser-health:/u.exec(WORKFLOW)?.[1]);
     assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
     assert.ok(
-      qualityJob.indexOf('npm run release:check')
+      qualityJob.indexOf('npm run verification:ci -- --group=preflight')
         < qualityJob.indexOf('npm ci --include=optional --ignore-scripts --audit=false'),
       'release-derived drift must fail before the locked install starts',
     );
     assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
     assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 4);
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 5);
     assert.equal(occurrences(WORKFLOW, /^\s+run: npm run dependencies:audit$/gmu), 0);
     assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}UNIT_RESULT: \$\{\{ needs\.unit\.result \}\}$/mu);
+    assert.match(WORKFLOW, /^\s{10}BROWSER_BUILD_RESULT: \$\{\{ needs\.browser-build\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}BROWSER_HEALTH_RESULT: \$\{\{ needs\.browser-health\.result \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}CLI_RUNTIME_RESULT: \$\{\{ needs\.cli-runtime\.result \}\}$/mu);
@@ -176,6 +174,10 @@ describe('continuous integration workflow', () => {
       'actions/checkout',
       'actions/setup-node',
       'actions/upload-artifact',
+      'actions/checkout',
+      'actions/setup-node',
+      'actions/download-artifact',
+      'actions/upload-artifact',
       'actions/upload-artifact',
       'actions/checkout',
       'actions/setup-node',
@@ -186,11 +188,12 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
-      ...CI_PREFLIGHT_SCRIPTS.map((script) => `npm run ${script}`),
-      ...CI_QUALITY_SCRIPTS.map((script) => `npm run ${script}`),
+      'npm run verification:ci -- --group=preflight',
+      'npm run verification:ci -- --group=quality',
+      'npm run verification:ci -- --group=unit',
+      'npm run verification:ci -- --group=browser-build',
+      'npm run verification:ci -- --group=cli-runtime',
       'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
-      ...CI_UNIT_SCRIPTS.map((script) => `npm run ${script}`),
-      ...CI_BROWSER_PREREQUISITE_SCRIPTS.map((script) => `npm run ${script}`),
       'npm run test:e2e:install',
       'npm run test:e2e:shard -- --run=${{ matrix.shard }}',
       'npm run frontend:authenticated-loading-report',
@@ -202,14 +205,27 @@ describe('continuous integration workflow', () => {
     }
     assert.deepEqual(readHostedCiScriptPlan(WORKFLOW), expectedHostedCiScriptPlan());
     assert.doesNotThrow(() => assertHostedCiParity(WORKFLOW));
+    const workflowWithoutBuildJob = WORKFLOW.replace(/\n  browser-build:\n[\s\S]*?\n  browser:/u, '\n  browser:');
+    assert.throws(() => assertHostedCiParity(workflowWithoutBuildJob), /missing the browser-build job/u);
+    const workflowWithAlteredArtifactName = WORKFLOW.replace(CI_FRONTEND_BUILD_ARTIFACT_NAME, 'frontend-build-altered');
+    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactName), /artifact publication has drifted/u);
+    const workflowWithAlteredArtifactPath = WORKFLOW.replace('            frontend/build\n            frontend/build-identity.json', '            frontend/other');
+    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactPath), /artifact publication has drifted/u);
+    const workflowWithoutBuildIntegrity = WORKFLOW.replace('--group=browser-build', '--group=unit');
+    assert.throws(() => assertHostedCiParity(workflowWithoutBuildIntegrity), /browserBuild scripts have drifted/u);
+    const workflowWithMatrixBuild = WORKFLOW.replace(
+      '      - name: Install Playwright Chromium',
+      '      - name: Rebuild unexpectedly\n        run: npm run build\n      - name: Install Playwright Chromium',
+    );
+    assert.throws(() => assertHostedCiParity(workflowWithMatrixBuild), /browser scripts have drifted/u);
     const workflowWithUnownedGate = WORKFLOW.replace(
-      '      - name: Run type checks',
-      '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run type checks',
+      '      - name: Run maintained quality group',
+      '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run maintained quality group',
     );
     assert.throws(() => assertHostedCiParity(workflowWithUnownedGate), /quality scripts have drifted/u);
     const workflowWithoutBrowserCandidate = WORKFLOW.replace('          npm run --silent verification:timing:update-candidate -- \\\n', '');
     assert.throws(() => assertHostedCiParity(workflowWithoutBrowserCandidate), /browserHealth scripts have drifted/u);
-    const workflowWithoutCliRuntime = WORKFLOW.replace('        run: npm run cli:package:check\n\n  verify:', '        run: npm run unowned:cli-check\n\n  verify:');
+    const workflowWithoutCliRuntime = WORKFLOW.replace('--group=cli-runtime', '--group=quality');
     assert.throws(() => assertHostedCiParity(workflowWithoutCliRuntime), /cliRuntime scripts have drifted/u);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}$/mu);
     assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_HEAD_SHA: \$\{\{ github\.sha \}\}$/mu);
@@ -217,6 +233,9 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
       'node tools/production-dependency-audit.mts',
     );
+    assert.equal(PACKAGE_MANIFEST.scripts?.['frontend:build:integrity'], 'node tools/frontend-build-integrity.mts --check');
+    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.prebuild, 'node ../tools/frontend-build-integrity.mts --clean');
+    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.postbuild, 'node ../tools/frontend-build-integrity.mts --record');
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /packages\/\*\*\/\*\.mts/u);
     assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /tools\/production-coverage\.mts/u);
     assert.doesNotMatch(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /test:critical-io-coverage/u);
@@ -240,9 +259,25 @@ describe('continuous integration workflow', () => {
     assert.equal(PACKAGE_MANIFEST.scripts?.['test:e2e:aggregate'], 'node tools/playwright-shard-aggregate.mts');
     assert.match(WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
     assert.match(WORKFLOW, /^\s{10}node-version: 26$/mu);
-    assert.match(WORKFLOW, /^\s+run: npm run cli:package:check$/mu);
+    assert.match(WORKFLOW, /^\s+run: npm run verification:ci -- --group=cli-runtime$/mu);
     assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
     assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
+    assert.match(browserJob, /^\s{4}needs:\s*\n\s{6}- browser-build$/mu);
+    assert.equal(occurrences(browserBuildJob, /^\s+run: npm run verification:ci -- --group=browser-build$/gmu), 1);
+    for (const script of CI_BROWSER_BUILD_SCRIPTS) {
+      assert.doesNotMatch(browserBuildJob, new RegExp(`^\\s+run: npm run ${escapeRegExp(script)}$`, 'mu'));
+    }
+    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run frontend:build:integrity$/gmu), 1);
+    assert.match(browserBuildJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
+    assert.match(browserBuildJob, /^\s{10}if-no-files-found: error$/mu);
+    assert.match(browserBuildJob, /^\s{10}retention-days: 1$/mu);
+    assert.match(browserBuildJob, /^\s{10}compression-level: 6$/mu);
+    assert.doesNotMatch(browserBuildJob, /\.svelte-kit/u);
+    assert.match(browserJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
+    assert.match(browserJob, /^\s{10}path: frontend$/mu);
+    assert.doesNotMatch(browserJob, /^\s{10}(?:pattern|merge-multiple):/mu);
+    assert.ok(browserJob.indexOf('Download verified frontend build') < browserJob.indexOf('Verify frontend build identity'));
+    assert.ok(browserJob.indexOf('Verify frontend build identity') < browserJob.indexOf('Install Playwright Chromium'));
     assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
@@ -250,8 +285,24 @@ describe('continuous integration workflow', () => {
     assert.equal(new Set(assigned).size, assigned.length);
     assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
+    assert.deepEqual(CI_COMMAND_GROUPS, ['preflight', 'quality', 'unit', 'browser-build', 'cli-runtime']);
+    assert.deepEqual(parseCiVerificationArguments([]), { mode: 'full' });
+    assert.deepEqual(parseCiVerificationArguments(['--list']), { mode: 'list' });
+    assert.deepEqual(parseCiVerificationArguments(['--group=quality']), { mode: 'group', group: 'quality' });
+    assert.deepEqual(parseCiVerificationArguments(['--group', 'browser-build']), { mode: 'group', group: 'browser-build' });
+    assert.throws(() => parseCiVerificationArguments(['--group=unknown']), /Usage/u);
+    const dispatched: Array<Readonly<{ script: string; args: readonly string[] }>> = [];
+    runCiCommandGroup('quality', (script, args) => dispatched.push({ script, args }));
+    assert.deepEqual(dispatched, CI_QUALITY_SCRIPTS.map((script) => ({ script, args: [] })));
+    const stopped: string[] = [];
+    assert.throws(() => runCiCommandGroup('quality', (script) => {
+      stopped.push(script);
+      if (stopped.length === 2) throw new Error('fixture command failure');
+    }), /fixture command failure/u);
+    assert.deepEqual(stopped, CI_QUALITY_SCRIPTS.slice(0, 2));
+    assert.deepEqual(ciCommandGroupScripts('browser-build'), CI_BROWSER_BUILD_SCRIPTS);
     const localPlan = formatLocalCiPlan();
-    for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_PREREQUISITE_SCRIPTS]) {
+    for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_BUILD_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
     assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
@@ -261,6 +312,7 @@ describe('continuous integration workflow', () => {
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
     assert.match(localPlan, /locked install \(install-time audit disabled; scheduled and release audits are separate\)/u);
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
+      'frontend:build:integrity',
       'test:e2e:install',
       'test:e2e:shard',
       'frontend:authenticated-loading-report',
@@ -337,6 +389,58 @@ describe('continuous integration workflow', () => {
     );
   });
 
+  test('preflights every unit-shell executable and preserves resolved paths with spaces', (context) => {
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-shell-preflight-'));
+    const executableDirectory = path.join(temporaryRoot, 'bin with spaces');
+    fs.mkdirSync(executableDirectory);
+    context.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+
+    assert.throws(() => resolveUnitTestExecutables(['zsh', 'pwsh'], {
+      environment: { PATH: path.join(temporaryRoot, 'missing') },
+      cwd: temporaryRoot,
+    }), (error) => error instanceof Error
+      && error.message.includes('zsh: not found')
+      && error.message.includes('pwsh: not found'));
+
+    const failing = path.join(executableDirectory, 'zsh');
+    fs.writeFileSync(failing, '#!/bin/sh\necho fixture-failure >&2\nexit 7\n', { mode: 0o755 });
+    assert.throws(() => resolveUnitTestExecutables(['zsh'], {
+      environment: { PATH: executableDirectory },
+      cwd: temporaryRoot,
+    }), /zsh: probe exited 7 \(fixture-failure\)/u);
+
+    assert.throws(() => resolveUnitTestExecutables(['zsh'], {
+      environment: { PATH: executableDirectory },
+      cwd: temporaryRoot,
+      probe: () => ({
+        error: new Error('fixture launch failure'),
+        signal: null,
+        status: null,
+        stderr: '',
+      }),
+    }), /zsh: failed to launch \(fixture launch failure\)/u);
+
+    for (const executable of ['bash', 'zsh', 'pwsh']) {
+      fs.writeFileSync(path.join(executableDirectory, executable), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    }
+    const sourceEnvironment = { PATH: executableDirectory, PRESERVED_VALUE: 'yes' };
+    const resolved = resolveUnitTestExecutables(undefined, {
+      environment: sourceEnvironment,
+      cwd: temporaryRoot,
+    });
+    assert.deepEqual([...resolved], [
+      ['bash', path.join(executableDirectory, 'bash')],
+      ['zsh', path.join(executableDirectory, 'zsh')],
+      ['pwsh', path.join(executableDirectory, 'pwsh')],
+    ]);
+    const executionEnvironment = unitTestExecutableEnvironment(resolved, sourceEnvironment);
+    assert.equal(executionEnvironment.PATH, executableDirectory);
+    assert.equal(executionEnvironment.PRESERVED_VALUE, 'yes');
+    assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_BASH, path.join(executableDirectory, 'bash'));
+    assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_ZSH, path.join(executableDirectory, 'zsh'));
+    assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_PWSH, path.join(executableDirectory, 'pwsh'));
+  });
+
   test('keeps the live production audit outside required per-push verification', () => {
     assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^on:\s*\n\s{2}schedule:\s*\n\s{4}- cron: '29 3 \* \* 2'\s*\n\s{2}workflow_dispatch:$/mu);
     assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
@@ -351,29 +455,81 @@ describe('continuous integration workflow', () => {
     assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}package-manager-cache: false$/mu);
   });
 
-  test('uses the same zero-retry single-worker contract locally and in CI while retaining bounded diagnostics', () => {
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}forbidOnly: true,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}failOnFlakyTests: true,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}retries: 0,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /^\s{2}workers: 1,$/mu);
-    assert.match(PLAYWRIGHT_CONFIG, /\['json', \{ outputFile: artifacts\.jsonResults \}\]/u);
-    assert.match(PLAYWRIGHT_CONFIG, /outputDir: artifacts\.testResults/u);
-    assert.match(PLAYWRIGHT_CONFIG, /trace: 'retain-on-failure'/u);
-    assert.match(PLAYWRIGHT_CONFIG, /screenshot: 'only-on-failure'/u);
+  test('resolves the same safe Playwright contract across local, hosted and performance lanes', () => {
+    const assertSafeConfiguration = (configuration: Readonly<{
+      forbidOnly: boolean;
+      failOnFlakyTests: boolean;
+      retries: number;
+      workers: number;
+      trace: string;
+      screenshot: string;
+    }>) => {
+      if (configuration.forbidOnly !== true || configuration.failOnFlakyTests !== true
+        || configuration.retries !== 0 || configuration.workers !== 1
+        || configuration.trace !== 'retain-on-failure'
+        || configuration.screenshot !== 'only-on-failure') {
+        throw new TypeError('Resolved Playwright configuration weakened the maintained execution contract.');
+      }
+    };
+    const local = resolvePlaywrightExecutionContract({});
+    assert.doesNotThrow(() => assertSafeConfiguration(local));
+    assert.equal(local.hosted, false);
+    assert.equal(local.useExistingBuild, false);
+    assert.equal(local.includePerformanceAuthority, false);
+
+    const hosted = resolvePlaywrightExecutionContract({ CI: '1' });
+    assertSafeConfiguration(hosted);
+    assert.equal(hosted.hosted, true);
+    assert.equal(hosted.useExistingBuild, true);
+
+    const performance = resolvePlaywrightExecutionContract({
+      WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1',
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'performance',
+    });
+    assertSafeConfiguration(performance);
+    assert.equal(performance.includePerformanceAuthority, true);
+    assert.equal(performance.functionalProject.excludedSpecs, PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN);
+    assert.equal(performance.performanceProject.matchedSpecs, PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN);
+    assert.deepEqual(performance.performanceProject.dependencies, ['setup']);
+    assert.equal(performance.performanceProject.workers, 1);
+    assert.equal(performance.performanceProject.fullyParallel, false);
+    assert.equal(performance.performanceProject.retries, 0);
+
+    assert.throws(
+      () => assertSafeConfiguration({ ...local, retries: 1 }),
+      /weakened the maintained execution contract/u,
+    );
   });
 
-  test('keeps functional checks deterministic and isolates runtime ceilings in every environment', () => {
-    assert.match(E2E_FIXTURES_SOURCE, /export const PERFORMANCE_AUTHORITY_PROJECT = PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;/u);
-    assert.match(
-      E2E_FIXTURES_SOURCE,
-      /export function enforcesMachineTimingBudgets\(projectName: string\): boolean \{\s+return projectName === PERFORMANCE_AUTHORITY_PROJECT;\s+\}/u,
-    );
-    assert.match(PLAYWRIGHT_CONFIG, /const performanceAuthority = process\.env\.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';/u);
-    assert.match(PLAYWRIGHT_CONFIG, /testIgnore: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,/u);
-    assert.match(PLAYWRIGHT_CONFIG, /dependencies: \['setup'\],/u);
-    assert.match(PLAYWRIGHT_CONFIG, /name: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,[\s\S]*?testMatch: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,[\s\S]*?dependencies: \['setup'\],[\s\S]*?workers: 1,[\s\S]*?fullyParallel: false,[\s\S]*?retries: 0,/u);
-    assert.match(PLAYWRIGHT_CONFIG, /\.\.\.\(performanceAuthority \? \[performanceAuthorityProject\] : \[\]\)/u);
-    assert.doesNotMatch(PLAYWRIGHT_CONFIG, /console-loading|deferred-interactions/u);
+  test('verifies the applied configuration and automatic fixture instead of only their declarations', (context) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-browser-contract-controls-'));
+    context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    assert.doesNotThrow(() => assertAppliedBrowserSafety());
+
+    const configuration = path.join(__dirname, '..', 'playwright.config.ts');
+    const weakenedConfiguration = path.join(directory, 'weakened.config.cjs');
+    fs.writeFileSync(weakenedConfiguration, `
+      const imported = require(${JSON.stringify(configuration)});
+      const configuration = imported.default ?? imported;
+      module.exports = { ...configuration, testDir: ${JSON.stringify(E2E_DIRECTORY)}, forbidOnly: false };
+    `);
+    assert.throws(() => assertAppliedBrowserSafety({ configurationFile: weakenedConfiguration }), /Applied Playwright configuration weakened/u);
+
+    const fixtures = pathToFileURL(path.join(E2E_DIRECTORY, 'fixtures.ts')).href;
+    for (const auto of [false, true]) {
+      const disconnectedFixture = path.join(directory, `disconnected-${auto}.mts`);
+      fs.writeFileSync(disconnectedFixture, `
+        import { test as original, expect } from ${JSON.stringify(fixtures)};
+        export { expect };
+        export const test = original.extend({
+          networkAndConsoleGuard: [async ({}, use) => { await use(); }, { auto: ${auto} }]
+        });
+      `);
+      assert.throws(() => assertAppliedBrowserSafety({ fixtureFile: disconnectedFixture }), /applied automatic network fixture/u);
+    }
+  });
+
+  test('keeps performance reporting in CI with isolated samples and functional readiness checks', async () => {
     assert.match(WORKFLOW, /^\s+run: npm run frontend:authenticated-loading-report$/mu);
     assert.match(WORKFLOW, /^\s+if: \$\{\{ matrix\.kind == 'performance' \}\}$/mu);
     assert.equal(
@@ -388,57 +544,178 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
       'node tools/playwright-performance-authority.mts',
     );
-    assert.match(PERFORMANCE_RUNNER_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /playwrightPerformanceAuthorityArguments\(PLAYWRIGHT_CLI\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /aggregatePlaywrightShardTimings\(reports\)/u);
-    assert.match(BALANCED_SUITE_SOURCE, /buildVerificationTimingUpdateCandidate\(\[/u);
-    assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');
+    assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-measurement');
     assert.deepEqual(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, [
       'e2e/console-loading.spec.ts',
       'e2e/deferred-interactions.spec.ts',
     ]);
+    assert.equal(PERFORMANCE_TIMING_POLICY, 'observational');
+    assert.equal(performanceSampleMedian([30, 10, 20]), 20);
+    assert.throws(() => performanceSampleMedian([10, 20]), /exactly 3/u);
 
-    const consoleAuthorityBlock = requiredValue(
-      /if \(enforcesMachineTimingBudgets\(testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(CONSOLE_LOADING_SOURCE)?.[1],
-    );
-    for (const metric of ['usableMsMedian', 'longTaskTotalMsMedian', 'usableMsMaximum', 'longTaskTotalMsMaximum']) {
-      assert.match(consoleAuthorityBlock, new RegExp(`expect\\(sampleSet\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
-    }
-    const consoleOutsideAuthority = CONSOLE_LOADING_SOURCE.replace(consoleAuthorityBlock, '');
-    assert.doesNotMatch(consoleOutsideAuthority, /expect\(sampleSet\.(?:usableMsMedian|longTaskTotalMsMedian|usableMsMaximum|longTaskTotalMsMaximum)\)\.toBeLessThanOrEqual/u);
-    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export const PERFORMANCE_SAMPLE_COUNT = 3;/u);
-    assert.match(PERFORMANCE_SAMPLING_SOURCE, /export const PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER = 2;/u);
-    assert.match(PERFORMANCE_SAMPLING_SOURCE, /Network\.clearBrowserCache/u);
-    assert.match(PERFORMANCE_SAMPLING_SOURCE, /Storage\.clearDataForOrigin/u);
-    assert.match(consoleOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
-    assert.match(consoleOutsideAuthority, /resetPerformanceSampleState\(page\)/u);
-    assert.match(consoleOutsideAuthority, /expect\(measurement\.completedRequestCount[^\n]+\)\.toBeGreaterThan/u);
-    assert.match(consoleOutsideAuthority, /expect\(measurement\.encodedTransferBytes\)\.toBeLessThanOrEqual/u);
-    assert.match(consoleOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
+    const operations: string[] = [];
+    const page = {
+      url: () => 'http://127.0.0.1:4173/lookup',
+      evaluate: async () => { operations.push('clear-session-storage'); },
+      goto: async (url: string) => { operations.push(`goto:${url}`); },
+      context: () => ({
+        newCDPSession: async () => ({
+          send: async (method: string) => { operations.push(method); },
+          detach: async () => { operations.push('detach'); },
+        }),
+      }),
+    };
+    await resetPerformanceSampleState(page as never, 'http://127.0.0.1:4173');
+    assert.deepEqual(operations, [
+      'clear-session-storage',
+      'goto:about:blank',
+      'Network.enable',
+      'Network.clearBrowserCache',
+      'Storage.clearDataForOrigin',
+      'detach',
+    ]);
 
-    const deferredAuthorityBlock = requiredValue(
-      /if \(enforcesMachineTimingBudgets\(options\.testInfo\.project\.name\)\) \{([\s\S]*?)\n    \}/u.exec(DEFERRED_INTERACTIONS_SOURCE)?.[1],
+    const installedTargets: unknown[] = [];
+    await installNavigationReadinessMark({
+      addInitScript: async (_callback: unknown, targets: unknown) => { installedTargets.push(targets); },
+    } as never, [{ selector: '#ready', requireEnabled: true, visibility: 'attached' }]);
+    assert.deepEqual(installedTargets, [[{ selector: '#ready', requireEnabled: true, visibility: 'attached' }]]);
+    await assert.rejects(
+      installNavigationReadinessMark({ addInitScript: async () => undefined } as never, []),
+      /between one and four/u,
     );
-    for (const metric of ['usableMsMedian', 'longTaskTotalMsMedian', 'usableMsMaximum', 'longTaskTotalMsMaximum']) {
-      assert.match(deferredAuthorityBlock, new RegExp(`expect\\(sampleSet\\.${metric}\\)\\.toBeLessThanOrEqual`, 'u'));
+  });
+
+  test('retains slow observations without promoting machine speed into an acceptance limit', () => {
+    const samples = [
+      { usableMs: 2_500, longTaskTotalMs: 1_500 },
+      { usableMs: 120, longTaskTotalMs: 0 },
+      { usableMs: 700, longTaskTotalMs: 60 },
+    ];
+    const expected = {
+      usableMsMedian: 700,
+      usableMsMaximum: 2_500,
+      longTaskTotalMsMedian: 60,
+      longTaskTotalMsMaximum: 1_500,
+    };
+    assert.deepEqual(summarizePerformanceTimings(samples), expected);
+    assert.deepEqual(summarizePerformanceTimings(samples.map((sample) => ({
+      usableMs: sample.usableMs * 10,
+      longTaskTotalMs: sample.longTaskTotalMs * 10,
+    }))), Object.fromEntries(Object.entries(expected).map(([key, value]) => [key, value * 10])));
+    assert.throws(() => summarizePerformanceTimings(samples.slice(1)), /exactly 3/u);
+    for (const invalid of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      for (const field of ['usableMs', 'longTaskTotalMs'] as const) {
+        assert.throws(
+          () => summarizePerformanceTimings([{ ...samples[0]!, [field]: invalid }, ...samples.slice(1)]),
+          /finite non-negative/u,
+        );
+      }
     }
-    const deferredOutsideAuthority = DEFERRED_INTERACTIONS_SOURCE.replace(deferredAuthorityBlock, '');
-    assert.doesNotMatch(deferredOutsideAuthority, /expect\(sampleSet\.(?:usableMsMedian|longTaskTotalMsMedian|usableMsMaximum|longTaskTotalMsMaximum)\)\.toBeLessThanOrEqual/u);
-    assert.doesNotMatch(deferredOutsideAuthority, /expect\(measurement\.(?:usableMs|longTaskTotalMs)\)\.toBeLessThanOrEqual/u);
-    assert.match(deferredOutsideAuthority, /sample <= PERFORMANCE_SAMPLE_COUNT/u);
-    assert.match(deferredOutsideAuthority, /resetPerformanceSampleState\(options\.page\)/u);
-    assert.match(deferredOutsideAuthority, /await options\.prepare\(sample\)/u);
-    assert.match(deferredOutsideAuthority, /expect\(measurement\.completedAssetRequestCount[^\n]+\)\.toBeGreaterThan/u);
-    assert.match(deferredOutsideAuthority, /expect\(measurement\.assetEncodedTransferBytes\)\.toBeLessThanOrEqual/u);
-    assert.match(deferredOutsideAuthority, /expect\(measurement\.layoutShiftScore\)\.toBeLessThanOrEqual/u);
-    assert.match(deferredOutsideAuthority, /expect\(measurement\.residualLayoutShiftScore\)\.toBeLessThanOrEqual/u);
-    assert.match(deferredOutsideAuthority, /expect\(captured\.investigationRequests[^\n]+\)\.toEqual\(\[\]\)/u);
+  });
+
+  test('records execution context without assuming a particular operating system or browser', () => {
+    const context = performanceMeasurementContext({
+      context: () => ({ browser: () => ({
+        browserType: () => ({ name: () => 'chromium' }),
+        version: () => '123.0.0.0',
+      }) }),
+      viewportSize: () => ({ width: 1280, height: 720 }),
+    } as never, {
+      project: { name: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT },
+      config: { workers: 1 },
+    } as never);
+    assert.deepEqual(context, {
+      hostPlatform: process.platform,
+      hostArchitecture: process.arch,
+      nodeVersion: process.versions.node,
+      browserName: 'chromium',
+      browserVersion: '123.0.0.0',
+      viewport: { width: 1280, height: 720 },
+      project: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+      configuredWorkers: 1,
+    });
+    const unavailable = performanceMeasurementContext({
+      context: () => ({ browser: () => null }),
+      viewportSize: () => null,
+    } as never, { project: { name: 'unavailable-browser' }, config: { workers: 1 } } as never);
+    assert.equal(unavailable.browserName, null);
+    assert.equal(unavailable.browserVersion, null);
+    assert.equal(unavailable.viewport, null);
+  });
+
+  test('stops serial local browser shards after an interruption without hiding ordinary failures', async () => {
+    const runs = ['1/4', '2/4', '3/4'].map((identity, index) => ({
+      label: `functional shard ${identity}`,
+      environment: {},
+      port: 4_180 + index,
+      args: ['runner', `--run=${identity}`],
+    }));
+    const interruptedLaunches: string[] = [];
+    const verifiedPorts: number[] = [];
+    let interrupted = false;
+    const interruptedResult = await runFunctionalRunsSerially(runs, {
+      execute: async (run) => {
+        interruptedLaunches.push(run.label);
+        interrupted = true;
+        return 2;
+      },
+      verifyPortFree: async (run) => {
+        verifiedPorts.push(run.port);
+      },
+      readResult: (run) => run.label,
+      isInterrupted: () => interrupted,
+    });
+    assert.deepEqual(interruptedLaunches, ['functional shard 1/4']);
+    assert.deepEqual(verifiedPorts, [4_180]);
+    assert.deepEqual(interruptedResult, { exits: [2], reports: [], interrupted: true });
+
+    const ordinaryLaunches: string[] = [];
+    let liveResult = '';
+    const ordinaryResult = await runFunctionalRunsSerially(runs, {
+      execute: async (run) => {
+        ordinaryLaunches.push(run.label);
+        liveResult = `${run.label} report`;
+        return run.label.endsWith('2/4') ? 2 : 0;
+      },
+      verifyPortFree: async () => undefined,
+      readResult: () => liveResult,
+      isInterrupted: () => false,
+    });
+    assert.deepEqual(ordinaryLaunches, runs.map((run) => run.label));
+    assert.deepEqual(ordinaryResult, {
+      exits: [0, 2, 0],
+      reports: ['functional shard 1/4 report', 'functional shard 3/4 report'],
+      interrupted: false,
+    });
+
+    const launchesBeforeMissingReport: string[] = [];
+    await assert.rejects(
+      runFunctionalRunsSerially(runs, {
+        execute: async (run) => {
+          launchesBeforeMissingReport.push(run.label);
+          return 0;
+        },
+        verifyPortFree: async () => undefined,
+        readResult: () => {
+          throw new Error('Functional shard report is missing.');
+        },
+        isInterrupted: () => false,
+      }),
+      /Functional shard report is missing/u,
+    );
+    assert.deepEqual(launchesBeforeMissingReport, ['functional shard 1/4']);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
     for (const { entry, source } of E2E_SOURCES) {
       assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);
       assert.doesNotMatch(source, /\bsetTimeout\s*\(/u, `${entry} uses a fixed timer delay`);
+      assert.doesNotMatch(
+        source,
+        /frontend\/\.svelte-kit\/output/u,
+        `${entry} reads undeclared frontend builder output`,
+      );
     }
   });
 

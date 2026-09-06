@@ -16,10 +16,12 @@ import {
   serializeRiskCalibrationSnapshot,
   snapshotRiskCalibrationDatasetExportForSerialization,
   type RiskCalibrationEvidence,
+  type RiskCalibrationDisposition,
   type RiskCalibrationRecord,
 } from '../contracts/risk-calibration.mts';
 import {
   latestCaseEvidence,
+  type CaseDisposition,
   type CaseEvidenceSnapshot,
   type CaseRecord,
 } from '../cases/case-record-model.mts';
@@ -30,13 +32,15 @@ export {
 } from '../contracts/risk-calibration.mts';
 export const MAX_RISK_CALIBRATION_EXPORT_RECORDS = MAX_RISK_CALIBRATION_RECORDS;
 
-const REVIEWED_DISPOSITIONS = new Set([
-  'suspicious',
-  'confirmed_abuse',
-  'false_positive',
-  'expected',
-  'closed_no_action',
-]);
+/** Explicit compatibility adapter from the current Case domain to calibration schema v2. */
+const RISK_CALIBRATION_DISPOSITION_PROJECTION = Object.freeze({
+  unreviewed: null,
+  suspicious: 'suspicious',
+  confirmed_abuse: 'confirmed_abuse',
+  false_positive: 'false_positive',
+  expected: 'expected',
+  closed_no_action: 'closed_no_action',
+} as const satisfies Record<CaseDisposition, RiskCalibrationDisposition | null>);
 const AVAILABILITY_STATES = new Set(['registered', 'for_sale', 'expiring', 'available', 'unknown', 'error']);
 const ACTIVITY_STATES = new Set(['active', 'parked', 'unreachable', 'no_site']);
 const MUTATION_TYPES = new Set<string>(RISK_MUTATION_TYPES);
@@ -58,10 +62,16 @@ export type CalibrationExportExclusion = Readonly<{
   reason: CalibrationExportExclusionReason;
 }>;
 
+export type RiskCalibrationDatasetExportRecord = Readonly<
+  Omit<RiskCalibrationRecord, 'analystDisposition'> & {
+    analystDisposition: Exclude<RiskCalibrationDisposition, 'unreviewed'>;
+  }
+>;
+
 export type RiskCalibrationDatasetExport = Readonly<{
   schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
   version: typeof RISK_CALIBRATION_DATASET_VERSION;
-  records: readonly RiskCalibrationRecord[];
+  records: readonly RiskCalibrationDatasetExportRecord[];
   export: Readonly<{
     selected: number;
     included: number;
@@ -201,7 +211,7 @@ export function buildRiskCalibrationDatasetExport(
   const selectedIds = snapshotSelectedCaseIds(selectedCaseIds);
   const caseById = new Map(cases.map((record) => [record.id, record]));
   const seen = new Set<string>();
-  const records: RiskCalibrationRecord[] = [];
+  const records: RiskCalibrationDatasetExportRecord[] = [];
   const exclusions: CalibrationExportExclusion[] = [];
 
   for (const caseId of selectedIds) {
@@ -216,7 +226,8 @@ export function buildRiskCalibrationDatasetExport(
       exclusions.push(Object.freeze({ caseId, domain: record.domain, reason: 'record_limit' }));
       continue;
     }
-    if (!REVIEWED_DISPOSITIONS.has(record.disposition)) {
+    const analystDisposition = RISK_CALIBRATION_DISPOSITION_PROJECTION[record.disposition];
+    if (analystDisposition === null) {
       exclusions.push(Object.freeze({ caseId, domain: record.domain, reason: 'unreviewed' }));
       continue;
     }
@@ -233,7 +244,7 @@ export function buildRiskCalibrationDatasetExport(
     records.push(Object.freeze({
       id: record.id,
       domain: record.domain,
-      analystDisposition: record.disposition as RiskCalibrationRecord['analystDisposition'],
+      analystDisposition,
       ...(record.reviewReasonCode ? { reviewReasonCode: record.reviewReasonCode } : {}),
       evidence,
     }));

@@ -105,22 +105,36 @@ async function assertPinnedSchemaTree(repositoryRoot = process.cwd()): Promise<v
   }
 }
 
-async function buildValidators(repositoryRoot = process.cwd()): Promise<Map<string, ValidateFunction>> {
+async function buildValidators(repositoryRoot = process.cwd()): Promise<{
+  bundle: ValidateFunction;
+  objects: Map<string, ValidateFunction>;
+}> {
   await assertPinnedSchemaTree(repositoryRoot);
   // The pinned schemas include a legacy escaped hyphen accepted by the
   // original validator but rejected under JavaScript's Unicode regexp mode.
   const ajv = new Ajv2020({ allErrors: true, strict: false, validateFormats: false, unicodeRegExp: false });
+  let bundleSchema: UnknownRecord | null = null;
   for (const filename of await jsonFiles(resolve(repositoryRoot, SCHEMA_ROOT))) {
     const text = (await readBoundedRegularFile(filename, MAX_SCHEMA_BYTES)).toString('utf8');
-    ajv.addSchema(JSON.parse(text));
+    const schema = JSON.parse(text) as UnknownRecord;
+    if (schema.$id === BUNDLE_SCHEMA_ID) bundleSchema = schema;
+    ajv.addSchema(schema);
   }
-  const validators = new Map<string, ValidateFunction>();
+  if (!bundleSchema) throw new Error('The pinned STIX bundle schema was not loaded.');
+  const envelopeSchema = structuredClone(bundleSchema) as UnknownRecord;
+  envelopeSchema.$id = BUNDLE_SCHEMA_ID.replace(/\.json$/u, '-envelope.json');
+  const envelopeProperties = envelopeSchema.properties as UnknownRecord | undefined;
+  const objectsProperty = envelopeProperties?.objects as UnknownRecord | undefined;
+  if (!objectsProperty) throw new Error('The pinned STIX bundle objects constraint was not loaded.');
+  delete objectsProperty.items;
+  const bundle = ajv.compile(envelopeSchema);
+  const objects = new Map<string, ValidateFunction>();
   for (const [type, schemaId] of Object.entries(OBJECT_SCHEMA_IDS)) {
     const validator = ajv.getSchema(schemaId);
     if (!validator) throw new Error(`The pinned STIX ${type} schema was not loaded.`);
-    validators.set(type, validator);
+    objects.set(type, validator);
   }
-  return validators;
+  return { bundle, objects };
 }
 
 function parseBundle(content: string): UnknownRecord {
@@ -140,10 +154,13 @@ async function validateStixBundle(content: string, repositoryRoot = process.cwd(
     throw new Error('STIX 2.1 schema validation failed: invalid bundle envelope.');
   }
   const validators = await buildValidators(repositoryRoot);
+  if (!validators.bundle(bundle)) {
+    throw new Error(`STIX 2.1 schema validation failed at bundle envelope: ${errorSummary(validators.bundle)}`);
+  }
   for (const [index, value] of bundle.objects.entries()) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`STIX 2.1 schema validation failed: /objects/${index} must be an object.`);
     const object = value as UnknownRecord;
-    const validator = typeof object.type === 'string' ? validators.get(object.type) : undefined;
+    const validator = typeof object.type === 'string' ? validators.objects.get(object.type) : undefined;
     if (!validator) throw new Error(`STIX 2.1 schema validation failed: /objects/${index}/type is unsupported by this export gate.`);
     if (!validator(object)) throw new Error(`STIX 2.1 schema validation failed at /objects/${index}: ${errorSummary(validator)}`);
   }

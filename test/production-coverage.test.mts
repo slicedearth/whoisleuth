@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  PRODUCTION_COVERAGE_EXCLUSIONS,
   PRODUCTION_COVERAGE_POLICY,
   parseProductionCoverage,
   validateProductionCoverage,
@@ -32,7 +33,7 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
-  test('retains explicit floors for CLI ownership, browser-local mutation, analyst actions, and Lookup projections', () => {
+  test('retains explicit browser owners and coverage floors for critical production paths', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/discriminated-command-handlers.mts'], {
       lines: 100, branches: 100, functions: 100,
     });

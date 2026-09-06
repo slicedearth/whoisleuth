@@ -3,14 +3,19 @@
 // infrastructure as ownership or coordination.
 
 import { classifyBulkSourceCoverage } from './bulk-source-coverage.ts';
+import {
+  BULK_LIFECYCLE_FILTERS,
+  type BulkAgeFilter,
+  type BulkGroupBy,
+  type BulkLifecycleFilter,
+  type BulkMailFilter,
+  type BulkSourceFilter,
+} from './bulk-review-model.ts';
+
+export type { BulkAgeFilter, BulkGroupBy, BulkLifecycleFilter, BulkMailFilter, BulkSourceFilter } from './bulk-review-model.ts';
 
 export const BULK_GROUP_LIMIT = 200;
 export const BULK_GROUP_DOMAIN_LIMIT = 2_000;
-
-export type BulkSourceFilter = '' | 'complete' | 'limited' | 'unrecorded';
-export type BulkAgeFilter = '' | 'new_30' | 'new_365' | 'older_365' | 'unknown';
-export type BulkMailFilter = '' | 'mail' | 'no_mail' | 'authenticated' | 'auth_gap' | 'unknown';
-export type BulkGroupBy = '' | 'mutation' | 'tld' | 'registrar' | 'nameserver';
 
 export type BulkTriageSource = {
   source: string;
@@ -90,14 +95,14 @@ export function matchesBulkAdvancedFilters(
 }
 
 export function bulkAdvancedFilterOptions(rows: readonly BulkTriageRow[]) {
-  const lifecycle = new Set<string>();
+  const lifecycle = new Set<BulkLifecycleFilter>();
   const registrars = new Set<string>();
   const caseDispositions = new Set<string>();
   for (const row of rows.slice(0, BULK_GROUP_DOMAIN_LIMIT)) {
     const lifecycleValue = text(row.availability, 40);
     const registrar = text(row.registrar);
     const disposition = text(row.caseDisposition, 40);
-    if (lifecycleValue) lifecycle.add(lifecycleValue);
+    if (BULK_LIFECYCLE_FILTERS.includes(lifecycleValue as BulkLifecycleFilter)) lifecycle.add(lifecycleValue as BulkLifecycleFilter);
     if (registrar && registrar !== '—') registrars.add(registrar);
     if (disposition) caseDispositions.add(disposition);
   }

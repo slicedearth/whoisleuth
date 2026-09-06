@@ -130,6 +130,7 @@ export function reviewNameserverPreflight(inputRaw: unknown, generatedAtValue = 
       && authorityState === 'authoritative'
       && servedSetState === 'aligned'
       && soaState === 'observed'
+      && addressState !== 'non_public'
       && (!inBailiwick || addressState === 'ready');
     return Object.freeze({
       nameserver,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.ts';
-  import type { BulkAgeFilter, BulkGroupBy, BulkMailFilter, BulkSourceFilter } from '$lib/analysis/bulk-triage.ts';
+  import type { BulkAgeFilter, BulkGroupBy, BulkLifecycleFilter, BulkMailFilter, BulkSourceFilter } from '$lib/analysis/bulk-triage.ts';
 
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'profile_unevaluated' | 'errors';
   type IndicatorFormat = 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
@@ -119,8 +119,8 @@
     sourceFilter: BulkSourceFilter;
     reviewFilter: string;
     setSourceFilter: (value: BulkSourceFilter) => void;
-    lifecycleFilter: string;
-    setLifecycleFilter: (value: string) => void;
+    lifecycleFilter: BulkLifecycleFilter;
+    setLifecycleFilter: (value: BulkLifecycleFilter) => void;
     ageFilter: BulkAgeFilter;
     setAgeFilter: (value: BulkAgeFilter) => void;
     mailFilter: BulkMailFilter;
@@ -131,7 +131,7 @@
     setCaseDispositionFilter: (value: string) => void;
     groupBy: BulkGroupBy;
     setGroupBy: (value: BulkGroupBy) => void;
-    advancedFilterOptions: { lifecycle: string[]; registrars: string[]; caseDispositions: string[] };
+    advancedFilterOptions: { lifecycle: BulkLifecycleFilter[]; registrars: string[]; caseDispositions: string[] };
     selectedCount: number;
     monitorAllBlockedCount: number;
     monitorSelectedBlockedCount: number;
@@ -189,7 +189,7 @@
   <div class="advanced-filters">
   <label class="field">Mutation<select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation.value}>{mutation.label}</option>{/each}</select></label>
   <label class="field">Source coverage<select value={sourceFilter} onchange={(event) => setSourceFilter(event.currentTarget.value as BulkSourceFilter)}><option value="">Any coverage</option><option value="complete">Complete recorded sources</option><option value="limited">At least one limited source</option><option value="unrecorded">Coverage not recorded</option></select></label>
-  <label class="field">Lifecycle<select value={lifecycleFilter} onchange={(event) => setLifecycleFilter(event.currentTarget.value)}><option value="">Any lifecycle</option>{#each advancedFilterOptions.lifecycle as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+  <label class="field">Lifecycle<select value={lifecycleFilter} onchange={(event) => setLifecycleFilter(event.currentTarget.value as BulkLifecycleFilter)}><option value="">Any lifecycle</option>{#each advancedFilterOptions.lifecycle as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
   <label class="field">Registration age<select value={ageFilter} onchange={(event) => setAgeFilter(event.currentTarget.value as BulkAgeFilter)}><option value="">Any observed age</option><option value="new_30">30 days or newer</option><option value="new_365">31 to 365 days</option><option value="older_365">Older than 365 days</option><option value="unknown">Not observed</option></select></label>
   <label class="field">Mail posture<select value={mailFilter} onchange={(event) => setMailFilter(event.currentTarget.value as BulkMailFilter)}><option value="">Any mail state</option><option value="mail">MX observed</option><option value="no_mail">No MX observed</option><option value="authenticated">SPF and DMARC observed</option><option value="auth_gap">SPF or DMARC gap</option><option value="unknown">Incomplete evidence</option></select></label>
   <label class="field">Registrar<select value={registrarFilter} onchange={(event) => setRegistrarFilter(event.currentTarget.value)}><option value="">Any registrar</option>{#each advancedFilterOptions.registrars as value}<option value={value}>{value}</option>{/each}</select></label>

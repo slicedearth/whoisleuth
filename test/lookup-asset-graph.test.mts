@@ -5,6 +5,7 @@ import {
   countLookupAssetGraphEdgesByLens,
   projectLookupAssetGraph,
 } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
+import { buildTlsObservation } from '../lib/tls-intelligence.mts';
 
 function fixture() {
   return buildLookupAssetGraph({
@@ -81,7 +82,7 @@ function fixture() {
     tlsHostname: { matches: true, error: null },
     tlsAltNames: { dnsNames: ['example.test', '*.example.test'] },
     tlsPublicKey: { type: 'rsa', bits: 2048, fingerprintSha256: 'b'.repeat(64) },
-    tlsIssuer: { organization: 'Example Certificate Authority' },
+    tlsIssuer: { organizations: ['Example Certificate Authority'], commonNames: ['Example issuing CA'] },
     certificatePolicyReview: {
       observedAt: '2026-07-31T00:00:04.000Z',
       findings: [{
@@ -148,9 +149,78 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-against-policy'));
-  assert.equal(identity.nodes.find((node) => node.label === 'identity.example')?.group, 'identity');
+  assert.equal(identity.nodes.find((node) => node.label === 'https://identity.example')?.group, 'identity');
   assert.equal(delegation.nodes.find((node) => node.label === 'ns1.example.test')?.group, 'dns');
   assert.equal(certificate.nodes.find((node) => node.label === '*.example.test')?.group, 'certificate');
+});
+
+test('origin relationships preserve scheme and effective port before classifying trust', () => {
+  const graph = buildLookupAssetGraph({
+    target: 'example.test',
+    observedAt: '2026-07-31T00:00:00.000Z',
+    httpEvidence: {
+      status: 'success',
+      complete: true,
+      finalUrl: 'https://example.test/path',
+      observedAt: '2026-07-31T00:00:01.000Z',
+    },
+    pageIdentity: { status: 'success', complete: true },
+    pageCanonical: { url: 'https://example.test:443/canonical' },
+    pageForms: { externalActionOrigins: ['http://example.test', 'https://example.test:8443'] },
+    pageResources: { externalOrigins: ['http://example.test', 'https://example.test:8443'] },
+  });
+  const identity = projectLookupAssetGraph(graph, 'identity');
+  const formEdges = graph.edges.filter((edge) => edge.kind === 'form-destination');
+  const resourceEdges = graph.edges.filter((edge) => edge.kind === 'loads-from');
+
+  assert.equal(graph.edges.find((edge) => edge.kind === 'redirects-to')?.boundary, 'same_registrable_domain');
+  assert.equal(graph.edges.find((edge) => edge.kind === 'declares-canonical')?.boundary, 'same_origin');
+  assert.equal(formEdges.length, 2);
+  assert.equal(resourceEdges.length, 2);
+  assert.ok([...formEdges, ...resourceEdges].every((edge) => edge.boundary === 'same_registrable_domain'));
+  assert.deepEqual(
+    graph.nodes.filter((node) => node.kind === 'origin').map((node) => node.label).sort(),
+    ['http://example.test', 'https://example.test', 'https://example.test:8443'],
+  );
+  assert.equal(identity.edges.filter((edge) => edge.kind === 'form-destination').length, 2);
+  assert.equal(identity.edges.filter((edge) => edge.kind === 'loads-from').length, 2);
+});
+
+test('asset graph reads the ordered issuer names emitted by the TLS normaliser', () => {
+  const tls = buildTlsObservation({
+    connectedAddress: '93.184.216.34',
+    sniHost: 'example.test',
+    protocol: 'TLSv1.3',
+    cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
+    authorized: true,
+    hostnameMatches: true,
+    peerCertificate: {
+      subject: { CN: 'example.test' },
+      issuer: { O: ['Primary Example CA', 'Secondary Example CA'], CN: 'Example issuing CA' },
+      serialNumber: '01',
+      valid_from: 'Jul  1 00:00:00 2026 GMT',
+      valid_to: 'Aug  1 00:00:00 2026 GMT',
+      fingerprint256: Array.from({ length: 32 }, () => 'AA').join(':'),
+      bits: 2048,
+      ca: false,
+    },
+  }, {
+    observedAt: '2026-07-31T00:00:00.000Z',
+    now: new Date('2026-07-31T00:00:00.000Z'),
+  });
+  assert.deepEqual(tls.certificate?.issuer.organizations, ['Primary Example CA', 'Secondary Example CA']);
+  const graph = buildLookupAssetGraph({
+    target: 'example.test',
+    observedAt: tls.observedAt,
+    tlsEvidence: tls,
+    tlsCertificate: tls.certificate,
+    tlsIssuer: tls.certificate?.issuer,
+  });
+  const issuedBy = graph.edges.find((edge) => edge.kind === 'issued-by');
+  assert.ok(issuedBy);
+  assert.equal(graph.nodes.find((node) => node.id === issuedBy.target)?.label, 'Primary Example CA');
+  assert.equal(issuedBy.sourceLabel, 'TLS certificate');
+  assert.ok(projectLookupAssetGraph(graph, 'certificate').edges.some((edge) => edge.id === issuedBy.id));
 });
 
 test('asset graph bounds hostile or excessive collections', () => {

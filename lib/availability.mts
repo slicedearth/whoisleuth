@@ -131,7 +131,9 @@ type AvailabilityOptions = {
 type WebsiteActivity = 'parked' | 'active' | 'unreachable';
 type RegistrationSource = 'rdap' | 'whois' | 'dns' | null;
 type RegistrationConfidence = 'high' | 'medium';
-type HtmlSignals = ReturnType<typeof extractHtmlSignals>;
+type HtmlSignals = Omit<ReturnType<typeof extractHtmlSignals>, 'cspMetaPolicy'> & Readonly<{
+  cspMetaPolicy: ReturnType<typeof extractHtmlSignals>['cspMetaPolicy'] | null;
+}>;
 
 function withoutHttpDeliveryMetadata(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;

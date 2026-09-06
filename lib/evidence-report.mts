@@ -375,7 +375,7 @@ function buildLookupEvidenceReport(
 
   return {
     title: cleanReportText(titleTarget),
-    notice: 'Human-readable summary. The versioned JSON export remains the full-fidelity evidence package; raw RDAP JSON and WHOIS response bodies are deliberately omitted here.',
+    notice: 'Human-readable summary of the bounded, privacy-minimised JSON evidence package. Raw RDAP JSON, WHOIS response bodies, contact records, and other excluded collection data are not included in either artefact.',
     metadata: [
       reportField('Generated', report.generatedAt),
       reportField('Generator', application.version ? `${application.name || 'WHOISleuth'} ${application.version}` : application.name || 'WHOISleuth'),
@@ -479,7 +479,7 @@ function buildLookupEvidenceReport(
       'This report summarises point-in-time observations and registry publications. It does not prove ownership, activity, availability, or maliciousness.',
       'Missing, skipped, partial, unsupported, or failed sources are inconclusive rather than negative evidence.',
       'The Risk score is a versioned heuristic review priority, not a probability or determination of maliciousness. Review its listed factors and the underlying source states.',
-      'Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package and may contain public contact data.',
+      'The JSON evidence package is a bounded, privacy-minimised projection. It excludes raw registry and WHOIS payloads, contact records, authentication and session material, and unreviewed fields.',
       ...(networkContext.contextVersion === 1 ? [
         'Observed network registration describes one point-in-time public endpoint. It may identify an edge or shared network rather than the origin host and does not prove control, ownership, intent, or maliciousness.',
       ] : []),

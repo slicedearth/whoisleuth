@@ -106,7 +106,17 @@ async function rejected(operation: () => Promise<unknown>, pattern: RegExp): Pro
 
 export async function buildIncrementalLookupQualificationReport() {
   const eventLines = lines();
-  const normal = await qualifyLookupProgressResponse(
+  const progressiveDelivery = await qualifyLookupProgressResponse(
+    responseFromChunks(eventLines),
+    {
+      expectedFinal: FINAL,
+      timeoutMs: 1000,
+      maximumFirstEventMs: 100,
+      minimumEventSpanMs: 10,
+      now: steppedClock(5),
+    },
+  );
+  const slowConsumer = await qualifyLookupProgressResponse(
     responseFromChunks(eventLines),
     {
       expectedFinal: FINAL,
@@ -211,9 +221,12 @@ export async function buildIncrementalLookupQualificationReport() {
     /fixed-length/iu,
   );
   const checks = Object.freeze({
-    chunkedDeliveryObserved: normal.bufferingDetected === false && normal.chunks === eventLines.length,
+    chunkedDeliveryObserved: progressiveDelivery.bufferingDetected === false
+      && progressiveDelivery.chunks === eventLines.length,
     proxyBufferingDetected: buffered.bufferingDetected === true,
-    slowConsumerCompleted: normal.slowConsumerDelayMs === 1 && normal.finalEquivalent,
+    slowConsumerCompleted: slowConsumer.slowConsumerDelayMs === 1
+      && slowConsumer.bufferingDetected === null
+      && slowConsumer.finalEquivalent,
     authenticationExpiry,
     duplicateEvents,
     timeout: timeout && timeoutCancelled,

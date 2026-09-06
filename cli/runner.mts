@@ -16,7 +16,7 @@ import {
   runEvidenceCommand,
 } from './evidence-command-runner.mts';
 import EXIT_CODES from './exit-codes.mts';
-import { readCliTextInput } from './input.mts';
+import { readCliHeaderInput, readCliTextInput } from './input.mts';
 import { INLINE_CLI_COMMANDS, runInlineCommand } from './inline-command-runner.mts';
 import {
   canLaunchInteractiveCli,
@@ -138,6 +138,13 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
         ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       })
     );
+    const readHeaderInput = async (source: string | null | undefined, maximumBytes: number, label: string): Promise<string> => (
+      readCliHeaderInput(source, dependencies.stdin || process.stdin, {
+        maximumBytes,
+        label,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      })
+    );
     const readPassphraseSource = async (source: string): Promise<string> => {
       let passphraseText: string;
       try {
@@ -164,6 +171,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       writeStderr: (value: string) => write(stderr, value),
       readSingleInput,
       readInput,
+      readHeaderInput,
       readPassphraseSource,
       now: () => dependencies.now ? dependencies.now() : new Date().toISOString(),
       beginProgress,

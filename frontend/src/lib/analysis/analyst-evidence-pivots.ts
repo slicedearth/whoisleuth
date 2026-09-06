@@ -1,3 +1,5 @@
+import { canonicalPublicIpAddress } from '../../../../packages/evidence/public-address-policy.mts';
+
 export type LookupEvidencePivotInput = {
   type: unknown;
   query: unknown;
@@ -23,8 +25,6 @@ const MAX_PIVOTS = 8;
 const MAX_ASN = 4_294_967_295;
 const CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
 const DOMAIN_LABEL_RE = /^(?:xn--)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
-const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
-const IPV6_RE = /^[0-9a-f:.]+$/iu;
 const PRIVATE_ASN_RANGES = Object.freeze([
   [64_496, 64_511],
   [64_512, 65_534],
@@ -55,80 +55,12 @@ function canonicalDomain(value: unknown): string | null {
   }
 }
 
-function canonicalIpv4(value: unknown): string | null {
-  if (typeof value !== 'string' || !IPV4_RE.test(value.trim())) return null;
-  const octets = value.trim().split('.').map(Number);
-  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return null;
-  return octets.join('.');
-}
-
-function isPublicIpv4(value: string): boolean {
-  const octets = value.split('.').map(Number);
-  if (octets.length !== 4) return false;
-  const [first = 0, second = 0, third = 0] = octets;
-  if (
-    first === 0
-    || first === 10
-    || first === 127
-    || first >= 224
-    || (first === 100 && second >= 64 && second <= 127)
-    || (first === 169 && second === 254)
-    || (first === 172 && second >= 16 && second <= 31)
-    || (first === 192 && second === 168)
-    || (first === 198 && (second === 18 || second === 19))
-    || (first === 192 && second === 0 && third === 0)
-    || (first === 192 && second === 0 && third === 2)
-    || (first === 198 && second === 51 && third === 100)
-    || (first === 203 && second === 0 && third === 113)
-  ) return false;
-  return true;
-}
-
-function canonicalIpv6(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const candidate = value.trim().toLowerCase();
-  if (
-    !candidate.includes(':')
-    || candidate.includes('%')
-    || candidate.includes('.')
-    || !IPV6_RE.test(candidate)
-  ) return null;
-  try {
-    const hostname = new URL(`https://[${candidate}]/`).hostname;
-    return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : null;
-  } catch {
-    return null;
-  }
-}
-
-function isPublicIpv6(value: string): boolean {
-  const normalized = value.toLowerCase();
-  if (
-    normalized === '::'
-    || normalized === '::1'
-    || normalized.startsWith('fc')
-    || normalized.startsWith('fd')
-    || /^fe[89ab]/u.test(normalized)
-    || normalized.startsWith('ff')
-    || normalized.startsWith('::ffff:')
-    || normalized.startsWith('2001:db8:')
-  ) return false;
-  return true;
-}
-
-function canonicalPublicIp(value: unknown): string | null {
-  const ipv4 = canonicalIpv4(value);
-  if (ipv4) return isPublicIpv4(ipv4) ? ipv4 : null;
-  const ipv6 = canonicalIpv6(value);
-  return ipv6 && isPublicIpv6(ipv6) ? ipv6 : null;
-}
-
 function canonicalPublicCidr(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 96) return null;
   const parts = value.trim().split('/');
   const [addressText, prefixText] = parts;
   if (!addressText || !prefixText || parts.length !== 2 || !/^\d{1,3}$/u.test(prefixText)) return null;
-  const address = canonicalPublicIp(addressText);
+  const address = canonicalPublicIpAddress(addressText);
   const prefix = Number(prefixText);
   if (!address || !Number.isInteger(prefix)) return null;
   if (address.includes(':') ? prefix < 0 || prefix > 128 : prefix < 0 || prefix > 32) return null;
@@ -166,7 +98,7 @@ function observedNetworkResource(input: LookupEvidencePivotInput): string | null
       if (cidr) return cidr;
     }
   }
-  return canonicalPublicIp(input.observedAddress);
+  return canonicalPublicIpAddress(input.observedAddress);
 }
 
 function pivot(
@@ -248,7 +180,7 @@ export function buildAnalystEvidencePivots(input: LookupEvidencePivotInput): Ana
 
   const asn = type === 'asn' ? requestedAsn(input) : null;
   const networkResource = asn?.display
-    || (type === 'ipv4' || type === 'ipv6' ? canonicalPublicIp(input.query) : observedNetworkResource(input));
+    || (type === 'ipv4' || type === 'ipv6' ? canonicalPublicIpAddress(input.query) : observedNetworkResource(input));
   if (networkResource) {
     pivots.push(pivot(
       'ripestat-resource',

@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     CASE_DISPOSITIONS,
+    isReviewedCaseDisposition,
     CASE_OBSERVED_EFFECT_STATES,
     CASE_PIN_COMPLETENESS,
     CASE_REVIEW_REASONS,
@@ -16,6 +17,7 @@
   import { abuseRecipientKindLabel } from '$lib/analysis/abuse-recipient-resolver.ts';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import type { LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
@@ -90,7 +92,7 @@
     recordConclusion: (
       rationale: string,
       selections: readonly LookupConclusionEvidenceSelection[],
-    ) => Promise<boolean>;
+    ) => Promise<LocalMutationOutcome>;
     recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<boolean>;
     recordRecheckOutcome: (input: Readonly<{
       state: string;
@@ -126,7 +128,7 @@
   const incidentUrlDetails = $derived(parseIncidentUrlContext(currentIncidentUrl));
   const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null));
   const conclusionIncomplete = $derived(
-    caseDisposition === 'unreviewed'
+    !isReviewedCaseDisposition(caseDisposition)
       || !caseReviewReason
       || !conclusionRationale.trim()
       || !conclusionEvidence.some((item) => item.stance === 'supports'),
@@ -166,7 +168,7 @@
 
   async function submitConclusion() {
     if (conclusionIncomplete) return;
-    if (await recordConclusion(conclusionRationale, conclusionEvidence)) {
+    if (clearsLocalMutationDraft(await recordConclusion(conclusionRationale, conclusionEvidence))) {
       conclusionRationale = '';
       conclusionEvidence = [];
     }
@@ -252,8 +254,8 @@
           <form class="case-tool conclusion-tool" onsubmit={(event) => { event.preventDefault(); void submitConclusion(); }}>
             <div><strong>Record conclusion</strong><p>Bind the analyst disposition and rationale to the exact normalised facts considered. Risk remains supporting context, not the conclusion.</p></div>
             <div class="classification-fields">
-              <label class="field" for="lookup-case-disposition">Disposition<select id="lookup-case-disposition" value={caseDisposition} onchange={(event) => setCaseDisposition(event.currentTarget.value)} disabled={actionBusy}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
-              <label class="field" for="lookup-case-review-reason">Review reason<select id="lookup-case-review-reason" value={caseReviewReason} onchange={(event) => setCaseReviewReason(event.currentTarget.value)} disabled={actionBusy || caseDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+              <label class="field" for="lookup-case-disposition">Disposition<select id="lookup-case-disposition" value={caseDisposition} onchange={(event) => setCaseDisposition(event.currentTarget.value)} disabled={actionBusy}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
+              <label class="field" for="lookup-case-review-reason">Review reason<select id="lookup-case-review-reason" value={caseReviewReason} onchange={(event) => setCaseReviewReason(event.currentTarget.value)} disabled={actionBusy || !isReviewedCaseDisposition(caseDisposition)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
             </div>
             <label class="field" for="lookup-case-conclusion-rationale">Rationale<textarea id="lookup-case-conclusion-rationale" bind:value={conclusionRationale} rows="3" maxlength="2000" placeholder="Explain what the evidence supports, what remains uncertain, and why this disposition is appropriate." disabled={actionBusy}></textarea></label>
             <details class="conclusion-evidence">
@@ -286,7 +288,7 @@
           </form>
 
           <section class="case-tool monitoring-tool" aria-labelledby="lookup-case-monitoring-title">
-            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the exact hostname with the current Lookup settings.</p></div>
+            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
             {#if watchlistSourceState === 'loading'}
               <p class="field-note" role="status">Checking browser-local watchlists…</p>
             {:else if watchlistSourceState === 'unavailable'}
@@ -294,7 +296,7 @@
             {:else if linkedWatchlistNames.length}
               <p class="linked-watchlists">Linked watchlist{linkedWatchlistNames.length === 1 ? '' : 's'}: {#each linkedWatchlistNames as name, index}<a href={`/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`}>{name}</a>{index < linkedWatchlistNames.length - 1 ? ', ' : ''}{/each}</p>
             {:else}
-              <p class="field-note">This exact hostname is not in a readable browser-local watchlist.</p>
+              <p class="field-note">This observation target is not in a readable browser-local watchlist.</p>
             {/if}
             {#if record.status === 'monitoring' && watchlistSourceState === 'ready' && !linkedWatchlistNames.length}
               <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change the Case status in Monitor.</p>

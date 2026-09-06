@@ -108,6 +108,11 @@ describe('evidence topology projection', () => {
     assert.equal(normalizeEvidenceTopologyStatus('rate_limited'), 'rate_limited');
     assert.equal(normalizeEvidenceTopologyStatus('timeout'), 'error');
     assert.equal(normalizeEvidenceTopologyStatus('something-new'), 'unknown');
+    for (const status of ['error', 'skipped', 'disabled', 'rate_limited', 'unsupported', 'inconclusive']) {
+      assert.equal(normalizeEvidenceTopologyStatus(status, { complete: false }), status);
+      assert.equal(normalizeEvidenceTopologyStatus(status, { truncated: true }), status);
+    }
+    assert.equal(normalizeEvidenceTopologyStatus('unknown', { complete: false }), 'unknown');
   });
 
   test('creates a curved horizontal connector', () => {
@@ -157,6 +162,22 @@ describe('evidence topology projection', () => {
     assert.equal(nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
     assert.equal(nodes.find((node) => node.id === 'posture')?.status, 'partial');
     assert.equal(nodes.some((node) => node.id === 'security-txt'), false);
+  });
+
+  test('keeps failed and intentionally uncollected source-node states terminal', () => {
+    const nodes = buildLookupEvidenceTopologyNodes({
+      targetType: 'domain',
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      dnsEvidence: { source: 'dns', status: 'error', complete: false },
+      httpEvidence: { source: 'http', status: 'error', complete: false },
+      tlsEvidence: { source: 'tls', status: 'unsupported', complete: false },
+      pageIdentity: { source: 'html', status: 'skipped', complete: false },
+    });
+    assert.deepEqual(
+      Object.fromEntries(nodes.filter((node) => ['dns', 'http', 'tls', 'page'].includes(node.id)).map((node) => [node.id, node.status])),
+      { dns: 'error', http: 'error', tls: 'unsupported', page: 'skipped' },
+    );
+    assert.equal(nodes.find((node) => node.id === 'dns')?.detail, 'error');
   });
 
   test('omits domain-only nodes for a non-domain target with no source evidence', () => {

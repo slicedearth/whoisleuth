@@ -194,10 +194,12 @@
     </div>
     {#if comparison}
       <div class="comparison" class:incomparable={!comparison.compatible}>
-        <strong>{comparison.compatible ? `${comparison.changes.length} material field change${comparison.changes.length === 1 ? '' : 's'}` : 'Snapshots are not comparable'}</strong>
+        <strong>{comparison.compatible ? `${comparison.changes.length} field difference${comparison.changes.length === 1 ? '' : 's'} to review` : 'Snapshots are not comparable'}</strong>
+        {#if comparison.compatible && !comparison.complete}<p>One or both snapshots are incomplete. Apparent absences remain incomparable rather than proving removal.</p>{/if}
         {#if comparison.changes.length}
           <ul>{#each comparison.changes as change}<li><span>{change.state}</span><code>{change.field}</code><small>{change.before || 'Unavailable'} → {change.after || 'Unavailable'}</small></li>{/each}</ul>
-        {:else}<p>No curated field changed between these compatible snapshots.</p>{/if}
+        {:else if comparison.complete}<p>No curated field changed between these compatible complete snapshots.</p>
+        {:else}<p>No qualified difference was retained; incomplete evidence does not establish equivalence.</p>{/if}
       </div>
       {#if comparison.dependencyTransitions.length}
         <section class="dependency-transitions" aria-labelledby="dependency-transition-title">

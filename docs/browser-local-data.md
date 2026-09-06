@@ -36,19 +36,20 @@ truncation and limitations. Imported, analyst-authored, provider-reported and
 collected evidence remain distinct. Missing or unreadable storage is reported
 as unavailable; it does not become an empty collection or evidence of absence.
 
-Cases remain keyed by canonical registrable domain while schema 14 can retain
+Cases remain keyed by canonical registrable domain while schema 15 can retain
 the exact normalised submitted hostname on each new evidence snapshot and the
-observation time of a reviewed response route. Cases migrated directly from
-published v2 schema 13 or public v1 schema 12 may retain null values because
-WHOISleuth does not reconstruct historical input from weaker fields. Case
-response histories are append-only and bounded.
+observation time and explicit review deadline of a response route. Analyst
+decisions can retain confidence and its basis. Cases migrated from supported
+schemas 12, 13 or 14 may retain null or unknown values because WHOISleuth does
+not reconstruct historical input from weaker fields. Case response histories
+are append-only and bounded.
 
-The current workspace archive is version 7. It contains Case schema 14 and a
-bounded analyst review-state section. Exact workspace versions 5 and 6 remain
+The current workspace archive is version 8. It contains Case schema 15 and a
+bounded analyst review-state section. Exact workspace versions 5, 6 and 7 remain
 readable and migrate directly; version 5 adds an empty review-state section
-without inventing decisions. The Brand Profile contract similarly reads exact
-public version 6 and writes version 7. Other historical formats and future
-versions are unsupported.
+without inventing decisions. The Brand Profile contract reads exact versions 6
+and 7 and writes version 8. Other historical formats and future versions are
+unsupported.
 
 ## IndexedDB behaviour
 

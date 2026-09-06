@@ -343,12 +343,13 @@ function parseStix(
       continue;
     }
     const publisher = identities.get(text(item.created_by_ref, 200) ?? '') ?? defaultPublisher;
+    if (type === 'indicator') optionalIso(item.valid_from, 'STIX valid_from');
     candidates.push({
       externalId,
       entityType: entity.entityType,
       entityValue,
       claimType: direct ? 'observable' : 'indicator',
-      observedAt: observations.get(externalId) ?? optionalIso(item.valid_from, 'STIX valid_from'),
+      observedAt: observations.get(externalId) ?? null,
       createdAt: optionalIso(item.created, 'STIX created'),
       modifiedAt: optionalIso(item.modified, 'STIX modified'),
       publisher,
@@ -365,6 +366,7 @@ function parseStix(
     exclusions: exclusions.slice(0, MAX_EXTERNAL_INTELLIGENCE_EXCLUSIONS),
     limitations: [
       'Only bounded domain, URL, IP, ASN, certificate, and simple exact-match Indicator objects are supported.',
+      'STIX observed-data times are retained as observation times. Indicator valid_from is validity metadata and is not relabelled as an observation time.',
       'WHOISleuth imports external claims as case assertions. It does not independently collect, verify, score, enrich, or act on them.',
     ],
   };
@@ -437,10 +439,9 @@ function parseMisp(
       entityValue,
       claimType: 'attribute',
       observedAt: optionalIso(item.last_seen, 'MISP last_seen')
-        ?? optionalIso(item.first_seen, 'MISP first_seen')
-        ?? epochIso(item.timestamp),
-      createdAt: epochIso(item.timestamp),
-      modifiedAt: null,
+        ?? optionalIso(item.first_seen, 'MISP first_seen'),
+      createdAt: null,
+      modifiedAt: epochIso(item.timestamp),
       publisher,
       confidence: confidence(item.confidence),
       labels: [...new Set([...eventLabels, ...tagNames(item.Tag)])].sort().slice(0, 20),
@@ -458,6 +459,7 @@ function parseMisp(
     exclusions: exclusions.slice(0, MAX_EXTERNAL_INTELLIGENCE_EXCLUSIONS),
     limitations: [
       'Only bounded domain, hostname, URL, IP, ASN, and SHA-256 certificate-fingerprint attributes are supported.',
+      'MISP first_seen and last_seen are retained as observation metadata. Attribute timestamp is retained separately as record modification time.',
       'WHOISleuth does not preserve MISP comments, publish events, enable correlation or IDS flags, or contact another system.',
     ],
   };

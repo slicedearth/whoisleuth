@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
-import { BASE_URL } from './constants';
+import { BASE_URL } from './constants.ts';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test
@@ -624,6 +624,32 @@ test('filtering by an observed hostname finds its canonical candidate', async ({
   await page.getByRole('textbox', { name: 'Filter candidates' }).fill('login');
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['example.invalid']);
+});
+
+test('certificate issuance-group pagination exposes every retained group', async ({ page }) => {
+  const certificateGroups = Array.from({ length: 13 }, (_, index) => ({
+    certificateKey: `id:${index + 1}`,
+    domains: [`group-${index + 1}.invalid`],
+    hostnames: [`host-${index + 1}.group-${index + 1}.invalid`],
+    observedAt: '2026-06-01T00:00:00.000Z',
+    wildcardObserved: index === 12,
+  }));
+  await mockCtSearch(page, {
+    ...structuredResponse,
+    certCount: certificateGroups.length,
+    certificateGroups,
+    certificateGroupsTruncated: false,
+  });
+  await runCtSearch(page);
+
+  const groups = page.locator('.certificate-groups');
+  const pagination = groups.getByRole('navigation', { name: 'Certificate issuance group pages' });
+  await expect(groups.locator('article')).toHaveCount(12);
+  await expect(groups.getByRole('status').first()).toContainText('Showing 1–12 of 13');
+  await pagination.getByRole('button', { name: 'Next' }).click();
+  await expect(pagination).toContainText('Page 2 of 2');
+  await expect(groups.getByText('Certificate group 13', { exact: true })).toBeVisible();
+  await expect(groups.locator('article')).toHaveCount(1);
 });
 
 test('selection is keyed by canonical domain and is keyboard-accessible', async ({ page }) => {

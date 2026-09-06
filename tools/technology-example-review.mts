@@ -29,6 +29,7 @@ import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
   boundedControlFreeText as boundedText,
   canonicalControlFreeTimestamp as timestamp,
+  canonicalObservationReviewTimestamps,
 } from './maintainer-tool-helpers.mts';
 import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
@@ -326,9 +327,10 @@ function validateOptions(options: ExampleReviewOptions) {
     throw new TypeError(`Supporting environments must contain at most ${MAX_SUPPORTING_ENVIRONMENTS} immutable OCI image references.`);
   }
   const responseMetadata = reviewedResponseMetadata(options);
-  const observedAt = timestamp(options.observedAt, 'Observation time');
-  const reviewedAt = timestamp(options.reviewedAt, 'Review time');
-  if (Date.parse(observedAt) > Date.parse(reviewedAt)) throw new TypeError('Observation time must not follow review time.');
+  const { observedAt, reviewedAt } = canonicalObservationReviewTimestamps(
+    options.observedAt,
+    options.reviewedAt,
+  );
   return Object.freeze({
     id,
     expectedIds: Object.freeze(expectedIds),

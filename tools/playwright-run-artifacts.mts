@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export const PLAYWRIGHT_RUN_KIND_ENV = 'WHOISLEUTH_PLAYWRIGHT_RUN_KIND';
 export const PLAYWRIGHT_SHARD_ENV = 'WHOISLEUTH_PLAYWRIGHT_SHARD';
 
@@ -54,5 +56,21 @@ export function playwrightRunArtifacts(environment: Environment = process.env): 
     jsonResults: `playwright-results/${identity}.json`,
     htmlReport: `playwright-report/${identity}`,
     testResults: `test-results/${identity}`,
+  });
+}
+
+export function playwrightJsonResultsPath(
+  repositoryRoot: string,
+  environment: Environment = process.env,
+): string {
+  return path.resolve(repositoryRoot, playwrightRunArtifacts(environment).jsonResults);
+}
+
+export function playwrightJsonReporterEnvironment(
+  repositoryRoot: string,
+  environment: Environment = process.env,
+): Readonly<{ PLAYWRIGHT_JSON_OUTPUT_FILE: string }> {
+  return Object.freeze({
+    PLAYWRIGHT_JSON_OUTPUT_FILE: playwrightJsonResultsPath(repositoryRoot, environment),
   });
 }

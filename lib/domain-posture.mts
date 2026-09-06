@@ -114,6 +114,20 @@ function asMxRecords(records: unknown[]): MxRecord[] {
   return records as MxRecord[];
 }
 
+function completeMxRecords(records: unknown[]): MxRecord[] | null {
+  const normalized: MxRecord[] = [];
+  for (const raw of records) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const value = raw as Record<string, unknown>;
+    const exchange = typeof value.exchange === 'string' ? value.exchange.trim().toLowerCase().replace(/\.+$/u, '') : null;
+    const priority = Number(value.priority);
+    if (exchange === null || !Number.isInteger(priority) || priority < 0 || priority > 65_535) return null;
+    if (exchange && !normalizeAuditDomain(exchange)) return null;
+    normalized.push({ exchange, priority });
+  }
+  return normalized;
+}
+
 function trimTerminalDots(value: string): string {
   let end = value.length;
   while (end > 0 && value.charCodeAt(end - 1) === 46) end -= 1;
@@ -471,7 +485,22 @@ function mtaStsCheck(dnsQuery: DnsQuery, policyFetch: MtaStsPolicyFetch | null, 
     });
   }
 
-  const mxHosts = mxQuery.error ? [] : classifyMxRecords(asMxRecords(mxQuery.records)).mxHosts;
+  if (mxQuery.error) {
+    return check('mta_sts', 'MTA-STS', 'info', 'Policy is valid but MX coverage could not be evaluated', {
+      detail: mxQuery.error,
+      records,
+      remediation: 'Retry the MX lookup before concluding that the policy covers every current mail exchanger.',
+    });
+  }
+  const reviewedMx = completeMxRecords(mxQuery.records);
+  if (!reviewedMx) {
+    return check('mta_sts', 'MTA-STS', 'info', 'Policy is valid but MX coverage is incomplete', {
+      detail: 'One or more MX records were malformed or outside the bounded hostname and priority contract.',
+      records,
+      remediation: 'Retry and review the MX evidence before concluding that the policy covers every current mail exchanger.',
+    });
+  }
+  const mxHosts = classifyMxRecords(reviewedMx).mxHosts;
   const unmatched = mxHosts.filter((host) => !policy.mx.some((pattern) => matchesMtaPattern(host, pattern)));
   if (unmatched.length) {
     return check('mta_sts', 'MTA-STS', 'danger', 'Policy does not cover every published MX host', {
@@ -623,7 +652,7 @@ function defensiveMailProfileCheck(profile: MailProtectionProfile, input: Postur
   const mx = input.mx.error ? null : classifyMxRecords(asMxRecords(input.mx.records));
   const requirements = {
     nullMx: mx?.hasNullMx === true,
-    restrictiveSpf: spf?.valid === true && spf.terminalPolicy === 'fail' && spf.dnsLookupTerms === 0,
+    restrictiveSpf: spf?.valid === true && spf.terminalPolicy === 'fail' && spf.authorizingTerms.length === 0,
     rejectingDmarc: dmarc?.valid === true
       && dmarc.policy === 'reject'
       && dmarc.subdomainPolicy === 'reject'
@@ -740,7 +769,7 @@ async function fetchMtaStsPolicy(
       signal: controller.signal,
       headers: whoisleuthRequestHeaders({ Accept: 'text/plain' }),
     }, 0);
-    if (!res.ok) {
+    if (res.status !== 200) {
       // Not reading this body - release it explicitly instead of leaving an
       // unconsumed stream (and the connection it's tied to) open until
       // undici's own idle-timeout eventually notices.

@@ -299,7 +299,7 @@
         {#if intelligencePreview.truncated}<p class="preview-warning">Partial preview. An object, exclusion, or retained-claim bound was reached.</p>{/if}
         <ul>
           {#each intelligencePreview.items.slice(0, 8) as item}
-            <li><strong>{item.entityValue}</strong><span>{item.entityType} · {item.claimType}{item.confidence === null ? '' : ` · confidence ${item.confidence}`}</span><p>{item.publisher ?? intelligencePreview.publisher ?? 'Publisher not declared'}{item.markings.length ? ` · ${item.markings.join(', ')}` : ''}</p></li>
+            <li><strong>{item.entityValue}</strong><span>{item.entityType} · {item.claimType}{item.confidence === null ? '' : ` · confidence ${item.confidence}`}</span><p>{item.publisher ?? intelligencePreview.publisher ?? 'Publisher not declared'}{item.markings.length ? ` · ${item.markings.join(', ')}` : ''}</p><p>{item.observedAt ? `Observed ${item.observedAt}` : 'Observation time not declared'}{item.createdAt ? ` · created ${item.createdAt}` : ''}{item.modifiedAt ? ` · modified ${item.modifiedAt}` : ''}</p></li>
           {/each}
         </ul>
         {#if intelligencePreview.items.length > 8}<p class="preview-note">Showing 8 of {intelligencePreview.items.length} accepted claims.</p>{/if}
@@ -314,7 +314,7 @@
         {/if}
         <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={parsing || applying || !intelligencePreview.items.length}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
         {#if !cases.length}<p class="preview-warning">Open a case before importing external intelligence. This importer never creates one automatically.</p>{/if}
-        <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, timestamps, labels, markings, confidence, and normalised entity are retained on each imported assertion. Claims remain separate from collected evidence.</p>
+        <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, declared observation, creation and modification timestamps, labels, markings, confidence, and normalised entity are retained on each imported assertion. Validity and update times are not presented as observations. Claims remain separate from collected evidence.</p>
         <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={parsing || applying || !targetCaseId || !intelligencePreview.items.length}>{applying ? 'Merging…' : 'Merge assertions into case'}</button><button class="btn" type="button" onclick={() => { preview = null; targetCaseId = ''; }} disabled={parsing || applying}>Cancel</button></div>
       </section>
     {/if}

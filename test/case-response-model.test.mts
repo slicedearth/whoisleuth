@@ -21,8 +21,11 @@ import {
   MAX_CASE_ACTION_EVENTS_PER_ACTION,
   MAX_CASE_ACTION_HISTORY_BYTES_PER_CASE,
   MAX_CASE_ACTIONS,
+  MAX_CASE_ASSERTIONS,
   MAX_CASE_DECISIONS,
   MAX_CASE_EVIDENCE_PINS,
+  MAX_CASE_MANUAL_TRAIL_EVENTS,
+  MAX_CASE_SIGHTINGS,
   mergeCaseActions,
   normalizeCaseActions,
   normalizeCaseClosureHistory,
@@ -79,6 +82,22 @@ describe('case response record normalization', () => {
       evidencePinIds: [pin.id, 'missing-pin'],
     }, NOW, new Set([pin.id]));
     assert.deepEqual(requiredValue(decisions[0]).evidencePinIds, [pin.id]);
+  });
+
+  test('current decisions retain bounded confidence while older schemas migrate without inventing it', () => {
+    const current = requiredValue(normalizeCaseDecisions([{
+      summary: 'Escalate for review',
+      rationale: 'The selected evidence warrants review.',
+      confidence: 'moderate',
+      confidenceBasis: 'Two consistent retained observations.',
+      createdAt: NOW,
+    }], NOW, undefined, { sourceVersion: 15 })[0]);
+    assert.equal(current.confidence, 'moderate');
+    assert.equal(current.confidenceBasis, 'Two consistent retained observations.');
+
+    const migrated = requiredValue(normalizeCaseDecisions([current], NOW, undefined, { sourceVersion: 14 })[0]);
+    assert.equal(migrated.confidence, 'unknown');
+    assert.equal(migrated.confidenceBasis, '');
   });
 
   test('checkpoints append bounded selected facts with typed provenance metadata', () => {
@@ -297,6 +316,40 @@ describe('case response record normalization', () => {
     assert.deepEqual(migrated.contactLimitations, ['Route freshness was not retained.']);
     assert.match(migrated.history[0]?.limitations.join(' ') ?? '', /pre-v13 transition history is unavailable/iu);
     assert.deepEqual(second, first);
+  });
+
+  test('retains current route-review deadlines and narrowly migrates exact legacy platform routes', () => {
+    const current = requiredValue(normalizeCaseActions([{
+      recipient: 'Application platform reporting form',
+      type: 'platform_report',
+      contactSource: 'Official provider guidance',
+      routeObservedAt: NOW,
+      routeReviewAfter: LATER,
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 15 })[0]);
+    assert.equal(current.type, 'platform_report');
+    assert.equal(current.routeObservedAt, NOW);
+    assert.equal(current.routeReviewAfter, LATER);
+
+    const legacy = requiredValue(normalizeCaseActions([{
+      recipient: 'Application platform reporting form',
+      type: 'security_contact_report',
+      contactSource: 'Official Application platform, reviewed 2026-07-28',
+      routeObservedAt: LATER,
+      routeReviewAfter: NEXT,
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 14 })[0]);
+    assert.equal(legacy.type, 'platform_report');
+    assert.equal(legacy.routeObservedAt, '2026-07-28T00:00:00.000Z');
+    assert.equal(legacy.routeReviewAfter, null);
+
+    const unrelated = requiredValue(normalizeCaseActions([{
+      recipient: 'Security contact',
+      type: 'security_contact_report',
+      contactSource: 'Official security contact',
+      createdAt: NOW,
+    }], NOW, { sourceVersion: 14 })[0]);
+    assert.equal(unrelated.type, 'security_contact_report');
   });
 
   test('merges action histories by stable event identity and reports bounded omissions', () => {
@@ -696,6 +749,79 @@ describe('case response record normalization', () => {
       () => appendCaseAction(boundedActions, { recipient: 'one-more-owner' }, LATER),
       /at most 50 response actions.*No additional action was retained/iu,
     );
+  });
+
+  test('live authored-record admission never evicts retained Case history', () => {
+    let pins = [] as ReturnType<typeof appendCaseEvidencePin>;
+    for (let index = 0; index < MAX_CASE_EVIDENCE_PINS; index += 1) {
+      pins = appendCaseEvidencePin(pins, {
+        label: `Evidence ${index}`,
+        value: `Observed value ${index}`,
+      }, new Date(Date.parse(NOW) + index * 1_000).toISOString());
+    }
+    const firstPinId = requiredValue(pins[0]).id;
+    const referencedDecision = requiredValue(appendCaseDecision([], {
+      summary: 'Retain the original evidence reference',
+      rationale: 'The oldest retained pin remains material to this decision.',
+      evidencePinIds: [firstPinId],
+    }, LATER, new Set(pins.map((pin) => pin.id)))[0]);
+    const retainedPins = structuredClone(pins);
+    assert.throws(
+      () => appendCaseEvidencePin(pins, { label: 'One more pin', value: 'Must be rejected' }, LATER),
+      /at most 40 evidence pins.*No existing evidence was removed/iu,
+    );
+    assert.deepEqual(pins, retainedPins);
+    assert.deepEqual(referencedDecision.evidencePinIds, [firstPinId]);
+
+    let decisions = [referencedDecision];
+    for (let index = decisions.length; index < MAX_CASE_DECISIONS; index += 1) {
+      decisions = appendCaseDecision(decisions, {
+        summary: `Decision ${index}`,
+        rationale: `Retained rationale ${index}`,
+      }, new Date(Date.parse(LATER) + index * 1_000).toISOString());
+    }
+    const retainedDecisions = structuredClone(decisions);
+    assert.throws(
+      () => appendCaseDecision(decisions, { summary: 'One more', rationale: 'Must be rejected' }, NEXT),
+      /at most 30 decisions.*No existing decision was removed/iu,
+    );
+    assert.deepEqual(decisions, retainedDecisions);
+
+    let assertions = [] as ReturnType<typeof appendCaseAssertion>;
+    for (let index = 0; index < MAX_CASE_ASSERTIONS; index += 1) {
+      assertions = appendCaseAssertion(assertions, { statement: `Assertion ${index}` }, LATER);
+    }
+    const retainedAssertions = structuredClone(assertions);
+    assert.throws(
+      () => appendCaseAssertion(assertions, { statement: 'One more assertion' }, NEXT),
+      /at most 50 assertions.*No existing assertion was removed/iu,
+    );
+    assert.deepEqual(assertions, retainedAssertions);
+
+    let trail = [] as ReturnType<typeof appendCaseManualTrailEvent>;
+    for (let index = 0; index < MAX_CASE_MANUAL_TRAIL_EVENTS; index += 1) {
+      trail = appendCaseManualTrailEvent(trail, { summary: `Trail entry ${index}` }, LATER);
+    }
+    const retainedTrail = structuredClone(trail);
+    assert.throws(
+      () => appendCaseManualTrailEvent(trail, { summary: 'One more trail entry' }, NEXT),
+      /at most 80 investigation-trail entries.*No existing entry was removed/iu,
+    );
+    assert.deepEqual(trail, retainedTrail);
+
+    let sightings = [] as ReturnType<typeof appendCaseSighting>;
+    for (let index = 0; index < MAX_CASE_SIGHTINGS; index += 1) {
+      sightings = appendCaseSighting(sightings, {
+        state: 'analyst_confirmed',
+        source: `Analyst source ${index}`,
+      }, LATER);
+    }
+    const retainedSightings = structuredClone(sightings);
+    assert.throws(
+      () => appendCaseSighting(sightings, { state: 'analyst_confirmed', source: 'One more source' }, NEXT),
+      /at most 80 sightings.*No existing sighting was removed/iu,
+    );
+    assert.deepEqual(sightings, retainedSightings);
   });
 
   test('removes every control character from normalized analyst records', () => {

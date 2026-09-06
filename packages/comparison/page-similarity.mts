@@ -287,7 +287,9 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
       complete: observed.complete,
       truncated: observed.truncated,
     },
-    partial: reference.truncated || observed.truncated || components.some((item) => item.partial),
+    partial: !reference.complete || !observed.complete
+      || reference.truncated || observed.truncated
+      || components.some((item) => item.partial),
     components,
     counts,
   };

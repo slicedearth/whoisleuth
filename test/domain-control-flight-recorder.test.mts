@@ -13,6 +13,7 @@ import {
   MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES,
   MAX_FLIGHT_RECORDER_INPUT_VALUES,
   MAX_FLIGHT_RECORDER_OBSERVATIONS,
+  MAX_FLIGHT_RECORDER_VALUES,
 } from '../packages/contracts/domain-control-flight-recorder.mts';
 
 const firstAt = '2026-08-01T00:00:00.000Z';
@@ -84,6 +85,35 @@ describe('domain-control flight recorder', () => {
     assert.equal(event?.kind, 'collection_change');
     assert.deepEqual(event?.after, []);
     assert.match(event?.explanation ?? '', /not evidence/iu);
+  });
+
+  test('rejects complete observations above the unique-value boundary without hiding tail changes', () => {
+    const values = Array.from({ length: MAX_FLIGHT_RECORDER_VALUES + 1 }, (_, index) => `ns-${index}.example.test`);
+    assert.throws(() => buildDomainControlFlightRecorder({
+      schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+      version: 1,
+      observations: [observation(firstAt, [{
+        id: 'delegated_nameservers', source: 'DNS', state: 'observed', values,
+      }])],
+      approvedWindows: [],
+    }, secondAt), new RegExp(`at most ${MAX_FLIGHT_RECORDER_VALUES} unique normalized values`, 'u'));
+
+    const withinLimit = values.slice(0, MAX_FLIGHT_RECORDER_VALUES);
+    const report = buildDomainControlFlightRecorder({
+      schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
+      version: 1,
+      observations: [
+        observation(firstAt, [{
+          id: 'delegated_nameservers', source: 'DNS', state: 'observed', values: [...withinLimit, withinLimit[0]],
+        }]),
+        observation(secondAt, [{
+          id: 'delegated_nameservers', source: 'DNS', state: 'observed', values: [...withinLimit].reverse(),
+        }]),
+      ],
+      approvedWindows: [],
+    }, secondAt);
+    assert.equal(report.summary.observedChanges, 0);
+    assert.equal(report.events[0]?.after.length, MAX_FLIGHT_RECORDER_VALUES);
   });
 
   test('rejects unsupported fields and non-canonical input shape', () => {

@@ -196,16 +196,14 @@ function hostnameList(value: readonly unknown[]): string[] {
   return [...new Set(value
     .map(domain)
     .filter((item): item is string => item !== null))]
-    .sort()
-    .slice(0, MAX_DOMAIN_CONTROL_RECORDS);
+    .sort();
 }
 
 function textList(value: readonly unknown[], maximum = 300): string[] {
   return [...new Set(value
     .map((item) => boundedText(item, maximum)?.toLowerCase() ?? null)
     .filter((item): item is string => item !== null))]
-    .sort()
-    .slice(0, MAX_DOMAIN_CONTROL_RECORDS);
+    .sort();
 }
 
 function spkiFingerprint(value: unknown): string | null {
@@ -273,21 +271,20 @@ function boundedDataArray(value: unknown, maximum: number): readonly unknown[] |
 function fieldValues(field: DomainControlField, value: readonly unknown[]): string[] | null {
   if (field === 'nameservers') {
     const normalized = value.map(domain);
-    return normalized.some((item) => item === null)
-      ? null
-      : hostnameList(normalized);
+    if (normalized.some((item) => item === null)) return null;
+    const values = hostnameList(normalized);
+    return values.length <= MAX_DOMAIN_CONTROL_RECORDS ? values : null;
   }
   if (field === 'mx' || field === 'caa' || field === 'ds') {
     const normalized = value.flatMap((item) => canonicalDomainControlRecordList([item], field));
-    return normalized.length === value.length
-      ? [...new Set(normalized)].sort().slice(0, MAX_DOMAIN_CONTROL_RECORDS)
-      : null;
+    const values = [...new Set(normalized)].sort();
+    return normalized.length === value.length && values.length <= MAX_DOMAIN_CONTROL_RECORDS ? values : null;
   }
   if (field === 'tlsSpkiSha256') {
     const normalized = value.map(spkiFingerprint);
-    return normalized.some((item) => item === null)
-      ? null
-      : [...new Set(normalized as string[])].sort().slice(0, MAX_DOMAIN_CONTROL_RECORDS);
+    if (normalized.some((item) => item === null)) return null;
+    const values = [...new Set(normalized as string[])].sort();
+    return values.length <= MAX_DOMAIN_CONTROL_RECORDS ? values : null;
   }
   if (field === 'registrarLock') {
     return value.every((item) => item === 'required' || item === 'not_required')
@@ -295,9 +292,9 @@ function fieldValues(field: DomainControlField, value: readonly unknown[]): stri
       : null;
   }
   const normalized = value.map((item) => boundedText(item, MAX_DOMAIN_CONTROL_REVIEW_TEXT_LENGTH)?.toLowerCase() ?? null);
-  return normalized.some((item) => item === null)
-    ? null
-    : textList(normalized, MAX_DOMAIN_CONTROL_REVIEW_TEXT_LENGTH);
+  if (normalized.some((item) => item === null)) return null;
+  const values = textList(normalized, MAX_DOMAIN_CONTROL_REVIEW_TEXT_LENGTH);
+  return values.length <= MAX_DOMAIN_CONTROL_RECORDS ? values : null;
 }
 
 function normalizeObservation(value: unknown): DomainControlObservation | null {

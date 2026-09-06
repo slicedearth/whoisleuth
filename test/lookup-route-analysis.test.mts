@@ -158,7 +158,7 @@ describe('Lookup route analysis', () => {
     )));
   });
 
-  test('does not infer Case hostname context from registrable or availability domains', () => {
+  test('does not invent submitted-hostname context when the response omits it', () => {
     const { inputHostname: _inputHostname, ...withoutInputHostname } = response();
     const result = withoutInputHostname as LookupHttpResponse;
     const analysis = buildLookupRouteAnalysis({
@@ -190,6 +190,32 @@ describe('Lookup route analysis', () => {
     assert.deepEqual(analysis.registrarPublicationComparison.fields, []);
     assert.equal(analysis.lookupEvidenceDepth, 'deep');
     assert.equal(analysis.checkpointFacts.length, 0);
+  });
+
+  test('does not promote failed or unsupported TLS source envelopes to an observed endpoint', () => {
+    for (const status of ['error', 'unsupported']) {
+      const result = response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+          dns: { source: 'dns', status: 'error', complete: false },
+          http: { source: 'http', status: 'error', complete: false, response: {} },
+          tls: { source: 'tls', status, complete: false, certificate: null },
+          pageIdentity: { source: 'html', status: 'skipped', complete: false },
+        },
+      });
+      const analysis = buildLookupRouteAnalysis({
+        result,
+        lookupView: createLookupViewModel(result),
+        profile: null,
+        task: 'general',
+        completedLookupDepth: 'deep',
+      });
+      assert.equal(analysis.activationContext.web.state, 'inconclusive');
+      assert.equal(analysis.activationContext.web.label, 'Web state inconclusive');
+    }
   });
 
   test('keeps profile-derived evidence inconclusive when browser-local profile context is unavailable', () => {

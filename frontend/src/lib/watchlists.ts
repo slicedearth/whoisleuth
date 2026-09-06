@@ -57,6 +57,20 @@ function boundedWatchlists(all: Watchlists): Watchlists {
   return JSON.parse(serializeWatchlistStore(all)).watchlists as Watchlists;
 }
 
+export function resolveWatchlistMutationTarget(
+  current: Watchlists,
+  requestedName: string,
+): { name: string; previous: WatchlistEntry | null } {
+  const existingName = Object.keys(current).find(
+    (candidate) => candidate.toLowerCase() === requestedName.toLowerCase(),
+  );
+  const previous = existingName ? current[existingName] ?? null : null;
+  if (!previous && Object.keys(current).length >= MAX_WATCHLISTS) {
+    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
+  }
+  return { name: existingName || requestedName, previous };
+}
+
 export async function writeWatchlists(all: Watchlists): Promise<void> {
   await updateBrowserLocalData('watchlists', () => ({ document: boundedWatchlists(all), result: undefined }));
 }
@@ -96,8 +110,9 @@ export async function saveWatchlist(name:string, results:WatchlistComparableReco
   if(results.length>MAX_WATCHLIST_DOMAINS)throw new Error(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} domains.`);
   return updateBrowserLocalData('watchlists', (current) => {
     const all = { ...current } as Watchlists;
-    const {entry,changes}=appendWatchlistScan(all[normalizedName]||null,results,{mode});
-    Object.defineProperty(all,normalizedName,{value:entry,writable:true,enumerable:true,configurable:true});
+    const target=resolveWatchlistMutationTarget(all,normalizedName);
+    const {entry,changes}=appendWatchlistScan(target.previous,results,{mode});
+    Object.defineProperty(all,target.name,{value:entry,writable:true,enumerable:true,configurable:true});
     return { document: boundedWatchlists(all), result: changes as WatchlistChange[] };
   });
 }
@@ -113,12 +128,9 @@ export async function saveSingleDomainWatchlist(
   if (!domain) throw new Error('The Lookup target is not a valid watchlist domain.');
   return updateBrowserLocalData('watchlists', (current) => {
     const all = { ...current } as Watchlists;
-    const existingName = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
-    const effectiveName = existingName || normalizedName;
-    const previous = existingName ? all[existingName] || null : null;
-    if (!previous && Object.keys(all).length >= MAX_WATCHLISTS) {
-      throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
-    }
+    const target = resolveWatchlistMutationTarget(all, normalizedName);
+    const effectiveName = target.name;
+    const previous = target.previous;
     if (previous && (previous.results.length !== 1 || previous.results[0]?.domain !== domain)) {
       throw new Error('That name belongs to a different or multi-domain watchlist. Choose another name so unrelated domains are not presented as rechecked.');
     }

@@ -9,6 +9,7 @@ import {
   type CaseRelationshipGraphRelationshipNode,
 } from './case-relationship-graph.mts';
 import type { CaseRelationshipSummary } from './case-relationships.mts';
+import { INVESTIGATION_SCHEMA_VERSION_FIELDS } from '../investigation/investigation-projection.mts';
 import {
   MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
@@ -159,12 +160,10 @@ function strings(values: unknown, maximumItems = 20, maximumLength = 300): strin
 }
 
 function schemaVersions(value: unknown): Record<string, number> {
+  const source = record(value);
   const output: Record<string, number> = {};
-  for (const [key, item] of Object.entries(record(value))
-    .filter(([name]) => /^[a-z][a-zA-Z0-9]{0,39}Version$/.test(name))
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(0, 20)) {
-    const normalized = version(item);
+  for (const key of INVESTIGATION_SCHEMA_VERSION_FIELDS) {
+    const normalized = version(source[key]);
     if (normalized !== null) output[key] = normalized;
   }
   return output;

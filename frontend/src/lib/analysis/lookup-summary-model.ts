@@ -109,6 +109,18 @@ function textOrNull(value: unknown): string | null {
   return valueText || null;
 }
 
+function selectedFieldSource(
+  selected: unknown,
+  rdapCandidates: readonly unknown[],
+  whoisCandidates: readonly unknown[],
+  fallback: unknown,
+): unknown {
+  const selectedKey = display(selected).toLowerCase();
+  if (selectedKey !== '—' && rdapCandidates.some((candidate) => display(candidate).toLowerCase() === selectedKey)) return 'rdap';
+  if (selectedKey !== '—' && whoisCandidates.some((candidate) => display(candidate).toLowerCase() === selectedKey)) return 'whois';
+  return fallback;
+}
+
 function records(value: unknown): JsonRecord[] {
   return Array.isArray(value)
     ? value.slice(0, 24).map(record).filter((item) => Object.keys(item).length > 0)
@@ -437,6 +449,27 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
   const whoisParsed = record(input.whoisParsed);
   const diagnostics = record(input.diagnostics);
   const source = availability.source;
+  const rdapLifecycle = record(rdapParsed.lifecycle);
+  const whoisLifecycle = record(whoisParsed.lifecycle);
+  const rdapEvents = records(rdapParsed.events);
+  const rdapEventDate = (action: string) => rdapEvents.find((event) => boundedText(event.action, 80) === action)?.date;
+  const registrarValue = availability.registrar || rdapParsed.registrar || whoisParsed.registrar;
+  const registrarSource = selectedFieldSource(registrarValue, [rdapParsed.registrar], [whoisParsed.registrar], source);
+  const createdSource = selectedFieldSource(input.createdDate, [
+    rdapLifecycle.createdDateIso,
+    rdapLifecycle.createdDate,
+    rdapEventDate('registration'),
+  ], [whoisParsed.createdDateIso, whoisLifecycle.createdDateIso, whoisParsed.createdDate], source);
+  const expiresSource = selectedFieldSource(input.expiresDate, [
+    rdapLifecycle.expiryDateIso,
+    rdapLifecycle.expiryDate,
+    rdapEventDate('expiration'),
+  ], [whoisParsed.expiryDateIso, whoisLifecycle.expiryDateIso, whoisParsed.expiryDate], source);
+  const updatedSource = selectedFieldSource(input.updatedDate, [
+    rdapLifecycle.updatedDateIso,
+    rdapLifecycle.updatedDate,
+    rdapEventDate('last changed'),
+  ], [whoisParsed.updatedDateIso, whoisLifecycle.updatedDateIso, whoisParsed.updatedDate], source);
   const limitations = registryLimitations(availability, rdapParsed, whoisParsed);
   const registryComparison = input.registryComparison;
   const registrarPublicationComparison = input.registrarPublicationComparison;
@@ -465,10 +498,10 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
       },
       {
         label: 'Registrar',
-        value: display(availability.registrar || rdapParsed.registrar || whoisParsed.registrar),
+        value: display(registrarValue),
         detail: display(whoisParsed.registrarUrl),
         provenance: factProvenance({
-          source,
+          source: registrarSource,
           diagnostics,
           observedAt: input.resultObservedAt,
           fields: ['RDAP registrar entity', 'WHOIS Registrar', 'registrar RDAP registrar entity'],
@@ -488,7 +521,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           typeof availability.domainAgeDays === 'number' ? availability.domainAgeDays : null,
         ) || 'Registry lifecycle date',
         provenance: factProvenance({
-          source,
+          source: createdSource,
           diagnostics,
           observedAt: input.resultObservedAt,
           fields: ['RDAP registration event or lifecycle', 'WHOIS creation-date family'],
@@ -505,7 +538,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           typeof availability.expiresInDays === 'number' ? availability.expiresInDays : null,
         ) || 'Registry lifecycle date',
         provenance: factProvenance({
-          source,
+          source: expiresSource,
           diagnostics,
           observedAt: input.resultObservedAt,
           fields: ['RDAP expiration event or lifecycle', 'WHOIS expiry-date family'],
@@ -520,7 +553,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
         value: formatDate(input.updatedDate),
         detail: 'Most recent registry change',
         provenance: factProvenance({
-          source,
+          source: updatedSource,
           diagnostics,
           observedAt: input.resultObservedAt,
           fields: ['RDAP last-changed event or lifecycle', 'WHOIS updated-date family'],

@@ -11,7 +11,7 @@ import {
 } from './verification-timing-profile.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 
-const MAX_RESULTS_BYTES = 64 * 1024 * 1024;
+export const MAX_PLAYWRIGHT_RESULTS_BYTES = 64 * 1024 * 1024;
 const MAX_TEST_RESULTS = 4_000;
 const MAX_TREE_DEPTH = 32;
 const MAX_TEXT_LENGTH = 180;
@@ -214,6 +214,10 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
   const lines = [
     `## Playwright result summary: ${markdown(summary.label)}`,
     '',
+    ...(summary.label === 'performance' ? [
+      'Timing measurements are observational. Passing this lane does not certify a universal response-time target. Individual samples and execution context are retained in JSON attachments.',
+      '',
+    ] : []),
     '| Result | Count |',
     '| --- | ---: |',
     `| Passed | ${summary.passed} |`,
@@ -249,7 +253,7 @@ async function main(): Promise<void> {
   let output: string;
   try {
     const source = await readBoundedRegularTextFile(resultPath, {
-      maximumBytes: MAX_RESULTS_BYTES,
+      maximumBytes: MAX_PLAYWRIGHT_RESULTS_BYTES,
       minimumBytes: 1,
       label: 'Playwright result data',
       // The path is selected by a maintainer or CI workflow. Preserve support

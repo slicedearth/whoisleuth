@@ -14,5 +14,6 @@ if (!Number.isSafeInteger(parsedPort) || parsedPort < 1024 || parsedPort > 65_53
 
 export const PORT = parsedPort;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
+export const ALLOWED_ORIGIN = new URL(BASE_URL).origin;
 export const TEST_SITE_PASSWORD = 'e2e-not-a-real-secret';
 export const TEST_SESSION_SECRET = 'e2e-not-a-real-session-signing-secret';

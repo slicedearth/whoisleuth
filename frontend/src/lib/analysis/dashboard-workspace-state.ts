@@ -1,4 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
+import { caseStatusIsClosed } from './case-record-decisions.ts';
 import type { AnalystReviewInboxItem } from './analyst-review-inbox.ts';
 import type {
   AnalystReviewLifecycle,
@@ -120,7 +121,7 @@ export function buildDashboardAttentionSummary(input: Readonly<{
     changedSinceReview: all.filter((item) => item.lifecycle.invalidated || item.lifecycle.recurred).length,
     expired: all.filter((item) => item.lifecycle.expired).length,
     dueFollowUps: all.filter((item) => item.lifecycle.reviewDue || (item.dueAt !== null && Date.parse(item.dueAt) <= nowMs)).length,
-    openCases: input.cases.filter((record) => record.status !== 'resolved').length,
+    openCases: input.cases.filter((record) => !caseStatusIsClosed(record.status)).length,
     watchlists: Math.max(0, Math.trunc(input.watchlistCount)),
     truncated: all.length > 20,
   };

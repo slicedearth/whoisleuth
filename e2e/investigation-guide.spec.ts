@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView } from './helpers';
-import { BASE_URL } from './constants';
+import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 

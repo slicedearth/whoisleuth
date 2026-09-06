@@ -404,25 +404,6 @@ describe('schema lifecycle repository closure', () => {
       /exported const declaration/u,
     );
 
-    assert.throws(
-      () => discoverSchemaLifecycleSourceBindings([
-        LIFECYCLE_MODULE,
-        familySource(),
-        registrySource(),
-        Object.freeze({ file: 'lib/hook.mts', source: 'export function run() {}\n' }),
-        Object.freeze({ file: 'lib/wrong.mts', source: 'export function run() {}\n' }),
-        Object.freeze({
-          file: 'tools/schema-lifecycle-repository.mts',
-          source: `
-            import * as hookModule from '../lib/hook.mts';
-            export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
-              'lib/wrong.mts': hookModule,
-            } as const);
-          `,
-        }),
-      ]),
-      /path does not match its static import/u,
-    );
   });
 
   test('copies a bounded ordinary source list without invoking accessors', () => {
@@ -562,6 +543,12 @@ describe('schema lifecycle repository closure', () => {
     const discovery = await discoverSchemaSources();
     const snapshot = await prepareSchemaLifecycleRepositorySnapshot(SCHEMA_LIFECYCLE_REGISTRY, discovery);
     assert.doesNotThrow(() => validatePreparedSchemaLifecycleRepository(SCHEMA_LIFECYCLE_REGISTRY, snapshot));
+    assert.deepEqual(
+      [...snapshot.hookModules.keys()].sort(),
+      [...new Set(SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => (
+        'metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []
+      )))].sort(),
+    );
 
     const missingFixture = cloneRegistry();
     firstFixture(missingFixture).path = 'test/fixtures/missing-schema-lifecycle-fixture.json';
@@ -588,7 +575,7 @@ describe('schema lifecycle repository closure', () => {
     firstHook(missingModule).module = 'lib/missing-lifecycle-hook.mts';
     assert.throws(
       () => validatePreparedSchemaLifecycleRepository(missingModule as unknown as SchemaLifecycleRegistry, snapshot),
-      /hook module is not statically bound/u,
+      /hook module was not loaded from the canonical registry/u,
     );
 
     const missingExport = cloneRegistry();

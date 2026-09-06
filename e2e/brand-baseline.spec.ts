@@ -138,6 +138,33 @@ test('rapid repeated Brand Profile save persists only one record', async ({ page
   expect(snapshot.records).toHaveLength(1);
 });
 
+test('official channels and rights references remain editable and browser-local', async ({ page }) => {
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  await page.getByRole('button', { name: 'Add channel' }).click();
+  await page.getByLabel('Official channel 1 platform').selectOption('instagram');
+  await page.getByLabel('Official channel 1 exact public URL').fill('https://social.example/example/');
+  await page.getByLabel('Official channel 1 public handle').fill('@example');
+  await page.getByLabel('Official channel 1 last reviewed').fill('2026-09-01');
+  await page.getByRole('button', { name: 'Add reference' }).click();
+  await page.getByLabel('Rights reference 1 owner').fill('Example Rights Holder');
+  await page.getByLabel('Rights reference 1 identifier').fill('TM-123');
+  await page.getByLabel('Rights reference 1 jurisdiction').fill('AU');
+  await page.getByLabel('Rights reference 1 official reference URL').fill('https://register.example/record/123');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Example Brand"');
+
+  const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const stored = requiredValue(snapshot.records[0], 'The saved Brand Profile is missing.').value;
+  expect(stored.officialChannels).toEqual([expect.objectContaining({ platform: 'instagram', url: 'https://social.example/example/', handle: '@example' })]);
+  expect(stored.rightsReferences).toEqual([expect.objectContaining({ kind: 'trademark', owner: 'Example Rights Holder', identifier: 'TM-123', jurisdiction: 'AU' })]);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByLabel('Official channel 1 exact public URL')).toHaveValue('https://social.example/example/');
+  await expect(page.getByLabel('Rights reference 1 identifier')).toHaveValue('TM-123');
+});
+
 test('the active Brand Profile has a separate maintainable allowlist', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, {

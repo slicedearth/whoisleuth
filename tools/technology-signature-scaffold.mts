@@ -6,17 +6,22 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  TECHNOLOGY_CATEGORIES,
+  TECHNOLOGY_EVIDENCE_SOURCES,
+  type TechnologyCategory,
+  type TechnologyEvidenceSource as CatalogueEvidenceSource,
+} from '../lib/website-technology.mts';
 
 type WritableLike = { write(value: string): unknown };
-type TechnologyCategory =
-  | 'content management'
-  | 'commerce'
-  | 'site builder'
-  | 'web framework'
-  | 'static site generator'
-  | 'web server'
-  | 'delivery platform';
-type TechnologyEvidenceSource = 'generator' | 'html' | 'resource' | 'server';
+const TECHNOLOGY_SCAFFOLD_SOURCE_MAP = Object.freeze({
+  generator: 'generator metadata',
+  html: 'static HTML',
+  resource: 'resource origin',
+  server: 'HTTP server header',
+  'response-header': 'passive response header',
+} satisfies Readonly<Record<string, CatalogueEvidenceSource>>);
+type TechnologyEvidenceSource = keyof typeof TECHNOLOGY_SCAFFOLD_SOURCE_MAP;
 type ScaffoldArguments = Readonly<{
   id: string;
   name: string;
@@ -30,16 +35,11 @@ type ScaffoldMainOptions = Readonly<{
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
-const CATEGORIES = new Set<TechnologyCategory>([
-  'content management',
-  'commerce',
-  'site builder',
-  'web framework',
-  'static site generator',
-  'web server',
-  'delivery platform',
-]);
-const SOURCES = new Set<TechnologyEvidenceSource>(['generator', 'html', 'resource', 'server']);
+const CATEGORIES = new Set<TechnologyCategory>(TECHNOLOGY_CATEGORIES);
+const SOURCES = new Set<TechnologyEvidenceSource>(Object.keys(TECHNOLOGY_SCAFFOLD_SOURCE_MAP) as TechnologyEvidenceSource[]);
+if (new Set(Object.values(TECHNOLOGY_SCAFFOLD_SOURCE_MAP)).size !== TECHNOLOGY_EVIDENCE_SOURCES.length) {
+  throw new TypeError('Technology scaffold evidence sources must cover the canonical catalogue vocabulary.');
+}
 
 function optionValue(args: readonly string[], name: string): string {
   const prefix = `${name}=`;
@@ -79,7 +79,7 @@ export function parseTechnologySignatureScaffoldArguments(
   return Object.freeze({ id, name, category, source });
 }
 
-function evidenceTemplate(source: TechnologyEvidenceSource): {
+export function technologySignatureScaffoldTemplate(source: TechnologyEvidenceSource): {
   evidence: string;
   positiveInput: string;
   benignInput: string;
@@ -88,7 +88,7 @@ function evidenceTemplate(source: TechnologyEvidenceSource): {
     case 'generator':
       return {
         evidence: "generatorEvidence(/^fixture-product(?:\\s|$)/i, 'Generator metadata identifies the product.')",
-        positiveInput: "{ generator: 'Fixture Product 1.0' }",
+        positiveInput: "{ generator: 'Fixture-Product 1.0' }",
         benignInput: "{ generator: 'Unrelated Fixture 1.0' }",
       };
     case 'html':
@@ -109,11 +109,17 @@ function evidenceTemplate(source: TechnologyEvidenceSource): {
         positiveInput: "{ httpServer: 'Fixture-Server/1.0' }",
         benignInput: "{ httpServer: 'Example-Server/1.0' }",
       };
+    case 'response-header':
+      return {
+        evidence: "responseHeaderEvidence('x-powered-by', /^fixture-product(?:\\s|$|\\/)/i, 'A passive response header identifies the product.')",
+        positiveInput: "{ responseHeaders: { 'x-powered-by': 'Fixture-Product/1.0' } }",
+        benignInput: "{ responseHeaders: { 'x-powered-by': 'Unrelated Fixture/1.0' } }",
+      };
   }
 }
 
 export function buildTechnologySignatureScaffold(input: ScaffoldArguments): string {
-  const template = evidenceTemplate(input.source);
+  const template = technologySignatureScaffoldTemplate(input.source);
   return [
     '// Synthetic authoring scaffold. Replace fixture markers with a narrowly',
     '// documented signature; never paste live page data, credentials, contacts,',
@@ -131,7 +137,7 @@ export function buildTechnologySignatureScaffold(input: ScaffoldArguments): stri
     '// fixtures/technology-signature-fixtures.mts: mandatory benign non-match',
     'negative(',
     `  'negative-${input.id}-ordinary-reference',`,
-    `  '${input.name} named without an implementation marker',`,
+    `  ${JSON.stringify(`${input.name} named without an implementation marker`)},`,
     `  ${template.benignInput},`,
     `  ['${input.id}'],`,
     '),',
@@ -172,3 +178,5 @@ export type {
   TechnologyCategory,
   TechnologyEvidenceSource,
 };
+
+export { TECHNOLOGY_SCAFFOLD_SOURCE_MAP };

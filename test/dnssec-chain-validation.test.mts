@@ -7,6 +7,7 @@ import { describe, test } from 'node:test';
 import {
   DNSSEC_TRUST_ANCHOR_SCHEMA,
   DNS_TYPE_A,
+  DNS_TYPE_CNAME,
   DNS_TYPE_DNSKEY,
   DNS_TYPE_DS,
   DNS_TYPE_NS,
@@ -14,11 +15,14 @@ import {
   DNS_TYPE_NSEC3,
   DNS_TYPE_RRSIG,
   DNS_TYPE_TLSA,
+  DnssecQuerySession,
   buildDnssecQuery,
+  collectValidatedRrset,
   dnskeyTag,
   parseDnssecResponse,
   signedRrsetData,
   validateDnssecChain,
+  validateDnssecChainWithContext,
   verifyRrset,
   type DnsWireRecord,
   type DnsWireResponse,
@@ -199,6 +203,7 @@ function secureFixture(
   ];
   let index = 0;
   return {
+    child,
     anchor: {
       schema: DNSSEC_TRUST_ANCHOR_SCHEMA,
       version: 1,
@@ -411,6 +416,47 @@ describe('isolated cryptographic DNSSEC validation', () => {
     assert.equal(report.delegations.at(-1)?.state, 'insecure');
     assert.equal(report.completeness, 'complete');
     assert.equal(report.transport.queryCount, 2);
+  });
+
+  test('does not accept an authenticated alias owner as NODATA for another type', async () => {
+    const fixture = secureFixture();
+    const context = await validateDnssecChainWithContext({
+      ownedOrAuthorized: true,
+      target: 'example.test',
+      resolver: RESOLVER,
+      trustAnchor: fixture.anchor,
+      observedAt: OBSERVED_AT,
+      sessionOptions: { exchange: fixture.exchange, now: () => 0 },
+    });
+    assert.equal(context.report.state, 'secure');
+
+    const owner = '_25._tcp.mail.example.test';
+    const nsecRdata = Buffer.concat([wireName('next.example.test'), Buffer.from([0, 1, 0x04])]);
+    const nsec = record(owner, DNS_TYPE_NSEC, nsecRdata, {
+      kind: 'NSEC',
+      nextName: 'next.example.test',
+      types: new Set([DNS_TYPE_CNAME]),
+    }, 'authority');
+    const signature = signatureRecord(
+      owner,
+      DNS_TYPE_NSEC,
+      'example.test',
+      fixture.child.record,
+      fixture.child.signingKey,
+      [nsec],
+      false,
+      'authority',
+    );
+    const session = new DnssecQuerySession({
+      resolver: { address: RESOLVER, port: 53, family: 4 },
+      now: () => 0,
+      transactionId: () => 0x3210,
+      exchange: async (query) => response(query, owner, DNS_TYPE_TLSA, [], [nsec, signature]),
+    });
+    const result = await collectValidatedRrset(session, context, owner, DNS_TYPE_TLSA, OBSERVED_AT);
+    assert.equal(result.records.length, 0);
+    assert.equal(result.verification.state, 'unsupported');
+    assert.match(result.verification.detail, /alias.*validated alias walk/iu);
   });
 
   test('continues past an authenticated non-delegation without trusting a separate NS answer', async () => {

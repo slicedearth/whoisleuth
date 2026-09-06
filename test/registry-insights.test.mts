@@ -131,4 +131,30 @@ describe('registry insight interpretation', () => {
     assert.equal(result.publications[0]?.state, 'unavailable');
     assert.equal(result.publications[1]?.state, 'unavailable');
   });
+
+  test('does not invent registration or unlocked states without qualifying evidence', () => {
+    const unavailable = buildRegistryInsights({
+      rdapStatus: 'error',
+      rdapParsed: null,
+      whoisStatus: 'skipped',
+      whoisParsed: null,
+    });
+    assert.equal(unavailable.lifecycle.stage, 'unknown');
+    assert.equal(unavailable.lifecycle.label, 'Lifecycle unavailable');
+    assert.equal(unavailable.lifecycle.redemption, null);
+    assert.equal(unavailable.lifecycle.pendingDelete, null);
+    assert.equal(unavailable.lifecycle.hold.client, null);
+    assert.equal(unavailable.lifecycle.locks.client, null);
+    assert.equal(unavailable.lifecycle.locks.server, null);
+
+    const partial = buildRegistryInsights({
+      rdapStatus: 'partial',
+      rdapParsed: { statuses: ['pendingTransfer'], serverTruncated: true },
+      whoisStatus: 'error',
+    });
+    assert.equal(partial.lifecycle.stage, 'pending_transfer');
+    assert.equal(partial.lifecycle.pendingTransfer, true);
+    assert.equal(partial.lifecycle.pendingDelete, null);
+    assert.equal(partial.lifecycle.locks.client, null);
+  });
 });

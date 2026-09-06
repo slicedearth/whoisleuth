@@ -409,7 +409,7 @@ function processingClassesForBoundary(boundary: Readonly<{
 function deliberatelyNotSent(boundary: Readonly<{
   networkMode: string;
   credentialModel: string;
-}>): readonly string[] {
+}>, capabilityFamilyId: CapabilityId): readonly string[] {
   if (boundary.networkMode === 'none') {
     return Object.freeze([
       'no_network_request',
@@ -424,7 +424,7 @@ function deliberatelyNotSent(boundary: Readonly<{
     'unselected_local_files',
     'cookies_and_session_data',
     'unrelated_evidence_values',
-    'complete_query_bearing_urls',
+    ...(capabilityFamilyId === 'rendered_web_capture' ? [] : ['complete_query_bearing_urls']),
     ...(boundary.credentialModel === 'deployment_optional' ? [] : ['credentials']),
   ]);
 }
@@ -456,6 +456,7 @@ function normalisedOutcomeProjection(outcomes: readonly string[]): PrivacyNormal
 
 function boundaryFields(
   boundary: CapabilityDefinition | CliOperationDefinition | CliExecutionVariant,
+  capabilityFamilyId: CapabilityId,
   returnedDataCategories: readonly string[],
   privacyLimitations: readonly string[],
 ): PrivacyBoundaryFields {
@@ -465,7 +466,7 @@ function boundaryFields(
     networkMode: boundary.networkMode,
     authorisation: boundary.authorisation,
     dataSent: boundary.disclosedData,
-    dataDeliberatelyNotSent: deliberatelyNotSent(boundary),
+    dataDeliberatelyNotSent: deliberatelyNotSent(boundary, capabilityFamilyId),
     recipientClasses: boundary.recipients,
     returnedDataCategories,
     processingClasses: processingClassesForBoundary(boundary),
@@ -559,7 +560,7 @@ function buildUncheckedPrivacyDataFlowCatalogue(
       title: capability.title,
       requestPurpose: detail.requestPurpose,
       job: capability.job,
-      ...boundaryFields(capability, detail.returnedDataCategories, capability.privacyLimitations),
+      ...boundaryFields(capability, capability.id, detail.returnedDataCategories, capability.privacyLimitations),
     };
   });
 
@@ -582,6 +583,7 @@ function buildUncheckedPrivacyDataFlowCatalogue(
       requestPurpose: `${source.requestPurpose} Variant: ${variant.id.replaceAll('_', ' ')}.`,
       ...boundaryFields(
         variant,
+        operation.capabilityFamilyId,
         responseCategories(variant.responseBudget, operation.capabilityFamilyId),
         operation.privacyLimitations,
       ),
@@ -599,6 +601,7 @@ function buildUncheckedPrivacyDataFlowCatalogue(
       collectionMode: operation.collectionMode,
       ...boundaryFields(
         operation,
+        operation.capabilityFamilyId,
         responseCategories(operation.responseBudget, operation.capabilityFamilyId),
         unique([source.privacyBoundary, ...operation.privacyLimitations]),
       ),
@@ -1426,8 +1429,8 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
   fixtures: [{
     id: 'privacy-data-flow-catalogue-v1',
     path: 'docs/privacy-data-flow-catalogue.json',
-    bytes: 486_646,
-    sha256: '0ad59be21bcf48b22c07b526c0c1bcf77ea44e82d89d9d1c015522b92c0951a8',
+    bytes: 489_551,
+    sha256: '733da04dab11f34f3343619bc611755c0e0b4fafbabc1a5a5c0a4ec503b5e360',
     contentDigestSha256: null,
     schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
     version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,

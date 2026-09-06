@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { BASE_URL } from './constants';
+import { BASE_URL } from './constants.ts';
 import { ALLOWED_ORIGIN, installNetworkGuard, isAllowedRequestOrigin } from './fixtures';
 
 // Exercises the predicate every spec's automatic network guard

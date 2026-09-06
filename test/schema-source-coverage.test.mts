@@ -17,6 +17,7 @@ import {
   SCHEMA_SOURCE_ROOTS,
   validateSchemaSourceCoverage,
 } from '../tools/schema-source-coverage.mts';
+import { discoverSchemaIdentifiersInSource as discoverSchemaIdentifiersInParser } from '../tools/schema-source-parsers.mts';
 import type { SchemaCompatibilityEntry } from '../packages/contracts/schema-compatibility.mts';
 
 const NOW = '2026-08-16T00:00:00.000Z';
@@ -73,6 +74,10 @@ function fixtureEntry(owner = 'lib/owner.mts'): SchemaCompatibilityEntry {
 }
 
 describe('schema source coverage', () => {
+  test('keeps the repository closure facade bound to the pure source parser', () => {
+    assert.equal(discoverSchemaIdentifiersInSource, discoverSchemaIdentifiersInParser);
+  });
+
   test('treats the reviewed lifecycle contract as metadata rather than a schema emitter', () => {
     const result = discoverSchemaIdentifiersInSource(`
       export function readLifecycle(value: { schema: string }) {
@@ -242,6 +247,33 @@ describe('schema source coverage', () => {
       ['whoisleuth.com', 'whoisleuth.fixture'],
     );
     assert.deepEqual(result.definitions, []);
+  });
+
+  test('reports source lines for JSON keys, values, writers, and malformed identities', () => {
+    const result = discoverSchemaIdentifiersInSource([
+      '{',
+      '  "whoisleuth.key-contract": true,',
+      '  "nested": {',
+      '    "schema": "whoisleuth.writer-contract",',
+      '    "malformed": { "schema": "whoisleuth.bad..suffix" },',
+      '    "reference": "https://whoisleuth.com/reference"',
+      '  }',
+      '}',
+    ].join('\n'), 'fixture.json');
+    assert.deepEqual(
+      result.occurrences.map((item) => [item.identifier, item.line]),
+      [
+        ['whoisleuth.key-contract', 2],
+        ['whoisleuth.writer-contract', 4],
+        ['whoisleuth.com', 6],
+      ],
+    );
+    assert.deepEqual(result.emitters.map((item) => [item.identifier, item.line]), [
+      ['whoisleuth.writer-contract', 4],
+    ]);
+    assert.ok(result.dynamicConstructions.some((item) => (
+      item.reason === 'malformed_schema_identifier' && item.line === 5
+    )));
   });
 
   test('discovers JSON keys without prefix false positives and bounds deep input', () => {

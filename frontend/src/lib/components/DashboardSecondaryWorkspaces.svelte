@@ -23,6 +23,10 @@
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
   import { publicResources } from '$lib/workspaces';
+  import {
+    captureBrowserSupportDiagnostics,
+    formatBrowserSupportDiagnostics,
+  } from '$lib/browser-support-diagnostics';
 
   let { onsummarychange, mode = 'all' }: {
     onsummarychange?: (message?: string) => void | Promise<void>;
@@ -38,6 +42,8 @@
   let templateLoadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let guideError = $state('');
   let workspaceMessage = $state('');
+  let supportDiagnostics = $state('');
+  let supportStatus = $state('');
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
@@ -101,6 +107,24 @@
     }
   }
 
+  function prepareSupportDiagnostics() {
+    supportDiagnostics = formatBrowserSupportDiagnostics(captureBrowserSupportDiagnostics({
+      applicationVersion: __WHOISLEUTH_VERSION__,
+      buildRevision: __WHOISLEUTH_BUILD_REVISION__,
+    }));
+    supportStatus = 'Diagnostics prepared locally. Review the fields before copying them.';
+  }
+
+  async function copySupportDiagnostics() {
+    if (!supportDiagnostics) prepareSupportDiagnostics();
+    try {
+      await navigator.clipboard.writeText(supportDiagnostics);
+      supportStatus = 'Diagnostics copied.';
+    } catch {
+      supportStatus = 'Clipboard access was unavailable. Select the visible diagnostics manually.';
+    }
+  }
+
   onMount(() => {
     void refreshSecondaryWorkspaces();
   });
@@ -149,11 +173,26 @@
 
   {#if mode === 'all'}<InvestigationTemplateManager {templates} loadState={templateLoadState} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />{/if}
   {#if mode !== 'guide'}<WorkspaceArchive onimport={handleArchiveImport} importOnly={mode === 'import'} />{/if}
+  {#if mode === 'all'}
+    <details class="support-diagnostics card">
+      <summary>Support diagnostics</summary>
+      <div>
+        <p>Prepare an allowlisted summary of this build, viewport class, theme and browser capability availability. It excludes targets, URLs, Cases, evidence, storage contents and browser identity.</p>
+        <div class="support-actions">
+          <button class="btn" type="button" onclick={prepareSupportDiagnostics}>Prepare support diagnostics</button>
+          {#if supportDiagnostics}<button class="btn" type="button" onclick={() => void copySupportDiagnostics()}>Copy diagnostics</button>{/if}
+        </div>
+        {#if supportDiagnostics}<textarea readonly aria-label="Support diagnostics" value={supportDiagnostics}></textarea>{/if}
+        <p class="support-status" role="status" aria-live="polite">{supportStatus}</p>
+      </div>
+    </details>
+  {/if}
 </section>
 
 <style>
   .secondary-workspaces{min-width:0;margin-top:20px;overflow-wrap:anywhere}.secondary-workspaces>h2{margin:0;font:700 var(--text-lg) var(--mono)}.secondary-workspaces>h2:focus{outline:none}.secondary-workspaces>h2:focus-visible{outline:2px solid var(--focus);outline-offset:5px}.workspace-message{margin:8px 0 0;color:var(--amber);font-size:var(--text-sm)}.workspace-message:empty{display:none}
   .guide-launcher{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:24px;margin-top:28px;padding:21px}.guide-launcher h3{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}.guide-launcher>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.help-links{display:grid;gap:7px;margin-top:18px}.help-links a{display:grid;gap:2px;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)}.help-links a:hover,.help-links a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.help-links strong{font:700 var(--text-xs) var(--mono)}.help-links span{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.guide-launcher form{align-self:center;min-width:0}.guide-launcher label{display:block;margin-bottom:6px;font:700 var(--text-xs) var(--mono)}.guide-launcher select{width:100%;margin-bottom:7px}.recipe-detail{margin:0 0 13px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.guide-input{display:flex;gap:7px;min-width:0}.guide-input input{min-width:0;flex:1}.guide-input button{flex:none;white-space:nowrap}.guide-note{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.guide-launcher .error{margin:7px 0 0}
+  .support-diagnostics{margin-top:28px;padding:0;overflow:hidden}.support-diagnostics>summary{padding:15px 18px;font:700 var(--text-sm) var(--mono)}.support-diagnostics>div{padding:0 18px 18px;border-top:1px solid var(--border)}.support-diagnostics p{max-width:82ch;margin:14px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.support-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}.support-diagnostics textarea{display:block;width:100%;height:210px;margin-top:12px;padding:12px;resize:vertical;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font:var(--text-xs)/1.5 var(--mono)}.support-diagnostics .support-status{min-height:1.5em;color:var(--interface-accent)}
   @media(max-width:760px){.guide-launcher{grid-template-columns:1fr}}
   @media(max-width:460px){.guide-input{align-items:stretch;flex-direction:column}.guide-input button{width:100%}}
 </style>

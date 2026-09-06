@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,11 +10,6 @@ import {
   CASE_REPORT_OUTPUT_VERSIONS,
   CASE_RESPONSE_PACKET_OUTPUT_VERSIONS,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION,
-  PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
-  PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  PUBLISHED_V2_CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
   SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS,
   CLI_CASE_PACK_CASE_REPORT_EPOCHS,
   SUPPORTED_CLI_CASE_PACK_VERSIONS,
@@ -39,6 +35,7 @@ const DISPLAY_NAMES = Object.freeze({
   'export.workspace-settings-section': 'Workspace settings section',
   'export.encrypted-workspace-archive': 'Encrypted workspace archive',
 } as const);
+const CASE_CONTRACT_DOCUMENTATION_PATH = 'docs/case-contracts.md';
 
 function versions(values: readonly number[]): string {
   return values.length ? values.join(', ') : '—';
@@ -70,7 +67,7 @@ export function buildCaseContractDocumentation(): string {
 
 This reference is generated from the canonical Case portability family in
 ${code('packages/contracts/case-portability.mts')}. Run
-${code('node tools/case-contract-doc.mts')} to reproduce it. Runtime validators
+${code('node tools/case-contract-doc.mts --write')} to reproduce it. Runtime validators
 remain statically imported; lifecycle module and export names are descriptive
 metadata and are never executed dynamically.
 
@@ -95,8 +92,7 @@ and the current writer emits version ${CASE_RESPONSE_REVIEW_INPUTS_VERSION}.
 
 ## CLI Case/report epochs
 
-The Case-pack verifier accepts the exact public v1, published v2, and current
-Case/report epochs.
+The Case-pack verifier accepts every exact Case/report epoch listed below.
 
 | Case versions | Matching report versions |
 | ---: | ---: |
@@ -124,9 +120,9 @@ formats written by public release 1.47.4:
 browser and portable Case schema 12, Case report schema 8, response-packet schema 6,
 CLI Case-pack schema 2 with its Case 12/report 8 epoch, workspace archive schema
 5, workspace settings schema 1, and encrypted workspace archive schema 1.
-Case schemas 12 and ${PUBLISHED_V2_CASE_SCHEMA_VERSION} migrate directly to schema
-${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}; response packets 6 and
-${PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION} verify alongside packet
+Case schemas ${proseVersions(CASE_BROWSER_SUPPORTED_VERSIONS.slice(0, -1))} migrate directly to schema
+${CASE_BROWSER_SUPPORTED_VERSIONS.at(-1)}; response packets
+${proseVersions(CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.slice(0, -1))} verify alongside packet
 ${CASE_RESPONSE_PACKET_OUTPUT_VERSIONS.at(-1)}. Every declared CLI epoch remains
 readable without passing through an unreleased checkpoint.
 
@@ -158,5 +154,11 @@ the durable baseline.
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.stdout.write(buildCaseContractDocumentation());
+  const output = buildCaseContractDocumentation();
+  if (process.argv[2] === '--write') {
+    writeFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', CASE_CONTRACT_DOCUMENTATION_PATH), output, 'utf8');
+    process.stdout.write(`Updated ${CASE_CONTRACT_DOCUMENTATION_PATH}.\n`);
+  } else {
+    process.stdout.write(output);
+  }
 }

@@ -2,7 +2,6 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { createConnection } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +13,7 @@ import {
   summarizePlaywrightResults,
 } from './playwright-results-summary.mts';
 import { inspectVerificationArtifacts } from './verification-artifact-status.mts';
+import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
 import {
   buildVerificationOwnershipPlan,
   type SpecialisedCheck,
@@ -55,6 +55,8 @@ const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> =
   'release-contract': 'release:check',
   licences: 'licenses:check',
   'production-dependency-audit': 'dependencies:audit',
+  'browser-build': 'build',
+  'browser-loading-report': 'frontend:loading-report',
   'browser-timing-plan': 'verification:timing:check',
   'analyst-journey-assurance': 'verification:journeys:check',
   'critical-mutation': 'test:mutation',
@@ -72,12 +74,8 @@ const SPECIALISED_DELIVERY_ONLY = new Set<SpecialisedCheck>([
   'staged-security',
 ]);
 
-function commandName(): string {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
-}
-
 function npmCommand(script: string): FocusedCommand {
-  return Object.freeze({ id: script, executable: commandName(), args: Object.freeze(['run', script]) });
+  return Object.freeze({ id: script, executable: npmExecutableName(), args: Object.freeze(['run', script]) });
 }
 
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
@@ -157,13 +155,19 @@ export function buildFocusedVerificationExecution(
   }
 
   const browserSpecs = Object.freeze([...plan.focusedBrowserChecks]);
-  if (browserSpecs.length) commands.push(npmCommand('build'));
+  if (browserSpecs.length && !commands.some((command) => command.id === 'build')) {
+    commands.push(npmCommand('build'));
+  }
   commands.push(Object.freeze({ id: 'diff-whitespace', executable: 'git', args: Object.freeze(['diff', '--check']) }));
+
+  const producesBrowserArtifacts = frontendChanged
+    || browserSpecs.length > 0
+    || commands.some((command) => command.id === 'build' || command.id === 'frontend:loading-report');
 
   return Object.freeze({
     commands: Object.freeze(commands),
     browserSpecs,
-    cleanupBrowserArtifacts: frontendChanged || browserSpecs.length > 0,
+    cleanupBrowserArtifacts: producesBrowserArtifacts,
     deferredSpecialisedChecks: Object.freeze([...deferred].sort()),
   });
 }
@@ -173,7 +177,7 @@ function renderExecutionPlan(
   execution: FocusedVerificationExecution,
 ): string {
   const lines = [
-    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} area(s).`,
+    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
     `Focused unit files: ${plan.focusedUnitChecks.length}.`,
     ...execution.commands.map((command) => `Run: ${command.id}`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,
@@ -196,27 +200,6 @@ function runCommand(command: FocusedCommand): void {
   if (child.status !== 0) throw new Error(`${command.id} failed with exit code ${child.status ?? 2}.`);
 }
 
-async function portIsFree(port: number): Promise<boolean> {
-  return await new Promise((resolve, reject) => {
-    const socket = createConnection({ host: '127.0.0.1', port });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error(`Port ${port} status check timed out.`));
-    }, 1_000);
-    socket.once('connect', () => {
-      clearTimeout(timer);
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once('error', (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      socket.destroy();
-      if (error.code === 'ECONNREFUSED') resolve(true);
-      else reject(error);
-    });
-  });
-}
-
 async function selectPlaywrightPort(): Promise<number> {
   const configured = process.env.WHOISLEUTH_E2E_FOCUSED_BASE_PORT?.trim();
   const first = configured ? Number(configured) : DEFAULT_PLAYWRIGHT_PORT;
@@ -224,7 +207,7 @@ async function selectPlaywrightPort(): Promise<number> {
     throw new TypeError('WHOISLEUTH_E2E_FOCUSED_BASE_PORT must be an integer from 1024 through 65000.');
   }
   for (let offset = 0; offset <= MAX_PORT_SEARCH && first + offset <= 65_535; offset += 1) {
-    if (await portIsFree(first + offset)) return first + offset;
+    if (await localPortIsFree(first + offset)) return first + offset;
   }
   throw new Error(`Could not find a free local Playwright port from ${first}.`);
 }
@@ -293,7 +276,7 @@ async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
   }
-  if (!(await portIsFree(port))) {
+  if (!(await localPortIsFree(port))) {
     failure ??= new Error(`Focused Playwright left port ${port} occupied.`);
   }
   if (failure) throw failure;

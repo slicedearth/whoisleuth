@@ -1,5 +1,6 @@
 import {
   MAX_BULK_SESSIONS,
+  areBulkRiskScoresComparable,
   compareBulkSessions,
   normalizeBulkSession,
   type BulkSession,
@@ -24,17 +25,11 @@ import {
   type RawComparisonLedgerSide,
 } from './comparison-ledger-contract.mts';
 
-function bulkCompleteness(session: BulkSession): ComparisonLedgerCompleteness {
-  return session.state === 'complete' ? 'complete' : session.state === 'partial' ? 'partial' : 'unavailable';
-}
+function bulkCompleteness(session: BulkSession): ComparisonLedgerCompleteness { return session.state === 'complete' ? 'complete' : session.state === 'partial' ? 'partial' : 'unavailable'; }
 
-function sourceMap(result: BulkSessionResult): Map<string, BulkSessionSourceState> {
-  return new Map(result.sourceCoverage.map((item) => [item.source, item.state]));
-}
+function sourceMap(result: BulkSessionResult): Map<string, BulkSessionSourceState> { return new Map(result.sourceCoverage.map((item) => [item.source, item.state])); }
 
-function namedBulkSourceState(result: BulkSessionResult, source: string): string {
-  return result.sourceCoverage.find((item) => item.source === source)?.state ?? 'not_reported';
-}
+function namedBulkSourceState(result: BulkSessionResult, source: string): string { return result.sourceCoverage.find((item) => item.source === source)?.state ?? 'not_reported'; }
 
 function bulkFamilyState(result: BulkSessionResult, family: string): string {
   if (family === 'model') return 'derived';
@@ -91,6 +86,9 @@ function bulkFieldDecision(field: BulkField, earlier: BulkSessionResult, later: 
   if (earlier.scanDepth !== later.scanDepth) return { state: 'not_compared', completeness: 'partial', earlierState, laterState, limitation: 'Unlike Fast and Deep result rows are not compared as an observed field change.' };
   if (field.kind === 'registrar') return { state: 'not_compared', completeness: 'not_reported', earlierState, laterState, limitation: 'The exact retained registrar texts are shown, but saved Bulk rows do not retain field-level registrar provenance; these values are not compared as a publication or target change.' };
   if (field.kind === 'model') {
+    if (field.field === 'Risk score' && !areBulkRiskScoresComparable(earlier, later)) {
+      return { state: 'not_compared', completeness: 'partial', earlierState, laterState, limitation: 'Risk scores require the same ready Brand Profile provenance, scan depth, and versioned Risk model before comparison.' };
+    }
     const comparable = comparisonLedgerValuePresent(before) && comparisonLedgerValuePresent(after);
     return { state: comparable ? 'different' : 'not_compared', completeness: comparable ? 'complete' : 'partial', earlierState, laterState, limitation: comparable ? null : 'A score absent from either retained row is not represented as an observed score change.' };
   }
@@ -110,6 +108,7 @@ function bulkPairCompleteness(earlier: BulkSession, later: BulkSession): Compari
   for (const [domain, left] of before) {
     const right = after.get(domain);
     if (!right || left.scanDepth !== right.scanDepth) return 'partial';
+    if (!areBulkRiskScoresComparable(left, right)) return 'partial';
     if (left.riskModelVersion === null || right.riskModelVersion === null || left.riskModelVersion !== right.riskModelVersion
       || left.opportunityModelVersion === null || right.opportunityModelVersion === null || left.opportunityModelVersion !== right.opportunityModelVersion) return 'partial';
     for (const field of BULK_FIELDS) {

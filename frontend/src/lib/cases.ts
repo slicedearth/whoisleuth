@@ -21,6 +21,7 @@ import type {
   CaseConclusionInput,
   CasePatch,
   CaseRecord,
+  ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
@@ -45,16 +46,21 @@ export type RiskCalibrationExportPreview = Readonly<{
   excluded: number;
   records: readonly Readonly<{
     domain: string;
-    analystDisposition: string;
+    analystDisposition: ReviewedCaseDisposition;
     reviewReasonCode: string | null;
   }>[];
 }>;
 
 export {
   CASE_DISPOSITIONS,
+  DEFAULT_DISPOSITION,
   CASE_REVIEW_REASONS,
   CASE_STATUSES,
   caseLookupTarget,
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  isReviewedCaseDisposition,
   compareCaseEvidence,
   dispositionLabel,
   latestCaseEvidence,
@@ -80,6 +86,10 @@ export {
   MAX_CASE_INCIDENT_TARGETS,
 } from '../../../packages/cases/case-workflow-metadata.mts';
 export {
+  buildCaseTypeEvidenceReadiness,
+  CASE_TYPE_READINESS_CHECK_IDS,
+} from './analysis/case-type-evidence-readiness.ts';
+export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
   CASE_ACTION_EVENT_SOURCE_CLASSES,
@@ -88,6 +98,7 @@ export {
   CASE_EVIDENCE_RELATION_STANCES,
   CASE_MANUAL_TRAIL_KINDS,
   CASE_CLOSURE_REASONS,
+  CASE_DECISION_CONFIDENCE_LEVELS,
   CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
   CASE_OBSERVED_EFFECT_STATES,
   CASE_PIN_COMPLETENESS,
@@ -141,6 +152,7 @@ export type {
   CaseNote,
   CasePatch,
   CaseRecord,
+  ReviewedCaseDisposition,
   EvidenceChange,
   EvidenceFactor,
 } from './analysis/case-model.ts';
@@ -324,7 +336,7 @@ export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; del
   });
 }
 
-export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
@@ -336,6 +348,7 @@ export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]
         updated: result.updated,
         skipped: result.skipped,
         brandProfileReferencesOmitted: result.brandProfileReferencesOmitted,
+        authoredHistoryOmitted: result.authoredHistoryOmitted,
         pruned,
       },
     };

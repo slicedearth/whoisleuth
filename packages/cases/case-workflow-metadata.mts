@@ -1,4 +1,4 @@
-// Stable analyst-facing Case metadata built on the existing Case v14 fields.
+// Stable analyst-facing Case metadata built on the existing Case fields.
 // Types are namespaced tags and incident targets are structured assertions, so
 // deployed Case, report, packet and workspace schemas do not gain duplicate
 // identity or compatibility surfaces.

@@ -385,6 +385,12 @@ describe('privacy data-flow catalogue', () => {
     const browserRetention = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'analyst_cases')!;
     assert.equal(browserRetention.retention.mode, 'browser_deliberate');
     assert.ok(browserRetention.processingClasses.includes('browser_local_retention'));
+    const renderedCapture = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'rendered_web_capture')!;
+    assert.ok(renderedCapture.dataSent.includes('admitted_resource_request'));
+    assert.equal(renderedCapture.dataDeliberatelyNotSent.includes('complete_query_bearing_urls'), false);
+    assert.match(renderedCapture.nonInferences.join(' '), /exact URL, including path and query/iu);
+    const passiveAvailability = PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.find((flow) => flow.id === 'availability')!;
+    assert.ok(passiveAvailability.dataDeliberatelyNotSent.includes('complete_query_bearing_urls'));
 
     for (const flow of allBoundaries) {
       assert.ok(flow.outcomes.length > 0, flow.id);
@@ -401,8 +407,8 @@ describe('privacy data-flow catalogue', () => {
 
   test('preserves version-1 capability contracts and byte-exact generated artefacts', () => {
     const manifestBytes = JSON.stringify(CAPABILITY_MANIFEST);
-    assert.equal(Buffer.byteLength(manifestBytes, 'utf8'), 82_381);
-    assert.equal(sha256(manifestBytes), 'dd80ec029ee520ef32e63aee55308be0ba39dc4d274df97fb8096a2980b1e33a');
+    assert.equal(Buffer.byteLength(manifestBytes, 'utf8'), 83_156);
+    assert.equal(sha256(manifestBytes), 'b99c6c715bb91f43e1ba3126703afdcaf000d4bae8c4d4e799098b7403424bf1');
     const publicReportBytes = JSON.stringify(capabilityReport('express', {}));
     assert.equal(Buffer.byteLength(publicReportBytes, 'utf8'), 2_545);
     assert.equal(sha256(publicReportBytes), 'd67a69dc51fcf2db4c564d9e8764ddd684abbdcae54a413d71d760912b80611a');

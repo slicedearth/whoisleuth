@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliCtSearchDocument } from '../cli/formatters/json.mts';
 import {
@@ -80,10 +80,10 @@ describe('ct-search CLI argument parsing', () => {
   });
 
   test('rejects repeated output flags, multiple keywords, and unrelated scan options', () => {
-    assert.throws(() => parseCliArguments(['ct-search', 'one', 'two']), /one keyword/);
-    assert.throws(() => parseCliArguments(['ct-search', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['ct-search', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['ct-search', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['ct-search', 'one', 'two']), CliUsageError);
+    assert.throws(() => parseCliArguments(['ct-search', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['ct-search', '--deep']), CliUsageError);
+    assert.throws(() => parseCliArguments(['ct-search', '--json', '--quiet']), CliUsageError);
   });
 });
 

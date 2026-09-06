@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 47,
+  "commandCount": 48,
   "groups": [
     "investigate",
     "respond",
@@ -148,7 +148,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "List installed command contracts",
       "group": "utilities",
       "common": true,
-      "usage": "whoisleuth commands [--common] [--group \u003cgroup>] [--mode \u003coffline|network>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth commands [--common] [--group \u003cinvestigate|respond|assure|utilities>] [--mode \u003coffline|network>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth commands --json",
       "boundary": "Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.",
       "collection": {
@@ -262,7 +262,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build an evidence manifest offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth manifest \u003cartefact.json> [...] --workflow \u003clabel> [--configuration-digest \u003csha256:digest>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth manifest \u003cartefacts...> --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth manifest lookup.json comparison.json --workflow \"domain review\" --json",
       "boundary": "The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.",
       "collection": {
@@ -335,7 +335,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Apply a declarative observation map offline",
       "group": "respond",
       "common": false,
-      "usage": "whoisleuth map-observations [mapping.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth map-observations [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth map-observations mapping.json --json",
       "boundary": "Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.",
       "collection": {
@@ -407,7 +407,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Project external findings to Open Asset Model",
       "group": "respond",
       "common": false,
-      "usage": "whoisleuth oam-export [external-findings.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth oam-export [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth oam-export external-findings.json --json",
       "boundary": "The projection is offline, preserves source completeness without inventing confidence, and covers only bounded FQDN, IP address, certificate, and related edge vocabulary.",
       "collection": {
@@ -479,7 +479,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Collect one domain, IP, or ASN",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth lookup [domain|IP|ASN] [--json|--junit|--markdown|--html] [--no-attribution] [--fast|--deep] [--observer \u003clabel>] [--vantage \u003clabel>] [--plan] [--summary|--verbose|--browse [--save-lookup \u003cfile>]] [--palette \u003cauto|light|dark>] [--strict-exit] [--fail-on \u003cpolicies>] [--events] [--quiet] [--no-color]",
+      "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
       "example": "whoisleuth lookup example.test --deep --browse",
       "boundary": "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
       "collection": {
@@ -584,7 +584,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Run bounded multi-target collection",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth bulk [file] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003c1-8>] [--checkpoint \u003cfile> [--resume]] [--events] [--plan] [--fail-on \u003cpolicies>] [--quiet] [--no-color]",
+      "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "cat domains.txt | whoisleuth bulk --jsonl",
       "boundary": "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.",
       "collection": {
@@ -689,7 +689,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Search certificate observations",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth ct-search [keyword] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth ct-search [\u003ckeyword>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth ct-search \"example brand\" --json",
       "boundary": "Certificate observations do not prove website activity, registration ownership, or malicious intent.",
       "collection": {
@@ -760,7 +760,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Normalise certificate observations offline",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth ct-intake [events.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth ct-intake [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth ct-intake certificate-events.json --json",
       "boundary": "The command is offline, caps output at 100 findings, and treats every event as a review lead rather than proof of serving or control.",
       "collection": {
@@ -833,7 +833,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Generate lookalike candidates offline",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth discover [brand|domain] [--tlds \u003clist>] [--preset \u003cname>|--families \u003cids>] [--keyboard \u003clayout>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--json|--jsonl|--domains] [--quiet] [--no-color]",
+      "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--quiet] [--no-color]",
       "example": "whoisleuth discover example.test --preset common --jsonl",
       "boundary": "Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.",
       "collection": {
@@ -920,7 +920,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Collect a supervised candidate review queue",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth discover-scan [brand|domain] [--tlds \u003clist>] [--preset \u003cname>|--families \u003cids>] [--keyboard \u003clayout>] [--dictionary \u003cfile>] [--fast|--deep] [--scan-limit \u003cn>] [--chunk-size \u003cn>] [--concurrency \u003cn>] [--resolver \u003cIPs>] [--allowlist \u003cfile>] [--checkpoint \u003cfile> [--resume]] [--observation-snapshot \u003cfile>] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--events] [--json|--jsonl|--csv|--domains] [--plan] [--fail-on \u003cpolicies>] [--quiet] [--no-color]",
+      "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json",
       "boundary": "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.",
       "collection": {
@@ -1032,7 +1032,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Review DNS and mail posture",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth posture [domain] [--selectors \u003clist>] [--retired-selectors \u003clist>] [--mail-profile \u003cprofile>] [--json|--sarif --owned-domain] [--quiet] [--no-color]",
+      "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--owned-domain] [--quiet] [--no-color]",
       "example": "whoisleuth posture example.test --mail-profile standard --json",
       "boundary": "Missing or failed DNS observations remain inconclusive and are not reported as absent controls.",
       "collection": {
@@ -1114,7 +1114,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Inspect one homepage request",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth http [domain] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth http [\u003cdomain>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth http example.test --json",
       "boundary": "Requests use the shared public-address and redirect guards. Fixed content-coding and cache-policy metadata describes only the selected response, excludes raw header values, and does not prove caching, transfer savings, performance, privacy, or safety. This is not a rendered browser or vulnerability scan.",
       "collection": {
@@ -1188,7 +1188,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Inspect one TLS connection",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth tls [hostname] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth tls [\u003chostname>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth tls example.test --json",
       "boundary": "One observed connection is point-in-time evidence and does not establish every address, edge, or historical certificate.",
       "collection": {
@@ -1262,7 +1262,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Validate an authorised DNSSEC chain",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth dnssec-validate \u003cdomain> --resolver \u003cpublic-IP> --trust-anchor \u003canchor.json> --owned-or-authorized [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth dnssec-validate \u003cdomain> --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized [--json] [--quiet] [--no-color]",
       "example": "whoisleuth dnssec-validate example.test --resolver \"$PUBLIC_RESOLVER_IP\" --trust-anchor anchor.json --owned-or-authorized --json",
       "boundary": "This isolated action is never invoked by Lookup, Bulk, monitoring, or recipes. It caps DNS queries, aliases, delegations, bytes, and duration; transport and validation failures remain separate, and secure is not a general safety verdict.",
       "collection": {
@@ -1339,7 +1339,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Review selected authorised SMTP transports",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth mail-transport [input.json] --resolver \u003cpublic-IP> --trust-anchor \u003canchor.json> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth mail-transport [\u003csource>] --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]",
       "example": "whoisleuth mail-transport selected-mx.json --resolver \"$PUBLIC_RESOLVER_IP\" --trust-anchor anchor.json --owned-or-authorized --active-probe --json",
       "boundary": "This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test. If a DANE-TA TLSA usage 2 association is published, active collection retains only the leaf certificate and leaves that comparison partial without certificate-path construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported and cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.",
       "collection": {
@@ -1420,7 +1420,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Explain local registry coverage",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth registry-support [domain|suffix] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth registry-support [\u003cdomain-or-suffix>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth registry-support example.test --json",
       "boundary": "This command is offline. Catalogue coverage does not test live reachability or decide registration or availability.",
       "collection": {
@@ -1492,7 +1492,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Diagnose saved registry collection",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth registry-doctor [lookup.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth registry-doctor [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth registry-doctor lookup.json --json",
       "boundary": "The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.",
       "collection": {
@@ -1564,7 +1564,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build target-free registry quality timelines",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth registry-cohort [lookups-or-reports.json|jsonl] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth registry-cohort [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth registry-cohort saved-lookups.jsonl --json",
       "boundary": "This command is offline and omits domains, queries, and raw evidence. Input families cannot be mixed, and retained samples are never assumed independent.",
       "collection": {
@@ -1636,7 +1636,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Create a sanitised registry fixture scaffold",
       "group": "utilities",
       "common": false,
-      "usage": "whoisleuth registry-scaffold --profile \u003cid> --suffix \u003csuffix> --scenario \u003cregistered|not_found|inconclusive>",
+      "usage": "whoisleuth registry-scaffold --profile \u003cvalue> --suffix \u003cvalue> --scenario \u003cregistered|not_found|inconclusive>",
       "example": "whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered",
       "boundary": "The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.",
       "collection": {
@@ -1693,7 +1693,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Replay reviewed Risk labels offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth risk-calibrate [dataset.json] [--json|--summary-json] [--quiet] [--no-color]",
+      "usage": "whoisleuth risk-calibrate [\u003csource>] [--json|--summary-json] [--quiet] [--no-color]",
       "example": "whoisleuth risk-calibrate calibration.json --summary-json",
       "boundary": "Calibration is offline and diagnostic. The summary form omits record identifiers, domains, and evidence; neither form trains, tunes, or changes the scoring model automatically.",
       "collection": {
@@ -1767,7 +1767,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Summarise reviewed lookalike yield offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth lookalike-calibrate [dataset.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth lookalike-calibrate [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth lookalike-calibrate reviewed-candidates.json --json",
       "boundary": "Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.",
       "collection": {
@@ -1839,7 +1839,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Validate saved evidence offline",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth verify-artifact [artifact.json] [--passphrase-file \u003cfile>] [--manifest \u003cmanifest.json> --manifest-entry \u003cartifact-N>] [--json] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cartifact-1|artifact-2|artifact-3|artifact-4|artifact-5|artifact-6|artifact-7|artifact-8|artifact-9|artifact-10|artifact-11|artifact-12|artifact-13|artifact-14|artifact-15|artifact-16>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit",
       "boundary": "Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.",
       "collection": {
@@ -1917,7 +1917,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Report portable artefact fidelity offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth interchange-report [artifact.json] [--passphrase-file \u003cfile>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth interchange-report [\u003csource>] [--passphrase-file \u003cfile>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth interchange-report workspace.json --json",
       "boundary": "The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.",
       "collection": {
@@ -1992,12 +1992,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Inspect an archive locally",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth inspect-archive [archive.json] [--passphrase-file \u003cfile>] [--search \u003cvalue>] [--require-match] [--reveal] [--expect-content-digest \u003csha256:digest>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth inspect-archive [\u003csource>] [--passphrase-file \u003cfile>] [--search \u003cvalue>] [--require-match] [--reveal] [--expect-content-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth inspect-archive workspace.json --search example.test --json",
       "boundary": "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default."
+        "scope": "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default."
       },
       "inputs": [
         {
@@ -2029,7 +2029,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eworkspace-archive-inspection"
       ],
       "inputLimits": [
-        "Reads one selected bounded workspace archive v7, retains exact v5 and v6 compatibility, and redacts output by default.",
+        "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2070,7 +2070,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Sign a reviewed artefact locally",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth sign-artifact [artifact.json] --private-key-file \u003cfile>",
+      "usage": "whoisleuth sign-artifact [\u003csource>] --private-key-file \u003cfile>",
       "example": "whoisleuth sign-artifact packet.json --private-key-file analyst-private.pem",
       "boundary": "The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator's responsibility.",
       "collection": {
@@ -2138,7 +2138,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Verify a signed evidence package",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth verify-signature [package.json] [--public-key-file \u003cfile>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth verify-signature packet.signed.json --json",
       "boundary": "A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder's real-world identity or authority.",
       "collection": {
@@ -2212,7 +2212,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build a target-free source report",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth source-report [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth source-report lookup.json --json",
       "boundary": "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
       "collection": {
@@ -2284,7 +2284,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Compare registry publications in one lookup",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth compare [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth compare lookup.json --json",
       "boundary": "Comparison is offline. Differences are review context and do not by themselves prove which publication is current.",
       "collection": {
@@ -2356,7 +2356,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Compare saved static page evidence",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth page-compare \u003cleft.json> \u003cright.json> [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth page-compare \u003csources...> [--json] [--quiet] [--no-color]",
       "example": "whoisleuth page-compare official.json candidate.json --json",
       "boundary": "Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.",
       "collection": {
@@ -2428,7 +2428,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Review saved passive mail evidence",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth mail-review [bulk.json|bulk.jsonl] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth mail-review [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth mail-review candidates.json --json",
       "boundary": "Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.",
       "collection": {
@@ -2496,11 +2496,83 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "mail-headers",
+      "summary": "Review message headers offline",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth mail-headers [\u003csource>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth mail-headers message.eml --json",
+      "boundary": "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Parses only the bounded header block from one selected message or standard input."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecli.mail-header-review"
+      ],
+      "inputLimits": [
+        "Parses only the bounded header block from one selected message or standard input.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "outputFormats": [
+        "terminal",
+        "JSON"
+      ],
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth review-evidence [evidence.json] [--mmdb \u003cdatabase-file>] [--json] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth review-evidence domain-change.json --json --strict-exit",
       "boundary": "The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
       "collection": {
@@ -2581,7 +2653,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build a decision brief from a saved lookup",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth brief [lookup.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth brief [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth brief lookup.json --json",
       "boundary": "The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.",
       "collection": {
@@ -2653,12 +2725,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build a reviewed case package",
       "group": "respond",
       "common": true,
-      "usage": "whoisleuth case-pack [cases.json] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
       "example": "whoisleuth case-pack cases.json --audience trusted --reviewed --json",
       "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -2688,7 +2760,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case-schema-14 browser export and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2729,7 +2801,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build or review a domain control manifest",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth domain-control [manifest-input.json|review-input.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth domain-control [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth domain-control domain-control-input.json --json",
       "boundary": "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.",
       "collection": {
@@ -2802,7 +2874,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Run one bounded domain control review",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth monitor-once [manifest.json] [--previous \u003csnapshot.json>] [--limit \u003c1-20>] [--concurrency \u003c1-3>] [--fail-on \u003cpolicies>] [--json|--junit] [--quiet] [--no-color]",
+      "usage": "whoisleuth monitor-once [\u003csource>] [--json|--junit] [--previous \u003cfile>] [--limit \u003cinteger>] [--concurrency \u003cinteger>] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "whoisleuth monitor-once manifest.json --previous previous.json --json --output next.json",
       "boundary": "This is an operator-scheduled one-shot collection, not a daemon. It caps targets and concurrency, retains normalised observations, and never changes domain configuration.",
       "collection": {
@@ -2889,7 +2961,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Review domain change, recovery, or retirement plans",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth assurance [assurance-input.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth assurance [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth assurance domain-assurance.json --json",
       "boundary": "The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.",
       "collection": {
@@ -2962,7 +3034,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build a reviewed change packet offline",
       "group": "respond",
       "common": false,
-      "usage": "whoisleuth change-packet [change-packet-input.json] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth change-packet [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth change-packet change-review.json --json",
       "boundary": "Assembly is offline. Readiness reflects only the supplied bounded evidence and does not authorise or perform a domain change.",
       "collection": {
@@ -3036,7 +3108,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Lint an artefact before deliberate sharing",
       "group": "respond",
       "common": false,
-      "usage": "whoisleuth sharing-review [artifact.json] --marking \u003clevel> --recipient-scope \u003cscope> --purpose \u003ctext> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth sharing-review [\u003csource>] --marking \u003cclear|green|amber|amber-strict|red> --recipient-scope \u003cpublic|community|organization|named-recipients> --purpose \u003cvalue> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose \"Reviewed incident handoff\" --human-reviewed --personal-data-reviewed --redactions-confirmed --json",
       "boundary": "The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.",
       "collection": {
@@ -3115,7 +3187,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Plan a fixed investigation recipe",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth workflow-plan \u003crecipe> \u003cdomain|brand> | --list | --explain \u003crecipe> [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-plan [\u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [\u003csubject>] [--list|--explain \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-plan domain-triage example.test --json",
       "boundary": "Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.",
       "collection": {
@@ -3212,7 +3284,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Execute approved fixed-recipe steps",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003crecipe> \u003cdomain|brand> [--select \u003cstep-id>=\u003cpath-or-value>]... [--approve-network] [--resume \u003cstate.json>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json",
       "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.",
       "collection": {
@@ -3318,7 +3390,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Compare two compatible retained artefacts",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth diff \u003cleft.json> \u003cright.json> [--left-session \u003cid> --right-session \u003cid>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth diff earlier.json later.json --json",
       "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
@@ -3394,7 +3466,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Reconcile independently labelled observations",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth reconcile \u003cobservation.json> \u003cobservation.json> [...] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth reconcile \u003csources...> [--json] [--quiet] [--no-color]",
       "example": "whoisleuth reconcile office.json mobile.json external.json --json",
       "boundary": "The command is offline, accepts 2 to 5 saved observations for one domain, and never treats labels as proof of network independence or majority agreement as truth.",
       "collection": {
@@ -3466,7 +3538,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build same-domain history from saved lookups",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth timeline \u003cobservation.json> \u003cobservation.json> [...] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth timeline \u003csources...> [--json] [--quiet] [--no-color]",
       "example": "whoisleuth timeline first.json second.json latest.json --json",
       "boundary": "The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.",
       "collection": {
@@ -3540,7 +3612,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Convert a lookup to an evidence report",
       "group": "respond",
       "common": true,
-      "usage": "whoisleuth export [lookup.json] [--markdown|--html|--compact] [--no-attribution]",
+      "usage": "whoisleuth export [\u003csource>] [--markdown|--html] [--compact] [--no-attribution]",
       "example": "whoisleuth export lookup.json --markdown",
       "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; published v2 schema 27 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
       "collection": {

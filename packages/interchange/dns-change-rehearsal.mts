@@ -2,6 +2,7 @@ import {
   DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
   DNS_CHANGE_REHEARSAL_VERSION,
 } from '../contracts/analyst-interchange.mts';
+import { canonicalPublicIpAddress } from '../evidence/public-address-policy.mts';
 
 export {
   DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
@@ -101,14 +102,35 @@ function nameservers(value: string | readonly string[]): string[] {
     .slice(0, MAX_REHEARSAL_NAMESERVERS);
 }
 
+type IntendedValues<T> = Readonly<{
+  values: T[];
+  invalid: number;
+  omitted: number;
+}>;
+
+function intendedNameservers(value: string): IntendedValues<string> {
+  const source = value.split(/[\s,]+/u).filter(Boolean);
+  const candidates = source.slice(0, MAX_REHEARSAL_NAMESERVERS * 3);
+  const valid = new Set<string>();
+  let invalid = 0;
+  for (const item of candidates) {
+    const normalized = hostname(item);
+    if (normalized) valid.add(normalized);
+    else invalid += 1;
+  }
+  const sorted = [...valid].sort();
+  return {
+    values: sorted.slice(0, MAX_REHEARSAL_NAMESERVERS),
+    invalid,
+    omitted: Math.max(0, source.length - candidates.length)
+      + Math.max(0, sorted.length - MAX_REHEARSAL_NAMESERVERS),
+  };
+}
+
 function address(value: string): string {
   const candidate = value.trim().toLowerCase();
-  if (candidate.length > 80 || CONTROL.test(candidate) || candidate.includes('%')) return '';
-  if (/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(candidate)) {
-    const parts = candidate.split('.').map(Number);
-    return parts.every((part) => part >= 0 && part <= 255) ? candidate : '';
-  }
-  return /^[a-f0-9:]+$/u.test(candidate) && candidate.includes(':') ? candidate : '';
+  if (candidate.length > 80 || CONTROL.test(candidate)) return '';
+  return canonicalPublicIpAddress(candidate) ?? '';
 }
 
 function glueRows(value: string): Array<{ nameserver: string; addresses: string[] }> {
@@ -129,6 +151,49 @@ function glueRows(value: string): Array<{ nameserver: string; addresses: string[
   return [...byHost.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([nameserver, values]) => ({ nameserver, addresses: [...values] }));
+}
+
+function intendedAddressRows(
+  value: string | undefined,
+  maximumRows: number,
+): IntendedValues<{ hostname: string; addresses: string[] }> {
+  const source = (value ?? '').split(/\r?\n/u).filter((line) => line.trim());
+  const candidates = source.slice(0, maximumRows * 2);
+  const byHost = new Map<string, Set<string>>();
+  let invalid = 0;
+  let omitted = Math.max(0, source.length - candidates.length);
+  for (const line of candidates) {
+    const [rawHost, ...rawAddresses] = line.trim().split(/[\s,]+/u);
+    const host = hostname(rawHost ?? '');
+    if (!host) {
+      invalid += 1;
+      continue;
+    }
+    if (!byHost.has(host) && byHost.size >= maximumRows) {
+      omitted += 1;
+      continue;
+    }
+    const current = byHost.get(host) ?? new Set<string>();
+    if (rawAddresses.length === 0) invalid += 1;
+    for (const rawAddress of rawAddresses.slice(0, 4)) {
+      const normalized = address(rawAddress);
+      if (!normalized) {
+        invalid += 1;
+        continue;
+      }
+      if (!current.has(normalized) && current.size >= 2) omitted += 1;
+      else current.add(normalized);
+    }
+    omitted += Math.max(0, rawAddresses.length - 4);
+    byHost.set(host, current);
+  }
+  return {
+    values: [...byHost.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([rowHostname, addresses]) => ({ hostname: rowHostname, addresses: [...addresses].sort() })),
+    invalid,
+    omitted,
+  };
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -294,9 +359,11 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const domain = hostname(input.domain);
   const current = nameservers(input.currentNameservers);
   const registry = nameservers(input.registryNameservers);
-  const proposed = nameservers(input.proposedNameservers);
+  const proposedNameserverInput = intendedNameservers(input.proposedNameservers);
+  const proposed = proposedNameserverInput.values;
   const currentGlue = glueInputRows(input.currentGlue);
-  const glue = glueRows(input.proposedGlue);
+  const proposedGlueInput = intendedAddressRows(input.proposedGlue, MAX_REHEARSAL_GLUE);
+  const glue = proposedGlueInput.values.map((row) => ({ nameserver: row.hostname, addresses: row.addresses }));
   const currentDs = dsRecords(input.currentDs);
   const proposedDs = dsRecords(input.proposedDs);
   const currentMx = mxRecords(input.currentMx);
@@ -304,7 +371,8 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const currentCaa = caaRecords(input.currentCaa);
   const proposedCaa = caaRecords(input.proposedCaa);
   const currentCriticalAddresses = addressRows(input.currentCriticalAddresses);
-  const proposedCriticalAddresses = addressRows(input.proposedCriticalAddresses);
+  const proposedCriticalAddressInput = intendedAddressRows(input.proposedCriticalAddresses, MAX_REHEARSAL_RECORDS);
+  const proposedCriticalAddresses = proposedCriticalAddressInput.values;
   const currentRegistrarLock = registrarLockState(input.currentRegistrationStatuses);
   const currentTlsSpkiSha256 = tlsSpkiSha256(input.currentTlsSpkiSha256);
   const proposedTlsSpkiSha256 = tlsSpkiSha256(input.proposedTlsSpkiSha256);
@@ -314,6 +382,21 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   )));
   const changingNameservers = proposed.length > 0 && !sameSet(current, proposed);
   const findings: DnsChangeFinding[] = [];
+  const invalidIntendedValues = proposedNameserverInput.invalid
+    + proposedGlueInput.invalid
+    + proposedCriticalAddressInput.invalid;
+  const omittedIntendedValues = proposedNameserverInput.omitted
+    + proposedGlueInput.omitted
+    + proposedCriticalAddressInput.omitted;
+
+  findings.push(invalidIntendedValues || omittedIntendedValues
+    ? finding(
+        'intended_input',
+        'blocked',
+        'Resolve invalid or omitted intended values',
+        `${invalidIntendedValues} invalid and ${omittedIntendedValues} over-bound intended value${invalidIntendedValues + omittedIntendedValues === 1 ? ' was' : 's were'} not admitted. Review the complete nameserver and public-address input before using this rehearsal.`,
+      )
+    : finding('intended_input', 'ready', 'Intended values fit the rehearsal contract', 'Every entered nameserver and public address was admitted to the bounded intended configuration.'));
 
   findings.push(!input.currentEvidenceComplete
     ? finding('current_evidence', 'unknown', 'Current evidence is incomplete', 'Refresh and review the registry, parent, and direct nameserver observations before using this rehearsal.')

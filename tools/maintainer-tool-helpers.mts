@@ -1,4 +1,12 @@
 import { createHash } from 'node:crypto';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readSync,
+} from 'node:fs';
+import { createConnection } from 'node:net';
 import path from 'node:path';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
@@ -46,6 +54,18 @@ export function canonicalControlFreeTimestamp(value: unknown, label: string): st
   const normalized = normalizeExplicitIsoTimestamp(boundedControlFreeText(value, label, 64));
   if (!normalized) throw new TypeError(`${label} must be a valid timestamp with an explicit timezone.`);
   return normalized;
+}
+
+export function canonicalObservationReviewTimestamps(
+  observedValue: unknown,
+  reviewedValue: unknown,
+): Readonly<{ observedAt: string; reviewedAt: string }> {
+  const observedAt = canonicalControlFreeTimestamp(observedValue, 'Observation time');
+  const reviewedAt = canonicalControlFreeTimestamp(reviewedValue, 'Review time');
+  if (Date.parse(observedAt) > Date.parse(reviewedAt)) {
+    throw new TypeError('Observation time must not follow review time.');
+  }
+  return Object.freeze({ observedAt, reviewedAt });
 }
 
 export function sanitizedMaintainerText(value: unknown, fallback: string, maximum: number): string {
@@ -99,6 +119,77 @@ export function pathIsWithin(root: string, candidate: string): boolean {
     && relative !== '..'
     && !relative.startsWith(`..${path.sep}`)
     && !path.isAbsolute(relative);
+}
+
+export function npmExecutableName(platform = process.platform): string {
+  return platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+export async function localPortIsFree(port: number, timeoutMs = 1_000): Promise<boolean> {
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new TypeError('Local port must be an integer from 1 through 65535.');
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
+    throw new TypeError('Local port status timeout must be an integer from 1 through 30000 milliseconds.');
+  }
+  return await new Promise((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`Port ${port} status check timed out.`));
+    }, timeoutMs);
+    socket.once('connect', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(false);
+    });
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      socket.destroy();
+      if (error.code === 'ECONNREFUSED') resolve(true);
+      else reject(error);
+    });
+  });
+}
+
+export function readBoundedStableRegularFileSync(
+  filename: string,
+  maximumBytes: number,
+  label: string,
+  minimumBytes = 1,
+): Buffer {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0
+    || !Number.isSafeInteger(minimumBytes) || minimumBytes < 0 || minimumBytes > maximumBytes) {
+    throw new TypeError(`${label} byte limits are invalid.`);
+  }
+  const noFollow = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0;
+  const descriptor = openSync(filename, constants.O_RDONLY | constants.O_NONBLOCK | noFollow);
+  try {
+    const before = fstatSync(descriptor);
+    if (!before.isFile() || before.size < minimumBytes || before.size > maximumBytes) {
+      throw new TypeError(`${label} must be a regular file within its byte limits.`);
+    }
+    const bytes = Buffer.allocUnsafe(Math.min(maximumBytes + 1, before.size + 1));
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = readSync(descriptor, bytes, offset, bytes.length - offset, null);
+      if (count === 0) break;
+      offset += count;
+    }
+    const after = fstatSync(descriptor);
+    if (offset > maximumBytes
+      || offset !== before.size
+      || after.size !== before.size
+      || after.dev !== before.dev
+      || after.ino !== before.ino
+      || after.mtimeMs !== before.mtimeMs
+      || after.ctimeMs !== before.ctimeMs) {
+      throw new TypeError(`${label} changed while it was being read.`);
+    }
+    return Buffer.from(bytes.subarray(0, offset));
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 export function medianOneDecimal(values: readonly number[]): number | null {

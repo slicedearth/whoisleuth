@@ -19,7 +19,9 @@ try {
       : formatRenderedCaptureComparison(comparison));
   } else {
     const options = parseCaptureArguments(argv);
-    const manifest = await captureRenderedPage(options, { launchBrowser: () => chromium.launch({ headless: true }) });
+    const manifest = await captureRenderedPage(options, {
+      launchBrowser: (timeout) => chromium.launch({ headless: true, timeout }),
+    });
     const capture = manifest.captures[0];
     if (!capture) throw new Error('Rendered capture completed without manifest evidence.');
     const safeDomain = sanitizeCaptureText(capture.domain, 253);

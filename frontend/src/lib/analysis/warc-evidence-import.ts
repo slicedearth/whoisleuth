@@ -33,6 +33,12 @@ const SHA_HEX_RE = /^[a-f0-9]+$/iu;
 const BASE32_RE = /^[A-Za-z2-7]+$/u;
 const MAX_EXCLUSIONS = 20;
 const MAX_TITLE_LENGTH = 240;
+const WARC_TRUNCATION_REASONS = new Map([
+  ['length', 'the configured length limit was reached'],
+  ['time', 'the configured collection time limit was reached'],
+  ['disconnect', 'the connection ended before the record was complete'],
+  ['unspecified', 'the archive producer did not specify why collection ended'],
+]);
 
 function decodeLatin1(bytes: Uint8Array): string {
   return new TextDecoder('iso-8859-1').decode(bytes);
@@ -279,6 +285,10 @@ export async function parseWarcEvidenceArchive(
       addExclusion(exclusions, 'A response whose supported WARC-Block-Digest did not match was excluded.');
       continue;
     }
+    const declaredTruncation = record.headers.get('warc-truncated')?.trim().toLowerCase() ?? null;
+    const truncationDescription = declaredTruncation
+      ? WARC_TRUNCATION_REASONS.get(declaredTruncation) ?? 'the archive producer declared an unrecognised truncation reason'
+      : null;
     if (findings.length >= MAX_WARC_FINDINGS) {
       addExclusion(exclusions, `Only the first ${MAX_WARC_FINDINGS} supported page responses were retained.`);
       continue;
@@ -295,7 +305,7 @@ export async function parseWarcEvidenceArchive(
         `Archive SHA-256 ${archiveDigestSha256}.`,
       ].filter(Boolean).join(' '),
       observedAt,
-      completeness: digestState === 'verified' ? 'complete' : 'partial',
+      completeness: digestState === 'verified' && !declaredTruncation ? 'complete' : 'partial',
       limitations: [
         'Imported locally from an analyst-selected WARC response; WHOISleuth did not collect or independently refresh the target.',
         digestState === 'verified'
@@ -303,6 +313,9 @@ export async function parseWarcEvidenceArchive(
           : digestState === 'missing'
             ? 'The response did not declare a WARC-Block-Digest, so record-level integrity was not verified.'
             : 'The response used an unsupported WARC-Block-Digest representation, so record-level integrity was not verified.',
+        ...(truncationDescription
+          ? [`WARC-Truncated declared ${declaredTruncation}: ${truncationDescription}; matching block integrity does not make the response complete.`]
+          : []),
         'Only normalised origin, title, status, observation time, completeness, limitations, and archive digest were retained.',
       ],
       reference: `urn:sha256:${archiveDigestSha256}`,

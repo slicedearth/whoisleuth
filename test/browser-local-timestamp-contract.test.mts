@@ -133,7 +133,7 @@ test('current browser-local timestamp decisions are timezone-independent', () =>
     brandNormalizedUpdatedAt: '2026-01-01T00:00:00.000Z',
     bulkProfileRevisionMatches: false,
     campaignMergeWinner: 'Local',
-    caseMergeStatus: 'new',
+    caseMergeStatus: 'escalated',
     shortlistSavedAt: '1970-01-01T00:00:00.000Z',
     relationshipMergeComplete: false,
     investigationOrder: ['explicit'],
@@ -175,8 +175,8 @@ const raw = {
   }, {
     id: 'pin-2', field: 'tls.valid_to', label: 'TLS expiry', value: candidate, source: 'fixture', observedAt: epoch, createdAt: epoch,
   }],
-  decisions: [{ id: 'decision-1', summary: 'Review', rationale: 'Fixture', evidencePinIds: ['pin-1'], createdAt: candidate }],
-  actions: [{ id: 'action-1', recipient: 'Analyst', type: 'internal_review', routeObservedAt: null, dueAt: candidate, followUpAt: candidate, createdAt: candidate, updatedAt: candidate }],
+  decisions: [{ id: 'decision-1', summary: 'Review', rationale: 'Fixture', confidence: 'unknown', confidenceBasis: '', evidencePinIds: ['pin-1'], createdAt: candidate }],
+  actions: [{ id: 'action-1', recipient: 'Analyst', type: 'internal_review', routeObservedAt: null, routeReviewAfter: null, dueAt: candidate, followUpAt: candidate, createdAt: candidate, updatedAt: candidate }],
   assertions: [{
     id: 'assertion-1', statement: 'Fixture assertion', createdAt: candidate, updatedAt: candidate,
     provenance: { origin: 'external_import', format: 'stix', sourceName: 'Fixture', sourceDigestSha256: 'b'.repeat(64), entityType: 'domain', entityValue: 'nested.invalid', observedAt: candidate, createdAt: candidate, modifiedAt: candidate },
@@ -222,8 +222,8 @@ function rejectNestedCase(timezone: string, timestamp: string, version: number):
 
 test('Case nested timestamps obey the current policy and retired schemas fail without reinterpretation', () => {
   const zoneLess = '2026-03-15T12:00:00.000';
-  const current = runNestedCase('UTC', zoneLess, 14);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 14), current);
+  const current = runNestedCase('UTC', zoneLess, 15);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 15), current);
   assert.equal(current.pinObservedAt, '2026-01-01T00:00:00.000Z');
   assert.equal(current.certificateNotAfter, null);
   assert.equal(current.actionDueAt, null);
@@ -234,12 +234,12 @@ test('Case nested timestamps obey the current policy and retired schemas fail wi
   for (const timezone of ['UTC', 'Australia/Melbourne']) {
     assert.match(
       rejectNestedCase(timezone, zoneLess, 11),
-      /Case schema 11 is not part of the supported compatibility boundary.*schema 14.*no data was changed/isu,
+      /Case schema 11 is not part of the supported compatibility boundary.*schema 15.*no data was changed/isu,
     );
   }
 
-  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 14);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 14), offset);
+  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 15);
+  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 15), offset);
   assert.equal(offset.pinObservedAt, '2026-03-15T11:00:00.000Z');
   assert.equal(offset.lifecycleStartsAt, '2026-02-13T11:00:00.000Z');
 });

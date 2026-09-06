@@ -163,13 +163,16 @@ export const RISK_CALIBRATION_REPORT_INTERPRETATION_KEYS = Object.freeze([
 ] as const);
 
 export type RiskCalibrationDatasetVersion = typeof SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS[number];
-export type RiskCalibrationDisposition =
-  | 'unreviewed'
-  | 'suspicious'
-  | 'confirmed_abuse'
-  | 'false_positive'
-  | 'expected'
-  | 'closed_no_action';
+/** Stable disposition identities admitted by the versioned calibration schema. */
+export const RISK_CALIBRATION_DISPOSITIONS = Object.freeze([
+  'unreviewed',
+  'suspicious',
+  'confirmed_abuse',
+  'false_positive',
+  'expected',
+  'closed_no_action',
+] as const);
+export type RiskCalibrationDisposition = typeof RISK_CALIBRATION_DISPOSITIONS[number];
 
 export type RiskCalibrationThreatIntelligence = Readonly<{
   providers: readonly Readonly<{
@@ -409,8 +412,8 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     {
       id: 'risk-calibration-report-v3-detailed',
       path: 'test/fixtures/risk-calibration-report-v3-detailed.json',
-      bytes: 7_026,
-      sha256: '5c0c435e81478e90bc0b64aa7c20fd82d131b5261a57d9550df3f03334bc20e1',
+      bytes: 7_020,
+      sha256: 'a5cba1681c170c79f8891037f47efc93e0ae6ce5d247418ff3f1c9a81a352922',
       contentDigestSha256: null,
       schema: RISK_CALIBRATION_REPORT_SCHEMA,
       version: RISK_CALIBRATION_REPORT_VERSION,
@@ -423,8 +426,8 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     {
       id: 'risk-calibration-report-v3-summary',
       path: 'test/fixtures/risk-calibration-report-v3-summary.json',
-      bytes: 5_486,
-      sha256: 'b06c312eed14680ce30fd58a84a93908d29ea9e71bfee8174b90df286b730549',
+      bytes: 5_480,
+      sha256: '71b7fe1ee613b2ab32bd1f5646ee765985022c904224e1a08f4577c1d1d06240',
       contentDigestSha256: null,
       schema: RISK_CALIBRATION_REPORT_SCHEMA,
       version: RISK_CALIBRATION_REPORT_VERSION,
@@ -1315,9 +1318,7 @@ const FACTOR_SPEC = objectOf([
 const REPORT_RECORD_SPEC = objectOf([
   { key: 'id', value: boundedText(MAX_RISK_CALIBRATION_RECORD_ID_LENGTH) },
   { key: 'domain', value: boundedText(MAX_RISK_CALIBRATION_DOMAIN_LENGTH) },
-  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, [
-    'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
-  ]) },
+  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, RISK_CALIBRATION_DISPOSITIONS) },
   { key: 'reviewReasonCode', value: nullable(boundedText(MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH)) },
   { key: 'interoperabilityTags', value: arrayOf(boundedText(MAX_RISK_CALIBRATION_STRING_LENGTH), 0, 32) },
   { key: 'metricClass', value: boundedText(16, ['positive', 'negative', 'excluded']) },
@@ -1385,9 +1386,7 @@ const DATASET_EVIDENCE_SPEC = objectOf([
 const DATASET_RECORD_SPEC = objectOf([
   { key: 'id', value: boundedText(MAX_RISK_CALIBRATION_RECORD_ID_LENGTH, null, 1, canonicalRiskCalibrationIdentifier) },
   { key: 'domain', value: boundedText(MAX_RISK_CALIBRATION_DOMAIN_LENGTH, null, 1, validRiskCalibrationDomain) },
-  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, [
-    'unreviewed', 'suspicious', 'confirmed_abuse', 'false_positive', 'expected', 'closed_no_action',
-  ]) },
+  { key: 'analystDisposition', value: boundedText(MAX_RISK_CALIBRATION_DISPOSITION_LENGTH, RISK_CALIBRATION_DISPOSITIONS) },
   { key: 'reviewReasonCode', value: boundedText(MAX_RISK_CALIBRATION_REVIEW_REASON_LENGTH, RISK_CALIBRATION_REVIEW_REASON_VALUES), optional: true },
   { key: 'evidence', value: DATASET_EVIDENCE_SPEC },
 ]);

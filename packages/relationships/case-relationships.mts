@@ -11,6 +11,7 @@ import {
   normalizeSnapshot,
 } from '../cases/case-model.mts';
 import {
+  INVESTIGATION_SCHEMA_VERSION_FIELDS,
   MAX_PROJECTION_LIMITATIONS,
 } from '../investigation/investigation-projection.mts';
 import { readBoundedInvestigationProjection } from '../investigation/investigation-projection-reader.mts';
@@ -109,7 +110,6 @@ const PROJECTION_FILTER_TYPES = new Set<string>(CASE_RELATIONSHIP_TYPE_FILTER_OP
 const PROJECTION_FILTER_PERIODS = new Set<string>(CASE_RELATIONSHIP_PERIOD_FILTER_OPTIONS);
 const PROJECTION_FILTER_COMPLETENESS = new Set<string>(CASE_RELATIONSHIP_COMPLETENESS_FILTER_OPTIONS);
 const PERIOD_MILLISECONDS = new Map([['7d', 7 * 86400000], ['30d', 30 * 86400000], ['365d', 365 * 86400000]]);
-const PROJECTION_SCHEMA_VERSION_FIELDS = ['case', 'riskModel', 'httpSummary', 'brandProfile', 'pageBaseline', 'pageIdentity', 'pageFingerprint', 'campaign', 'relationshipEvidence', 'relationshipObservation'];
 
 export interface CaseRelationshipMember {
   id: string;
@@ -487,7 +487,7 @@ function projectionLimitations(values: unknown): string[] {
 function projectionSchemaVersions(value: unknown): Record<string, number> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
-  return Object.fromEntries(PROJECTION_SCHEMA_VERSION_FIELDS.flatMap<[string, number]>((field) => {
+  return Object.fromEntries(INVESTIGATION_SCHEMA_VERSION_FIELDS.flatMap<[string, number]>((field) => {
     const version = record[field];
     return Number.isSafeInteger(version) && Number(version) > 0 ? [[field, Number(version)]] : [];
   }));

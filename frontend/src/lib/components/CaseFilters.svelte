@@ -25,8 +25,8 @@
     setSearch: (value: string) => void;
     sort: Sort;
     setSort: (value: Sort) => void;
-    statusOptions: Option[];
-    dispositionOptions: Option[];
+    statusOptions: readonly Option[];
+    dispositionOptions: readonly Option[];
     clear: () => void;
     matchedCount: number;
     totalCount: number;

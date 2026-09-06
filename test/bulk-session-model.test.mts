@@ -530,7 +530,24 @@ describe('saved Bulk sessions', () => {
       withContext('current', ACTIVE_PROFILE_CONTEXT, 35, 6),
     );
     assert.equal(mismatchedModel?.rows.some((row) => row.changes.some((change) => change.startsWith('Risk:'))), false);
-    assert.match(mismatchedModel?.limitations.join(' ') ?? '', /same versioned Risk model/u);
+    assert.match(mismatchedModel?.limitations.join(' ') ?? '', /versioned Risk model/u);
+
+    const differentDepth = compareBulkSessions(
+      session('baseline', {
+        updatedAt: FIRST,
+        mode: 'fast',
+        results: [result('priority.invalid', {
+          profileContext: ACTIVE_PROFILE_CONTEXT,
+          risk: 80,
+          riskModelVersion: 5,
+          hasActiveBrandProfile: true,
+          scanDepth: 'fast',
+        })],
+      }),
+      withContext('current', ACTIVE_PROFILE_CONTEXT, 35),
+    );
+    assert.equal(differentDepth?.rows.some((row) => row.changes.some((change) => change.startsWith('Risk:'))), false);
+    assert.match(differentDepth?.limitations.join(' ') ?? '', /scan depth/u);
 
     const missingRisk = compareBulkSessions(
       withContext('baseline', ACTIVE_PROFILE_CONTEXT, 80),

@@ -53,6 +53,18 @@ describe('undelegated nameserver preflight review', () => {
     assert.match(result.gate.reasons.join(' '), /no observed public address/iu);
   });
 
+  test('rejects supplied private-only addresses for an out-of-bailiwick nameserver', () => {
+    const value = input();
+    value.observations[1]!.addresses = ['127.0.0.1'];
+    const result = reviewNameserverPreflight(value, NOW);
+    assert.equal(result.rows[1]?.inBailiwick, false);
+    assert.equal(result.rows[1]?.addressState, 'non_public');
+    assert.equal(result.rows[1]?.ready, false);
+    assert.equal(result.state, 'review');
+    assert.equal(result.gate.pass, false);
+    assert.match(result.gate.reasons.join(' '), /no observed public address/iu);
+  });
+
   test('bounds inputs and rejects unrelated or internally contradictory observations', () => {
     assert.throws(() => reviewNameserverPreflight({ ...input(), unexpected: true }, NOW), /unknown field/iu);
     assert.throws(() => reviewNameserverPreflight({

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';
+import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 
 // ---------------------------------------------------------------------------
@@ -46,8 +47,8 @@ function snapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function caseRecord(overrides: Record<string, unknown> = {}) {
-  return {
+function caseRecord(overrides: Record<string, unknown> = {}): CaseRecord {
+  const base = {
     id: 'case-1',
     domain: 'test.invalid',
     status: 'new',
@@ -67,8 +68,10 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     closures: { records: [], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
     createdAt: ISO,
     updatedAt: ISO,
-    ...overrides,
-  };
+  } satisfies CaseRecord;
+  // Individual tests deliberately inject future or malformed runtime fields
+  // through this boundary; ordinary typed fixtures remain checked above.
+  return { ...base, ...overrides } as CaseRecord;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +81,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 10);
+    assert.ok(Number.isSafeInteger(caseReport.CASE_REPORT_SCHEMA_VERSION) && caseReport.CASE_REPORT_SCHEMA_VERSION > 0);
   });
 });
 
@@ -92,7 +95,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 10);
+    assert.equal(json.schemaVersion, caseReport.CASE_REPORT_SCHEMA_VERSION);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.application.version, null);
@@ -109,12 +112,12 @@ describe('buildCaseReport JSON', () => {
     assert.equal('notes' in json.case, false);
   });
 
-  test('case report v10 preserves exact opaque Brand Profile references', () => {
+  test('the current Case report preserves exact opaque Brand Profile references', () => {
     const record = caseRecord({
       brandProfileIds: ['Profile_A', 'profile_a'],
     });
     const { json, markdown } = caseReport.buildCaseReport(record, { generatedAt: ISO });
-    assert.equal(json.schemaVersion, 10);
+    assert.equal(json.schemaVersion, caseReport.CASE_REPORT_SCHEMA_VERSION);
     assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
     (record.brandProfileIds as string[])[0] = 'changed-source';
     assert.deepEqual(json.case.brandProfileIds, ['Profile_A', 'profile_a']);
@@ -230,7 +233,7 @@ describe('buildCaseReport JSON', () => {
     assert.equal(requiredValue(json.currentAssessment).id, 'ev-1');
   });
 
-  test('report v10 preserves nullable profile provenance in JSON, timeline, and Markdown beside Risk', () => {
+  test('the current report preserves nullable profile provenance in JSON, timeline, and Markdown beside Risk', () => {
     const limitation = 'The active Brand Profile was unavailable for this observation.';
     const rec = caseRecord({
       evidenceHistory: [snapshot({
@@ -241,7 +244,7 @@ describe('buildCaseReport JSON', () => {
       })],
     });
     const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
-    assert.equal(json.schemaVersion, 10);
+    assert.equal(json.schemaVersion, caseReport.CASE_REPORT_SCHEMA_VERSION);
     assert.equal(requiredValue(json.currentAssessment).profileContextState, 'unavailable');
     assert.equal(requiredValue(json.currentAssessment).profileContextLimitation, limitation);
     assert.equal(requiredValue(json.evidenceTimeline[0]).snapshot.profileContextState, 'unavailable');

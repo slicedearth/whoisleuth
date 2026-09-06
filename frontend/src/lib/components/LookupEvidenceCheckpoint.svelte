@@ -9,6 +9,7 @@
     CaseEvidencePin,
     CaseTransitionExpectation,
   } from '$lib/cases';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
 
   let {
     facts,
@@ -22,7 +23,7 @@
     onsave: (
       selectedFields: string[],
       transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>,
-    ) => void | Promise<void>;
+    ) => Promise<LocalMutationOutcome>;
     actionBusy?: boolean;
     headingId?: string;
   } = $props();
@@ -66,7 +67,8 @@
 
   async function save() {
     if (actionBusy) return;
-    await onsave(selectedFields, transitionMode ? transitionExpectations : {});
+    const outcome = await onsave(selectedFields, transitionMode ? transitionExpectations : {});
+    if (!clearsLocalMutationDraft(outcome)) return;
     selectedFields = [];
     transitionExpectations = {};
     transitionMode = false;
@@ -149,7 +151,7 @@
           </article>
         {/each}
       </div>
-      <p class="limit">A failed or incomplete later lookup never replaces the saved checkpoint. Missing, unavailable, conflicting, and not-recorded states remain distinct from a material change.</p>
+      <p class="limit">A failed, incomplete, or differently scoped later lookup never replaces the saved checkpoint. Missing, unavailable, conflicting, incomparable, and not-recorded states remain distinct from a material change.</p>
     </details>
   {/if}
 </section>

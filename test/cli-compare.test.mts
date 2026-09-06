@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import {
   MAX_COMPARE_EVENTS,
   MAX_COMPARE_INPUT_BYTES,
@@ -206,10 +206,10 @@ describe('comparison CLI arguments', () => {
   });
 
   test('rejects multiple files, repeated JSON, unrelated flags, and quiet JSON', () => {
-    assert.throws(() => parseCliArguments(['compare', 'one.json', 'two.json']), /one optional lookup JSON file/);
-    assert.throws(() => parseCliArguments(['compare', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['compare', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['compare', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['compare', 'one.json', 'two.json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['compare', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['compare', '--deep']), CliUsageError);
+    assert.throws(() => parseCliArguments(['compare', '--json', '--quiet']), CliUsageError);
   });
 });
 

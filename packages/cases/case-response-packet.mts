@@ -2,6 +2,7 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.mts';
+import { caseDispositionSupportsDefensiveResponse } from './case-record-operations.mts';
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,
@@ -21,10 +22,12 @@ import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
@@ -51,10 +54,12 @@ import {
 export {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
@@ -91,6 +96,7 @@ export const RESPONSE_CONTACT_KINDS = [
   'registry',
   'network_hosting',
   'security_txt',
+  'application_platform',
 ] as const;
 export type ResponseContactKind = typeof RESPONSE_CONTACT_KINDS[number];
 
@@ -99,6 +105,7 @@ export const RESPONSE_PACKET_PROFILE_IDS = [
   'registry',
   'network_hosting',
   'security_contact',
+  'application_platform',
   'browser_blocklist',
   'internal_soc',
 ] as const;
@@ -227,6 +234,20 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     followUpFields: ['Security reference', 'Triage acknowledgement', 'Remediation outcome'],
   },
   {
+    id: 'application_platform',
+    label: 'Platform report review',
+    audience: 'Application-platform safety, impersonation, commerce, or rights team',
+    subjectPrefix: 'Reviewed platform report',
+    requiredContactKind: 'application_platform',
+    checklist: ['Confirm the exact account or content URL', 'Choose the route matching the evidence and reporter authority', 'Review the provider notice before sharing identity or rights-owner details'],
+    evidenceOrder: ['Incident facts', 'Exact platform URLs', 'Selected observations', 'Rights or authority evidence', 'Action history'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Selected evidence pins', 'Route provenance and review deadline', 'Relevant rights or authority context'],
+    excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected personal data', 'Unsupported policy or legal conclusions'],
+    redactions: ['Credential-bearing URLs are rejected; review query strings, fragments, tokens, identity documents, and unrelated personal data before sharing'],
+    attachments: ['Reviewed response packet', 'Optional normalised case report'],
+    followUpFields: ['Provider reference', 'Acknowledgement time', 'Policy response', 'Independent observed effect'],
+  },
+  {
     id: 'browser_blocklist',
     label: 'Browser or blocklist review',
     audience: 'Browser-safety, reputation, or blocklist reviewer',
@@ -337,8 +358,8 @@ export type CaseResponsePacket = {
   case: {
     id: string;
     domain: string;
-    status: string;
-    disposition: string;
+    status: CaseRecord['status'];
+    disposition: CaseRecord['disposition'];
     updatedAt: string;
   };
   incident: {
@@ -353,6 +374,7 @@ export type CaseResponsePacket = {
     contact: string;
     source: string;
     observedAt: string | null;
+    reviewAfter: string | null;
     freshness: 'current' | 'stale' | 'unknown';
     limitations: string[];
   }>;
@@ -362,6 +384,7 @@ export type CaseResponsePacket = {
     contact: string;
     source: string;
     observedAt: string | null;
+    reviewAfter: string | null;
     freshness: 'current' | 'stale' | 'unknown';
     limitations: string[];
   } | null;
@@ -409,6 +432,7 @@ export type CaseResponsePacket = {
     recipient: string;
     contactSource: string;
     routeObservedAt: string | null;
+    routeReviewAfter: string | null;
     state: string;
     reference: string | null;
     providerOutcome: string | null;
@@ -484,6 +508,9 @@ export type CaseResponsePacket = {
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const RESPONSE_PROFILE_IDS = new Set<string>(RESPONSE_PACKET_PROFILE_IDS);
+const PRE_PLATFORM_CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS.filter((kind) => kind !== 'application_platform'));
+const PRE_PLATFORM_PROFILE_IDS = new Set<string>(RESPONSE_PACKET_PROFILE_IDS.filter((id) => id !== 'application_platform'));
+const PRE_PLATFORM_ACTION_TYPES = CASE_ACTION_TYPES.filter((type) => type !== 'platform_report');
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 
@@ -502,9 +529,14 @@ function timestamp(value: unknown): string | null {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function normalizeExactUrl(value: unknown): string | null {
-  const candidate = text(value, MAX_EXACT_URL_LENGTH);
+function normalizeExactUrl(value: unknown, rejectOverlong: boolean): string | null {
+  if (typeof value !== 'string' || CONTROL_RE.test(value)) return null;
+  const candidate = value.trim();
   if (!candidate) return null;
+  if (candidate.length > MAX_EXACT_URL_LENGTH) {
+    if (rejectOverlong) throw new Error(`Each exact HTTP(S) URL is limited to ${MAX_EXACT_URL_LENGTH} characters; shorten or remove the overlong URL before continuing.`);
+    return null;
+  }
   try {
     const parsed = new URL(candidate);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
@@ -514,7 +546,7 @@ function normalizeExactUrl(value: unknown): string | null {
   }
 }
 
-function normalizeUrls(value: unknown): string[] {
+function normalizeUrls(value: unknown, rejectOverlong = false): string[] {
   const source = Array.isArray(value)
     ? value
     : typeof value === 'string'
@@ -522,7 +554,7 @@ function normalizeUrls(value: unknown): string[] {
       : [];
   const unique = new Set<string>();
   for (const item of source.slice(0, MAX_ABUSIVE_URLS * 2)) {
-    const normalized = normalizeExactUrl(item);
+    const normalized = normalizeExactUrl(item, rejectOverlong);
     if (normalized) unique.add(normalized);
     if (unique.size >= MAX_ABUSIVE_URLS) break;
   }
@@ -549,14 +581,21 @@ function actionContactKind(type: string): ResponseContactKind | 'manual' {
   if (type === 'registry_report') return 'registry';
   if (type === 'network_hosting_report') return 'network_hosting';
   if (type === 'security_contact_report') return 'security_txt';
+  if (type === 'platform_report') return 'application_platform';
   return 'manual';
 }
 
-function routeFreshness(observedAt: string | null, generatedAt: string): 'current' | 'stale' | 'unknown' {
+function routeFreshness(
+  observedAt: string | null,
+  reviewAfter: string | null,
+  generatedAt: string,
+): 'current' | 'stale' | 'unknown' {
   if (!observedAt) return 'unknown';
   const routeAge = Date.parse(generatedAt) - Date.parse(observedAt);
+  const reviewExpired = reviewAfter !== null && Date.parse(generatedAt) >= Date.parse(reviewAfter);
   return routeAge < -MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS
-    || routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000
+    || reviewExpired
+    || (reviewAfter === null && routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000)
     ? 'stale'
     : 'current';
 }
@@ -628,13 +667,15 @@ function bindPacketRoute(
     };
   }
   const observedAt = timestamp(action.routeObservedAt);
+  const reviewAfter = timestamp(action.routeReviewAfter);
   const recipientRoute: NonNullable<CaseResponsePacket['recipientRoute']> = {
     actionId: action.id,
     kind,
     contact: text(action.recipient, 320),
     source: text(action.contactSource, 120) || 'analyst supplied',
     observedAt,
-    freshness: routeFreshness(observedAt, generatedAt),
+    reviewAfter,
+    freshness: routeFreshness(observedAt, reviewAfter, generatedAt),
     limitations: normalizeLimitations(action.contactLimitations),
   };
   const contacts: CaseResponsePacket['contacts'] = kind === 'manual' ? [] : [{
@@ -642,6 +683,7 @@ function bindPacketRoute(
     contact: recipientRoute.contact,
     source: recipientRoute.source,
     observedAt,
+    reviewAfter,
     freshness: recipientRoute.freshness,
     limitations: [...recipientRoute.limitations],
   }];
@@ -935,7 +977,7 @@ export function buildCaseResponsePreflight(
   const retainedPinIds = new Set(caseRecord.evidencePins.map((pin) => pin.id));
   const evidenceLinkedDecisionCount = caseRecord.decisions.filter((decision) =>
     decision.evidencePinIds.some((evidencePinId) => retainedPinIds.has(evidencePinId))).length;
-  const responseDisposition = ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition);
+  const responseDisposition = caseDispositionSupportsDefensiveResponse(caseRecord.disposition);
   const reviewedActionCount = caseRecord.actions.filter((action) =>
     ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;
   const profile = responsePacketProfile(input.profile);
@@ -990,6 +1032,8 @@ export function buildCaseResponsePreflight(
             : 'The browser or blocklist profile requires a manually reviewed submission destination recorded as a Case action.'
           : `${profile.label} has no fixed external contact-kind requirement.`,
     },
+    // Packet v9 retains its established machine-token wording for immutable
+    // fixture compatibility; interactive Case surfaces use the canonical label.
     {
       id: 'case_disposition',
       label: 'Case disposition',
@@ -1071,6 +1115,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       recipient: text(action.recipient, 320),
       contactSource: text(action.contactSource, 120),
       routeObservedAt: timestamp(action.routeObservedAt),
+      routeReviewAfter: timestamp(action.routeReviewAfter),
       state: text(action.state, 80),
       reference: text(action.reference, 500) || null,
       providerOutcome: text(action.providerOutcome, 80) || null,
@@ -1206,7 +1251,7 @@ export function buildCaseResponseReviewInputs(
     incident: {
       category,
       affectedParty: text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH),
-      abusiveUrls: normalizeUrls(input.abusiveUrls),
+      abusiveUrls: normalizeUrls(input.abusiveUrls, true),
       observedHarm: text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH),
       observedAt: timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null,
     },
@@ -1371,21 +1416,24 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     || !descriptors.version || !Object.hasOwn(descriptors.version, 'value')) {
     throw new TypeError('Case-response review inputs must not contain accessors.');
   }
-  const current = descriptors.version.value === CASE_RESPONSE_REVIEW_INPUTS_VERSION;
-  const publishedV2 = descriptors.version.value === PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
-  if (descriptors.contract.value !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA || (!current && !publishedV2)) {
+  const version = descriptors.version.value;
+  const current = version === CASE_RESPONSE_REVIEW_INPUTS_VERSION;
+  const hasActionBinding = version === LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION || current;
+  const publishedV2 = version === PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
+  if (descriptors.contract.value !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA || (!current && !hasActionBinding && !publishedV2)) {
     throw new TypeError('Case-response review inputs contain an unsupported version, shape, or bound.');
   }
   const source = exactReviewRecord(
     value,
-    current ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS,
+    hasActionBinding ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS,
     'Case-response review inputs',
   );
   const profile = exactReviewRecord(source.profile, [
     'id', 'label', 'audience', 'subject', 'checklist', 'includedEvidence',
     'excludedEvidence', 'redactions',
   ], 'Case-response review profile');
-  if (typeof profile.id !== 'string' || !RESPONSE_PROFILE_IDS.has(profile.id)) {
+  const supportedProfileIds = current ? RESPONSE_PROFILE_IDS : PRE_PLATFORM_PROFILE_IDS;
+  if (typeof profile.id !== 'string' || !supportedProfileIds.has(profile.id)) {
     throw new TypeError('Case-response review profile is unsupported.');
   }
   for (const key of ['label', 'audience', 'subject'] as const) {
@@ -1415,9 +1463,10 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
 
   for (const candidate of boundedReviewArray(source.contacts, MAX_RESPONSE_CONTACTS, 'Case-response contacts')) {
     const contact = exactReviewRecord(candidate, [
-      'kind', 'contact', 'source', 'observedAt', 'freshness', 'limitations',
+      'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
     ], 'Case-response contact');
-    if (typeof contact.kind !== 'string' || !CONTACT_KINDS.has(contact.kind)
+    const supportedContactKinds = current ? CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS;
+    if (typeof contact.kind !== 'string' || !supportedContactKinds.has(contact.kind)
       || typeof contact.freshness !== 'string'
       || !['current', 'stale', 'unknown'].includes(contact.freshness)) {
       throw new TypeError('Case-response contact contains an unsupported enum.');
@@ -1425,24 +1474,26 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewText(contact.contact, 320, 'Case-response contact value');
     reviewText(contact.source, 120, 'Case-response contact source');
     reviewText(contact.observedAt, 64, 'Case-response contact observation time', true);
+    if (current) reviewText(contact.reviewAfter, 64, 'Case-response contact review deadline', true);
     reviewStrings(contact.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response contact limitations');
   }
 
-  if (current && source.recipientRoute !== null) {
+  if (hasActionBinding && source.recipientRoute !== null) {
     const route = exactReviewRecord(source.recipientRoute, [
-      'actionId', 'kind', 'contact', 'source', 'observedAt', 'freshness', 'limitations',
+      'actionId', 'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
     ], 'Case-response recipient route');
     reviewText(route.actionId, 64, 'Case-response recipient action id');
-    reviewEnum(route.kind, [...RESPONSE_CONTACT_KINDS, 'manual'], 'Case-response recipient kind');
+    reviewEnum(route.kind, [...(current ? RESPONSE_CONTACT_KINDS : [...PRE_PLATFORM_CONTACT_KINDS]), 'manual'], 'Case-response recipient kind');
     reviewText(route.contact, 320, 'Case-response recipient value');
     reviewText(route.source, 120, 'Case-response recipient source');
     reviewText(route.observedAt, 64, 'Case-response recipient observation time', true);
+    if (current) reviewText(route.reviewAfter, 64, 'Case-response recipient review deadline', true);
     reviewEnum(route.freshness, ['current', 'stale', 'unknown'], 'Case-response recipient freshness');
     reviewStrings(route.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response recipient limitations');
   }
 
   let currentLineageActionIds: string[] | null = null;
-  if (current) {
+  if (hasActionBinding) {
     const actionBinding = exactReviewRecord(source.actionBinding, [
       'state', 'selectedActionId', 'lineageActionIds', 'limitations',
     ], 'Case-response action binding');
@@ -1487,7 +1538,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   const readiness = exactReviewRecord(source.readiness, [
     'profileId', 'rows', 'counts', 'limitations',
   ], 'Case-response readiness');
-  if (typeof readiness.profileId !== 'string' || !RESPONSE_PROFILE_IDS.has(readiness.profileId)) {
+  if (typeof readiness.profileId !== 'string' || !supportedProfileIds.has(readiness.profileId)) {
     throw new TypeError('Case-response readiness profile is unsupported.');
   }
   const readinessRows = boundedReviewArray(readiness.rows, RESPONSE_READINESS_ROW_IDS.length, 'Case-response readiness rows');
@@ -1540,7 +1591,8 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   for (const candidate of boundedReviewArray(source.escalationHistory, MAX_RESPONSE_ACTION_HISTORY, 'Case-response escalation history')) {
     const action = exactReviewRecord(candidate, [
       'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
-      ...(current ? ['routeObservedAt'] : []),
+      ...(hasActionBinding ? ['routeObservedAt'] : []),
+      ...(current ? ['routeReviewAfter'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
     ], 'Case-response escalation action');
@@ -1551,8 +1603,9 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       throw new TypeError('Case-response escalation action identities must be unique.');
     }
     escalationActionIds.push(action.actionId as string);
-    if (current) reviewText(action.routeObservedAt, 64, 'Case-response action route observation time', true);
-    reviewEnum(action.type, CASE_ACTION_TYPES, 'Case-response action type');
+    if (hasActionBinding) reviewText(action.routeObservedAt, 64, 'Case-response action route observation time', true);
+    if (current) reviewText(action.routeReviewAfter, 64, 'Case-response action route review deadline', true);
+    reviewEnum(action.type, current ? CASE_ACTION_TYPES : PRE_PLATFORM_ACTION_TYPES, 'Case-response action type');
     reviewEnum(action.state, CASE_ACTION_STATES, 'Case-response action state');
     for (const key of ['reference', 'outcomeDetail', 'originActionId'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`, true);
@@ -1680,6 +1733,7 @@ function escapeMarkdown(value: string): string {
 function contactLabel(value: ResponseContactKind | 'manual'): string {
   if (value === 'network_hosting') return 'Observed endpoint network registration';
   if (value === 'security_txt') return 'security.txt';
+  if (value === 'application_platform') return 'Application platform';
   if (value === 'manual') return 'Manual submission';
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -1691,7 +1745,7 @@ export async function buildCaseResponsePacket(
 ): Promise<{ json: CaseResponsePacket; markdown: string; email: string }> {
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH);
   const affectedParty = text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH);
-  const abusiveUrls = normalizeUrls(input.abusiveUrls);
+  const abusiveUrls = normalizeUrls(input.abusiveUrls, true);
   const observedHarm = text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH);
   const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
   const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
@@ -1819,6 +1873,7 @@ export async function buildCaseResponsePacket(
           `- Contact: ${escapeMarkdown(recipientRoute.contact)}`,
           `- Source: ${escapeMarkdown(recipientRoute.source)}`,
           `- Route observed: ${recipientRoute.observedAt ?? 'Not provided'} (${recipientRoute.freshness})`,
+          `- Route review after: ${recipientRoute.reviewAfter ?? 'Not provided'}`,
           `- Limitations: ${recipientRoute.limitations.length ? recipientRoute.limitations.map(escapeMarkdown).join('; ') : 'None recorded'}`,
           '',
         ]

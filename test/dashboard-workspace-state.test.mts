@@ -7,6 +7,10 @@ import {
   dashboardWorkspaceState,
 } from '../frontend/src/lib/analysis/dashboard-workspace-state.ts';
 import {
+  ANALYST_REVIEW_REQUIRED_COLLECTION_IDS,
+  analystReviewRequiredSourceState,
+} from '../frontend/src/lib/analysis/analyst-review-source-state.ts';
+import {
   analystReviewLifecycle,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
@@ -46,6 +50,14 @@ function item(fingerprint = analystReviewMaterialFingerprint(['first'])): Analys
 }
 
 describe('Dashboard workspace and attention states', () => {
+  test('requires every Review Item source before reporting a count', () => {
+    const ready = Object.fromEntries(ANALYST_REVIEW_REQUIRED_COLLECTION_IDS.map((collection) => [collection, 'ready'])) as Record<(typeof ANALYST_REVIEW_REQUIRED_COLLECTION_IDS)[number], 'ready'>;
+    assert.equal(analystReviewRequiredSourceState(ready), 'ready');
+    assert.equal(analystReviewRequiredSourceState({ ...ready, detection_rules: 'unavailable' }), 'unavailable');
+    assert.equal(analystReviewRequiredSourceState({ ...ready, website_snapshots: 'unavailable' }), 'unavailable');
+    assert.equal(analystReviewRequiredSourceState({ ...ready, website_snapshots: 'loading' }), 'loading');
+  });
+
   test('distinguishes loading, genuine first use, unavailable, and returning work', () => {
     const empty = DASHBOARD_REQUIRED_COLLECTION_IDS.map(() => ({ status: 'ready' as const, count: 0 }));
     assert.equal(dashboardWorkspaceState(empty.slice(0, -1)), 'loading');

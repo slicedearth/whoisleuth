@@ -29,9 +29,22 @@ import {
   MAX_BOUNDED_JSON_KEYS,
   MAX_BOUNDED_JSON_VALUES,
 } from '../cli/bounded-json.mts';
+import {
+  buildInterchangeRoundTripReport,
+  formatInterchangeRoundTripReport,
+  main as interchangeRoundTripMain,
+} from '../tools/interchange-roundtrip.mts';
 
 const NOW = '2026-08-07T00:00:00.000Z';
 const PASSPHRASE = 'fixture archive passphrase';
+
+function writer() {
+  let value = '';
+  return {
+    stream: { write(chunk: string) { value += chunk; } },
+    read: () => value,
+  };
+}
 
 function passport() {
   return buildDomainControlManifest({
@@ -120,6 +133,27 @@ async function currentInternalCasePackWithScalarProjection() {
 }
 
 describe('interchange fidelity report', () => {
+  test('proves a reserved browser to CLI to browser archive round trip', async () => {
+    const report = await buildInterchangeRoundTripReport();
+    assert.equal(report.archiveSchema, 'whoisleuth.workspace-archive');
+    assert.equal(report.cliVerificationState, 'integrity_valid');
+    assert.equal(report.cliFidelity, 'normalised_merge');
+    assert.equal(report.importedCases, 1);
+    assert.equal(report.canonicalReExportMatched, true);
+    assert.equal(report.networkRequests, 0);
+    assert.match(report.archiveDigestSha256, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(formatInterchangeRoundTripReport(report), /Canonical re-export: matched/u);
+
+    const stdout = writer();
+    const stderr = writer();
+    assert.equal(await interchangeRoundTripMain([], stdout.stream, stderr.stream), 0);
+    assert.match(stdout.read(), /Network requests: 0/u);
+    assert.equal(stderr.read(), '');
+
+    const usage = writer();
+    assert.equal(await interchangeRoundTripMain(['--json'], writer().stream, usage.stream), 1);
+    assert.match(usage.read(), /Usage: npm run interchange:roundtrip/u);
+  });
   test('requires an explicit zone for current report production', async () => {
     await assert.rejects(
       () => buildInterchangeFidelityReport('{}', { generatedAt: '2026-08-07T00:00:00' }),

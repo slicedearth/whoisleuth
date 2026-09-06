@@ -167,6 +167,7 @@ export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new D
     });
   });
   const reasons = Object.freeze([
+    ...(rows.length === 0 ? ['No comparable owner and record-type scope was supplied or observed.'] : []),
     ...rows.filter((row) => row.state !== 'converged').map((row) => `${row.owner} ${row.type} is ${row.state}.`),
     ...latestByObserver.filter((item) => item.state !== 'observed').map((item) => `${item.observer} latest evidence is ${item.state}.`),
   ].slice(0, 200));

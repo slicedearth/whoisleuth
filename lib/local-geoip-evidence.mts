@@ -66,14 +66,30 @@ function buildLocalGeoIpDatabase(value: unknown): LocalGeoIpDatabase {
   }
   const truncated = rows.length > MAX_GEOIP_RECORDS;
   const normalized = rows.slice(0, MAX_GEOIP_RECORDS).map(normalizeGeoIpEntry);
-  const records = normalized.filter((item): item is GeoIpEntry => item !== null)
-    .sort((left, right) => right.parsedNetwork.length - left.parsedNetwork.length);
+  const byNetwork = new Map<string, GeoIpEntry>();
+  const sameAttribution = (left: GeoIpEntry, right: GeoIpEntry): boolean => (
+    left.countryCode === right.countryCode
+    && left.region === right.region
+    && left.city === right.city
+    && left.asn === right.asn
+    && left.asName === right.asName
+  );
+  for (const item of normalized) {
+    if (!item) continue;
+    const existing = byNetwork.get(item.network);
+    if (existing && !sameAttribution(existing, item)) {
+      throw new TypeError(`A local GeoIP database must not assign conflicting evidence to canonical prefix ${item.network}.`);
+    }
+    if (!existing) byNetwork.set(item.network, item);
+  }
+  const records = [...byNetwork.values()]
+    .sort((left, right) => right.parsedNetwork.length - left.parsedNetwork.length || left.network.localeCompare(right.network));
   return Object.freeze({
     sourceLabel,
     databaseVersion,
     license,
     records: Object.freeze(records),
-    rejectedCount: normalized.length - records.length + Math.max(0, rows.length - MAX_GEOIP_RECORDS),
+    rejectedCount: normalized.filter((item) => item === null).length + Math.max(0, rows.length - MAX_GEOIP_RECORDS),
     truncated,
   });
 }

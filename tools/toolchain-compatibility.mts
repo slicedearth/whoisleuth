@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { accessSync, constants as fsConstants } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,8 +17,146 @@ type MainOptions = Readonly<{
 }>;
 
 type Version = Readonly<{ major: number; minor: number; patch: number }>;
+export type UnitTestExecutable = 'bash' | 'zsh' | 'pwsh';
+type ExecutableProbe = (
+  executable: string,
+  args: readonly string[],
+  options: Readonly<{
+    cwd: string;
+    encoding: 'utf8';
+    env: NodeJS.ProcessEnv;
+    input: string;
+    maxBuffer: number;
+    timeout: number;
+  }>,
+) => Pick<SpawnSyncReturns<string>, 'error' | 'signal' | 'status' | 'stderr'>;
+
+const UNIT_TEST_EXECUTABLE_REQUIREMENTS: Readonly<Record<UnitTestExecutable, Readonly<{
+  environmentVariable: string;
+  probeArguments: readonly string[];
+}>>> = Object.freeze({
+  bash: Object.freeze({
+    environmentVariable: 'WHOISLEUTH_VERIFICATION_BASH',
+    probeArguments: Object.freeze(['--noprofile', '--norc', '-c', 'exit 0']),
+  }),
+  zsh: Object.freeze({
+    environmentVariable: 'WHOISLEUTH_VERIFICATION_ZSH',
+    probeArguments: Object.freeze(['-f', '-c', 'exit 0']),
+  }),
+  pwsh: Object.freeze({
+    environmentVariable: 'WHOISLEUTH_VERIFICATION_PWSH',
+    probeArguments: Object.freeze(['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', 'exit 0']),
+  }),
+});
+
+export const UNIT_TEST_EXECUTABLES = Object.freeze(
+  Object.keys(UNIT_TEST_EXECUTABLE_REQUIREMENTS) as UnitTestExecutable[],
+);
 
 export const MAX_TOOLCHAIN_INPUT_BYTES = 2 * 1024 * 1024;
+const EXECUTABLE_PROBE_TIMEOUT_MS = 5_000;
+const EXECUTABLE_PROBE_OUTPUT_BYTES = 4_096;
+
+function defaultExecutableProbe(
+  executable: string,
+  args: readonly string[],
+  options: Parameters<ExecutableProbe>[2],
+): ReturnType<ExecutableProbe> {
+  return spawnSync(executable, args, options);
+}
+
+function executableCandidates(
+  executable: UnitTestExecutable,
+  environment: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): readonly string[] {
+  const requirement = UNIT_TEST_EXECUTABLE_REQUIREMENTS[executable];
+  const configured = environment[requirement.environmentVariable]?.trim();
+  if (configured) return Object.freeze([path.resolve(configured)]);
+  const filename = platform === 'win32' ? `${executable}.exe` : executable;
+  return Object.freeze((environment.PATH || '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((directory) => path.resolve(directory, filename)));
+}
+
+export function resolveUnitTestExecutables(
+  requested: readonly UnitTestExecutable[] = UNIT_TEST_EXECUTABLES,
+  options: Readonly<{
+    environment?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
+    cwd?: string;
+    probe?: ExecutableProbe;
+    canExecute?: (candidate: string) => boolean;
+  }> = {},
+): ReadonlyMap<UnitTestExecutable, string> {
+  const environment = options.environment ?? process.env;
+  const platform = options.platform ?? process.platform;
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const probe = options.probe ?? defaultExecutableProbe;
+  const canExecute = options.canExecute ?? ((candidate: string) => {
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const resolved = new Map<UnitTestExecutable, string>();
+  const failures: string[] = [];
+
+  for (const executable of [...new Set(requested)]) {
+    const requirement = UNIT_TEST_EXECUTABLE_REQUIREMENTS[executable];
+    if (!requirement) throw new TypeError(`Unsupported unit-test executable ${String(executable)}.`);
+    const candidates = executableCandidates(executable, environment, platform);
+    const candidate = candidates.find(canExecute);
+    if (!candidate) {
+      failures.push(`${executable}: not found as an executable on PATH`);
+      continue;
+    }
+    const child = probe(candidate, requirement.probeArguments, {
+      cwd,
+      encoding: 'utf8',
+      env: { ...environment },
+      input: '',
+      maxBuffer: EXECUTABLE_PROBE_OUTPUT_BYTES,
+      timeout: EXECUTABLE_PROBE_TIMEOUT_MS,
+    });
+    if (child.error) {
+      failures.push(`${executable}: failed to launch (${child.error.message.slice(0, 240)})`);
+      continue;
+    }
+    if (child.signal || child.status !== 0) {
+      const detail = typeof child.stderr === 'string' ? child.stderr.trim().slice(0, 240) : '';
+      failures.push(`${executable}: probe ${child.signal ? `was terminated by ${child.signal}` : `exited ${String(child.status)}`}${detail ? ` (${detail})` : ''}`);
+      continue;
+    }
+    resolved.set(executable, candidate);
+  }
+  if (failures.length > 0) {
+    throw new Error(`Unit verification prerequisites are unavailable:\n${failures.map((failure) => `- ${failure}`).join('\n')}.`);
+  }
+  return resolved;
+}
+
+export function unitTestExecutableEnvironment(
+  resolved: ReadonlyMap<UnitTestExecutable, string>,
+  environment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const output = { ...environment };
+  for (const [executable, filename] of resolved) {
+    output[UNIT_TEST_EXECUTABLE_REQUIREMENTS[executable].environmentVariable] = filename;
+  }
+  return output;
+}
+
+export function unitTestExecutablePath(
+  executable: UnitTestExecutable,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const resolved = resolveUnitTestExecutables([executable], { environment });
+  return resolved.get(executable)!;
+}
 
 function parseVersion(value: unknown, label: string): Version {
   if (typeof value !== 'string') throw new TypeError(`${label} must be a semantic version.`);

@@ -33,8 +33,8 @@ export {
 
 export type InvestigationCapsuleAnalystRecords = Readonly<{
   caseId: string;
-  status: string;
-  disposition: string;
+  status: CaseRecord['status'];
+  disposition: CaseRecord['disposition'];
   decisions: readonly Readonly<{
     id: string;
     summary: string;

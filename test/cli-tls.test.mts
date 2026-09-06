@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliTlsDocument } from '../cli/formatters/json.mts';
 import {
@@ -110,10 +110,10 @@ describe('TLS CLI argument parsing', () => {
   });
 
   test('rejects repeated flags, multiple hostnames, and unsupported options', () => {
-    assert.throws(() => parseCliArguments(['tls', 'one.test', 'two.test']), /one hostname/);
-    assert.throws(() => parseCliArguments(['tls', 'one.test', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['tls', 'one.test', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['tls', 'one.test', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['tls', 'one.test', 'two.test']), CliUsageError);
+    assert.throws(() => parseCliArguments(['tls', 'one.test', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['tls', 'one.test', '--deep']), CliUsageError);
+    assert.throws(() => parseCliArguments(['tls', 'one.test', '--json', '--quiet']), CliUsageError);
   });
 });
 

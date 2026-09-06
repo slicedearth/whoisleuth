@@ -14,6 +14,7 @@ import {
   TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA,
   TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION,
   buildTechnologySignatureBenchmark,
+  countTechnologyDetectionFailures,
   formatTechnologySignatureBenchmark,
   lintTechnologySignatureBenchmark,
   main,
@@ -36,6 +37,21 @@ function capture() {
 }
 
 describe('technology signature benchmark', () => {
+  test('keeps collision and declared-control populations distinct', () => {
+    const fixtures = [
+      { unexpectedIds: ['collision-only'], forbiddenObservedIds: [] },
+      { unexpectedIds: ['declared-control'], forbiddenObservedIds: ['declared-control'] },
+    ];
+    assert.deepEqual(countTechnologyDetectionFailures(fixtures), {
+      collisionMatches: 2,
+      falsePositiveMatches: 1,
+    });
+    assert.deepEqual(countTechnologyDetectionFailures(fixtures, new Set(['collision-only'])), {
+      collisionMatches: 1,
+      falsePositiveMatches: 0,
+    });
+  });
+
   test('passes the complete bounded fixture corpus with per-category metrics', () => {
     const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     assert.equal(report.schema, TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA);

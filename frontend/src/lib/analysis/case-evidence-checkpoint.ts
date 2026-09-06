@@ -26,6 +26,7 @@ export type CheckpointComparisonState =
   | 'changed'
   | 'conflicting'
   | 'equal'
+  | 'incomparable'
   | 'missing'
   | 'not_recorded'
   | 'unavailable';
@@ -380,13 +381,14 @@ export function compareAcquisitionTransitionPins(
       const comparison = comparisons.get(pin.field ?? '');
       if (!comparison) return [];
       let transitionState: AcquisitionTransitionState = 'indeterminate';
-      if (comparison.state === 'unavailable'
+      if (pin.transitionExpectation === 'review') {
+        transitionState = 'manual_review';
+      } else if (comparison.state === 'unavailable'
         || comparison.state === 'conflicting'
+        || comparison.state === 'incomparable'
         || comparison.state === 'missing'
         || comparison.state === 'not_recorded') {
         transitionState = 'indeterminate';
-      } else if (pin.transitionExpectation === 'review') {
-        transitionState = 'manual_review';
       } else if (pin.transitionExpectation === 'preserve') {
         transitionState = comparison.state === 'equal' ? 'verified_preserved' : 'unexpected_change';
       } else {
@@ -411,11 +413,31 @@ export function compareCheckpointPins(
     .map((pin) => {
       const current = currentByField.get(pin.field ?? '');
       let state: CheckpointComparisonState = 'not_recorded';
+      let qualificationLimitation = '';
       if (current) {
         if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
         else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
         else if (current.value === null) state = 'missing';
-        else state = current.value === pin.value ? 'equal' : 'changed';
+        else {
+          const sameSchema = Boolean(pin.sourceSchema
+            && pin.sourceSchema.collection === current.sourceSchema.collection
+            && pin.sourceSchema.schema === current.sourceSchema.schema
+            && pin.sourceSchema.version === current.sourceSchema.version);
+          const comparable = pin.completeness === 'complete'
+            && current.completeness === 'complete'
+            && pin.truncated !== true
+            && current.truncated !== true
+            && pin.source === current.source
+            && pin.category === current.category
+            && pin.collectionDepth === current.collectionDepth
+            && sameSchema;
+          if (!comparable) {
+            state = 'incomparable';
+            qualificationLimitation = 'Both checkpoint sides must retain the same source, scope, schema, collection depth, and complete untruncated evidence before equality or change is verified.';
+          } else {
+            state = current.value === pin.value ? 'equal' : 'changed';
+          }
+        }
       }
       return {
         field: pin.field ?? '',
@@ -426,7 +448,10 @@ export function compareCheckpointPins(
         state,
         source: current?.source ?? pin.source,
         observedAt: current?.observedAt ?? pin.observedAt,
-        limitations: current?.limitations ?? pin.limitations,
+        limitations: [...new Set([
+          ...(current?.limitations ?? pin.limitations),
+          ...(qualificationLimitation ? [qualificationLimitation] : []),
+        ])].slice(0, MAX_CHECKPOINT_LIMITATIONS),
       };
     });
 }

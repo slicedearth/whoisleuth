@@ -98,7 +98,7 @@
     fields: string[],
     expectations: Readonly<Record<string, CaseTransitionExpectation>> = {},
   ) {
-    if (!replay || !caseRecord || caseBusy) return;
+    if (!replay || !caseRecord || caseBusy) return 'stale' as const;
     const current = replay;
     const generation = replayGeneration;
     caseBusy = true;
@@ -112,7 +112,9 @@
       caseRecord = result.record;
       caseStatus = result.status;
       caseBusy = false;
+      return result.mutationOutcome ?? 'rejected';
     }
+    return 'stale' as const;
   }
 
   async function loadComparison(event: Event) {

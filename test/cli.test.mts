@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
-import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMANDS, CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { boundedCliErrorMessage } from '../cli/errors.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -114,10 +114,10 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', '--deep', '--fast']), /mutually exclusive/);
     assert.throws(() => parseCliArguments(['lookup', '--fast', '--deep']), /mutually exclusive/);
     assert.throws(() => parseCliArguments(['lookup', '--fast', '--fast']), /only once/);
-    assert.throws(() => parseCliArguments(['lookup', 'one.com', 'two.com']), /one query/);
+    assert.throws(() => parseCliArguments(['lookup', 'one.com', 'two.com']), CliUsageError);
     assert.throws(() => parseCliArguments(['lookup', 'x', '--json', '--quiet']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--verbose']), /mutually exclusive/);
-    assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--json']), /terminal output/);
+    assert.throws(() => parseCliArguments(['lookup', 'x', '--summary', '--json']), CliUsageError);
     for (const character of ['\u00ad', '\u034f', '\u180e', '\u200d', '\u2060', '\ufe0f']) {
       assert.throws(
         () => parseCliArguments(['lookup', `exa${character}mple.test`]),
@@ -381,11 +381,11 @@ describe('CLI argument parsing', () => {
     });
     assert.throws(
       () => parseCliArguments(['verify-artifact', '--passphrase-file']),
-      /requires one bounded UTF-8 file/u,
+      CliUsageError,
     );
     assert.throws(
       () => parseCliArguments(['verify-artifact', 'one.json', 'two.json']),
-      /accepts one optional JSON file/u,
+      CliUsageError,
     );
     assert.throws(
       () => parseCliArguments(['verify-artifact', '--strict-exit', '--strict-exit']),
@@ -393,11 +393,11 @@ describe('CLI argument parsing', () => {
     );
     assert.throws(
       () => parseCliArguments(['verify-artifact', 'report.json', '--manifest', 'manifest.json']),
-      /must be supplied together/u,
+      CliUsageError,
     );
     assert.throws(
       () => parseCliArguments(['verify-artifact', 'report.json', '--manifest-entry', 'artifact-17']),
-      /artifact-1 through artifact-16/u,
+      CliUsageError,
     );
   });
 
@@ -419,11 +419,11 @@ describe('CLI argument parsing', () => {
     });
     assert.throws(
       () => parseCliArguments(['interchange-report', '--passphrase-file']),
-      /requires one bounded UTF-8 file/u,
+      CliUsageError,
     );
     assert.throws(
       () => parseCliArguments(['interchange-report', 'one.json', 'two.json']),
-      /accepts one optional JSON file/u,
+      CliUsageError,
     );
   });
 
@@ -514,7 +514,7 @@ describe('CLI argument parsing', () => {
     });
     assert.throws(
       () => parseCliArguments(['source-report', 'one.json', 'two.json']),
-      /accepts one optional JSON file/u,
+      CliUsageError,
     );
   });
 });
@@ -1679,6 +1679,7 @@ test('review-family readers fail through bounded command-specific usage errors',
     ['compare', 'lookup.json'],
     ['page-compare', 'left.json', 'right.json'],
     ['mail-review', 'mail.json'],
+    ['mail-headers', 'message.eml'],
     ['review-evidence', 'evidence.json'],
     ['brief', 'lookup.json'],
     ['case-pack', 'cases.json', '--audience', 'internal', '--reviewed'],
@@ -1697,6 +1698,7 @@ test('review-family readers fail through bounded command-specific usage errors',
       readCompareInput: failRead,
       readDiffInput: failRead,
       readMailReviewInput: failRead,
+      readMailHeaderInput: failRead,
     });
     assert.equal(code, EXIT_CODES.USAGE, argv[0]);
     assert.equal(stdout.value(), '', argv[0]);

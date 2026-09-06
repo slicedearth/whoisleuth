@@ -1,5 +1,5 @@
 import { expect, test as setup } from '@playwright/test';
-import { BASE_URL, TEST_SITE_PASSWORD } from './constants';
+import { BASE_URL, TEST_SITE_PASSWORD } from './constants.ts';
 import { isAllowedRequestOrigin } from './fixtures';
 import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
 

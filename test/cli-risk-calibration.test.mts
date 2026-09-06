@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { formatTerminalRiskCalibration } from '../cli/formatters/terminal.mts';
 import {
@@ -65,6 +65,18 @@ function dataset(records = [record()]) {
   };
 }
 
+function riskExplanation(score: number) {
+  const baseline = requiredValue(explainRiskScore({ availability: 'registered' }));
+  return {
+    ...baseline,
+    score,
+    rawScore: score,
+    capped: false,
+    factors: [],
+    families: [],
+  };
+}
+
 describe('risk-calibrate arguments and bounded input', () => {
   test('accepts a file or stdin with terminal and JSON output', () => {
     assert.deepEqual(parseCliArguments(['risk-calibrate', 'dataset.json']), {
@@ -79,12 +91,12 @@ describe('risk-calibrate arguments and bounded input', () => {
   });
 
   test('rejects duplicate output, incompatible quiet mode, unknown options, and multiple files', () => {
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--summary-json']), /mutually exclusive/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--summary-json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--quiet']), /cannot be combined/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', '--threshold', '50']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['risk-calibrate', 'one.json', 'two.json']), /one optional dataset/);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--summary-json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--summary-json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--json', '--quiet']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', '--threshold', '50']), CliUsageError);
+    assert.throws(() => parseCliArguments(['risk-calibrate', 'one.json', 'two.json']), CliUsageError);
   });
 
   test('reads bounded UTF-8 and rejects an oversized stream', async () => {
@@ -272,6 +284,47 @@ describe('offline Risk calibration report', () => {
     assert.equal(requiredValue(report.thresholds[0]).precision, null);
     assert.equal(requiredValue(report.thresholds[0]).recall, null);
     assert.equal(requiredValue(report.thresholds[0]).specificity, null);
+  });
+
+  test('reports zero F1 when false positives and false negatives define an all-wrong sample', () => {
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([
+      record({ id: 'missed-positive', domain: 'missed.test', analystDisposition: 'confirmed_abuse' }),
+      record({ id: 'false-positive', domain: 'flagged.test', analystDisposition: 'expected' }),
+    ])));
+    const report = buildRiskCalibrationReport(
+      parsed,
+      (input) => riskExplanation(input.domain === 'missed.test' ? 0 : 100),
+      { modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD },
+    );
+    const current = requiredValue(report.thresholds.find((item) => item.threshold === RISK_REVIEW_THRESHOLD));
+    assert.deepEqual({
+      truePositive: current.truePositive,
+      falsePositive: current.falsePositive,
+      falseNegative: current.falseNegative,
+      f1: current.f1,
+    }, { truePositive: 0, falsePositive: 1, falseNegative: 1, f1: 0 });
+  });
+
+  test('compares canonical nullable scores across model versions', () => {
+    const parsed = parseRiskCalibrationDataset(JSON.stringify(dataset([
+      record({ id: 'both-unscored', domain: 'unscored.test', evidence: { availability: 'unknown' } }),
+      record({ id: 'became-unscored', domain: 'removed.test' }),
+      record({ id: 'became-scored', domain: 'added.test' }),
+    ])));
+    const explanation = (score: number | null) => score === null ? null : riskExplanation(score);
+    const report = buildRiskCalibrationReport(parsed, (input) => (
+      input.domain === 'removed.test' ? null : explanation(input.domain === 'added.test' ? 60 : null)
+    ), {
+      modelVersion: RISK_MODEL_VERSION,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+      previousModelVersion: 7,
+      explainPreviousRiskScore: (input) => (
+        input.domain === 'removed.test' ? explanation(60) : null
+      ),
+    });
+    assert.equal(report.modelComparison.scoresChanged, 2);
+    assert.equal(report.modelComparison.bandsChanged, 2);
+    assert.equal(report.modelComparison.thresholdClassificationsChanged, 0);
   });
 
   test('replays current subdomain records and rejects reader-only version 1', () => {

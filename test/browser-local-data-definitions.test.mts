@@ -110,18 +110,23 @@ describe('browser-local collection definitions', () => {
   });
 
   test('every non-Case wrapper detects a future version before migration without changing its input', () => {
+    const futureVersion = (id: string) => {
+      const definition = BROWSER_LOCAL_COLLECTIONS.find((item) => item.id === id);
+      assert.ok(definition, id);
+      return definition.schemaVersion + 1;
+    };
     const futureRoots: Record<string, unknown> = {
-      campaigns: { version: 2, campaigns: [] },
-      brand_profiles: { version: 8, profiles: [] },
-      watchlists: { schema: 'whoisleuth.watchlists', version: 3, watchlists: {} },
-      shortlist: { schema: 'whoisleuth.shortlist', version: 4, entries: [] },
-      ct_history: { version: 4, entries: [] },
-      detection_rules: { version: 2, rules: [] },
-      relationship_observations: { schema: 'whoisleuth.relationship-observations', version: 2, observations: [] },
-      bulk_sessions: { schema: 'whoisleuth.bulk-sessions', version: 5, sessions: [] },
-      website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: 6, snapshots: [] },
-      investigation_templates: { schema: 'whoisleuth.investigation-templates', version: 3, templates: [] },
-      bulk_review: { schema: 'whoisleuth.bulk-review', version: 2, presets: [], rows: [] },
+      campaigns: { version: futureVersion('campaigns'), campaigns: [] },
+      brand_profiles: { version: futureVersion('brand_profiles'), profiles: [] },
+      watchlists: { schema: 'whoisleuth.watchlists', version: futureVersion('watchlists'), watchlists: {} },
+      shortlist: { schema: 'whoisleuth.shortlist', version: futureVersion('shortlist'), entries: [] },
+      ct_history: { version: futureVersion('ct_history'), entries: [] },
+      detection_rules: { version: futureVersion('detection_rules'), rules: [] },
+      relationship_observations: { schema: 'whoisleuth.relationship-observations', version: futureVersion('relationship_observations'), observations: [] },
+      bulk_sessions: { schema: 'whoisleuth.bulk-sessions', version: futureVersion('bulk_sessions'), sessions: [] },
+      website_snapshots: { schema: 'whoisleuth.website-profile-snapshots', version: futureVersion('website_snapshots'), snapshots: [] },
+      investigation_templates: { schema: 'whoisleuth.investigation-templates', version: futureVersion('investigation_templates'), templates: [] },
+      bulk_review: { schema: 'whoisleuth.bulk-review', version: futureVersion('bulk_review'), presets: [], rows: [] },
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');

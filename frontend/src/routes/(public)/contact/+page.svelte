@@ -40,7 +40,10 @@
   let submitting = $state(false);
   let error = $state('');
   let resolvedRoute = $state('');
-  let mailtoHref = $state('');
+  let resolvedCategory = $state<ContactCategory | null>(null);
+  const mailtoHref = $derived(resolvedRoute && resolvedCategory
+    ? buildMailto(resolvedRoute, resolvedCategory)
+    : '');
 
   function turnstileApi(): TurnstileApi | null {
     return (window as WindowWithTurnstile).turnstile ?? null;
@@ -98,7 +101,7 @@
   function resetResolvedContact() {
     challengeToken = '';
     resolvedRoute = '';
-    mailtoHref = '';
+    resolvedCategory = null;
     error = '';
     const api = turnstileApi();
     if (api && widgetId) api.reset(widgetId);
@@ -163,7 +166,7 @@
     const submittedCategory = category;
     error = '';
     resolvedRoute = '';
-    mailtoHref = '';
+    resolvedCategory = null;
     try {
       const { response, body: payload } = await requestJsonCapped('/api/contact-route', {
         method: 'POST',
@@ -181,7 +184,7 @@
         throw new Error('Contact verification failed');
       }
       resolvedRoute = route;
-      mailtoHref = buildMailto(route, submittedCategory);
+      resolvedCategory = submittedCategory;
     } catch {
       error = 'The contact route could not be prepared. Complete a fresh challenge and try again.';
     } finally {

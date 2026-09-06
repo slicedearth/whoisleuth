@@ -2,6 +2,20 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 
+test('reference section navigation is available before client hydration', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  try {
+    await page.goto('/cli');
+    const sections = page.getByRole('navigation', { name: 'CLI sections' });
+    await expect(sections).toBeVisible();
+    await expect(sections.getByRole('link')).toHaveCount(6);
+    await expect(sections.getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+  } finally {
+    await context.close();
+  }
+});
+
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
   await page.goto('/');
 
@@ -137,7 +151,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await page.goto('/resources');
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Guides for common investigation tasks sections' })).toBeVisible();
+  await expect(page.locator('.page-sections')).toBeVisible();
   await expect(page.locator('.resource-grid article')).toHaveCount(PUBLIC_RESOURCES.length);
   await page.locator('.resource-grid').getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
@@ -178,10 +192,10 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
-  const articleSections = page.locator('.section-navigation-mobile');
+  const articleSections = page.locator('.reference-browser');
   await expect(articleSections).toBeVisible();
   await articleSections.locator(':scope > summary').click();
-  await expect(articleSections.getByRole('link')).toHaveCount(5);
+  await expect(articleSections.locator('.mobile-page-sections').getByRole('link')).toHaveCount(5);
   expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
   await expectNoHorizontalOverflow(page);
 
@@ -202,7 +216,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.getByText(/The analyst question changes section order for the selected task/i)).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Guides for common investigation tasks sections' })).toBeVisible();
+  await expect(page.locator('.page-sections')).toBeVisible();
   const taskPaths = page.getByRole('region', { name: 'Common WHOISleuth tasks' });
   await expect(taskPaths).toBeVisible();
   await expect(taskPaths.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
@@ -303,10 +317,10 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources');
-  const sectionBrowser = page.locator('.section-navigation-mobile');
+  const sectionBrowser = page.locator('.reference-browser');
   await expect(sectionBrowser).toBeVisible();
   await sectionBrowser.locator(':scope > summary').click();
-  const resourceSections = sectionBrowser.getByRole('navigation', { name: 'Guides for common investigation tasks sections' });
+  const resourceSections = sectionBrowser.locator('.mobile-page-sections');
   await expect(resourceSections).toBeVisible();
   await expect(page.getByRole('region', { name: 'Common WHOISleuth tasks' })).toBeVisible();
   await expect(resourceSections.getByRole('link', { name: 'Topics' })).toHaveAttribute('href', '#topics');

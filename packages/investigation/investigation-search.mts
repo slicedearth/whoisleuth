@@ -3,6 +3,7 @@
 // absence from a missing result. It indexes only known projection fields.
 
 import {
+  INVESTIGATION_OBSERVATION_KINDS,
   type InvestigationEntityType,
   type InvestigationObservationKind,
   type InvestigationSourceState,
@@ -136,15 +137,7 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'case',
   'campaign',
 ]);
-const OBSERVATION_KINDS = new Set<InvestigationObservationKind>([
-  'case_evidence',
-  'case_record',
-  'brand_profile',
-  'brand_page_baseline',
-  'campaign_record',
-  'scan_relationship_evidence',
-  'retained_relationship_observation',
-]);
+const OBSERVATION_KINDS = new Set<InvestigationObservationKind>(INVESTIGATION_OBSERVATION_KINDS);
 const STORES = new Set<InvestigationStoreName>(['cases', 'campaigns', 'brandProfiles', 'relationshipRows', 'relationshipObservations']);
 const SOURCE_STATES = new Set<InvestigationSearchSourceState>(['absent', 'invalid', 'unavailable', 'unsupported', 'supported']);
 const FIELD_PRIORITY: Record<InvestigationSearchField, number> = {

@@ -182,7 +182,7 @@
 
   {#if visible.length}
     <ol class="items">
-      {#each visible as item}
+      {#each visible as item (item.id)}
         <li class:urgent={item.priority === 'urgent'} class:high={item.priority === 'high'}>
           <div class="item-main">
             <div class="item-meta">

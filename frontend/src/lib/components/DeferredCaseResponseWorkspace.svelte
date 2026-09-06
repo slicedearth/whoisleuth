@@ -59,17 +59,19 @@
     <span><strong>Case response and packet workspace</strong><small>Open response planning, evidence packets, action tracking, and closure review</small></span>
     <span>{open ? 'Close workspace' : 'Open workspace'}</span>
   </summary>
-  {#if open}
-    <div class="response-body">
-      <DeferredSurface
-        load={() => import('$lib/components/CaseResponseWorkspace.svelte')}
-        loadingLabel="Loading Case response and packet workspace…"
-        unavailableLabel="The Case response workspace could not be loaded."
-        onready={restoreDeepLinkFocus}
-        props={{ record, onsaved, oncommitted, onmessage, sectionId: `${sectionId}-workspace`, advancedInitially: openInitially }}
-      />
-    </div>
-  {/if}
+  <!-- The Cases view already preloads this module. Prepare one expanded Case
+       behind the closed native disclosure so opening it cannot insert a large
+       workspace after the input's layout-stability window. -->
+  <div class="response-body">
+    <DeferredSurface
+      load={() => import('$lib/components/CaseResponseWorkspace.svelte')}
+      loadingLabel="Loading Case response and packet workspace…"
+      unavailableLabel="The Case response workspace could not be loaded."
+      onready={restoreDeepLinkFocus}
+      placeholder="workspace"
+      props={{ record, onsaved, oncommitted, onmessage, sectionId: `${sectionId}-workspace`, advancedInitially: openInitially }}
+    />
+  </div>
 </details>
 
 <style>

@@ -28,6 +28,7 @@ import {
   VERIFICATION_TIMING_PROFILE_PATH,
 } from '../tools/verification-timing-profile.mts';
 import {
+  assertDeclaredVerificationTest,
   buildVerificationOwnershipPlan,
   checkVerificationOwnershipMap,
   FULL_BATCH_RELEASE_GATES,
@@ -293,6 +294,7 @@ describe('verification architecture contracts', () => {
       '.github/workflows/ci.yml',
     ];
     const plan = buildVerificationOwnershipPlan(paths);
+    assert.equal(plan.mapVersion, 2);
     assert.equal(plan.assignments.length, paths.length);
     assert.deepEqual(plan.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES);
     assert.ok(plan.focusedUnitChecks.length > 0);
@@ -306,9 +308,157 @@ describe('verification architecture contracts', () => {
     assert.equal(closure.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES.length);
     assert.ok(closure.schemaFamilies > 0 && closure.capabilities > 0 && closure.cliOperations > 0);
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
+    assert.ok(closure.browserRequiredSupportPaths > 0);
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+    assert.throws(
+      () => assertDeclaredVerificationTest('test/absent.test.mts', 'unit'),
+      /does not exist/u,
+    );
+    assert.throws(
+      () => assertDeclaredVerificationTest('test/verification-architecture.mts', 'unit'),
+      /invalid test-file identity/u,
+    );
+    assert.throws(
+      () => assertDeclaredVerificationTest('e2e/accessibility.setup.ts', 'browser'),
+      /invalid test-file identity/u,
+    );
+  });
+
+  test('selects derived coverage for each structural change owner', () => {
+    const rehearsals = [
+      {
+        kind: 'isolated presentation',
+        path: 'frontend/src/lib/components/LookupAtAGlance.svelte',
+        owner: 'frontend user-facing routes and components',
+        unit: 'test/model-contract-properties.test.mts',
+        browser: 'e2e/lookup-interaction-design.spec.ts',
+        specialised: 'architecture',
+        excluded: 'cli-package',
+      },
+      {
+        kind: 'Case status decision',
+        path: 'packages/cases/case-record-decisions.mts',
+        owner: 'Case domain and response lifecycle',
+        unit: 'test/case-record-ownership.test.mts',
+        browser: 'e2e/cases.spec.ts',
+        specialised: 'privacy-catalogue',
+      },
+      {
+        kind: 'CLI option',
+        path: 'cli/command-reference.mts',
+        owner: 'CLI command and installed-package surface',
+        unit: 'test/cli-command-registry.test.mts',
+        browser: null,
+        specialised: 'cli-package',
+      },
+      {
+        kind: 'portable Case field',
+        path: 'packages/cases/case-record-projection.mts',
+        owner: 'Case domain and response lifecycle',
+        unit: 'test/cli-case-pack.test.mts',
+        browser: 'e2e/case-import-workflows.spec.ts',
+        specialised: 'schema-inventory',
+      },
+      {
+        kind: 'browser-test support artefact',
+        path: 'tools/frontend-build-integrity.mts',
+        owner: 'maintainer verification tooling',
+        unit: 'test/frontend-build-integrity.test.mts',
+        browser: 'e2e/deferred-recovery.spec.ts',
+        specialised: 'browser-build',
+      },
+    ] as const;
+
+    for (const rehearsal of rehearsals) {
+      const assignment = buildVerificationOwnershipPlan([rehearsal.path]).assignments[0]!;
+      assert.equal(assignment.ownershipArea, rehearsal.owner, rehearsal.kind);
+      assert.ok(assignment.focusedUnitChecks.includes(rehearsal.unit), rehearsal.kind);
+      if (rehearsal.browser) assert.ok(assignment.focusedBrowserChecks.includes(rehearsal.browser), rehearsal.kind);
+      else assert.deepEqual(assignment.focusedBrowserChecks, [], rehearsal.kind);
+      assert.ok(assignment.mandatorySpecialisedChecks.includes(rehearsal.specialised), rehearsal.kind);
+      if ('excluded' in rehearsal) {
+        assert.equal(assignment.mandatorySpecialisedChecks.includes(rehearsal.excluded), false, rehearsal.kind);
+      }
+    }
+  });
+
+  test('plans shared browser support changes against the complete functional inventory', () => {
+    const functionalInventory = readVerificationTestInventory()
+      .filter(isPlaywrightFunctionalSpec)
+      .sort();
+    const supportPaths = [
+      'e2e/auth.setup.ts',
+      'e2e/fixtures.ts',
+      'e2e/helpers.ts',
+    ];
+
+    for (const supportPath of supportPaths) {
+      const assignment = buildVerificationOwnershipPlan([supportPath]).assignments[0]!;
+      assert.equal(assignment.ownershipArea, 'browser and analyst-journey verification');
+      assert.ok(assignment.impactAreas.includes('shared browser setup and support verification'));
+      assert.deepEqual(assignment.focusedBrowserChecks, functionalInventory);
+      assert.equal(assignment.focusedBrowserChecks.includes('e2e/auth.setup.ts'), false);
+      assert.equal(assignment.userFacingBrowserRequired, true);
+    }
+
+    const mixed = buildVerificationOwnershipPlan([
+      'e2e/helpers.ts',
+      'e2e/dashboard.spec.ts',
+    ]);
+    assert.deepEqual(mixed.focusedBrowserChecks, functionalInventory);
+    assert.equal(mixed.assignments.length, 2);
+    assert.deepEqual(
+      buildFocusedVerificationExecution(mixed).browserSpecs,
+      functionalInventory,
+    );
+  });
+
+  test('selects one owner while aggregating every matching verification impact', () => {
+    const plan = buildVerificationOwnershipPlan([
+      'packages/contracts/privacy-data-flow-catalogue.mts',
+      'tools/privacy-data-flow-catalogue-renderer.mts',
+      'tools/schema-lifecycle-repository.mts',
+      'tools/public-product-catalogue-renderer.mts',
+      'frontend/src/lib/components/LookupAtAGlance.svelte',
+    ]);
+    const byPath = new Map(plan.assignments.map((assignment) => [assignment.changedPath, assignment]));
+
+    const sharedPrivacy = byPath.get('packages/contracts/privacy-data-flow-catalogue.mts')!;
+    assert.equal(sharedPrivacy.ownershipArea, 'shared contracts and lifecycle metadata');
+    assert.deepEqual(sharedPrivacy.impactAreas, [
+      'portable domain packages',
+      'privacy contract and disclosure surfaces',
+      'shared contracts and lifecycle metadata',
+    ]);
+    assert.ok(sharedPrivacy.focusedUnitChecks.includes('test/schema-lifecycle-registry.test.mts'));
+    assert.ok(sharedPrivacy.focusedUnitChecks.includes('test/privacy-data-flow-catalogue.test.mts'));
+    assert.ok(sharedPrivacy.focusedBrowserChecks.includes('e2e/privacy-data-flow-catalogue.spec.ts'));
+
+    const privacyRenderer = byPath.get('tools/privacy-data-flow-catalogue-renderer.mts')!;
+    assert.equal(privacyRenderer.ownershipArea, 'maintainer verification tooling');
+    assert.ok(privacyRenderer.impactAreas.includes('privacy catalogue verification'));
+    assert.ok(privacyRenderer.impactAreas.includes('privacy contract and disclosure surfaces'));
+    assert.ok(privacyRenderer.mandatorySpecialisedChecks.includes('workflow-closure'));
+    assert.ok(privacyRenderer.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+
+    const schemaTool = byPath.get('tools/schema-lifecycle-repository.mts')!;
+    assert.ok(schemaTool.impactAreas.includes('schema inventory and lifecycle verification'));
+    assert.ok(schemaTool.focusedUnitChecks.includes('test/schema-lifecycle-repository.test.mts'));
+    assert.ok(schemaTool.mandatorySpecialisedChecks.includes('schema-inventory'));
+
+    const publicTool = byPath.get('tools/public-product-catalogue-renderer.mts')!;
+    assert.ok(publicTool.impactAreas.includes('public product and capability verification'));
+    assert.ok(publicTool.focusedBrowserChecks.includes('e2e/capabilities.spec.ts'));
+    assert.ok(publicTool.mandatorySpecialisedChecks.includes('capability-catalogue'));
+
+    const lookup = byPath.get('frontend/src/lib/components/LookupAtAGlance.svelte')!;
+    assert.equal(lookup.ownershipArea, 'frontend user-facing routes and components');
+    assert.ok(lookup.impactAreas.includes('Lookup analyst workflow'));
+    assert.ok(lookup.focusedBrowserChecks.includes('e2e/lookup-anchor-navigation.spec.ts'));
+    assert.ok(lookup.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(lookup.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
   test('consolidates a user-interface change into one bounded focused execution plan', () => {
@@ -328,10 +478,63 @@ describe('verification architecture contracts', () => {
     assert.ok(ids.includes('diff-whitespace'));
     assert.ok(execution.browserSpecs.includes('e2e/lookup-interaction-design.spec.ts'));
     assert.ok(execution.browserSpecs.includes('e2e/accessibility.spec.ts'));
-    assert.ok(execution.browserSpecs.includes('e2e/design-system.spec.ts'));
+    assert.ok(execution.browserSpecs.includes('e2e/lookup-anchor-navigation.spec.ts'));
+    assert.equal(execution.browserSpecs.includes('e2e/design-system.spec.ts'), false);
     assert.ok(!ids.includes('test:e2e:built'));
     assert.ok(!ids.includes('verification:ci'));
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
+  });
+
+  test('binds lowercase workflow facades and shared browser storage to their dedicated suites', () => {
+    const plan = buildVerificationOwnershipPlan([
+      'frontend/src/lib/cases.ts',
+      'frontend/src/lib/campaigns.ts',
+      'frontend/src/lib/watchlists.ts',
+      'frontend/src/lib/scheduled-monitoring.ts',
+      'frontend/src/lib/browser-local-data.ts',
+      'frontend/src/lib/browser-local-data-service.ts',
+    ]);
+    const byPath = new Map(plan.assignments.map((assignment) => [assignment.changedPath, assignment]));
+
+    const cases = byPath.get('frontend/src/lib/cases.ts')!;
+    assert.ok(cases.impactAreas.includes('Case analyst workflow'));
+    assert.ok(cases.focusedUnitChecks.includes('test/case-model.test.mts'));
+    assert.ok(cases.focusedBrowserChecks.includes('e2e/cases.spec.ts'));
+
+    const campaigns = byPath.get('frontend/src/lib/campaigns.ts')!;
+    assert.ok(campaigns.impactAreas.includes('Brand and campaign analyst workflow'));
+    assert.ok(campaigns.focusedUnitChecks.includes('test/campaign-model.test.mts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/brand-asset-register.spec.ts'));
+
+    for (const owner of ['frontend/src/lib/watchlists.ts', 'frontend/src/lib/scheduled-monitoring.ts']) {
+      const assignment = byPath.get(owner)!;
+      assert.ok(assignment.impactAreas.includes('Monitoring analyst workflow'));
+      assert.ok(assignment.focusedUnitChecks.includes('test/watchlist-store.test.mts'));
+      assert.ok(assignment.focusedBrowserChecks.includes('e2e/hosted-monitoring.spec.ts'));
+    }
+
+    for (const owner of ['frontend/src/lib/browser-local-data.ts', 'frontend/src/lib/browser-local-data-service.ts']) {
+      const assignment = byPath.get(owner)!;
+      assert.ok(assignment.impactAreas.includes('browser-local persistence and migration behaviour'));
+      assert.ok(assignment.focusedUnitChecks.includes('test/browser-local-data-provider.test.mts'));
+      assert.ok(assignment.focusedBrowserChecks.includes('e2e/local-data-platform.spec.ts'));
+      assert.ok(assignment.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+      assert.ok(assignment.mandatorySpecialisedChecks.includes('schema-inventory'));
+    }
+  });
+
+  test('runs a real production build, loading report and recovery check for build-boundary tooling', () => {
+    const ownership = buildVerificationOwnershipPlan(['tools/frontend-build-integrity.mts']);
+    const execution = buildFocusedVerificationExecution(ownership);
+    const ids = execution.commands.map((command) => command.id);
+    const build = ids.indexOf('build');
+    const loading = ids.indexOf('frontend:loading-report');
+
+    assert.ok(build >= 0);
+    assert.ok(loading > build);
+    assert.equal(ids.filter((id) => id === 'build').length, 1);
+    assert.equal(execution.cleanupBrowserArtifacts, true);
+    assert.deepEqual(execution.browserSpecs, ['e2e/deferred-recovery.spec.ts']);
   });
 
   test('closes application-version changes over derived fixtures, documentation, and release gates', () => {
@@ -390,7 +593,7 @@ describe('verification architecture contracts', () => {
     assert.equal(assurance.journeyContractVersion, 1);
     assert.equal(assurance.mappedJourneys, assurance.declaredJourneys);
     assert.ok(assurance.playwrightTests >= assurance.declaredJourneys);
-    assert.equal(assurance.execution, 'static_source_audit');
+    assert.equal(assurance.execution, 'source_and_fixture_contract_audit');
     assert.equal(assurance.browserTestsExecuted, 0);
     assert.equal(
       assurance.balancedShardSpecifications,

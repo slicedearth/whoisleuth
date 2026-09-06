@@ -35,6 +35,14 @@ import {
   type CaseRecord,
 } from './case-record-contracts.mts';
 import {
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  caseStatusRequiresClosure,
+  isReviewedCaseDisposition,
+  type ReviewedCaseDisposition,
+} from './case-record-decisions.mts';
+import {
   DEFAULT_EVIDENCE_SOURCE,
   EVIDENCE_SOURCE_SET,
   caseTimestampOrNull,
@@ -64,6 +72,15 @@ import {
   normalizeCaseInvestigationBranches,
   updateCaseInvestigationBranch,
 } from './case-investigation-branch-model.mts';
+
+export {
+  caseDispositionSupportsDefensiveResponse,
+  caseStatusIsClosed,
+  caseStatusOptionsForDirectEdit,
+  caseStatusRequiresClosure,
+  isReviewedCaseDisposition,
+};
+export type { ReviewedCaseDisposition };
 
 export const MAX_CASE_OBJECTIVE_LENGTH = 320;
 export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
@@ -257,7 +274,7 @@ export function normalizeCase(
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
-    status: normalizedStatus === 'resolved'
+    status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'
       : normalizedStatus,
@@ -321,7 +338,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   const closures = input.closure !== undefined
     ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions)
     : normalizeCaseClosureHistory(undefined, now);
-  if (normalizeStatus(input.status) === 'resolved' && input.closure === undefined) {
+  if (caseStatusRequiresClosure(normalizeStatus(input.status)) && input.closure === undefined) {
     throw new Error('Opening a resolved case requires a deliberate closure reason and its linked review context.');
   }
   return {
@@ -489,7 +506,7 @@ export function updateCase(
   if (patch.closure !== undefined) {
     closures = appendCaseClosure(closures, patch.closure, now, observedEffects, actions);
   }
-  if (patch.status === 'resolved' && patch.closure === undefined) {
+  if (caseStatusRequiresClosure(patch.status) && patch.closure === undefined) {
     throw new Error('Resolve this case through the deliberate closure review so the reason and evidence state remain explicit.');
   }
   const record: CaseRecord = {
@@ -553,7 +570,7 @@ export function recordCaseConclusion(
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const disposition = normalizeDisposition(input.disposition);
   const reviewReasonCode = normalizeReviewReasonCode(input.reviewReasonCode);
-  if (disposition === 'unreviewed') {
+  if (!isReviewedCaseDisposition(disposition)) {
     throw new Error('Select a reviewed disposition before recording a conclusion.');
   }
   if (!reviewReasonCode) {

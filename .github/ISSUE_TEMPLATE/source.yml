@@ -1,0 +1,43 @@
+name: Data-source problem
+description: Report a reproducible source-state, parser or coverage problem.
+title: "[Source]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the source family and visible state without pasting raw responses, contacts, live investigation targets or credentials.
+  - type: dropdown
+    id: family
+    attributes:
+      label: Source family
+      options:
+        - Registry or RDAP
+        - WHOIS
+        - DNS or routing
+        - Certificate or TLS
+        - Website or technology
+        - External intelligence
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: Reported state and limitation
+      description: Include the visible state, diagnostic category and expected behaviour using reserved examples where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed raw responses, contacts, targets, credentials and personal data.
+          required: true

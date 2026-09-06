@@ -15,6 +15,7 @@ import { classifyQuery } from '../lib/classify.mts';
 import { registryStandardsCoverageSnapshot } from '../lib/registry-capabilities.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { CAPABILITY_MANIFEST, cliOperationForCommand } from '../packages/contracts/capability-manifest.mts';
+import { CLI_HELP_GROUP_ORDER } from '../packages/contracts/cli-command-semantics.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import {
   CLI_PUBLIC_GUIDANCE,
@@ -82,7 +83,7 @@ function publicCliCatalogue() {
   });
   return Object.freeze({
     commandCount: commands.length,
-    groups: Object.freeze(['investigate', 'respond', 'assure', 'utilities']),
+    groups: CLI_HELP_GROUP_ORDER,
     modes: Object.freeze(['offline', 'network']),
     commands: Object.freeze(commands),
     workflows: Object.freeze({
@@ -164,30 +165,6 @@ function publicExamples() {
     exportedAt: EXAMPLE_TIME,
     cases: [syntheticCase],
   }), { audience: 'public', reviewed: true }, EXAMPLE_TIME);
-  const casePackPreview = Object.freeze({
-    schema: casePack.packet.schema,
-    version: casePack.packet.version,
-    audience: casePack.packet.audience,
-    reviewed: casePack.packet.reviewed,
-    caseCount: casePack.cases.length,
-    case: Object.freeze({
-      schemaVersion: CASE_SCHEMA_VERSION,
-      domain: casePack.cases[0]?.domain,
-      status: casePack.cases[0]?.status,
-      tags: casePack.cases[0]?.tags,
-    }),
-    report: Object.freeze({
-      schema: casePack.packet.reports[0]?.schema,
-      schemaVersion: casePack.packet.reports[0]?.schemaVersion,
-    }),
-    redactionManifest: casePack.packet.redactionManifest,
-    integrity: Object.freeze({
-      algorithm: casePack.integrity.algorithm,
-      canonicalization: casePack.integrity.canonicalization,
-      digestPresent: /^sha256:[a-f0-9]{64}$/u.test(casePack.integrity.digestSha256),
-    }),
-    limitations: casePack.packet.limitations,
-  });
   const examples = Object.freeze([
     Object.freeze({
       id: 'lookup-preflight',
@@ -230,13 +207,13 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'case-handoff',
-      title: 'Reviewed public Case handoff',
+      title: 'Importable public Case handoff',
       format: 'JSON',
       command: 'whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json',
-      summary: `A canonical public Case-pack v2 built from one reserved-domain Case schema ${CASE_SCHEMA_VERSION} record.`,
+      summary: `A complete public Case-pack v2 built from one reserved-domain Case schema ${CASE_SCHEMA_VERSION} record, with a verifiable digest.`,
       synthetic: true,
       notice: SYNTHETIC_NOTICE,
-      content: JSON.stringify({ synthetic: true, notice: SYNTHETIC_NOTICE, preview: casePackPreview }, null, 2),
+      content: JSON.stringify(casePack, null, 2),
       large: true,
       downloadName: 'synthetic-reviewed-case-handoff.json',
       mediaType: 'application/json',

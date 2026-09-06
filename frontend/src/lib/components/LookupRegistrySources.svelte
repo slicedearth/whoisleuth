@@ -36,7 +36,7 @@
     tone: string;
   };
   type ContactRole = { role: string; contacts: Array<{ identity: string; details: string[] }> };
-  type TraceState = 'complete' | 'partial' | 'unavailable' | 'not_collected';
+  type TraceState = 'complete' | 'partial' | 'unavailable' | 'not_collected' | 'not_found' | 'unsupported' | 'skipped' | 'disabled' | 'rate_limited' | 'error';
   const asRecord = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
   const asRecords = (value: unknown, maximum = 500): JsonRecord[] => Array.isArray(value)
     ? value.slice(0, maximum).filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
@@ -71,6 +71,7 @@
     whoisRows,
     whoisContactRoles,
     whoisTruncatedFields,
+    registrationTrace = {},
     insights = {},
     standing = {},
     registrar,
@@ -87,6 +88,7 @@
     whoisRows: DisplayRow[];
     whoisContactRoles: ContactRole[];
     whoisTruncatedFields: string[];
+    registrationTrace?: { registry?: TraceState; whois?: TraceState };
     insights?: JsonRecord;
     standing?: JsonRecord;
     registrar: {
@@ -131,20 +133,7 @@
   let showRegistryReversePreview = $state(false);
   let showRegistrarReversePreview = $state(false);
   const abuseRouting = $derived(asRecords(insights.abuseRouting, 8));
-  const hasRdapPublication = $derived(Boolean(
-    rdapParsed.domain
-    || rdapParsed.handle
-    || rdapParsed.objectClassName
-    || rdapParsed.statuses
-    || rdapParsed.nameservers,
-  ));
-  const registryTraceState = $derived<TraceState>(rdapError
-    ? 'unavailable'
-    : rdapPartialDetail
-      ? 'partial'
-      : rdapRows.length || hasRdapPublication
-        ? 'complete'
-        : 'unavailable');
+  const registryTraceState = $derived<TraceState>(registrationTrace.registry ?? (rdapError ? 'error' : rdapPartialDetail ? 'partial' : 'unavailable'));
   const registrarTraceState = $derived<TraceState>(!registrar.visible
     ? 'not_collected'
     : registrar.success
@@ -152,11 +141,7 @@
       : registrar.error
         ? 'unavailable'
         : 'partial');
-  const whoisTraceState = $derived<TraceState>(whoisError
-    ? 'unavailable'
-    : whoisRows.length
-      ? 'complete'
-      : 'not_collected');
+  const whoisTraceState = $derived<TraceState>(registrationTrace.whois ?? (whoisError ? 'error' : 'unavailable'));
   const comparisonLanes = $derived.by((): MatrixInput[] => {
     return [
       ...comparisonRows.map((row, index): MatrixInput => ({
@@ -191,7 +176,7 @@
   ));
 
   function traceStateLabel(state: TraceState): string {
-    return state === 'not_collected' ? 'Not collected' : state.replaceAll('_', ' ');
+    return state.replaceAll('_', ' ');
   }
   type PlotCell = { x: number; width: number };
   const PUBLICATION_COLOURS: Readonly<Record<string, string>> = Object.freeze({
@@ -229,6 +214,12 @@
     return '?';
   };
   const sourceStateLabel = (state: string): string => state.replaceAll('_', ' ');
+  const lifecycleFlagLabel = (value: unknown): string => value === true ? 'observed' : value === false ? 'not observed' : 'unavailable';
+  const lifecycleLockLabel = (value: unknown, kind: string): string => value === true
+    ? `${kind} lock observed`
+    : value === false
+      ? `no ${kind.toLowerCase()} lock observed`
+      : `${kind} lock state unavailable`;
 </script>
 
 {#if resultType === 'domain'}
@@ -447,11 +438,11 @@
       <article>
         <span>Lifecycle</span>
         <strong>{display(lifecycle.label)}</strong>
-        <small>Redemption: {lifecycle.redemption === true ? 'observed' : 'not observed'} · pending delete: {lifecycle.pendingDelete === true ? 'observed' : 'not observed'}</small>
+        <small>Redemption: {lifecycleFlagLabel(lifecycle.redemption)} · pending delete: {lifecycleFlagLabel(lifecycle.pendingDelete)}</small>
       </article>
       <article>
         <span>Registration locks</span>
-        <strong>{lifecycleLocks.client === true ? 'Client lock observed' : 'No client lock observed'} · {lifecycleLocks.server === true ? 'server lock observed' : 'no server lock observed'}</strong>
+        <strong>{lifecycleLockLabel(lifecycleLocks.client, 'Client')} · {lifecycleLockLabel(lifecycleLocks.server, 'Server')}</strong>
         <small>These point-in-time statuses do not prove protection remains enabled.</small>
       </article>
       <article>
@@ -672,7 +663,7 @@
   .trace-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}
   .trace-sources article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .trace-sources article[data-state='partial']{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}
-  .trace-sources article[data-state='unavailable'],.trace-sources article[data-state='not_collected']{border-style:dotted}
+  .trace-sources article[data-state='unavailable'],.trace-sources article[data-state='not_collected'],.trace-sources article[data-state='not_found'],.trace-sources article[data-state='unsupported'],.trace-sources article[data-state='skipped'],.trace-sources article[data-state='disabled'],.trace-sources article[data-state='rate_limited'],.trace-sources article[data-state='error']{border-style:dotted}
   .trace-sources article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
   .trace-sources strong{font:700 var(--text-xs) var(--mono)}
   .trace-state{flex:none;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}

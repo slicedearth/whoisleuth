@@ -3,8 +3,10 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import {
   CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
   PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_ARCHIVE_VERSION,
@@ -42,11 +44,11 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     const sections = page.getByRole('navigation', { name: 'Privacy policy sections' });
     await expect(sections.getByRole('link')).toHaveCount(8);
     await expect(page.getByText(new RegExp(
-      `Current Case schema ${CASE_SCHEMA_VERSION}.*Published v2 Case schema ${PUBLISHED_V2_CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+      `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
       'iu',
     ))).toBeVisible();
     await expect(page.getByText(new RegExp(
-      `current writer emits workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*Exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} and ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION} remain readable`,
+      `current writer emits workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*Exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION}, ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION}, and ${LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION} remain readable`,
       'iu',
     ))).toBeVisible();
     await expect(page.getByText(/IndexedDB as plaintext JSON/iu)).toBeVisible();

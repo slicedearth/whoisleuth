@@ -51,7 +51,13 @@ describe('Bulk lookup request controller', () => {
       {
         fetch: async (url) => {
           calls.push(url);
-          return response(compactResponse());
+          return response({
+            ...compactResponse(),
+            query: 'portal.example.test',
+            inputHostname: 'portal.example.test',
+            registrableDomain: 'example.test',
+            isSubdomain: true,
+          });
         },
       },
     );

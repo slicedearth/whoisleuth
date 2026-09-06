@@ -57,6 +57,26 @@ describe('SPF', () => {
     assert.ok(parsed.issues.some((issue) => /deprecated ptr/.test(issue)));
     assert.ok(parsed.issues.some((issue) => /after the all/.test(issue)));
   });
+
+  test('rejects malformed mechanisms, addresses, prefixes, and duplicate modifiers', () => {
+    for (const policy of [
+      'v=spf1 madeup:sender.example.test -all',
+      'v=spf1 ip4:999.999.999.999 -all',
+      'v=spf1 ip6:2001:db8::1/129 -all',
+      'v=spf1 mx/33 -all',
+      'v=spf1 redirect=one.example redirect=two.example',
+    ]) {
+      const parsed = parseSpfRecords([policy]);
+      assert.equal(parsed.valid, false, policy);
+      assert.ok(parsed.issues.length > 0, policy);
+    }
+  });
+
+  test('distinguishes fail-qualified mechanisms from terms that can authorise a sender', () => {
+    assert.deepEqual(parseSpfRecords(['v=spf1 -ip4:192.0.2.0/24 -all']).authorizingTerms, []);
+    assert.deepEqual(parseSpfRecords(['v=spf1 ip4:192.0.2.0/24 -all']).authorizingTerms, ['ip4:192.0.2.0/24']);
+    assert.deepEqual(parseSpfRecords(['v=spf1 ?ip6:2001:db8::/32 -all']).authorizingTerms, ['?ip6:2001:db8::/32']);
+  });
 });
 
 describe('DMARC', () => {
@@ -152,5 +172,20 @@ describe('DKIM', () => {
     assert.equal(malformed.valid, false);
     assert.equal(malformed.keyParseState, 'invalid');
     assert.equal(parseDkimRecords('future', [`v=DKIM1; k=future; p=${RSA_2048_PUBLIC_KEY}`]).valid, false);
+  });
+
+  test('accepts raw Ed25519 key bytes and rejects a SubjectPublicKeyInfo wrapper', () => {
+    const raw = Buffer.alloc(32, 0x2a);
+    const parsed = parseDkimRecords('ed', [`v=DKIM1; k=ed25519; p=${raw.toString('base64')}`]);
+    assert.equal(parsed.valid, true);
+    assert.equal(parsed.keyType, 'ed25519');
+    assert.equal(parsed.keyBits, 256);
+    assert.equal(parsed.keyParseState, 'parsed');
+
+    const wrapped = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]);
+    const rejected = parseDkimRecords('wrapped', [`v=DKIM1; k=ed25519; p=${wrapped.toString('base64')}`]);
+    assert.equal(rejected.valid, false);
+    assert.equal(rejected.keyParseState, 'invalid');
+    assert.match(rejected.issues.join(' '), /32 raw bytes/iu);
   });
 });

@@ -8,6 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,18 +27,21 @@ function retainedDocument(): string | null {
   return readFileSync(OUTPUT_PATH, 'utf8');
 }
 
-function writeAtomically(content: string): void {
-  const temporaryPath = `${OUTPUT_PATH}.tmp`;
+function writeAtomically(content: string, outputPath = OUTPUT_PATH): void {
+  const temporaryPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`;
   let descriptor: number | null = null;
+  let temporaryCreated = false;
   try {
     descriptor = openSync(temporaryPath, 'wx', 0o644);
+    temporaryCreated = true;
     writeFileSync(descriptor, content, 'utf8');
     closeSync(descriptor);
     descriptor = null;
-    renameSync(temporaryPath, OUTPUT_PATH);
+    renameSync(temporaryPath, outputPath);
+    temporaryCreated = false;
   } finally {
     if (descriptor !== null) closeSync(descriptor);
-    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+    if (temporaryCreated && existsSync(temporaryPath)) unlinkSync(temporaryPath);
   }
 }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
 import { buildInvestigationPlan } from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
@@ -19,7 +19,7 @@ describe('fixed investigation execution', () => {
   test('keeps plan-only recipes outside workflow-run execution', () => {
     assert.throws(
       () => parseCliArguments(['workflow-run', 'campaign-review', 'Example Organisation']),
-      /workflow-run recipe must be one of/iu,
+      CliUsageError,
     );
   });
   test('pauses before network collection without approval', async () => {

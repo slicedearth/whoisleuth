@@ -30,7 +30,10 @@ import {
   LOOKUP_CLAIM_REQUIREMENT_IDS,
 } from '../../packages/investigation/lookup-claim-readiness.mts';
 import { normalizeDomainControlManifestDocument } from '../../packages/evidence/domain-control-runtime.mts';
-import { DOMAIN_CHANGE_PACKET_SCHEMA, DOMAIN_CHANGE_PACKET_VERSION } from '../../lib/domain-change-packet.mts';
+import {
+  DOMAIN_CHANGE_PACKET_SCHEMA,
+  DOMAIN_CHANGE_PACKET_VERSION,
+} from '../../lib/domain-change-packet.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../../packages/contracts/domain-control-manifest.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
@@ -503,19 +506,31 @@ function expectedDomainChangeSummary(
   const beforeRows = rows(before);
   const afterRows = rows(after);
   const keys = [...new Set([...beforeRows.keys(), ...afterRows.keys()])].sort();
-  return keys.slice(0, 500).flatMap((key) => {
-    const left = beforeRows.get(key);
-    const right = afterRows.get(key);
-    const values = (row: UnknownRecord | undefined) => [...new Set(
-      ((row?.observations as UnknownRecord[] | undefined) ?? [])
-        .flatMap((observation) => observation.values as string[]),
-    )].sort();
-    const beforeValues = values(left);
-    const afterValues = values(right);
-    if (sameValues(beforeValues, afterValues)) return [];
+  const collectionComplete = (review: UnknownRecord): boolean => {
+    const row = ((review.authoritativeRecordMatrix as UnknownRecord[])[0]);
+    const observations = (row?.observations as UnknownRecord[] | undefined) ?? [];
+    return observations.length >= 2 && observations.every((item) => item.state === 'observed');
+  };
+  const rowEvidence = (review: UnknownRecord, row: UnknownRecord | undefined): { state: string; values: string[] } => {
+    if (!row) return { state: collectionComplete(review) ? 'complete' : 'unavailable', values: [] };
+    const observations = row.observations as UnknownRecord[];
+    if (observations.some((item) => item.state !== 'observed')) return { state: 'partial', values: [] };
+    if (row.state === 'different') return { state: 'inconsistent', values: [] };
+    if (row.state !== 'aligned') return { state: 'insufficient', values: [] };
+    return { state: 'complete', values: [...new Set(observations.flatMap((item) => item.values as string[]))].sort() };
+  };
+  const changed: Array<Readonly<{ owner: string; type: string; beforeValues: string[]; afterValues: string[] }>> = [];
+  for (const key of keys.slice(0, 500)) {
+    const left = rowEvidence(before, beforeRows.get(key));
+    const right = rowEvidence(after, afterRows.get(key));
     const [owner, type] = key.split('\u0000');
-    return [{ owner: owner ?? '', type: type ?? '', beforeValues, afterValues }];
-  });
+    if (left.state !== 'complete' || right.state !== 'complete') {
+      continue;
+    } else if (!sameValues(left.values, right.values)) {
+      changed.push({ owner: owner ?? '', type: type ?? '', beforeValues: left.values, afterValues: right.values });
+    }
+  }
+  return changed;
 }
 
 function validateDomainChangePacket(value: UnknownRecord): void {

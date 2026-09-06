@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, pseudoContent, runBulkScan, selectBulkResultView } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
 import { TLS_RELATIONSHIP_PROFILE_VERSION } from '../packages/comparison/relationship-evidence.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
@@ -263,6 +263,7 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
 
 test('deep results present bounded relationship evidence including exact native certificate identity', async ({ page }) => {
   test.slow();
+  let partialRelationships = true;
   const profile = {
     id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
@@ -276,6 +277,13 @@ test('deep results present bounded relationship evidence including exact native 
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const shared = domain !== 'third.example';
+    const uniquePrefix = domain === 'first.example' ? 'FIRST' : 'SECOND';
+    const trackingIdentifiers = shared ? [
+      { type: 'tag-container', value: 'GTM-SHARED' },
+      ...(partialRelationships
+        ? Array.from({ length: 31 }, (_, index) => ({ type: 'tag-container', value: `${uniquePrefix}-${index}` }))
+        : []),
+    ] : [];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -288,7 +296,7 @@ test('deep results present bounded relationship evidence including exact native 
           dns: { status: 'complete', records: { a: [shared ? '203.0.113.9' : '203.0.113.10'], aaaa: [], ns: [] } },
           pageIdentity: {
             fingerprints: {
-              identifiers: { values: shared ? [{ type: 'tag-container', value: 'GTM-SHARED' }] : [] },
+              identifiers: { values: trackingIdentifiers },
             },
           },
           tls: shared ? {
@@ -303,6 +311,19 @@ test('deep results present bounded relationship evidence including exact native 
 
   await page.getByLabel('Scan mode').selectOption('deep');
   await runBulkScan(page, ['first.example', 'second.example', 'third.example']);
+  await openBulkWorkspaceTools(page);
+  await page.getByLabel('Session name').fill('Partial relationship review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Partial relationship review.' })).toBeVisible();
+
+  partialRelationships = false;
+  await page.getByRole('button', { name: 'Scan 3 domains' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 3 of 3 lookups.' })).toBeVisible();
+  await page.getByLabel('Session name').fill('Complete relationship review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Complete relationship review.' })).toBeVisible();
+  await page.locator('.bulk-sessions article', { hasText: 'Partial relationship review' }).getByRole('button', { name: 'Load' }).click();
+
   await selectBulkResultView(page, 'Analysis');
   await page.getByRole('button', { name: /^Relationships\b/u }).click();
 
@@ -334,11 +355,19 @@ test('deep results present bounded relationship evidence including exact native 
   await previewRetention.click();
   const admission = section.getByRole('dialog', { name: 'Retain this relationship observation?' });
   await expect(admission).toBeFocused();
+  await expect(admission).toContainText('partial · truncated');
   await expect(admission).toContainText('Exact leaf-certificate SHA-256');
   await expect(admission.getByText('2 requests', { exact: false })).toHaveCount(0);
   await expect(admission).toContainText('0 requests · no external service receives the target');
   await expect(admission).toContainText('One bounded browser-local relationship observation');
   await expect(admission).toContainText('does not establish shared ownership, control, actor identity, coordination, intent, safety, or maliciousness');
+
+  await page.locator('.bulk-sessions article', { hasText: 'Complete relationship review' }).getByRole('button', { name: 'Load' }).click();
+  await expect(admission.getByRole('status')).toContainText('current scan evidence changed');
+  await expect(admission.getByRole('button', { name: 'Retain reviewed observation' })).toBeDisabled();
+  await admission.getByRole('button', { name: 'Close relationship admission preview' }).click();
+  await previewRetention.click();
+  await expect(admission).toContainText('complete · not truncated');
   await admission.getByRole('button', { name: 'Cancel' }).click();
   await expect(previewRetention).toBeFocused();
   await previewRetention.click();
@@ -346,6 +375,9 @@ test('deep results present bounded relationship evidence including exact native 
     .getByRole('button', { name: 'Retain reviewed observation' }).click();
   await expect(certificateRelationship.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
   await expect(section.getByRole('status')).toContainText('Retained shared tls certificate for 2 domains in this browser');
+  const storedRelationship = await readBrowserLocalCollection(page, 'relationship_observations', { minimumRecords: 1 });
+  expect(storedRelationship.records).toHaveLength(1);
+  expect(storedRelationship.records[0]?.value).toMatchObject({ complete: true, truncated: false });
   expect(admissionRequests).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });

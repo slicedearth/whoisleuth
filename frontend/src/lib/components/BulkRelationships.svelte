@@ -9,18 +9,16 @@
   import {
     buildRelationshipAdmissionPreview,
     type RelationshipAdmissionAction,
+    type RelationshipAdmissionGroup,
     type RelationshipAdmissionPreview,
+    type RelationshipRetentionAdmission,
   } from '$lib/analysis/relationship-admission-preview.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
 
-  type RelationshipGroup = {
-    type: string;
-    label: string;
-    method: string;
-    value: string;
-    normalizedValue: string;
-    domains: string[];
-    description: string;
-  };
+  type PendingAdmission = RelationshipRetentionAdmission & Readonly<{
+    action: RelationshipAdmissionAction;
+    relationshipIdentity: string;
+  }>;
 
   let {
     groups,
@@ -34,31 +32,74 @@
     retentionAvailable = true,
     observedAt = '',
     sourceIdentities = [],
+    sourceContextId,
   }: {
-    groups: RelationshipGroup[];
+    groups: RelationshipAdmissionGroup[];
     truncated: boolean;
     limitations: string[];
     loadDomains: (domains: string[]) => void;
-    retainObservation?: (relationship: RelationshipGroup) => void | Promise<void>;
-    observationId?: (relationship: RelationshipGroup) => string;
+    retainObservation?: (admission: RelationshipRetentionAdmission) => LocalMutationOutcome | Promise<LocalMutationOutcome>;
+    observationId?: (relationship: RelationshipAdmissionGroup) => string;
     retainedIds?: ReadonlySet<string>;
     retainStatus?: string;
     retentionAvailable?: boolean;
     observedAt?: string;
     sourceIdentities?: string[];
+    sourceContextId: string;
   } = $props();
 
-  let pendingRelationship = $state<RelationshipGroup | null>(null);
-  let pendingAction = $state<RelationshipAdmissionAction | null>(null);
+  let pendingAdmission = $state<PendingAdmission | null>(null);
   let preview = $state<RelationshipAdmissionPreview | null>(null);
   let previewElement = $state<HTMLElement>();
   let returnFocusId = $state('');
+  let admissionBusy = $state(false);
 
-  async function openAdmissionPreview(relationship: RelationshipGroup, action: RelationshipAdmissionAction, index: number) {
-    pendingRelationship = relationship;
-    pendingAction = action;
+  function relationshipIdentity(relationship: RelationshipAdmissionGroup): string {
+    return JSON.stringify([
+      relationship.type,
+      relationship.label,
+      relationship.method,
+      relationship.value,
+      relationship.normalizedValue,
+      relationship.domains,
+      relationship.description,
+    ]);
+  }
+
+  function sameTexts(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+  }
+
+  function admissionMatchesCurrent(admission: PendingAdmission): boolean {
+    return admission.sourceContextId === sourceContextId
+      && admission.observedAt === observedAt
+      && admission.complete === !truncated
+      && admission.truncated === truncated
+      && sameTexts(admission.sourceIdentities, sourceIdentities)
+      && sameTexts(admission.limitations, limitations)
+      && groups.some((relationship) => relationshipIdentity(relationship) === admission.relationshipIdentity);
+  }
+
+  const admissionCurrent = $derived(pendingAdmission !== null && admissionMatchesCurrent(pendingAdmission));
+
+  async function openAdmissionPreview(relationship: RelationshipAdmissionGroup, action: RelationshipAdmissionAction, index: number) {
+    const snapshot = Object.freeze({
+      ...relationship,
+      domains: Object.freeze([...relationship.domains]),
+    });
+    pendingAdmission = Object.freeze({
+      action,
+      relationship: snapshot,
+      relationshipIdentity: relationshipIdentity(snapshot),
+      sourceContextId,
+      observedAt,
+      sourceIdentities: Object.freeze([...sourceIdentities]),
+      complete: !truncated,
+      truncated,
+      limitations: Object.freeze([...limitations]),
+    });
     returnFocusId = `relationship-${action}-${index}`;
-    preview = buildRelationshipAdmissionPreview(relationship, {
+    preview = buildRelationshipAdmissionPreview(snapshot, {
       action,
       observedAt,
       sourceIdentities,
@@ -70,21 +111,27 @@
 
   async function closeAdmissionPreview(restoreFocus = true) {
     const focusId = returnFocusId;
-    pendingRelationship = null;
-    pendingAction = null;
+    pendingAdmission = null;
     preview = null;
+    admissionBusy = false;
     returnFocusId = '';
     await tick();
     if (restoreFocus) document.getElementById(focusId)?.focus();
   }
 
   async function admitRelationship() {
-    const relationship = pendingRelationship;
-    const action = pendingAction;
-    if (!relationship || !action) return;
-    await closeAdmissionPreview(false);
-    if (action === 'expand') loadDomains(relationship.domains);
-    else await retainObservation?.(relationship);
+    const admission = pendingAdmission;
+    if (!admission || admissionBusy || !admissionMatchesCurrent(admission)) return;
+    if (admission.action === 'expand') {
+      await closeAdmissionPreview(false);
+      loadDomains([...admission.relationship.domains]);
+      return;
+    }
+    if (!retentionAvailable || !retainObservation) return;
+    admissionBusy = true;
+    const outcome = await retainObservation(admission);
+    admissionBusy = false;
+    if (clearsLocalMutationDraft(outcome)) await closeAdmissionPreview(false);
   }
 
   function relationshipIcon(type: string): IntelligenceIconName {
@@ -182,7 +229,8 @@
         <p class="shared-warning">{preview.sharedInfrastructureWarning}</p>
         <p><strong>Why this may help:</strong> {preview.usefulness}</p>
         <ul>{#each preview.limitations as limitation}<li>{limitation}</li>{/each}</ul>
-        <div class="preview-actions"><button class="primary" type="button" onclick={() => void admitRelationship()}>{preview.action === 'expand' ? 'Load reviewed domains' : 'Retain reviewed observation'}</button><button class="btn" type="button" onclick={() => void closeAdmissionPreview()}>Cancel</button></div>
+        {#if !admissionCurrent}<p class="admission-state" role="status">The current scan evidence changed after this preview opened. Close it and open a fresh preview before continuing.</p>{:else if preview.action === 'retain' && !retentionAvailable}<p class="admission-state" role="status">Relationship retention became unavailable. Reload its browser-local context before trying again.</p>{/if}
+        <div class="preview-actions"><button class="primary" type="button" disabled={!admissionCurrent || admissionBusy || (preview.action === 'retain' && !retentionAvailable)} onclick={() => void admitRelationship()}>{admissionBusy ? 'Retaining…' : preview.action === 'expand' ? 'Load reviewed domains' : 'Retain reviewed observation'}</button><button class="btn" type="button" disabled={admissionBusy} onclick={() => void closeAdmissionPreview()}>Cancel</button></div>
       </div>
     {/if}
     {#if retainStatus}<p class="retain-status" role="status" aria-live="polite">{retainStatus}</p>{/if}
@@ -210,7 +258,7 @@
   .relationship-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .relationship-actions button{max-width:100%;margin:0;white-space:normal}
   .retain-status{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .admission-preview{display:grid;gap:11px;margin-top:14px;padding:14px;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:var(--radius-md);background:var(--panel-raised)}.admission-preview:focus{outline:none}.admission-preview:focus-visible{outline:2px solid var(--focus);outline-offset:3px}.admission-preview>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.admission-preview h3{margin:3px 0 0;font:700 var(--text-sm) var(--mono)}.admission-preview dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}.admission-preview dl div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.admission-preview dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.admission-preview dd{margin:4px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.admission-preview>p,.admission-preview li{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.admission-preview .shared-warning{padding:8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06)}.admission-preview ul{display:grid;gap:4px;margin:0;padding-left:18px}.preview-actions{display:flex;flex-wrap:wrap;gap:7px}
+  .admission-preview{display:grid;gap:11px;margin-top:14px;padding:14px;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:var(--radius-md);background:var(--panel-raised)}.admission-preview:focus{outline:none}.admission-preview:focus-visible{outline:2px solid var(--focus);outline-offset:3px}.admission-preview>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.admission-preview h3{margin:3px 0 0;font:700 var(--text-sm) var(--mono)}.admission-preview dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}.admission-preview dl div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.admission-preview dt{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.admission-preview dd{margin:4px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.admission-preview>p,.admission-preview li{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.admission-preview .shared-warning,.admission-preview .admission-state{padding:8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06)}.admission-preview .admission-state{color:var(--text)}.admission-preview ul{display:grid;gap:4px;margin:0;padding-left:18px}.preview-actions{display:flex;flex-wrap:wrap;gap:7px}
   .relationship-limitations{margin-top:12px}
   .relationship-limitations summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}
   @media(max-width:700px){.relationship-list,.admission-preview dl{grid-template-columns:minmax(0,1fr)}}

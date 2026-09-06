@@ -159,3 +159,23 @@ test('campaign and member pagination preserve expansion and case controls', asyn
   await expect(page.getByText('member-26.invalid', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible();
 });
+
+test('case consistency pagination exposes every bounded finding', async ({ page }) => {
+  const cases = Array.from({ length: 30 }, (_, index) => ({
+    ...caseRecord(index + 1),
+    disposition: 'suspicious',
+  }));
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
+  });
+
+  const quality = page.locator('.quality');
+  const pagination = quality.getByRole('navigation', { name: 'Case consistency finding pages' });
+  await expect(quality.getByRole('listitem')).toHaveCount(24);
+  await expect(quality.getByRole('status').first()).toContainText('Showing 1–24 of 30');
+  await pagination.getByRole('button', { name: 'Next' }).click();
+  await expect(pagination).toContainText('Page 2 of 2');
+  await expect(quality.getByText('Record why case-30.invalid was dispositioned', { exact: true })).toBeVisible();
+  await expect(quality.getByRole('listitem')).toHaveCount(6);
+});

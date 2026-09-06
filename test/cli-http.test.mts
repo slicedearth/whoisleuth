@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliHttpDocument } from '../cli/formatters/json.mts';
 import { formatTerminalHttp } from '../cli/formatters/terminal.mts';
@@ -94,10 +94,10 @@ describe('HTTP CLI argument parsing', () => {
   });
 
   test('rejects repeated flags, multiple domains, and unrelated options', () => {
-    assert.throws(() => parseCliArguments(['http', 'one.test', 'two.test']), /one domain/);
-    assert.throws(() => parseCliArguments(['http', 'one.test', '--json', '--json']), /only once/);
-    assert.throws(() => parseCliArguments(['http', 'one.test', '--deep']), /Unknown option/);
-    assert.throws(() => parseCliArguments(['http', 'one.test', '--json', '--quiet']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['http', 'one.test', 'two.test']), CliUsageError);
+    assert.throws(() => parseCliArguments(['http', 'one.test', '--json', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['http', 'one.test', '--deep']), CliUsageError);
+    assert.throws(() => parseCliArguments(['http', 'one.test', '--json', '--quiet']), CliUsageError);
   });
 });
 

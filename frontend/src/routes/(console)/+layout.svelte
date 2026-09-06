@@ -43,6 +43,7 @@
   let commandReturnFocus: HTMLElement | undefined;
   let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
+  const wideWorkspace = $derived(['/lookup', '/bulk', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
     void checkSession();
@@ -253,7 +254,7 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." />{/if}{@render children()}<SiteFooter console /></main>
+    <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}{@render children()}<SiteFooter console /></main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
       <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />

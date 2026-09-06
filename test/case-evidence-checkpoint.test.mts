@@ -288,4 +288,36 @@ describe('case evidence checkpoints', () => {
     assert.equal(states['http.final_origin'], 'indeterminate');
     assert.ok(pins.every((pin) => pin.transitionExpectation !== null));
   });
+
+  test('keeps matching partial or differently scoped transition evidence indeterminate', () => {
+    const sourceFacts = buildLookupCheckpointFacts(response(), {
+      collectionDepth: 'deep',
+      generatedAt: OBSERVED_AT,
+    });
+    const nameservers = sourceFacts.find((fact) => fact.field === 'dns.nameservers');
+    assert.ok(nameservers);
+    const partialFact = { ...nameservers, completeness: 'partial' as const, truncated: true };
+    const inputs = checkpointPinInputs([partialFact], ['dns.nameservers'], {
+      checkpointId: 'partial-transition',
+      transitionExpectations: { 'dns.nameservers': 'preserve' },
+    });
+    const pins = normalizeCaseEvidencePins(inputs.map((item) => ({
+      ...item,
+      id: 'partial-transition-pin',
+      createdAt: OBSERVED_AT,
+    })), OBSERVED_AT);
+
+    const partial = compareAcquisitionTransitionPins(pins, [partialFact]);
+    assert.equal(partial[0]?.state, 'incomparable');
+    assert.equal(partial[0]?.transitionState, 'indeterminate');
+    assert.match(partial[0]?.limitations.join(' ') ?? '', /complete untruncated evidence/u);
+
+    const otherDepth = compareAcquisitionTransitionPins(pins.map((pin) => ({
+      ...pin,
+      completeness: 'complete',
+      truncated: false,
+    })), [{ ...nameservers, collectionDepth: 'fast' }]);
+    assert.equal(otherDepth[0]?.state, 'incomparable');
+    assert.equal(otherDepth[0]?.transitionState, 'indeterminate');
+  });
 });

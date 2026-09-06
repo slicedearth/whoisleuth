@@ -117,3 +117,42 @@ test('bounds hostile strings and preserves unknown source states', () => {
   assert.ok((summary.diagnostics[0]?.detail.length || 0) <= 2_400);
   assert.equal(summary.signals.length, 0);
 });
+
+test('attributes each fallback registration fact to the publication that supplied it', () => {
+  const whoisTime = '2026-03-01T01:02:03.000Z';
+  const summary = buildLookupSummaryModel({
+    availability: {
+      state: 'registered',
+      confidence: 'high',
+      source: 'rdap',
+      registrar: 'WHOIS Registrar',
+      createdDateIso: '2020-01-01T00:00:00.000Z',
+      expiryDateIso: '2027-01-01T00:00:00.000Z',
+    },
+    rdapParsed: { domain: 'EXAMPLE.TEST', lifecycle: {} },
+    whoisParsed: {
+      registrar: 'WHOIS Registrar',
+      createdDateIso: '2020-01-01T00:00:00.000Z',
+      expiryDateIso: '2027-01-01T00:00:00.000Z',
+      updatedDateIso: '2026-02-01T00:00:00.000Z',
+      lifecycle: {},
+    },
+    diagnostics: {
+      rdap: { status: 'success', fetchedAt: '2026-03-02T01:02:03.000Z' },
+      whois: { status: 'partial', queriedAt: whoisTime },
+      availability: { status: 'complete' },
+    },
+    createdDate: '2020-01-01T00:00:00.000Z',
+    expiresDate: '2027-01-01T00:00:00.000Z',
+    updatedDate: '2026-02-01T00:00:00.000Z',
+    resultObservedAt: '2026-03-03T01:02:03.000Z',
+  });
+
+  for (const label of ['Registrar', 'Created', 'Expires', 'Updated']) {
+    const fact = summary.facts.find((candidate) => candidate.label === label);
+    assert.deepEqual(fact?.provenance.sources, ['WHOIS']);
+    assert.equal(fact?.provenance.observedAt, new Date(whoisTime).toLocaleString());
+    assert.equal(fact?.provenance.completeness, 'partial');
+  }
+  assert.deepEqual(summary.facts.find((fact) => fact.label === 'Registration')?.provenance.sources, ['Registry RDAP']);
+});

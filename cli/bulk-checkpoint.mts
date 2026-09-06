@@ -6,7 +6,7 @@ import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
-import type { BulkLookupResult } from './bulk.mts';
+import type { BulkCollectionContext, BulkLookupResult } from './bulk.mts';
 import { boundedCliInputError, CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
 
@@ -74,6 +74,22 @@ function normalizeCompactResult(value: unknown): Record<string, unknown> | null 
   return result;
 }
 
+function normalizeCollectionContext(value: unknown): BulkCollectionContext | undefined | null {
+  if (value === undefined) return undefined;
+  const context = recordOrNull(value);
+  if (!context || Object.keys(context).some((key) => !['dnsResolver', 'resolverServers'].includes(key))) return null;
+  const resolverServers = context.resolverServers;
+  if (!Array.isArray(resolverServers) || resolverServers.length > 3
+    || resolverServers.some((server) => typeof server !== 'string' || !server || server.length > 45)) return null;
+  if (context.dnsResolver === 'system_default' && resolverServers.length === 0) {
+    return { dnsResolver: 'system_default', resolverServers: [] };
+  }
+  if (context.dnsResolver === 'analyst_selected' && resolverServers.length > 0) {
+    return { dnsResolver: 'analyst_selected', resolverServers: [...resolverServers] };
+  }
+  return null;
+}
+
 function normalizeCheckpointResult(
   value: unknown,
   queries: readonly string[],
@@ -88,16 +104,24 @@ function normalizeCheckpointResult(
     ? null
     : normalizedTimestamp(item.observedAt) ?? undefined;
   if (observedAt === undefined) return null;
+  const collectionContext = normalizeCollectionContext(item.collectionContext);
+  if (collectionContext === null) return null;
   if (item.ok === false) {
     if (typeof item.error !== 'string' || !item.error || item.error.length > 300) return null;
-    return { index: Number(index), query, ok: false, error: item.error, observedAt };
+    return {
+      index: Number(index), query, ok: false, error: item.error, observedAt,
+      ...(collectionContext ? { collectionContext } : {}),
+    };
   }
   const result = normalizeCompactResult(item.result);
   if (item.ok !== true || !result) return null;
   const classified = classifyQuery(query);
   const storedClassified = recordOrNull(item.classified);
   if (storedClassified?.type !== classified.type || storedClassified.value !== classified.value) return null;
-  return { index: Number(index), query, ok: true, classified, result, observedAt };
+  return {
+    index: Number(index), query, ok: true, classified, result, observedAt,
+    ...(collectionContext ? { collectionContext } : {}),
+  };
 }
 
 function parseBulkCheckpoint(
@@ -241,8 +265,9 @@ async function createBulkCheckpointWriter(options: Readonly<{
   }
 
   function scheduleWrite(): void {
+    if (writeFailure) return;
     dirty = true;
-    if (activeWrite || writeFailure) return;
+    if (activeWrite) return;
     const pending = drainWrites();
     activeWrite = pending;
     void pending.then(
@@ -280,6 +305,7 @@ async function createBulkCheckpointWriter(options: Readonly<{
     },
     async flush(): Promise<void> {
       while (activeWrite || dirty) {
+        if (writeFailure && !activeWrite) break;
         if (!activeWrite) scheduleWrite();
         if (activeWrite) await activeWrite;
       }

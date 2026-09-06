@@ -95,6 +95,21 @@ function lookupResponse(overrides: Partial<LookupHttpResponse> = {}): LookupHttp
       },
       http: { status: 'unavailable' },
       tls: { status: 'partial' },
+      technologyProfile: {
+        profileVersion: 11,
+        status: 'success',
+        observedAt: '2026-07-26T01:02:06.000Z',
+        complete: true,
+        truncated: false,
+        limitations: [],
+        privateProfileValue: 'must-not-enter-readable-report',
+        findings: [
+          { name: 'Example Edge', roles: ['observed_edge'], privateFindingValue: 'must-not-enter-readable-report' },
+          { name: 'Example Platform', roles: ['application_platform'] },
+          { name: 'Example Runtime', roles: ['framework_runtime'] },
+          { name: 'Example Dependency', roles: ['embedded_dependency'] },
+        ],
+      },
     },
     networkContext: {
       contextVersion: 1,
@@ -190,6 +205,19 @@ describe('browser-local readable Lookup report', () => {
     assert.equal(serialized.includes('REGISTRAR-1'), false);
     assert.equal(serialized.includes('must-not-enter-readable-report'), false);
     const availability = object(projected.availability);
+    const technology = object(availability.technologyProfile);
+    assert.deepEqual(
+      (technology.findings as JsonObject[]).map((finding) => [finding.name, finding.roles]),
+      [
+        ['Example Edge', ['observed_edge']],
+        ['Example Platform', ['application_platform']],
+        ['Example Runtime', ['framework_runtime']],
+        ['Example Dependency', ['embedded_dependency']],
+      ],
+    );
+    const whois = object(projected.whois);
+    const whoisParsed = object(whois.parsed);
+    assert.deepEqual(whoisParsed.registrar, { name: 'Example Registrar' });
     const dns = object(availability.dns);
     const records = object(dns.records);
     assert.ok(Array.isArray(records.soa));
@@ -233,6 +261,10 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /One bounded network record was omitted/u);
     assert.match(report, /SOA primary server:\*\* ns1\\\.example\\\.test/u);
     assert.match(report, /SOA serial:\*\* 2026072601/u);
+    assert.match(report, /Observed edge, CDN, reverse proxy or WAF:\*\* Example Edge/u);
+    assert.match(report, /Application-platform indicators:\*\* Example Platform/u);
+    assert.match(report, /Framework or runtime indicators:\*\* Example Runtime/u);
+    assert.match(report, /Embedded or third-party dependencies:\*\* Example Dependency/u);
     assert.match(report, /heuristic review priority/u);
     assert.match(report, /## Canonical Decision Facts/u);
     assert.ok(report.includes(`whoisleuth\\.lookup\\-readable\\-report v${LOOKUP_READABLE_REPORT_VERSION}`));
@@ -245,6 +277,23 @@ describe('browser-local readable Lookup report', () => {
     assert.doesNotMatch(report, /REGISTRAR-1/u);
     assert.doesNotMatch(report, /<script>|\]\(https:\/\//iu);
     assert.ok(new TextEncoder().encode(report).byteLength <= MAX_LOOKUP_READABLE_REPORT_BYTES);
+  });
+
+  test('reports absent technology roles as unreported without inventing indicators', () => {
+    const source = lookupResponse();
+    const availability = source.availability as unknown as Record<string, unknown>;
+    delete availability.technologyProfile;
+    const report = buildLookupReadableReport(source, {
+      applicationVersion: '1.35.0',
+      generatedAt: '2026-07-26T02:00:00.000Z',
+      decisionFacts: reportFacts,
+    });
+
+    assert.match(report, /Observed edge, CDN, reverse proxy or WAF:\*\* Not reported/u);
+    assert.match(report, /Application-platform indicators:\*\* Not reported/u);
+    assert.match(report, /Framework or runtime indicators:\*\* Not reported/u);
+    assert.match(report, /Embedded or third-party dependencies:\*\* Not reported/u);
+    assert.doesNotMatch(report, /Example (?:Edge|Platform|Runtime|Dependency)/u);
   });
 
   test('omits absent view-model fields before applying the strict portable JSON contract', () => {

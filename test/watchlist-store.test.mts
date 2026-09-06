@@ -16,7 +16,7 @@ import {
   WATCHLIST_SCHEMA_VERSION,
   watchlistStoreVersion,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
-import { mergeHostedWatchlist } from '../frontend/src/lib/watchlists.ts';
+import { mergeHostedWatchlist, resolveWatchlistMutationTarget } from '../frontend/src/lib/watchlists.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -193,4 +193,20 @@ test('hosted restore preserves capacity errors while allowing additions and repl
   assert.equal(Object.keys(replaced).length, MAX_WATCHLISTS);
   assert.equal(Object.hasOwn(replaced, 'hosted'), false);
   assert.ok(replaced.Hosted);
+});
+
+test('Bulk watchlist admission rejects a new 101st list without changing retained lists', () => {
+  const full = normalizeWatchlistStore(Object.fromEntries(
+    Array.from({ length: MAX_WATCHLISTS }, (_, index) => [`List ${index + 1}`, entry()]),
+  )).watchlists;
+  const before = structuredClone(full);
+  assert.throws(
+    () => resolveWatchlistMutationTarget(full, 'One more list'),
+    /Watchlist storage is full/iu,
+  );
+  assert.deepEqual(full, before);
+
+  const replacement = resolveWatchlistMutationTarget(full, 'list 1');
+  assert.equal(replacement.name, 'List 1');
+  assert.equal(replacement.previous, full['List 1']);
 });

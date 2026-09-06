@@ -1,46 +1,40 @@
 import { defineConfig, devices } from '@playwright/test';
-import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/constants';
-import {
-  PLAYWRIGHT_FUNCTIONAL_PROJECT,
-  PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
-  PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
-} from './tools/playwright-execution-contract.mts';
+import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/constants.ts';
+import { resolvePlaywrightExecutionContract } from './tools/playwright-execution-contract.mts';
 import { playwrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
+import { assertFrontendBuildIntegrity } from './tools/frontend-build-integrity.mts';
 
-const isCI = Boolean(process.env.CI);
-const useExistingBuild = isCI || process.env.WHOISLEUTH_E2E_USE_BUILD === '1';
-const performanceAuthority = process.env.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1';
+const execution = resolvePlaywrightExecutionContract();
+if (execution.useExistingBuild) assertFrontendBuildIntegrity();
 const artifacts = playwrightRunArtifacts();
-
 const chromiumProject = {
-  name: PLAYWRIGHT_FUNCTIONAL_PROJECT,
+  name: execution.functionalProject.name,
   use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
-  dependencies: ['setup'],
-  // Machine timing is an isolated authority lane. Functional shards retain
-  // deterministic readiness and layout assertions without inheriting runtime
-  // ceilings from a runner that is also executing hundreds of browser cases.
-  testIgnore: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
+  dependencies: [...execution.functionalProject.dependencies],
+  // Repeated performance observations run in an isolated lane. Its specs
+  // still enforce readiness, transfer and layout contracts; neither lane
+  // treats one host's elapsed time as a universal acceptance threshold.
+  testIgnore: execution.functionalProject.excludedSpecs,
 };
-
 const performanceAuthorityProject = {
-  name: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
-  testMatch: PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
+  name: execution.performanceProject.name,
+  testMatch: execution.performanceProject.matchedSpecs,
   use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
-  dependencies: ['setup'],
-  workers: 1,
-  fullyParallel: false,
-  retries: 0,
+  dependencies: [...execution.performanceProject.dependencies],
+  workers: execution.performanceProject.workers,
+  fullyParallel: execution.performanceProject.fullyParallel,
+  retries: execution.performanceProject.retries,
 };
 
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: true,
-  failOnFlakyTests: true,
-  retries: 0,
-  workers: 1,
+  forbidOnly: execution.forbidOnly,
+  failOnFlakyTests: execution.failOnFlakyTests,
+  retries: execution.retries,
+  workers: execution.workers,
   outputDir: artifacts.testResults,
-  reporter: isCI
+  reporter: execution.hosted
     ? [
         ['list'],
         ['json', { outputFile: artifacts.jsonResults }],
@@ -49,20 +43,20 @@ export default defineConfig({
     : [['list']],
   use: {
     baseURL: BASE_URL,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: execution.trace,
+    screenshot: execution.screenshot,
     video: 'off',
   },
   projects: [
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     chromiumProject,
-    ...(performanceAuthority ? [performanceAuthorityProject] : []),
+    ...(execution.includePerformanceAuthority ? [performanceAuthorityProject] : []),
   ],
   // CI builds the frontend as its own step, so the server here just starts
   // node directly. Local standalone runs still build automatically; the full
   // verification pyramid can reuse its explicit build instead of rebuilding.
   webServer: {
-    command: useExistingBuild ? 'node server.mts' : 'npm start',
+    command: execution.useExistingBuild ? 'node server.mts' : 'npm start',
     url: BASE_URL,
     // A port collision should fail the run loudly, not silently test
     // whatever unrelated (or stale) server already happens to be listening.

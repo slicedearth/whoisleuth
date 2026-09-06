@@ -24,6 +24,7 @@ import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.m
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { assertBoundedJsonStructure, parseBoundedJson } from '../lib/bounded-json.mts';
 import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 export const EVIDENCE_STORAGE_MEASUREMENT_SCHEMA = 'whoisleuth.evidence-storage-measurement';
 export const EVIDENCE_STORAGE_MEASUREMENT_VERSION = 1;
@@ -430,6 +431,8 @@ function scenarioCase(
       id: `decision-${responseGroup}`,
       summary: 'Retain for analyst review',
       rationale: 'The bounded evidence remains material and requires an explicit decision.',
+      confidence: 'unknown',
+      confidenceBasis: '',
       evidencePinIds: [pinId],
       createdAt: responseTime,
     }],
@@ -439,6 +442,7 @@ function scenarioCase(
       recipient: 'Reviewed internal queue',
       contactSource: 'Analyst-selected workflow',
       routeObservedAt: null,
+      routeReviewAfter: null,
       contactLimitations: ['No external submission was performed.'],
       dueAt: null,
       state: 'drafting',
@@ -839,7 +843,7 @@ export async function buildEvidenceStorageMeasurementProfile(
       browserDatabaseVersion: 1,
       browserObjectStores: Object.freeze(['records', 'manifests']),
       browserCodec: 'json-v1',
-      browserCollectionCount: 12,
+      browserCollectionCount: BROWSER_LOCAL_COLLECTION_MANIFEST.length,
     }),
     scenarios: Object.freeze(scenarios),
     decision: Object.freeze({

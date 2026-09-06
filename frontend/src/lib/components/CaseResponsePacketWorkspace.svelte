@@ -12,6 +12,7 @@
     buildCaseResponseReadiness,
     buildCaseResponseReviewDigest,
     buildResponsePacketProfilePreview,
+    CASE_RESPONSE_PACKET_VERSION,
     CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE,
     caseResponsePacketFilename,
     RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
@@ -378,7 +379,7 @@
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
           <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
-          <p class="notice">Selection includes only retained Case pins supported by response-packet v8. It does not collect, upload, or infer new evidence.</p>
+          <p class="notice">Selection includes only retained Case pins supported by response-packet v{CASE_RESPONSE_PACKET_VERSION}. It does not collect, upload, or infer new evidence.</p>
         </section>
       {/if}
       {#if packetWizardStep === 1}
@@ -407,7 +408,7 @@
       {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-6`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-6`}>
           <header><div><p class="eyebrow">Bind current material</p><h4 id={`packet-wizard-title-${record.id}-6`}>Exact-input digest review</h4></div><span class:attention={!packetReviewIsCurrent}>{packetReviewIsCurrent ? 'current review' : packetReviewDigest ? 'review stale' : 'not reviewed'}</span></header>
-          <p>Review the selected evidence, action-bound recipient scope, provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v8 review digest.</p>
+          <p>Review the selected evidence, action-bound recipient scope, provenance, privacy and redactions, readiness, freshness, contradictions, and limitations. Then bind these exact current inputs to a response-packet v{CASE_RESPONSE_PACKET_VERSION} review digest.</p>
           <button class="btn" type="button" onclick={() => void reviewPacketInputs()} disabled={packetBusy || !packetPreflight.canExport}>Review and bind exact inputs</button>
           {#if packetReviewDigest}<code>{packetReviewDigest}</code>{/if}
           {#if packetReviewDigest && !packetReviewIsCurrent}<p class="history-warning">Material inputs changed after review. The retained digest is stale; re-review before authorisation.</p>{/if}

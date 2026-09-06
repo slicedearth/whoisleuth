@@ -10,6 +10,7 @@ import {
   loadEvidenceStorageMeasurementFixture,
   validateEvidenceStorageMeasurementFixture,
 } from '../tools/evidence-storage-measurement.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 describe('evidence-storage architecture measurement', () => {
   test('is deterministic and bound to the reviewed revision and fixture identities', async () => {
@@ -85,7 +86,7 @@ describe('evidence-storage architecture measurement', () => {
       browserDatabaseVersion: 1,
       browserObjectStores: ['records', 'manifests'],
       browserCodec: 'json-v1',
-      browserCollectionCount: 12,
+      browserCollectionCount: BROWSER_LOCAL_COLLECTION_MANIFEST.length,
     });
   });
 

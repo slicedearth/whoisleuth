@@ -61,11 +61,12 @@ export type WorkspaceImportSummary = {
   skipped: number;
   pruned: number;
   brandProfileReferencesOmitted: number;
+  authoredHistoryOmitted: number;
 };
 
 function importSummary(
   id: string,
-  result: { added: number; updated: number; skipped: number; pruned?: number; brandProfileReferencesOmitted?: number },
+  result: { added: number; updated: number; skipped: number; pruned?: number; brandProfileReferencesOmitted?: number; authoredHistoryOmitted?: number },
 ): WorkspaceImportSummary {
   return {
     id,
@@ -74,6 +75,7 @@ function importSummary(
     skipped: result.skipped ?? 0,
     pruned: result.pruned ?? 0,
     brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
+    authoredHistoryOmitted: result.authoredHistoryOmitted ?? 0,
   };
 }
 
@@ -200,10 +202,10 @@ async function applySettings(
   if (!setThemePreference(theme)) throw new Error('Could not save the imported theme preference. Browser storage may be full or unavailable.');
   if (activeProfileAvailable) {
     setActiveProfile(requestedProfileId);
-    return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0 };
+    return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 };
   }
   if (!requestedProfileId) setActiveProfile('');
-  return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0 };
+  return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 };
 }
 
 /** Revalidates the archive, then applies only selected ready sections. */
@@ -310,7 +312,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
       const result = await applySettings(settingsSection, (settings) => { appliedSettings = settings; });
-      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0 });
+      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 });
     }
   } catch (cause) {
     rethrowUnknownWorkspaceCommit(cause);

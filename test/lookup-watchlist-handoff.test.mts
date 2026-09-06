@@ -10,8 +10,8 @@ import { MAX_WATCHLIST_NAME_LENGTH } from '../frontend/src/lib/analysis/watchlis
 import { appendWatchlistScan } from '../frontend/src/lib/analysis/watchlist-history.ts';
 
 describe('Lookup watchlist handoff', () => {
-  test('builds one bounded comparable record for the exact observed hostname', () => {
-    const record = buildLookupWatchlistRecord('Login.Example.Test', {
+  test('builds one bounded comparable record for the supplied observation target', () => {
+    const record = buildLookupWatchlistRecord('Example.Test', {
       availability: 'registered',
       registrar: 'Example Registrar',
       nameservers: ['ns1.example.test'],
@@ -24,7 +24,7 @@ describe('Lookup watchlist handoff', () => {
     }, 'deep');
 
     assert.deepEqual(record, {
-      domain: 'login.example.test',
+      domain: 'example.test',
       scanDepth: 'deep',
       registrarName: 'Example Registrar',
       availability: 'registered',

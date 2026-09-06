@@ -472,6 +472,34 @@ test('text fields retain a visible focus outline in forced-colours mode', async 
   expect(outline.width).toBeGreaterThanOrEqual(2);
 });
 
+test('forced colours preserve active navigation and disclosure affordances', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await page.goto('/cli#command-commands');
+
+  const activeNavigation = page.locator('.reference-tree a[aria-current="page"]');
+  const navigationOutline = await activeNavigation.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+  });
+  expect(navigationOutline.style).not.toBe('none');
+  expect(navigationOutline.width).toBeGreaterThanOrEqual(2);
+
+  const disclosure = page.locator('article[data-command-detail="commands"] .contract-details > summary');
+  await disclosure.focus();
+  const affordance = await disclosure.evaluate((element) => {
+    const marker = getComputedStyle(element, '::after');
+    const focus = getComputedStyle(element);
+    return {
+      marker: marker.content,
+      outlineStyle: focus.outlineStyle,
+      outlineWidth: Number.parseFloat(focus.outlineWidth),
+    };
+  });
+  expect(affordance.marker).toBe('"+"');
+  expect(affordance.outlineStyle).not.toBe('none');
+  expect(affordance.outlineWidth).toBeGreaterThanOrEqual(2);
+});
+
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {
   await clearThemePreference(page);
   await page.emulateMedia({ colorScheme: 'light' });
@@ -501,31 +529,42 @@ test('the theme trigger controls only a rendered option list', async ({ page }) 
   await expect(page.locator('#colour-theme-options')).toHaveCount(0);
 });
 
-test('the public theme menu uses the surrounding canvas surface', async ({ page }) => {
+test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/resources');
-  await chooseTheme(page, 'Light');
 
-  for (const viewport of [
-    { width: 1280, height: 800 },
-    { width: 390, height: 844 },
-  ]) {
-    await page.setViewportSize(viewport);
-    const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
-    await trigger.click();
-    const options = page.getByRole('listbox', { name: 'Colour theme options' });
-    await expect(options).toBeVisible();
+  for (const theme of ['Light', 'Dark'] as const) {
+    await chooseTheme(page, theme);
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 1024, height: 768 },
+      { width: 390, height: 844 },
+      { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const trigger = page.getByRole('button', { name: `Colour theme, ${theme} selected` });
+      await trigger.click();
+      const options = page.getByRole('listbox', { name: 'Colour theme options' });
+      await expect(options).toBeVisible();
 
-    const colours = await page.evaluate(() => ({
-      canvas: getComputedStyle(document.body).backgroundColor,
-      trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
-      options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
-    }));
-    expect(colours.trigger).toBe(colours.canvas);
-    expect(colours.options).toBe(colours.canvas);
+      const colours = await page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:fixed;background:var(--panel)';
+        document.body.append(probe);
+        const result = {
+          trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
+          options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
+          panel: getComputedStyle(probe).backgroundColor,
+        };
+        probe.remove();
+        return result;
+      });
+      expect(colours.trigger).toBe('rgba(0, 0, 0, 0)');
+      expect(colours.options).toBe(colours.panel);
 
-    await trigger.click();
-    await expect(options).toHaveCount(0);
+      await trigger.click();
+      await expect(options).toHaveCount(0);
+    }
   }
 });
 
@@ -550,6 +589,35 @@ test('the authenticated console reuses the same persisted selector', async ({ pa
   await page.reload();
   await expect(page.getByRole('button', { name: 'Colour theme, Light selected' }).locator('[data-theme-symbol="light"]')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('the mobile console theme control inherits the drawer in light and dark modes', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+
+  for (const theme of ['Light', 'Dark'] as const) {
+    await chooseTheme(page, theme);
+    const trigger = page.getByRole('button', { name: `Colour theme, ${theme} selected` });
+    await trigger.click();
+    const colours = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:fixed;background:var(--panel)';
+      document.body.append(probe);
+      const result = {
+        trigger: getComputedStyle(document.querySelector('#console-navigation .theme-trigger')!).backgroundColor,
+        options: getComputedStyle(document.querySelector('#console-navigation .theme-options')!).backgroundColor,
+        panel: getComputedStyle(probe).backgroundColor,
+      };
+      probe.remove();
+      return result;
+    });
+    expect(colours.trigger).toBe('rgba(0, 0, 0, 0)');
+    expect(colours.options).toBe(colours.panel);
+    await trigger.click();
+  }
+  await expectNoHorizontalOverflow(page);
 });
 
 test('theme controls fit beside authenticated public navigation across common phone widths', async ({ page }) => {

@@ -6,6 +6,7 @@ import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-in
 import {
   DOMAIN_CHANGE_PACKET_INPUT_SCHEMA,
   DOMAIN_CHANGE_PACKET_SCHEMA,
+  DOMAIN_CHANGE_PACKET_VERSION,
   buildDomainChangePacket,
 } from '../lib/domain-change-packet.mts';
 
@@ -70,6 +71,7 @@ describe('domain change packet', () => {
   test('assembles a ready digest-protected packet without collection', async () => {
     const packet = await buildDomainChangePacket(packetInput(), NOW);
     assert.equal(packet.schema, DOMAIN_CHANGE_PACKET_SCHEMA);
+    assert.equal(packet.version, DOMAIN_CHANGE_PACKET_VERSION);
     assert.equal(packet.state, 'ready');
     assert.equal(packet.summary.changedAuthoritativeRecordSets.length, 1);
     assert.equal(packet.summary.changedAuthoritativeRecordSets[0]?.type, 'A');
@@ -77,6 +79,36 @@ describe('domain change packet', () => {
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.artifact.kind, 'signed_review_artifact');
     assert.equal(verified.state, 'verified');
+  });
+
+  test('keeps unavailable and inconsistent authority evidence out of the changed-set summary', async () => {
+    const unavailable = packetInput();
+    unavailable.postChange.authoritySnapshots = unavailable.postChange.authoritySnapshots.map((snapshot) => ({
+      ...snapshot, state: 'unavailable', records: [],
+    }));
+    const unavailablePacket = await buildDomainChangePacket(unavailable, NOW);
+    assert.deepEqual(unavailablePacket.summary.changedAuthoritativeRecordSets, []);
+    assert.match(unavailablePacket.gate.reasons.join(' '), /Post-change evidence.*unavailable/iu);
+
+    const inconsistent = packetInput();
+    inconsistent.postChange.authoritySnapshots[1]!.records[0]!.value = '192.0.2.30';
+    const inconsistentPacket = await buildDomainChangePacket(inconsistent, NOW);
+    assert.deepEqual(inconsistentPacket.summary.changedAuthoritativeRecordSets, []);
+    assert.match(inconsistentPacket.gate.reasons.join(' '), /Post-change evidence.*differ/iu);
+  });
+
+  test('distinguishes a complete empty post-change set from unavailable evidence', async () => {
+    const completeEmpty = packetInput();
+    completeEmpty.preChange.authoritySnapshots.forEach((snapshot) => {
+      snapshot.records.push({ owner: 'example.test', type: 'NS', value: 'ns1.example.test', ttl: 300 });
+    });
+    completeEmpty.postChange.authoritySnapshots.forEach((snapshot) => {
+      snapshot.records = [{ owner: 'example.test', type: 'NS', value: 'ns1.example.test', ttl: 300 }];
+    });
+    const packet = await buildDomainChangePacket(completeEmpty, NOW);
+    const removed = packet.summary.changedAuthoritativeRecordSets.find((item) => item.type === 'A');
+    assert.deepEqual(removed?.beforeValues, ['192.0.2.10']);
+    assert.deepEqual(removed?.afterValues, []);
   });
 
   test('rejects mixed-domain evidence and reports incomplete inputs as review', async () => {

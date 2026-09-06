@@ -128,10 +128,11 @@
           skipped:sum.skipped+item.skipped,
           pruned:sum.pruned+item.pruned,
           brandProfileReferencesOmitted:sum.brandProfileReferencesOmitted+item.brandProfileReferencesOmitted,
+          authoredHistoryOmitted:sum.authoredHistoryOmitted+item.authoredHistoryOmitted,
         }),
-        {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0},
+        {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0,authoredHistoryOmitted:0},
       );
-      const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
+      const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
       archiveValue=null;preview=null;selectedIds=[];
       message=resultMessage;
       try {
@@ -226,7 +227,7 @@
           <li class:unsupported={section.status==='unsupported'} class:blocked={section.status==='blocked'}>
             <label>
               <input type="checkbox" checked={selected(section.id)} disabled={section.status!=='ready'||busy} onchange={(event)=>void toggle(section.id,(event.currentTarget as HTMLInputElement).checked)}>
-              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.brandProfileReferencesOmitted?` · ${section.brandProfileReferencesOmitted} Brand Profile reference${section.brandProfileReferencesOmitted===1?'':'s'} will be omitted`:''}{section.pruned?` · ${section.pruned} older evidence snapshot${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
+              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.brandProfileReferencesOmitted?` · ${section.brandProfileReferencesOmitted} Brand Profile reference${section.brandProfileReferencesOmitted===1?'':'s'} will be omitted`:''}{section.authoredHistoryOmitted?` · ${section.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${section.authoredHistoryOmitted===1?'':'s'} will be omitted`:''}{section.pruned?` · ${section.pruned} older evidence snapshot${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
             </label>
             <span class="state">{section.status==='ready'?'Ready':section.status==='unsupported'?'Unsupported':'Blocked'}</span>
             {#if section.reason}<p>{section.reason}</p>{/if}

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
+import { unitTestExecutablePath } from '../../tools/toolchain-compatibility.mts';
+
 type CompletionResult = Readonly<{
   key: string;
   candidates: readonly string[];
@@ -75,7 +77,7 @@ printf '%s\\n' "\${COMPREPLY[@]}"
 printf '${END_MARKER}${index}__\\n'
 `).join('\n');
   const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }\n${script}\n${invocations}`;
-  const child = spawnSync('bash', ['-c', harness], {
+  const child = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', harness], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
@@ -112,7 +114,7 @@ compadd() {
 }
 ${script}
 ${invocations}`;
-  const child = spawnSync('zsh', ['-c', harness], {
+  const child = spawnSync(unitTestExecutablePath('zsh'), ['-f', '-c', harness], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
@@ -159,7 +161,7 @@ $results = foreach ($lineValue in $lines) {
   }
 }
 $results | ConvertTo-Json -Compress -Depth 4 -AsArray`;
-  const child = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', invocation], {
+  const child = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', invocation], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     input: JSON.stringify(lines),

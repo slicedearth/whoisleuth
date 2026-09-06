@@ -6,7 +6,19 @@ export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
 
 export type CriticalMutant = Readonly<{
   id: string;
-  area: 'authority_availability' | 'schema_refusal' | 'privacy_projection' | 'missing_evidence_scoring' | 'unreviewed_evidence_scoring' | 'public_address_enforcement' | 'artifact_structure_integrity';
+  area:
+    | 'authority_availability'
+    | 'schema_refusal'
+    | 'privacy_projection'
+    | 'missing_evidence_scoring'
+    | 'unreviewed_evidence_scoring'
+    | 'public_address_enforcement'
+    | 'artifact_structure_integrity'
+    | 'local_mutation_outcome'
+    | 'evidence_completeness'
+    | 'protocol_null_mx'
+    | 'observation_time_order'
+    | 'comparison_source_qualification';
   file: string;
   line: number;
   search: string;
@@ -20,7 +32,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     id: 'authority-dns-delegation-required',
     area: 'authority_availability',
     file: 'lib/availability.mts',
-    line: 611,
+    line: 613,
     search: 'if (!rdapFound && !hasWhoisRegistrationData && !dnsDelegated) {',
     replacement: 'if (!rdapFound && !hasWhoisRegistrationData) {',
     focusedTests: Object.freeze(['test/availability-dns.test.mts']),
@@ -84,6 +96,56 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     search: '  if (displayed > total || omitted !== total - displayed || items.length !== displayed) fail(label);',
     replacement: '  if (displayed > total || omitted !== total - displayed) fail(label);',
     focusedTests: Object.freeze(['test/artifact-verify.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'local-mutation-draft-requires-commit',
+    area: 'local_mutation_outcome',
+    file: 'frontend/src/lib/local-mutation-outcome.ts',
+    line: 20,
+    search: "  return outcome === 'committed';",
+    replacement: '  return true;',
+    focusedTests: Object.freeze(['test/local-mutation-outcome.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'domain-change-requires-complete-evidence',
+    area: 'evidence_completeness',
+    file: 'lib/domain-change-packet.mts',
+    line: 97,
+    search: "    if (beforeEvidence.state !== 'complete' || afterEvidence.state !== 'complete') {",
+    replacement: "    if (beforeEvidence.state !== 'complete' && afterEvidence.state !== 'complete') {",
+    focusedTests: Object.freeze(['test/domain-change-packet.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'null-mx-requires-zero-preference',
+    area: 'protocol_null_mx',
+    file: 'lib/zone-intent-review.mts',
+    line: 182,
+    search: "    if (exchangeToken === '.' && preference !== 0) throw new TypeError('A Null MX exchange must use preference 0.');",
+    replacement: "    if (false) throw new TypeError('A Null MX exchange must use preference 0.');",
+    focusedTests: Object.freeze(['test/zone-intent-review.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'observation-cannot-follow-review',
+    area: 'observation_time_order',
+    file: 'tools/maintainer-tool-helpers.mts',
+    line: 65,
+    search: '  if (Date.parse(observedAt) > Date.parse(reviewedAt)) {',
+    replacement: '  if (false) {',
+    focusedTests: Object.freeze(['test/technology-fixture-review.test.mts']),
+    timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'comparison-requires-complete-sources',
+    area: 'comparison_source_qualification',
+    file: 'packages/comparison/comparison-ledger-bulk.mts',
+    line: 96,
+    search: '  if (!completeBulkSourceState(earlierState) || !completeBulkSourceState(laterState)) {',
+    replacement: '  if (false) {',
+    focusedTests: Object.freeze(['test/comparison-ledger.test.mts']),
     timeoutMs: 20_000,
   }),
 ]);

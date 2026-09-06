@@ -948,6 +948,46 @@ describe('retained comparison adapters', () => {
     assert.ok(details.rows.some((row) => row.field === 'Bulk collection mode' && row.state === 'collection_changed'));
   });
 
+  test('does not compare Risk across different ready Brand Profile revisions', () => {
+    const earlierContext = {
+      sourceState: 'ready',
+      activeProfileId: 'profile-one',
+      profileUpdatedAt: EARLIER,
+      limitation: '',
+    };
+    const laterContext = {
+      sourceState: 'ready',
+      activeProfileId: 'profile-one',
+      profileUpdatedAt: LATER,
+      limitation: '',
+    };
+    const earlier = bulkSession('bulk-profile-earlier', 'Earlier profile', EARLIER, [
+      bulkResult('profile-score.reservation.invalid', {
+        risk: 20,
+        hasActiveBrandProfile: true,
+        profileContext: earlierContext,
+      }),
+    ], { profileContext: earlierContext });
+    const later = bulkSession('bulk-profile-later', 'Later profile', LATER, [
+      bulkResult('profile-score.reservation.invalid', {
+        risk: 80,
+        hasActiveBrandProfile: true,
+        profileContext: laterContext,
+      }),
+    ], { profileContext: laterContext });
+    const input = {
+      bulkSessions: [earlier, later],
+      bulkPairs: [{ earlierSessionId: earlier.id, laterSessionId: later.id }],
+    };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items[0]?.completeness, 'partial');
+    const details = buildComparisonLedgerDetails(input, { itemIds: index.items[0]?.id });
+    const risk = details.rows.find((row) => row.field === 'Risk score');
+    assert.equal(risk?.state, 'not_compared');
+    assert.match(risk?.limitations.join(' ') ?? '', /same ready Brand Profile provenance/iu);
+    assert.equal(details.rows.some((row) => row.field === 'Risk score' && row.state === 'different'), false);
+  });
+
   test('keeps registrar provenance conservative across RDAP and WHOIS source switches', () => {
     const earlier = bulkSession('bulk-rdap-registrar', 'RDAP registrar', EARLIER, [
       bulkResult('registrar-source.reservation.invalid', {
@@ -1037,6 +1077,34 @@ describe('retained comparison adapters', () => {
     assert.equal(details.rows[0]?.state, 'incomplete');
     assert.equal(details.rows[0]?.completeness, 'partial');
     assert.equal(details.rows.some((row) => row.state === 'equivalent'), false);
+  });
+
+  test('does not report a value change when both retained field sources are partial', () => {
+    const sourceCoverage = [
+      { source: 'rdap', state: 'complete' },
+      { source: 'availability', state: 'complete' },
+      { source: 'http', state: 'partial' },
+    ];
+    const earlier = bulkSession('bulk-partial-field-earlier', 'Earlier partial field', EARLIER, [
+      bulkResult('partial-field.reservation.invalid', { sourceCoverage, activityStatus: 'active' }),
+    ]);
+    const later = bulkSession('bulk-partial-field-later', 'Later partial field', LATER, [
+      bulkResult('partial-field.reservation.invalid', { sourceCoverage, activityStatus: 'parked' }),
+    ]);
+    const input = {
+      bulkSessions: [earlier, later],
+      bulkPairs: [{ earlierSessionId: earlier.id, laterSessionId: later.id }],
+    };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items[0]?.completeness, 'partial');
+    const details = buildComparisonLedgerDetails(input, { itemIds: index.items[0]?.id });
+    const activity = details.rows.find((row) => row.field === 'Website activity');
+    assert.equal(activity?.state, 'not_compared');
+    assert.equal(activity?.completeness, 'partial');
+    assert.equal(activity?.earlier.sourceState, 'partial');
+    assert.equal(activity?.later.sourceState, 'partial');
+    assert.match(activity?.limitations.join(' ') ?? '', /both retained family source states must be complete/iu);
+    assert.equal(details.rows.some((row) => row.field === 'Website activity' && row.state === 'different'), false);
   });
 
   test('allows an identical fully source-complete non-empty Bulk pair to be equivalent', () => {

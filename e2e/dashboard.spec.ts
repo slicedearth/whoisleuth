@@ -103,6 +103,57 @@ function profile(id: string, name: string) {
   };
 }
 
+async function seedDashboardAttentionSources(page: import('@playwright/test').Page) {
+  const snapshot = (id: string, observedAt: string, technology: string, digest: string) => ({
+    id,
+    domain: 'attention-source.invalid',
+    observedAt,
+    savedAt: observedAt,
+    complete: true,
+    truncated: false,
+    technologies: [{ id: technology.toLowerCase().replaceAll(' ', '-'), name: technology, category: 'cms', confidence: 'high' }],
+    posture: [{ id: 'https', state: 'observed' }],
+    identity: {
+      normalizedHtml: digest,
+      visibleText: null,
+      domStructure: null,
+      formStructure: null,
+      resourceHosts: null,
+      trackingIdentifiers: null,
+      faviconHash: null,
+    },
+    sources: [{ source: 'page', state: 'success' }],
+  });
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: CASE_SCHEMA_VERSION,
+      cases: [caseRecord('attention-source-case', 'attention-source.invalid', 'new')],
+    },
+    'whoisleuth-detection-rules-v1': currentBrowserLocalDocument('detection_rules', {
+      rules: [{
+        id: 'attention-source-rule',
+        name: 'Review new Cases',
+        enabled: true,
+        match: 'all',
+        conditions: [{ field: 'status', operator: 'equals', value: 'new' }],
+        riskDelta: 0,
+        tag: 'review-source',
+      }],
+    }),
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
+      snapshots: [
+        snapshot('snapshot-earlier', '2026-07-14T06:00:00.000Z', 'CMS One', 'a'.repeat(64)),
+        snapshot('snapshot-later', '2026-07-14T07:00:00.000Z', 'CMS Two', 'b'.repeat(64)),
+      ],
+    }),
+  }, { clearStorage: true });
+  await Promise.all([
+    readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 }),
+    readBrowserLocalCollection(page, 'detection_rules', { minimumRecords: 1 }),
+    readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 2 }),
+  ]);
+}
+
 async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
   const archiveCase = {
       id: 'archive-case', domain: 'archive-case.invalid', status: 'new', disposition: 'unreviewed',
@@ -344,6 +395,29 @@ test('the Dashboard never classifies an unavailable required collection as empty
   await expect(page.getByText(/no work/iu)).toHaveCount(0);
 });
 
+for (const unavailableSource of ['detection_rules', 'website_snapshots'] as const) {
+  test(`the Dashboard withholds attention counts when ${unavailableSource} cannot be read`, async ({ page }) => {
+    await page.goto('/dashboard');
+    await seedDashboardAttentionSources(page);
+    const attentionMetric = page.locator('.attention-grid article').filter({ hasText: 'Attention needed' });
+    await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toBeVisible();
+    await expect(attentionMetric.locator('strong')).not.toHaveText('0');
+    await page.locator('details.contributors > summary').click();
+    await expect(page.locator('details.contributors')).toContainText('Review custom-rule match for attention-source.invalid');
+    await expect(page.locator('details.contributors')).toContainText('attention-source.invalid · adjacent website profiles');
+
+    await page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /^Bulk/u }).click();
+    await expect(page).toHaveURL('/bulk');
+    await failBrowserLocalCollectionReads(page, unavailableSource);
+    await page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /^Dashboard/u }).click();
+
+    await expect(page.getByRole('heading', { name: 'Attention summary unavailable' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toHaveCount(0);
+    await expect(page.getByText(/No current Review Item requires attention/u)).toHaveCount(0);
+    await expect(page.getByText(/no missing source was treated as empty/iu)).toBeVisible();
+  });
+}
+
 test('the Console navigation exposes semantic groups without changing link order or mobile keyboard access', {
   tag: [
     '@analyst-journey',
@@ -418,6 +492,20 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await expectSelectedOptionFits(page.getByLabel('Destination'));
   await expectSelectedOptionFits(page.getByLabel('Disclose', { exact: true }));
   await expectNoHorizontalOverflow(page);
+});
+
+test('support diagnostics expose only coarse allowlisted browser state', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('diagnostic-case', 'diagnostic.invalid', 'new')] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.locator('details.support-diagnostics > summary').click();
+  await page.getByRole('button', { name: 'Prepare support diagnostics' }).click();
+  const output = page.getByRole('textbox', { name: 'Support diagnostics' });
+  await expect(output).toHaveValue(/"applicationVersion": "2\.3\.0"/u);
+  await expect(output).toHaveValue(/"viewportClass": "wide"/u);
+  await expect(output).not.toHaveValue(/diagnostic\.invalid|\/dashboard|case|evidence|url|userAgent/iu);
 });
 
 test('the dashboard reports bounded browser-local counts and recent saved work', async ({ page }) => {
@@ -573,6 +661,9 @@ test('reviewed case evidence keeps the same workspace content through two CLI an
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
+  // Three 600,000-iteration key derivations and two complete CLI archive
+  // inspections can exceed the default timeout while CI shards share a host.
+  test.slow();
   const passphrase = 'portable archive fixture passphrase';
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);

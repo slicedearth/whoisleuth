@@ -9,6 +9,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,17 +57,20 @@ function writeAtomically(path: string, content: string): void {
     throw new Error('Generated public-product artefact exceeds its retained byte limit.');
   }
   mkdirSync(dirname(path), { recursive: true });
-  const temporary = `${path}.tmp`;
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   let descriptor: number | null = null;
+  let temporaryCreated = false;
   try {
     descriptor = openSync(temporary, 'wx', 0o644);
+    temporaryCreated = true;
     writeFileSync(descriptor, content, 'utf8');
     closeSync(descriptor);
     descriptor = null;
     renameSync(temporary, path);
+    temporaryCreated = false;
   } finally {
     if (descriptor !== null) closeSync(descriptor);
-    if (existsSync(temporary)) unlinkSync(temporary);
+    if (temporaryCreated && existsSync(temporary)) unlinkSync(temporary);
   }
 }
 
@@ -97,4 +101,4 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   process.exitCode = main();
 }
 
-export { MAX_PUBLIC_PRODUCT_ARTIFACT_BYTES, OUTPUTS, main };
+export { MAX_PUBLIC_PRODUCT_ARTIFACT_BYTES, OUTPUTS, main, writeAtomically };

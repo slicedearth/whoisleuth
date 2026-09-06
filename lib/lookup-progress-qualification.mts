@@ -29,7 +29,9 @@ export type LookupProgressQualificationResult = Readonly<{
   chunks: number;
   firstEventAfterMs: number;
   finalEventAfterMs: number;
-  bufferingDetected: boolean;
+  // A slow-consumer delay makes buffering absence unprovable; `null` is distinct
+  // from both a clean no-buffering measurement and an observed buffering failure.
+  bufferingDetected: boolean | null;
   eventSpanMs: number;
   slowConsumerDelayMs: number;
   finalEquivalent: true;
@@ -176,14 +178,19 @@ export async function qualifyLookupProgressResponse(
       throw new TypeError('Incremental Lookup qualification did not observe a complete event sequence.');
     }
     const eventSpanMs = Math.max(0, finalEventAfterMs - firstEventAfterMs);
+    const firstEventBuffered = firstEventAfterMs > maximumFirstEventMs;
+    const spanBuffered = minimumEventSpanMs > 0 && eventSpanMs < minimumEventSpanMs;
     return Object.freeze({
       status: 'qualified',
       events: eventCount,
       chunks: chunkCount,
       firstEventAfterMs,
       finalEventAfterMs,
-      bufferingDetected: firstEventAfterMs > maximumFirstEventMs
-        || (minimumEventSpanMs > 0 && eventSpanMs < minimumEventSpanMs),
+      bufferingDetected: firstEventBuffered
+        ? true
+        : readDelayMs > 0
+          ? null
+          : spanBuffered,
       eventSpanMs,
       slowConsumerDelayMs: readDelayMs,
       finalEquivalent: true,

@@ -3,6 +3,7 @@
 // so imported rules cannot execute code or reach outside bounded case evidence.
 
 import { latestCaseEvidence } from '../cases/case-model.mts';
+import { CASE_DISPOSITIONS, CASE_STATUSES } from '../cases/case-record-contracts.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   DETECTION_RULE_SCHEMA,
@@ -111,8 +112,8 @@ export const RULE_FIELD_DEFINITIONS: readonly RuleFieldDefinition[] = Object.fre
   { value: 'mutationTypes', label: 'Mutation type', kind: 'list' },
   { value: 'nameservers', label: 'Nameserver', kind: 'list' },
   { value: 'httpSecurityHeaders', label: 'HTTP security header', kind: 'list' },
-  { value: 'status', label: 'Case status', kind: 'enum', values: ['new', 'investigating', 'monitoring', 'escalated', 'closed'] },
-  { value: 'disposition', label: 'Case disposition', kind: 'enum', values: ['unreviewed', 'benign', 'suspicious', 'confirmed_abuse', 'false_positive'] },
+  { value: 'status', label: 'Case status', kind: 'enum', values: CASE_STATUSES.map((item) => item.value) },
+  { value: 'disposition', label: 'Case disposition', kind: 'enum', values: CASE_DISPOSITIONS.map((item) => item.value) },
   { value: 'tags', label: 'Case tag', kind: 'list' },
 ]);
 
@@ -185,11 +186,12 @@ export function normalizeDetectionRule(
   if (!name) return null;
   const conditions: RuleCondition[] = [];
   const rawConditions = Array.isArray(item.conditions) ? item.conditions : [];
-  for (const item of rawConditions.slice(0, MAX_RULE_CONDITIONS)) {
-    const condition = normalizeRuleCondition(item);
-    if (condition) conditions.push(condition);
+  if (!rawConditions.length || rawConditions.length > MAX_RULE_CONDITIONS) return null;
+  for (const rawCondition of rawConditions) {
+    const condition = normalizeRuleCondition(rawCondition);
+    if (!condition) return null;
+    conditions.push(condition);
   }
-  if (!conditions.length) return null;
   const riskDelta = normalizeInteger(item.riskDelta, 0, MAX_RULE_RISK_DELTA);
   return {
     id: safeId(item.id) || (generateId ? makeId() : null),
@@ -200,6 +202,33 @@ export function normalizeDetectionRule(
     riskDelta: riskDelta ?? 0,
     tag: normalizedText(item.tag, MAX_RULE_TAG_LENGTH).toLowerCase(),
   };
+}
+
+function validateDetectionRule(
+  raw: unknown,
+  { generateId = false }: { generateId?: boolean } = {},
+): NormalizedDetectionRule {
+  const item = record(raw);
+  if (!Array.isArray(item.conditions) || !item.conditions.length) {
+    throw new Error('A custom rule needs at least one condition.');
+  }
+  if (item.conditions.length > MAX_RULE_CONDITIONS) {
+    throw new Error(`Custom rules are limited to ${MAX_RULE_CONDITIONS} conditions.`);
+  }
+  for (const [index, condition] of item.conditions.entries()) {
+    if (!normalizeRuleCondition(condition)) {
+      throw new Error(`Condition ${index + 1} is invalid or outside the allowed bounds.`);
+    }
+  }
+  if (item.match !== undefined && item.match !== 'all' && item.match !== 'any') {
+    throw new Error('Choose whether all or any conditions must match.');
+  }
+  if (item.riskDelta !== undefined && normalizeInteger(item.riskDelta, 0, MAX_RULE_RISK_DELTA) === null) {
+    throw new Error(`Custom contribution must be a whole number from 0 to ${MAX_RULE_RISK_DELTA}.`);
+  }
+  const normalized = normalizeDetectionRule(item, { generateId });
+  if (!normalized) throw new Error('Enter a rule name and valid conditions.');
+  return normalized;
 }
 
 function ruleList(raw: unknown): unknown[] {
@@ -214,22 +243,34 @@ export function detectionRuleStoreVersion(raw: unknown): number | null {
   return typeof item.version === 'number' && Number.isFinite(item.version) ? item.version : null;
 }
 
-export function normalizeDetectionRuleStore(raw: unknown): DetectionRuleStore {
+export function recoverDetectionRuleStore(raw: unknown): { store: DetectionRuleStore; rejected: number } {
   assertWorkspaceInputGraph(raw, 'Detection-rule store');
   assertWorkspaceDeclaredVersion(raw, 'Detection-rule store');
   const byId = new Map<string, DetectionRule>();
-  for (const item of ruleList(raw).slice(0, MAX_RULE_INPUT_RECORDS)) {
+  const source = ruleList(raw);
+  let rejected = Math.max(0, source.length - MAX_RULE_INPUT_RECORDS);
+  for (const item of source.slice(0, MAX_RULE_INPUT_RECORDS)) {
     const rule = normalizeDetectionRule(item);
-    if (!rule?.id || byId.has(rule.id)) continue;
+    if (!rule?.id || byId.has(rule.id)) {
+      rejected += 1;
+      continue;
+    }
+    if (byId.size >= MAX_DETECTION_RULES) {
+      rejected += 1;
+      continue;
+    }
     byId.set(rule.id, { ...rule, id: rule.id });
-    if (byId.size >= MAX_DETECTION_RULES) break;
   }
-  return { version: DETECTION_RULE_SCHEMA_VERSION, rules: [...byId.values()] };
+  return { store: { version: DETECTION_RULE_SCHEMA_VERSION, rules: [...byId.values()] }, rejected };
+}
+
+export function normalizeDetectionRuleStore(raw: unknown): DetectionRuleStore {
+  return recoverDetectionRuleStore(raw).store;
 }
 
 export function createDetectionRule(rules: unknown, input: unknown): { rules: DetectionRule[]; record: DetectionRule } {
-  const normalized = normalizeDetectionRule(input, { generateId: true });
-  if (!normalized?.id) throw new Error('Enter a rule name and one valid condition.');
+  const normalized = validateDetectionRule(input, { generateId: true });
+  if (!normalized.id) throw new Error('Enter a rule name and one valid condition.');
   const existing = normalizeDetectionRuleStore(rules).rules;
   if (existing.length >= MAX_DETECTION_RULES) throw new Error(`Custom rules are limited to ${MAX_DETECTION_RULES}. Delete or export one first.`);
   const created = { ...normalized, id: normalized.id };
@@ -240,8 +281,8 @@ export function updateDetectionRule(rules: unknown, id: unknown, patch: unknown)
   const normalizedRules = normalizeDetectionRuleStore(rules).rules;
   const current = normalizedRules.find((rule) => rule.id === id);
   if (!current) throw new Error('That custom rule no longer exists.');
-  const updated = normalizeDetectionRule({ ...current, ...record(patch), id });
-  if (!updated?.id) throw new Error('A custom rule needs a name and at least one valid condition.');
+  const updated = validateDetectionRule({ ...current, ...record(patch), id });
+  if (!updated.id) throw new Error('A custom rule needs a name and at least one valid condition.');
   return normalizeDetectionRuleStore(normalizedRules.map((rule) => rule.id === id ? updated : rule)).rules;
 }
 
@@ -321,8 +362,13 @@ export function previewDetectionRule(
   existingRules: unknown,
   rawCandidate: unknown,
 ): DetectionRulePreview | null {
-  const normalized = normalizeDetectionRule({ ...record(rawCandidate), id: 'preview-rule', enabled: true });
-  if (!normalized?.id) return null;
+  let normalized: NormalizedDetectionRule;
+  try {
+    normalized = validateDetectionRule({ ...record(rawCandidate), id: 'preview-rule', enabled: true });
+  } catch {
+    return null;
+  }
+  if (!normalized.id) return null;
   const candidate: DetectionRule = { ...normalized, id: normalized.id };
   const sourceRecords = Array.isArray(records) ? records.slice(0, 500) : [];
   const evaluations = evaluateRuleSet(sourceRecords, [candidate]).filter((item) => item.matchedRules.length > 0);
@@ -371,8 +417,14 @@ export function mergeDetectionRules(localRaw: unknown, importedRaw: unknown) {
   let updated = 0;
   let skipped = Math.max(0, importedList.length - MAX_RULE_INPUT_RECORDS);
   for (const item of importedList.slice(0, MAX_RULE_INPUT_RECORDS)) {
-    const rule = normalizeDetectionRule(item);
-    if (!rule?.id) { skipped++; continue; }
+    let rule: NormalizedDetectionRule;
+    try {
+      rule = validateDetectionRule(item);
+    } catch {
+      skipped++;
+      continue;
+    }
+    if (!rule.id) { skipped++; continue; }
     const storedRule = { ...rule, id: rule.id };
     if (byId.has(rule.id)) { byId.set(rule.id, storedRule); updated++; }
     else if (byId.size < MAX_DETECTION_RULES) { byId.set(rule.id, storedRule); added++; }

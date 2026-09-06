@@ -3,7 +3,7 @@ import { Writable } from 'node:stream';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import type { LookupSourceSettlement } from '../lib/lookup-source-progress.mts';
 import {
   MAX_LOOKUP_BROWSER_SEARCH_BYTES,
@@ -174,6 +174,24 @@ describe('lookup terminal evidence browser', () => {
     assert.match(terminal, /TLS and certificate:\nEvidence\s+Success/u);
     assert.match(terminal, /Issuer\s+Fixture issuing CA/u);
     assert.doesNotMatch(terminal, /must-not-render|privateCertificateBytes/u);
+  });
+
+  test('keeps every canonical verbose formatter section reachable and searchable', () => {
+    const document = lookupDocument();
+    Reflect.set(document, 'sslbl', {
+      status: 'success', complete: true, truncated: false, match: false,
+      observedAt: document.generatedAt,
+    });
+    const terminalHeadings = formatTerminalLookup(document, { detail: 'verbose' })
+      .split('\n')
+      .filter((line) => line.endsWith(':'))
+      .map((line) => line.slice(0, -1));
+    const panels = buildLookupBrowserPanels(document);
+    assert.equal(terminalHeadings.length, 10);
+    assert.deepEqual(panels.map((panel) => panel.label), terminalHeadings);
+    assert.equal(panels.at(-1)?.label, 'Collection');
+    const matches = findLookupBrowserMatches(panels, document.generatedAt);
+    assert.ok(matches.matches.some((match) => panels[match.panelIndex]?.label === 'Collection'));
   });
 
   test('discloses record and collection truncation while removing terminal direction controls', () => {
@@ -745,9 +763,9 @@ describe('lookup browse CLI contract', () => {
       events: false, plan: false, includeAttribution: true, observerLabel: null, vantageLabel: null,
       quiet: false, color: true, browse: true,
     });
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--json']), /terminal output/u);
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--verbose']), /cannot be combined/u);
-    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--output', 'result.txt']), /interactive terminal/u);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--json']), CliUsageError);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--verbose']), CliUsageError);
+    assert.throws(() => parseCliArguments(['lookup', 'example.test', '--browse', '--output', 'result.txt']), CliUsageError);
   });
 
   test('fails browser preflight before collection and reserves interactive stdin for navigation', async () => {

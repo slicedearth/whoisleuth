@@ -4,6 +4,7 @@ import {
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDING_DOMAINS,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
+  MAX_EXTERNAL_FINDING_SUMMARY_LENGTH,
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './external-findings-import.mts';
@@ -207,6 +208,37 @@ function positiveInteger(value: unknown, maximum: number, label: string): number
   return Number(value);
 }
 
+function listSummaryFragments(label: string, values: readonly string[]): string[] {
+  const fragments: string[] = [];
+  let current = `${label}:`;
+  for (const value of values) {
+    const separator = current === `${label}:` ? ' ' : ', ';
+    if (`${current}${separator}${value}.`.length > MAX_EXTERNAL_FINDING_SUMMARY_LENGTH) {
+      fragments.push(`${current}.`);
+      current = `${label}: ${value}`;
+    } else current += `${separator}${value}`;
+  }
+  if (current !== `${label}:`) fragments.push(`${current}.`);
+  return fragments;
+}
+
+function partitionSummary(fragments: readonly string[]): string[] {
+  const summaries: string[] = [];
+  let current = '';
+  for (const fragment of fragments) {
+    if (!fragment || fragment.length > MAX_EXTERNAL_FINDING_SUMMARY_LENGTH) {
+      throw new Error('Web capture metadata cannot be represented within the external-finding summary bound.');
+    }
+    const combined = current ? `${current} ${fragment}` : fragment;
+    if (combined.length > MAX_EXTERNAL_FINDING_SUMMARY_LENGTH) {
+      summaries.push(current);
+      current = fragment;
+    } else current = combined;
+  }
+  if (current) summaries.push(current);
+  return summaries;
+}
+
 export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {
   const root = record(value);
   if (
@@ -227,6 +259,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
   }
   const findings: Array<Record<string, unknown>> = [];
   const domainCounts = new Map<string, number>();
+  const findingCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
     const capture = record(raw);
     if (!capture || !onlyKeys(capture, MANIFEST_CAPTURE_KEYS)) {
@@ -296,27 +329,35 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         artifactSummaries.push(`DOM digest ${fileName}: application/json, ${bytes} bytes, SHA-256 ${sha256}.`);
       }
     }
-    const summaries = [
+    const summaryFragments = [
       pageTitle || finalOrigin
         ? `Sanitised page capture${pageTitle ? ` titled "${pageTitle}"` : ''}${finalOrigin ? ` ended at origin ${finalOrigin}` : ''}.`
         : '',
-      technologies.length ? `Observed technology labels: ${technologies.join(', ')}.` : '',
-      requestDomains.length ? `Observed request domains: ${requestDomains.join(', ')}.` : '',
+      ...listSummaryFragments('Observed technology labels', technologies),
+      ...listSummaryFragments('Observed request domains', requestDomains),
       ...artifactSummaries,
     ].filter(Boolean);
-    findings.push({
-      domain,
-      category: 'page',
-      evidenceClass: 'deployment_observation',
-      summary: summaries.join(' '),
-      observedAt,
-      completeness,
-      limitations: [
-        'Imported sanitised capture manifest metadata; WHOISleuth did not receive artefact bytes or independently verify their digests.',
-        ...limitations,
-      ].slice(0, 8),
-      reference: sourceReference,
-    });
+    const summaries = partitionSummary(summaryFragments);
+    const priorFindingCount = findingCounts.get(domain) ?? 0;
+    if (priorFindingCount + summaries.length > MAX_EXTERNAL_FINDINGS_PER_DOMAIN) {
+      throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDINGS_PER_DOMAIN}-finding per-domain import limit after preserving bounded metadata.`);
+    }
+    findingCounts.set(domain, priorFindingCount + summaries.length);
+    for (const summary of summaries) {
+      findings.push({
+        domain,
+        category: 'page',
+        evidenceClass: 'deployment_observation',
+        summary,
+        observedAt,
+        completeness,
+        limitations: [
+          'Imported sanitised capture manifest metadata; WHOISleuth did not receive artefact bytes or independently verify their digests.',
+          ...limitations,
+        ].slice(0, 8),
+        reference: sourceReference,
+      });
+    }
   }
   return parseExternalFindingsDocument({
     schema: EXTERNAL_FINDINGS_SCHEMA,

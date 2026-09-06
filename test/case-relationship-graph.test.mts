@@ -115,6 +115,13 @@ describe('case relationship graph projection', () => {
     assert.equal(graph.relationshipNodes.length, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
     assert.equal(graph.caseNodes.length, MAX_RELATIONSHIP_GRAPH_CASES);
     assert.ok(graph.relationshipNodes.every((node) => graph.edges.filter((edge) => edge.relationshipId === node.id).length === 2));
+    const orderedCases = [...graph.caseNodes].sort((left, right) => left.y - right.y);
+    for (let index = 1; index < orderedCases.length; index += 1) {
+      const previous = requiredValue(orderedCases[index - 1]);
+      const current = requiredValue(orderedCases[index]);
+      assert.ok(current.y >= previous.y + previous.height + 8);
+    }
+    assert.ok(graph.height > 640);
     assert.equal(graph.truncated, true);
   });
 

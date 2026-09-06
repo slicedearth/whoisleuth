@@ -10,6 +10,7 @@ import {
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
   MAX_CLI_PACKAGE_COMPILER_SOURCES,
   MAX_CLI_PACKAGE_ENTRIES,
+  MAX_CLI_PACKAGE_FILE_BYTES,
   MAX_CLI_PACKAGE_MODULES,
   MAX_CLI_RUNTIME_MODULES,
   assertCliPackageSourceSnapshot,
@@ -22,6 +23,7 @@ import {
   parseArguments,
   selectCliPackageSources,
   selectMaterializedCliPackageSources,
+  validatePackedCliFiles,
 } from '../tools/cli-package.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -82,6 +84,51 @@ describe('scoped CLI package contract', () => {
       && MAX_CLI_PACKAGE_COMPILER_SOURCES <= 512);
     assert.ok(MAX_CLI_PACKAGE_ENTRIES >= MAX_CLI_RUNTIME_MODULES / 2
       && MAX_CLI_PACKAGE_ENTRIES <= 512);
+  });
+
+  test('allows a small module extraction inside fixed headroom and still rejects excessive graphs', () => {
+    const source = (index: number) => index === 0 ? 'bin/whoisleuth.mts' : `lib/extracted-${index}.mts`;
+    const admitted = selectCliPackageSources({
+      modules: Array.from({ length: MAX_CLI_RUNTIME_MODULES }, (_, index) => ({ source: source(index) })),
+    }, { maximumModules: MAX_CLI_RUNTIME_MODULES, requiredSources: ['bin/whoisleuth.mts'] });
+    assert.equal(admitted.length, MAX_CLI_RUNTIME_MODULES);
+    assert.throws(() => selectCliPackageSources({
+      modules: Array.from({ length: MAX_CLI_RUNTIME_MODULES + 1 }, (_, index) => ({ source: source(index) })),
+    }, { maximumModules: MAX_CLI_RUNTIME_MODULES, requiredSources: ['bin/whoisleuth.mts'] }), /between 1 and/u);
+  });
+
+  test('rejects excessive, missing, traversing and source-bearing packed contents', () => {
+    assert.deepEqual(validatePackedCliFiles({
+      files: [{ path: 'bin/whoisleuth.mjs' }, { path: 'package.json' }],
+    }, ['bin/whoisleuth.mjs']), ['bin/whoisleuth.mjs', 'package.json']);
+    assert.throws(() => validatePackedCliFiles({
+      files: Array.from({ length: MAX_CLI_PACKAGE_ENTRIES + 1 }, (_, index) => ({ path: `lib/item-${index}.mjs` })),
+    }), /expected between 1 and/u);
+    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'package.json' }] }, ['bin/whoisleuth.mjs']), /is missing/u);
+    assert.throws(() => validatePackedCliFiles({ files: [{ path: '../outside.mjs' }] }), /safe repository-relative path/u);
+    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'test/private.mjs' }] }), /excluded application or test path/u);
+    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'lib/source.mts' }] }), /source or source-map/u);
+  });
+
+  test('keeps per-file and aggregate source-byte ceilings independent of counts', async () => {
+    const repository = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-bytes-'));
+    try {
+      await mkdir(path.join(repository, 'lib'));
+      await writeFile(path.join(repository, 'lib', 'small.mts'), '12345', 'utf8');
+      await writeFile(path.join(repository, 'lib', 'large.mts'), '123456789', 'utf8');
+      await assert.rejects(captureCliPackageSourceSnapshot(repository, ['lib/large.mts'], {
+        totalBytes: 0,
+        maximumBytes: 32,
+        maximumFileBytes: 8,
+      }), /exceeds/u);
+      await assert.rejects(captureCliPackageSourceSnapshot(repository, ['lib/small.mts', 'lib/large.mts'], {
+        totalBytes: 0,
+        maximumBytes: 12,
+        maximumFileBytes: MAX_CLI_PACKAGE_FILE_BYTES,
+      }), /aggregate byte limit/u);
+    } finally {
+      await rm(repository, { recursive: true, force: true });
+    }
   });
 
   test('validates compiler context paths with bounded linear segment checks', () => {
@@ -334,8 +381,16 @@ describe('scoped CLI package contract', () => {
       publicationEnabled: false,
       archiveFilename: null,
       archiveSha256: null,
+    }, {
+      runtimeGraphModuleCount: 166,
+      packageGraphModuleCount: 168,
+      compilerSourceCount: 156,
+      packedEntryCount: 165,
     });
     assert.match(output, /Publication: disabled/u);
+    assert.match(output, /Runtime dependency graph: 166 modules/u);
+    assert.match(output, /Package dependency graph: 168 modules/u);
+    assert.match(output, /Compiler source closure: 156 sources/u);
     assert.match(output, /Runtime dependencies: @peculiar\/x509@2\.0\.0, maxmind@5\.0\.7, parse5@8\.0\.1, reflect-metadata@0\.2\.2, tldts@7\.4\.10, undici@8\.9\.0/u);
     assert.match(output, /Installed checks: help, zero-argument-help, version, doctor, lookup-plan, direct-lookup-plan, completion, manual, registry-support, discover/u);
   });

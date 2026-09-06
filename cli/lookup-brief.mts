@@ -149,8 +149,10 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
   const facts = [
     ['registration-state', 'Registration state', availability.state, availabilitySource.id],
     ['registrar', 'Registrar', record(preferred.registrar).name ?? preferred.registrar, preferredRegistrationSource.id],
-    ['created', 'Created', record(preferred.lifecycle).createdIso ?? preferred.createdDateIso, preferredRegistrationSource.id],
-    ['expires', 'Expires', record(preferred.lifecycle).expiryIso ?? preferred.expiryDateIso, preferredRegistrationSource.id],
+    ['created', 'Created', record(preferred.lifecycle).createdDateIso
+      ?? record(preferred.lifecycle).createdIso ?? preferred.createdDateIso, preferredRegistrationSource.id],
+    ['expires', 'Expires', record(preferred.lifecycle).expiryDateIso
+      ?? record(preferred.lifecycle).expiryIso ?? preferred.expiryDateIso, preferredRegistrationSource.id],
     ['name-servers', 'Name servers', joinedText(preferred.nameservers), preferredRegistrationSource.id],
     ['website-activity', 'Website activity', availability.activityStatus, httpSource.id],
     ['page-title', 'Page title', availability.pageTitle, httpSource.id],

@@ -105,10 +105,17 @@ describe('synthetic demo state', () => {
     assert.equal(lookup.securityTxt.state, 'present');
     assert.equal(lookup.credentialSurface.classifiedCount, 3);
     assert.equal(lookup.credentialSurface.categories.password, 1);
+    assert.equal(lookup.credentialSurface.actions.external, 1);
+    assert.equal(SYNTHETIC_DEMO_CANDIDATES[0]?.observations[0]?.hasExternalFormAction, true);
     assert.equal(lookup.securityPosture.summary.potentialExposure, 1);
     assert.deepEqual(lookup.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(lookup.network.address, '203.0.113.44');
     assert.equal(lookup.tls.alternativeNames.length, 2);
+    const parked = requiredValue(syntheticDemoLookupView('character-edit'));
+    const parkedCandidate = requiredValue(SYNTHETIC_DEMO_CANDIDATES.find((candidate) => candidate.id === 'character-edit'));
+    assert.equal(parkedCandidate.observations[0]?.hasMx, false);
+    assert.equal(parked.tls.complete, false);
+    assert.equal(parked.securityPosture.findings.some((finding) => finding.id === 'certificate-hostname'), false);
     assert.equal(syntheticDemoLookupView('unknown'), null);
 
     const relationships = syntheticDemoRelationshipGroups();

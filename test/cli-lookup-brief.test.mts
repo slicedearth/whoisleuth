@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import { buildCliLookupBrief, formatCliLookupBrief } from '../cli/lookup-brief.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { parseRdap } from '../lib/rdap.mts';
 
 const NOW = '2026-08-05T02:00:00.000Z';
 
@@ -11,7 +12,7 @@ function lookup() {
   return {
     schema: 'whoisleuth.cli.lookup', version: 1, generatedAt: NOW, mode: 'deep', query: 'example.test', type: 'domain', registrableDomain: 'example.test',
     diagnostics: { rdap: { status: 'success', observedAt: NOW }, whois: { status: 'partial', observedAt: NOW } },
-    rdap: { parsed: { registrar: { name: 'Example Registrar' }, lifecycle: { createdIso: '2024-01-02T00:00:00Z' } } },
+    rdap: { parsed: { registrar: { name: 'Example Registrar' }, lifecycle: { createdDateIso: '2024-01-02T00:00:00.000Z' } } },
     whois: { parsed: {} },
     availability: { state: 'registered', activityStatus: 'active', pageTitle: 'Example service', dns: { status: 'success' }, http: { status: 'success' }, tls: { status: 'unavailable' } },
   };
@@ -53,6 +54,30 @@ describe('CLI Lookup brief', () => {
     const rendered = formatCliLookupBrief(brief);
     assert.match(rendered, new RegExp(`Registry Registrar.*observed ${NOW.replaceAll('.', '\\.')}`, 'u'));
     assert.match(rendered, /WHOIS Registrar.*observed 2026-08-05T01:59:00.000Z/u);
+  });
+
+  test('reads registration and expiry dates from the canonical RDAP parser lifecycle', () => {
+    const source = lookup();
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.TEST',
+      events: [
+        { eventAction: 'registration', eventDate: '2024-01-02T00:00:00Z' },
+        { eventAction: 'expiration', eventDate: '2028-03-04T00:00:00Z' },
+      ],
+    });
+    assert.ok(parsed);
+    Object.assign(source.rdap, {
+      parsed: { ...parsed, registrar: { name: 'Example Registrar' } },
+    });
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    assert.equal(brief.facts.find((item) => item.id === 'created')?.value, '2024-01-02T00:00:00.000Z');
+    assert.equal(brief.facts.find((item) => item.id === 'expires')?.value, '2028-03-04T00:00:00.000Z');
+
+    Object.assign(source.rdap, {
+      parsed: { registrar: { name: 'Example Registrar' }, lifecycle: {} },
+    });
+    const missing = buildCliLookupBrief(JSON.stringify(source), NOW);
+    assert.equal(missing.facts.some((item) => item.id === 'created' || item.id === 'expires'), false);
   });
 
   test('sanitises retained page identity before building and presenting a brief', () => {

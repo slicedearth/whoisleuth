@@ -98,6 +98,7 @@ export type LookupAssetGraphProjection = Readonly<{
 }>;
 
 type JsonRecord = Record<string, unknown>;
+type NormalizedWebOrigin = Readonly<{ origin: string; hostname: string }>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const MAX_NODES = 72;
@@ -237,12 +238,15 @@ function hostname(value: unknown): string | null {
   return candidate;
 }
 
-function urlHost(value: unknown): string | null {
+function webOrigin(value: unknown): NormalizedWebOrigin | null {
   const candidate = text(value, 2_048);
   if (!candidate) return null;
   try {
-    return new URL(/^[a-z][a-z\d+.-]*:\/\//iu.test(candidate) ? candidate : `https://${candidate}`)
-      .hostname.toLowerCase().replace(/\.$/u, '');
+    const parsed = new URL(/^[a-z][a-z\d+.-]*:\/\//iu.test(candidate) ? candidate : `https://${candidate}`);
+    const parsedHostname = hostname(parsed.hostname);
+    return parsedHostname && parsed.origin !== 'null'
+      ? Object.freeze({ origin: parsed.origin, hostname: parsedHostname })
+      : null;
   } catch {
     return null;
   }
@@ -374,10 +378,12 @@ export function buildLookupAssetGraph(input: Readonly<{
   const trustBoundary = (
     candidate: string | null,
     sourceHost = target,
+    candidateOrigin: string | null = null,
+    sourceOrigin: string | null = null,
   ): LookupTrustBoundary => {
     if (!candidate) return 'unresolved';
-    if (candidate === sourceHost) return 'same_origin';
-    if (candidate === target || candidate.endsWith(`.${target}`)) return 'same_registrable_domain';
+    if (candidateOrigin && sourceOrigin && candidateOrigin === sourceOrigin) return 'same_origin';
+    if (candidate === sourceHost || candidate === target || candidate.endsWith(`.${target}`)) return 'same_registrable_domain';
     if (reviewedProfileDomains.has(candidate)) return 'reviewed_profile';
     return 'external';
   };
@@ -573,7 +579,8 @@ export function buildLookupAssetGraph(input: Readonly<{
   }
 
   const httpEvidence = record(input.httpEvidence);
-  const finalHost = urlHost(httpEvidence.finalUrl);
+  const finalOrigin = webOrigin(httpEvidence.finalUrl);
+  const finalHost = finalOrigin?.hostname ?? null;
   const finalHostId = finalHost
     ? connect(
         'hostname',
@@ -593,11 +600,11 @@ export function buildLookupAssetGraph(input: Readonly<{
       )
     : null;
   const identitySource = finalHostId || targetId;
-  const canonicalHost = urlHost(record(input.pageCanonical).url);
-  if (canonicalHost) {
+  const canonicalOrigin = webOrigin(record(input.pageCanonical).url);
+  if (canonicalOrigin) {
     connect(
       'origin',
-      canonicalHost,
+      canonicalOrigin.origin,
       {
         kind: 'declares-canonical',
         label: 'declares canonical origin',
@@ -607,17 +614,17 @@ export function buildLookupAssetGraph(input: Readonly<{
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
         href: '#evidence-page',
-        boundary: trustBoundary(canonicalHost, finalHost || target),
+        boundary: trustBoundary(canonicalOrigin.hostname, finalHost || target, canonicalOrigin.origin, finalOrigin?.origin ?? null),
       },
       'Publisher-declared canonical origin',
       identitySource,
     );
   }
-  const openGraphHost = urlHost(record(input.pageOpenGraphUrl).url);
-  if (openGraphHost) {
+  const openGraphOrigin = webOrigin(record(input.pageOpenGraphUrl).url);
+  if (openGraphOrigin) {
     connect(
       'origin',
-      openGraphHost,
+      openGraphOrigin.origin,
       {
         kind: 'declares-open-graph',
         label: 'declares Open Graph origin',
@@ -627,18 +634,18 @@ export function buildLookupAssetGraph(input: Readonly<{
         limitations: limitations(record(input.pageIdentity).limitations),
         lenses: ['identity'],
         href: '#evidence-page',
-        boundary: trustBoundary(openGraphHost, finalHost || target),
+        boundary: trustBoundary(openGraphOrigin.hostname, finalHost || target, openGraphOrigin.origin, finalOrigin?.origin ?? null),
       },
       'Publisher-declared Open Graph origin',
       identitySource,
     );
   }
   for (const origin of textList(record(input.pageForms).externalActionOrigins)) {
-    const host = urlHost(origin);
-    if (host) {
+    const destination = webOrigin(origin);
+    if (destination) {
       connect(
         'origin',
-        host,
+        destination.origin,
         {
           kind: 'form-destination',
           label: 'form may submit to',
@@ -648,7 +655,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: ['A declared form action does not prove that a user submitted data or that the endpoint received it.'],
           lenses: ['identity'],
           href: '#evidence-page',
-          boundary: trustBoundary(host, finalHost || target),
+          boundary: trustBoundary(destination.hostname, finalHost || target, destination.origin, finalOrigin?.origin ?? null),
         },
         'External form-action origin',
         identitySource,
@@ -656,11 +663,11 @@ export function buildLookupAssetGraph(input: Readonly<{
     }
   }
   for (const origin of textList(record(input.pageResources).externalOrigins)) {
-    const host = urlHost(origin);
-    if (host) {
+    const resource = webOrigin(origin);
+    if (resource) {
       connect(
-        'hostname',
-        host,
+        'origin',
+        resource.origin,
         {
           kind: 'loads-from',
           label: 'references resources from',
@@ -670,7 +677,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: ['A static resource reference does not prove that a browser loaded the resource or disclosed data to it.'],
           lenses: ['identity'],
           href: '#evidence-page',
-          boundary: trustBoundary(host, finalHost || target),
+          boundary: trustBoundary(resource.hostname, finalHost || target, resource.origin, finalOrigin?.origin ?? null),
         },
         'External resource origin',
         identitySource,
@@ -702,7 +709,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   const structuredIdentity = record(input.structuredDataIdentity);
   for (const entity of records(structuredIdentity.entities, 12)) {
     const entityLabel = text(entity.name, 180);
-    const declaredOrigin = urlHost(entity.declaredOrigin);
+    const declaredOrigin = webOrigin(entity.declaredOrigin);
     const entityId = entityLabel
       ? connect(
           'identity',
@@ -727,7 +734,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     if (declaredOrigin) {
       connect(
         'origin',
-        declaredOrigin,
+        declaredOrigin.origin,
         {
           kind: 'declares-origin',
           label: 'declares origin',
@@ -737,7 +744,7 @@ export function buildLookupAssetGraph(input: Readonly<{
           limitations: limitations(structuredIdentity.limitations),
           lenses: ['identity'],
           href: '#evidence-structured-identity',
-          boundary: trustBoundary(declaredOrigin, finalHost || target),
+          boundary: trustBoundary(declaredOrigin.hostname, finalHost || target, declaredOrigin.origin, finalOrigin?.origin ?? null),
         },
         'Publisher-declared structured-data origin',
         entityId || identitySource,
@@ -893,7 +900,11 @@ export function buildLookupAssetGraph(input: Readonly<{
       }
     }
     const issuer = record(input.tlsIssuer);
-    const issuerLabel = text(issuer.organization || issuer.commonName || issuer.CN, 180);
+    const issuerOrganizations = textList(issuer.organizations, 8);
+    const issuerCommonNames = textList(issuer.commonNames, 8);
+    const issuerLabel = issuerOrganizations[0]
+      || issuerCommonNames[0]
+      || text(issuer.organization || issuer.commonName || issuer.CN, 180);
     if (issuerLabel) {
       const issuerId = addNode('issuer', issuerLabel, 'Certificate issuer');
       if (issuerId) {

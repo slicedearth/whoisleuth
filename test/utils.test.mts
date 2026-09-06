@@ -3,6 +3,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as utils from '../frontend/src/lib/analysis/utils.ts';
+import { groupBySimilarFavicon } from '../packages/comparison/favicon-similarity.mts';
 import { requiredValue } from './value-assertions.mts';
 
 describe('isValidEmailAddress', () => {
@@ -162,38 +163,38 @@ describe('groupBySimilarFavicon', () => {
   const far = '0000000000000000';
 
   test('groups perceptual near-duplicates within the distance threshold', () => {
-    const groups = utils.groupBySimilarFavicon([
+    const groups = groupBySimilarFavicon([
       { domain: 'a.example', faviconPHash: near },
       { domain: 'b.example', faviconPHash: near2 },
       { domain: 'c.example', faviconPHash: far },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example']);
+    assert.deepEqual(requiredValue(groups[0]), ['a.example', 'b.example']);
   });
 
   test('groups byte-identical icons even when perceptually undecodable (null phash)', () => {
-    const groups = utils.groupBySimilarFavicon([
+    const groups = groupBySimilarFavicon([
       { domain: 'a.example', faviconHash: 'sha-gif-1', faviconPHash: null },
       { domain: 'b.example', faviconHash: 'sha-gif-1', faviconPHash: null },
       { domain: 'c.example', faviconHash: 'sha-gif-2', faviconPHash: null },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example']);
+    assert.deepEqual(requiredValue(groups[0]), ['a.example', 'b.example']);
   });
 
   test('unions transitively across exact and perceptual links', () => {
     // a~b by perceptual distance, b~c by exact hash => one group of three.
-    const groups = utils.groupBySimilarFavicon([
+    const groups = groupBySimilarFavicon([
       { domain: 'a.example', faviconPHash: near },
       { domain: 'b.example', faviconHash: 'h1', faviconPHash: near2 },
       { domain: 'c.example', faviconHash: 'h1' },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example', 'c.example']);
+    assert.deepEqual(requiredValue(groups[0]), ['a.example', 'b.example', 'c.example']);
   });
 
   test('drops singletons and ignores records with no favicon at all', () => {
-    const groups = utils.groupBySimilarFavicon([
+    const groups = groupBySimilarFavicon([
       { domain: 'a.example', faviconPHash: near },
       { domain: 'lonely.example', faviconPHash: far },
       { domain: 'nofavicon.example' },
@@ -205,10 +206,23 @@ describe('groupBySimilarFavicon', () => {
     // Two unrelated solid/monotonic favicons both hash to all-zeros. With
     // different exact hashes they must NOT be grouped - this guards stored
     // degenerate hashes from earlier scans.
-    const groups = utils.groupBySimilarFavicon([
+    const groups = groupBySimilarFavicon([
       { domain: 'a.example', faviconHash: 'exact-a', faviconPHash: '0000000000000000' },
       { domain: 'b.example', faviconHash: 'exact-b', faviconPHash: '0000000000000000' },
     ], 6);
     assert.deepEqual(groups, []);
+  });
+
+  test('retains the browser-facing forwarding export and malformed-input behaviour', () => {
+    assert.equal(utils.groupBySimilarFavicon, groupBySimilarFavicon);
+    assert.deepEqual(groupBySimilarFavicon(null, 6), []);
+    assert.deepEqual(groupBySimilarFavicon([
+      null,
+      [],
+      { domain: 42, faviconHash: 'same' },
+      { domain: 'missing.example' },
+      { domain: 'first.example', faviconHash: 'same' },
+      { domain: 'second.example', faviconHash: 'same' },
+    ], 6), [['first.example', 'second.example']]);
   });
 });

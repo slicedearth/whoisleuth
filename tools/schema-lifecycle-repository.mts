@@ -1,90 +1,13 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { types as utilTypes } from 'node:util';
 
 import ts from 'typescript';
 
-import * as offlineArtifactValidationModule from '../cli/offline-artifact-validation.mts';
-import * as artifactVerifyModule from '../cli/artifact-verify.mts';
-import * as casePackModule from '../cli/case-pack.mts';
-import * as domainControlMonitorModule from '../cli/domain-control-monitor.mts';
-import * as domainControlObservationsModule from '../cli/domain-control-observations.mts';
-import * as ciReportModule from '../cli/ci-report.mts';
-import * as evidenceSigningModule from '../cli/evidence-signing.mts';
-import * as jsonFormatterModule from '../cli/formatters/json.mts';
-import * as terminalFormatterModule from '../cli/formatters/terminal.mts';
-import * as interchangeReportModule from '../cli/interchange-report.mts';
-import * as outputFileModule from '../cli/output-file.mts';
-import * as pageCompareModule from '../cli/page-compare.mts';
-import * as retainedArtifactDiffModule from '../cli/retained-artifact-diff.mts';
-import * as riskCalibrationModule from '../cli/risk-calibration.mts';
-import * as sharingReviewModule from '../cli/sharing-review.mts';
-import * as savedLookupModule from '../cli/saved-lookup.mts';
-import * as sourceReliabilityModule from '../cli/source-reliability.mts';
-import * as caseModelModule from '../packages/cases/case-model.mts';
-import * as caseReportModule from '../packages/cases/case-report.mts';
-import * as caseResponsePacketModule from '../packages/cases/case-response-packet.mts';
-import * as acquisitionDecisionPacketModule from '../packages/investigation/acquisition-decision-packet.mts';
-import * as bulkDomainComparisonModule from '../packages/investigation/bulk-domain-comparison.mts';
-import * as bulkMailExposureModule from '../packages/investigation/bulk-mail-exposure.mts';
-import * as bulkReviewExportModule from '../packages/investigation/bulk-review-export.mts';
-import * as investigationCapsuleModule from '../packages/investigation/investigation-capsule.mts';
-import * as lookupAssetGraphModule from '../packages/investigation/lookup-asset-graph.mts';
-import * as lookupClaimPassportModule from '../packages/investigation/lookup-claim-passport.mts';
-import * as lookupInvestigationBriefModule from '../packages/investigation/lookup-investigation-brief.mts';
-import * as candidateHandoffModule from '../packages/investigation/candidate-handoff.mts';
-import * as campaignTemporalReviewModule from '../packages/investigation/campaign-temporal-review.mts';
-import * as parentDomainCampaignReviewModule from '../packages/investigation/parent-domain-campaign-review.mts';
-import * as investigationProjectionModule from '../packages/investigation/investigation-projection.mts';
-import * as investigationSearchModule from '../packages/investigation/investigation-search.mts';
-import * as observationEnvelopeModule from '../packages/investigation/observation-envelope.mts';
-import * as externalFindingsConvertersModule from '../packages/interchange/external-findings-converters.mts';
-import * as externalFindingsImportModule from '../packages/interchange/external-findings-import.mts';
-import * as analystInterchangeModule from '../packages/contracts/analyst-interchange.mts';
-import * as investigationProjectionsContractModule from '../packages/contracts/investigation-projections.mts';
-import * as monitoringPortabilityModule from '../packages/contracts/monitoring-portability.mts';
-import * as privacyDataFlowCatalogueModule from '../packages/contracts/privacy-data-flow-catalogue.mts';
-import * as relationshipPortabilityModule from '../packages/contracts/relationship-portability.mts';
-import * as tabPortabilityModule from '../packages/contracts/tab-portability.mts';
-import * as brandProtectionOperationsReportModule from '../packages/interchange/brand-protection-operations-report.mts';
-import * as defensiveIndicatorExportModule from '../packages/interchange/defensive-indicator-export.mts';
-import * as dnsChangeRehearsalModule from '../packages/interchange/dns-change-rehearsal.mts';
-import * as investigationPlaybookInterchangeModule from '../packages/interchange/investigation-playbook-interchange.mts';
-import * as mailReportWorkbenchModule from '../packages/interchange/mail-report-workbench.mts';
-import * as mispIndicatorExportModule from '../packages/interchange/misp-indicator-export.mts';
-import * as registrationDisclosurePlanModule from '../packages/interchange/registration-disclosure-plan.mts';
-import * as staticPagePatternPacksModule from '../packages/interchange/static-page-pattern-packs.mts';
-import * as stixIndicatorExportModule from '../packages/interchange/stix-indicator-export.mts';
-import * as webCaptureImportModule from '../packages/interchange/web-capture-import.mts';
-import * as scheduledMonitorDispatcherModule from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
-import * as scheduledMonitorModelModule from '../packages/monitoring/scheduled-monitor-model.mts';
-import * as analystReviewStateModule from '../packages/monitoring/analyst-review-state.mts';
-import * as caseRelationshipClustersModule from '../packages/relationships/case-relationship-clusters.mts';
-import * as caseRelationshipGraphExportModule from '../packages/relationships/case-relationship-graph-export.mts';
-import * as brandProfileModelModule from '../packages/workspace/brand-profile-model.mts';
-import * as bulkReviewModelModule from '../packages/workspace/bulk-review-model.mts';
-import * as bulkSessionModelModule from '../packages/workspace/bulk-session-model.mts';
-import * as campaignModelModule from '../packages/workspace/campaign-model.mts';
-import * as ctHistoryModule from '../packages/workspace/ct-history.mts';
-import * as detectionRuleModelModule from '../packages/workspace/detection-rule-model.mts';
-import * as investigationTemplateModelModule from '../packages/workspace/investigation-template-model.mts';
-import * as relationshipObservationModelModule from '../packages/workspace/relationship-observation-model.mts';
-import * as shortlistModelModule from '../packages/workspace/shortlist-model.mts';
-import * as watchlistStoreModule from '../packages/workspace/watchlist-store.mts';
-import * as websiteSnapshotModelModule from '../packages/workspace/website-snapshot-model.mts';
-import * as workspaceArchiveModule from '../packages/workspace/workspace-archive.mts';
-import * as encryptedWorkspaceArchiveModule from '../packages/workspace/workspace-archive-crypto.mts';
-import * as domainControlPassportModule from '../packages/workspace/domain-control-passport.mts';
-import * as riskCalibrationDashboardModule from '../packages/investigation/risk-calibration-dashboard.mts';
-import * as riskCalibrationExportModule from '../packages/investigation/risk-calibration-export.mts';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
-import * as domainControlFlightRecorderModule from '../lib/domain-control-flight-recorder.mts';
-import * as domainControlManifestModule from '../lib/domain-control-manifest.mts';
-import * as riskCalibrationSummaryModule from '../lib/risk-calibration-summary.mts';
 import type { SchemaLifecycleRegistry } from '../packages/contracts/schema-lifecycle.mts';
-import * as casePortabilityModule from '../packages/contracts/case-portability.mts';
-import * as workspacePortabilityModule from '../packages/contracts/workspace-portability.mts';
 import {
   CASE_CONTRACT_OWNER,
   CASE_DOMAIN_COMPATIBILITY_FACADES,
@@ -98,8 +21,11 @@ import {
   WORKSPACE_PORTABILITY_BOUND_CONSTANTS,
   WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS,
 } from '../packages/contracts/workspace-portability.mts';
-import * as domainControlRuntimeModule from '../packages/evidence/domain-control-runtime.mts';
-import { compareCodeUnits as ordinalCompare } from './maintainer-tool-helpers.mts';
+import {
+  boundedSafeRelativePath,
+  compareCodeUnits as ordinalCompare,
+  pathIsWithin,
+} from './maintainer-tool-helpers.mts';
 import {
   MAX_SCHEMA_SOURCE_BINDINGS,
   MAX_SCHEMA_SOURCE_AST_DEPTH,
@@ -112,7 +38,6 @@ import {
 
 const SCHEMA_LIFECYCLE_REGISTRY_FILE = 'packages/contracts/schema-lifecycle-registry.mts';
 const SCHEMA_LIFECYCLE_MODULE_FILE = 'packages/contracts/schema-lifecycle.mts';
-const SCHEMA_LIFECYCLE_REPOSITORY_FILE = 'tools/schema-lifecycle-repository.mts';
 export const MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES = 64 * 1024 * 1024;
 const MAX_SCHEMA_LIFECYCLE_HOOK_MODULES = 128;
 const MAX_SCHEMA_LIFECYCLE_STATIC_STRING_LENGTH = 256;
@@ -122,88 +47,6 @@ const LIFECYCLE_CODE_EXTENSIONS = new Set([
   '.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx',
 ]);
 
-export const SCHEMA_LIFECYCLE_HOOK_MODULES = Object.freeze({
-  'cli/offline-artifact-validation.mts': offlineArtifactValidationModule,
-  'cli/artifact-verify.mts': artifactVerifyModule,
-  'cli/case-pack.mts': casePackModule,
-  'cli/domain-control-monitor.mts': domainControlMonitorModule,
-  'cli/domain-control-observations.mts': domainControlObservationsModule,
-  'cli/ci-report.mts': ciReportModule,
-  'cli/evidence-signing.mts': evidenceSigningModule,
-  'cli/formatters/json.mts': jsonFormatterModule,
-  'cli/formatters/terminal.mts': terminalFormatterModule,
-  'cli/interchange-report.mts': interchangeReportModule,
-  'cli/output-file.mts': outputFileModule,
-  'cli/page-compare.mts': pageCompareModule,
-  'cli/retained-artifact-diff.mts': retainedArtifactDiffModule,
-  'cli/risk-calibration.mts': riskCalibrationModule,
-  'cli/sharing-review.mts': sharingReviewModule,
-  'cli/saved-lookup.mts': savedLookupModule,
-  'cli/source-reliability.mts': sourceReliabilityModule,
-  'packages/cases/case-model.mts': caseModelModule,
-  'packages/cases/case-report.mts': caseReportModule,
-  'packages/cases/case-response-packet.mts': caseResponsePacketModule,
-  'packages/investigation/acquisition-decision-packet.mts': acquisitionDecisionPacketModule,
-  'packages/investigation/bulk-domain-comparison.mts': bulkDomainComparisonModule,
-  'packages/investigation/bulk-mail-exposure.mts': bulkMailExposureModule,
-  'packages/investigation/bulk-review-export.mts': bulkReviewExportModule,
-  'packages/investigation/investigation-capsule.mts': investigationCapsuleModule,
-  'packages/investigation/lookup-asset-graph.mts': lookupAssetGraphModule,
-  'packages/investigation/lookup-claim-passport.mts': lookupClaimPassportModule,
-  'packages/investigation/lookup-investigation-brief.mts': lookupInvestigationBriefModule,
-  'packages/investigation/candidate-handoff.mts': candidateHandoffModule,
-  'packages/investigation/campaign-temporal-review.mts': campaignTemporalReviewModule,
-  'packages/investigation/parent-domain-campaign-review.mts': parentDomainCampaignReviewModule,
-  'packages/investigation/investigation-projection.mts': investigationProjectionModule,
-  'packages/investigation/investigation-search.mts': investigationSearchModule,
-  'packages/investigation/observation-envelope.mts': observationEnvelopeModule,
-  'packages/interchange/external-findings-converters.mts': externalFindingsConvertersModule,
-  'packages/interchange/external-findings-import.mts': externalFindingsImportModule,
-  'packages/contracts/analyst-interchange.mts': analystInterchangeModule,
-  'packages/contracts/investigation-projections.mts': investigationProjectionsContractModule,
-  'packages/contracts/monitoring-portability.mts': monitoringPortabilityModule,
-  'packages/contracts/privacy-data-flow-catalogue.mts': privacyDataFlowCatalogueModule,
-  'packages/contracts/relationship-portability.mts': relationshipPortabilityModule,
-  'packages/contracts/tab-portability.mts': tabPortabilityModule,
-  'packages/interchange/brand-protection-operations-report.mts': brandProtectionOperationsReportModule,
-  'packages/interchange/defensive-indicator-export.mts': defensiveIndicatorExportModule,
-  'packages/interchange/dns-change-rehearsal.mts': dnsChangeRehearsalModule,
-  'packages/interchange/investigation-playbook-interchange.mts': investigationPlaybookInterchangeModule,
-  'packages/interchange/mail-report-workbench.mts': mailReportWorkbenchModule,
-  'packages/interchange/misp-indicator-export.mts': mispIndicatorExportModule,
-  'packages/interchange/registration-disclosure-plan.mts': registrationDisclosurePlanModule,
-  'packages/interchange/static-page-pattern-packs.mts': staticPagePatternPacksModule,
-  'packages/interchange/stix-indicator-export.mts': stixIndicatorExportModule,
-  'packages/interchange/web-capture-import.mts': webCaptureImportModule,
-  'packages/monitoring/scheduled-monitor-dispatcher.mts': scheduledMonitorDispatcherModule,
-  'packages/monitoring/scheduled-monitor-model.mts': scheduledMonitorModelModule,
-  'packages/monitoring/analyst-review-state.mts': analystReviewStateModule,
-  'packages/relationships/case-relationship-clusters.mts': caseRelationshipClustersModule,
-  'packages/relationships/case-relationship-graph-export.mts': caseRelationshipGraphExportModule,
-  'packages/workspace/brand-profile-model.mts': brandProfileModelModule,
-  'packages/workspace/bulk-review-model.mts': bulkReviewModelModule,
-  'packages/workspace/bulk-session-model.mts': bulkSessionModelModule,
-  'packages/workspace/campaign-model.mts': campaignModelModule,
-  'packages/workspace/ct-history.mts': ctHistoryModule,
-  'packages/workspace/detection-rule-model.mts': detectionRuleModelModule,
-  'packages/workspace/investigation-template-model.mts': investigationTemplateModelModule,
-  'packages/workspace/relationship-observation-model.mts': relationshipObservationModelModule,
-  'packages/workspace/shortlist-model.mts': shortlistModelModule,
-  'packages/workspace/watchlist-store.mts': watchlistStoreModule,
-  'packages/workspace/website-snapshot-model.mts': websiteSnapshotModelModule,
-  'packages/workspace/workspace-archive-crypto.mts': encryptedWorkspaceArchiveModule,
-  'packages/workspace/workspace-archive.mts': workspaceArchiveModule,
-  'packages/workspace/domain-control-passport.mts': domainControlPassportModule,
-  'packages/investigation/risk-calibration-dashboard.mts': riskCalibrationDashboardModule,
-  'packages/investigation/risk-calibration-export.mts': riskCalibrationExportModule,
-  'lib/domain-control-flight-recorder.mts': domainControlFlightRecorderModule,
-  'lib/domain-control-manifest.mts': domainControlManifestModule,
-  'lib/risk-calibration-summary.mts': riskCalibrationSummaryModule,
-  'packages/contracts/case-portability.mts': casePortabilityModule,
-  'packages/contracts/workspace-portability.mts': workspacePortabilityModule,
-  'packages/evidence/domain-control-runtime.mts': domainControlRuntimeModule,
-} as const);
-
 type LifecycleSource = Readonly<{ file: string; source: string }>;
 
 export type SchemaLifecycleSourceBinding = Readonly<{
@@ -212,16 +55,9 @@ export type SchemaLifecycleSourceBinding = Readonly<{
   line: number;
 }>;
 
-export type SchemaLifecycleHookModuleSourceBinding = Readonly<{
-  module: string;
-  localName: string;
-  line: number;
-}>;
-
 export type SchemaLifecycleSourceBindings = Readonly<{
   definitions: readonly SchemaLifecycleSourceBinding[];
   registryEntries: readonly SchemaLifecycleSourceBinding[];
-  hookModules: readonly SchemaLifecycleHookModuleSourceBinding[];
 }>;
 
 type PendingRegistryReference = Readonly<{
@@ -417,8 +253,6 @@ function parseLifecycleSource(
   definitions: readonly SchemaLifecycleSourceBinding[];
   registryReferences: readonly PendingRegistryReference[];
   registryDeclarations: number;
-  hookModules: readonly SchemaLifecycleHookModuleSourceBinding[];
-  hookModuleDeclarations: number;
 }> {
   const sourceFile = ts.createSourceFile(item.file, item.source, ts.ScriptTarget.Latest, true, scriptKind(item.file));
   const diagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
@@ -429,7 +263,6 @@ function parseLifecycleSource(
   const nonCanonicalFamilyFactories = new Set<string>();
   const nonCanonicalRegistryFactories = new Set<string>();
   const importedBindings = new Map<string, Readonly<{ imported: string; specifier: string; line: number }>>();
-  const namespaceImports = new Map<string, string>();
   const staticStringBindings = new Map<string, ts.Expression>();
   const lineFor = (position: number) => sourceFile.getLineAndCharacterOfPosition(position).line + 1;
   for (const statement of sourceFile.statements) {
@@ -446,11 +279,6 @@ function parseLifecycleSource(
       || !ts.isStringLiteral(statement.moduleSpecifier)
       || !statement.importClause) continue;
     const importedModule = resolveSourceModule(item.file, statement.moduleSpecifier.text, sourceFiles);
-    if (statement.importClause.namedBindings
-      && ts.isNamespaceImport(statement.importClause.namedBindings)
-      && importedModule) {
-      namespaceImports.set(statement.importClause.namedBindings.name.text, importedModule);
-    }
     if (importedModule === SCHEMA_LIFECYCLE_MODULE_FILE
       && (statement.importClause.name
         || (statement.importClause.namedBindings
@@ -498,55 +326,12 @@ function parseLifecycleSource(
 
   const definitions: SchemaLifecycleSourceBinding[] = [];
   const registryReferences: PendingRegistryReference[] = [];
-  const hookModules: SchemaLifecycleHookModuleSourceBinding[] = [];
   let registryDeclarations = 0;
-  let hookModuleDeclarations = 0;
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement) || !hasExportModifier(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
       const initializer = unwrapExpression(declaration.initializer);
-      if (declaration.name.text === 'SCHEMA_LIFECYCLE_HOOK_MODULES') {
-        if (item.file !== SCHEMA_LIFECYCLE_REPOSITORY_FILE
-          || !(statement.declarationList.flags & ts.NodeFlags.Const)
-          || !ts.isCallExpression(initializer)
-          || initializer.arguments.length !== 1) {
-          throw new TypeError('Schema lifecycle hook modules must use one canonical static declaration.');
-        }
-        const hookCallee = unwrapExpression(initializer.expression);
-        const hookObject = unwrapExpression(initializer.arguments[0]!);
-        if (!ts.isPropertyAccessExpression(hookCallee)
-          || !ts.isIdentifier(hookCallee.expression)
-          || hookCallee.expression.text !== 'Object'
-          || hookCallee.name.text !== 'freeze'
-          || !ts.isObjectLiteralExpression(hookObject)) {
-          throw new TypeError('Schema lifecycle hook modules must use one frozen static object.');
-        }
-        hookModuleDeclarations += 1;
-        for (const property of hookObject.properties) {
-          if (!ts.isPropertyAssignment(property)
-            || !ts.isStringLiteral(property.name)) {
-            throw new TypeError('Schema lifecycle hook modules must use static path-to-namespace bindings.');
-          }
-          const namespace = unwrapExpression(property.initializer);
-          if (!ts.isIdentifier(namespace)) {
-            throw new TypeError('Schema lifecycle hook modules must use static namespace imports.');
-          }
-          const importedModule = namespaceImports.get(namespace.text);
-          if (!importedModule || property.name.text !== importedModule) {
-            throw new TypeError(`Schema lifecycle hook module path does not match its static import: ${property.name.text}.`);
-          }
-          hookModules.push(Object.freeze({
-            module: property.name.text,
-            localName: namespace.text,
-            line: lineFor(property.getStart(sourceFile)),
-          }));
-          if (hookModules.length > MAX_SCHEMA_LIFECYCLE_HOOK_MODULES) {
-            throw new TypeError('Schema lifecycle hook modules exceed their bounded entry ceiling.');
-          }
-        }
-        continue;
-      }
       if (!ts.isCallExpression(initializer)) continue;
       const callee = unwrapExpression(initializer.expression);
       if (!ts.isIdentifier(callee)) continue;
@@ -661,8 +446,6 @@ function parseLifecycleSource(
     definitions: Object.freeze(definitions),
     registryReferences: Object.freeze(registryReferences),
     registryDeclarations,
-    hookModules: Object.freeze(hookModules),
-    hookModuleDeclarations,
   });
 }
 
@@ -674,9 +457,7 @@ export function discoverSchemaLifecycleSourceBindings(
   const sourceFiles = new Set(sourceSnapshot.map((item) => item.file));
   const definitions: SchemaLifecycleSourceBinding[] = [];
   const registryEntries: SchemaLifecycleSourceBinding[] = [];
-  const hookModules: SchemaLifecycleHookModuleSourceBinding[] = [];
   let registryDeclarations = 0;
-  let hookModuleDeclarations = 0;
   for (const item of sourceSnapshot) {
     if (!LIFECYCLE_CODE_EXTENSIONS.has(path.posix.extname(item.file).toLowerCase())) {
       if (item.source.includes('schema-lifecycle')
@@ -705,25 +486,13 @@ export function discoverSchemaLifecycleSourceBindings(
         }
       }
     }
-    if (parsed.hookModuleDeclarations) {
-      if (item.file !== SCHEMA_LIFECYCLE_REPOSITORY_FILE) {
-        throw new TypeError(`Schema lifecycle hook modules must be declared in ${SCHEMA_LIFECYCLE_REPOSITORY_FILE}.`);
-      }
-      hookModuleDeclarations += parsed.hookModuleDeclarations;
-      hookModules.push(...parsed.hookModules);
-    }
   }
   if (registryDeclarations !== 1) {
     throw new TypeError('Schema lifecycle source coverage requires one canonical registry declaration.');
   }
-  if ((sourceFiles.has(SCHEMA_LIFECYCLE_REPOSITORY_FILE) && hookModuleDeclarations !== 1)
-    || hookModuleDeclarations > 1) {
-    throw new TypeError('Schema lifecycle source coverage requires one canonical hook-module declaration.');
-  }
   return Object.freeze({
     definitions: Object.freeze(definitions),
     registryEntries: Object.freeze(registryEntries),
-    hookModules: Object.freeze(hookModules),
   });
 }
 
@@ -773,8 +542,6 @@ async function repositoryLifecycleBindings(discovery: SchemaSourceDiscovery): Pr
   return discoverSchemaLifecycleSourceBindings(sources);
 }
 
-type HookModuleMap = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
-
 export function assertSchemaLifecycleFixtureDiscriminator(
   raw: string,
   maximumBytes: number,
@@ -813,28 +580,63 @@ export function assertSchemaLifecycleFixtureDiscriminator(
   }
 }
 
-function snapshotHookModules(value: unknown): ReadonlyMap<string, Readonly<Record<string, unknown>>> {
-  if (utilTypes.isProxy(value)
-    || !value
-    || typeof value !== 'object'
-    || Array.isArray(value)
-    || Object.getPrototypeOf(value) !== Object.prototype) {
-    throw new TypeError('Schema lifecycle hook modules must use an ordinary static map.');
-  }
-  const keys = Reflect.ownKeys(value);
-  if (keys.length < 1
-    || keys.length > MAX_SCHEMA_LIFECYCLE_HOOK_MODULES
-    || keys.some((key) => typeof key !== 'string')) {
-    throw new TypeError('Schema lifecycle hook modules must use a bounded exact string-key map.');
-  }
-  const modules = new Map<string, Readonly<Record<string, unknown>>>();
-  for (const key of keys as string[]) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)
-      || !descriptor.value || typeof descriptor.value !== 'object') {
-      throw new TypeError(`Schema lifecycle hook module ${key} must use an ordinary data binding.`);
+export async function loadSchemaLifecycleHookModules(
+  registry: SchemaLifecycleRegistry,
+  discovery: SchemaSourceDiscovery,
+): Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>> {
+  buildSchemaLifecycleCompatibilityMatrix(registry);
+  const admittedFiles = new Set(discovery.files);
+  const exportsByModule = new Map<string, Set<string>>();
+  for (const family of registry) {
+    if (!('metadata' in family)) continue;
+    for (const hook of family.metadata.hooks) {
+      const module = boundedSafeRelativePath(
+        hook.module,
+        `Schema lifecycle hook module ${hook.id}`,
+        MAX_SCHEMA_LIFECYCLE_STATIC_STRING_LENGTH,
+      );
+      if (!LIFECYCLE_CODE_EXTENSIONS.has(path.posix.extname(module).toLowerCase())) {
+        throw new TypeError(`Schema lifecycle hook module must be executable source: ${module}.`);
+      }
+      if (!admittedFiles.has(module)) {
+        throw new TypeError(`Schema lifecycle hook module is not an admitted source file: ${module}.`);
+      }
+      const names = exportsByModule.get(module) ?? new Set<string>();
+      names.add(hook.exportName);
+      exportsByModule.set(module, names);
+      if (exportsByModule.size > MAX_SCHEMA_LIFECYCLE_HOOK_MODULES) {
+        throw new TypeError('Schema lifecycle hook modules exceed their bounded entry ceiling.');
+      }
     }
-    modules.set(key, descriptor.value as Readonly<Record<string, unknown>>);
+  }
+  if (!exportsByModule.size) throw new TypeError('Schema lifecycle registry declares no verifier hooks.');
+
+  const modules = new Map<string, Readonly<Record<string, unknown>>>();
+  for (const [module, exportNames] of [...exportsByModule].sort(([left], [right]) => ordinalCompare(left, right))) {
+    const absolute = path.resolve(discovery.repositoryRoot, module);
+    if (!pathIsWithin(discovery.repositoryRoot, absolute)) {
+      throw new TypeError(`Schema lifecycle hook module escapes the repository root: ${module}.`);
+    }
+    let namespace: Readonly<Record<string, unknown>>;
+    try {
+      namespace = await import(pathToFileURL(absolute).href) as Readonly<Record<string, unknown>>;
+    } catch (cause) {
+      throw new TypeError(`Schema lifecycle hook module could not be loaded: ${module}.`, { cause });
+    }
+    const snapshot = Object.create(null) as Record<string, unknown>;
+    for (const exportName of [...exportNames].sort(ordinalCompare)) {
+      const descriptor = Object.getOwnPropertyDescriptor(namespace, exportName);
+      if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`Schema lifecycle hook export is missing or is not callable: ${module}#${exportName}.`);
+      }
+      Object.defineProperty(snapshot, exportName, {
+        value: descriptor.value,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+      });
+    }
+    modules.set(module, Object.freeze(snapshot));
   }
   return modules;
 }
@@ -1197,11 +999,6 @@ function validatePreparedSchemaLifecycleStructure(
   }
 
   const declaredHookModules = [...hookModules.keys()].sort(ordinalCompare);
-  const sourceHookModules = bindings.hookModules.map((binding) => binding.module).sort(ordinalCompare);
-  if (declaredHookModules.length !== sourceHookModules.length
-    || declaredHookModules.some((value, index) => value !== sourceHookModules[index])) {
-    throw new TypeError('Schema lifecycle static hook-module bindings do not match their source imports.');
-  }
   for (const module of declaredHookModules) {
     if (!discoveryFiles.has(module)) {
       throw new TypeError(`Schema lifecycle hook module is not an admitted source file: ${module}.`);
@@ -1224,7 +1021,7 @@ function validatePreparedSchemaLifecycleStructure(
     for (const hook of family.metadata.hooks) {
       hookModulePaths.add(hook.module);
       if (!hookModules.has(hook.module)) {
-        throw new TypeError(`Schema lifecycle hook module is not statically bound: ${hook.module}.`);
+        throw new TypeError(`Schema lifecycle hook module was not loaded from the canonical registry: ${hook.module}.`);
       }
       const module = hookModules.get(hook.module)!;
       const descriptor = Object.getOwnPropertyDescriptor(module, hook.exportName);
@@ -1236,7 +1033,7 @@ function validatePreparedSchemaLifecycleStructure(
   const referencedHookModules = [...hookModulePaths].sort(ordinalCompare);
   if (declaredHookModules.length !== referencedHookModules.length
     || declaredHookModules.some((value, index) => value !== referencedHookModules[index])) {
-    throw new TypeError('Schema lifecycle static hook-module bindings are stale or incomplete.');
+    throw new TypeError('Schema lifecycle loaded hook modules are stale or incomplete.');
   }
 
 }
@@ -1248,7 +1045,7 @@ export async function prepareSchemaLifecycleRepositorySnapshot(
   await validateCasePortabilitySourceClosure(discovery);
   await validateWorkspacePortabilitySourceClosure(discovery);
   const bindings = await repositoryLifecycleBindings(discovery);
-  const hookModules = snapshotHookModules(SCHEMA_LIFECYCLE_HOOK_MODULES as HookModuleMap);
+  const hookModules = await loadSchemaLifecycleHookModules(registry, discovery);
   const fixtureByPath = new Map<string, PreparedFixture>();
   const snapshot = Object.freeze({
     bindings,

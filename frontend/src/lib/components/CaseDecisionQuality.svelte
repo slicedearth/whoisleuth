@@ -1,6 +1,26 @@
 <script lang="ts">
+  import Pagination from './Pagination.svelte';
   import type { CaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
+  const PAGE_SIZE = 24;
   let { report }: { report: CaseDecisionQualityReport } = $props();
+  let page = $state(1);
+  let pageScope = $state('');
+  const pageCount = $derived(Math.max(1, Math.ceil(report.findings.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleFindings = $derived(report.findings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const firstVisible = $derived(report.findings.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0);
+  const lastVisible = $derived(firstVisible + visibleFindings.length - 1);
+
+  function setPage(value: number): void {
+    page = Math.max(1, Math.min(pageCount, Math.trunc(value) || 1));
+  }
+
+  $effect(() => {
+    const nextScope = JSON.stringify(report.findings.map((finding) => finding.id));
+    if (nextScope === pageScope) return;
+    pageScope = nextScope;
+    page = 1;
+  });
 </script>
 
 <section class="quality card" aria-labelledby="case-quality-title">
@@ -10,7 +30,7 @@
   </header>
   {#if report.findings.length}
     <ul>
-      {#each report.findings.slice(0, 24) as finding (finding.id)}
+      {#each visibleFindings as finding (finding.id)}
         <li class:high={finding.severity === 'high'}>
           <div><strong>{finding.title}</strong><span>{finding.severity} priority</span></div>
           <p>{finding.detail}</p>
@@ -19,7 +39,8 @@
         </li>
       {/each}
     </ul>
-    {#if report.findings.length > 24}<p>{report.findings.length - 24} additional bounded finding{report.findings.length - 24 === 1 ? '' : 's'} omitted from this view.</p>{/if}
+    <p role="status">Showing {firstVisible}–{lastVisible} of {report.findings.length} bounded consistency findings; at most {PAGE_SIZE} findings are rendered per page.</p>
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Case consistency finding pages" />
   {:else}
     <p class="empty">No record-consistency issue was found in the current bounded case collection.</p>
   {/if}

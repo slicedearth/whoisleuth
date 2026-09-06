@@ -1,4 +1,8 @@
-import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import {
+  caseLookupTarget,
+  type CaseRecord,
+} from './case-model.ts';
+import { caseStatusIsClosed, isReviewedCaseDisposition } from './case-record-decisions.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import {
@@ -368,7 +372,7 @@ function currentCaseEvidenceGap(record: CaseRecord, nowIso: string) {
 }
 
 export function currentCaseEvidenceGapDismissedPinIds(record: CaseRecord, nowRaw: unknown): ReadonlySet<string> {
-  if (record.status === 'resolved') return new Set();
+  if (caseStatusIsClosed(record.status)) return new Set();
   const nowIso = timestamp(nowRaw) || new Date().toISOString();
   const gap = currentCaseEvidenceGap(record, nowIso);
   return gap.dismissed ? new Set(gap.limitedPinRecords.map((item) => item.id)) : new Set();
@@ -378,7 +382,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
   const items: AnalystReviewItem[] = [];
   for (const record of records.slice(0, 500)) {
     const updatedAt = timestamp(record.updatedAt) || nowIso;
-    if (record.status !== 'resolved' && record.disposition === 'unreviewed') {
+    if (!caseStatusIsClosed(record.status) && !isReviewedCaseDisposition(record.disposition)) {
       items.push(withReviewMetadata({
         id: `case:${record.id}`,
         kind: 'case',
@@ -410,7 +414,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
     const openContradictions = openContradictionRecords.length;
     const limitedPins = limitedPinRecords.length;
     const gapCount = openUnknowns + openContradictions + limitedPins;
-    if (record.status !== 'resolved' && gapCount > 0) {
+    if (!caseStatusIsClosed(record.status) && gapCount > 0) {
       if (!dismissed) {
         const parts = [
           openUnknowns ? `${openUnknowns} open unknown${openUnknowns === 1 ? '' : 's'}` : '',

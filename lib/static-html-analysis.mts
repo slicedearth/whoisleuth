@@ -86,6 +86,9 @@ type StaticPublicationMetadata = {
 };
 
 type StaticHtmlAnalysis = {
+  title: string | null;
+  effectiveBaseUrl: string | null;
+  baseHrefState: 'absent' | 'valid' | 'invalid';
   markup: string;
   visibleText: string;
   structureTokens: string[];
@@ -182,6 +185,7 @@ function attributeValue(
   attributes: Array<{ name: string; value: string }>,
   name: string,
   maximumLength = MAX_FORM_ATTRIBUTE_LENGTH,
+  lowercase = true,
 ): { present: boolean; value: string | null; truncated: boolean } {
   const attribute = attributes
     .slice(0, MAX_ATTRIBUTES_PER_TAG)
@@ -192,7 +196,7 @@ function attributeValue(
   }
   return {
     present: true,
-    value: attribute.value.trim().toLowerCase(),
+    value: lowercase ? attribute.value.trim().toLowerCase() : attribute.value.trim(),
     truncated: attributes.length > MAX_ATTRIBUTES_PER_TAG,
   };
 }
@@ -224,13 +228,14 @@ function formMethod(attributes: Array<{ name: string; value: string }>): { value
 
 function formAction(
   attributes: Array<{ name: string; value: string }>,
-  baseUrl: URL | null,
+  resolutionBase: URL | null,
+  documentOrigin: string | null,
 ): {
   relationship: 'sameOrigin' | 'external' | 'missing' | 'unclassified';
   cleartext: boolean;
   truncated: boolean;
 } {
-  const action = attributeValue(attributes, 'action');
+  const action = attributeValue(attributes, 'action', MAX_FORM_ATTRIBUTE_LENGTH, false);
   if (!action.present && action.truncated) {
     return { relationship: 'unclassified', cleartext: false, truncated: true };
   }
@@ -240,16 +245,16 @@ function formAction(
   if (action.value === null) {
     return { relationship: 'unclassified', cleartext: false, truncated: true };
   }
-  if (!baseUrl) {
+  if (!resolutionBase || !documentOrigin) {
     return { relationship: 'unclassified', cleartext: false, truncated: action.truncated };
   }
   try {
-    const parsed = new URL(action.value, baseUrl);
+    const parsed = new URL(action.value, resolutionBase);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) {
       return { relationship: 'unclassified', cleartext: false, truncated: action.truncated };
     }
     return {
-      relationship: parsed.origin === baseUrl.origin ? 'sameOrigin' : 'external',
+      relationship: parsed.origin === documentOrigin ? 'sameOrigin' : 'external',
       cleartext: parsed.protocol === 'http:',
       truncated: action.truncated,
     };
@@ -356,7 +361,9 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   const supplied = typeof value === 'string' ? value : '';
   const inputLimitReached = supplied.length > MAX_STATIC_HTML_CHARS;
   const html = supplied.slice(0, MAX_STATIC_HTML_CHARS);
-  const baseUrl = safeBaseUrl(options.baseUrl);
+  const documentUrl = safeBaseUrl(options.baseUrl);
+  let effectiveBaseUrl = documentUrl;
+  let baseHrefState: StaticHtmlAnalysis['baseHrefState'] = 'absent';
   const includeVisibleText = options.includeVisibleText === true;
   const markup: string[] = [];
   const visibleTextParts: string[] = [];
@@ -434,6 +441,17 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   let scriptElementSeen = false;
   let nonVisibleTextDepth = 0;
   let visibleTextCharacters = 0;
+  let titleDepth = 0;
+  let titleCharacters = 0;
+  const titleParts: string[] = [];
+  const pendingFormActions: Array<Array<{ name: string; value: string }>> = [];
+
+  function appendTitle(chars: string): void {
+    if (titleDepth === 0 || !chars || titleCharacters >= 201) return;
+    const retained = chars.slice(0, 201 - titleCharacters);
+    titleParts.push(retained);
+    titleCharacters += retained.length;
+  }
 
   function appendInlineScript(chars: string): void {
     if (!activeInlineScript || !chars) return;
@@ -491,6 +509,26 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         implicitHeadTextDepth += 1;
       }
       const inPublicationHead = insideExplicitHead || (!headScopeClosed && !bodyContentStarted && HEAD_CONTEXT_TAGS.has(tagName));
+      if (tagName === 'base' && inPublicationHead && baseHrefState === 'absent') {
+        const href = attributeValue(token.attrs, 'href', MAX_FORM_ATTRIBUTE_LENGTH, false);
+        if (href.truncated && !href.present) {
+          effectiveBaseUrl = documentUrl;
+          baseHrefState = 'invalid';
+        } else if (href.present) {
+          try {
+            const parsed = href.value !== null && documentUrl ? new URL(href.value, documentUrl) : null;
+            if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) {
+              throw new Error('Invalid document base URL.');
+            }
+            effectiveBaseUrl = parsed;
+            baseHrefState = 'valid';
+          } catch {
+            effectiveBaseUrl = documentUrl;
+            baseHrefState = 'invalid';
+          }
+        }
+      }
+      if (tagName === 'title' && titleDepth === 0 && titleParts.length === 0) titleDepth = 1;
       if (/^h[1-6]$/u.test(tagName)) {
         const key = tagName as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
         publicationMetadata.headings[key] += 1;
@@ -659,10 +697,8 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
           forms.formsObserved += 1;
           const method = formMethod(token.attrs);
           forms.methods[method.value] += 1;
-          const action = formAction(token.attrs, baseUrl);
-          forms.actions[action.relationship] += 1;
-          if (action.cleartext) forms.actions.cleartext += 1;
-          if (method.truncated || action.truncated) forms.truncated = true;
+          pendingFormActions.push(token.attrs);
+          if (method.truncated || token.attrs.length > MAX_ATTRIBUTES_PER_TAG) forms.truncated = true;
         }
       } else if (tagName === 'input') {
         if (forms.inputsObserved >= MAX_STATIC_INPUTS) {
@@ -698,6 +734,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     onEndTag(token) {
       const tagName = token.tagName.toLowerCase();
       if (tagName === 'script') activeInlineScript = null;
+      if (tagName === 'title' && titleDepth > 0) titleDepth = 0;
       if (tagName === 'head') {
         insideExplicitHead = false;
         headScopeClosed = true;
@@ -714,6 +751,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         headScopeClosed = true;
       }
       appendInlineScript(token.chars);
+      appendTitle(token.chars);
       appendVisibleText(token.chars);
     },
     onNullCharacter(token) {
@@ -722,10 +760,12 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         headScopeClosed = true;
       }
       appendInlineScript(token.chars);
+      appendTitle(token.chars);
       appendVisibleText(token.chars);
     },
     onWhitespaceCharacter(token) {
       appendInlineScript(token.chars);
+      appendTitle(token.chars);
       appendVisibleText(token.chars);
     },
     onComment() {},
@@ -735,6 +775,14 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
 
   tokenizer = new Tokenizer({ sourceCodeLocationInfo: false }, handler);
   tokenizer.write(html, true);
+
+  for (const attributes of pendingFormActions) {
+    const action = formAction(attributes, effectiveBaseUrl, documentUrl?.origin ?? null);
+    forms.actions[action.relationship] += 1;
+    if (action.cleartext) forms.actions.cleartext += 1;
+    if (action.truncated) forms.truncated = true;
+  }
+  if ((baseHrefState as StaticHtmlAnalysis['baseHrefState']) === 'invalid') forms.truncated = true;
 
   publicationMetadata.truncated = publicationMetadata.truncated || inputLimitReached || publicationTagLimitReached;
   publicationMetadata.documentTruncated = inputLimitReached || publicationTagLimitReached;
@@ -761,6 +809,13 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     + publicationMetadata.renderBlockingCandidates.stylesheet;
 
   return {
+    title: (() => {
+      const value = titleParts.join('').replace(CONTROL_CHARACTER_RE_GLOBAL, ' ').replace(/\ufffd/gu, ' ').replace(/\s+/gu, ' ').trim();
+      if (!value) return null;
+      return value.length > 200 ? `${value.slice(0, 200)}…` : value;
+    })(),
+    effectiveBaseUrl: effectiveBaseUrl?.toString() ?? null,
+    baseHrefState,
     markup: markup.join('\n'),
     visibleText: visibleTextParts.join('').replace(CONTROL_CHARACTER_RE_GLOBAL, ' ').replace(/\s+/gu, ' '),
     structureTokens,

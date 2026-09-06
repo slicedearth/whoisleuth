@@ -107,6 +107,35 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     'Browser exports and CLI artefacts remain separate versioned documents; compatibility and privacy projections are checked before import or packaging.',
     'A browser handoff prepares or imports reviewed local material. It does not upload, submit, publish, enforce, or start monitoring.',
   ]),
+  interchangeRecipes: Object.freeze([
+    Object.freeze({
+      id: 'workspace-verification',
+      label: 'Check a browser workspace before restoring it',
+      commands: Object.freeze([
+        'whoisleuth verify-artifact workspace.json --json',
+        'whoisleuth interchange-report workspace.json --json',
+      ]),
+      result: 'Review structure, section integrity, supported versions and the proposed browser import before applying any records.',
+    }),
+    Object.freeze({
+      id: 'lookup-replay',
+      label: 'Continue a CLI Lookup in the browser',
+      commands: Object.freeze([
+        'whoisleuth lookup example.test --deep --browse --save-lookup lookup.json',
+        'whoisleuth verify-artifact lookup.json --json',
+      ]),
+      result: 'Replay the saved file from Console Lookup, inspect its source states and then choose whether to retain it in a Case.',
+    }),
+    Object.freeze({
+      id: 'case-handoff',
+      label: 'Prepare a reviewed Case handoff',
+      commands: Object.freeze([
+        'whoisleuth case-pack cases.json --audience public --reviewed --json',
+        'whoisleuth sharing-review case-pack.json --marking clear --recipient-scope public --purpose "Reviewed evidence handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
+      ]),
+      result: 'Verify the output digest and review the audience projection before deliberately sharing the separate file.',
+    }),
+  ]),
   boundaries: Object.freeze([
     'Offline commands may read only deliberately selected bounded files or standard input and make no request.',
     'Network commands run from the local machine and disclose the selected target only to the source classes declared by that command.',

@@ -18,7 +18,7 @@ function retainedEvidence(inputHostname: unknown) {
   };
 }
 
-describe('Case v14 exact submitted hostname', () => {
+describe('Case exact submitted hostname', () => {
   test('normalises strict Unicode input to canonical lower-case A-label form and binds it to the Case parent', () => {
     assert.equal(
       model.normalizeEvidenceHostnameForCase('CAFÉ.Example.Test', 'example.test'),
@@ -118,7 +118,7 @@ describe('Case v14 exact submitted hostname', () => {
         updatedAt: FIRST,
       }],
     });
-    assert.equal(publishedV2.version, 14);
+    assert.equal(publishedV2.version, model.CASE_SCHEMA_VERSION);
     assert.equal(publishedV2.cases[0]?.evidenceHistory[0]?.inputHostname, null);
 
     const migrated = model.normalizeCaseStore({
@@ -139,7 +139,7 @@ describe('Case v14 exact submitted hostname', () => {
         updatedAt: FIRST,
       }],
     });
-    assert.equal(migrated.version, 14);
+    assert.equal(migrated.version, model.CASE_SCHEMA_VERSION);
     assert.equal(migrated.cases[0]?.evidenceHistory[0]?.inputHostname, null);
 
     const current = model.normalizeCaseStore({
@@ -154,7 +154,7 @@ describe('Case v14 exact submitted hostname', () => {
     assert.equal(current.cases[0]?.evidenceHistory[0]?.inputHostname, 'login.example.test');
   });
 
-  test('round-trips the field while report v10 excludes it and makes no environmental-change claim', () => {
+  test('round-trips the field while the report excludes it and qualifies incompatible observation scope', () => {
     const first = model.createCase({
       domain: 'example.test',
       source: 'lookup',
@@ -176,7 +176,8 @@ describe('Case v14 exact submitted hostname', () => {
     assert.equal(serialized.includes('login.example.test'), false);
     assert.equal(serialized.includes('account.example.test'), false);
     assert.equal(report.json.evidenceTimeline[1]?.changes, null);
-    assert.equal(report.json.evidenceTimeline[1]?.hasIncomparableChange, false);
-    assert.deepEqual(report.json.evidenceTimeline[1]?.incomparableReasons, []);
+    assert.equal(report.json.evidenceTimeline[1]?.hasIncomparableChange, true);
+    assert.deepEqual(report.json.evidenceTimeline[1]?.incomparableReasons, ['observation-context']);
+    assert.match(report.markdown, /Observation targets differ or are unknown/u);
   });
 });

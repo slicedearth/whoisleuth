@@ -4,6 +4,12 @@
 // remains the only authoritative and persistable result.
 
 import type { ClassifiedQuery } from './classify.mts';
+import {
+  THREAT_INTELLIGENCE_CONTRACT_VERSION,
+  THREAT_INTELLIGENCE_RESULT_STATES,
+  THREAT_INTELLIGENCE_SCHEMA,
+  type ThreatIntelligenceResultState,
+} from './threat-intelligence-types.mts';
 import type {
   LookupProgressSource,
   LookupProgressState,
@@ -47,6 +53,12 @@ const DIRECT_STATES = new Set<LookupProgressState>([
   'unavailable',
   'rate_limited',
 ]);
+const THREAT_INTELLIGENCE_SOURCES = new Set<LookupProgressSource>([
+  'external_intelligence',
+  'malware_host_intelligence',
+  'malware_ioc_intelligence',
+]);
+const THREAT_INTELLIGENCE_STATES = new Set<ThreatIntelligenceResultState>(THREAT_INTELLIGENCE_RESULT_STATES);
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -92,6 +104,15 @@ function normalizedState(
   if (source === 'domain_evidence') {
     return record(value).deepScanComplete === false ? 'partial' : 'success';
   }
+  if (THREAT_INTELLIGENCE_SOURCES.has(source)) {
+    const intelligence = record(value);
+    return intelligence.schema === THREAT_INTELLIGENCE_SCHEMA
+      && intelligence.version === THREAT_INTELLIGENCE_CONTRACT_VERSION
+      && typeof intelligence.state === 'string'
+      && THREAT_INTELLIGENCE_STATES.has(intelligence.state as ThreatIntelligenceResultState)
+      ? intelligence.state as LookupProgressState
+      : 'error';
+  }
 
   const status = record(value).status;
   if (typeof status === 'string' && DIRECT_STATES.has(status as LookupProgressState)) {
@@ -109,15 +130,22 @@ function normalizeLookupSourceSettlement(
 ): LookupSourceSettlement {
   const state = normalizedState(source, outcome, value);
   const sourceRecord = record(value);
+  const threatObservation = THREAT_INTELLIGENCE_SOURCES.has(source)
+    ? record(sourceRecord.observation)
+    : null;
   const resultState = source === 'domain_evidence'
     && typeof sourceRecord.state === 'string'
     && RESULT_STATES.has(sourceRecord.state)
     ? sourceRecord.state
     : null;
-  const complete = !['partial', 'error', 'unavailable', 'rate_limited'].includes(state);
-  const truncated = sourceRecord.truncated === true
-    || sourceRecord.recordsTruncated === true
-    || sourceRecord.bodyTruncated === true;
+  const complete = threatObservation
+    ? state !== 'error' && threatObservation.complete === true
+    : !['partial', 'error', 'unavailable', 'rate_limited'].includes(state);
+  const truncated = threatObservation
+    ? threatObservation.truncated === true
+    : sourceRecord.truncated === true
+      || sourceRecord.recordsTruncated === true
+      || sourceRecord.bodyTruncated === true;
   const limitation = outcome === 'rejected'
     ? 'This source did not complete. No absence or safety conclusion was inferred.'
     : state === 'skipped'

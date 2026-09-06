@@ -7,6 +7,7 @@
     CASE_ASSERTION_KINDS,
     CASE_ASSERTION_STATES,
     CASE_CLOSURE_REASONS,
+    CASE_DECISION_CONFIDENCE_LEVELS,
     CASE_DISPOSITIONS,
     CASE_EVIDENCE_RELATION_STANCES,
     CASE_MANUAL_TRAIL_KINDS,
@@ -18,6 +19,9 @@
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
     caseInvestigationContext,
+    caseStatusIsClosed,
+    dispositionLabel,
+    isReviewedCaseDisposition,
     editCase,
     type CaseActionRecord,
     type CaseActionState,
@@ -69,6 +73,8 @@
   let pinLimitations = $state('');
   let decisionSummary = $state('');
   let decisionRationale = $state('');
+  let decisionConfidence = $state('unknown');
+  let decisionConfidenceBasis = $state('');
   let decisionPinIds = $state<string[]>([]);
   let decisionDisposition = $state('unreviewed');
   let decisionReviewReason = $state('');
@@ -340,11 +346,15 @@
       decision: {
         summary: decisionSummary,
         rationale: decisionRationale,
+        confidence: decisionConfidence,
+        confidenceBasis: decisionConfidenceBasis,
         evidencePinIds: decisionPinIds,
       },
     }, `Recorded an analyst decision for ${record.domain}.`)) return;
     decisionSummary = '';
     decisionRationale = '';
+    decisionConfidence = 'unknown';
+    decisionConfidenceBasis = '';
     decisionPinIds = [];
     decisionClassificationDirty = false;
   }
@@ -656,7 +666,7 @@
     <dl class="case-context" aria-label="Current Case context">
       <div class="context-objective"><dt>Objective</dt><dd>{investigationContext.objective}</dd></div>
       <div><dt>Incident URL</dt><dd>{investigationContext.urlRetention === 'exact' ? investigationContext.incidentUrl : `${investigationContext.incidentUrl} (origin only)`}</dd></div>
-      <div><dt>Disposition</dt><dd>{record.disposition.replaceAll('_', ' ')}</dd></div>
+      <div><dt>Disposition</dt><dd>{dispositionLabel(record.disposition)}</dd></div>
       <div><dt>Evidence</dt><dd>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} linked conclusion${evidenceLinkedDecisionCount === 1 ? '' : 's'}` : 'Conclusion link needed'}</dd></div>
       <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
     </dl>
@@ -696,21 +706,25 @@
         <header><div><p class="eyebrow">Assess</p><h5 id={`quick-conclusion-${record.id}`}>Record conclusion</h5></div><span>{evidenceLinkedDecisionCount ? `${evidenceLinkedDecisionCount} evidence-linked` : 'Evidence link required'}</span></header>
         {#if record.decisions.length}
           {@const latestDecision = record.decisions.at(-1)}
-          {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>{latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
+          {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>Confidence: {latestDecision.confidence}{latestDecision.confidenceBasis ? ` — ${latestDecision.confidenceBasis}` : ''} · {latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
         {/if}
         <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
           <div class="two-columns">
-            <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+            <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
             <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
           </div>
           <label class="field">Conclusion summary<input bind:value={decisionSummary} maxlength="80" required placeholder="What should the Case record conclude?"></label>
           <label class="field">Evidence-based rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="2" required></textarea></label>
+          <div class="two-columns">
+            <label class="field">Analyst confidence<select bind:value={decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Confidence records the analyst’s judgement, not the Risk score or evidence completeness.</small></label>
+            <label class="field">Confidence basis<textarea bind:value={decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionConfidence !== 'unknown'} placeholder={decisionConfidence === 'unknown' ? 'Optional while confidence is unknown' : 'Why is this confidence level appropriate?'}></textarea></label>
+          </div>
           {#if record.evidencePins.length}
             <fieldset class="pin-references"><legend>Evidence considered</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source}</span></label>{/each}</fieldset>
           {:else}
             <p class="notice">No retained evidence pin is available. Return to Lookup or use Advanced to pin an observation before recording a supported conclusion.</p>
           {/if}
-          <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record conclusion</button>
+          <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>Record conclusion</button>
         </form>
       </section>
 
@@ -760,7 +774,7 @@
             </div>
             <button class="btn" type="submit" disabled={mutationBusy || effectState === 'not_checked' || !effectSource.trim()}>Record independent outcome</button>
           </form>
-          {#if record.observedEffects.reviews.length && record.status !== 'resolved'}
+          {#if record.observedEffects.reviews.length && !caseStatusIsClosed(record.status)}
             <form class="quick-form closure-quick" onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
               <h6>Close deliberately</h6>
               <div class="two-columns">
@@ -844,18 +858,22 @@
     <summary>Record an analyst decision</summary>
     <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
       <div class="two-columns">
-        <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (decisionDisposition === 'unreviewed') decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.value === 'unreviewed' ? 'Select a reviewed disposition' : option.label}</option>{/each}</select></label>
+        <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
         <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       </div>
       <label class="field">Decision summary<input bind:value={decisionSummary} maxlength="80" required></label>
       <label class="field">Rationale<textarea bind:value={decisionRationale} maxlength="2000" rows="3" required></textarea></label>
+      <div class="two-columns">
+        <label class="field">Analyst confidence<select bind:value={decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Separate from Risk, source health and evidence completeness.</small></label>
+        <label class="field">Confidence basis<textarea bind:value={decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionConfidence !== 'unknown'}></textarea></label>
+      </div>
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
       {/if}
-      <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length}>Record decision</button>
+      <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>Record decision</button>
     </form>
     {#if record.decisions.length}
-      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>{decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
+      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{decision.confidenceBasis ? ` — ${decision.confidenceBasis}` : ''} · {decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
     {/if}
   </details>
 
@@ -874,7 +892,26 @@
       <button class="btn" type="submit" disabled={mutationBusy}>Record assertion</button>
     </form>
     {#if record.assertions.length}
-      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li id={assertionItemId(assertion.id)} tabindex="-1"><strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}{#if assertion.provenance}<small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small><small>File SHA-256 {assertion.provenance.sourceDigestSha256}{assertion.provenance.observedAt ? ` · observed ${assertion.provenance.observedAt}` : ''}</small>{#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}{/if}{#if assertion.evidenceRelations?.length}<small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>{:else}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{/if}{#if assertion.state === 'open'}<button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
+      <ol class="records">
+        {#each [...record.assertions].reverse() as assertion}
+          <li id={assertionItemId(assertion.id)} tabindex="-1">
+            <strong>{assertion.provenance ? 'external import' : assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong>
+            <p>{assertion.statement}</p>
+            {#if assertion.rationale}<p>{assertion.rationale}</p>{/if}
+            {#if assertion.provenance}
+              <small>{assertion.provenance.format.toUpperCase()} · {assertion.provenance.sourceName}{assertion.provenance.publisher ? ` · ${assertion.provenance.publisher}` : ''}{assertion.provenance.externalId ? ` · ${assertion.provenance.externalId}` : ''}</small>
+              <small>File SHA-256 {assertion.provenance.sourceDigestSha256} · {assertion.provenance.observedAt ? `observed ${assertion.provenance.observedAt}` : 'observation time not declared'}{assertion.provenance.createdAt ? ` · created ${assertion.provenance.createdAt}` : ''}{assertion.provenance.modifiedAt ? ` · modified ${assertion.provenance.modifiedAt}` : ''}</small>
+              {#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}
+            {/if}
+            {#if assertion.evidenceRelations?.length}
+              <small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>
+            {:else}
+              <small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>
+            {/if}
+            {#if assertion.state === 'open'}<button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}
+          </li>
+        {/each}
+      </ol>
     {/if}
   </details>
 

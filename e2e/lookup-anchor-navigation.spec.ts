@@ -1,7 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-design-fixtures';
+import { productionChunkPath } from './production-build';
 
 // Lookup section and evidence-map anchor stability coverage.
 
@@ -120,12 +119,7 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
 
 test('Lookup keeps a deferred mapped-evidence hash aligned through post-release layout changes @timing-sensitive', async ({ page }) => {
   test.slow();
-  const builtManifest = JSON.parse(await readFile(
-    join(process.cwd(), 'frontend', '.svelte-kit', 'output', 'client', '.vite', 'manifest.json'),
-    'utf8',
-  )) as Record<string, { file: string }>;
-  const dnsChunkPath = builtManifest['src/lib/components/LookupDnsEvidence.svelte']?.file;
-  if (!dnsChunkPath) throw new TypeError('The production manifest does not own the Lookup DNS evidence chunk.');
+  const dnsChunkPath = productionChunkPath('src/lib/components/LookupDnsEvidence.svelte');
 
   let releaseChunk = () => {};
   let markChunkRequested = () => {};
@@ -134,7 +128,7 @@ test('Lookup keeps a deferred mapped-evidence hash aligned through post-release 
   let chunkHeld = false;
   await page.route('**/*', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname === `/${dnsChunkPath}`) {
+    if (pathname === dnsChunkPath) {
       if (!chunkHeld) {
         chunkHeld = true;
         markChunkRequested();

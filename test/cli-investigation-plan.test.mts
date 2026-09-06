@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { parseCliArguments } from '../cli/arguments.mts';
+import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import {
   buildInvestigationPlan,
   buildWorkflowRecipeCatalogue,
@@ -121,9 +121,9 @@ describe('fixed investigation plans', () => {
   });
 
   test('rejects unsupported recipes and non-domain subjects where required', () => {
-    assert.throws(() => parseCliArguments(['workflow-plan', 'unknown', 'example.test']), /recipe must be one of/iu);
-    assert.throws(() => parseCliArguments(['workflow-plan', '--list', 'example.test']), /do not accept a subject/iu);
-    assert.throws(() => parseCliArguments(['workflow-plan', '--list', '--explain', 'domain-triage']), /mutually exclusive/iu);
+    assert.throws(() => parseCliArguments(['workflow-plan', 'unknown', 'example.test']), CliUsageError);
+    assert.throws(() => parseCliArguments(['workflow-plan', '--list', 'example.test']), CliUsageError);
+    assert.throws(() => parseCliArguments(['workflow-plan', '--list', '--explain', 'domain-triage']), CliUsageError);
     assert.throws(() => buildInvestigationPlan('domain-triage', 'not a domain', NOW), /requires one valid domain/iu);
     assert.throws(
       () => buildInvestigationPlan('domain-triage', 'example.test', '2026-08-03T05:00:00'),

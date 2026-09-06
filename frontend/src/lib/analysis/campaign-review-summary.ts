@@ -1,7 +1,5 @@
-import {
-  latestCaseEvidence,
-  type CaseRecord,
-} from './case-record-model.ts';
+import { latestCaseEvidence, type CaseRecord } from './case-record-model.ts';
+import { isReviewedCaseDisposition } from './case-record-decisions.ts';
 
 export type CampaignReviewCue = Readonly<{
   id: 'credential_surface' | 'identity_relationship' | 'mail_surface' | 'redirect_review';
@@ -78,7 +76,7 @@ export function buildCampaignReviewSummary(
     memberCount: domains.length,
     linkedCaseCount: linked.length,
     unavailableCaseCount: Math.max(0, domains.length - linked.length),
-    unreviewedCaseCount: linked.filter((record) => record.disposition === 'unreviewed').length,
+    unreviewedCaseCount: linked.filter((record) => !isReviewedCaseDisposition(record.disposition)).length,
     limitedEvidenceCount: snapshots.filter(({ evidence }) => (
       !evidence
       || LIMITED_AVAILABILITY.has(String(evidence.availability ?? '').toLowerCase())

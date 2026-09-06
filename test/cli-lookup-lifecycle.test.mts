@@ -21,7 +21,6 @@ import {
   type CliLookupDocument,
   type UnknownRecord,
 } from '../cli/saved-lookup.mts';
-import { SCHEMA_LIFECYCLE_HOOK_MODULES } from '../tools/schema-lifecycle-repository.mts';
 
 const FIXTURE_URLS = {
   legacy: new URL('./fixtures/cli-lookup-v1.json', import.meta.url),
@@ -372,14 +371,4 @@ describe('CLI Lookup schema lifecycle', () => {
     );
   });
 
-  test('binds every hook to a fixed statically imported module export', () => {
-    assert.equal(CLI_LOOKUP_SCHEMA, 'whoisleuth.cli.lookup');
-    for (const hook of CLI_LOOKUP_SCHEMA_LIFECYCLE.metadata.hooks) {
-      const module = SCHEMA_LIFECYCLE_HOOK_MODULES[
-        hook.module as keyof typeof SCHEMA_LIFECYCLE_HOOK_MODULES
-      ];
-      assert.ok(module, hook.module);
-      assert.equal(typeof (module as Record<string, unknown>)[hook.exportName], 'function', hook.id);
-    }
-  });
 });

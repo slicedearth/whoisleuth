@@ -592,6 +592,36 @@ describe('optional local rendered capture package', () => {
     }
   });
 
+  test('round-trips the exact host, title, and artifact bounds into partitioned Case findings', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-import-bound-test-'));
+    const destination = path.join(parent, 'capture');
+    const title = 'T'.repeat(300);
+    const subresourceUrls = Array.from(
+      { length: MAX_CAPTURE_HOSTS - 1 },
+      (_, index) => `https://asset-${String(index).padStart(2, '0')}.example.test/resource.js`,
+    );
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => fakeBrowser({ title, subresourceUrls }),
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        now: () => '2026-08-01T00:00:00.000Z',
+      });
+      assert.equal(manifest.captures[0]?.requestDomains.length, MAX_CAPTURE_HOSTS);
+      assert.equal(manifest.captures[0]?.artifacts.length, 2);
+      const imported = parseWebCaptureManifest(manifest);
+      const retained = imported.findings.map((finding) => finding.summary).join(' ');
+      assert.ok(imported.findings.length > 1);
+      assert.ok(retained.includes(title));
+      for (const domain of manifest.captures[0]?.requestDomains ?? []) assert.ok(retained.includes(domain), domain);
+      for (const artifact of manifest.captures[0]?.artifacts ?? []) assert.ok(retained.includes(artifact.fileName));
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test('removes C1 and bidirectional controls from retained page titles', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-title-test-'));
     const destination = path.join(parent, 'capture');
@@ -835,6 +865,93 @@ describe('optional local rendered capture package', () => {
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
       }), /total-run deadline/u);
       assert.ok(Date.now() - startedAt < 2_000);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('closes a browser acquired after the total deadline exactly once', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-browser-test-'));
+    const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    let resolveLaunch!: (browser: Browser) => void;
+    let signalLaunch!: () => void;
+    let signalClose!: () => void;
+    const launchStarted = new Promise<void>((resolve) => { signalLaunch = resolve; });
+    const browserClosed = new Promise<void>((resolve) => { signalClose = resolve; });
+    let closeCount = 0;
+    let contextCount = 0;
+    let launchTimeout = 0;
+    const lateBrowser = {
+      newContext: async () => { contextCount += 1; throw new Error('late browser must not create a context'); },
+      close: async () => { closeCount += 1; signalClose(); },
+    } as unknown as Browser;
+    try {
+      const capture = captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async (timeoutMs) => {
+          launchTimeout = timeoutMs;
+          signalLaunch();
+          return new Promise<Browser>((resolve) => { resolveLaunch = resolve; });
+        },
+        writeArtifact: async () => { throw new Error('late browser must not write artefacts'); },
+        deadlineScheduler: deadline.scheduler,
+      });
+      await launchStarted;
+      assert.ok(launchTimeout > 0 && launchTimeout <= 1_000);
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
+      resolveLaunch(lateBrowser);
+      await browserClosed;
+      assert.equal(closeCount, 1);
+      assert.equal(contextCount, 0);
+      await assert.rejects(() => stat(destination), /ENOENT/u);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('cleans an anchored writer acquired after the total deadline exactly once', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-writer-test-'));
+    const destination = path.join(parent, 'capture');
+    const deadline = controlledDeadlineScheduler();
+    type Writer = Awaited<ReturnType<typeof startAnchoredArtifactWriter>>;
+    let resolveWriter!: (writer: Writer) => void;
+    let signalStart!: () => void;
+    let signalFinish!: () => void;
+    const writerStarted = new Promise<void>((resolve) => { signalStart = resolve; });
+    const writerFinished = new Promise<void>((resolve) => { signalFinish = resolve; });
+    let finishCount = 0;
+    let terminateCount = 0;
+    const lateWriter: Writer = {
+      write: async () => { throw new Error('late writer must not write artefacts'); },
+      finish: async (cleanup) => {
+        assert.equal(cleanup, true);
+        finishCount += 1;
+        signalFinish();
+      },
+      terminate: () => { terminateCount += 1; },
+    };
+    try {
+      const capture = captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
+      }, {
+        launchBrowser: async () => { throw new Error('late writer must stop browser launch'); },
+        startArtifactWriter: async () => {
+          signalStart();
+          return new Promise<Writer>((resolve) => { resolveWriter = resolve; });
+        },
+        deadlineScheduler: deadline.scheduler,
+      });
+      await writerStarted;
+      deadline.expire();
+      await assert.rejects(capture, /total-run deadline/u);
+      resolveWriter(lateWriter);
+      await writerFinished;
+      assert.equal(finishCount, 1);
+      assert.equal(terminateCount, 0);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });

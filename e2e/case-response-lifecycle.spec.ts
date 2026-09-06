@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, openPacketWizardStep } from './case-response-fixtures';
+import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
 
 // Case response mutation, failure recovery and lifecycle coverage.
 
@@ -390,8 +391,9 @@ test('append-only response review, exact authorisation, independent verification
   test.slow();
   await openCasesView(page);
   await createCase(page, 'response.invalid');
-  await page.locator('.case-body').getByLabel('Disposition').selectOption('confirmed_abuse');
-  await page.locator('.case-body').getByLabel('Review reason').selectOption('confirmed_credential_abuse');
+  const caseMetadata = page.locator('.case-body > .field-grid');
+  await caseMetadata.getByLabel('Disposition').selectOption('confirmed_abuse');
+  await caseMetadata.getByLabel('Review reason').selectOption('confirmed_credential_abuse');
 
   const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
@@ -513,7 +515,7 @@ test('append-only response review, exact authorisation, independent verification
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 8,
+    schemaVersion: CASE_RESPONSE_PACKET_VERSION,
     profile: {
       id: 'registrar',
       audience: 'Domain registrar abuse or compliance team',

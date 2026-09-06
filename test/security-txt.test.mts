@@ -112,6 +112,44 @@ describe('parseSecurityTxt', () => {
     assert.deepEqual(mismatched.canonical, ['https://example.test/.well-known/security.txt']);
   });
 
+  test('normalizes Canonical authority case but preserves path and query case', () => {
+    const authorityCase = parseSecurityTxt(validBody.replace(
+      'Canonical: https://example.test/.well-known/security.txt',
+      'Canonical: https://EXAMPLE.TEST/.well-known/security.txt?revision=One',
+    ), {
+      finalUrl: 'https://example.test/.well-known/security.txt?revision=One',
+      now,
+    });
+    assert.equal(authorityCase.canonicalMatches, true);
+
+    for (const finalUrl of [
+      'https://example.test/.well-known/Security.txt?revision=One',
+      'https://example.test/.well-known/security.txt?revision=one',
+    ]) {
+      const mismatch = parseSecurityTxt(validBody.replace(
+        'Canonical: https://example.test/.well-known/security.txt',
+        'Canonical: https://example.test/.well-known/security.txt?revision=One',
+      ), { finalUrl, now });
+      assert.equal(mismatch.canonicalMatches, false);
+      assert.equal(mismatch.state, 'partial');
+    }
+  });
+
+  test('rejects empty and malformed mail and telephone contacts', () => {
+    for (const contact of [
+      'mailto:', 'mailto:/', 'mailto:missing-at', 'mailto:@example.test',
+      'mailto:security@', 'mailto:security@example', 'mailto:.security@example.test',
+      'mailto:security..team@example.test', 'tel:', 'tel:/', 'tel:+--',
+    ]) {
+      const result = parseSecurityTxt(`Contact: ${contact}\nExpires: 2027-01-01T00:00:00Z`, { now });
+      assert.equal(result.state, 'malformed', contact);
+      assert.deepEqual(result.contacts, [], contact);
+    }
+    const valid = parseSecurityTxt('Contact: tel:+61-3-5550-0100\nExpires: 2027-01-01T00:00:00Z', { now });
+    assert.equal(valid.state, 'present');
+    assert.deepEqual(valid.contacts, ['tel:+61-3-5550-0100']);
+  });
+
   test('rejects malformed UTF-8 replacement and control characters', () => {
     assert.equal(parseSecurityTxt(`${validBody}\ufffd`, { now }).state, 'malformed');
     assert.equal(parseSecurityTxt(`${validBody}\u0000`, { now }).state, 'malformed');

@@ -59,6 +59,8 @@ describe('retained relationship observation model', () => {
     assert.equal(first.classification, 'derived');
     assert.equal(first.source, 'bulk_relationship_analysis');
     assert.equal(first.sourceVersion, 2);
+    assert.equal(first.observedAt, EARLY);
+    assert.equal(first.retainedAt, LATE);
     assert.equal(first.complete, true);
     assert.equal(first.truncated, false);
   });
@@ -92,6 +94,7 @@ describe('retained relationship observation model', () => {
       normalizedValue: '999.0.0.1',
       value: '999.0.0.1',
     })), /supported bounded value/i);
+    assert.throws(() => createRelationshipObservation(input(), { observedAt: null, retainedAt: LATE }), /observation time/i);
   });
 
   test('refreshes an existing identity, deletes explicitly, and keeps the store bounded', () => {

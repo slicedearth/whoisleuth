@@ -53,7 +53,7 @@
 
   function newCondition(){return{field:'availability',operator:'equals',value:'registered'};}
   async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);onchange?.(rules);}
-  function definition(field:string){return ruleFieldDefinition(field) as null|{value:string;label:string;kind:string;values?:string[]};}
+  function definition(field:string){return ruleFieldDefinition(field) as null|{value:string;label:string;kind:string;values?:string[];min?:number;max?:number};}
   function operatorLabel(value:string){return({equals:'equals',at_least:'at least',at_most:'at most',contains:'contains',present:'is present'} as Record<string,string>)[value]??value;}
   function updateField(index:number,value:string){const operator=operatorsForRuleField(value)[0]??'equals';const item={field:value,operator,value:operator==='present'?'true':definition(value)?.kind==='boolean'?'true':definition(value)?.values?.[0]??''};conditions=conditions.map((condition,i)=>i===index?item:condition);}
   function updateOperator(index:number,value:string){conditions=conditions.map((condition,i)=>i===index?{...condition,operator:value,value:value==='present'?'true':condition.value}:condition);}
@@ -111,7 +111,7 @@
             <label><span>Value</span>
               {#if field?.kind==='boolean'}<select bind:value={condition.value}><option value="true">Yes</option><option value="false">No</option></select>
               {:else if field?.kind==='enum'}<select bind:value={condition.value}>{#each field.values??[] as value}<option {value}>{value.replaceAll('_',' ')}</option>{/each}</select>
-              {:else}<input bind:value={condition.value} type={field?.kind==='number'?'number':'text'} maxlength="200" required>{/if}
+              {:else}<input bind:value={condition.value} type={field?.kind==='number'?'number':'text'} min={field?.min} max={field?.max} step={field?.kind==='number'?'1':undefined} maxlength="200" required>{/if}
             </label>
           {/if}
           <button type="button" class="btn danger remove-condition" onclick={()=>removeCondition(index)} disabled={conditions.length===1}>Remove</button>

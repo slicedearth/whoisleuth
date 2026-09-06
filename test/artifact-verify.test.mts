@@ -555,7 +555,7 @@ describe('offline artifact verifier', () => {
     assert.equal(report.checks.contentIntegrity, 'verified');
 
     const changed = structuredClone(pack);
-    changed.cases[0]!.status = 'closed';
+    Reflect.set(changed.cases[0]!, 'status', 'closed');
     await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /would be repaired|failed its SHA-256/iu);
   });
 
@@ -1229,7 +1229,7 @@ describe('offline artifact verifier', () => {
     }
   });
 
-  test('rejects retired response packets and verifies current v8 with the exact review binding', async () => {
+  test('rejects retired response packets and verifies the current packet with the exact review binding', async () => {
     const { retired } = await unsupportedCaseContracts();
     await assert.rejects(
       verifyOfflineArtifact(JSON.stringify(retired.responsePacket)),
@@ -1256,7 +1256,7 @@ describe('offline artifact verifier', () => {
     }, '2026-07-15T01:00:00.000Z')).json;
     const verified = await verifyOfflineArtifact(JSON.stringify(packet));
     assert.equal(verified.state, 'verified');
-    assert.equal(verified.artifact.version, 8);
+    assert.equal(verified.artifact.version, CASE_RESPONSE_PACKET_VERSION);
 
     const forged = structuredClone(packet) as unknown as Record<string, unknown>;
     const authorisation = forged.authorisation as Record<string, unknown>;
@@ -1269,7 +1269,7 @@ describe('offline artifact verifier', () => {
     );
   });
 
-  test('reconstructs the v8 provider lifecycle projection instead of trusting a re-signed summary', async () => {
+  test('reconstructs the current provider lifecycle projection instead of trusting a re-signed summary', async () => {
     const base = createCase({
       domain: 'provider-lifecycle.example',
       status: 'escalated',

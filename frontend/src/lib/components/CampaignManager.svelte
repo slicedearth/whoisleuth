@@ -91,7 +91,9 @@
     catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
   }
   async function save(campaign:CampaignRecord){
-    try{await refresh(await editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));showCampaign(campaign.id);const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
+    const submittedName=nameDraft;
+    const submittedDescription=descriptionDraft;
+    try{await refresh(await editCampaign(campaign.id,{name:submittedName,description:submittedDescription}));const current=campaigns.find((item)=>item.id===campaign.id);if(current&&expandedId===campaign.id&&nameDraft===submittedName&&descriptionDraft===submittedDescription){showCampaign(campaign.id);nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
   }
   async function add(campaign:CampaignRecord){

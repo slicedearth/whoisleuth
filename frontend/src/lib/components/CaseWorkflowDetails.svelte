@@ -3,6 +3,7 @@
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
+    buildCaseTypeEvidenceReadiness,
     caseIncidentTargetAssertion,
     caseIncidentTargets,
     caseNumber,
@@ -16,7 +17,7 @@
     resolvePlatformReportingRoutes,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
-  } from '$lib/analysis/platform-reporting-routes.ts';
+  } from '../../../../packages/cases/platform-reporting-routes.mts';
 
   let {
     record,
@@ -53,6 +54,7 @@
     if (labels.length <= 2) return labels.join(' and ');
     return `${labels.slice(0, 2).join(', ')} and ${labels.length - 2} more`;
   });
+  const typeReadiness = $derived(buildCaseTypeEvidenceReadiness(record));
   const routeGroups = $derived.by<RouteGroup[]>(() => {
     const groups = new Map<string, RouteGroup>();
     for (const target of incidentTargets) {
@@ -185,10 +187,11 @@
     }
     await persist({
       action: {
-        type: 'security_contact_report',
+        type: 'platform_report',
         recipient: route.contact,
         contactSource: `Official ${route.platformLabel} ${route.label}, reviewed ${route.reviewedAt}`,
-        routeObservedAt: new Date().toISOString(),
+        routeObservedAt: `${route.reviewedAt}T00:00:00.000Z`,
+        routeReviewAfter: `${route.reviewAfter}T00:00:00.000Z`,
         contactLimitations: [
           `Official guidance: ${route.guidanceUrl}`,
           route.privacyNote,
@@ -235,6 +238,21 @@
       <button class="btn" type="submit" disabled={busy || !typesDirty}>Save Case types</button>
     </form>
   </details>
+
+  {#if typeReadiness.rows.length}
+    <section class="type-readiness" aria-labelledby={`type-readiness-title-${record.id}`}>
+      <div class="section-heading"><div><h5 id={`type-readiness-title-${record.id}`}>Evidence readiness by Case type</h5><p>Checks the retained Case record against the selected investigation types.</p></div><span>{typeReadiness.counts.missingRequired} required missing · {typeReadiness.counts.missingRecommended} recommended missing</span></div>
+      <ul>
+        {#each typeReadiness.rows as row}
+          <li data-state={row.state}>
+            <span aria-hidden="true">{row.state === 'present' ? '✓' : row.importance === 'required' ? '!' : '·'}</span>
+            <div><strong>{row.label}</strong><small>{row.importance} for {row.appliesTo.join(', ')}</small><p>{row.evidence}. {row.why}</p></div>
+          </li>
+        {/each}
+      </ul>
+      <p class="limitation">{typeReadiness.limitation}</p>
+    </section>
+  {/if}
 
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
     <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
@@ -283,10 +301,10 @@
   .case-number{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px;max-width:100%}.case-number>span{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-number code{max-width:min(100%,430px);padding:5px 7px;background:var(--panel-raised);font-size:var(--text-2xs);overflow-wrap:anywhere;white-space:normal}.case-number button{grid-column:2;grid-row:2}
   .case-types{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.case-types>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}.case-types>summary small{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-align:right}.case-types>form{display:grid;gap:8px;padding:0 10px 10px}.case-types fieldset{display:grid;gap:10px;min-width:0;margin:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.case-types fieldset>p,.section-heading p,.route p,.empty{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.case-types>form>button{justify-self:start}
   .type-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.type-grid label{display:flex;min-width:0;align-items:flex-start;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer}.type-grid label:has(input:checked){border-color:rgb(var(--accent-rgb) / .55);background:rgb(var(--accent-rgb) / .06)}.type-grid input{flex:none;width:16px;height:16px;margin-top:1px}.type-grid span,.type-grid strong,.type-grid small{display:block;min-width:0}.type-grid strong{font:700 var(--text-xs) var(--mono)}.type-grid small{margin-top:3px;color:var(--muted);font-size:.62rem;line-height:1.35}
-  .incident-targets,.reporting-routes{display:grid;gap:9px;padding-top:12px;border-top:1px solid var(--border)}.section-heading>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.target-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.target-form input{width:100%;margin-top:5px}.field small{color:var(--muted)}
+  .type-readiness,.incident-targets,.reporting-routes{display:grid;gap:9px;padding-top:12px;border-top:1px solid var(--border)}.section-heading>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.type-readiness ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;padding:0;list-style:none}.type-readiness li{display:flex;min-width:0;gap:8px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.type-readiness li>span{display:grid;flex:none;width:20px;height:20px;place-items:center;border:1px solid var(--border);border-radius:50%;font:750 var(--text-2xs) var(--mono)}.type-readiness li[data-state="present"]>span{color:var(--success);border-color:color-mix(in srgb,var(--success) 45%,var(--border))}.type-readiness li[data-state="missing"]>span{color:var(--amber);border-color:rgb(var(--amber-rgb)/.45)}.type-readiness strong,.type-readiness small{display:block}.type-readiness strong{font:700 var(--text-xs) var(--mono)}.type-readiness small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}.type-readiness p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.type-readiness .limitation{margin:0}.target-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.target-form input{width:100%;margin-top:5px}.field small{color:var(--muted)}
   .target-list{display:grid;gap:5px;margin:0;padding:0;list-style:none}.target-list li{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.target-list a{min-width:0;color:var(--accent);font:600 var(--text-2xs) var(--mono);overflow-wrap:anywhere}.target-list button{flex:none}
   .route-groups{display:grid;gap:8px}.route-groups>article{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.route-groups article>header strong{font:700 var(--text-xs) var(--mono)}.route-groups article>header span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--success);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.route-groups article>header span.stale{color:var(--amber)}.matched-targets{display:grid;gap:3px;margin:0;padding-left:18px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}.route{display:grid;gap:7px;padding:9px;border-left:3px solid var(--accent);background:var(--panel)}.route>div:first-child strong{font:700 var(--text-xs) var(--mono)}.route>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}.route-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}.route-actions>a:not(.btn){color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   @media(max-width:900px){.type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:620px){.workflow-details>header{display:grid}.case-number{width:100%;grid-template-columns:minmax(0,1fr) auto}.case-types>summary{align-items:flex-start;flex-direction:column}.case-types>summary small{text-align:left}.type-grid{grid-template-columns:1fr}.target-form{grid-template-columns:1fr}.target-form button,.case-types>form>button{width:100%}.target-list li{align-items:stretch;flex-direction:column}.target-list button{align-self:flex-start}.route-actions>*{flex:1 1 150px;text-align:center}}
+  @media(max-width:620px){.workflow-details>header{display:grid}.case-number{width:100%;grid-template-columns:minmax(0,1fr) auto}.case-types>summary{align-items:flex-start;flex-direction:column}.case-types>summary small{text-align:left}.type-grid,.type-readiness ul{grid-template-columns:1fr}.target-form{grid-template-columns:1fr}.target-form button,.case-types>form>button{width:100%}.target-list li{align-items:stretch;flex-direction:column}.target-list button{align-self:flex-start}.route-actions>*{flex:1 1 150px;text-align:center}}
   @media(max-width:480px){.workflow-details{padding:0;border:0;background:transparent}.case-types>form{padding:0 8px 8px}.case-types fieldset{padding:0;border:0;background:transparent}.type-grid label{padding:10px}}
 </style>
