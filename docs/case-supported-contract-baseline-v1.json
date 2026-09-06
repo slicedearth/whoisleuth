@@ -537,7 +537,8 @@
           "cli-case-pack-v2-case-v12-public",
           "cli-case-pack-v2-case-v13",
           "cli-case-pack-v2-case-v14",
-          "cli-case-pack-v2-case-v15"
+          "cli-case-pack-v2-case-v15",
+          "cli-case-pack-v2-case-v15-current"
         ]
       },
       {
@@ -934,6 +935,16 @@
         "bytes": 9439,
         "sha256": "9c07b7828f5e348a6e9ca05e1bd487998851491d85d0b30b38adba196f84faee",
         "contentDigestSha256": "sha256:475a91fe7c3afddd3f73ba5b9a698c08bc7b37f3fb67bcf86441ee908beb0dc8",
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.cli-pack.current"
+      },
+      {
+        "id": "cli-case-pack-v2-case-v15-current",
+        "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v15-current.json",
+        "bytes": 9439,
+        "sha256": "9ce7303956589ebfb832157823c74e3ec4d3852507e991d0e1b0c542a06dc377",
+        "contentDigestSha256": "sha256:5a88d202efd12c522a6001fa579d2fff8196a0d2ab68571c27894040edbdc3d0",
         "version": 2,
         "expectation": "accepted_exact",
         "shapeId": "case.cli-pack.current"
@@ -2195,6 +2206,11 @@
         "LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION",
         "LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION",
         "LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION",
+        "PUBLISHED_V2_2_CASE_SCHEMA_VERSION",
+        "PUBLISHED_V2_2_CASE_REPORT_SCHEMA_VERSION",
+        "PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION",
+        "PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION",
+        "PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION",
         "CASE_BROWSER_STORE_LIFECYCLE_SCHEMA",
         "CASE_EXPORT_LIFECYCLE_SCHEMA",
         "CASE_SCHEMA_VERSION",
@@ -2212,6 +2228,7 @@
         "SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS",
         "CLI_CASE_PACK_SCHEMA",
         "CLI_CASE_PACK_VERSION",
+        "CLI_CASE_PACK_WRITER_FIXTURE_ID",
         "SUPPORTED_CLI_CASE_PACK_VERSIONS",
         "CLI_CASE_PACK_CASE_REPORT_EPOCHS",
         "WORKSPACE_ARCHIVE_SCHEMA",

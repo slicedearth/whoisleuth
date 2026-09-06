@@ -2,7 +2,7 @@ import type { Page, Request } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   CASE_SCHEMA_VERSION,
-  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
   PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -334,7 +334,7 @@ test('keeps privacy detail on the policy page and links to it from resources', a
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
   await expect(page.getByText(new RegExp(
-    `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+    `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${PUBLISHED_V2_2_CASE_SCHEMA_VERSION} remain readable`,
     'iu',
   ))).toBeVisible();
   await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);

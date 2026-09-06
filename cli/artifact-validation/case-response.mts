@@ -3,12 +3,12 @@ import { createHash } from 'node:crypto';
 import { canonicalArtifactJsonV2 } from '../../packages/evidence/artifact-integrity.mts';
 import {
   CASE_RESPONSE_PACKET_VERSION,
-  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSIVE_URLS,
   MAX_RESPONSE_ARTEFACT_REFERENCES,
@@ -264,11 +264,11 @@ function validateCurrentActionSummary(value: unknown, label: string): number {
 function validateCaseResponsePacketV7ToV9(
   value: UnknownRecord,
   version: typeof PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION
-    | typeof LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION
+    | typeof PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION
     | typeof CASE_RESPONSE_PACKET_VERSION,
 ): void {
   const current = version === CASE_RESPONSE_PACKET_VERSION;
-  const modern = version === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION || current;
+  const modern = version === PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION || current;
   const root = exact(value, [
     'schema', 'schemaVersion', 'generatedAt', 'reviewRequired', 'submissionPerformed', 'profile', 'case',
     'incident', 'contacts', 'selectedEvidence', 'contradictions', 'readiness', 'artefactReferences',
@@ -734,7 +734,7 @@ function validateCaseResponsePacketV7ToV9(
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
     version: current
       ? CASE_RESPONSE_REVIEW_INPUTS_VERSION
-      : modern ? LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+      : modern ? PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
     profile: {
       id: profile.id,
       label: profile.label,
@@ -785,8 +785,8 @@ export function validateCaseResponsePacket(value: UnknownRecord): void {
   if (value.schemaVersion === PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION) {
     return validateCaseResponsePacketV7ToV9(value, PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION);
   }
-  if (value.schemaVersion === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION) {
-    return validateCaseResponsePacketV7ToV9(value, LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION);
+  if (value.schemaVersion === PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION) {
+    return validateCaseResponsePacketV7ToV9(value, PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION);
   }
   if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) < CASE_RESPONSE_PACKET_VERSION) {
     throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is not part of the public compatibility boundary; no data was changed.`);

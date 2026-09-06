@@ -6,9 +6,9 @@ import {
   CASE_REPORT_SCHEMA_VERSION,
   CASE_RESPONSE_PACKET_VERSION,
   CASE_SCHEMA_VERSION,
-  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
-  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
-  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
@@ -45,11 +45,11 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'single-bulk-network', pattern: /Single and Bulk lookups send the selected target/iu },
   { id: 'browser-plaintext', pattern: /IndexedDB as plaintext JSON/iu },
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
-  { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${PUBLISHED_V2_2_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },
   { id: 'case-incident-links', pattern: /Case can (?:also )?retain controlled classifications and exact HTTP\(S\) incident links.*browser-local Case metadata/iu },
   { id: 'public-case-pack', pattern: /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu },
-  { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION},? ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION},? and ${LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION} remain readable`, 'iu') },
+  { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION},? ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION},? and ${PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION} remain readable`, 'iu') },
   { id: 'unsupported-workspace', pattern: /Versions 1 through 4.*future versions fail without.*reset, deletion,? or rewrite/iu },
   { id: 'monitoring-custody', pattern: /scheduled monitoring.*application-encrypted.*Disabling collection (?:does not delete|also leaves)/iu },
   { id: 'monitoring-key-custody', pattern: /worker runtime receives the encryption key through its deployment environment/iu },
@@ -95,11 +95,11 @@ test('public privacy notices share the current material data-handling contract',
   assert.deepEqual([...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [
     PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
-    LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+    PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
     WORKSPACE_ARCHIVE_VERSION,
   ]);
   assert.equal(PUBLIC_CASE_RESPONSE_PACKET_VERSION, 6);
   assert.equal(PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION, 7);
-  assert.equal(LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION, 8);
+  assert.equal(PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION, 8);
   assert.equal(CASE_RESPONSE_PACKET_VERSION, 9);
 });

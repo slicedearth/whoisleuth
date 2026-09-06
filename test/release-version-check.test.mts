@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -15,12 +15,14 @@ import {
   buildReleaseVersionReport,
   formatReleaseVersionReport,
   inspectReleaseVersionIdentity,
+  inspectReleaseVersionDerivedOutputs,
   selectPrecedingPublicReleaseVersion,
   main,
   normalizeSemanticVersion,
   parseArguments,
 } from '../tools/release-version-check.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 function capture() {
   let value = '';
@@ -145,6 +147,18 @@ describe('release manifest lockstep', () => {
     assert.throws(
       () => selectPrecedingPublicReleaseVersion('2.2.0', []),
       /tag inventory/u,
+    );
+  });
+
+  test('checks generated writer metadata without rewriting a published same-schema fixture', async () => {
+    const published = JSON.parse(await readFile(new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v15.json', import.meta.url), 'utf8'));
+    assert.equal(published.packet.reports[0].application.version, '2.3.0');
+    assert.deepEqual(await inspectReleaseVersionDerivedOutputs(process.cwd(), WHOISLEUTH_APPLICATION_VERSION), {
+      checkedFixtures: 1, checkedReports: 1,
+    });
+    await assert.rejects(
+      inspectReleaseVersionDerivedOutputs(process.cwd(), '0.0.0'),
+      /application metadata must match release version/u,
     );
   });
 

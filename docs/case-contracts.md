@@ -53,10 +53,10 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release 2.2.0 is the immediately preceding public writer. It emitted
-Case schema 14, Case report schema 10, response-packet schema
-8, review-input digest material version 2, and workspace
-archive schema 7. Version 2.3.0 is the current writer in this
+Release 2.3.0 is the immediately preceding public writer. It emitted
+Case schema 15, Case report schema 11, response-packet schema
+9, review-input digest material version 3, and workspace
+archive schema 8. Version 2.3.1 is the current writer in this
 checkout. It emits Case schema 15, report schema 11,
 response-packet schema 9, review-input version 3, and workspace
 archive schema 8.
@@ -81,7 +81,7 @@ and no import path automatically deletes stored data.
 
 ## Durable compatibility evidence
 
-The lifecycle family binds 28 immutable current-format
+The lifecycle family binds 29 immutable current-format
 fixtures to exact byte counts and SHA-256 identities. The canonical JSON
 commitment is
 `docs/case-supported-contract-baseline-v1.json`; it is derived from
