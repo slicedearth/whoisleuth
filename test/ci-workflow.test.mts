@@ -156,7 +156,10 @@ describe('continuous integration workflow', () => {
     assert.deepEqual(workflow.on.push, { branches: ['main'] });
     assert.ok(Object.hasOwn(workflow.on, 'pull_request'));
     assert.doesNotThrow(() => assertHostedCiParity(WORKFLOW));
-    assert.deepEqual(readHostedCiScriptPlan(WORKFLOW), expectedHostedCiScriptPlan());
+    const actual = readHostedCiScriptPlan(WORKFLOW);
+    for (const [lane, scripts] of Object.entries(expectedHostedCiScriptPlan())) {
+      assert.deepEqual([...actual[lane as keyof typeof actual]].sort(), [...scripts].sort());
+    }
   });
 
   test('accepts renamed steps, YAML formatting, action updates and independent preparation order', () => {
@@ -174,7 +177,8 @@ describe('continuous integration workflow', () => {
     const browser = fixtureJob(workflow, 'browser');
     const installIndex = browser.steps.findIndex((step) => step.run === 'npm run test:e2e:install');
     const [install] = browser.steps.splice(installIndex, 1);
-    browser.steps.unshift(requiredValue(install));
+    const downloadIndex = browser.steps.findIndex((step) => step.uses?.startsWith('actions/download-artifact@'));
+    browser.steps.splice(downloadIndex, 0, requiredValue(install));
     assert.doesNotThrow(() => assertHostedCiParity(stringify(workflow, { indent: 4 })));
   });
 

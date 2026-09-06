@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, openPacketWizardStep } from './case-response-fixtures';
 import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
@@ -113,7 +113,7 @@ test('observation drafts survive presentation changes and another stage save', a
   await expect(sighting.getByLabel(/Limitations/)).toHaveValue('Retained sighting limit');
 });
 
-test('observation validation and pre-write failure preserve a draft for deliberate retry', async ({ page }) => {
+test('observation validation and a failed write preserve a draft for deliberate retry', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'observation-retry.invalid');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
@@ -127,9 +127,9 @@ test('observation validation and pre-write failure preserve a draft for delibera
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
   await pin.getByLabel('Fact', { exact: true }).fill('Evidence retained for retry.');
   await pin.getByLabel(/Limitations/).fill('One selected fact only.');
-  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await failNextBrowserLocalManifestWrite(page, 'cases');
   await submit.click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Cases could not be read');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('out of storage space');
   await expect(pin.getByLabel('Label')).toHaveValue('Retry evidence');
   await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('Evidence retained for retry.');
   await expect(pin.getByLabel(/Limitations/)).toHaveValue('One selected fact only.');
