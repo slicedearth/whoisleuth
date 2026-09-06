@@ -124,6 +124,14 @@ describe('test duration report', () => {
     assert.match(formatTestDurationHealth(health), /Median of 3 complete runs/u);
     assert.match(formatTestDurationHealth(health), /test\/a\.test\.mts: 20 ms \(\+10 ms, \+100%\)/u);
     assert.match(formatTestDurationHealth(health), /not rewritten automatically/u);
+    const withoutB = { ...profile, files: profile.files.slice(0, 1) };
+    const expanded = buildTestDurationHealth([run(10, 30, 90), run(30, 20, 110), run(20, 10, 100)],
+      withoutB, ['test/a.test.mts', 'test/b.test.mts']);
+    assert.deepEqual(expanded.unmeasured, [{ file: 'test/b.test.mts', observedMedianMs: 20 }]);
+    assert.equal(expanded.observedAggregateMs, 20);
+    assert.equal(expanded.retainedAggregateMs, 10);
+    assert.equal(expanded.aggregateDeltaMs, 10, 'compare only files with retained observations');
+    assert.match(formatTestDurationHealth(expanded), /test\/b\.test\.mts: 20 ms observed; no retained measurement/u);
   });
 
   it('rejects partial, repeated, malformed, and inventory-inconsistent timing data', () => {

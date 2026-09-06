@@ -10,6 +10,7 @@ import {
   buildBalancedBrowserShardPlan,
   parsePlaywrightTimingData,
   readVerificationTimingProfile,
+  readVerificationTestInventory,
   type VerificationTimingProfile,
 } from './verification-timing-profile.mts';
 
@@ -57,8 +58,9 @@ function identity(files: readonly string[]): string {
 export function aggregatePlaywrightShardTimings(
   reports: readonly unknown[],
   profile: VerificationTimingProfile = readVerificationTimingProfile(),
+  inventory: readonly string[] = readVerificationTestInventory(),
 ): Readonly<{ aggregate: BrowserShardTimingAggregate; summary: BrowserShardTimingSummary }> {
-  const plan = buildBalancedBrowserShardPlan(profile);
+  const plan = buildBalancedBrowserShardPlan(profile, undefined, inventory);
   if (reports.length !== plan.shardCount) {
     throw new TypeError(`Browser timing aggregation requires exactly ${plan.shardCount} functional shard reports.`);
   }
@@ -128,7 +130,7 @@ export function aggregatePlaywrightShardTimings(
   return Object.freeze({
     aggregate: Object.freeze({
       reportVersion: 1,
-      inventoryFingerprint: profile.inventoryFingerprint,
+      inventoryFingerprint: plan.inventoryFingerprint,
       files: Object.freeze(files),
     }),
     summary: Object.freeze({

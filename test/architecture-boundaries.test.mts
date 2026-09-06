@@ -37,22 +37,24 @@ describe('architecture boundaries', () => {
       env: { ...process.env, FORCE_COLOR: '0' },
     });
 
-    const output = `${result.stdout}\n${result.stderr}`;
     // The JSON reporter returns data successfully even when that data contains
     // violations. Inspect its findings, not the reporter's process status.
     assert.equal(result.status, 0, result.stderr);
-    assert.match(output, /shared-contracts-stay-independent-of-domain-and-adapters/u);
-    assert.match(output, /domain-packages-stay-independent-of-runtime-adapters/u);
-    assert.match(output, /case-domain-stays-independent-of-runtime-adapters/u);
-    assert.match(output, /case-domain-no-node-core/u);
-    assert.match(output, /workspace-domain-stays-independent-of-runtime-adapters/u);
-    assert.match(output, /workspace-domain-no-node-core/u);
-    assert.match(output, /portable-domain-packages-stay-independent-of-runtime-adapters/u);
-    assert.match(output, /portable-domain-packages-no-node-core/u);
-    assert.match(output, /non-frontend-production-stays-out-of-frontend/u);
-    assert.match(output, /observation-consumers-use-domain-owner/u);
     const report = JSON.parse(result.stdout) as { summary: { error: number; violations: Array<{ from: string; to: string; rule: { name: string } }> } };
     assert.ok(report.summary.error > 0);
+    const violatedRules = new Set(report.summary.violations.map((violation) => violation.rule.name));
+    for (const name of [
+      'shared-contracts-stay-independent-of-domain-and-adapters',
+      'domain-packages-stay-independent-of-runtime-adapters',
+      'case-domain-stays-independent-of-runtime-adapters',
+      'case-domain-no-node-core',
+      'workspace-domain-stays-independent-of-runtime-adapters',
+      'workspace-domain-no-node-core',
+      'portable-domain-packages-stay-independent-of-runtime-adapters',
+      'portable-domain-packages-no-node-core',
+      'non-frontend-production-stays-out-of-frontend',
+      'observation-consumers-use-domain-owner',
+    ]) assert.ok(violatedRules.has(name), `${name} must report an actual forbidden dependency`);
     const blockedTargets = new Set(report.summary.violations
       .filter((violation) => violation.rule.name === 'non-frontend-production-stays-out-of-frontend')
       .map((violation) => violation.to.replace('test/fixtures/architecture/frontend/src/lib/', '')));

@@ -71,6 +71,7 @@ export type VerificationBrowserShardPlan = Readonly<{
   totalPlannedWeightMs: number;
   unavoidableImbalanceMs: number;
   imbalanceRatio: number;
+  unmeasuredFiles: readonly string[];
 }>;
 
 type UnknownRecord = Record<string, unknown>;
@@ -154,8 +155,8 @@ export function readVerificationTestInventory(): readonly string[] {
 }
 
 export function verificationTestInventoryFingerprint(inventory: readonly string[] = readVerificationTestInventory()): string {
-  const normalized = [...inventory].sort();
-  if (normalized.length < 1 || new Set(normalized).size !== normalized.length) {
+  const normalized = inventory.map((file) => normaliseTestPath(file)).sort();
+  if (normalized.length < 1 || normalized.length > MAX_TIMING_FILES || new Set(normalized).size !== normalized.length) {
     throw new TypeError('Verification test inventory must be non-empty and unique before fingerprinting.');
   }
   return createHash('sha256').update(`${normalized.join('\n')}\n`, 'utf8').digest('hex');
@@ -233,7 +234,7 @@ function parseProfileValue(value: unknown, inventory: readonly string[]): Verifi
 
 export function parseVerificationTimingProfile(
   input: string | Buffer,
-  inventory: readonly string[] = readVerificationTestInventory(),
+  inventory?: readonly string[],
 ): VerificationTimingProfile {
   const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input, 'utf8');
   if (bytes.length < 1 || bytes.length > MAX_TIMING_PROFILE_BYTES) {
@@ -241,7 +242,14 @@ export function parseVerificationTimingProfile(
   }
   let parsed: unknown;
   try { parsed = JSON.parse(bytes.toString('utf8')) as unknown; } catch { throw new TypeError('Timing profile must be valid JSON.'); }
-  return parseProfileValue(parsed, inventory);
+  if (!isRecord(parsed) || !Array.isArray(parsed.files)) throw new TypeError('Timing profile is malformed.');
+  // A retained profile describes measured history, not which tests may run.
+  // Validate its own identities and digest; discovery owns today's inventory.
+  const measuredInventory = parsed.files.map((item) => {
+    if (!isRecord(item)) throw new TypeError('Timing file is malformed.');
+    return normaliseTestPath(item.file);
+  });
+  return parseProfileValue(parsed, inventory ?? measuredInventory);
 }
 
 export function readVerificationTimingProfile(): VerificationTimingProfile {
@@ -254,11 +262,22 @@ export function readVerificationTimingProfile(): VerificationTimingProfile {
 export function buildBalancedBrowserShardPlan(
   profile: VerificationTimingProfile,
   shardCount = VERIFICATION_BROWSER_SHARD_COUNT,
+  inventory: readonly string[] = readVerificationTestInventory(),
 ): VerificationBrowserShardPlan {
   if (!Number.isSafeInteger(shardCount) || shardCount < 1 || shardCount > 16) {
     throw new TypeError('Browser shard count must be between 1 and 16.');
   }
-  const browser = profile.files.filter((item) => item.lane === 'browser' && isPlaywrightFunctionalSpec(item.file));
+  const inventoryFingerprint = verificationTestInventoryFingerprint(inventory);
+  const measured = new Map(profile.files.map((item) => [item.file, item]));
+  const estimate = (lane: VerificationTimingLane): number => {
+    const weights = profile.files.filter((item) => item.lane === lane
+      && (lane !== 'browser' || isPlaywrightFunctionalSpec(item.file))).map((item) => item.weightMs);
+    return weights.length ? median(weights) : 1;
+  };
+  const browserEstimate = estimate('browser');
+  const browser = inventory.filter(isPlaywrightFunctionalSpec).map((file) => ({
+    file, weightMs: measured.get(file)?.weightMs ?? browserEstimate,
+  }));
   if (browser.length < shardCount) throw new TypeError('Browser inventory is smaller than the requested shard count.');
   const working = Array.from({ length: shardCount }, (_, index) => ({ shard: index + 1, files: [] as string[], weight: 0 }));
   for (const item of [...browser].sort((left, right) => right.weightMs - left.weightMs || left.file.localeCompare(right.file))) {
@@ -280,17 +299,18 @@ export function buildBalancedBrowserShardPlan(
   const maximum = Math.max(...weights);
   const minimum = Math.min(...weights);
   const total = weights.reduce((sum, value) => sum + value, 0);
-  const setup = profile.files.filter((item) => item.lane === 'browser_setup');
+  const setup = inventory.filter((file) => testLane(file) === 'browser_setup');
   return Object.freeze({
     profileVersion: VERIFICATION_TIMING_PROFILE_VERSION,
-    inventoryFingerprint: profile.inventoryFingerprint,
+    inventoryFingerprint,
     shardCount,
-    setupFiles: Object.freeze(setup.map((item) => item.file).sort()),
-    setupWeightMs: setup.reduce((sum, item) => sum + item.weightMs, 0),
+    setupFiles: Object.freeze([...setup].sort()),
+    setupWeightMs: setup.reduce((sum, file) => sum + (measured.get(file)?.weightMs ?? estimate('browser_setup')), 0),
     shards: Object.freeze(shards),
     totalPlannedWeightMs: total,
     unavoidableImbalanceMs: maximum - minimum,
     imbalanceRatio: total === 0 ? 0 : Number(((maximum - minimum) / (total / shardCount)).toFixed(6)),
+    unmeasuredFiles: Object.freeze(inventory.filter((file) => !measured.has(file)).sort()),
   });
 }
 
@@ -299,19 +319,6 @@ function readBoundedReport(filename: string): string {
   const size = statSync(filename).size;
   if (size < 1 || size > MAX_TIMING_REPORT_BYTES) throw new TypeError(`Timing report must be between 1 and ${MAX_TIMING_REPORT_BYTES} bytes.`);
   return readFileSync(filename, 'utf8');
-}
-
-function readRetainedProfileForUpdate(): VerificationTimingProfile {
-  const profilePath = path.join(REPOSITORY_ROOT, VERIFICATION_TIMING_PROFILE_PATH);
-  const input = readBoundedReport(profilePath);
-  let parsed: unknown;
-  try { parsed = JSON.parse(input) as unknown; } catch { throw new TypeError('Retained timing profile must be valid JSON.'); }
-  if (!isRecord(parsed) || !Array.isArray(parsed.files)) throw new TypeError('Retained timing profile is malformed.');
-  const retainedInventory = parsed.files.map((item, index) => {
-    if (!isRecord(item)) throw new TypeError(`Retained timing file ${index + 1} is malformed.`);
-    return normaliseTestPath(item.file, `Retained timing file ${index + 1}`);
-  });
-  return parseProfileValue(parsed, retainedInventory);
 }
 
 function decodeXml(value: string): string {
@@ -519,19 +526,19 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
   if (!SAFE_ID.test(id)) throw new TypeError('Timing update provenance ID is invalid.');
   const environmentClass = candidateOption(args, 'environment');
   const sampleBasis = candidateOption(args, 'sample-basis');
-  const retained = readRetainedProfileForUpdate();
+  const retained = readVerificationTimingProfile();
   if (retained.provenance.some((item) => item.id === id)) throw new TypeError('Timing update provenance ID already exists.');
   const parsedBrowser = lane === 'browser' ? parseBrowserAggregateReport(reports[0]!) : null;
   const measurements = lane === 'unit'
     ? parseUnitDurationReports(reports)
     : parsedBrowser!.measurements;
-  if (parsedBrowser && parsedBrowser.inventoryFingerprint !== retained.inventoryFingerprint) {
-    throw new TypeError('Browser shard aggregate inventory fingerprint does not match the retained timing profile.');
+  const inventory = readVerificationTestInventory();
+  if (parsedBrowser && parsedBrowser.inventoryFingerprint !== verificationTestInventoryFingerprint(inventory)) {
+    throw new TypeError('Browser shard aggregate inventory fingerprint does not match the current test inventory.');
   }
   if ([...measurements].some(([file]) => (lane === 'unit') !== (testLane(file) === 'unit'))) {
     throw new TypeError('Timing update report contains an identity from another lane.');
   }
-  const inventory = readVerificationTestInventory();
   const expectedMeasurements = inventory.filter((file) => lane === 'unit'
     ? testLane(file) === 'unit'
     : testLane(file) === 'browser_setup' || isPlaywrightFunctionalSpec(file));
@@ -540,14 +547,15 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
     throw new TypeError(`Timing update does not cover the complete maintained ${lane} inventory.`);
   }
   const currentByFile = new Map(retained.files.map((item) => [item.file, item]));
-  const files = inventory.map((file): VerificationTimingFile => {
+  const files = inventory.flatMap((file): VerificationTimingFile[] => {
     const measured = measurements.get(file);
     const current = currentByFile.get(file);
     if (measured === undefined) {
-      if (!current) throw new TypeError(`Timing update did not measure new required test identity ${file}.`);
-      return current;
+      // Another lane's new test remains unmeasured until that lane supplies
+      // accepted evidence. Never invent a measurement to complete a catalogue.
+      return current ? [current] : [];
     }
-    return Object.freeze({ file, lane: testLane(file), weightMs: measured.weightMs, sampleCount: measured.sampleCount, provenanceId: id });
+    return [Object.freeze({ file, lane: testLane(file), weightMs: measured.weightMs, sampleCount: measured.sampleCount, provenanceId: id })];
   });
   const sampleCount = Math.max(...[...measurements.values()].map((measurement) => measurement.sampleCount));
   const retainedProvenanceIds = new Set(files.map((item) => item.provenanceId));
@@ -557,10 +565,10 @@ export function buildVerificationTimingUpdateCandidate(args: readonly string[]):
   ];
   return parseProfileValue({
     profileVersion: retained.profileVersion,
-    inventoryFingerprint: verificationTestInventoryFingerprint(inventory),
+    inventoryFingerprint: verificationTestInventoryFingerprint(files.map((item) => item.file)),
     provenance,
     files,
-  }, inventory);
+  }, files.map((item) => item.file));
 }
 
 function formatPlan(plan: VerificationBrowserShardPlan): string {
@@ -569,6 +577,7 @@ function formatPlan(plan: VerificationBrowserShardPlan): string {
     `Browser setup: ${plan.setupFiles.length} file(s), ${plan.setupWeightMs} ms retained weight`,
     ...plan.shards.map((shard) => `Shard ${shard.shard}/${plan.shardCount}: ${shard.files.length} specs, ${shard.plannedWeightMs} ms planned weight`),
     `Projected imbalance: ${plan.unavoidableImbalanceMs} ms (${(plan.imbalanceRatio * 100).toFixed(2)}% of mean shard weight)`,
+    `Unmeasured test files: ${plan.unmeasuredFiles.length}. New browser files use a lane-median scheduling estimate, not measured evidence.`,
   ];
   return `${lines.join('\n')}\n`;
 }

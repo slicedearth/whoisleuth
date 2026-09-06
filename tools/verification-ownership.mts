@@ -10,6 +10,8 @@ import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycl
 import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-renderer.mts';
 import { readVerificationTestInventory } from './verification-timing-profile.mts';
+import { OUTPUT_PATH as CAPABILITY_DOCUMENT_PATH } from './capability-manifest.mts';
+import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
@@ -515,9 +517,17 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     specialised: specialised('documentation'), browserRequired: false,
   }),
   Object.freeze({
+    id: 'generated-capability-document', area: 'generated capability reference', priority: 45,
+    matches: (value: string) => path.resolve(REPOSITORY_ROOT, value) === CAPABILITY_DOCUMENT_PATH,
+    focusedUnit: unit('test/capability-manifest.test.mts', 'test/documentation-links.test.mts'),
+    focusedBrowser: browser(), specialised: specialised('capability-catalogue', 'documentation'),
+    browserRequired: false,
+  }),
+  Object.freeze({
     id: 'cli-documentation-impact', area: 'installed CLI documentation', priority: 0,
     impactOnly: true,
-    matches: (value: string) => ['docs/cli.md', 'docs/cli-reference.md', 'packages/cli/README.md'].includes(value),
+    matches: (value: string) => value.endsWith('.md')
+      && CLI_PACKAGE_SUPPORT_FILES.some(([source]) => source === value),
     focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-package-boundary.test.mts'),
     focusedBrowser: browser(), specialised: specialised('documentation'), browserRequired: false,
   }),

@@ -35,6 +35,7 @@ export type TestDurationHealth = Readonly<{
   aggregateDeltaMs: number;
   aggregateDeltaPercentage: number;
   comparisons: readonly TestDurationComparison[];
+  unmeasured: readonly Readonly<{ file: string; observedMedianMs: number }>[];
 }>;
 
 export { parseTestDurationData } from './test-duration-reporter.mts';
@@ -66,18 +67,22 @@ export function buildTestDurationHealth(
     }
   }
   const retained = new Map(profile.files.filter((file) => file.lane === 'unit').map((file) => [file.file, file.weightMs]));
-  const comparisons = expected.map((file): TestDurationComparison => {
+  const unmeasured: Array<Readonly<{ file: string; observedMedianMs: number }>> = [];
+  const comparisons = expected.flatMap((file): TestDurationComparison[] => {
     const retainedMs = retained.get(file);
-    if (retainedMs === undefined) throw new TypeError(`Retained timing profile is missing ${file}.`);
     const observedMedianMs = median(runs.map((run) => run.files.find((item) => item.file === file)?.durationMs as number));
+    if (retainedMs === undefined) {
+      unmeasured.push(Object.freeze({ file, observedMedianMs }));
+      return [];
+    }
     const deltaMs = observedMedianMs - retainedMs;
-    return Object.freeze({
+    return [Object.freeze({
       file,
       retainedMs,
       observedMedianMs,
       deltaMs,
       deltaPercentage: percentageDelta(observedMedianMs, retainedMs),
-    });
+    })];
   });
   const retainedAggregateMs = comparisons.reduce((sum, item) => sum + item.retainedMs, 0);
   const observedAggregateMs = comparisons.reduce((sum, item) => sum + item.observedMedianMs, 0);
@@ -93,6 +98,7 @@ export function buildTestDurationHealth(
     aggregateDeltaMs: observedAggregateMs - retainedAggregateMs,
     aggregateDeltaPercentage: percentageDelta(observedAggregateMs, retainedAggregateMs),
     comparisons: Object.freeze(comparisons),
+    unmeasured: Object.freeze(unmeasured),
   });
 }
 
@@ -117,7 +123,13 @@ export function formatTestDurationHealth(health: TestDurationHealth): string {
     '## Unit timing health',
     '',
     `Median of ${health.runCount} complete runs: ${health.testsPerRun} tests across ${health.fileCount} files; ${milliseconds(health.wallDurationMedianMs)} wall duration.`,
-    `Aggregate file-test time: ${milliseconds(health.observedAggregateMs)} observed versus ${milliseconds(health.retainedAggregateMs)} retained (${signed(health.aggregateDeltaMs)} ms, ${signed(health.aggregateDeltaPercentage)}%).`,
+    `Comparable file-test time (${health.comparisons.length} files): ${milliseconds(health.observedAggregateMs)} observed versus ${milliseconds(health.retainedAggregateMs)} retained (${signed(health.aggregateDeltaMs)} ms, ${signed(health.aggregateDeltaPercentage)}%).`,
+    ...(health.unmeasured.length ? [
+      '',
+      '### No retained comparison',
+      '',
+      ...health.unmeasured.map((item) => `- ${item.file}: ${milliseconds(item.observedMedianMs)} observed; no retained measurement.`),
+    ] : []),
     '',
     '### Largest increases',
     '',

@@ -21,7 +21,7 @@ import {
   resetPerformanceSampleState,
   resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
-import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
   CI_BROWSER_BUILD_SCRIPTS,
@@ -250,7 +250,7 @@ describe('continuous integration workflow', () => {
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
     assert.equal(shardPlan.shards.length, 4);
     assert.equal(new Set(assigned).size, assigned.length);
-    assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
+    assert.deepEqual(assigned.sort(), readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     assert.deepEqual(CI_COMMAND_GROUPS, ['preflight', 'quality', 'unit', 'browser-build', 'cli-runtime']);
     assert.deepEqual(parseCiVerificationArguments([]), { mode: 'full' });

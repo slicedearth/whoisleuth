@@ -146,7 +146,8 @@ describe('Playwright result summary', () => {
       }],
     });
     const accepted = files.map((item, index) => report(item.file, 10 + index));
-    const result = aggregatePlaywrightShardTimings(accepted, profile);
+    const inventory = [...files.map((item) => item.file), ...PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, 'e2e/auth.setup.ts'];
+    const result = aggregatePlaywrightShardTimings(accepted, profile, inventory);
     assert.equal(result.summary.passed, 8);
     assert.equal(result.summary.browserSpecifications, 4);
     assert.equal(result.summary.setupFiles, 1);
@@ -159,13 +160,15 @@ describe('Playwright result summary', () => {
     assert.match(renderBrowserShardTimingSummary(result.summary), /0 failed, flaky, skipped, or retried/u);
 
     assert.throws(
-      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, accepted[2]!, accepted[3]!], profile),
+      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, accepted[2]!, accepted[3]!], profile, inventory),
       /uniquely match/u,
     );
     const retried = structuredClone(accepted);
     const retryTest = retried[0]!.suites[0]!.specs[1]!.tests[0]!;
     retryTest.status = 'flaky';
     retryTest.results.push({ status: 'passed', duration: 1, retry: 1 });
-    assert.throws(() => aggregatePlaywrightShardTimings(retried, profile), /complete passing/u);
+    assert.throws(() => aggregatePlaywrightShardTimings(retried, profile, inventory), /complete passing/u);
+    assert.throws(() => aggregatePlaywrightShardTimings(accepted, profile, [...inventory, 'e2e/new.spec.ts']),
+      /uniquely match/u, 'an unmeasured new specification must not be omitted from execution');
   });
 });

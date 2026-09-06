@@ -26,6 +26,7 @@ import {
   readVerificationTestInventory,
   readVerificationTimingProfile,
   VERIFICATION_TIMING_PROFILE_PATH,
+  verificationTestInventoryFingerprint,
 } from '../tools/verification-timing-profile.mts';
 import {
   assertDeclaredVerificationTest,
@@ -43,19 +44,20 @@ function rawProfile(): Record<string, unknown> {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('verification architecture contracts', () => {
-  test('retains complete measured timing identities and a deterministic exact browser plan', () => {
+  test('uses discovered tests for a deterministic exact browser plan and retains honest timing history', () => {
     const inventory = readVerificationTestInventory();
     const profile = readVerificationTimingProfile();
     const first = buildBalancedBrowserShardPlan(profile);
     const second = buildBalancedBrowserShardPlan(profile);
     assert.deepEqual(first, second);
-    assert.deepEqual(profile.files.map((item) => item.file).sort(), [...inventory].sort());
+    assert.equal(profile.inventoryFingerprint, verificationTestInventoryFingerprint(profile.files.map((item) => item.file)));
+    assert.equal(first.inventoryFingerprint, verificationTestInventoryFingerprint(inventory));
     assert.ok(inventory.every((file) => !file.startsWith('test/') || /^test\/[^/]+\.test\.mts$/u.test(file)));
     assert.equal(inventory.includes('tools/test-duration-reporter.mts'), false);
     assert.equal(inventory.some((file) => file.startsWith('test/support/')), false);
     assert.equal(first.setupFiles.length, 1);
     assert.equal(first.shards.length, 4);
-    const browserInventory = profile.files.filter((item) => item.lane === 'browser').map((item) => item.file).sort();
+    const browserInventory = inventory.filter((file) => file.endsWith('.spec.ts')).sort();
     const eligible = browserInventory.filter(isPlaywrightFunctionalSpec);
     const performanceAuthority = browserInventory.filter(isPlaywrightPerformanceAuthoritySpec);
     const assigned = first.shards.flatMap((item) => item.files).sort();
@@ -70,7 +72,9 @@ describe('verification architecture contracts', () => {
   });
 
   test('rejects missing, duplicate, unknown, malformed, and unmeasured timing identities', () => {
-    const inventory = readVerificationTestInventory();
+    const retained = rawProfile();
+    const inventory = (retained.files as Array<{ file: string }>).map((item) => item.file);
+    assert.doesNotThrow(() => parseVerificationTimingProfile(JSON.stringify(retained), inventory));
     const variants: Array<readonly [string, (value: Record<string, unknown>) => void]> = [
       ['missing', (value) => { (value.files as unknown[]).pop(); }],
       ['duplicate', (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
@@ -97,11 +101,35 @@ describe('verification architecture contracts', () => {
     }
   });
 
+  test('discovers new and removed tests without rewriting historical timings or pretending estimates were measured', () => {
+    const files = ['a', 'b', 'c', 'd'].map((name, index) => ({
+      file: `e2e/${name}.spec.ts`, lane: 'browser', weightMs: (index + 1) * 100, sampleCount: 1, provenanceId: 'fixture-browser',
+    }));
+    const profile = parseVerificationTimingProfile(JSON.stringify({
+      profileVersion: 1,
+      inventoryFingerprint: verificationTestInventoryFingerprint(files.map((item) => item.file)),
+      provenance: [{ id: 'fixture-browser', lane: 'browser', environmentClass: 'fixture', sampleBasis: 'fixture', sampleCount: 1 }],
+      files,
+    }));
+    const before = JSON.stringify(profile);
+    const inventory = ['e2e/a.spec.ts', 'e2e/b.spec.ts', 'e2e/c.spec.ts', 'e2e/new.spec.ts', 'test/new.test.mts'];
+    const plan = buildBalancedBrowserShardPlan(profile, 4, inventory);
+    assert.deepEqual(plan, buildBalancedBrowserShardPlan(profile, 4, [...inventory].reverse()));
+    assert.deepEqual(plan.shards.flatMap((shard) => shard.files).sort(), inventory.filter(isPlaywrightFunctionalSpec));
+    assert.deepEqual(plan.unmeasuredFiles, ['e2e/new.spec.ts', 'test/new.test.mts']);
+    assert.equal(plan.totalPlannedWeightMs, 850, 'new browser file uses the historical lane median only for scheduling');
+    assert.equal(plan.inventoryFingerprint, verificationTestInventoryFingerprint(inventory));
+    assert.equal(JSON.stringify(profile), before);
+    assert.equal(profile.files.some((item) => item.file === 'e2e/new.spec.ts'), false);
+    const withoutBrowserHistory = { ...profile, files: [] };
+    assert.equal(buildBalancedBrowserShardPlan(withoutBrowserHistory, 4, inventory).totalPlannedWeightMs, 4);
+  });
+
   test('builds a complete median-of-three unit candidate and retires replaced provenance', () => {
     const retained = readVerificationTimingProfile();
     assert.ok(retained.provenance.length < MAX_TIMING_PROVENANCE);
-    const unitFiles = retained.files.filter((file) => file.lane === 'unit');
-    const replacedProvenance = new Set(unitFiles.map((file) => file.provenanceId));
+    const unitFiles = readVerificationTestInventory().filter((file) => file.startsWith('test/')).map((file) => ({ file }));
+    const replacedProvenance = new Set(retained.files.filter((file) => file.lane === 'unit').map((file) => file.provenanceId));
     assert.ok(unitFiles.length > 0 && replacedProvenance.size > 0);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
     const reports = [10.4, 12.6, 20.2].map((durationMs, index) => {
@@ -174,7 +202,7 @@ describe('verification architecture contracts', () => {
     const report = path.join(directory, 'aggregate.json');
     const aggregate = {
       reportVersion: 1,
-      inventoryFingerprint: retained.inventoryFingerprint,
+      inventoryFingerprint: plan.inventoryFingerprint,
       files: [
         ...functionalFiles.map((file, index) => ({ file, lane: 'browser', weightMs: index + 1, sampleCount: 1 })),
         ...plan.setupFiles.map((file) => ({ file, lane: 'browser_setup', weightMs: 5, sampleCount: plan.shardCount })),
@@ -195,6 +223,9 @@ describe('verification architecture contracts', () => {
       )));
       for (const retainedPerformance of performanceFiles) {
         assert.deepEqual(candidate.files.find((item) => item.file === retainedPerformance.file), retainedPerformance);
+      }
+      for (const file of plan.unmeasuredFiles.filter((file) => file.startsWith('test/'))) {
+        assert.equal(candidate.files.some((item) => item.file === file), false, 'browser evidence must not fabricate a unit timing');
       }
 
       writeFileSync(report, JSON.stringify({
@@ -251,7 +282,7 @@ describe('verification architecture contracts', () => {
       });
       assert.equal(aggregateRun.status, 0, aggregateRun.stderr || aggregateRun.stdout);
       const aggregate = JSON.parse(aggregateRun.stdout) as { inventoryFingerprint: string };
-      assert.equal(aggregate.inventoryFingerprint, retained.inventoryFingerprint);
+      assert.equal(aggregate.inventoryFingerprint, plan.inventoryFingerprint);
       const aggregatePath = path.join(directory, 'aggregate.json');
       writeFileSync(aggregatePath, aggregateRun.stdout);
 
@@ -269,8 +300,9 @@ describe('verification architecture contracts', () => {
         maxBuffer: 4 * 1024 * 1024,
       });
       assert.equal(candidateRun.status, 0, candidateRun.stderr || candidateRun.stdout);
-      const candidate = JSON.parse(candidateRun.stdout) as { inventoryFingerprint: string };
-      assert.equal(candidate.inventoryFingerprint, retained.inventoryFingerprint);
+      const candidate = parseVerificationTimingProfile(candidateRun.stdout);
+      const measuredBrowser = candidate.files.filter((item) => item.lane !== 'unit' && !isPlaywrightPerformanceAuthoritySpec(item.file));
+      assert.deepEqual(measuredBrowser.map((item) => item.file).sort(), [...plan.setupFiles, ...plan.shards.flatMap((shard) => shard.files)].sort());
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -418,14 +450,18 @@ describe('verification architecture contracts', () => {
   });
 
   test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
-    for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'PRIVACY.md']) {
+    for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md', 'PRIVACY.md', 'docs/capability-manifest.md']) {
       const plan = await createVerificationOwnershipPlan([file]);
       const execution = buildFocusedVerificationExecution(plan);
       assert.deepEqual(execution.browserSpecs, [], file);
       assert.equal(execution.cleanupBrowserArtifacts, false, file);
       assert.ok(!execution.commands.some((command) => /typecheck|build|^check$/u.test(command.id)), file);
-      if (file === 'docs/cli.md') assert.ok(plan.focusedUnitChecks.includes('test/cli-package-boundary.test.mts'));
+      if (['docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md'].includes(file)) assert.ok(plan.focusedUnitChecks.includes('test/cli-package-boundary.test.mts'));
       if (file === 'PRIVACY.md') assert.ok(plan.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+      if (file === 'docs/capability-manifest.md') {
+        assert.ok(plan.mandatorySpecialisedChecks.includes('capability-catalogue'));
+        assert.ok(plan.focusedUnitChecks.includes('test/capability-manifest.test.mts'));
+      }
     }
   });
 
@@ -634,7 +670,7 @@ describe('verification architecture contracts', () => {
     assert.equal(assurance.browserTestsExecuted, 0);
     assert.equal(
       assurance.balancedShardSpecifications,
-      readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).length,
+      readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).length,
     );
     assert.equal(assurance.skippedJourneys, 0);
     assert.equal(assurance.retryAcceptance, false);

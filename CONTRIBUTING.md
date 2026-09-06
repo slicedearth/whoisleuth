@@ -24,6 +24,9 @@ An ordinary helper in an existing area needs no package-inventory baseline or
 ownership exception. New unit tests follow `test/<name>.test.mts` and are
 discovered automatically. Source counts are reported; resource bounds still
 protect bytes, processing and untrusted imports.
+New tests need no timing-profile entry. Current discovery decides what runs;
+retained measurements only help balance shards. New browser tests use a labelled
+scheduling estimate until accepted measurements are available.
 
 ## Check the change
 

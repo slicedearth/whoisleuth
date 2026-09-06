@@ -182,8 +182,9 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
       `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-serial-shards`,
       '--sample-basis=complete-four-shard-functional-run',
     ]);
-    if (candidate.inventoryFingerprint !== result.aggregate.inventoryFingerprint) {
-      throw new TypeError('Local browser timing candidate does not match the executed test inventory.');
+    if (result.aggregate.files.some((measured) => !candidate.files.some((item) =>
+      item.file === measured.file && item.weightMs === measured.weightMs && item.sampleCount === measured.sampleCount))) {
+      throw new TypeError('Local browser timing candidate does not retain every executed measurement.');
     }
     return renderBrowserShardTimingSummary(result.summary);
   } finally {
