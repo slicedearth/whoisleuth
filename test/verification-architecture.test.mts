@@ -488,6 +488,14 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
   });
 
+  test('follows imported release metadata into generated examples without another test registration', async () => {
+    const plan = await createVerificationOwnershipPlan(['package.json']);
+    assert.ok(plan.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
+    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
+    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
+    assert.deepEqual(plan.focusedBrowserChecks, []);
+  });
+
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([
       'packages/contracts/privacy-data-flow-catalogue.mts',

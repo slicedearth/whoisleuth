@@ -737,9 +737,9 @@ export function importedUnitTests(
 
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
-  const codePaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|svelte)$/u.test(file)
-    && !file.endsWith('.svelte') && !file.startsWith('e2e/'));
-  if (!codePaths.length) return initial;
+  const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json)$/u.test(file)
+    && !file.startsWith('e2e/'));
+  if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
   let selection: ReadonlyMap<string, readonly string[]>;
   let explanation: string;
@@ -751,13 +751,13 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
     });
     const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
-    selection = importedUnitTests(codePaths, graph, inventory);
-    const fallback = codePaths.filter((file) => selection.get(file)?.length === inventory.length);
+    selection = importedUnitTests(importedPaths, graph, inventory);
+    const fallback = importedPaths.filter((file) => selection.get(file)?.length === inventory.length);
     explanation = fallback.length
       ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
       : 'Unit dependents are discovered from current imports, including transitive helpers and newly added tests.';
   } catch {
-    selection = new Map(codePaths.map((file) => [file, inventory]));
+    selection = new Map(importedPaths.map((file) => [file, inventory]));
     explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit inventory.';
   }
   const plan = buildVerificationOwnershipPlan(rawPaths, selection);
