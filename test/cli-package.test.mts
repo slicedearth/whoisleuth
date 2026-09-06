@@ -8,11 +8,8 @@ import { fileURLToPath } from 'node:url';
 import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-  MAX_CLI_PACKAGE_COMPILER_SOURCES,
-  MAX_CLI_PACKAGE_ENTRIES,
+  MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   MAX_CLI_PACKAGE_FILE_BYTES,
-  MAX_CLI_PACKAGE_MODULES,
-  MAX_CLI_RUNTIME_MODULES,
   assertCliPackageSourceSnapshot,
   buildCliPackageManifest,
   captureCliPackageSourceSnapshot,
@@ -78,23 +75,20 @@ describe('scoped CLI package contract', () => {
   test('bounds both long-running package assembly and installed command processes', () => {
     assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
-    assert.ok(MAX_CLI_RUNTIME_MODULES >= 1 && MAX_CLI_RUNTIME_MODULES < MAX_CLI_PACKAGE_MODULES);
-    assert.ok(MAX_CLI_PACKAGE_MODULES <= 512);
-    assert.ok(MAX_CLI_PACKAGE_COMPILER_SOURCES >= MAX_CLI_RUNTIME_MODULES / 2
-      && MAX_CLI_PACKAGE_COMPILER_SOURCES <= 512);
-    assert.ok(MAX_CLI_PACKAGE_ENTRIES >= MAX_CLI_RUNTIME_MODULES / 2
-      && MAX_CLI_PACKAGE_ENTRIES <= 512);
+    assert.ok(Number.isSafeInteger(MAX_CLI_PACKAGE_PROCESSING_ITEMS));
+    assert.ok(MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2 * 512 <= 4 * 1024 * 1024,
+      'entry processing must keep tar header and padding overhead within 4 MiB');
   });
 
-  test('allows a small module extraction inside fixed headroom and still rejects excessive graphs', () => {
+  test('allows source decomposition without a release-count baseline and still bounds processing', () => {
     const source = (index: number) => index === 0 ? 'bin/whoisleuth.mts' : `lib/extracted-${index}.mts`;
     const admitted = selectCliPackageSources({
-      modules: Array.from({ length: MAX_CLI_RUNTIME_MODULES }, (_, index) => ({ source: source(index) })),
-    }, { maximumModules: MAX_CLI_RUNTIME_MODULES, requiredSources: ['bin/whoisleuth.mts'] });
-    assert.equal(admitted.length, MAX_CLI_RUNTIME_MODULES);
+      modules: Array.from({ length: 600 }, (_, index) => ({ source: source(index) })),
+    }, { requiredSources: ['bin/whoisleuth.mts'] });
+    assert.equal(admitted.length, 600);
     assert.throws(() => selectCliPackageSources({
-      modules: Array.from({ length: MAX_CLI_RUNTIME_MODULES + 1 }, (_, index) => ({ source: source(index) })),
-    }, { maximumModules: MAX_CLI_RUNTIME_MODULES, requiredSources: ['bin/whoisleuth.mts'] }), /between 1 and/u);
+      modules: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => ({ source: source(index) })),
+    }, { requiredSources: ['bin/whoisleuth.mts'] }), /between 1 and/u);
   });
 
   test('rejects excessive, missing, traversing and source-bearing packed contents', () => {
@@ -102,7 +96,7 @@ describe('scoped CLI package contract', () => {
       files: [{ path: 'bin/whoisleuth.mjs' }, { path: 'package.json' }],
     }, ['bin/whoisleuth.mjs']), ['bin/whoisleuth.mjs', 'package.json']);
     assert.throws(() => validatePackedCliFiles({
-      files: Array.from({ length: MAX_CLI_PACKAGE_ENTRIES + 1 }, (_, index) => ({ path: `lib/item-${index}.mjs` })),
+      files: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => ({ path: `lib/item-${index}.mjs` })),
     }), /expected between 1 and/u);
     assert.throws(() => validatePackedCliFiles({ files: [{ path: 'package.json' }] }, ['bin/whoisleuth.mjs']), /is missing/u);
     assert.throws(() => validatePackedCliFiles({ files: [{ path: '../outside.mjs' }] }), /safe repository-relative path/u);

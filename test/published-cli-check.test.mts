@@ -17,8 +17,7 @@ import {
   type Fetcher,
 } from '../tools/published-cli-check.mts';
 import {
-  MAX_CLI_PACKAGE_COMPILER_SOURCES,
-  MAX_CLI_PACKAGE_ENTRIES,
+  MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   MAX_CLI_PACKAGE_INSTALLED_CHECKS,
 } from '../tools/cli-package.mts';
 
@@ -138,7 +137,7 @@ describe('published CLI verification', () => {
       installedChecks: Array.from({ length: MAX_CLI_PACKAGE_INSTALLED_CHECKS + 1 }, (_, index) => `installed-check-${index}`),
     }), VERSION), /bounded non-empty string array/u);
     assert.throws(() => validateCandidateReport(candidateReport({
-      sourceModuleCount: MAX_CLI_PACKAGE_COMPILER_SOURCES + 1,
+      sourceModuleCount: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1,
     }), VERSION), /Reviewed source module count must be between/u);
     assert.throws(() => validateCandidateReport(candidateReport({ publicationEnabled: false }), VERSION), /publication-enabled/u);
     assert.throws(() => validateCandidateReport(candidateReport({ archiveSha256: 'a'.repeat(64), extra: true }), VERSION), /field contract/u);
@@ -164,7 +163,7 @@ describe('published CLI verification', () => {
       dist: { ...(publishedManifest().dist as object), tarball: `https://packages.invalid/whoisleuth-cli-${VERSION}.tgz` },
     }), VERSION), /outside the expected public registry boundary/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
-      dist: { ...(publishedManifest().dist as object), fileCount: MAX_CLI_PACKAGE_ENTRIES + 1 },
+      dist: { ...(publishedManifest().dist as object), fileCount: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 },
     }), VERSION), /Published file count must be between/u);
   });
 

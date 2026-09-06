@@ -102,23 +102,15 @@ const execFile = promisify(execFileCallback);
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// The measured 2.3.0 candidate contains 346 executable-graph modules, 348
-// package-graph modules, 336 compiler sources and 347 packed entries. Fixed
-// count ceilings retain roughly 10-15% headroom for small module extraction;
-// byte and process limits below continue to bound its real processing cost.
-// Two browser-safe domain-control paths remain explicit package roots because
-// released CLI archives permitted those deep imports.
-export const MAX_CLI_RUNTIME_MODULES = 384;
-export const MAX_CLI_PACKAGE_MODULES = 386;
-// Type-only and JSON compiler inputs are captured in addition to the runtime
-// dependency graph. They may emit no runtime code, but remain subject to this
-// finite count plus the independent compiler-context byte ceilings.
-export const MAX_CLI_PACKAGE_COMPILER_SOURCES = 384;
+// Emergency work bound, not a release inventory or a refactoring budget.
+// Each phase may visit at most 4,096 items; independent byte limits and process
+// deadlines also apply. For tar validation this bounds header/padding overhead
+// to 4 MiB (two 512-byte records per entry), in addition to unpacked file bytes.
+export const MAX_CLI_PACKAGE_PROCESSING_ITEMS = 4_096;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_ENTRIES = 400;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 81;
@@ -128,6 +120,7 @@ export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:cases|comparison|contracts|evidence|interchange|investigation|monitoring|workspace))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const COMPILABLE_SOURCE_PATTERN = /\.(?:mts|ts)$/u;
 const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
+// Released archives permitted these two browser-safe deep imports.
 const CLI_COMPATIBILITY_ENTRY_MODULES = Object.freeze([
   'frontend/src/lib/analysis/domain-control-manifest-core.ts',
   'frontend/src/lib/analysis/domain-control-records.ts',
@@ -279,9 +272,9 @@ export function selectCliPackageSources(
   }> = {},
 ): readonly string[] {
   const graph = record(graphValue, 'Dependency graph');
-  const maximumModules = options.maximumModules ?? MAX_CLI_RUNTIME_MODULES;
+  const maximumModules = options.maximumModules ?? MAX_CLI_PACKAGE_PROCESSING_ITEMS;
   const requiredSources = options.requiredSources ?? CLI_RUNTIME_ENTRY_MODULES;
-  if (!Number.isSafeInteger(maximumModules) || maximumModules < 1 || maximumModules > MAX_CLI_PACKAGE_MODULES) {
+  if (!Number.isSafeInteger(maximumModules) || maximumModules < 1 || maximumModules > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
     throw new TypeError('Dependency graph module ceiling is invalid.');
   }
   if (!Array.isArray(graph.modules) || graph.modules.length === 0 || graph.modules.length > maximumModules) {
@@ -690,8 +683,8 @@ async function cliPackageCompilerSourceClosure(
     contextFiles.add(relative);
     for (const manifest of compilerPackageManifests(relative)) contextFiles.add(manifest);
   }
-  if (selected.size > MAX_CLI_PACKAGE_COMPILER_SOURCES) {
-    throw new TypeError(`CLI compiler source closure contains ${selected.size} modules; expected at most ${MAX_CLI_PACKAGE_COMPILER_SOURCES}.`);
+  if (selected.size > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
+    throw new TypeError(`CLI compiler source closure exceeds the ${MAX_CLI_PACKAGE_PROCESSING_ITEMS}-item processing limit.`);
   }
   return Object.freeze({
     sources: Object.freeze([...selected].sort()),
@@ -774,9 +767,9 @@ export function validatePackedCliFiles(
   packResult: JsonRecord,
   requiredEntries: readonly string[] = [],
 ): readonly string[] {
-  if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_ENTRIES) {
+  if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
     const observed = Array.isArray(packResult.files) ? packResult.files.length : 0;
-    throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_ENTRIES}.`);
+    throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_PROCESSING_ITEMS}.`);
   }
   const entries = Object.freeze(packResult.files.map((entry, index) => (
     safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
@@ -830,11 +823,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       dependencyGraph(repositoryRoot, CLI_PACKAGE_ENTRY_MODULES),
     ]);
     const executableSources = selectCliPackageSources(runtimeGraph, {
-      maximumModules: MAX_CLI_RUNTIME_MODULES,
+      maximumModules: MAX_CLI_PACKAGE_PROCESSING_ITEMS,
       requiredSources: CLI_RUNTIME_ENTRY_MODULES,
     });
     const runtimeSources = selectCliPackageSources(packageGraph, {
-      maximumModules: MAX_CLI_PACKAGE_MODULES,
+      maximumModules: MAX_CLI_PACKAGE_PROCESSING_ITEMS,
       requiredSources: CLI_PACKAGE_ENTRY_MODULES,
     });
     const runtimeGraphModuleCount = dependencyGraphModuleCount(runtimeGraph);

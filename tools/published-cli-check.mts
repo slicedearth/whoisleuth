@@ -15,8 +15,7 @@ import {
 import {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,
-  MAX_CLI_PACKAGE_COMPILER_SOURCES,
-  MAX_CLI_PACKAGE_ENTRIES,
+  MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   MAX_CLI_PACKAGE_INSTALLED_CHECKS,
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
@@ -68,7 +67,7 @@ export const PUBLISHED_CLI_CHECK_VERSION = 3;
 const MAX_METADATA_BYTES = 512 * 1024;
 const MAX_CANDIDATE_REPORT_BYTES = 64 * 1024;
 const MAX_ERROR_LENGTH = 512;
-const MAX_CLI_PACKAGE_TAR_BYTES = MAX_CLI_PACKAGE_UNPACKED_BYTES + (MAX_CLI_PACKAGE_ENTRIES * 2 * 512) + 1_024;
+const MAX_CLI_PACKAGE_TAR_BYTES = MAX_CLI_PACKAGE_UNPACKED_BYTES + (MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2 * 512) + 1_024;
 export const PUBLISHED_CLI_REQUEST_TIMEOUT_MS = 120_000;
 const RUNTIME_DEPENDENCIES = Object.freeze([
   '@peculiar/x509',
@@ -248,8 +247,8 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
   if (report.packageName !== PACKAGE_NAME || normalizeSemanticVersion(report.packageVersion) !== expectedVersion) {
     throw new TypeError('Reviewed candidate report identity does not match the selected version.');
   }
-  boundedInteger(report.sourceModuleCount, 'Reviewed source module count', MAX_CLI_PACKAGE_COMPILER_SOURCES);
-  boundedInteger(report.packedEntryCount, 'Reviewed packed entry count', MAX_CLI_PACKAGE_ENTRIES);
+  boundedInteger(report.sourceModuleCount, 'Reviewed source module count', MAX_CLI_PACKAGE_PROCESSING_ITEMS);
+  boundedInteger(report.packedEntryCount, 'Reviewed packed entry count', MAX_CLI_PACKAGE_PROCESSING_ITEMS);
   boundedInteger(report.packedBytes, 'Reviewed packed bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
   boundedInteger(report.unpackedBytes, 'Reviewed unpacked bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
   if (report.publicationEnabled !== true) throw new TypeError('Reviewed candidate report must be publication-enabled.');
@@ -299,7 +298,7 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
   const shasum = boundedString(dist.shasum, 'Published shasum', 64);
   if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(integrity) || !/^[a-f0-9]{40}$/u.test(shasum)) throw new TypeError('Published distribution integrity metadata is invalid.');
   const tarball = validatedTarballUrl(dist.tarball, expectedVersion);
-  const fileCount = boundedInteger(dist.fileCount, 'Published file count', MAX_CLI_PACKAGE_ENTRIES);
+  const fileCount = boundedInteger(dist.fileCount, 'Published file count', MAX_CLI_PACKAGE_PROCESSING_ITEMS);
   const unpackedBytes = boundedInteger(dist.unpackedSize, 'Published unpacked bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
   const attestations = record(dist.attestations, 'Published attestations');
   const provenance = record(attestations.provenance, 'Published provenance');
