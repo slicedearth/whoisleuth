@@ -74,6 +74,169 @@ test('Quick and Advanced Case Response presentations keep one record and focus t
   await expectNoHorizontalOverflow(page);
 });
 
+test('observation drafts survive presentation changes and another stage save', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'observation-draft.invalid');
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
+  await pin.locator('summary').click();
+  await sighting.locator('summary').click();
+  await pin.getByLabel('Label').fill('Retained draft');
+  await pin.getByLabel('Fact', { exact: true }).fill('An unfinished evidence selection.');
+  await pin.getByLabel('Source', { exact: true }).fill('Draft source');
+  await pin.getByLabel('Observed at', { exact: true }).fill('2026-08-20T10:00');
+  await pin.getByLabel('Completeness').selectOption('partial');
+  await pin.getByLabel(/Limitations/).fill('Draft limit');
+  await sighting.getByLabel('Source', { exact: true }).fill('Retained sighting source');
+  await sighting.getByLabel('Evidence category').selectOption('delegation');
+  await sighting.getByLabel(/Limitations/).fill('Retained sighting limit');
+  await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
+  await expect(pin).toHaveCount(0);
+  await workspace.getByLabel('Recipient or owner', { exact: true }).fill('Fixture internal reviewer');
+  await workspace.getByRole('button', { name: 'Create drafting action' }).click();
+  await expect(workspace.getByRole('button', { name: 'Ready for review', exact: true })).toBeVisible();
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(saved.records[0]!.value.actions).toHaveLength(1);
+  expect(saved.records[0]!.value.actions[0]!.state).toBe('drafting');
+  await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await pin.locator('summary').click();
+  await sighting.locator('summary').click();
+  await expect(pin.getByLabel('Label')).toHaveValue('Retained draft');
+  await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('An unfinished evidence selection.');
+  await expect(pin.getByLabel('Source', { exact: true })).toHaveValue('Draft source');
+  await expect(pin.getByLabel('Observed at', { exact: true })).toHaveValue('2026-08-20T10:00');
+  await expect(pin.getByLabel('Completeness')).toHaveValue('partial');
+  await expect(pin.getByLabel(/Limitations/)).toHaveValue('Draft limit');
+  await expect(sighting.getByLabel('Source', { exact: true })).toHaveValue('Retained sighting source');
+  await expect(sighting.getByLabel('Evidence category')).toHaveValue('delegation');
+  await expect(sighting.getByLabel(/Limitations/)).toHaveValue('Retained sighting limit');
+});
+
+test('observation validation and pre-write failure preserve a draft for deliberate retry', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'observation-retry.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.locator('summary').click();
+  await pin.getByLabel('Label').fill('Retry evidence');
+  const submit = pin.getByRole('button', { name: 'Pin evidence' });
+  await submit.click();
+  expect(await pin.getByLabel('Fact', { exact: true }).evaluate((element) => (element as HTMLTextAreaElement).validity.valueMissing)).toBe(true);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
+  await pin.getByLabel('Fact', { exact: true }).fill('Evidence retained for retry.');
+  await pin.getByLabel(/Limitations/).fill('One selected fact only.');
+  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await submit.click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Cases could not be read');
+  await expect(pin.getByLabel('Label')).toHaveValue('Retry evidence');
+  await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('Evidence retained for retry.');
+  await expect(pin.getByLabel(/Limitations/)).toHaveValue('One selected fact only.');
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
+  await submit.click();
+  await expect(pin.locator('ol.records > li')).toHaveCount(1);
+  await expect(pin.getByLabel('Label')).toHaveValue('');
+  await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('');
+  await expect(submit).toBeFocused();
+});
+
+test('a committed sighting is not offered as a failed write when refreshing Cases fails', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'sighting-committed.invalid');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const workspace = await openCaseResponseWorkspace(page);
+  const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
+  await sighting.locator('summary').click();
+  await sighting.getByLabel('Source', { exact: true }).fill('Fixture observation');
+  await sighting.getByLabel(/Limitations/).fill('Selected source only.');
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await sighting.getByRole('button', { name: 'Record sighting' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(sighting.getByLabel(/Limitations/)).toHaveValue('');
+  await expect(sighting.locator('ol.records > li')).toHaveCount(1);
+  const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
+  expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+  expect(committed.records[0]!.value.sightings).toHaveLength(1);
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  const restored = await openCaseResponseWorkspace(page);
+  const restoredSighting = restored.locator('details[id^="case-response-observation-sightings-"]');
+  await restoredSighting.locator('summary').click();
+  await expect(restoredSighting.locator('ol.records > li')).toHaveCount(1);
+});
+
+test('observation writes preserve another tab edit and coordinate rapid submissions', async ({ page, context }) => {
+  await openCasesView(page);
+  await createCase(page, 'observation-concurrent.invalid');
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.locator('summary').click();
+  await pin.getByLabel('Label').fill('Concurrent evidence');
+  await pin.getByLabel('Fact', { exact: true }).fill('One appended evidence pin.');
+  const other = await context.newPage();
+  try {
+    await openCasesView(other);
+    const heading = other.locator('.case-head', { hasText: 'observation-concurrent.invalid' });
+    if (await heading.getAttribute('aria-expanded') !== 'true') await heading.click();
+    await other.locator('.case-body .note-edit textarea').fill('Note from the other tab.');
+    await other.locator('.case-body .note-edit').evaluate((form) => (form as HTMLFormElement).requestSubmit());
+    await expect(other.locator('.notes p')).toContainText(['Note from the other tab.']);
+    await expect(pin.getByLabel('Label')).toHaveValue('Concurrent evidence');
+    await pin.locator('form').evaluate((form) => {
+      (form as HTMLFormElement).requestSubmit();
+      (form as HTMLFormElement).requestSubmit();
+    });
+    await expect(pin.locator('ol.records > li')).toHaveCount(1);
+    const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    expect(saved.records[0]!.value.evidencePins).toHaveLength(1);
+    expect(saved.records[0]!.value.notes).toHaveLength(1);
+    expect(saved.records[0]!.value.notes[0]!.body).toBe('Note from the other tab.');
+  } finally { await other.close(); }
+});
+
+test('observation forms remain usable across supported layouts and both themes', async ({ page }, testInfo) => {
+  await openCasesView(page);
+  await createCase(page, 'observation-layout.invalid');
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
+  await pin.locator('summary').click();
+  await sighting.locator('summary').click();
+  await pin.getByLabel('Label').fill('A source-qualified observation');
+  await pin.getByLabel('Fact', { exact: true }).fill('Evidence remains separately attributed and available for review.');
+  await pin.getByRole('button', { name: 'Pin evidence' }).click();
+  await expect(pin.locator('ol.records > li')).toHaveCount(1);
+  await sighting.getByRole('button', { name: 'Record sighting' }).click();
+  await expect(sighting.locator('.chronology')).toBeVisible();
+  for (const theme of ['Light theme', 'Dark theme']) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /Colour theme/ }).click();
+    await page.getByRole('option', { name: theme }).click();
+    for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]]) {
+      await page.setViewportSize({ width: width!, height: height! });
+      await expectNoHorizontalOverflow(page);
+      const fact = pin.getByLabel('Fact', { exact: true });
+      await fact.focus();
+      await expect(fact).toBeFocused();
+      await expect(fact).toBeVisible();
+      await expect(sighting.getByLabel('Source', { exact: true })).toBeVisible();
+      const geometry = await pin.evaluate((element) => {
+        const panel = element.getBoundingClientRect();
+        return [...element.querySelectorAll('input, select, textarea, button')].every((control) => {
+          const box = control.getBoundingClientRect();
+          return box.width > 0 && box.left >= panel.left && box.right <= panel.right + 1;
+        });
+      });
+      expect(geometry).toBe(true);
+      expect(await pin.locator('summary').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
+      await pin.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+      await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+    }
+  }
+});
+
 test('Case mutation focus recovery respects deliberate movement and restores a displaced branch control', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'focus-recovery.invalid');

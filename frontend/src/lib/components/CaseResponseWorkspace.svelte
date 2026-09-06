@@ -16,8 +16,6 @@
     CASE_PIN_COMPLETENESS,
     CASE_PROVIDER_OUTCOMES,
     CASE_REVIEW_REASONS,
-    CASE_SIGHTING_CATEGORIES,
-    CASE_SIGHTING_STATES,
     caseInvestigationContext,
     caseStatusIsClosed,
     dispositionLabel,
@@ -35,7 +33,8 @@
     isLegalCaseActionTransition,
     type CaseActionEventSourceClass,
   } from '$lib/analysis/case-response-model.ts';
-  import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
+  import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
+  import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
@@ -65,12 +64,6 @@
   let presentationMode = $state<'quick' | 'advanced'>('quick');
   $effect(() => { if (advancedInitially) presentationMode = 'advanced'; });
 
-  let pinLabel = $state('');
-  let pinValue = $state('');
-  let pinSource = $state('lookup evidence');
-  let pinObservedAt = $state('');
-  let pinCompleteness = $state('complete');
-  let pinLimitations = $state('');
   let decisionSummary = $state('');
   let decisionRationale = $state('');
   let decisionConfidence = $state('unknown');
@@ -105,13 +98,6 @@
   let trailKind = $state('pivot');
   let trailSummary = $state('');
   let trailTarget = $state('');
-  let sightingState = $state('observed_by_deployment');
-  let sightingCategory = $state('website');
-  let sightingSource = $state('WHOISleuth deep lookup');
-  let sightingObservedAt = $state('');
-  let sightingCompleteness = $state('complete');
-  let sightingEvidencePinId = $state('');
-  let sightingLimitations = $state('');
   let effectState = $state('not_checked');
   let effectObservedAt = $state('');
   let effectSourceClass = $state('analyst');
@@ -133,11 +119,6 @@
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
   const investigationContext = $derived(caseInvestigationContext(record));
   const responseLifecycle = $derived(buildCaseResponseLifecycleSummary(record));
-  const sightingChronology = $derived(buildCaseSightingChronology(record.sightings));
-  const sightingReviewConclusionCount = $derived(
-    record.sightings.filter((sighting) =>
-      sighting.state === 'not_reproduced' || sighting.state === 'expired').length,
-  );
   const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
     decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
   const userObservedEffectSourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
@@ -232,22 +213,12 @@
     evidenceHandoffStage = stage;
   }
 
-  function isoFromLocal(value: string): string | null {
-    if (!value) return null;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-  }
-
   function localFromIso(value: string | null): string {
     if (!value) return '';
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return '';
     const adjusted = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
     return adjusted.toISOString().slice(0, 16);
-  }
-
-  function list(value: string): string[] {
-    return value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
   }
 
   function countLabel(count: number, singular: string): string {
@@ -313,22 +284,6 @@
         if (restoreTarget?.isConnected) restoreTarget.focus({ preventScroll: true });
       }
     }
-  }
-
-  async function addPin() {
-    if (!await persist({
-      evidencePin: {
-        label: pinLabel,
-        value: pinValue,
-        source: pinSource,
-        observedAt: isoFromLocal(pinObservedAt) || new Date().toISOString(),
-        completeness: pinCompleteness,
-        limitations: list(pinLimitations),
-      },
-    }, `Pinned analyst-selected evidence for ${record.domain}.`)) return;
-    pinLabel = '';
-    pinValue = '';
-    pinLimitations = '';
   }
 
   async function addDecision() {
@@ -406,21 +361,6 @@
     trailKind = 'pivot';
     trailSummary = '';
     trailTarget = '';
-  }
-
-  async function addSighting() {
-    if (!await persist({
-      sighting: {
-        state: sightingState,
-        category: sightingCategory,
-        source: sightingSource,
-        observedAt: isoFromLocal(sightingObservedAt) || new Date().toISOString(),
-        completeness: sightingCompleteness,
-        evidencePinId: sightingEvidencePinId || null,
-        limitations: list(sightingLimitations),
-      },
-    }, `Recorded a source-qualified sighting for ${record.domain}.`)) return;
-    sightingLimitations = '';
   }
 
   function actionInput() {
@@ -789,71 +729,11 @@
         </section>
       {/if}
     </section>
-  {:else}
-  <details id={`case-response-observation-${record.id}`}>
-    <summary>Pin an observed fact</summary>
-    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
-      <div class="two-columns">
-        <label class="field">Label<input bind:value={pinLabel} maxlength="80" required placeholder="Observed login form"></label>
-        <label class="field">Source<input bind:value={pinSource} maxlength="80" required placeholder="Lookup evidence"></label>
-        <label class="field">Observed at<input type="datetime-local" bind:value={pinObservedAt}></label>
-        <label class="field">Completeness<select bind:value={pinCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
-      </div>
-      <label class="field">Fact<textarea bind:value={pinValue} maxlength="1000" rows="2" required></textarea></label>
-      <label class="field">Limitations <small>one per line</small><textarea bind:value={pinLimitations} maxlength="2000" rows="2"></textarea></label>
-      <button class="btn" type="submit" disabled={mutationBusy}>Pin evidence</button>
-    </form>
-    {#if record.evidencePins.length}
-      <ol class="records">{#each [...record.evidencePins].reverse() as pin}<li><strong>{pin.label}</strong><p>{pin.value}</p><small>{pin.source} · {pin.completeness} · {pin.observedAt}</small>{#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
-    {/if}
-  </details>
-
-  <details id={`case-response-observation-sightings-${record.id}`}>
-    <summary>Record a source-qualified sighting</summary>
-    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
-      <p class="notice">Use observed or reported states for source evidence. Analyst confirmed, not reproduced, and expired are review conclusions and do not alter the original observation.</p>
-      <div class="two-columns">
-        <label class="field">Sighting state<select bind:value={sightingState}>{#each CASE_SIGHTING_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-        <label class="field">Evidence category<select bind:value={sightingCategory}>{#each CASE_SIGHTING_CATEGORIES as value}<option {value}>{value}</option>{/each}</select></label>
-        <label class="field">Source<input bind:value={sightingSource} maxlength="80" required></label>
-        <label class="field">Observed or reviewed at<input type="datetime-local" bind:value={sightingObservedAt}></label>
-        <label class="field">Completeness<select bind:value={sightingCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
-        {#if record.evidencePins.length}<label class="field">Supporting evidence pin<select bind:value={sightingEvidencePinId}><option value="">No pin selected</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>{/if}
-      </div>
-      <label class="field">Limitations <small>one per line</small><textarea bind:value={sightingLimitations} maxlength="2000" rows="2"></textarea></label>
-      <button class="btn" type="submit" disabled={mutationBusy}>Record sighting</button>
-    </form>
-    {#if record.sightings.length}
-      <ol class="records">{#each [...record.sightings].reverse() as sighting}<li><strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong><p>{sighting.source}</p><small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt}</small>{#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
-    {/if}
-    {#if sightingChronology.length}
-      <section class="chronology" aria-labelledby={`sighting-chronology-${record.id}`}>
-        <div>
-          <strong id={`sighting-chronology-${record.id}`}>Observation chronology</strong>
-          <span>{countLabel(sightingChronology.length, 'source sequence')}</span>
-        </div>
-        <p>First and last observed describe retained evidence, not domain creation, activation, or removal. Review conclusions remain outside these ranges.</p>
-        <ol>
-          {#each sightingChronology as entry}
-            <li>
-              <div><strong>{entry.category}</strong><span>{entry.sourceClass} · {entry.completeness}</span></div>
-              <p>{entry.source}</p>
-              <dl>
-                <div><dt>First observed</dt><dd>{entry.firstObservedAt}</dd></div>
-                <div><dt>Last observed</dt><dd>{entry.lastObservedAt}</dd></div>
-                <div><dt>Observations</dt><dd>{entry.observationCount}</dd></div>
-              </dl>
-              {#if entry.limitations.length}<small>Limits: {entry.limitations.join('; ')}</small>{/if}
-            </li>
-          {/each}
-        </ol>
-        {#if sightingReviewConclusionCount}
-          <small>{countLabel(sightingReviewConclusionCount, 'review conclusion')} retained separately and excluded from observed ranges.</small>
-        {/if}
-      </section>
-    {/if}
-  </details>
-
+  {/if}
+  {#key record.id}
+    <CaseObservationStage {record} {mutationBusy} {persist} visible={presentationMode === 'advanced'} />
+  {/key}
+  {#if presentationMode === 'advanced'}
   <details id={`case-response-assessment-${record.id}`}>
     <summary>Record an analyst decision</summary>
     <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
@@ -1104,7 +984,6 @@
   .transition-form,.remediation-review .stack{display:grid;gap:10px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.transition-form>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px}.transition-form>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}
   .transition-timeline{display:grid;gap:7px;margin:9px 0 0;padding:0;list-style:none}.transition-timeline li{min-width:0;padding:8px;border-left:3px solid var(--accent);background:var(--panel)}.transition-timeline li[data-applied="false"]{border-color:var(--amber)}.transition-timeline span,.transition-timeline small{display:block;overflow-wrap:anywhere}.history-warning{margin:7px 0;padding:8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .remediation-review{gap:12px}.separate-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.separate-times div{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.separate-times dt{color:var(--muted);font-size:var(--text-2xs)}.separate-times dd{margin:4px 0 0;font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere}.embedded-records{padding:0}.closure-form{border-color:rgb(var(--amber-rgb) / .35)!important}
-  .chronology{display:grid;gap:8px;margin:0 12px 12px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.chronology>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}.chronology>div>span,.chronology>p,.chronology>small{color:var(--muted);font-size:var(--text-2xs)}.chronology>p{margin:0;line-height:1.5}.chronology ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:7px;margin:0;padding:0;list-style:none}.chronology li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.chronology li>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px}.chronology li>div>strong{font:700 var(--text-xs) var(--mono);text-transform:capitalize}.chronology li>div>span,.chronology li>small{color:var(--muted);font-size:var(--text-2xs)}.chronology li>p{margin:6px 0;overflow-wrap:anywhere}.chronology dl{display:grid;gap:3px;margin:0}.chronology dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px}.chronology dt,.chronology dd{margin:0;font-size:var(--text-2xs)}.chronology dt{color:var(--muted)}.chronology dd{font-family:var(--mono);overflow-wrap:anywhere}
   .pin-references{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
   .choice{display:flex;align-items:flex-start;gap:7px;min-width:0}.choice input{width:auto;margin-top:2px}.choice span{min-width:0;overflow-wrap:anywhere}
