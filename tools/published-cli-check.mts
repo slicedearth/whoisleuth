@@ -15,9 +15,9 @@ import {
 import {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,
+  MAX_CLI_PACKAGE_COMPILER_SOURCES,
   MAX_CLI_PACKAGE_ENTRIES,
   MAX_CLI_PACKAGE_INSTALLED_CHECKS,
-  MAX_CLI_PACKAGE_MODULES,
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
   type CliPackageReport,
@@ -248,7 +248,7 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
   if (report.packageName !== PACKAGE_NAME || normalizeSemanticVersion(report.packageVersion) !== expectedVersion) {
     throw new TypeError('Reviewed candidate report identity does not match the selected version.');
   }
-  boundedInteger(report.sourceModuleCount, 'Reviewed source module count', MAX_CLI_PACKAGE_MODULES);
+  boundedInteger(report.sourceModuleCount, 'Reviewed source module count', MAX_CLI_PACKAGE_COMPILER_SOURCES);
   boundedInteger(report.packedEntryCount, 'Reviewed packed entry count', MAX_CLI_PACKAGE_ENTRIES);
   boundedInteger(report.packedBytes, 'Reviewed packed bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
   boundedInteger(report.unpackedBytes, 'Reviewed unpacked bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);

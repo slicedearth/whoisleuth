@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { TEST_SITE_PASSWORD } from './constants';
+import { TEST_SITE_PASSWORD } from './constants.ts';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { expectVersionedSourceLink } from './helpers';
 

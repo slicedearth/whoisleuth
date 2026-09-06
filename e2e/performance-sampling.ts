@@ -1,19 +1,31 @@
 import type { Page } from '@playwright/test';
 
-import { ALLOWED_ORIGIN } from './fixtures';
+import { ALLOWED_ORIGIN } from './constants.ts';
+import {
+  PERFORMANCE_SAMPLE_COUNT,
+  installNavigationReadinessMark,
+  machineTimingBudgetChecks,
+  performanceSampleMedian,
+  resetPerformanceSampleState as resetPerformanceSampleStateForOrigin,
+  validateBrowserReadinessTargets,
+  type BrowserReadinessTarget,
+  type MachineTimingBudget,
+  type MachineTimingBudgetCheck,
+  type MachineTimingSampleSet,
+} from '../tools/playwright-execution-contract.mts';
 
-// Three samples make the median require two passes against the reviewed
-// budget. One scheduler-affected sample remains permitted, but the two-times
-// hard ceiling prevents the median from hiding a severe regression.
-export const PERFORMANCE_SAMPLE_COUNT = 3;
-export const PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER = 2;
-
-export type BrowserReadinessTarget = Readonly<{
-  selector: string;
-  exactText?: string;
-  requireEnabled?: boolean;
-  visibility?: 'visible' | 'attached';
-}>;
+export {
+  PERFORMANCE_SAMPLE_COUNT,
+  installNavigationReadinessMark,
+  machineTimingBudgetChecks,
+  performanceSampleMedian,
+};
+export type {
+  BrowserReadinessTarget,
+  MachineTimingBudget,
+  MachineTimingBudgetCheck,
+  MachineTimingSampleSet,
+};
 
 export type BrowserInteractionReadiness = Readonly<{
   start: Readonly<{
@@ -29,28 +41,11 @@ type BrowserInteractionReadinessResult = Readonly<{
   browserReadyMs: number;
 }>;
 
-function validateReadinessTargets(targets: readonly BrowserReadinessTarget[]): void {
-  if (targets.length < 1 || targets.length > 4) {
-    throw new TypeError('Browser readiness requires between one and four target definitions.');
-  }
-  for (const target of targets) {
-    if (!target.selector.trim() || target.selector.length > 240) {
-      throw new TypeError('Browser readiness selectors must be bounded non-empty strings.');
-    }
-    if (target.exactText !== undefined && target.exactText.length > 500) {
-      throw new TypeError('Browser readiness text must remain within the maintained bound.');
-    }
-    if (target.visibility !== undefined && target.visibility !== 'visible' && target.visibility !== 'attached') {
-      throw new TypeError('Browser readiness visibility is unsupported.');
-    }
-  }
-}
-
 export async function beginBrowserInteractionReadiness(
   page: Page,
   definition: BrowserInteractionReadiness,
 ): Promise<void> {
-  validateReadinessTargets(definition.targets);
+  validateBrowserReadinessTargets(definition.targets);
   if (definition.start.selector !== undefined && (!definition.start.selector.trim() || definition.start.selector.length > 240)) {
     throw new TypeError('Browser interaction selectors must be bounded non-empty strings.');
   }
@@ -162,37 +157,6 @@ export async function abortBrowserInteractionReadiness(page: Page): Promise<void
   }).catch(() => undefined);
 }
 
-export async function installNavigationReadinessMark(
-  page: Page,
-  targets: readonly BrowserReadinessTarget[],
-): Promise<void> {
-  validateReadinessTargets(targets);
-  await page.addInitScript((definitions) => {
-    const scope = globalThis as typeof globalThis & { __whoisleuthNavigationReadyAt?: number | null };
-    scope.__whoisleuthNavigationReadyAt = null;
-    const normalizeText = (value: string): string => value.replace(/\s+/gu, ' ').trim();
-    const targetReady = (target: BrowserReadinessTarget): boolean => (
-      [...document.querySelectorAll(target.selector)].some((element) => {
-        const style = getComputedStyle(element);
-        if (target.visibility !== 'attached'
-          && (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse'
-          || element.getClientRects().length === 0)) return false;
-        if (target.exactText !== undefined && normalizeText(element.textContent ?? '') !== normalizeText(target.exactText)) return false;
-        if (target.requireEnabled && (element.matches(':disabled') || element.getAttribute('aria-disabled') === 'true')) return false;
-        return true;
-      })
-    );
-    const poll = (): void => {
-      if (definitions.every(targetReady)) {
-        scope.__whoisleuthNavigationReadyAt = performance.now();
-      } else {
-        requestAnimationFrame(poll);
-      }
-    };
-    requestAnimationFrame(poll);
-  }, targets);
-}
-
 export async function readNavigationReadinessMark(page: Page): Promise<number> {
   await page.waitForFunction(() => {
     const scope = globalThis as typeof globalThis & { __whoisleuthNavigationReadyAt?: number | null };
@@ -215,26 +179,5 @@ export async function isNavigationReadinessMarked(page: Page): Promise<boolean> 
 }
 
 export async function resetPerformanceSampleState(page: Page): Promise<void> {
-  if (page.url() === ALLOWED_ORIGIN || page.url().startsWith(`${ALLOWED_ORIGIN}/`)) {
-    await page.evaluate(() => sessionStorage.clear());
-  }
-  await page.goto('about:blank');
-  const session = await page.context().newCDPSession(page);
-  try {
-    await session.send('Network.enable');
-    await session.send('Network.clearBrowserCache');
-    await session.send('Storage.clearDataForOrigin', {
-      origin: ALLOWED_ORIGIN,
-      storageTypes: 'appcache,cache_storage,indexeddb,local_storage,service_workers,websql',
-    });
-  } finally {
-    await session.detach();
-  }
-}
-
-export function performanceSampleMedian(values: readonly number[]): number {
-  if (values.length !== PERFORMANCE_SAMPLE_COUNT || values.some((value) => !Number.isFinite(value) || value < 0)) {
-    throw new TypeError(`Performance authority requires exactly ${PERFORMANCE_SAMPLE_COUNT} finite non-negative samples.`);
-  }
-  return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)]!;
+  return resetPerformanceSampleStateForOrigin(page, ALLOWED_ORIGIN);
 }

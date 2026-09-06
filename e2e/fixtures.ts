@@ -1,18 +1,20 @@
 import { test as base, expect } from '@playwright/test';
 import type { BrowserContext, ConsoleMessage, Route } from '@playwright/test';
-import { PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT } from '../tools/playwright-execution-contract.mts';
-import { BASE_URL } from './constants';
+import {
+  PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
+  PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
+  PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+  enforcesMachineTimingBudgets,
+} from '../tools/playwright-execution-contract.mts';
+import { ALLOWED_ORIGIN } from './constants.ts';
 
 // The one origin every browser-initiated request is allowed to reach.
 // Exported (and kept as a pure, dependency-free predicate) so the guard
 // logic itself can be exercised directly - see origin-guard.spec.ts - rather
 // than only ever being proven correct by the absence of a failure.
-export const ALLOWED_ORIGIN = new URL(BASE_URL).origin;
+export { ALLOWED_ORIGIN };
 export const PERFORMANCE_AUTHORITY_PROJECT = PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;
-
-export function enforcesMachineTimingBudgets(projectName: string): boolean {
-  return projectName === PERFORMANCE_AUTHORITY_PROJECT;
-}
+export { enforcesMachineTimingBudgets };
 
 export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
@@ -74,7 +76,7 @@ export async function installNetworkGuard(context: BrowserContext, allowedOrigin
     await route.abort('blockedbyclient');
   };
 
-  await context.route('**/*', handler);
+  await context.route(PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN, handler);
 
   return {
     offOriginRequests,
@@ -167,7 +169,7 @@ export const test = base.extend<Options & Fixtures>({
       expect(guard.offOriginRequests, 'requests must stay within the local test server origin').toEqual([]);
       expect(consoleIssues, 'no console errors/warnings or uncaught page errors').toEqual([]);
     },
-    { auto: true },
+    PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
   ],
 });
 

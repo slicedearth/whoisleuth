@@ -1,20 +1,20 @@
 import { performance } from 'node:perf_hooks';
 import type { Locator, Page, Request, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import { ALLOWED_ORIGIN, enforcesMachineTimingBudgets, expect, test } from './fixtures';
+import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import {
   PERFORMANCE_SAMPLE_COUNT,
-  PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
   abortBrowserInteractionReadiness,
   beginBrowserInteractionReadiness,
+  machineTimingBudgetChecks,
   performanceSampleMedian,
   readBrowserInteractionReadiness,
   resetPerformanceSampleState,
   type BrowserInteractionReadiness,
-} from './performance-sampling';
+} from './performance-sampling.ts';
 
 type InteractionId =
   | 'cli_command_detail'
@@ -523,15 +523,8 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
 
   // Shared hosted runners cannot provide a stable CPU scheduling authority.
   // Transfer, request and layout gates remain blocking in every project.
-  if (enforcesMachineTimingBudgets(options.testInfo.project.name)) {
-    expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(budget.usableMs);
-    expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(budget.longTaskTotalMs);
-    expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
-      budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-    );
-    expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
-      budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-    );
+  for (const check of machineTimingBudgetChecks(options.testInfo.project.name, sampleSet, budget)) {
+    expect(check.observed, check.metric).toBeLessThanOrEqual(check.maximum);
   }
   return sampleSet;
 }

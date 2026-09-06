@@ -13,7 +13,7 @@ import {
   isNavigationReadinessMarked,
   readBrowserInteractionReadiness,
   readNavigationReadinessMark,
-} from './performance-sampling';
+} from './performance-sampling.ts';
 
 const CASES_KEY = 'whois-rdap-cases-v1';
 

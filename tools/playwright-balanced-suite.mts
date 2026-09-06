@@ -7,7 +7,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
-import { createHostedBrowserWorkspace, type HostedBrowserWorkspace } from './hosted-browser-workspace.mts';
+import {
+  createHostedBrowserWorkspace,
+  runHostedBrowserWorkspace,
+  type HostedBrowserWorkspace,
+} from './hosted-browser-workspace.mts';
 import {
   localPortIsFree,
   npmExecutableName,
@@ -227,89 +231,90 @@ export async function runFunctionalRunsSerially(
   });
 }
 
+async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
+  const executionRoot = workspace.root;
+  const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
+  const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
+
+  if (interruptionRequested) return 130;
+
+  const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
+  const ports = await selectPortRange(plan.shardCount + 1);
+  try {
+    if (interruptionRequested) return 130;
+    const performanceEnvironment = runEnvironment(
+      executionRoot,
+      ports[plan.shardCount]!,
+      'performance',
+      workspace.revision,
+    );
+    const performanceExit = await runProcess(
+      executionRoot,
+      'isolated performance authority',
+      playwrightPerformanceAuthorityArguments(playwrightCli),
+      performanceEnvironment,
+    );
+    if (interruptionRequested) return 130;
+    if (performanceExit !== 0) return performanceExit;
+    const performanceResult = resultData(executionRoot, performanceEnvironment);
+
+    const functionalRuns = plan.shards.map((shard, index) => {
+      const identity = `${shard.shard}/${plan.shardCount}`;
+      const environment = runEnvironment(executionRoot, ports[index]!, 'functional', workspace.revision, identity);
+      return Object.freeze({
+        label: `functional shard ${identity}`,
+        environment,
+        port: ports[index]!,
+        args: Object.freeze([shardRunner, `--run=${identity}`]),
+      });
+    });
+    // Hosted CI assigns each shard its own runner. Launching all four on one
+    // local host creates contention that the hosted topology does not have and
+    // can turn bounded deferred-module deadlines into false product failures.
+    // Preserve the exact shard plan and reports, but give each local shard the
+    // same isolated execution opportunity as its hosted counterpart.
+    const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
+      execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
+      verifyPortFree: (run) => requirePortRangeFree([run.port]),
+      readResult: (run) => resultData(executionRoot, run.environment),
+      isInterrupted: () => interruptionRequested,
+    });
+    if (functionalResult.interrupted) return 130;
+    if (functionalResult.exits.some((code) => code !== 0)) return 2;
+
+    const functionalResults = functionalResult.reports;
+    process.stdout.write(verifyHostedBrowserHealth(functionalResults));
+    const summaries = [
+      resultSummary(performanceEnvironment, performanceResult),
+      ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
+    ];
+    const totals = summaries.reduce((summary, item) => ({
+      total: summary.total + item.total,
+      passed: summary.passed + item.passed,
+      failed: summary.failed + item.failed,
+      flaky: summary.flaky + item.flaky,
+      skipped: summary.skipped + item.skipped,
+      retried: summary.retried + item.retried,
+    }), { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0, retried: 0 });
+    process.stdout.write(
+      `Accepted Playwright suite: ${totals.passed}/${totals.total} passed; `
+      + `${totals.failed} failed, ${totals.flaky} flaky, ${totals.retried} retried, ${totals.skipped} skipped.\n`,
+    );
+    return totals.failed || totals.flaky || totals.retried ? 2 : 0;
+  } finally {
+    await requirePortRangeFree(ports);
+  }
+}
+
 export async function main(args = process.argv.slice(2)): Promise<number> {
-  let workspace: HostedBrowserWorkspace | null = null;
   try {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
-    workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
-    const executionRoot = workspace.root;
-    const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
-    const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
-
-    if (interruptionRequested) return 130;
-
-    const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
-    const ports = await selectPortRange(plan.shardCount + 1);
-    try {
-      if (interruptionRequested) return 130;
-      const performanceEnvironment = runEnvironment(
-        executionRoot,
-        ports[plan.shardCount]!,
-        'performance',
-        workspace.revision,
-      );
-      const performanceExit = await runProcess(
-        executionRoot,
-        'isolated performance authority',
-        playwrightPerformanceAuthorityArguments(playwrightCli),
-        performanceEnvironment,
-      );
-      if (interruptionRequested) return 130;
-      if (performanceExit !== 0) return performanceExit;
-      const performanceResult = resultData(executionRoot, performanceEnvironment);
-
-      const functionalRuns = plan.shards.map((shard, index) => {
-        const identity = `${shard.shard}/${plan.shardCount}`;
-        const environment = runEnvironment(executionRoot, ports[index]!, 'functional', workspace!.revision, identity);
-        return Object.freeze({
-          label: `functional shard ${identity}`,
-          environment,
-          port: ports[index]!,
-          args: Object.freeze([shardRunner, `--run=${identity}`]),
-        });
-      });
-      // Hosted CI assigns each shard its own runner. Launching all four on one
-      // local host creates contention that the hosted topology does not have and
-      // can turn bounded deferred-module deadlines into false product failures.
-      // Preserve the exact shard plan and reports, but give each local shard the
-      // same isolated execution opportunity as its hosted counterpart.
-      const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
-        execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
-        verifyPortFree: (run) => requirePortRangeFree([run.port]),
-        readResult: (run) => resultData(executionRoot, run.environment),
-        isInterrupted: () => interruptionRequested,
-      });
-      if (functionalResult.interrupted) return 130;
-      if (functionalResult.exits.some((code) => code !== 0)) return 2;
-
-      const functionalResults = functionalResult.reports;
-      process.stdout.write(verifyHostedBrowserHealth(functionalResults));
-      const summaries = [
-        resultSummary(performanceEnvironment, performanceResult),
-        ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
-      ];
-      const totals = summaries.reduce((summary, item) => ({
-        total: summary.total + item.total,
-        passed: summary.passed + item.passed,
-        failed: summary.failed + item.failed,
-        flaky: summary.flaky + item.flaky,
-        skipped: summary.skipped + item.skipped,
-        retried: summary.retried + item.retried,
-      }), { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0, retried: 0 });
-      process.stdout.write(
-        `Accepted Playwright suite: ${totals.passed}/${totals.total} passed; `
-        + `${totals.failed} failed, ${totals.flaky} flaky, ${totals.retried} retried, ${totals.skipped} skipped.\n`,
-      );
-      return totals.failed || totals.flaky || totals.retried ? 2 : 0;
-    } finally {
-      await requirePortRangeFree(ports);
-    }
+    const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
+    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace), () => interruptionRequested);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
     return interruptionRequested ? 130 : 2;
-  } finally {
-    workspace?.dispose();
   }
 }
 

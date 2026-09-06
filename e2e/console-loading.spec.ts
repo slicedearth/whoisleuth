@@ -1,16 +1,16 @@
 import { performance as hostPerformance } from 'node:perf_hooks';
-import { enforcesMachineTimingBudgets, expect, test } from './fixtures';
+import { expect, test } from './fixtures';
 import type { CDPSession, Locator, Page, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
-  PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
   installNavigationReadinessMark,
+  machineTimingBudgetChecks,
   performanceSampleMedian,
   readNavigationReadinessMark,
   resetPerformanceSampleState,
   type BrowserReadinessTarget,
-} from './performance-sampling';
+} from './performance-sampling.ts';
 
 type ConsoleRoute = Readonly<{
   path: '/lookup' | '/monitor' | '/cli';
@@ -341,15 +341,8 @@ for (const route of routes) {
     process.stdout.write(`Console loading sample set: ${JSON.stringify(sampleSet)}\n`);
     // Shared hosted runners cannot provide a stable CPU scheduling authority.
     // Transfer and layout gates above remain blocking in every project.
-    if (enforcesMachineTimingBudgets(testInfo.project.name)) {
-      expect(sampleSet.usableMsMedian).toBeLessThanOrEqual(route.budget.usableMs);
-      expect(sampleSet.longTaskTotalMsMedian).toBeLessThanOrEqual(route.budget.longTaskTotalMs);
-      expect(sampleSet.usableMsMaximum).toBeLessThanOrEqual(
-        route.budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-      );
-      expect(sampleSet.longTaskTotalMsMaximum).toBeLessThanOrEqual(
-        route.budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-      );
+    for (const check of machineTimingBudgetChecks(testInfo.project.name, sampleSet, route.budget)) {
+      expect(check.observed, check.metric).toBeLessThanOrEqual(check.maximum);
     }
   });
 }

@@ -17,6 +17,7 @@ import {
   type Fetcher,
 } from '../tools/published-cli-check.mts';
 import {
+  MAX_CLI_PACKAGE_COMPILER_SOURCES,
   MAX_CLI_PACKAGE_ENTRIES,
   MAX_CLI_PACKAGE_INSTALLED_CHECKS,
 } from '../tools/cli-package.mts';
@@ -136,6 +137,9 @@ describe('published CLI verification', () => {
     assert.throws(() => validateCandidateReport(candidateReport({
       installedChecks: Array.from({ length: MAX_CLI_PACKAGE_INSTALLED_CHECKS + 1 }, (_, index) => `installed-check-${index}`),
     }), VERSION), /bounded non-empty string array/u);
+    assert.throws(() => validateCandidateReport(candidateReport({
+      sourceModuleCount: MAX_CLI_PACKAGE_COMPILER_SOURCES + 1,
+    }), VERSION), /Reviewed source module count must be between/u);
     assert.throws(() => validateCandidateReport(candidateReport({ publicationEnabled: false }), VERSION), /publication-enabled/u);
     assert.throws(() => validateCandidateReport(candidateReport({ archiveSha256: 'a'.repeat(64), extra: true }), VERSION), /field contract/u);
     let fetched = false;

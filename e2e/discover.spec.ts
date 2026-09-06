@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
-import { BASE_URL } from './constants';
+import { BASE_URL } from './constants.ts';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test

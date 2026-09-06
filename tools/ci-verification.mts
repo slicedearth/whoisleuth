@@ -7,6 +7,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
+import {
+  resolveUnitTestExecutables,
+  unitTestExecutableEnvironment,
+} from './toolchain-compatibility.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -66,6 +70,14 @@ export const CI_CLI_RUNTIME_NODE_MAJOR = 26;
 export const CI_CLI_RUNTIME_SCRIPTS = Object.freeze([
   'cli:package:check',
 ] as const);
+export const CI_COMMAND_GROUPS = Object.freeze([
+  'preflight',
+  'quality',
+  'unit',
+  'browser-build',
+  'cli-runtime',
+] as const);
+export type CiCommandGroup = typeof CI_COMMAND_GROUPS[number];
 
 export type HostedCiScriptPlan = Readonly<{
   quality: readonly string[];
@@ -154,8 +166,27 @@ function run(command: string, args: readonly string[], environment: NodeJS.Proce
   if (child.status !== 0) throw new Error(`Local CI command failed with exit code ${child.status ?? 2}.`);
 }
 
-function npmRun(script: string, extra: readonly string[] = []): void {
-  run(npmExecutableName(), ['run', script, ...extra]);
+function npmRun(
+  script: string,
+  extra: readonly string[] = [],
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  run(npmExecutableName(), ['run', script, ...extra], environment);
+}
+
+export function ciCommandGroupScripts(group: CiCommandGroup): readonly string[] {
+  if (group === 'preflight') return CI_PREFLIGHT_SCRIPTS;
+  if (group === 'quality') return CI_QUALITY_SCRIPTS;
+  if (group === 'unit') return CI_UNIT_SCRIPTS;
+  if (group === 'browser-build') return CI_BROWSER_BUILD_SCRIPTS;
+  return CI_CLI_RUNTIME_SCRIPTS;
+}
+
+export function runCiCommandGroup(
+  group: CiCommandGroup,
+  execute: (script: string, args: readonly string[]) => void = (script, args) => npmRun(script, args),
+): void {
+  for (const script of ciCommandGroupScripts(group)) execute(script, []);
 }
 
 function nodeVersion(executable: string): string | null {
@@ -203,10 +234,17 @@ function cliRuntimeExecutable(): string {
 
 function runCliRuntimeCheck(executable: string): void {
   const runtimePath = [path.dirname(executable), process.env.PATH].filter(Boolean).join(path.delimiter);
-  run(executable, [path.join(REPOSITORY_ROOT, 'tools', 'cli-package.mts')], {
+  run(executable, [path.join(REPOSITORY_ROOT, 'tools', 'ci-verification.mts'), '--group=cli-runtime'], {
     ...process.env,
     PATH: runtimePath,
   });
+}
+
+function assertCliRuntime(actual = process.versions.node): void {
+  const match = /^(\d+)\.\d+\.\d+$/u.exec(actual);
+  if (match?.[1] !== String(CI_CLI_RUNTIME_NODE_MAJOR)) {
+    throw new Error(`CLI compatibility CI group requires Node.js ${CI_CLI_RUNTIME_NODE_MAJOR}; running ${actual}.`);
+  }
 }
 
 function workflowJob(workflow: string, job: string): string {
@@ -266,8 +304,15 @@ function assertFrontendBuildArtifactFlow(workflow: string): void {
 }
 
 function npmScripts(job: string): readonly string[] {
-  return Object.freeze([...job.matchAll(/^\s+(?:run:\s+)?npm run (?:--silent\s+)?([a-z0-9:.-]+)(?:\s|$)/gmu)]
-    .map((match) => match[1] as string));
+  return Object.freeze([...job.matchAll(
+    /^\s+(?:run:\s+)?npm run (?:--silent\s+)?([a-z0-9:.-]+)(?:\s+--\s+--group=([a-z-]+))?(?:\s|$)/gmu,
+  )].flatMap((match) => {
+    const script = match[1] as string;
+    const group = match[2];
+    if (script !== 'verification:ci' || !group) return [script];
+    if (!CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) return [`verification:ci:${group}`];
+    return ciCommandGroupScripts(group as CiCommandGroup);
+  }));
 }
 
 export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
@@ -325,30 +370,58 @@ export function formatLocalCiPlan(): string {
   ].join('\n');
 }
 
+export function parseCiVerificationArguments(args: readonly string[]): Readonly<{
+  mode: 'full' | 'list' | 'group';
+  group?: CiCommandGroup;
+}> {
+  if (args.length === 0) return Object.freeze({ mode: 'full' });
+  if (args.length === 1 && args[0] === '--list') return Object.freeze({ mode: 'list' });
+  const group = args.length === 1 && args[0]?.startsWith('--group=')
+    ? args[0].slice('--group='.length)
+    : args.length === 2 && args[0] === '--group'
+      ? args[1]
+      : null;
+  if (group && CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) {
+    return Object.freeze({ mode: 'group', group: group as CiCommandGroup });
+  }
+  throw new TypeError(`Usage: node tools/ci-verification.mts [--list | --group=<${CI_COMMAND_GROUPS.join('|')}>]`);
+}
+
 export function main(args = process.argv.slice(2)): number {
   let cleanup = false;
   let failure: unknown;
   try {
     assertHostedCiParity();
-    if (args.length === 1 && args[0] === '--list') {
+    const parsed = parseCiVerificationArguments(args);
+    if (parsed.mode === 'list') {
       process.stdout.write(`${formatLocalCiPlan()}\n`);
       return 0;
     }
-    if (args.length) throw new TypeError('Usage: node tools/ci-verification.mts [--list]');
+    if (parsed.mode === 'group') {
+      const group = parsed.group!;
+      if (group === 'cli-runtime') assertCliRuntime();
+      else assertLocalCiRuntime();
+      const environment = group === 'unit'
+        ? unitTestExecutableEnvironment(resolveUnitTestExecutables())
+        : process.env;
+      runCiCommandGroup(group, (script, extra) => npmRun(script, extra, environment));
+      return 0;
+    }
     assertLocalCiRuntime();
     if (gitOutput(['status', '--porcelain=v1', '--untracked-files=all'])) {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
     cleanup = true;
     assertPlaywrightBrowserCacheWritable();
+    const unitEnvironment = unitTestExecutableEnvironment(resolveUnitTestExecutables());
     const cliRuntime = cliRuntimeExecutable();
     const range = localCiRevisionRange();
     npmRun('security:staged', ['--', '--range', range]);
-    for (const script of CI_PREFLIGHT_SCRIPTS) npmRun(script);
+    runCiCommandGroup('preflight');
     run(npmExecutableName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);
-    for (const script of CI_QUALITY_SCRIPTS) npmRun(script);
-    for (const script of CI_UNIT_SCRIPTS) npmRun(script);
-    for (const script of CI_BROWSER_BUILD_SCRIPTS) npmRun(script);
+    runCiCommandGroup('quality');
+    runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
+    runCiCommandGroup('browser-build');
     npmRun('test:e2e:install');
     npmRun('test:e2e:built');
     runCliRuntimeCheck(cliRuntime);

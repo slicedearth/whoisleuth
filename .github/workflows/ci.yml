@@ -33,40 +33,12 @@ jobs:
           SECRET_SCAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           SECRET_SCAN_HEAD_SHA: ${{ github.sha }}
         run: npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"
-      - name: Verify release version
-        run: npm run release:check
+      - name: Run maintained preflight group
+        run: npm run verification:ci -- --group=preflight
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
-      - name: Verify development toolchain compatibility
-        run: npm run toolchain:check
-      - name: Verify retained timing and balanced browser plan
-        run: npm run verification:timing:check
-      - name: Verify focused ownership map
-        run: npm run verification:ownership:check
-      - name: Verify mandatory analyst journeys
-        run: npm run verification:journeys:check
-      - name: Verify canonical capability catalogue
-        run: npm run capabilities:check
-      - name: Verify canonical privacy catalogue
-        run: npm run privacy:check
-      - name: Verify schema lifecycle inventory
-        run: npm run schema:inventory
-      - name: Kill reviewed critical mutants
-        run: npm run test:mutation
-      - name: Verify production dependency notices
-        run: npm run licenses:check
-      - name: Verify optional-provider policy freshness
-        run: npm run providers:policy-check
-      - name: Verify reviewed technology evidence
-        run: npm run technology:coverage-check
-      - name: Verify scoped CLI package
-        run: npm run cli:package:check
-      - name: Verify architectural dependency boundaries
-        run: npm run architecture:check
-      - name: Run type checks
-        run: npm run typecheck
-      - name: Check Svelte frontend
-        run: npm run check
+      - name: Run maintained quality group
+        run: npm run verification:ci -- --group=quality
 
   unit:
     runs-on: ubuntu-latest
@@ -87,8 +59,8 @@ jobs:
           sudo apt-get install --no-install-recommends --yes zsh
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
-      - name: Run tests with production-source coverage
-        run: npm run test:coverage
+      - name: Run maintained unit group
+        run: npm run verification:ci -- --group=unit
       - name: Upload unit coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -116,14 +88,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
-      - name: Build Svelte frontend
-        run: npm run build
-      - name: Enforce frontend loading budgets
-        run: npm run frontend:loading-report
-      - name: Scan built browser assets
-        run: npm run security:retire
-      - name: Verify frontend build identity
-        run: npm run frontend:build:integrity
+      - name: Run maintained browser-build group
+        run: npm run verification:ci -- --group=browser-build
       - name: Upload verified frontend build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -280,8 +246,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
-      - name: Exercise the installed CLI package boundary
-        run: npm run cli:package:check
+      - name: Run maintained CLI compatibility group
+        run: npm run verification:ci -- --group=cli-runtime
 
   verify:
     if: ${{ always() }}

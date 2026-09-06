@@ -4,9 +4,10 @@ import { serializeCsvCell, serializeCsvRows } from '../../../../lib/csv.mts';
 import {
   hammingDistanceHex,
   isInformativePerceptualHash,
-  isPerceptualHash,
 } from '../../../../lib/perceptual-hash-comparison.mts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
+
+export { groupBySimilarFavicon } from '../../../../packages/comparison/favicon-similarity.mts';
 
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
@@ -53,88 +54,6 @@ export { hammingDistanceHex };
 // profile values.
 export function isInformativeFaviconHash(hex: unknown): hex is string {
   return isInformativePerceptualHash(hex);
-}
-
-// Groups records that share a favicon, connecting two whenever their exact
-// hashes match OR their perceptual hashes are within maxDistance. Returns the
-// domain lists of every group of 2+ (singletons dropped). Exact-hash matching
-// still covers favicons that can't be perceptually decoded (GIF/JPEG/SVG ->
-// null phash), while the perceptual pass additionally catches resized or
-// recompressed near-duplicates the exact hash alone would miss - so a phishing
-// ring that varied one favicon slightly across its domains still clusters.
-// Union-find gives transitive grouping (A~B, B~C => one group); the pairwise
-// perceptual pass is O(n^2) but only over records that carry a favicon at all
-// (deep-scanned domains, capped well below the fast-scan ceiling).
-type FaviconRecord = {
-  domain: string;
-  faviconHash: string | null;
-  faviconPHash: string | null;
-};
-
-function faviconRecord(value: unknown): FaviconRecord | null {
-  const record = plainRecord(value);
-  if (!record || typeof record.domain !== 'string') return null;
-  const faviconHash = typeof record.faviconHash === 'string' && record.faviconHash
-    ? record.faviconHash
-    : null;
-  const faviconPHash = isPerceptualHash(record.faviconPHash)
-    ? record.faviconPHash
-    : null;
-  return faviconHash || faviconPHash
-    ? { domain: record.domain, faviconHash, faviconPHash }
-    : null;
-}
-
-export function groupBySimilarFavicon(records: unknown, maxDistance: number): string[][] {
-  const items = Array.isArray(records)
-    ? records.map(faviconRecord).filter((record): record is FaviconRecord => record !== null)
-    : [];
-  const parent = items.map((_, i) => i);
-  const find = (x: number): number => {
-    let root = x;
-    while ((parent[root] ?? root) !== root) root = parent[root] ?? root;
-    while ((parent[x] ?? x) !== root) {
-      const next = parent[x] ?? x;
-      parent[x] = root;
-      x = next;
-    }
-    return root;
-  };
-  const union = (a: number, b: number): void => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[ra] = rb; };
-
-  // Exact-hash buckets first (cheap, and the only signal for undecodable icons).
-  const firstByHash = new Map<string, number>();
-  items.forEach((r, i) => {
-    if (!r.faviconHash) return;
-    const existing = firstByHash.get(r.faviconHash);
-    if (existing !== undefined) union(i, existing);
-    else firstByHash.set(r.faviconHash, i);
-  });
-
-  // Perceptual near-matches among records with an *informative* phash -
-  // degenerate hashes (solid/monotonic icons) are skipped so they don't all
-  // cluster together; they can still group via an exact-hash match above.
-  const withPhash: Array<{ i: number; phash: string }> = [];
-  items.forEach((r, i) => {
-    if (isInformativeFaviconHash(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash });
-  });
-  for (let a = 0; a < withPhash.length; a += 1) {
-    for (let b = a + 1; b < withPhash.length; b += 1) {
-      const left = withPhash[a];
-      const right = withPhash[b];
-      if (!left || !right) continue;
-      const distance = hammingDistanceHex(left.phash, right.phash);
-      if (distance !== null && distance <= maxDistance) union(left.i, right.i);
-    }
-  }
-
-  const groups = new Map<number, string[]>();
-  items.forEach((r, i) => {
-    const root = find(i);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root)?.push(r.domain);
-  });
-  return [...groups.values()].filter((domains) => domains.length >= 2);
 }
 
 export function toCsvValue(v: unknown): string {

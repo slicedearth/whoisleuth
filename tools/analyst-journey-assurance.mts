@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 
 import { Buffer } from 'node:buffer';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
+import type { JSONReport } from '@playwright/test/reporter';
+import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 
 import {
   SYNTHETIC_ANALYST_JOURNEYS,
@@ -15,6 +19,7 @@ import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT } from './playwright-execution-contract.mts';
 
 export const ANALYST_JOURNEY_ASSURANCE_VERSION = 1;
 export const MAX_ANALYST_JOURNEY_SPEC_BYTES = 2 * 1024 * 1024;
@@ -167,6 +172,133 @@ function assignedShard(file: string, plan: ReturnType<typeof buildBalancedBrowse
   return shards[0]!.shard;
 }
 
+export function assertAppliedBrowserSafety(options: Readonly<{
+  configurationFile?: string;
+  fixtureFile?: string;
+}> = {}): void {
+  const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-contract-'));
+  const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
+  // Configuration discovery does not need a build. Fixture probes override
+  // page/context and must never launch a browser, start a server or make network requests.
+  for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'NODE_V8_COVERAGE', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
+    delete environment[name];
+  }
+  const run = (args: readonly string[]) => spawnSync(process.execPath, [
+    path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js'), 'test', ...args,
+  ], {
+    cwd: REPOSITORY_ROOT, env: environment, encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'], timeout: 30 * 1000, maxBuffer: 2 * 1024 * 1024,
+  });
+  const parse = (child: ReturnType<typeof run>, expectedExit: number): Record<string, unknown> => {
+    if (child.error || child.signal || child.status !== expectedExit) {
+      throw new TypeError(`Applied browser contract probe failed: ${child.error?.message || child.stderr.slice(0, 2000) || child.stdout.slice(0, 2000) || `exit ${child.status}`}`);
+    }
+    return parseBoundedJsonObject(child.stdout, { maximumBytes: 2 * 1024 * 1024, label: 'Applied browser contract report' });
+  };
+
+  try {
+    const reporter = path.join(temporaryRoot, 'configuration.cjs');
+    writeFileSync(reporter, `module.exports = class {
+      onError(error) { process.stderr.write(error.message + '\\n'); }
+      onBegin(config) {
+        const loaded = require(config.configFile);
+        const declaration = loaded.default ?? loaded;
+        process.stdout.write(JSON.stringify({
+          forbidOnly: config.forbidOnly, failOnFlakyTests: config.failOnFlakyTests, workers: config.workers,
+          projects: config.projects.map(project => ({
+            name: project.name, retries: project.retries,
+            fullyParallel: declaration.projects?.find(entry => entry.name === project.name)?.fullyParallel ?? declaration.fullyParallel ?? false,
+            workers: declaration.projects?.find(entry => entry.name === project.name)?.workers ?? config.workers,
+            dependencies: project.dependencies, testMatch: [project.testMatch].flat().map(String), testIgnore: [project.testIgnore].flat().map(String),
+            trace: project.use.trace, screenshot: project.use.screenshot
+          }))
+        }));
+      }
+    };`, { mode: 0o600 });
+    const configuration = parse(run([
+      '--config', options.configurationFile ?? path.join(REPOSITORY_ROOT, 'playwright.config.ts'),
+      '--list', '--project=setup', `--reporter=${reporter}`,
+    ]), 0);
+    const projects = configuration.projects as ReadonlyArray<Readonly<{
+      name: string; retries: number; workers: number; fullyParallel: boolean; dependencies: readonly string[];
+      trace: string; screenshot: string; testMatch: readonly string[]; testIgnore: readonly string[];
+    }>> | undefined;
+    const functional = projects?.find((project) => project.name === PLAYWRIGHT_FUNCTIONAL_PROJECT);
+    const performance = projects?.find((project) => project.name === PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT);
+    if (configuration.forbidOnly !== true || configuration.failOnFlakyTests !== true || configuration.workers !== 1
+      || !functional || !performance
+      || [functional, performance].some((project) => project.retries !== 0 || project.workers !== 1 || project.trace !== 'retain-on-failure'
+        || project.screenshot !== 'only-on-failure' || !project.dependencies.includes('setup'))
+      || performance.fullyParallel !== false
+      || !functional.testIgnore.length || JSON.stringify(functional.testIgnore) !== JSON.stringify(performance.testMatch)) {
+      throw new TypeError('Applied Playwright configuration weakened the maintained execution contract.');
+    }
+
+    const fixtureUrl = pathToFileURL(options.fixtureFile ?? path.join(REPOSITORY_ROOT, 'e2e', 'fixtures.ts')).href;
+    const constantsUrl = pathToFileURL(path.join(REPOSITORY_ROOT, 'e2e', 'constants.ts')).href;
+    writeFileSync(path.join(temporaryRoot, 'guard.spec.mts'), `
+      import { EventEmitter } from 'node:events';
+      import { test as original, expect } from ${JSON.stringify(fixtureUrl)};
+      import { ALLOWED_ORIGIN } from ${JSON.stringify(constantsUrl)};
+      const test = original.extend({
+        browser: async () => { throw new Error('A fixture-contract probe must not launch a browser.'); },
+        context: async ({}, use) => {
+          await use({ handler: null, pattern: null,
+            async route(pattern, handler) { this.pattern = pattern; this.handler = handler; },
+            async unrouteAll() {}
+          });
+        },
+        page: async ({}, use) => { await use(new EventEmitter()); }
+      });
+      // Neither test requests the guard fixture: automatic registration is
+      // part of the behaviour under test, not something this probe supplies.
+      test('allows a same-origin request through the automatic fixture', async ({ context }) => {
+        expect(context.pattern).toBe('**/*');
+        expect(typeof context.handler).toBe('function');
+        const outcomes = [];
+        await context.handler({
+          request: () => ({ url: () => ALLOWED_ORIGIN + '/guard-probe', method: () => 'GET' }),
+          continue: async () => { outcomes.push('continued'); },
+          abort: async (reason) => { outcomes.push(reason); }
+        });
+        expect(outcomes).toEqual(['continued']);
+      });
+      test('rejects an off-origin request during automatic teardown', async ({ context }) => {
+        expect(typeof context.handler).toBe('function');
+        const outcomes = [];
+        await context.handler({
+          request: () => ({ url: () => 'https://example.invalid/guard-probe', method: () => 'GET' }),
+          continue: async () => { outcomes.push('continued'); },
+          abort: async (reason) => { outcomes.push(reason); }
+        });
+        expect(outcomes).toEqual(['blockedbyclient']);
+        console.log('guard-probe:blocked-before-teardown');
+      });
+    `, { mode: 0o600 });
+    const probeConfig = path.join(temporaryRoot, 'probe.config.cjs');
+    writeFileSync(probeConfig, `module.exports = {
+      testDir: __dirname, testMatch: 'guard.spec.mts', workers: 1, retries: 0,
+      outputDir: ${JSON.stringify(path.join(temporaryRoot, 'results'))}, reporter: 'json'
+    };`, { mode: 0o600 });
+    const results = parse(run(['--config', probeConfig]), 1) as unknown as JSONReport;
+    const specifications = results.suites?.[0]?.specs;
+    const allowed = specifications?.[0]?.tests?.[0];
+    const blocked = specifications?.[1]?.tests?.[0];
+    const allowedResult = allowed?.results?.[0];
+    const blockedResult = blocked?.results?.[0];
+    if (results.errors?.length !== 0 || specifications?.length !== 2
+      || allowed?.status !== 'expected' || allowed.results?.length !== 1 || allowedResult?.status !== 'passed'
+      || blocked?.status !== 'unexpected' || blocked.results?.length !== 1 || blockedResult?.status !== 'failed'
+      || blockedResult?.errors?.length !== 1
+      || !blockedResult?.errors?.[0]?.message?.includes('requests must stay within the local test server origin')
+      || !blockedResult?.stdout?.some((entry) => 'text' in entry && entry.text.includes('guard-probe:blocked-before-teardown'))) {
+      throw new TypeError('The applied automatic network fixture did not both admit local requests and block and reject off-origin requests.');
+    }
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
 export function buildAnalystJourneyAssurance() {
   const specNames = readdirSync(E2E_ROOT).filter((name) => name.endsWith('.spec.ts')).sort();
   let totalBytes = 0;
@@ -186,14 +318,7 @@ export function buildAnalystJourneyAssurance() {
 
   const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
   for (const required of REQUIRED_BOUNDARY_SPECS) assignedShard(required, plan);
-  const config = boundedSource('playwright.config.ts');
-  const fixture = boundedSource('e2e/fixtures.ts');
-  if (!/failOnFlakyTests:\s*true/u.test(config)
-    || !/auto:\s*true/u.test(fixture)
-    || !/context\.route\('\*\*\/\*'/u.test(fixture)
-    || !/requests must stay within the local test server origin/u.test(fixture)) {
-    throw new TypeError('Analyst journeys require fail-on-flaky configuration and the automatic same-origin request guard.');
-  }
+  assertAppliedBrowserSafety();
 
   const journeys = SYNTHETIC_ANALYST_JOURNEYS.map((journey) => {
     const tag = `@journey-${journey.id}`;
@@ -228,7 +353,7 @@ export function buildAnalystJourneyAssurance() {
   }
   return Object.freeze({
     assuranceVersion: ANALYST_JOURNEY_ASSURANCE_VERSION,
-    execution: 'static_source_audit' as const,
+    execution: 'source_and_fixture_contract_audit' as const,
     browserTestsExecuted: 0,
     journeyContractVersion: SYNTHETIC_ANALYST_JOURNEY_VERSION,
     declaredJourneys: SYNTHETIC_ANALYST_JOURNEYS.length,
@@ -259,7 +384,7 @@ export function main(args = process.argv.slice(2)): number {
       `Analyst journey contract audit v${result.assuranceVersion}: ${result.mappedJourneys}/${result.declaredJourneys} journeys mapped, `
       + `${result.playwrightTests} enabled tagged test declarations, ${result.balancedShardSpecifications} balanced-shard specifications, `
       + `${result.skippedJourneys} declared tests disabled, retry acceptance ${result.retryAcceptance ? 'enabled' : 'disabled'}. `
-      + 'This static audit did not execute a browser test.\n',
+      + 'Configuration and automatic fixture checks used no browser or server.\n',
     );
     return 0;
   } catch (error) {

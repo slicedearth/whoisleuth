@@ -593,7 +593,7 @@ describe('verification architecture contracts', () => {
     assert.equal(assurance.journeyContractVersion, 1);
     assert.equal(assurance.mappedJourneys, assurance.declaredJourneys);
     assert.ok(assurance.playwrightTests >= assurance.declaredJourneys);
-    assert.equal(assurance.execution, 'static_source_audit');
+    assert.equal(assurance.execution, 'source_and_fixture_contract_audit');
     assert.equal(assurance.browserTestsExecuted, 0);
     assert.equal(
       assurance.balancedShardSpecifications,

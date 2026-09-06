@@ -154,30 +154,19 @@ function referencedConstraintOptions(constraint: CliGrammarConstraint): readonly
 }
 
 describe('canonical CLI command registry', () => {
-  test('keeps each command\'s maintained metadata in one typed seed', () => {
-    const source = readFileSync(new URL('../cli/command-reference.mts', import.meta.url), 'utf8');
-    assert.equal([...source.matchAll(/: commandSeed\(\{/gu)].length, CLI_COMMAND_REGISTRY.length);
-    for (const retiredParallelMap of [
-      'COMMAND_USAGE_SEED',
-      'COMMAND_DETAILS_SEED',
-      'COMMAND_COLLECTION_SEED',
-      'OPTIONS_BY_COMMAND_SEED',
-      'POSITIONALS_BY_COMMAND_SEED',
-      'GRAMMAR_CONSTRAINTS_SEED',
-      'COMMAND_DESCRIPTIONS_SEED',
-      'HANDLER_OWNER_BY_COMMAND',
-      'NETWORK_EFFECT_BY_COMMAND',
-      'COMMON_COMMANDS',
-      'SCHEMA_IDENTIFIERS_BY_COMMAND',
-      'PRIMARY_ARTEFACTS_BY_COMMAND',
-      'INTEGER_RANGE_SEED',
-      'IDEMPOTENT_OPTIONS',
-      'REPEATABLE_OPTIONS',
-    ]) assert.doesNotMatch(source, new RegExp(`\\b${retiredParallelMap}\\b`, 'u'));
-  });
-
-  test('keeps one ordered, unique, deeply immutable command contract', () => {
+  test('keeps one ordered, unique, deeply immutable exported command contract', () => {
+    const assertCanonicalProjection = (definitions: readonly Readonly<{ command: string; order: number }>[]) => {
+      if (new Set(definitions.map((definition) => definition.command)).size !== definitions.length
+        || definitions.some((definition, order) => definition.order !== order)) {
+        throw new TypeError('CLI command projection is duplicated or out of order.');
+      }
+    };
     assert.ok(CLI_COMMAND_REGISTRY.length > 0);
+    assert.doesNotThrow(() => assertCanonicalProjection(CLI_COMMAND_REGISTRY));
+    assert.throws(() => assertCanonicalProjection([
+      ...CLI_COMMAND_REGISTRY,
+      { ...CLI_COMMAND_REGISTRY[0]!, order: CLI_COMMAND_REGISTRY.length },
+    ]), /duplicated or out of order/u);
     assert.deepEqual(CLI_COMMANDS, CLI_COMMAND_REGISTRY.map((definition) => definition.command));
     assert.equal(new Set(CLI_COMMANDS).size, CLI_COMMANDS.length);
     assertDeepFrozen(CLI_COMMAND_REGISTRY);

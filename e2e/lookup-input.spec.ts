@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
-import { TEST_SITE_PASSWORD } from './constants';
+import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
