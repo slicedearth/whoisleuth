@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -39,8 +40,6 @@ const POLICY_NON_SOURCE_FILES = Object.freeze([
   'frontend/src/app.html',
   'lib/generated/cisa-kev-catalog.sha256',
   'lib/generated/retire-browser-catalog.sha256',
-  'packages/cli/README.md',
-  'packages/web-capture/README.md',
 ]);
 
 async function fixtureRepository(t: { after(callback: () => Promise<void>): void }): Promise<string> {
@@ -386,6 +385,20 @@ describe('schema source coverage', () => {
     assert.ok(removedAllowance);
     await rm(path.join(root, removedAllowance));
     await assert.rejects(discoverSchemaSources(root), /allowance is stale or missing.*app\.css/iu);
+  });
+
+  test('discovers ordinary modules and conventional documentation without per-file exceptions', async (t) => {
+    const root = await fixtureRepository(t);
+    await mkdir(path.join(root, 'packages', 'example'));
+    await writeFile(path.join(root, 'CONTRIBUTING.md'), '# Contributing\n');
+    await writeFile(path.join(root, 'packages', 'example', 'README.md'), '# Example package\n');
+    await writeFile(path.join(root, 'packages', 'example', 'helper.mts'), 'export const value = 1;\n');
+    const expected = ['packages/example/helper.mts', 'server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    await writeFile(path.join(root, 'CONTRIBUTING.mts'), 'export const value = 1;\n');
+    await assert.rejects(discoverSchemaSources(root), /unclassified repository path.*CONTRIBUTING\.mts/u);
   });
 
   test('resolves exact imported aliases and rejects unrelated names and duplicate inline emitters', async (t) => {

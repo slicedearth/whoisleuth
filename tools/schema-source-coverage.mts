@@ -68,8 +68,6 @@ export const SCHEMA_SOURCE_NON_SOURCE_FILES = Object.freeze([
   'frontend/src/app.html',
   'lib/generated/cisa-kev-catalog.sha256',
   'lib/generated/retire-browser-catalog.sha256',
-  'packages/cli/README.md',
-  'packages/web-capture/README.md',
 ] as const);
 const DEFAULT_SCHEMA_SOURCE_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 
@@ -82,10 +80,6 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'DISCLOSURE',
   'LICENSE',
   'NOTICE',
-  'PRIVACY.md',
-  'README.md',
-  'SECURITY.md',
-  'TRADEMARKS.md',
   'frontend/analysis-tsconfig.json',
   'frontend/package.json',
   'frontend/svelte.config.ts',
@@ -107,6 +101,11 @@ const SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES = new Set([
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.json', '.jsx', '.mjs', '.mts', '.svelte', '.ts', '.tsx']);
+// Prose is not executable schema source. New contributor documents and package
+// READMEs do not need a per-file exception; runtime templates still do.
+function isConventionalMarkdown(relative: string): boolean {
+  return /^(?:[^/]+|packages\/[^/]+\/README)\.md$/u.test(relative);
+}
 const SCHEMA_SOURCE_NON_SOURCE_FILE_SET = new Set<string>(SCHEMA_SOURCE_NON_SOURCE_FILES);
 const CLASSIFICATION_KINDS = new Set(['exempt', 'member', 'non_schema']);
 const CLASSIFICATION_REASONS = new Set([
@@ -271,6 +270,7 @@ async function collectFiles(
       }
       if (!metadata.isFile()) throw new TypeError(`Schema source path ${relative} must be an ordinary file or directory.`);
       if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (isConventionalMarkdown(relative)) continue;
         if (!SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
         }
@@ -348,6 +348,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
     for (const relative of manifest) {
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
+        if (isConventionalMarkdown(relative)) continue;
         if (SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           observedNonSourceFiles.add(relative);
           continue;
@@ -356,6 +357,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
       }
       if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)
         || coveredFiles.has(relative)
+        || isConventionalMarkdown(relative)
         || SCHEMA_SOURCE_EXEMPT_FILES.has(relative)) continue;
       throw new TypeError(`Schema source scope contains an unclassified repository path: ${relative}`);
     }
@@ -405,7 +407,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         await visit(absolute, relative, depth + 1);
       } else if (!metadata.isFile()) {
         throw new TypeError(`Schema source scope path ${relative} must be an ordinary file or directory.`);
-      } else {
+      } else if (!isConventionalMarkdown(relative)) {
         throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
       }
     }
