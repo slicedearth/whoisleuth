@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
@@ -503,8 +504,11 @@ test('support diagnostics expose only coarse allowlisted browser state', async (
   await page.locator('details.support-diagnostics > summary').click();
   await page.getByRole('button', { name: 'Prepare support diagnostics' }).click();
   const output = page.getByRole('textbox', { name: 'Support diagnostics' });
-  await expect(output).toHaveValue(/"applicationVersion": "2\.3\.0"/u);
-  await expect(output).toHaveValue(/"viewportClass": "wide"/u);
+  await expect(output).toHaveValue(/\S/u);
+  expect(JSON.parse(await output.inputValue())).toMatchObject({
+    applicationVersion: WHOISLEUTH_APPLICATION_VERSION,
+    viewportClass: 'wide',
+  });
   await expect(output).not.toHaveValue(/diagnostic\.invalid|\/dashboard|case|evidence|url|userAgent/iu);
 });
 
