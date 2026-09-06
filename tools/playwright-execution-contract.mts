@@ -1,7 +1,7 @@
-import type { Page } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 
 export const PLAYWRIGHT_FUNCTIONAL_PROJECT = 'chromium';
-export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT = 'performance-authority';
+export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT = 'performance-measurement';
 
 export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS = Object.freeze([
   'e2e/console-loading.spec.ts',
@@ -31,57 +31,43 @@ export function isPlaywrightFunctionalSpec(file: string): boolean {
     && !isPlaywrightPerformanceAuthoritySpec(normalized);
 }
 
-export function enforcesMachineTimingBudgets(projectName: string): boolean {
-  return projectName === PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;
-}
-
-// Three samples make the median require two passes against the reviewed
-// budget. One scheduler-affected sample remains permitted, but the two-times
-// hard ceiling prevents the median from hiding a severe regression.
+// Repeated observations expose variation; they do not turn one host's speed
+// into a release requirement. Readiness, safety, transfer and layout checks
+// remain independent, blocking assertions in the owning specifications.
 export const PERFORMANCE_SAMPLE_COUNT = 3;
-export const PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER = 2;
+export const PERFORMANCE_TIMING_POLICY = 'observational' as const;
 
-export type MachineTimingSampleSet = Readonly<{
-  usableMsMedian: number;
-  usableMsMaximum: number;
-  longTaskTotalMsMedian: number;
-  longTaskTotalMsMaximum: number;
-}>;
-export type MachineTimingBudget = Readonly<{
+type PerformanceTimingSample = Readonly<{
   usableMs: number;
   longTaskTotalMs: number;
 }>;
-export type MachineTimingBudgetCheck = Readonly<{
-  metric: keyof MachineTimingSampleSet;
-  observed: number;
-  maximum: number;
-}>;
 
-export function machineTimingBudgetChecks(
-  projectName: string,
-  sampleSet: MachineTimingSampleSet,
-  budget: MachineTimingBudget,
-): readonly MachineTimingBudgetCheck[] {
-  if (!enforcesMachineTimingBudgets(projectName)) return Object.freeze([]);
-  return Object.freeze([
-    Object.freeze({ metric: 'usableMsMedian', observed: sampleSet.usableMsMedian, maximum: budget.usableMs }),
-    Object.freeze({
-      metric: 'longTaskTotalMsMedian',
-      observed: sampleSet.longTaskTotalMsMedian,
-      maximum: budget.longTaskTotalMs,
-    }),
-    Object.freeze({
-      metric: 'usableMsMaximum',
-      observed: sampleSet.usableMsMaximum,
-      maximum: budget.usableMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-    }),
-    Object.freeze({
-      metric: 'longTaskTotalMsMaximum',
-      observed: sampleSet.longTaskTotalMsMaximum,
-      maximum: budget.longTaskTotalMs * PERFORMANCE_TRANSIENT_OUTLIER_MULTIPLIER,
-    }),
-  ]);
+export function summarizePerformanceTimings(samples: readonly PerformanceTimingSample[]) {
+  const usable = samples.map((sample) => sample.usableMs);
+  const longTasks = samples.map((sample) => sample.longTaskTotalMs);
+  return Object.freeze({
+    usableMsMedian: performanceSampleMedian(usable),
+    usableMsMaximum: Math.max(...usable),
+    longTaskTotalMsMedian: performanceSampleMedian(longTasks),
+    longTaskTotalMsMaximum: Math.max(...longTasks),
+  });
 }
+
+export function performanceMeasurementContext(page: Page, testInfo: TestInfo) {
+  const browser = page.context().browser();
+  return Object.freeze({
+    hostPlatform: process.platform,
+    hostArchitecture: process.arch,
+    nodeVersion: process.versions.node,
+    browserName: browser?.browserType().name() ?? null,
+    browserVersion: browser?.version() ?? null,
+    viewport: page.viewportSize(),
+    project: testInfo.project.name,
+    configuredWorkers: testInfo.config.workers,
+  });
+}
+
+export type PerformanceMeasurementContext = ReturnType<typeof performanceMeasurementContext>;
 
 export type BrowserReadinessTarget = Readonly<{
   selector: string;
@@ -161,7 +147,7 @@ export async function resetPerformanceSampleState(
 
 export function performanceSampleMedian(values: readonly number[]): number {
   if (values.length !== PERFORMANCE_SAMPLE_COUNT || values.some((value) => !Number.isFinite(value) || value < 0)) {
-    throw new TypeError(`Performance authority requires exactly ${PERFORMANCE_SAMPLE_COUNT} finite non-negative samples.`);
+    throw new TypeError(`Performance reporting requires exactly ${PERFORMANCE_SAMPLE_COUNT} finite non-negative samples.`);
   }
   return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)]!;
 }

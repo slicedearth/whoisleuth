@@ -8,14 +8,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
-  enforcesMachineTimingBudgets,
   isPlaywrightFunctionalSpec,
+  PERFORMANCE_TIMING_POLICY,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS,
   installNavigationReadinessMark,
-  machineTimingBudgetChecks,
+  performanceMeasurementContext,
   performanceSampleMedian,
+  summarizePerformanceTimings,
   resetPerformanceSampleState,
   resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
@@ -528,7 +529,7 @@ describe('continuous integration workflow', () => {
     }
   });
 
-  test('keeps functional checks deterministic and isolates runtime ceilings in every environment', async () => {
+  test('keeps performance reporting in CI with isolated samples and functional readiness checks', async () => {
     assert.match(WORKFLOW, /^\s+run: npm run frontend:authenticated-loading-report$/mu);
     assert.match(WORKFLOW, /^\s+if: \$\{\{ matrix\.kind == 'performance' \}\}$/mu);
     assert.equal(
@@ -543,27 +544,12 @@ describe('continuous integration workflow', () => {
       PACKAGE_MANIFEST.scripts?.['frontend:authenticated-loading-report'],
       'node tools/playwright-performance-authority.mts',
     );
-    assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-authority');
+    assert.equal(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, 'performance-measurement');
     assert.deepEqual(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, [
       'e2e/console-loading.spec.ts',
       'e2e/deferred-interactions.spec.ts',
     ]);
-    assert.equal(enforcesMachineTimingBudgets('chromium'), false);
-    assert.equal(enforcesMachineTimingBudgets(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT), true);
-    const sampleSet = {
-      usableMsMedian: 100,
-      usableMsMaximum: 190,
-      longTaskTotalMsMedian: 20,
-      longTaskTotalMsMaximum: 39,
-    };
-    const budget = { usableMs: 100, longTaskTotalMs: 20 };
-    assert.deepEqual(machineTimingBudgetChecks('chromium', sampleSet, budget), []);
-    assert.deepEqual(machineTimingBudgetChecks(PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, sampleSet, budget), [
-      { metric: 'usableMsMedian', observed: 100, maximum: 100 },
-      { metric: 'longTaskTotalMsMedian', observed: 20, maximum: 20 },
-      { metric: 'usableMsMaximum', observed: 190, maximum: 200 },
-      { metric: 'longTaskTotalMsMaximum', observed: 39, maximum: 40 },
-    ]);
+    assert.equal(PERFORMANCE_TIMING_POLICY, 'observational');
     assert.equal(performanceSampleMedian([30, 10, 20]), 20);
     assert.throws(() => performanceSampleMedian([10, 20]), /exactly 3/u);
 
@@ -598,6 +584,64 @@ describe('continuous integration workflow', () => {
       installNavigationReadinessMark({ addInitScript: async () => undefined } as never, []),
       /between one and four/u,
     );
+  });
+
+  test('retains slow observations without promoting machine speed into an acceptance limit', () => {
+    const samples = [
+      { usableMs: 2_500, longTaskTotalMs: 1_500 },
+      { usableMs: 120, longTaskTotalMs: 0 },
+      { usableMs: 700, longTaskTotalMs: 60 },
+    ];
+    const expected = {
+      usableMsMedian: 700,
+      usableMsMaximum: 2_500,
+      longTaskTotalMsMedian: 60,
+      longTaskTotalMsMaximum: 1_500,
+    };
+    assert.deepEqual(summarizePerformanceTimings(samples), expected);
+    assert.deepEqual(summarizePerformanceTimings(samples.map((sample) => ({
+      usableMs: sample.usableMs * 10,
+      longTaskTotalMs: sample.longTaskTotalMs * 10,
+    }))), Object.fromEntries(Object.entries(expected).map(([key, value]) => [key, value * 10])));
+    assert.throws(() => summarizePerformanceTimings(samples.slice(1)), /exactly 3/u);
+    for (const invalid of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      for (const field of ['usableMs', 'longTaskTotalMs'] as const) {
+        assert.throws(
+          () => summarizePerformanceTimings([{ ...samples[0]!, [field]: invalid }, ...samples.slice(1)]),
+          /finite non-negative/u,
+        );
+      }
+    }
+  });
+
+  test('records execution context without assuming a particular operating system or browser', () => {
+    const context = performanceMeasurementContext({
+      context: () => ({ browser: () => ({
+        browserType: () => ({ name: () => 'chromium' }),
+        version: () => '123.0.0.0',
+      }) }),
+      viewportSize: () => ({ width: 1280, height: 720 }),
+    } as never, {
+      project: { name: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT },
+      config: { workers: 1 },
+    } as never);
+    assert.deepEqual(context, {
+      hostPlatform: process.platform,
+      hostArchitecture: process.arch,
+      nodeVersion: process.versions.node,
+      browserName: 'chromium',
+      browserVersion: '123.0.0.0',
+      viewport: { width: 1280, height: 720 },
+      project: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+      configuredWorkers: 1,
+    });
+    const unavailable = performanceMeasurementContext({
+      context: () => ({ browser: () => null }),
+      viewportSize: () => null,
+    } as never, { project: { name: 'unavailable-browser' }, config: { workers: 1 } } as never);
+    assert.equal(unavailable.browserName, null);
+    assert.equal(unavailable.browserVersion, null);
+    assert.equal(unavailable.viewport, null);
   });
 
   test('stops serial local browser shards after an interruption without hiding ordinary failures', async () => {

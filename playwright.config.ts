@@ -11,9 +11,9 @@ const chromiumProject = {
   name: execution.functionalProject.name,
   use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
   dependencies: [...execution.functionalProject.dependencies],
-  // Machine timing is an isolated authority lane. Functional shards retain
-  // deterministic readiness and layout assertions without inheriting runtime
-  // ceilings from a runner that is also executing hundreds of browser cases.
+  // Repeated performance observations run in an isolated lane. Its specs
+  // still enforce readiness, transfer and layout contracts; neither lane
+  // treats one host's elapsed time as a universal acceptance threshold.
   testIgnore: execution.functionalProject.excludedSpecs,
 };
 const performanceAuthorityProject = {

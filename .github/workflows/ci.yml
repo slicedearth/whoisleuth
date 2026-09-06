@@ -150,7 +150,7 @@ jobs:
       - name: Run Playwright functional shard
         if: ${{ matrix.kind == 'functional' }}
         run: npm run test:e2e:shard -- --run=${{ matrix.shard }}
-      - name: Run isolated authenticated loading authority
+      - name: Record isolated authenticated performance and verify loading contracts
         if: ${{ matrix.kind == 'performance' }}
         run: npm run frontend:authenticated-loading-report
       - name: Summarize Playwright result data

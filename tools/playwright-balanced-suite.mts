@@ -250,7 +250,7 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
     );
     const performanceExit = await runProcess(
       executionRoot,
-      'isolated performance authority',
+      'isolated performance measurements',
       playwrightPerformanceAuthorityArguments(playwrightCli),
       performanceEnvironment,
     );

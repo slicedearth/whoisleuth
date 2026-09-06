@@ -7,13 +7,16 @@ import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLeg
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import {
   PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TIMING_POLICY,
   abortBrowserInteractionReadiness,
   beginBrowserInteractionReadiness,
-  machineTimingBudgetChecks,
+  performanceMeasurementContext,
   performanceSampleMedian,
+  summarizePerformanceTimings,
   readBrowserInteractionReadiness,
   resetPerformanceSampleState,
   type BrowserInteractionReadiness,
+  type PerformanceMeasurementContext,
 } from './performance-sampling.ts';
 
 type InteractionId =
@@ -32,8 +35,6 @@ type InteractionId =
 
 type InteractionBudget = Readonly<{
   assetEncodedTransferBytes: number;
-  usableMs: number;
-  longTaskTotalMs: number;
   layoutShiftScore: number;
   residualLayoutShiftScore: number;
 }>;
@@ -58,6 +59,8 @@ type DeferredInteractionMeasurement = Readonly<{
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
+  execution: PerformanceMeasurementContext;
   assetEncodedTransferBytes: number;
   completedAssetRequestCount: number;
   usableMs: number;
@@ -82,6 +85,8 @@ type DeferredInteractionSampleSet = Readonly<{
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
+  execution: PerformanceMeasurementContext;
   sampleCount: number;
   usableMsMedian: number;
   usableMsMaximum: number;
@@ -93,8 +98,7 @@ type DeferredInteractionSampleSet = Readonly<{
   limitations: readonly string[];
 }>;
 
-// Calibrated from nine browser-marked samples across three isolated
-// local production-build runs on 2026-09-05. Browser event-to-frame marks
+// Browser event-to-frame marks
 // exclude host command, keyboard-dispatch and assertion-polling time.
 // The CLI filter row measures one real keyboard refinement after a prefilled
 // multi-result query. That keeps the browser recent-input semantics while
@@ -103,30 +107,24 @@ type DeferredInteractionSampleSet = Readonly<{
 // first ends when the workspace is attached inside its closed disclosure; the
 // second ends only when that prepared workspace and its controls are visible.
 // Bulk Analysis likewise owns a separate transition/preload row before the
-// cohort-outlier disclosure is measured. Those four rows were remeasured as
-// distinct populations; they are not compared with the retired combined Case
-// interval or with setup work from the earlier Bulk disclosure row.
-// The public Case handoff was remeasured on 2026-09-05 after the current Case
-// contract added type-specific readiness and reviewed response context. Its
-// generated example remains one deferred asset; the ceiling tracks the
-// measured contract rather than hiding the added bytes in an unrelated route.
-// Transfer ceilings add 20% and round up to 1 KiB; readiness and long-task
-// ceilings add 50% and round up to 25 ms and 10 ms respectively. Layout
-// ceilings add 50% and round up to 0.005. Zero-observation floors preserve a
-// small measurement allowance without turning these tripwires into targets.
-const INTERACTION_OBSERVED_MAXIMA = Object.freeze({
-  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 11.4, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 19.6, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, usableMs: 30.2, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, usableMs: 187.4, longTaskTotalMs: 56, layoutShiftScore: 0 }),
-  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, usableMs: 63.5, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, usableMs: 31.2, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  bulk_analysis_transition: Object.freeze({ assetEncodedTransferBytes: 60_308, usableMs: 33.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 29.4, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, usableMs: 55.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  case_response_preparation: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 46.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 14.8, longTaskTotalMs: 0, layoutShiftScore: 0 }),
-  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, usableMs: 17.7, longTaskTotalMs: 0, layoutShiftScore: 0 }),
+// cohort-outlier disclosure is measured. Each phase keeps its own observations.
+// Retain the reviewed asset and layout bounds: transfer adds 20% and rounds up
+// to 1 KiB; layout adds 50% and rounds up to 0.005 with a 0.01 floor. A prepared
+// interaction still requires zero transfer. Elapsed-time observations are not
+// inputs to these bounds and are not promoted into universal timing limits.
+const INTERACTION_RESOURCE_BASELINE = Object.freeze({
+  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, layoutShiftScore: 0 }),
+  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, layoutShiftScore: 0 }),
+  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, layoutShiftScore: 0 }),
+  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, layoutShiftScore: 0 }),
+  bulk_analysis_transition: Object.freeze({ assetEncodedTransferBytes: 60_308, layoutShiftScore: 0 }),
+  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, layoutShiftScore: 0 }),
+  case_response_preparation: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
 });
 
 function roundUp(value: number, quantum: number): number {
@@ -134,20 +132,18 @@ function roundUp(value: number, quantum: number): number {
 }
 
 function interactionBudget(interaction: InteractionId): InteractionBudget {
-  const observed = INTERACTION_OBSERVED_MAXIMA[interaction];
+  const observed = INTERACTION_RESOURCE_BASELINE[interaction];
   return Object.freeze({
     assetEncodedTransferBytes: observed.assetEncodedTransferBytes === 0
       ? 0
       : roundUp(observed.assetEncodedTransferBytes * 1.2, 1024),
-    usableMs: Math.max(75, roundUp(observed.usableMs * 1.5, 25)),
-    longTaskTotalMs: Math.max(50, roundUp(observed.longTaskTotalMs * 1.5, 10)),
     layoutShiftScore: Math.max(0.01, roundUp(observed.layoutShiftScore * 1.5, 0.005)),
     residualLayoutShiftScore: 0.01,
   });
 }
 
 const INTERACTION_BUDGETS: Readonly<Record<InteractionId, InteractionBudget>> = Object.freeze(
-  Object.fromEntries(Object.keys(INTERACTION_OBSERVED_MAXIMA).map((interaction) => (
+  Object.fromEntries(Object.keys(INTERACTION_RESOURCE_BASELINE).map((interaction) => (
     [interaction, interactionBudget(interaction as InteractionId)]
   ))) as Record<InteractionId, InteractionBudget>,
 );
@@ -422,6 +418,8 @@ async function measureDeferredInteractionSample(
       path: options.path,
       readyPresentation,
       budget,
+      timingPolicy: PERFORMANCE_TIMING_POLICY,
+      execution: performanceMeasurementContext(options.page, options.testInfo),
       assetEncodedTransferBytes: captured.assetEncodedTransferBytes,
       completedAssetRequestCount: captured.completedAssetRequestCount,
       usableMs,
@@ -447,8 +445,8 @@ async function measureDeferredInteractionSample(
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Residual layout shift includes every entry during a short post-readiness stability window.',
-        'Ceilings are reviewed regression limits derived from repeated isolated local production-build runs with documented headroom.',
-        'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
+        'Transfer and layout ceilings are reviewed resource and presentation regression limits, not elapsed-time targets.',
+        'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
     });
     const body = Buffer.from(`${JSON.stringify(measurement, null, 2)}\n`, 'utf8');
@@ -498,19 +496,19 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
     path: options.path,
     readyPresentation,
     budget,
+    timingPolicy: PERFORMANCE_TIMING_POLICY,
+    execution: performanceMeasurementContext(options.page, options.testInfo),
     sampleCount: measurements.length,
-    usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
-    usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+    ...summarizePerformanceTimings(measurements),
     hostActionMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostActionMs)),
     hostActionMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostActionMs)),
-    longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
-    longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
     samples: Object.freeze([...measurements]),
     limitations: Object.freeze([
-      'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
+      'Three independently cache-cleared, browser-local-state-cleared samples retain their median and maximum for performance review.',
       'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
-      'Browser-visible readiness and host action duration are retained separately; only browser-visible readiness is compared with the usable-time budget.',
-      'Every sample remains subject to transfer, request and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
+      'Browser-visible readiness and host action duration remain separate observations; neither is converted into a host-derived acceptance limit.',
+      'Compare repeated runs of the same workload under comparable conditions before attributing a timing difference to a code change.',
+      'Every sample remains subject to functional readiness, transfer, request and layout checks, and the bounded test timeout still rejects hangs.',
     ]),
   });
   const body = Buffer.from(`${JSON.stringify(sampleSet, null, 2)}\n`, 'utf8');
@@ -521,11 +519,6 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
   });
   process.stdout.write(`Deferred interaction sample set: ${JSON.stringify(sampleSet)}\n`);
 
-  // Shared hosted runners cannot provide a stable CPU scheduling authority.
-  // Transfer, request and layout gates remain blocking in every project.
-  for (const check of machineTimingBudgetChecks(options.testInfo.project.name, sampleSet, budget)) {
-    expect(check.observed, check.metric).toBeLessThanOrEqual(check.maximum);
-  }
   return sampleSet;
 }
 

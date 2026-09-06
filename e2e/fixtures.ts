@@ -3,8 +3,6 @@ import type { BrowserContext, ConsoleMessage, Route } from '@playwright/test';
 import {
   PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
-  PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
-  enforcesMachineTimingBudgets,
 } from '../tools/playwright-execution-contract.mts';
 import { ALLOWED_ORIGIN } from './constants.ts';
 
@@ -13,8 +11,6 @@ import { ALLOWED_ORIGIN } from './constants.ts';
 // logic itself can be exercised directly - see origin-guard.spec.ts - rather
 // than only ever being proven correct by the absence of a failure.
 export { ALLOWED_ORIGIN };
-export const PERFORMANCE_AUTHORITY_PROJECT = PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT;
-export { enforcesMachineTimingBudgets };
 
 export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {

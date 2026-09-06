@@ -3,28 +3,28 @@ import type { Page } from '@playwright/test';
 import { ALLOWED_ORIGIN } from './constants.ts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TIMING_POLICY,
   installNavigationReadinessMark,
-  machineTimingBudgetChecks,
+  performanceMeasurementContext,
   performanceSampleMedian,
+  summarizePerformanceTimings,
   resetPerformanceSampleState as resetPerformanceSampleStateForOrigin,
   validateBrowserReadinessTargets,
   type BrowserReadinessTarget,
-  type MachineTimingBudget,
-  type MachineTimingBudgetCheck,
-  type MachineTimingSampleSet,
+  type PerformanceMeasurementContext,
 } from '../tools/playwright-execution-contract.mts';
 
 export {
   PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TIMING_POLICY,
   installNavigationReadinessMark,
-  machineTimingBudgetChecks,
+  performanceMeasurementContext,
   performanceSampleMedian,
+  summarizePerformanceTimings,
 };
 export type {
   BrowserReadinessTarget,
-  MachineTimingBudget,
-  MachineTimingBudgetCheck,
-  MachineTimingSampleSet,
+  PerformanceMeasurementContext,
 };
 
 export type BrowserInteractionReadiness = Readonly<{

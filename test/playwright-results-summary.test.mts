@@ -93,6 +93,18 @@ describe('Playwright result summary', () => {
     assert.throws(() => summarizePlaywrightResults(null), /must be an object/u);
   });
 
+  test('distinguishes recorded performance from a universal response-time guarantee', () => {
+    const report = renderPlaywrightResultSummary(summarizePlaywrightResults(fixture(), 'performance'));
+    assert.match(report, /Timing measurements are observational/u);
+    assert.match(report, /does not certify a universal response-time target/u);
+    assert.match(report, /execution context.*JSON attachments/u);
+    assert.match(report, /\| Failed \| 1 \|/u);
+    assert.match(report, /\| Flaky \| 1 \|/u);
+    assert.match(report, /Observed run duration: 1500 ms/u);
+    const functional = renderPlaywrightResultSummary(summarizePlaywrightResults(fixture(), '1-of-4'));
+    assert.doesNotMatch(functional, /Timing measurements are observational/u);
+  });
+
   test('aggregates the exact functional shard inventory without hiding retries or duplicates', () => {
     const files = ['a', 'b', 'c', 'd'].map((name, index) => Object.freeze({
       file: `e2e/${name}.spec.ts`,

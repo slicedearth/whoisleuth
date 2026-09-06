@@ -4,12 +4,15 @@ import type { CDPSession, Locator, Page, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
+  PERFORMANCE_TIMING_POLICY,
   installNavigationReadinessMark,
-  machineTimingBudgetChecks,
+  performanceMeasurementContext,
   performanceSampleMedian,
+  summarizePerformanceTimings,
   readNavigationReadinessMark,
   resetPerformanceSampleState,
   type BrowserReadinessTarget,
+  type PerformanceMeasurementContext,
 } from './performance-sampling.ts';
 
 type ConsoleRoute = Readonly<{
@@ -19,8 +22,6 @@ type ConsoleRoute = Readonly<{
   readinessTargets: readonly BrowserReadinessTarget[];
   budget: Readonly<{
     encodedTransferBytes: number;
-    usableMs: number;
-    longTaskTotalMs: number;
     layoutShiftScore: number;
   }>;
 }>;
@@ -44,6 +45,8 @@ type ConsoleLoadingMeasurement = RuntimeProbe & Readonly<{
   readinessClock: 'navigation_start_to_animation_frame';
   path: ConsoleRoute['path'];
   budget: ConsoleRoute['budget'];
+  timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
+  execution: PerformanceMeasurementContext;
   encodedTransferBytes: number;
   completedRequestCount: number;
   usableMs: number;
@@ -57,6 +60,8 @@ type ConsoleLoadingSampleSet = Readonly<{
   mode: 'authenticated_local_chromium_repeated_cold_load';
   path: ConsoleRoute['path'];
   budget: ConsoleRoute['budget'];
+  timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
+  execution: PerformanceMeasurementContext;
   sampleCount: number;
   usableMsMedian: number;
   usableMsMaximum: number;
@@ -68,30 +73,24 @@ type ConsoleLoadingSampleSet = Readonly<{
   limitations: readonly string[];
 }>;
 
-// Calibrated from nine browser-marked samples across three isolated
-// local production-build runs on 2026-09-05. The maxima include first-route
-// process and browser-cache variance instead of relying only on warmed suite
-// timings. Browser marks exclude host assertion polling from route readiness.
-// The CLI row was remeasured after component-owned client initialisation and
-// a working filter response became part of its readiness contract.
-// Transfer ceilings add 20% and round up to 64 KiB; readiness and long-task
-// ceilings add 50% and round up to 50 ms and 10 ms respectively. Layout
-// ceilings add 50% and round up to 0.005, with small zero-observation floors.
-const CONSOLE_LOADING_OBSERVED_MAXIMA = Object.freeze({
-  '/lookup': Object.freeze({ encodedTransferBytes: 2_125_921, usableMs: 511.3, longTaskTotalMs: 92, layoutShiftScore: 0 }),
-  '/monitor': Object.freeze({ encodedTransferBytes: 1_831_989, usableMs: 341.1, longTaskTotalMs: 0, layoutShiftScore: 0.0064 }),
-  '/cli': Object.freeze({ encodedTransferBytes: 513_272, usableMs: 139.2, longTaskTotalMs: 0, layoutShiftScore: 0.0015 }),
+// Retain the reviewed production-asset and layout regression bounds. Transfer
+// ceilings add 20% to the measured asset set and round up to 64 KiB; layout
+// ceilings add 50% and round up to 0.005, with a 0.01 floor. These are separate
+// from CPU-dependent elapsed time, which is reported without a host-derived
+// pass/fail threshold. No transfer or layout ceiling is raised by that policy.
+const CONSOLE_LOADING_RESOURCE_BASELINE = Object.freeze({
+  '/lookup': Object.freeze({ encodedTransferBytes: 2_125_921, layoutShiftScore: 0 }),
+  '/monitor': Object.freeze({ encodedTransferBytes: 1_831_989, layoutShiftScore: 0.0064 }),
+  '/cli': Object.freeze({ encodedTransferBytes: 513_272, layoutShiftScore: 0.0015 }),
 });
 function roundUp(value: number, quantum: number): number {
   return Math.ceil(value / quantum) * quantum;
 }
 
-function coldLoadBudget(path: keyof typeof CONSOLE_LOADING_OBSERVED_MAXIMA): ConsoleRoute['budget'] {
-  const observed = CONSOLE_LOADING_OBSERVED_MAXIMA[path];
+function coldLoadBudget(path: keyof typeof CONSOLE_LOADING_RESOURCE_BASELINE): ConsoleRoute['budget'] {
+  const observed = CONSOLE_LOADING_RESOURCE_BASELINE[path];
   return Object.freeze({
     encodedTransferBytes: roundUp(observed.encodedTransferBytes * 1.2, 64 * 1024),
-    usableMs: roundUp(observed.usableMs * 1.5, 50),
-    longTaskTotalMs: Math.max(50, roundUp(observed.longTaskTotalMs * 1.5, 10)),
     layoutShiftScore: Math.max(0.01, roundUp(observed.layoutShiftScore * 1.5, 0.005)),
   });
 }
@@ -270,6 +269,8 @@ async function measureConsoleRoute(
       readinessClock: 'navigation_start_to_animation_frame',
       path: route.path,
       budget: route.budget,
+      timingPolicy: PERFORMANCE_TIMING_POLICY,
+      execution: performanceMeasurementContext(page, testInfo),
       ...transfer(),
       usableMs,
       hostReadyMs,
@@ -281,8 +282,8 @@ async function measureConsoleRoute(
         'Host navigation, command and readiness-assertion duration is excluded from usable time and retained separately as hostReadyMs.',
         'The CLI route additionally proves that its search control changes and restores the rendered command result set after the readiness mark.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
-        'Ceilings are reviewed regression limits derived from repeated isolated local production-build runs with documented headroom.',
-        'Wall-clock and long-task ceilings are enforced only by the single-worker performance-authority project.',
+        'Transfer and layout ceilings are reviewed resource and presentation regression limits, not elapsed-time targets.',
+        'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
     });
     await testInfo.attach(`console-loading-${route.path.slice(1)}-sample-${sample}.json`, {
@@ -319,19 +320,19 @@ for (const route of routes) {
       mode: 'authenticated_local_chromium_repeated_cold_load',
       path: route.path,
       budget: route.budget,
+      timingPolicy: PERFORMANCE_TIMING_POLICY,
+      execution: performanceMeasurementContext(page, testInfo),
       sampleCount: measurements.length,
-      usableMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.usableMs)),
-      usableMsMaximum: Math.max(...measurements.map((measurement) => measurement.usableMs)),
+      ...summarizePerformanceTimings(measurements),
       hostReadyMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostReadyMs)),
       hostReadyMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostReadyMs)),
-      longTaskTotalMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.longTaskTotalMs)),
-      longTaskTotalMsMaximum: Math.max(...measurements.map((measurement) => measurement.longTaskTotalMs)),
       samples: Object.freeze([...measurements]),
       limitations: Object.freeze([
-        'The median of three independently cache-cleared, browser-local-state-cleared samples is the machine timing authority.',
+        'Three independently cache-cleared, browser-local-state-cleared samples retain their median and maximum for performance review.',
         'Samples share one Chromium and local server process; this reduces scheduler noise and is not a first-process cold-start claim.',
-        'Browser readiness and host navigation/assertion duration remain separate; only browser readiness is compared with the usable-time budget.',
-        'Every sample remains subject to transfer and layout ceilings, and a two-times timing ceiling rejects severe transient regressions.',
+        'Browser readiness and host navigation/assertion duration remain separate observations; neither is converted into a host-derived acceptance limit.',
+        'Compare repeated runs of the same workload under comparable conditions before attributing a timing difference to a code change.',
+        'Every sample remains subject to functional readiness, transfer and layout checks, and the bounded test timeout still rejects hangs.',
       ]),
     });
     await testInfo.attach(`console-loading-${route.path.slice(1)}-samples.json`, {
@@ -339,10 +340,5 @@ for (const route of routes) {
       contentType: 'application/json',
     });
     process.stdout.write(`Console loading sample set: ${JSON.stringify(sampleSet)}\n`);
-    // Shared hosted runners cannot provide a stable CPU scheduling authority.
-    // Transfer and layout gates above remain blocking in every project.
-    for (const check of machineTimingBudgetChecks(testInfo.project.name, sampleSet, route.budget)) {
-      expect(check.observed, check.metric).toBeLessThanOrEqual(check.maximum);
-    }
   });
 }

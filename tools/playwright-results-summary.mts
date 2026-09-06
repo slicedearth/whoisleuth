@@ -214,6 +214,10 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
   const lines = [
     `## Playwright result summary: ${markdown(summary.label)}`,
     '',
+    ...(summary.label === 'performance' ? [
+      'Timing measurements are observational. Passing this lane does not certify a universal response-time target. Individual samples and execution context are retained in JSON attachments.',
+      '',
+    ] : []),
     '| Result | Count |',
     '| --- | ---: |',
     `| Passed | ${summary.passed} |`,
