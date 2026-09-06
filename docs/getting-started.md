@@ -59,80 +59,49 @@ Architecture checks enforce that direction.
 
 ## Verification
 
-Before pushing a clean commit, run the same maintained quality, unit and
-browser gates as hosted CI:
+Use [Contributing](../CONTRIBUTING.md) to locate an owner and choose checks for
+an ordinary change. During editing and before a feature-branch push:
+
+```bash
+npm run verification:focused -- --list
+npm run verification:focused
+```
+
+The plan explains selected owners and import dependents. Pass explicit
+repository-relative paths after `--` to narrow the declared scope. Documentation
+changes select offline document checks; documents included in the CLI also
+select package-document checks. Unknown import impact falls back to the full
+unit inventory. Browser selection remains deliberately conservative.
+
+Complete required hosted checks must pass against the current merge candidate
+before merge or deployment. A routine contribution does not require a second
+complete run on the contributor's machine. State which checks were run and
+which were not; a focused result is not release evidence.
+
+For verification-infrastructure changes, reproducing hosted failures, or full
+offline assurance, run the complete local boundary from a clean commit:
 
 ```bash
 npm run verification:ci
 ```
 
-While iterating, run the owned unit, static and browser checks for the current
-dirty diff. The focused command builds once and runs all selected browser specs
-in one process:
+It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). It performs a locked install,
+quality checks, coverage, production-browser tests and CLI compatibility checks.
+Shared executable groups keep the required local and hosted checks aligned.
+Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
+group mode does not install dependencies or orchestrate other lanes.
 
-```bash
-npm run verification:focused
-```
+Performance reports retain samples, execution context, readiness, long tasks
+and layout evidence. Elapsed time is observational, not a limit calibrated to
+one development machine. Compare repeated workloads under comparable
+conditions. Functional readiness, network boundaries, byte limits and bounded
+timeouts remain enforced.
 
-Pass repository-relative paths after `--` to verify a smaller declared change,
-or add `--list` to inspect the plan without running it. This is an iteration
-boundary, not release evidence.
-
-For mechanical changes, edit the domain owner first: CLI option grammar belongs
-to `cli/command-reference.mts`; Case status and disposition decisions belong to
-`case-record-decisions.mts`; Case persistence and audience treatment belongs to
-`case-record-projection.mts`. Generated help, completion and public reference
-outputs derive from those owners. Browser tests consume only the served build
-and private build-identity marker declared by the frontend build owner. The
-focused plan selects the affected derived consumers while immutable historical
-fixtures remain independent compatibility evidence.
-
-The local CI command requires the exact `.nvmrc` runtime, a Node 26 executable on
-`PATH` for the CLI compatibility lane, and a clean worktree. Set
-`WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime
-is installed outside `PATH`. Before package, unit or build work begins, it
-probes the shells required by the unit lane and reports missing or unusable
-executables together; it does not install or skip them. The command performs the locked install and
-changed-line security scan before the maintained quality, coverage, build,
-production-browser and secondary CLI-runtime gates. Ordinary interactive
-browser work can use `npm run test:e2e`; the full CI command also runs the
-isolated performance measurements. Report exact failures, retries, flakes and
-skips rather than describing a retried run as clean.
-
-Performance measurements remain part of every complete local and hosted CI
-run. Reports retain three samples, medians, maxima, browser-side readiness,
-host-side duration, long tasks, and execution context. Elapsed times are
-observations, not release limits derived from a development machine. Review
-changes using repeated measurements of the same workload under comparable
-conditions; a different host's duration alone does not establish a regression
-or prove acceptable user experience. Any future blocking performance objective
-must state its user-facing requirement, representative workload and execution
-conditions instead of inheriting a prior machine's observed speed.
-
-Functional readiness, request boundaries, asset-transfer limits, layout checks
-and bounded test timeouts remain mandatory. Shared command and build contracts
-provide workflow consistency; they do not claim identical operating systems,
-hardware performance or coverage of every supported platform.
-
-Hosted jobs invoke the same executable `preflight`, `quality`, `unit`,
-`browser-build` and `cli-runtime` groups owned by `verification:ci`. Maintainers
-can run one already-prepared lane with `npm run verification:ci --
---group=<name>`; group mode preserves the lane's runtime and prerequisite checks
-but deliberately does not perform the full command's clean-commit guard,
-dependency installation, browser orchestration or final cleanup.
-
-The coverage gate measures all loaded production TypeScript, enforces the
-global line, branch and function floors, and retains stricter per-file floors
-for critical artefact I/O. Its inventory check also rejects any newly omitted
-source file. Type-only modules, compatibility re-exports, browser adapters,
-framework entries and executable entry points remain visible as a small,
-explicit list with an owning type, build, browser or process check; they are
-not silently counted as covered.
-
-Some checks deliberately read the repository, dependency graph, fixtures or
-generated contracts. They do not contact live investigation targets. Commands
-whose names describe drift, provider status or deployment self-checks can have
-separate explicit network modes; review their help before running them.
+Coverage includes loaded production TypeScript and independent critical I/O
+floors. Exclusions must identify their type, build, browser or process check.
+Tests use local fixtures; deliberate source-refresh and deployment checks have
+separate network modes. Do not run those for an unrelated edit.
 
 ## Browser end-to-end tests
 

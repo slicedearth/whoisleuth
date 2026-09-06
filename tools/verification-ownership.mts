@@ -9,6 +9,8 @@ import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.m
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-renderer.mts';
+import { readVerificationTestInventory } from './verification-timing-profile.mts';
+import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
 export const MAX_VERIFICATION_CHANGED_PATHS = 128;
@@ -246,7 +248,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-user-interface', area: 'frontend user-facing routes and components', priority: 30,
     matches: (value: string) => value.startsWith('frontend/src/'),
-    focusedUnit: unit('test/model-contract-properties.test.mts'),
+    focusedUnit: unit(),
     focusedBrowser: browser('e2e/accessibility.spec.ts'),
     specialised: specialised('architecture', 'analyst-journey-assurance'),
     browserRequired: true,
@@ -486,13 +488,13 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'privacy-documents', area: 'privacy and data-flow documentation', priority: 45,
     matches: (value: string) => value === 'PRIVACY.md' || value.startsWith('docs/privacy-'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'), focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
-    specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'), browserRequired: true,
+    focusedUnit: unit('test/documentation-links.test.mts', 'test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'), focusedBrowser: browser(),
+    specialised: specialised('privacy-catalogue', 'documentation'), browserRequired: false,
   }),
   Object.freeze({
     id: 'privacy-contract-impact', area: 'privacy contract and disclosure surfaces', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('privacy-data-flow')
+    matches: (value: string) => (!value.endsWith('.md') && value.includes('privacy-data-flow'))
       || value.startsWith('frontend/src/routes/(public)/privacy/'),
     focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'),
     focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
@@ -506,10 +508,18 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     specialised: specialised('workflow-closure', 'staged-security'), browserRequired: false,
   }),
   Object.freeze({
-    id: 'documentation', area: 'maintained public documentation', priority: 20,
-    matches: (value: string) => value === 'README.md' || value === 'SECURITY.md' || value.startsWith('docs/'),
-    focusedUnit: unit('test/documentation-links.test.mts'), focusedBrowser: browser('e2e/public-guide.spec.ts'),
-    specialised: specialised('documentation'), browserRequired: true,
+    id: 'documentation', area: 'maintained public documentation', priority: 42,
+    matches: (value: string) => (/^[^/]+\.md$/u.test(value) && value !== 'THIRD_PARTY_NOTICES.md') || value.startsWith('docs/')
+      || value.startsWith('packages/') && value.endsWith('.md'),
+    focusedUnit: unit('test/documentation-links.test.mts', 'test/documentation-contract.test.mts'), focusedBrowser: browser(),
+    specialised: specialised('documentation'), browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'cli-documentation-impact', area: 'installed CLI documentation', priority: 0,
+    impactOnly: true,
+    matches: (value: string) => ['docs/cli.md', 'docs/cli-reference.md', 'packages/cli/README.md'].includes(value),
+    focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-package-boundary.test.mts'),
+    focusedBrowser: browser(), specialised: specialised('documentation'), browserRequired: false,
   }),
   Object.freeze({
     id: 'package-release', area: 'package, dependency, and release metadata', priority: 30,
@@ -596,7 +606,7 @@ function validateRules(): void {
 }
 
 function exactFocusedChecks(changedPath: string): readonly string[] {
-  if (changedPath.startsWith('test/') && changedPath.endsWith('.mts')) return Object.freeze([changedPath]);
+  if (/^test\/[^/]+\.test\.mts$/u.test(changedPath) && existingTest(changedPath)) return Object.freeze([changedPath]);
   if (changedPath.startsWith('e2e/') && /\.(?:spec|setup)\.ts$/u.test(changedPath)) return Object.freeze([]);
   const basename = path.posix.basename(changedPath).replace(/\.(?:mts|ts|svelte|json|md|yml|yaml)$/u, '');
   return Object.freeze([
@@ -607,17 +617,16 @@ function exactFocusedChecks(changedPath: string): readonly string[] {
 }
 
 function exactBrowserChecks(changedPath: string): readonly string[] {
-  if (changedPath.startsWith('e2e/') && changedPath.endsWith('.spec.ts')) return Object.freeze([changedPath]);
+  if (changedPath.startsWith('e2e/') && changedPath.endsWith('.spec.ts') && existingTest(changedPath)) return Object.freeze([changedPath]);
   return Object.freeze([]);
 }
 
 function matchingRules(changedPath: string): readonly VerificationRule[] {
   const matches = RULES.filter((rule) => rule.matches(changedPath));
-  if (!matches.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
-  return Object.freeze(matches);
+  return Object.freeze([ownershipRule(changedPath, matches), ...matches.filter((rule) => rule.impactOnly)]);
 }
 
-function ownershipRule(changedPath: string, matches = matchingRules(changedPath)): VerificationRule {
+function ownershipRule(changedPath: string, matches: readonly VerificationRule[] = RULES.filter((rule) => rule.matches(changedPath))): VerificationRule {
   const owners = matches.filter((rule) => !rule.impactOnly);
   if (!owners.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
   const priority = Math.max(...owners.map((rule) => rule.priority));
@@ -630,7 +639,10 @@ function uniqueSorted<T extends string>(values: readonly T[]): readonly T[] {
   return Object.freeze([...new Set(values)].sort() as T[]);
 }
 
-export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): VerificationOwnershipPlan {
+export function buildVerificationOwnershipPlan(
+  rawPaths: readonly string[],
+  importedTests: ReadonlyMap<string, readonly string[]> = new Map(),
+): VerificationOwnershipPlan {
   validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
     throw new TypeError(`Verification plan requires 1 to ${MAX_VERIFICATION_CHANGED_PATHS} changed paths.`);
@@ -643,6 +655,7 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
     const focusedUnitChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedUnit),
       ...exactFocusedChecks(changedPath),
+      ...(importedTests.get(changedPath) ?? []),
     ]);
     const focusedBrowserChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedBrowser),
@@ -675,11 +688,70 @@ export function buildVerificationOwnershipPlan(rawPaths: readonly string[]): Ver
     fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES,
     interpretation: Object.freeze([
       'Focused checks support iteration only and do not establish batch or release readiness.',
-      'Each path has one highest-priority owner while every matching impact contributes checks.',
+      'Each path selects its most specific owner plus explicit cross-cutting impacts, not every ancestor owner.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
     ]),
   });
+}
+
+// Reuse the architecture resolver rather than maintain another import parser or
+// source-to-test register. The graph is rebuilt once for the current edit plan.
+export function importedUnitTests(
+  changedPaths: readonly string[],
+  graph: Pick<ICruiseResult, 'modules'>,
+  inventory: readonly string[],
+): ReadonlyMap<string, readonly string[]> {
+  if (graph.modules.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Dependency graph exceeds the inventory bound.');
+  const dependents = new Map<string, Set<string>>();
+  const unresolved = graph.modules.some((module) => module.dependencies.some((dependency) =>
+    dependency.couldNotResolve && /^(?:\.|\$lib\/)/u.test(dependency.module)));
+  for (const module of graph.modules) {
+    for (const dependency of module.dependencies) {
+      const incoming = dependents.get(dependency.resolved) ?? new Set<string>();
+      incoming.add(module.source);
+      dependents.set(dependency.resolved, incoming);
+    }
+  }
+  return new Map(changedPaths.map((changedPath) => {
+    const visited = new Set([changedPath]);
+    for (const source of visited) {
+      for (const dependent of dependents.get(source) ?? []) visited.add(dependent);
+    }
+    const tests = inventory.filter((file) => visited.has(file));
+    // No import evidence is not evidence of no impact: deleted files, dynamic
+    // loading and file-reading tests use the complete unit inventory fallback.
+    return [changedPath, unresolved || !tests.length ? inventory : tests];
+  }));
+}
+
+export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
+  const initial = buildVerificationOwnershipPlan(rawPaths);
+  const codePaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|svelte)$/u.test(file)
+    && !file.endsWith('.svelte') && !file.startsWith('e2e/'));
+  if (!codePaths.length) return initial;
+  const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
+  let selection: ReadonlyMap<string, readonly string[]>;
+  let explanation: string;
+  try {
+    const { cruise } = await import('dependency-cruiser');
+    const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
+    const { output } = await cruise([...inventory], {
+      ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: true, validate: false,
+      tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
+    });
+    const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
+    selection = importedUnitTests(codePaths, graph, inventory);
+    const fallback = codePaths.filter((file) => selection.get(file)?.length === inventory.length);
+    explanation = fallback.length
+      ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
+      : 'Unit dependents are discovered from current imports, including transitive helpers and newly added tests.';
+  } catch {
+    selection = new Map(codePaths.map((file) => [file, inventory]));
+    explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit inventory.';
+  }
+  const plan = buildVerificationOwnershipPlan(rawPaths, selection);
+  return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 
 function maintainedInventory(): readonly string[] {
@@ -781,7 +853,7 @@ export function checkVerificationOwnershipMap() {
   });
 }
 
-export function main(args = process.argv.slice(2)): number {
+export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--check') {
       const result = checkVerificationOwnershipMap();
@@ -789,7 +861,7 @@ export function main(args = process.argv.slice(2)): number {
       process.stdout.write(`Canonical closure: ${result.schemaFamilies} schema families, ${result.schemaOwnerPaths} owner paths, ${result.capabilities} capabilities, ${result.cliOperations} CLI operations, ${result.privacyProfiles} privacy profiles, ${result.privacyConsumerFlows} privacy consumer flows, ${result.blockingDependencyRules} blocking dependency rules.\n`);
       return 0;
     }
-    const plan = buildVerificationOwnershipPlan(args);
+    const plan = await createVerificationOwnershipPlan(args);
     const serialised = `${JSON.stringify(plan, null, 2)}\n`;
     if (Buffer.byteLength(serialised, 'utf8') > 256 * 1024) throw new TypeError('Verification ownership plan exceeds its output byte bound.');
     process.stdout.write(serialised);
@@ -801,5 +873,5 @@ export function main(args = process.argv.slice(2)): number {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }

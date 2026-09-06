@@ -202,24 +202,33 @@ jobs:
           pattern: playwright-results-*-of-4
           path: ${{ runner.temp }}/playwright-functional-results
           merge-multiple: true
-      - name: Verify exact browser inventory and observed balance
-        run: |
-          reports=(
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
-          )
-          npm run --silent test:e2e:aggregate -- "${reports[@]}" > "$RUNNER_TEMP/playwright-browser-aggregate.json"
-          npm run --silent test:e2e:aggregate -- --summary "${reports[@]}" | tee "$RUNNER_TEMP/playwright-browser-health.md"
-          cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
-          npm run --silent verification:timing:update-candidate -- \
-            --lane=browser \
-            --report="$RUNNER_TEMP/playwright-browser-aggregate.json" \
-            --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            --environment=linux-x64-chromium-node24-ci \
-            --sample-basis=complete-four-shard-functional-run \
-            > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
+      - name: Verify exact browser inventory
+        run: >-
+          npm run --silent test:e2e:aggregate --
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          > "$RUNNER_TEMP/playwright-browser-aggregate.json"
+      - name: Summarise observed balance
+        run: >-
+          npm run --silent test:e2e:aggregate -- --summary
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          > "$RUNNER_TEMP/playwright-browser-health.md"
+      - name: Record browser timing evidence
+        run: >-
+          npm run --silent verification:timing:update-candidate --
+          --lane=browser
+          --report="$RUNNER_TEMP/playwright-browser-aggregate.json"
+          --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          --environment=linux-x64-chromium-node24-ci
+          --sample-basis=complete-four-shard-functional-run
+          > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
+      - name: Present browser health summary
+        run: cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload browser timing evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -263,16 +272,6 @@ jobs:
     steps:
       - name: Require every verification lane to pass
         env:
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          UNIT_RESULT: ${{ needs.unit.result }}
-          BROWSER_BUILD_RESULT: ${{ needs.browser-build.result }}
-          BROWSER_RESULT: ${{ needs.browser.result }}
-          BROWSER_HEALTH_RESULT: ${{ needs.browser-health.result }}
-          CLI_RUNTIME_RESULT: ${{ needs.cli-runtime.result }}
+          NEEDS_RESULTS: ${{ toJSON(needs) }}
         run: |
-          test "$QUALITY_RESULT" = success
-          test "$UNIT_RESULT" = success
-          test "$BROWSER_BUILD_RESULT" = success
-          test "$BROWSER_RESULT" = success
-          test "$BROWSER_HEALTH_RESULT" = success
-          test "$CLI_RUNTIME_RESULT" = success
+          node -e 'const results = Object.values(JSON.parse(process.env.NEEDS_RESULTS)); process.exit(results.length > 0 && results.every(job => job.result === "success") ? 0 : 1)'

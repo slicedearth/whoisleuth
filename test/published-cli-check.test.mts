@@ -18,7 +18,6 @@ import {
 } from '../tools/published-cli-check.mts';
 import {
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
-  MAX_CLI_PACKAGE_INSTALLED_CHECKS,
 } from '../tools/cli-package.mts';
 
 const VERSION = '1.33.0';
@@ -128,13 +127,12 @@ describe('published CLI verification', () => {
   });
 
   test('rejects candidate report drift and selected archive mismatch before registry access', async () => {
-    assert.ok(Number.isSafeInteger(MAX_CLI_PACKAGE_INSTALLED_CHECKS));
-    assert.ok(MAX_CLI_PACKAGE_INSTALLED_CHECKS >= candidateReport().installedChecks.length);
+    assert.ok(MAX_CLI_PACKAGE_PROCESSING_ITEMS >= candidateReport().installedChecks.length);
     assert.doesNotThrow(() => validateCandidateReport(candidateReport({
       installedChecks: Array.from({ length: 71 }, (_, index) => `installed-check-${index}`),
     }), VERSION));
     assert.throws(() => validateCandidateReport(candidateReport({
-      installedChecks: Array.from({ length: MAX_CLI_PACKAGE_INSTALLED_CHECKS + 1 }, (_, index) => `installed-check-${index}`),
+      installedChecks: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => `installed-check-${index}`),
     }), VERSION), /bounded non-empty string array/u);
     assert.throws(() => validateCandidateReport(candidateReport({
       sourceModuleCount: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1,

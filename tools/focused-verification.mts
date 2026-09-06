@@ -15,7 +15,7 @@ import {
 import { inspectVerificationArtifacts } from './verification-artifact-status.mts';
 import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
 import {
-  buildVerificationOwnershipPlan,
+  createVerificationOwnershipPlan,
   type SpecialisedCheck,
   type VerificationOwnershipPlan,
 } from './verification-ownership.mts';
@@ -137,9 +137,23 @@ export function buildFocusedVerificationExecution(
     }));
   }
 
-  const frontendChanged = plan.changedPaths.some((value) => value.startsWith('frontend/'));
-  if (frontendChanged) {
-    commands.push(npmCommand('typecheck'), npmCommand('check'));
+  const typedPaths = plan.changedPaths.filter((value) => /\.(?:[cm]?ts|svelte)$/u.test(value));
+  const frontendChanged = typedPaths.some((value) => value.startsWith('frontend/src/'));
+  // Svelte check already checks the frontend TypeScript project. Do not also
+  // typecheck the server, CLI, test and browser-test projects for a UI edit.
+  if (frontendChanged) commands.push(npmCommand('check'));
+  const compilerProjects = new Set<string>();
+  for (const file of typedPaths) {
+    if (file.startsWith('frontend/src/')) continue;
+    if (file.startsWith('e2e/') || file === 'playwright.config.ts') compilerProjects.add('e2e/tsconfig.json');
+    else if (file.startsWith('test/')) compilerProjects.add('test/tsconfig.json');
+    else compilerProjects.add('tsconfig.json');
+  }
+  for (const project of compilerProjects) {
+    commands.push(Object.freeze({
+      id: `typecheck (${project})`, executable: process.execPath,
+      args: Object.freeze([path.join(REPOSITORY_ROOT, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', project]),
+    }));
   }
 
   const deferred = new Set<SpecialisedCheck>();
@@ -179,12 +193,14 @@ function renderExecutionPlan(
   const lines = [
     `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
     `Focused unit files: ${plan.focusedUnitChecks.length}.`,
+    ...plan.assignments.map((assignment) => `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`),
+    ...plan.interpretation.slice(-1),
     ...execution.commands.map((command) => `Run: ${command.id}`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,
     ...(execution.deferredSpecialisedChecks.length
       ? [`Delivery-only checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
       : []),
-    'This is an iteration boundary. Run npm run verification:ci from the clean commit before push.',
+    'This focused result covers the listed paths and checks only. Complete hosted checks are required before merge; release checks remain separate.',
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -289,7 +305,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     const options = parseFocusedVerificationOptions(args);
     const paths = options.changed ? discoverFocusedVerificationPaths() : options.paths;
-    const plan = buildVerificationOwnershipPlan(paths);
+    const plan = await createVerificationOwnershipPlan(paths);
     const execution = buildFocusedVerificationExecution(plan);
     process.stdout.write(renderExecutionPlan(plan, execution));
     if (options.list) return 0;
@@ -317,7 +333,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     process.stderr.write(`${failure instanceof Error ? failure.message : 'Focused verification failed.'}\n`);
     return 2;
   }
-  process.stdout.write('\nFocused verification passed. The clean-commit CI boundary remains outstanding.\n');
+  process.stdout.write('\nFocused verification passed for the listed scope. Report any checks not run when opening a pull request; complete hosted verification remains required before merge.\n');
   return 0;
 }
 

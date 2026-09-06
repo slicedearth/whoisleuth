@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
@@ -15,8 +16,6 @@ import {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
 export const CI_FRONTEND_BUILD_ARTIFACT_NAME = 'frontend-build-${{ github.sha }}-${{ github.run_attempt }}';
-const UPLOAD_ARTIFACT_ACTION = 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a';
-const DOWNLOAD_ARTIFACT_ACTION = 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c';
 
 export const CI_QUALITY_SCRIPTS = Object.freeze([
   'toolchain:check',
@@ -247,76 +246,70 @@ function assertCliRuntime(actual = process.versions.node): void {
   }
 }
 
-function workflowJob(workflow: string, job: string): string {
-  const match = new RegExp(`\\n  ${job}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|$)`, 'u').exec(workflow);
-  if (!match?.[1]) throw new TypeError(`Hosted CI workflow is missing the ${job} job.`);
-  return match[1];
+type WorkflowStep = {
+  uses?: string;
+  run?: string;
+  if?: string | boolean;
+  'continue-on-error'?: boolean | string;
+  with?: Record<string, unknown>;
+};
+type WorkflowJob = {
+  steps: WorkflowStep[];
+  needs?: string | string[];
+  if?: string | boolean;
+  'continue-on-error'?: boolean | string;
+  permissions?: unknown;
+};
+type Workflow = { jobs: Record<string, WorkflowJob>; permissions?: unknown };
+
+function parseWorkflow(source: string): Workflow {
+  if (Buffer.byteLength(source, 'utf8') > 512 * 1024) throw new TypeError('Hosted CI workflow exceeds the parsing bound.');
+  // Pre-install release checks and --list remain dependency-free.
+  const { parseDocument } = createRequire(import.meta.url)('yaml') as typeof import('yaml');
+  const document = parseDocument(source, { uniqueKeys: true });
+  if (document.errors.length) throw new TypeError('Hosted CI workflow is not valid YAML.');
+  const value: unknown = document.toJS({ maxAliasCount: 0 });
+  if (!value || typeof value !== 'object' || !('jobs' in value)
+    || !value.jobs || typeof value.jobs !== 'object' || Array.isArray(value.jobs)) {
+    throw new TypeError('Hosted CI workflow must declare jobs.');
+  }
+  return value as Workflow;
 }
 
-function workflowStep(job: string, step: string): string {
-  const escaped = step.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  const match = new RegExp(`(?:^|\\n)\\s{6}- name: ${escaped}\\n([\\s\\S]*?)(?=\\n\\s{6}- name: |$)`, 'u').exec(job);
-  if (!match?.[0]) throw new TypeError(`Hosted CI workflow is missing the ${step} step.`);
-  return match[0];
+function workflowJob(workflow: Workflow, name: string): WorkflowJob {
+  const job = workflow.jobs[name];
+  if (!job || !Array.isArray(job.steps)) throw new TypeError(`Hosted CI workflow is missing the ${name} job.`);
+  return job;
 }
 
-function assertFrontendBuildArtifactFlow(workflow: string): void {
-  const buildJob = workflowJob(workflow, 'browser-build');
-  const browserJob = workflowJob(workflow, 'browser');
-  const upload = workflowStep(buildJob, 'Upload verified frontend build');
-  const download = workflowStep(browserJob, 'Download verified frontend build');
-  const exactUpload = new RegExp(
-    `uses: ${UPLOAD_ARTIFACT_ACTION.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s+# v7`,
-    'u',
-  );
-  const exactDownload = new RegExp(
-    `uses: ${DOWNLOAD_ARTIFACT_ACTION.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s+# v8\\.0\\.1`,
-    'u',
-  );
-  const declaredArtifactBlock = [
-    '          path: |',
-    ...FRONTEND_BROWSER_ARTIFACT_PATHS.map((item) => `            ${item}`),
-  ].join('\n');
-  if (!exactUpload.test(upload)
-    || !upload.includes(`          name: ${CI_FRONTEND_BUILD_ARTIFACT_NAME}`)
-    || !upload.includes(declaredArtifactBlock)
-    || !upload.includes('          if-no-files-found: error')
-    || !upload.includes('          retention-days: 1')
-    || !upload.includes('          compression-level: 6')
-    || upload.includes('.svelte-kit')) {
-    throw new Error('Hosted browser-build artifact publication has drifted from the exact served-build contract.');
-  }
-  if (!exactDownload.test(download)
-    || !download.includes(`          name: ${CI_FRONTEND_BUILD_ARTIFACT_NAME}`)
-    || !download.includes('          path: frontend')
-    || /\bpattern:|\bmerge-multiple:/u.test(download)) {
-    throw new Error('Hosted browser build download has drifted from the exact artifact contract.');
-  }
-  if (!/^\s{4}needs:\s*\n\s{6}- browser-build$/mu.test(browserJob)) {
-    throw new Error('Hosted browser lanes must depend on the verified browser-build lane.');
-  }
-  const downloadPosition = browserJob.indexOf('- name: Download verified frontend build');
-  const integrityPosition = browserJob.indexOf('- name: Verify frontend build identity');
-  const installPosition = browserJob.indexOf('- name: Install Playwright Chromium');
-  if (!(downloadPosition >= 0 && downloadPosition < integrityPosition && integrityPosition < installPosition)) {
-    throw new Error('Hosted browser lanes must verify the downloaded build before Playwright installation and execution.');
-  }
+function condition(value: unknown): string {
+  return String(value ?? '').replace(/^\s*\$\{\{\s*|\s*\}\}\s*$/gu, '').trim();
 }
 
-function npmScripts(job: string): readonly string[] {
-  return Object.freeze([...job.matchAll(
-    /^\s+(?:run:\s+)?npm run (?:--silent\s+)?([a-z0-9:.-]+)(?:\s+--\s+--group=([a-z-]+))?(?:\s|$)/gmu,
-  )].flatMap((match) => {
-    const script = match[1] as string;
-    const group = match[2];
-    if (script !== 'verification:ci' || !group) return [script];
-    if (!CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) return [`verification:ci:${group}`];
-    return ciCommandGroupScripts(group as CiCommandGroup);
-  }));
+function dependencies(job: WorkflowJob): readonly string[] {
+  return typeof job.needs === 'string' ? [job.needs] : job.needs ?? [];
 }
 
-export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
-  if (Buffer.byteLength(workflow, 'utf8') > 512 * 1024) throw new TypeError('Hosted CI workflow exceeds the maintained parsing bound.');
+function stepScripts(step: WorkflowStep): readonly string[] {
+  if (typeof step.run !== 'string') return [];
+  const command = step.run.replace(/\\\r?\n/gu, ' ').trim();
+  const match = /^npm run (?:--silent\s+)?([a-z0-9:.-]+)(?:\s|$)/u.exec(command);
+  if (!match) return [];
+  // Required gates are direct commands, not shell programmes whose control flow
+  // this policy would have to interpret. Redirection of reports remains allowed.
+  if (/[\n;&|]/u.test(command)) throw new Error('Required CI commands must run directly without swallowed failures or shell control flow.');
+  const script = match[1] as string;
+  if (script !== 'verification:ci') return [script];
+  const group = /^npm run verification:ci -- --group[= ]([a-z-]+)$/u.exec(command)?.[1];
+  if (!CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) throw new Error('Hosted CI uses an unknown verification group.');
+  return ciCommandGroupScripts(group as CiCommandGroup);
+}
+
+function npmScripts(job: WorkflowJob): readonly string[] {
+  return Object.freeze(job.steps.flatMap(stepScripts));
+}
+
+function scriptPlan(workflow: Workflow): HostedCiScriptPlan {
   return Object.freeze({
     quality: npmScripts(workflowJob(workflow, 'quality')),
     unit: npmScripts(workflowJob(workflow, 'unit')),
@@ -325,6 +318,46 @@ export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
     browserHealth: npmScripts(workflowJob(workflow, 'browser-health')),
     cliRuntime: npmScripts(workflowJob(workflow, 'cli-runtime')),
   });
+}
+
+export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
+  return scriptPlan(parseWorkflow(workflow));
+}
+
+function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
+  const build = workflowJob(workflow, 'browser-build');
+  const browser = workflowJob(workflow, 'browser');
+  const upload = build.steps.find((step) => step.uses?.startsWith('actions/upload-artifact@')
+    && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
+  const download = browser.steps.find((step) => step.uses?.startsWith('actions/download-artifact@')
+    && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
+  const paths = String(upload?.with?.path ?? '').trim().split(/\r?\n/u).map((value) => value.trim()).sort();
+  if (!upload || condition(upload.if) || upload.with?.['if-no-files-found'] !== 'error'
+    || JSON.stringify(paths) !== JSON.stringify([...FRONTEND_BROWSER_ARTIFACT_PATHS].sort())) {
+    throw new Error('Hosted browser-build artifact publication must contain the served build and its identity only.');
+  }
+  if (!download || condition(download.if) || download.with?.path !== 'frontend'
+    || download.with?.pattern !== undefined || download.with?.['merge-multiple'] !== undefined
+    || !dependencies(browser).includes('browser-build')) {
+    throw new Error('Hosted browser build download must use the exact verified build artifact.');
+  }
+  const buildVerification = build.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
+  const integrity = browser.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
+  const consumers = browser.steps.flatMap((step, index) => stepScripts(step).some((script) =>
+    ['test:e2e:shard', 'frontend:authenticated-loading-report'].includes(script)) ? [index] : []);
+  if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)
+    || integrity <= browser.steps.indexOf(download) || consumers.some((index) => index <= integrity)
+    || npmScripts(browser).includes('build')) {
+    throw new Error('Browser tests must consume the downloaded, verified build without rebuilding it.');
+  }
+}
+
+function assertReadOnlyPermissions(value: unknown): void {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.values(value).some((permission) => permission !== 'read' && permission !== 'none')) {
+    throw new Error('CI permissions must remain explicitly read-only.');
+  }
 }
 
 export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
@@ -341,17 +374,44 @@ export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
 export function assertHostedCiParity(
   workflow = readFileSync(path.join(REPOSITORY_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
 ): void {
-  const actual = readHostedCiScriptPlan(workflow);
+  const parsed = parseWorkflow(workflow);
+  const actual = scriptPlan(parsed);
   const expected = expectedHostedCiScriptPlan();
-  for (const lane of ['quality', 'unit', 'browserBuild', 'browser', 'browserHealth', 'cliRuntime'] as const) {
-    if (JSON.stringify(actual[lane]) !== JSON.stringify(expected[lane])) {
+  for (const lane of Object.keys(expected) as Array<keyof HostedCiScriptPlan>) {
+    if (JSON.stringify([...actual[lane]].sort()) !== JSON.stringify([...expected[lane]].sort())) {
       throw new Error(
         `Hosted ${lane} scripts have drifted from the maintained local CI contract.\n`
         + `Expected: ${expected[lane].join(', ')}\nActual: ${actual[lane].join(', ')}`,
       );
     }
   }
-  assertFrontendBuildArtifactFlow(workflow);
+  if (parsed.permissions === undefined) throw new Error('CI permissions must be explicit.');
+  assertReadOnlyPermissions(parsed.permissions);
+  for (const [name, job] of Object.entries(parsed.jobs)) {
+    assertReadOnlyPermissions(job.permissions);
+    if (job['continue-on-error']
+      || name !== 'verify' && condition(job.if)) throw new Error(`Required CI job ${name} must not be skipped or ignore failure.`);
+    for (const step of job.steps) {
+      if (step['continue-on-error']) throw new Error(`CI job ${name} must not ignore step failures.`);
+      if (step.uses && !/^[^@\s]+@[a-f0-9]{40}$/u.test(step.uses)) throw new Error('CI actions must be pinned to immutable revisions.');
+      if (step.uses?.startsWith('actions/checkout@') && step.with?.['persist-credentials'] !== false) {
+        throw new Error('CI checkouts must not retain credentials.');
+      }
+      const scripts = stepScripts(step);
+      const guard = condition(step.if);
+      if (scripts.length && guard && !(
+        scripts.every((script) => ['verification:artifacts', 'test:e2e:summary'].includes(script)) && guard === 'always()'
+        || scripts.length === 1 && scripts[0] === 'test:e2e:shard' && guard === "matrix.kind == 'functional'"
+        || scripts.length === 1 && scripts[0] === 'frontend:authenticated-loading-report' && guard === "matrix.kind == 'performance'"
+      )) throw new Error(`Required CI commands in ${name} have an unsupported skip condition.`);
+    }
+  }
+  const verify = workflowJob(parsed, 'verify');
+  const lanes = Object.keys(parsed.jobs).filter((name) => name !== 'verify').sort();
+  if (condition(verify.if) !== 'always()' || JSON.stringify([...dependencies(verify)].sort()) !== JSON.stringify(lanes)) {
+    throw new Error('The required verify job must always account for every verification lane.');
+  }
+  assertFrontendBuildArtifactFlow(parsed);
 }
 
 export function formatLocalCiPlan(): string {
@@ -391,7 +451,6 @@ export function main(args = process.argv.slice(2)): number {
   let cleanup = false;
   let failure: unknown;
   try {
-    assertHostedCiParity();
     const parsed = parseCiVerificationArguments(args);
     if (parsed.mode === 'list') {
       process.stdout.write(`${formatLocalCiPlan()}\n`);
@@ -401,6 +460,7 @@ export function main(args = process.argv.slice(2)): number {
       const group = parsed.group!;
       if (group === 'cli-runtime') assertCliRuntime();
       else assertLocalCiRuntime();
+      if (group === 'quality') assertHostedCiParity();
       const environment = group === 'unit'
         ? unitTestExecutableEnvironment(resolveUnitTestExecutables())
         : process.env;
@@ -419,6 +479,7 @@ export function main(args = process.argv.slice(2)): number {
     npmRun('security:staged', ['--', '--range', range]);
     runCiCommandGroup('preflight');
     run(npmExecutableName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);
+    assertHostedCiParity();
     runCiCommandGroup('quality');
     runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
     runCiCommandGroup('browser-build');

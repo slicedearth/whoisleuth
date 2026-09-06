@@ -15,7 +15,7 @@ describe('architecture boundaries', () => {
       '--config',
       join(ROOT, '.dependency-cruiser.json'),
       '--output-type',
-      'err-long',
+      'json',
       join(FIXTURE_ROOT, 'packages', 'contracts'),
       join(FIXTURE_ROOT, 'packages', 'evidence'),
       join(FIXTURE_ROOT, 'packages', 'cases'),
@@ -38,7 +38,9 @@ describe('architecture boundaries', () => {
     });
 
     const output = `${result.stdout}\n${result.stderr}`;
-    assert.notEqual(result.status, 0, output);
+    // The JSON reporter returns data successfully even when that data contains
+    // violations. Inspect its findings, not the reporter's process status.
+    assert.equal(result.status, 0, result.stderr);
     assert.match(output, /shared-contracts-stay-independent-of-domain-and-adapters/u);
     assert.match(output, /domain-packages-stay-independent-of-runtime-adapters/u);
     assert.match(output, /case-domain-stays-independent-of-runtime-adapters/u);
@@ -47,14 +49,26 @@ describe('architecture boundaries', () => {
     assert.match(output, /workspace-domain-no-node-core/u);
     assert.match(output, /portable-domain-packages-stay-independent-of-runtime-adapters/u);
     assert.match(output, /portable-domain-packages-no-node-core/u);
-    assert.match(output, /cli-stays-out-of-frontend/u);
     assert.match(output, /non-frontend-production-stays-out-of-frontend/u);
-    assert.match(output, /case-consumers-use-domain-owner/u);
-    assert.match(output, /workspace-consumers-use-domain-owner/u);
-    assert.match(output, /portable-domain-consumers-use-shared-owner/u);
-    assert.match(output, /non-frontend-production-stays-out-of-frontend-presentation/u);
-    assert.match(output, /artifact-integrity-consumers-use-domain-owner/u);
-    assert.match(output, /domain-control-consumers-use-domain-owner/u);
     assert.match(output, /observation-consumers-use-domain-owner/u);
+    const report = JSON.parse(result.stdout) as { summary: { error: number; violations: Array<{ from: string; to: string; rule: { name: string } }> } };
+    assert.ok(report.summary.error > 0);
+    const blockedTargets = new Set(report.summary.violations
+      .filter((violation) => violation.rule.name === 'non-frontend-production-stays-out-of-frontend')
+      .map((violation) => violation.to.replace('test/fixtures/architecture/frontend/src/lib/', '')));
+    // Independent bad-import fixtures still exercise every retired duplicate
+    // rule. The general boundary covers new frontend modules automatically.
+    for (const target of [
+      'components/adapter.mts', 'analysis/case-model.mts', 'analysis/brand-profile-model.mts',
+      'analysis/workspace-archive.mts', 'analysis/external-findings-import.mts', 'analysis/page-similarity.mts',
+      'analysis/artifact-integrity.mts', 'analysis/domain-control-manifest-core.mts', 'analysis/domain-control-records.mts',
+    ]) assert.ok(blockedTargets.has(target), `${target} must remain forbidden to non-frontend consumers`);
+  });
+
+  test('makes the blocking architecture reporter fail for a forbidden import', () => {
+    const result = spawnSync(process.execPath, [EXECUTABLE, '--config', join(ROOT, '.dependency-cruiser.json'),
+      '--output-type', 'err-long', join(FIXTURE_ROOT, 'cli')], { cwd: ROOT, encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout + result.stderr, /non-frontend-production-stays-out-of-frontend/u);
   });
 });

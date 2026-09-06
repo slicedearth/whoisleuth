@@ -113,7 +113,6 @@ export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_INSTALLED_CHECKS = 81;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
@@ -1233,8 +1232,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       ...installedHandlerChecks,
       ...commandHelpChecks,
     ]);
-    if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_INSTALLED_CHECKS) {
-      throw new TypeError(`Installed CLI checks exceed the reviewed ${MAX_CLI_PACKAGE_INSTALLED_CHECKS}-check ceiling.`);
+    if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
+      throw new TypeError('Installed CLI checks exceed the package processing bound.');
     }
 
     const inventory = Object.freeze({

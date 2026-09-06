@@ -93,6 +93,8 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
 
+For changes to the project, see [Contributing](CONTRIBUTING.md).
+
 ## Architecture
 
 The application is a TypeScript modular monolith:

@@ -31,6 +31,8 @@ import {
   assertDeclaredVerificationTest,
   buildVerificationOwnershipPlan,
   checkVerificationOwnershipMap,
+  createVerificationOwnershipPlan,
+  importedUnitTests,
   FULL_BATCH_RELEASE_GATES,
 } from '../tools/verification-ownership.mts';
 
@@ -332,7 +334,7 @@ describe('verification architecture contracts', () => {
         kind: 'isolated presentation',
         path: 'frontend/src/lib/components/LookupAtAGlance.svelte',
         owner: 'frontend user-facing routes and components',
-        unit: 'test/model-contract-properties.test.mts',
+        unit: 'test/lookup-request-controller.test.mts',
         browser: 'e2e/lookup-interaction-design.spec.ts',
         specialised: 'architecture',
         excluded: 'cli-package',
@@ -415,6 +417,41 @@ describe('verification architecture contracts', () => {
     );
   });
 
+  test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
+    for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'PRIVACY.md']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      const execution = buildFocusedVerificationExecution(plan);
+      assert.deepEqual(execution.browserSpecs, [], file);
+      assert.equal(execution.cleanupBrowserArtifacts, false, file);
+      assert.ok(!execution.commands.some((command) => /typecheck|build|^check$/u.test(command.id)), file);
+      if (file === 'docs/cli.md') assert.ok(plan.focusedUnitChecks.includes('test/cli-package-boundary.test.mts'));
+      if (file === 'PRIVACY.md') assert.ok(plan.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+    }
+  });
+
+  test('discovers transitive helper consumers and safely falls back when imports cannot explain coverage', () => {
+    const inventory = ['test/consumer.test.mts', 'test/unrelated.test.mts'];
+    const graph = { modules: [
+      { source: 'test/consumer.test.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts' }] },
+      { source: 'packages/example/owner.mts', dependencies: [{ resolved: 'packages/example/helper.mts', module: './helper.mts' }] },
+      { source: 'packages/example/helper.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: './owner.mts' }] },
+    ] } as Parameters<typeof importedUnitTests>[1];
+    const selected = importedUnitTests(['packages/example/helper.mts', 'test/consumer.test.mts', 'packages/example/deleted.mts'], graph, inventory);
+    assert.deepEqual(selected.get('packages/example/helper.mts'), ['test/consumer.test.mts']);
+    assert.deepEqual(selected.get('test/consumer.test.mts'), ['test/consumer.test.mts']);
+    assert.deepEqual(selected.get('packages/example/deleted.mts'), inventory);
+    graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
+    assert.deepEqual(importedUnitTests(['packages/example/helper.mts'], graph, inventory).get('packages/example/helper.mts'), inventory);
+    assert.equal(buildVerificationOwnershipPlan(['test/helpers/subprocess-environment.mts']).focusedUnitChecks.includes('test/helpers/subprocess-environment.mts'), false);
+  });
+
+  test('uses the existing resolver to find a real helper through its consumers', async () => {
+    const plan = await createVerificationOwnershipPlan(['packages/comparison/favicon-similarity.mts']);
+    assert.ok(plan.focusedUnitChecks.includes('test/utils.test.mts'));
+    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
+    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
+  });
+
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([
       'packages/contracts/privacy-data-flow-catalogue.mts',
@@ -428,7 +465,6 @@ describe('verification architecture contracts', () => {
     const sharedPrivacy = byPath.get('packages/contracts/privacy-data-flow-catalogue.mts')!;
     assert.equal(sharedPrivacy.ownershipArea, 'shared contracts and lifecycle metadata');
     assert.deepEqual(sharedPrivacy.impactAreas, [
-      'portable domain packages',
       'privacy contract and disclosure surfaces',
       'shared contracts and lifecycle metadata',
     ]);
@@ -469,7 +505,8 @@ describe('verification architecture contracts', () => {
     const execution = buildFocusedVerificationExecution(ownership);
     const ids = execution.commands.map((command) => command.id);
 
-    assert.equal(ids.filter((id) => id === 'typecheck').length, 1);
+    assert.equal(ids.filter((id) => id === 'typecheck (e2e/tsconfig.json)').length, 1);
+    assert.equal(ids.includes('typecheck (tsconfig.json)'), false);
     assert.equal(ids.filter((id) => id === 'check').length, 1);
     assert.equal(ids.filter((id) => id === 'build').length, 1);
     assert.equal(ids.filter((id) => id === 'architecture:check').length, 1);

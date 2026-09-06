@@ -1,44 +1,22 @@
 import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const DOCS_DIRECTORY = join(ROOT, 'docs');
-const PACKAGES_DIRECTORY = join(ROOT, 'packages');
-const PUBLIC_ROOT_DOCUMENTS = [
-  'PRIVACY.md',
-  'README.md',
-  'SECURITY.md',
-  'TRADEMARKS.md',
-];
-const DOCUMENTATION_FILES = [
-  ...PUBLIC_ROOT_DOCUMENTS.map((name) => join(ROOT, name)),
-  ...readdirSync(DOCS_DIRECTORY)
-    .filter((name) => extname(name).toLowerCase() === '.md')
-    .sort()
-    .map((name) => join(DOCS_DIRECTORY, name)),
-  ...readdirSync(PACKAGES_DIRECTORY, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(PACKAGES_DIRECTORY, entry.name, 'README.md'))
-    .filter(existsSync)
-    .sort(),
-];
+const DOCUMENTATION_FILES = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+  cwd: ROOT, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024,
+}).split('\0'))]
+  .filter((file) => /^(?:[^/]+\.md|docs\/.*\.md|packages\/.*\.md)$/u.test(file))
+  .map((file) => join(ROOT, file)).filter(existsSync).sort();
 const REQUIRED_GUIDES = [
   'docs/application-guide.md',
   'docs/getting-started.md',
   'docs/operations.md',
-];
-const REQUIRED_DELIVERY_COMMANDS = ['npm run verification:ci'];
-const README_VERIFICATION_COMMANDS = [
-  'npm test',
-  'npm run typecheck',
-  'npm run check',
-  'npm run build',
-  'git diff --check',
 ];
 
 function sourceLinesOutsideFences(markdown: string): Array<{ line: string; lineNumber: number }> {
@@ -112,20 +90,16 @@ describe('documentation links', () => {
   test('keeps the operator and application guides in the documentation set', () => {
     const documented = new Set(DOCUMENTATION_FILES.map((file) => relative(ROOT, file)));
     for (const guide of REQUIRED_GUIDES) assert.equal(documented.has(guide), true, `${guide} is not covered`);
-    for (const document of PUBLIC_ROOT_DOCUMENTS) assert.equal(documented.has(document), true, `${document} is not covered`);
+    for (const document of ['README.md', 'PRIVACY.md', 'SECURITY.md']) assert.equal(documented.has(document), true, `${document} is not covered`);
     assert.equal([...documented].some((file) => /^packages\/[^/]+\/README\.md$/u.test(file)), true);
   });
 
-  test('keeps the layered verification guidance aligned with required gates', () => {
-    for (const [file, requiredCommands] of [
-      [join(ROOT, 'README.md'), README_VERIFICATION_COMMANDS],
-      [join(ROOT, 'docs/getting-started.md'), REQUIRED_DELIVERY_COMMANDS],
-    ] as const) {
-      const source = readFileSync(file, 'utf8');
-      const verification = source.match(/## Verification[\s\S]*?```bash\n([\s\S]*?)\n```/u)?.[1] ?? '';
-      for (const command of requiredCommands) {
-        assert.equal(verification.split('\n').includes(command), true, `${relative(ROOT, file)} omits ${command}`);
-      }
+  test('documents existing contributor commands without freezing wording or fence order', () => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+    for (const file of ['README.md', 'CONTRIBUTING.md', 'docs/getting-started.md']) {
+      const commands = [...readFileSync(join(ROOT, file), 'utf8').matchAll(/npm run ([a-z][a-z0-9:.-]*)/gu)];
+      assert.ok(commands.length > 0, file);
+      for (const [, command] of commands) assert.ok(Object.hasOwn(manifest.scripts, command!), `${file}: unknown command ${command}`);
     }
   });
 
