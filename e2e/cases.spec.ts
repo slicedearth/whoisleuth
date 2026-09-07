@@ -546,6 +546,30 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
   await expect(tags).toHaveValue('');
 });
 
+test('Case tag undo preserves a newer change from another tab', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-08T00:00:00.000Z');
+  await openCasesView(page);
+  await createCase(page, 'undo-conflict.invalid');
+  const other = await page.context().newPage();
+  try {
+    await other.goto('/monitor?view=cases');
+    await other.locator('.case-head', { hasText: 'undo-conflict.invalid' }).click();
+    await page.getByRole('textbox', { name: /^Additional tags\b/u }).fill('first-review');
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    const undo = page.getByRole('region', { name: 'Undo analyst change' });
+    await expect(undo).toBeVisible();
+    await other.getByRole('textbox', { name: /^Additional tags\b/u }).fill('later-review');
+    await other.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect.poll(async () => (await readBrowserLocalCollection(other, 'cases')).records[0]?.value.tags).toEqual(['later-review']);
+    await undo.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(page.getByText('The saved value changed after this action. Undo was not applied; the newer changes were preserved.', { exact: true })).toBeVisible();
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    expect(stored.records[0]?.value.tags).toEqual(['later-review']);
+  } finally {
+    await other.close();
+  }
+});
+
 test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
   const observedAt = new Date(Date.now() - 9 * 86_400_000).toISOString();

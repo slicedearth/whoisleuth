@@ -715,12 +715,17 @@
     const discoverStage = guide?.stages.find((stage) => stage.id === 'discover');
     if (guide?.recipeId === 'brand_sweep' && discoverStage?.outcome === 'pending') {
       const selectedDomains = selectedCandidates.map((candidate) => candidate.domain);
-      const retainedGuide = selectInvestigationGuideReviewDomains(selectedDomains);
-      const expectedRetainedDomains = selectedDomains.slice(0, MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
-      const retainedSelectionMatches = retainedGuide?.reviewDomains.length === expectedRetainedDomains.length
-        && retainedGuide.reviewDomains.every((domain, index) => domain === expectedRetainedDomains[index])
-        && retainedGuide.reviewDomainsTruncated === (selectedDomains.length > MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
-      if (retainedSelectionMatches) updateInvestigationGuideOutcome('discover', 'complete');
+      try {
+        const retainedGuide = selectInvestigationGuideReviewDomains(selectedDomains);
+        const expectedRetainedDomains = selectedDomains.slice(0, MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+        const retainedSelectionMatches = retainedGuide?.reviewDomains.length === expectedRetainedDomains.length
+          && retainedGuide.reviewDomains.every((domain, index) => domain === expectedRetainedDomains[index])
+          && retainedGuide.reviewDomainsTruncated === (selectedDomains.length > MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+        if (retainedSelectionMatches) updateInvestigationGuideOutcome('discover', 'complete');
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : 'Could not retain guide progress. The selected candidates remain available; retry before opening Bulk.';
+        return;
+      }
     }
     await goto(`/bulk?source=discover&handoff=${handoffResult.token}`);
   }

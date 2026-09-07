@@ -662,6 +662,42 @@ test('partial progress, pause, resume, and restart remain explicit', async ({ pa
   await expect(currentAction(page)).toContainText('Collect starting evidence');
 });
 
+test('failed guide progress and clear operations retain the draft and visible context', async ({ page }) => {
+  await startRecipe(page, 'Infrastructure pivot');
+  await allowAndOpen(page, 'Lookup');
+  await currentAction(page).getByRole('button', { name: 'Mark partial', exact: true }).click();
+  const rationale = currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true });
+  await rationale.fill('The selected source needs a later review.');
+  await page.evaluate((key) => {
+    const target = window as typeof window & { failGuideWrites?: boolean };
+    target.failGuideWrites = true;
+    const set = Storage.prototype.setItem;
+    const remove = Storage.prototype.removeItem;
+    Storage.prototype.setItem = function (name: string, value: string) {
+      if (this === sessionStorage && name === key && target.failGuideWrites) throw new DOMException('Unavailable', 'QuotaExceededError');
+      return set.call(this, name, value);
+    };
+    Storage.prototype.removeItem = function (name: string) {
+      if (this === sessionStorage && name === key && target.failGuideWrites) throw new DOMException('Unavailable', 'InvalidStateError');
+      return remove.call(this, name);
+    };
+  }, GUIDE_KEY);
+  await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
+  await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not retain');
+  await expect(rationale).toHaveValue('The selected source needs a later review.');
+  await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
+  await page.getByRole('button', { name: 'Clear context', exact: true }).click();
+  await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not clear');
+  await expect(rationale).toHaveValue('The selected source needs a later review.');
+  await page.evaluate(() => { (window as typeof window & { failGuideWrites?: boolean }).failGuideWrites = false; });
+  await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
+  await expect(page.locator('.guide')).toContainText('1 of 3 steps reviewed');
+  expect(await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null').stages[0].reviewNote, GUIDE_KEY)).toBe('The selected source needs a later review.');
+  await page.getByRole('button', { name: 'Clear context', exact: true }).click();
+  await expect(page.locator('.guide')).toHaveCount(0);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBeNull();
+});
+
 test('exports only a compact versioned progress summary after explicit confirmation', async ({ page }) => {
   await startRecipe(page);
   await page.getByText('Guide options', { exact: true }).click();

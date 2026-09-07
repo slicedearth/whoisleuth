@@ -25,6 +25,7 @@ import type {
 } from './analysis/case-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
+import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
 import {
   mergeExternalFindingsIntoCase,
   mergeExternalFindingsIntoCases,
@@ -214,12 +215,29 @@ export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; 
   });
 }
 
+function applyCasePatch(current: CaseRecord[], id: string, patch: CasePatch) {
+  const result = updateCase(current, id, patch);
+  const { cases, pruned } = boundedCases(result.cases);
+  const record = cases.find((item) => item.id === id) ?? result.record;
+  return { document: cases, result: { record, cases, pruned } };
+}
+
 export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  return updateBrowserLocalData('cases', (current) => applyCasePatch(current, id, patch));
+}
+
+export async function editCaseTags(id: string, tags: string[]) {
   return updateBrowserLocalData('cases', (current) => {
-    const result = updateCase(current, id, patch);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    const previous = [...(current.find((record) => record.id === id)?.tags ?? [])];
+    const change = applyCasePatch(current, id, { tags });
+    return { ...change, result: { ...change.result, undo: { id, previous, expected: [...change.result.record.tags] } } };
+  });
+}
+
+export async function restoreCaseTags(undo: Awaited<ReturnType<typeof editCaseTags>>['undo']) {
+  return updateBrowserLocalData('cases', (current) => {
+    assertAnalystUndoCurrent(current.find((record) => record.id === undo.id)?.tags ?? null, undo.expected);
+    return applyCasePatch(current, undo.id, { tags: undo.previous });
   });
 }
 

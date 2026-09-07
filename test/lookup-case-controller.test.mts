@@ -59,6 +59,7 @@ describe('Lookup case controller', () => {
     assert.deepEqual(await controller.refresh(''), {
       record: null,
       status: '',
+      sourceState: 'ready',
     });
   });
 
@@ -74,6 +75,7 @@ describe('Lookup case controller', () => {
     assert.deepEqual(await controller.refresh('case-context.example'), {
       record: null,
       status: '',
+      sourceState: 'ready',
     });
   });
 
@@ -90,6 +92,7 @@ describe('Lookup case controller', () => {
 
     assert.deepEqual(await controller.refresh('case-context.example'), {
       record: null,
+      sourceState: 'unavailable',
       status:
         'Browser-local case context is unavailable. The collected lookup evidence remains available.',
     });
@@ -203,7 +206,7 @@ describe('Lookup case controller', () => {
 
   test('handles absent create context, bounded pruning, and both open failure forms', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
-    assert.deepEqual(await new LookupCaseController(fixtureApi()).open('', {}, 'fast'), { record: null, status: '' });
+    assert.deepEqual(await new LookupCaseController(fixtureApi()).open('', {}, 'fast'), { record: null, status: '', mutationOutcome: 'rejected' });
 
     const created = await new LookupCaseController(fixtureApi({
       open: async () => ({ record, cases: [record], created: true, pruned: 1 }),
@@ -229,8 +232,8 @@ describe('Lookup case controller', () => {
   test('validates notes and preserves the retained record across write failures', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const controller = new LookupCaseController(fixtureApi());
-    assert.deepEqual(await controller.appendNote(null, 'note'), { record: null, status: '' });
-    assert.deepEqual(await controller.appendNote(record, '   '), { record, status: 'A note cannot be empty.' });
+    assert.deepEqual(await controller.appendNote(null, 'note'), { record: null, status: '', mutationOutcome: 'rejected' });
+    assert.deepEqual(await controller.appendNote(record, '   '), { record, status: 'A note cannot be empty.', mutationOutcome: 'rejected' });
 
     const saved = await new LookupCaseController(fixtureApi({
       addNote: async (_id, note) => {
@@ -244,11 +247,11 @@ describe('Lookup case controller', () => {
     const explicit = await new LookupCaseController(fixtureApi({
       addNote: async () => { throw new Error('Note write denied.'); },
     })).appendNote(record, 'note');
-    assert.deepEqual(explicit, { record, status: 'Note write denied.' });
+    assert.deepEqual(explicit, { record, status: 'Note write denied.', mutationOutcome: 'rejected' });
     const fallback = await new LookupCaseController(fixtureApi({
       addNote: async () => { throw null; },
     })).appendNote(record, 'note');
-    assert.deepEqual(fallback, { record, status: 'Could not add the note.' });
+    assert.deepEqual(fallback, { record, status: 'Could not add the note.', mutationOutcome: 'rejected' });
   });
 
   test('records a disposition and reviewed reason together', async () => {
@@ -383,7 +386,7 @@ describe('Lookup case controller', () => {
       collectionDepth: 'deep' as const,
     };
 
-    assert.deepEqual(await new LookupCaseController(fixtureApi()).openReplay('', {}), { record: null, status: '' });
+    assert.deepEqual(await new LookupCaseController(fixtureApi()).openReplay('', {}), { record: null, status: '', mutationOutcome: 'rejected' });
     const replayError = await new LookupCaseController(fixtureApi({
       open: async () => { throw new Error('Replay write denied.'); },
     })).openReplay(record.domain, {});

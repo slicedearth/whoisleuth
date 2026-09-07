@@ -64,7 +64,7 @@ function serializedBytes(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function readStoredGuide(key: string): InvestigationGuide | null {
+function readStoredGuide(key: string, requireReadable = false): InvestigationGuide | null {
   try {
     const serialized = sessionStorage.getItem(key);
     if (serialized === null) return null;
@@ -77,6 +77,7 @@ function readStoredGuide(key: string): InvestigationGuide | null {
       maximumBytes: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
     }));
   } catch {
+    if (requireReadable) throw new Error('Could not read the guided investigation in this tab. Existing progress was not changed.');
     return null;
   }
 }
@@ -97,13 +98,15 @@ function storeGuide(guide: InvestigationGuide) {
 function updateStoredGuide(next: InvestigationGuide | null, fallback: InvestigationGuide | null): InvestigationGuide | null {
   if (!next) return next;
   if (fallback && JSON.stringify(next) === JSON.stringify(fallback)) return fallback;
-  try {
-    storeGuide(next);
-    announceGuideChange();
-    return next;
-  } catch {
-    return fallback;
-  }
+  storeGuide(next);
+  announceGuideChange();
+  return next;
+}
+
+function requireStoredGuide(): InvestigationGuide {
+  const guide = readStoredGuide(INVESTIGATION_GUIDE_KEY, true);
+  if (!guide) throw new Error('No valid guided investigation is available in this tab. Reload before changing its progress.');
+  return guide;
 }
 
 export function loadInvestigationGuide(): InvestigationGuide | null {
@@ -123,42 +126,42 @@ export function startInvestigationGuide(
 }
 
 export function recordInvestigationGuideVisit(pathname: string): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = readStoredGuide(INVESTIGATION_GUIDE_KEY, true);
   return updateStoredGuide(visitInvestigationGuide(current, pathname), current);
 }
 
 export function approveInvestigationGuideCollection(stageId: string): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = requireStoredGuide();
   return updateStoredGuide(approveInvestigationGuideStage(current, stageId), current);
 }
 
 export function updateInvestigationGuideOutcome(stageId: string, outcome: InvestigationGuideOutcome, reviewNote: string | null = null): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = requireStoredGuide();
   return updateStoredGuide(setInvestigationGuideStageOutcome(current, stageId, outcome, new Date().toISOString(), reviewNote), current);
 }
 
 export function selectInvestigationGuideFocusDomain(domain: string): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = readStoredGuide(INVESTIGATION_GUIDE_KEY, true);
   return updateStoredGuide(setInvestigationGuideFocusDomain(current, domain), current);
 }
 
 export function selectInvestigationGuideReviewDomains(domains: string[]): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = readStoredGuide(INVESTIGATION_GUIDE_KEY, true);
   return updateStoredGuide(setInvestigationGuideReviewDomains(current, domains), current);
 }
 
 export function pauseInvestigationGuide(): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = requireStoredGuide();
   return updateStoredGuide(setInvestigationGuideStatus(current, 'paused'), current);
 }
 
 export function resumeInvestigationGuide(): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = requireStoredGuide();
   return updateStoredGuide(setInvestigationGuideStatus(current, 'active'), current);
 }
 
 export function restartStoredInvestigationGuide(): InvestigationGuide | null {
-  const current = loadInvestigationGuide();
+  const current = requireStoredGuide();
   return updateStoredGuide(restartInvestigationGuide(current), current);
 }
 
@@ -183,7 +186,7 @@ export function clearInvestigationGuide() {
   try {
     sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
   } catch {
-    // Unavailable storage is already effectively clear.
+    throw new Error('Could not clear the guided investigation in this tab. Its retained progress may still be present; try again when storage is available.');
   }
   announceGuideChange();
 }

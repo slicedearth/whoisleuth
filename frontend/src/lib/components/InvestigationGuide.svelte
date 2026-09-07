@@ -70,6 +70,7 @@
   let contextDomain = $state('');
   let contextError = $state('');
   let localContextError = $state('');
+  let persistenceError = $state('');
   let evidenceContextAvailable = $state(true);
   let profileContextAvailable = $state(true);
   let caseContextAvailable = $state(true);
@@ -319,15 +320,33 @@
   }
 
   function endGuide() {
+    try {
+      clearInvestigationGuide();
+    } catch (cause) {
+      persistenceError = cause instanceof Error ? cause.message : 'Could not clear the guided investigation.';
+      return;
+    }
+    persistenceError = '';
     actionObservationVersion += 1;
     actionObserver?.disconnect();
     actionObserver = null;
-    clearInvestigationGuide();
     guide = null;
   }
 
+  function applyGuideMutation(operation: () => InvestigationGuide | null): boolean {
+    try {
+      const next = operation();
+      guide = next;
+      persistenceError = '';
+      return true;
+    } catch (cause) {
+      persistenceError = cause instanceof Error ? cause.message : 'Could not save guided investigation progress.';
+      return false;
+    }
+  }
+
   function togglePause() {
-    guide = guide?.status === 'paused' ? resumeInvestigationGuide() : pauseInvestigationGuide();
+    applyGuideMutation(guide?.status === 'paused' ? resumeInvestigationGuide : pauseInvestigationGuide);
   }
 
   function beginTargetEdit() {
@@ -381,22 +400,22 @@
   }
 
   async function approveAndOpen(stage: InvestigationRecipeStage) {
-    guide = approveInvestigationGuideCollection(stage.id);
+    if (!applyGuideMutation(() => approveInvestigationGuideCollection(stage.id))) return;
     closeRequestReview();
     if (!guide) return;
     const approvedHref = investigationGuideApprovedHref(guide, stage.id);
     if (approvedHref === '/bulk?source=discover#domains') {
       if (page.url.pathname === stage.path && page.url.searchParams.get('source') === 'discover') {
-        guide = recordInvestigationGuideVisit(page.url.pathname);
+        applyGuideMutation(() => recordInvestigationGuideVisit(page.url.pathname));
         await focusRouteTarget('#domains');
       } else {
         await goto(approvedHref);
-        guide = recordInvestigationGuideVisit(stage.path) ?? guide;
+        applyGuideMutation(() => recordInvestigationGuideVisit(stage.path));
       }
       return;
     }
     await goto(approvedHref);
-    guide = recordInvestigationGuideVisit(stage.path) ?? guide;
+    applyGuideMutation(() => recordInvestigationGuideVisit(stage.path));
   }
 
   function openRequestReview(stageId: string) {
@@ -410,7 +429,7 @@
   }
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
-    guide = updateInvestigationGuideOutcome(stageId, outcome);
+    if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome))) return;
     pendingOutcome = null;
     outcomeNote = '';
     if (outcome !== 'pending') {
@@ -427,7 +446,8 @@
 
   function confirmOutcome(stageId: string) {
     if (!pendingOutcome || !outcomeNote.trim()) return;
-    guide = updateInvestigationGuideOutcome(stageId, pendingOutcome, outcomeNote);
+    const outcome = pendingOutcome;
+    if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome, outcomeNote))) return;
     pendingOutcome = null;
     outcomeNote = '';
     selectedStageId = '';
@@ -455,7 +475,7 @@
       restartPending = true;
       return;
     }
-    guide = restartStoredInvestigationGuide();
+    if (!applyGuideMutation(restartStoredInvestigationGuide)) return;
     selectedStageId = '';
     reviewingStageId = '';
     reviewingLocation = '';
@@ -501,7 +521,7 @@
     const pathname = page.url.pathname;
     const hash = page.url.hash;
     handledLocation = `${pathname}\u0000${hash}`;
-    guide = recordInvestigationGuideVisit(pathname) ?? guide;
+    applyGuideMutation(() => recordInvestigationGuideVisit(pathname));
     void (async () => {
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
@@ -528,7 +548,7 @@
         reviewingStageId = '';
         reviewingLocation = '';
       }
-      guide = recordInvestigationGuideVisit(pathname);
+      applyGuideMutation(() => recordInvestigationGuideVisit(pathname));
       if (hash) void focusRouteTarget(hash).then(observeAction);
       else void observeAction();
     }
@@ -557,6 +577,7 @@
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
+    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
 
     {#if !contextDismissed}
     {#if actionStage && actionProgress}

@@ -21,7 +21,7 @@
   let beforeId = $state('');
   let afterId = $state('');
   let message = $state('');
-  let operation = $state<'loading' | 'ready' | 'busy'>('loading');
+  let operation = $state<'loading' | 'ready' | 'busy' | 'unavailable'>('loading');
   let operationGeneration = 0;
   let mounted = false;
   let loadedDomain = $state('');
@@ -66,6 +66,7 @@
   async function refresh(expectedDomain: string) {
     const generation = ++operationGeneration;
     operation = 'loading';
+    message = '';
     try {
       const next = await loadWebsiteSnapshots();
       if (!owns(generation, expectedDomain)) return;
@@ -73,11 +74,11 @@
       const scoped = next.filter((item) => item.domain === expectedDomain);
       if (!afterId && scoped[0]) afterId = scoped[0].id;
       if (!beforeId && scoped[1]) beforeId = scoped[1].id;
+      operation = 'ready';
     } catch (cause) {
       if (!owns(generation, expectedDomain)) return;
       message = cause instanceof Error ? cause.message : 'Could not load website snapshots.';
-    } finally {
-      if (owns(generation, expectedDomain)) operation = 'ready';
+      operation = 'unavailable';
     }
   }
   async function save() {
@@ -187,7 +188,12 @@
     </div>
   </header>
   <p>Save after reviewing a completed Deep Lookup. Snapshots retain curated technology identifiers, posture states, identity digests, source health, completeness and timestamps. Differences are review cues.</p>
-  {#if domainSnapshots.length}
+  {#if operation === 'loading'}
+    <p role="status">Loading retained website snapshots…</p>
+  {:else if operation === 'unavailable'}
+    <p role="alert">Saved website snapshots could not be read. Existing snapshots may still be retained in this browser.</p>
+    <button class="btn" type="button" onclick={() => void refresh(domain)}>Retry snapshot read</button>
+  {:else if domainSnapshots.length}
     <div class="comparison-controls">
       <label class="field">Earlier snapshot<select bind:value={beforeId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
       <label class="field">Later snapshot<select bind:value={afterId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
@@ -223,7 +229,7 @@
   {:else}
     <p>No website-profile snapshot is retained for this domain.</p>
   {/if}
-  <section class="certificate-inventory" aria-labelledby="certificate-inventory-title">
+  {#if operation === 'ready' || operation === 'busy'}<section class="certificate-inventory" aria-labelledby="certificate-inventory-title">
     <header>
       <div>
         <p class="eyebrow">Deployment-observed history</p>
@@ -265,7 +271,7 @@
     {:else}
       <p>No observed certificate has been retained. Review a completed Deep domain Lookup, then save the current snapshot.</p>
     {/if}
-  </section>
+  </section>{/if}
   <p class="message" role="status">{message}</p>
 </section>
 

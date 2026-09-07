@@ -223,7 +223,12 @@
   const currentQueryLimit=$derived(bulkQueryLimit(mode));
   const scanOutcomes=$derived(buildBulkProgressOutcomes(results,total));
   const activeConcurrency=$derived(bulkConcurrency(mode,pacing));
-  $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
+  $effect(()=>{
+    if(routePage.url.searchParams.has('investigation')&&!running&&results.length){
+      try{selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));}
+      catch(cause){status=cause instanceof Error?cause.message:'Could not retain the guided review selection. Bulk results remain available.';}
+    }
+  });
   const coverage=$derived.by(()=>{if(profileSourceState!=='ready'||!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
 
   function currentProfileContext():BulkProfileContextProvenance {
@@ -443,10 +448,35 @@
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
   function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';reviewStateFilter='';page=1;}
   function currentBulkReviewView():BulkReviewPresetView{return{primaryFilter:filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,reviewStateFilter,groupBy,sortKey,sortDirection};}
-  async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView){await ensureBulkReviewContext();if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing saved views.';return;}try{bulkReviewStore=await bulkReviewApi.saveBulkReviewPreset({name,view});bulkReviewStatus=`Saved the “${name.trim()}” view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';}}
+  async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView):Promise<LocalMutationOutcome>{
+    await ensureBulkReviewContext();
+    if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing saved views.';return'rejected';}
+    try{
+      bulkReviewStore=await bulkReviewApi.saveBulkReviewPreset({name,view});
+      bulkReviewStatus=`Saved the “${name.trim()}” view.`;
+      return'committed';
+    }catch(cause){
+      bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';
+      return failedLocalMutationOutcome(cause);
+    }
+  }
   function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view. No scan was started.`;}
   async function removeBulkReviewView(preset:BulkReviewPreset){await ensureBulkReviewContext();if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before deleting saved views.';return;}try{bulkReviewStore=await bulkReviewApi.deleteBulkReviewPreset(preset.id);bulkReviewStatus=`Deleted the ${preset.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
-  async function setBulkReviewState(row:ScanResult,state:string){await ensureBulkReviewContext();if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing a row review state.';return;}const previous=bulkReviewStateByDomain.get(row.domain)||'unreviewed';if(previous===state)return;const api=bulkReviewApi;try{bulkReviewStore=await api.saveBulkReviewRowState(row.domain,state as BulkReviewState);bulkReviewStatus=`Marked ${row.domain} as ${state}. Case disposition was not changed.`;registerAnalystUndo({kind:'bulk_review_state',action:`Review state changed to ${state}`,affectedRecord:row.domain,undo:async()=>{bulkReviewStore=await api.saveBulkReviewRowState(row.domain,previous);return `Restored ${row.domain} to ${previous}.`;}});}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not update the review state.';}}
+  async function setBulkReviewState(row:ScanResult,state:string){
+    await ensureBulkReviewContext();
+    if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing a row review state.';return;}
+    if((bulkReviewStateByDomain.get(row.domain)||'unreviewed')===state)return;
+    const api=bulkReviewApi;
+    try{
+      const changed=await api.changeBulkReviewRowState(row.domain,state as BulkReviewState);
+      bulkReviewStore=changed.store;
+      bulkReviewStatus=`Marked ${row.domain} as ${state}. Case disposition was not changed.`;
+      registerAnalystUndo({kind:'bulk_review_state',action:`Review state changed to ${state}`,affectedRecord:row.domain,undo:async()=>{
+        bulkReviewStore=await api.restoreBulkReviewRow(changed.undo);
+        return `Restored ${row.domain} to ${changed.undo.previous?.state??'unreviewed'}.`;
+      }});
+    }catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not update the review state.';}
+  }
   function setSort(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey===next)sortDirection=sortDirection===1?-1:1;else{sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortKey(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey!==next){sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
@@ -483,7 +513,10 @@
     }catch(cause){relationshipRetentionStatus=cause instanceof Error?cause.message:'Could not retain that relationship observation.';return failedLocalMutationOutcome(cause);}
   }
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
-  async function toggleSaved(row:ScanResult){await ensurePrimaryResultContext();if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before changing it.';return;}const api=shortlistApi;const previous=shortlist.find((item)=>item.domain===row.domain);try{const added=await api.toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await api.loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;registerAnalystUndo({kind:'shortlist_membership',action:added?'Added to shortlist':'Removed from shortlist',affectedRecord:row.domain,undo:async()=>{if(previous)await api.setShortlistSelection([previous],true);else await api.setShortlistSelection([shortlistPayload(row)],false);shortlist=await api.loadShortlist();return `${row.domain} ${previous?'restored to':'removed from'} the shortlist.`;}});}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
+  async function toggleSaved(row:ScanResult){
+    const selected=!isShortlisted(row.domain);
+    if(await selectRows([row],selected))shortlistStatus=selected?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;
+  }
   function shortlistPayload(row:ScanResult){return{...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()};}
   function shortlistSelectionStatus(result:ShortlistSelectionResult,selected:boolean):string {
     if(!selected)return `Removed ${result.removed} domain${result.removed===1?'':'s'} from the shortlist.`;
@@ -493,34 +526,32 @@
       : '';
     return `Selected ${result.added} new and refreshed ${result.updated} existing domain${changed===1?'':'s'}${skipped}.`;
   }
-  async function restoreShortlistSelection(affected:ScanResult[],previous:ShortlistRecord[]):Promise<string> {
+  async function restoreShortlistSelection(undo:ShortlistSelectionResult['undo']):Promise<string> {
     await ensurePrimaryResultContext();
     if(!shortlistApi)throw new Error('The shortlist is unavailable. Reload before changing it.');
-    await shortlistApi.setShortlistSelection(affected.map(shortlistPayload),false);
-    if(previous.length)await shortlistApi.setShortlistSelection(previous,true);
-    shortlist=await shortlistApi.loadShortlist();
-    return `Restored the prior shortlist membership for ${affected.length} domain${affected.length===1?'':'s'}.`;
+    shortlist=await shortlistApi.restoreShortlistSelection(undo);
+    return `Restored the prior shortlist membership for ${undo.length} domain${undo.length===1?'':'s'}.`;
   }
   async function selectRows(rows:ScanResult[],selected=true){
     await ensurePrimaryResultContext();
-    if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before changing the selection.';return;}
+    if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before changing the selection.';return false;}
     const affected=rows.slice(0,500);
-    const affectedDomains=new Set(affected.map((row)=>row.domain));
-    const previous=shortlist.filter((item)=>affectedDomains.has(item.domain));
     try{
       const result=await shortlistApi.setShortlistSelection(affected.map(shortlistPayload),selected);
-      shortlist=await shortlistApi.loadShortlist();
+      shortlist=result.records;
       shortlistStatus=shortlistSelectionStatus(result,selected);
-      if(result.added+result.updated+result.removed>0){
+      if(result.undo.length){
         registerAnalystUndo({
           kind:'shortlist_membership',
           action:selected?'Updated shortlist selection':'Removed shortlist selection',
           affectedRecord:`${affected.length} domain${affected.length===1?'':'s'}`,
-          undo:()=>restoreShortlistSelection(affected,previous),
+          undo:()=>restoreShortlistSelection(result.undo),
         });
       }
+      return result.skipped===0;
     }catch(cause){
       shortlistStatus=cause instanceof Error?cause.message:'Could not update the selection.';
+      return false;
     }
   }
   async function selectDomains(domains:string[]){const wanted=new Set(domains);await selectRows(filtered.filter((row)=>wanted.has(row.domain)),true);}
@@ -568,7 +599,12 @@
         : `Saved ${row.domain} to ${name}.`;
     }catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the current result.';}
   }
-  async function inspectAt(index:number){const row=resultAt(index);if(!row)return;selectInvestigationGuideFocusDomain(row.domain);await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);}
+  async function inspectAt(index:number){
+    const row=resultAt(index);if(!row)return;
+    try{selectInvestigationGuideFocusDomain(row.domain);}
+    catch(cause){status=cause instanceof Error?cause.message:'Could not retain the selected guide target. Try again when tab storage is available.';return;}
+    await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);
+  }
   async function run(domains:string[],replace=true,preservePrior=false):Promise<string[]>{
     if(profileSourceState==='loading'){status='Wait for browser-local Brand Profile context to finish loading before scanning.';return[];}
     const scanProfile=settledProfileSnapshot();

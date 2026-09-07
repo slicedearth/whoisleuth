@@ -6,6 +6,8 @@
     type BulkReviewPresetView,
     type BulkReviewStore,
   } from '$lib/bulk-review';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
 
   let {
     store,
@@ -22,7 +24,7 @@
     currentView: BulkReviewPresetView;
     reviewFilter: BulkReviewFilter;
     setReviewFilter: (value: BulkReviewFilter) => void;
-    saveView: (name: string, view: BulkReviewPresetView) => void | Promise<void>;
+    saveView: (name: string, view: BulkReviewPresetView) => Promise<LocalMutationOutcome>;
     loadView: (preset: BulkReviewPreset) => void;
     deleteView: (preset: BulkReviewPreset) => void | Promise<void>;
     status: string;
@@ -31,6 +33,19 @@
 
   let name = $state('');
   let selectedId = $state('');
+  let saving = $state(false);
+  const draft = createDraftRevision(() => 'bulk-review-view');
+
+  async function save() {
+    if (saving) return;
+    saving = true;
+    const unchanged = draft.capture();
+    try {
+      if (clearsLocalMutationDraft(await saveView(name, currentView)) && unchanged()) name = '';
+    } finally {
+      saving = false;
+    }
+  }
 
   function selectedPreset(): BulkReviewPreset | null {
     return store.presets.find((item) => item.id === selectedId) ?? null;
@@ -61,9 +76,9 @@
       <button class="btn" type="button" disabled={!selectedPreset()} onclick={() => { const preset = selectedPreset(); if (preset) loadView(preset); }}>Load view</button>
       <button class="btn danger-text" type="button" disabled={!selectedPreset()} onclick={() => { const preset = selectedPreset(); if (preset) void deleteView(preset); }}>Delete</button>
     </div>
-    <form onsubmit={(event) => { event.preventDefault(); void saveView(name, currentView); name = ''; }}>
+    <form oninput={draft.changed} onchange={draft.changed} onsubmit={(event) => { event.preventDefault(); void save(); }}>
       <label for="bulk-review-view-name">New view name<input id="bulk-review-view-name" bind:value={name} maxlength="80" placeholder="High-risk mail review"></label>
-      <button class="btn" type="submit">Save current view</button>
+      <button class="btn" type="submit" disabled={saving || !name.trim()}>Save current view</button>
     </form>
   </div>
   <p class="review-status" role="status">{status}</p>

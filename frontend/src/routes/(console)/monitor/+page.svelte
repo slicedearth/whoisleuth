@@ -37,7 +37,7 @@
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
-    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, caseFreeformTags, caseTagsWithTypes, caseTypeIds, caseTypeRecords, deleteCase, dispositionLabel, editCase, exportCases,
+    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, caseFreeformTags, caseTagsWithTypes, caseTypeIds, caseTypeRecords, deleteCase, dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase,
     previewRiskCalibrationDataset, removeCaseBrandProfileAssociation, statusLabel, type CaseRecord, type RiskCalibrationExportPreview
   } from '$lib/cases';
@@ -384,12 +384,13 @@
     const submittedDraft=tagDraft;
     try{
       const next=caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean),caseTypeIds(record.tags));if(previous.join('\\0')===next.join('\\0'))return;
-      const committed=await editCase(record.id,{tags:next});
+      const committed=await editCaseTags(record.id,next);
       if(expandedId===record.id&&tagDraft===submittedDraft)tagDraft=caseTagDraft(committed.record);
       await reconcileCommittedCaseSnapshot(committed,`Updated tags for ${record.domain}.`,expandedId===record.id?committed.record:null);
       registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{
-        const restored=await editCase(record.id,{tags:previous});
-        if(expandedId===record.id)tagDraft=caseTagDraft(restored.record);
+        const draftBeforeUndo=tagDraft;
+        const restored=await restoreCaseTags(committed.undo);
+        if(expandedId===record.id&&tagDraft===draftBeforeUndo)tagDraft=caseTagDraft(restored.record);
         await reconcileCommittedCaseMutation(restored,`Restored the previous tags for ${record.domain}.`);
         return `Restored the previous tags for ${record.domain}.`;
       }});

@@ -5,7 +5,20 @@ import {
   analystUndoExpired,
   analystUndoRemainingMs,
   createAnalystUndoDescriptor,
+  assertAnalystUndoCurrent,
+  AnalystUndoConflictError,
 } from '../frontend/src/lib/analysis/analyst-undo.ts';
+
+test('undo accepts only the value produced by the submitted mutation', () => {
+  assert.doesNotThrow(() => assertAnalystUndoCurrent(['review'], ['review']));
+  assert.doesNotThrow(() => assertAnalystUndoCurrent(null, null));
+  for (const [current, expected] of [
+    [['review', 'later'], ['review']],
+    [null, ['review']],
+    [['review'], null],
+    [{ state: 'reviewed', updatedAt: '2026-09-08T02:00:00Z' }, { state: 'reviewed', updatedAt: '2026-09-08T01:00:00Z' }],
+  ]) assert.throws(() => assertAnalystUndoCurrent(current, expected), AnalystUndoConflictError);
+});
 
 test('analyst undo descriptors bound labels and expiry', () => {
   const descriptor = createAnalystUndoDescriptor({

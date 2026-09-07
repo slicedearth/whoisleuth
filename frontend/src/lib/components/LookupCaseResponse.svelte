@@ -31,6 +31,8 @@
     record,
     note,
     caseStatus,
+    caseSourceState,
+    retryCaseRead,
     caseDisposition,
     caseReviewReason,
     checkpointFacts,
@@ -73,6 +75,8 @@
     record: CaseRecord | null;
     note: string;
     caseStatus: string;
+    caseSourceState: 'loading' | 'ready' | 'unavailable';
+    retryCaseRead: () => void | Promise<void>;
     caseDisposition: string;
     caseReviewReason: string;
     checkpointFacts: readonly CheckpointFact[];
@@ -93,7 +97,7 @@
       rationale: string,
       selections: readonly LookupConclusionEvidenceSelection[],
     ) => Promise<LocalMutationOutcome>;
-    recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<boolean>;
+    recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<LocalMutationOutcome>;
     recordRecheckOutcome: (input: Readonly<{
       state: string;
       completeness: string;
@@ -101,7 +105,7 @@
       followUpAt: string | null;
       limitations: readonly string[];
       comparisonSummary: string;
-    }>) => Promise<boolean>;
+    }>) => Promise<LocalMutationOutcome>;
     saveToWatchlist: () => void;
     recheckCase: () => void;
     recordRecipient: (route: ResolvedAbuseRecipient) => void | Promise<void>;
@@ -231,7 +235,11 @@
 {#if domain}
   <section class="case-card evidence-card card">
     <div class="case-intro section-head"><div><p class="eyebrow">Investigation</p><h4>Analyst case</h4></div>{#if record}<div class="case-badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></div>{/if}</div>
-    {#if record}
+    {#if caseSourceState === 'loading'}
+      <p class="case-hint" role="status">Loading saved Case context…</p>
+    {:else if caseSourceState === 'unavailable'}
+      <div class="case-body"><p class="case-hint" role="alert">Saved Case context could not be read. Existing work may still be retained in this browser.</p><button class="btn" type="button" onclick={() => void retryCaseRead()}>Retry Case read</button></div>
+    {:else if record}
       <div class="case-body">
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
