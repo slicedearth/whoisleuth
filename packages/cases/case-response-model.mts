@@ -1372,6 +1372,10 @@ export function appendCaseActionTransition(
   );
 }
 
+const ACTION_REVIEW_MATERIAL_FIELDS = [
+  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId',
+] as const satisfies readonly (keyof CaseActionRecord)[];
+
 export function updateCaseAction(
   current: readonly CaseActionRecord[],
   raw: unknown,
@@ -1387,14 +1391,11 @@ export function updateCaseAction(
   }
   const metadata = {
     ...existing,
-    type: Object.hasOwn(patch, 'type') ? patch.type : existing.type,
-    recipient: Object.hasOwn(patch, 'recipient') ? patch.recipient : existing.recipient,
-    contactSource: Object.hasOwn(patch, 'contactSource') ? patch.contactSource : existing.contactSource,
-    routeObservedAt: Object.hasOwn(patch, 'routeObservedAt') ? patch.routeObservedAt : existing.routeObservedAt,
-    contactLimitations: Object.hasOwn(patch, 'contactLimitations') ? patch.contactLimitations : existing.contactLimitations,
+    ...Object.fromEntries(ACTION_REVIEW_MATERIAL_FIELDS
+      .filter((field) => Object.hasOwn(patch, field))
+      .map((field) => [field, patch[field]])),
     dueAt: Object.hasOwn(patch, 'dueAt') ? patch.dueAt : existing.dueAt,
     followUpAt: Object.hasOwn(patch, 'followUpAt') ? patch.followUpAt : existing.followUpAt,
-    originActionId: Object.hasOwn(patch, 'originActionId') ? patch.originActionId : existing.originActionId,
     metadataUpdatedAt: now,
   };
   if (Object.hasOwn(patch, 'originActionId') && patch.originActionId !== null
@@ -1403,7 +1404,7 @@ export function updateCaseAction(
   }
   let updated = normalizeAction(metadata, now, currentActionNormalizationOptions(validPinIds));
   if (!updated) throw new Error('An action requires a recipient or internal owner.');
-  const materialChanged = ['type', 'recipient', 'contactSource', 'routeObservedAt', 'contactLimitations', 'originActionId']
+  const materialChanged = ACTION_REVIEW_MATERIAL_FIELDS
     .some((key) => Object.hasOwn(patch, key) && JSON.stringify(record(existing)[key]) !== JSON.stringify(record(updated)[key]));
   if (materialChanged && ['submitted', 'acknowledged', 'terminal'].includes(existing.state)) {
     throw new Error('Submitted or terminal action identity and recipient metadata cannot be rewritten; create a linked follow-on action instead.');

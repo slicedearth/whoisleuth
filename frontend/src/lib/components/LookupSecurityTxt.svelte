@@ -51,8 +51,8 @@
       <div><dt>Expires</dt><dd>{expiresAt ? new Date(expiresAt).toLocaleString() : '—'}</dd></div>
     </dl>
     <section class="health" aria-label="Disclosure policy health">
-      <div><strong>{health.state}</strong><span>{health.expiryDays === null ? 'Expiry unavailable' : `${health.expiryDays} days to expiry`}</span></div>
-      <p>{health.coverage.contacts} contact · {health.coverage.policies} policy · {health.coverage.encryption} encryption reference · {health.coverage.languages} language</p>
+      <div><strong>{health.state}</strong><span>{health.expiryDays === null ? 'Expiry unavailable' : health.expiryDays <= 0 ? 'Recorded expiry has passed' : `${health.expiryDays} day${health.expiryDays === 1 ? '' : 's'} to expiry`}</span></div>
+      <p>{health.coverage.contacts} contact{health.coverage.contacts === 1 ? '' : 's'} · {health.coverage.policies} {health.coverage.policies === 1 ? 'policy' : 'policies'} · {health.coverage.encryption} encryption reference{health.coverage.encryption === 1 ? '' : 's'} · {health.coverage.languages} language{health.coverage.languages === 1 ? '' : 's'}</p>
       {#if health.review.length}<ul>{#each health.review as item}<li>{item}</li>{/each}</ul>{/if}
     </section>
 

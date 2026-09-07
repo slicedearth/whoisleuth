@@ -467,6 +467,7 @@ describe('Lookup case controller', () => {
       contact: 'abuse@provider.example',
       source: 'RDAP',
       observedAt: null,
+      reviewAfter: '2026-08-01T00:00:00.000Z',
       limitations: ['Delivery was not tested.'],
       actionType: 'network_hosting_report',
     };
@@ -494,6 +495,7 @@ describe('Lookup case controller', () => {
       recipient: 'abuse@provider.example',
       contactSource: 'RDAP',
       routeObservedAt: null,
+      routeReviewAfter: '2026-08-01T00:00:00.000Z',
       contactLimitations: ['Delivery was not tested.'],
       state: 'planned',
     });

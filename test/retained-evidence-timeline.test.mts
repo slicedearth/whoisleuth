@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import {
@@ -12,6 +12,34 @@ import { normalizeWebsiteProfileSnapshot } from '../frontend/src/lib/analysis/we
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const STORED_AT = '2026-07-21T00:00:00.000Z';
+
+test('the timeline retains the complete supported Case history and counts nested exclusions', () => {
+  const base = createCase({ domain: 'history.example', source: 'lookup', evidence: { scanDepth: 'deep', availability: 'registered', capturedAt: OBSERVED_AT } }, STORED_AT);
+  assert.ok(base.evidenceHistory[0]);
+  const history = Array.from({ length: 25 }, (_, index) => ({
+    ...base.evidenceHistory[0]!,
+    registrar: `Fixture registrar ${index}`,
+    capturedAt: new Date(Date.parse(OBSERVED_AT) + index * 60_000).toISOString(),
+  }));
+  const record = normalizeCase({ ...base, evidenceHistory: history });
+  assert.ok(record);
+  assert.equal(record.evidenceHistory.length, 25);
+  const complete = buildRetainedEvidenceTimeline({ cases: [record], now: STORED_AT });
+  assert.equal(complete.items.length, 25);
+  assert.equal(complete.truncated, false);
+  assert.deepEqual(complete.omissions, []);
+  assert.deepEqual(new Set(complete.items.map((item) => item.id)), new Set(record.evidenceHistory.map((item) => `case-snapshot:${record.id}:${item.id}`)));
+  assert.deepEqual(new Set(complete.items.map((item) => item.observedAt)), new Set(history.map((item) => item.capturedAt)));
+
+  const overBound = buildRetainedEvidenceTimeline({ cases: [{ ...record, evidenceHistory: [...history, { ...history[0]!, id: 'extra' }] }], now: STORED_AT });
+  assert.equal(overBound.items.length, 25);
+  assert.equal(overBound.truncated, true);
+  assert.deepEqual(overBound.omissions, [{ source: 'Case snapshots outside the source bound', count: 1 }]);
+  const undated = buildRetainedEvidenceTimeline({ cases: [{ ...record, evidenceHistory: [{ ...history[0]!, capturedAt: '' }] }], now: STORED_AT });
+  assert.equal(undated.items.length, 0);
+  assert.equal(undated.truncated, true);
+  assert.deepEqual(undated.omissions, [{ source: 'Undated Case snapshots', count: 1 }]);
+});
 
 test('retained evidence timeline keeps observation, storage, source, and owner context separate', () => {
   const caseRecord = createCase({

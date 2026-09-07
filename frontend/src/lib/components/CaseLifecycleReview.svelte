@@ -115,6 +115,8 @@
           <p>{route.actionType.replaceAll('_', ' ')} · {route.state.replaceAll('_', ' ')}</p>
           <small>{route.recipient}</small>
           <small>{route.source}</small>
+          {#if route.nextReviewAt}<small>Source review due <time datetime={route.nextReviewAt}>{new Date(route.nextReviewAt).toLocaleDateString()}</time></small>{/if}
+          {#if route.followUpAt}<small>Action follow-up <time datetime={route.followUpAt}>{new Date(route.followUpAt).toLocaleDateString()}</time></small>{/if}
           <a href={`/monitor?view=cases&case=${encodeURIComponent(route.caseId)}`}>Open case</a>
         </article>
       {/each}

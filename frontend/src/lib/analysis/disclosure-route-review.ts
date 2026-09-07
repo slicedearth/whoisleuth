@@ -1,4 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
+import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
 
 export const MAX_DISCLOSURE_ROUTE_REVIEWS = 250;
 
@@ -12,6 +13,7 @@ export type DisclosureRouteReview = Readonly<{
   state: string;
   updatedAt: string;
   nextReviewAt: string | null;
+  followUpAt: string | null;
   review: 'current' | 'due' | 'unconfirmed';
   limitations: readonly string[];
 }>;
@@ -30,13 +32,13 @@ export function buildDisclosureRouteReview(
   truncated: boolean;
   limitations: readonly string[];
 }> {
-  const nowMs = Number.isFinite(Date.parse(String(now))) ? Date.parse(String(now)) : 0;
+  const evaluatedAt = typeof now === 'string' ? now : '';
   const routes: DisclosureRouteReview[] = [];
   for (const record of records.slice(0, 500)) {
     for (const action of record.actions.slice(-50)) {
       if (!['network_hosting_report', 'registrar_report', 'registry_report', 'security_contact_report'].includes(action.type)) continue;
-      const nextReviewAt = timestamp(action.followUpAt) || timestamp(action.dueAt);
-      const hasReviewedSource = Boolean(action.contactSource && action.contactLimitations.length);
+      const nextReviewAt = timestamp(action.routeReviewAfter);
+      const freshness = responseRouteFreshness(action.routeObservedAt, action.routeReviewAfter, evaluatedAt);
       routes.push({
         id: `${record.id}:${action.id}`,
         caseId: record.id,
@@ -47,11 +49,8 @@ export function buildDisclosureRouteReview(
         state: action.state,
         updatedAt: timestamp(action.updatedAt) || timestamp(record.updatedAt) || new Date(0).toISOString(),
         nextReviewAt,
-        review: nextReviewAt && Date.parse(nextReviewAt) <= nowMs
-          ? 'due'
-          : hasReviewedSource
-            ? 'current'
-            : 'unconfirmed',
+        followUpAt: timestamp(action.followUpAt) || timestamp(action.dueAt),
+        review: !action.contactSource || freshness === 'unknown' ? 'unconfirmed' : freshness === 'stale' ? 'due' : 'current',
         limitations: action.contactLimitations,
       });
     }
@@ -67,7 +66,7 @@ export function buildDisclosureRouteReview(
     truncated: records.length > 500 || routes.length > MAX_DISCLOSURE_ROUTE_REVIEWS,
     limitations: [
       'Route review uses only contact sources and actions deliberately saved in browser-local cases. It performs no discovery or reachability check.',
-      'A current entry means its recorded review date is not due. It does not prove that the recipient is monitored, appropriate, responsive, or responsible.',
+      'Route freshness uses its source observation and review deadline, not the action follow-up date. Current evidence does not prove that the recipient is monitored, appropriate, responsive, or responsible.',
     ],
   };
 }

@@ -4,6 +4,7 @@
 // not test deliverability, and never treats a provider name as responsibility.
 
 import { resolveProviderReportingRoutes } from './provider-reporting-routes.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export type AbuseRecipientKind =
   | 'application_platform'
@@ -22,9 +23,9 @@ export type ResolvedAbuseRecipient = Readonly<{
   contact: string;
   source: string;
   observedAt: string | null;
+  reviewAfter: string | null;
   limitations: readonly string[];
   officialSourceUrl?: string;
-  catalogueReviewAfter?: string;
   actionType:
     | 'network_hosting_report'
     | 'registrar_report'
@@ -148,9 +149,8 @@ function recipient(
     channel: resolved.channel,
     contact: resolved.contact,
     source,
-    observedAt: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(text(observedAtRaw, 64))
-      ? new Date(String(observedAtRaw)).toISOString()
-      : null,
+    observedAt: normalizeExplicitIsoTimestamp(observedAtRaw),
+    reviewAfter: null,
     limitations: [...new Set(limitations.map((item) => text(item, 240)).filter(Boolean))].slice(0, 8),
     actionType: actionType(kind),
   };
@@ -216,7 +216,7 @@ function securityTxtRecipients(securityTxtRaw: unknown): ResolvedAbuseRecipient[
         ...publishedLimitations,
         'security.txt expresses a disclosure route, not necessarily the correct destination for an abuse report.',
       ]);
-      return resolved ? [resolved] : [];
+      return resolved ? [{ ...resolved, reviewAfter: normalizeExplicitIsoTimestamp(securityTxt.expiresAt) }] : [];
     });
 }
 
@@ -270,7 +270,7 @@ function providerRecipients(
     return item ? [{
       ...item,
       officialSourceUrl: route.officialSourceUrl,
-      catalogueReviewAfter: route.reviewAfter,
+      reviewAfter: route.reviewAfter,
     }] : [];
   });
   return { recipients, coverage: resolved.coverage };

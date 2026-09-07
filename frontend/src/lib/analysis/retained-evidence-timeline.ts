@@ -3,6 +3,8 @@ import type { BulkSession } from './bulk-session-model.ts';
 import type { RelationshipObservation } from './relationship-observation-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import type { WebsiteProfileSnapshot } from './website-snapshot-model.ts';
+import { MAX_CASES, MAX_CASE_ASSERTIONS, MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
+import { MAX_BULK_SESSIONS, MAX_RELATIONSHIP_OBSERVATIONS, MAX_WATCHLISTS, MAX_WATCHLIST_HISTORY_EVENTS, MAX_WEBSITE_SNAPSHOTS } from '../../../../packages/contracts/workspace-portability.mts';
 
 export const MAX_RETAINED_TIMELINE_ITEMS = 2_000;
 export const MAX_RETAINED_TIMELINE_ENTITIES = 20;
@@ -71,6 +73,7 @@ export type RetainedEvidenceTimeline = Readonly<{
   items: readonly RetainedTimelineItem[];
   truncated: boolean;
   counts: Readonly<Record<RetainedTimelineKind | 'all' | RetainedTimelineEventType, number>>;
+  omissions: readonly Readonly<{ source: string; count: number }>[];
   entities: readonly string[];
   cases: readonly Readonly<{ id: string; label: string }>[];
   sources: readonly string[];
@@ -142,14 +145,23 @@ function freshnessMetadata(
   };
 }
 
-function caseTimelineItems(records: readonly CaseRecord[], now: string): RetainedTimelineItem[] {
+function omitTimelineSource(omissions: Map<string, number>, source: string, count: number) {
+  if (count > 0) omissions.set(source, (omissions.get(source) ?? 0) + count);
+}
+
+function timelineSource<T>(values: readonly T[], maximum: number, source: string, omissions: Map<string, number>, newestLast = false): T[] {
+  omitTimelineSource(omissions, source, values.length - maximum);
+  return newestLast ? values.slice(-maximum) : values.slice(0, maximum);
+}
+
+function caseTimelineItems(records: readonly CaseRecord[], now: string, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
-  for (const record of records.slice(0, 500)) {
+  for (const record of timelineSource(records, MAX_CASES, 'Cases outside the source bound', omissions)) {
     const caseHref = `/monitor?view=cases&case=${encodeURIComponent(record.id)}`;
-    for (const snapshot of record.evidenceHistory.slice(-20)) {
+    for (const snapshot of timelineSource(record.evidenceHistory, MAX_EVIDENCE_SNAPSHOTS_PER_CASE, 'Case snapshots outside the source bound', omissions, true)) {
       const observedAt = timestamp(snapshot.capturedAt);
       const storedAt = timestamp(record.updatedAt);
-      if (!observedAt || !storedAt) continue;
+      if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated Case snapshots', 1); continue; }
       const depth = snapshot.scanDepth === 'deep' ? 'Deep' : snapshot.scanDepth === 'fast' ? 'Fast' : 'Unknown-depth';
       const areas: RetainedTimelineArea[] = ['case'];
       if (snapshot.source === 'lookup') areas.push('lookup');
@@ -179,10 +191,10 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         limitations: ['Compact case snapshots do not retain a complete source-coverage or truncation record. Open the owning case for the retained fields.'],
       });
     }
-    for (const pin of record.evidencePins.slice(-40)) {
+    for (const pin of timelineSource(record.evidencePins, MAX_CASE_EVIDENCE_PINS, 'Case evidence pins outside the source bound', omissions, true)) {
       const observedAt = timestamp(pin.observedAt);
       const storedAt = timestamp(pin.createdAt);
-      if (!observedAt || !storedAt) continue;
+      if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated Case evidence pins', 1); continue; }
       const checkpoint = Boolean(pin.checkpointId);
       items.push({
         id: `${checkpoint ? 'checkpoint' : 'pin'}:${record.id}:${pin.id}`,
@@ -207,12 +219,12 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         limitations: limitations(pin.limitations, 'An analyst-selected pin is a retained fact, not an independent verification or conclusion.'),
       });
     }
-    for (const assertion of record.assertions.slice(-40)) {
+    for (const assertion of timelineSource(record.assertions, MAX_CASE_ASSERTIONS, 'Case assertions outside the source bound', omissions, true)) {
       const provenance = assertion.provenance;
       if (!provenance) continue;
       const observedAt = timestamp(provenance.observedAt ?? provenance.createdAt ?? assertion.createdAt);
       const storedAt = timestamp(assertion.createdAt);
-      if (!observedAt || !storedAt) continue;
+      if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated external assertions', 1); continue; }
       items.push({
         id: `external-assertion:${record.id}:${assertion.id}`,
         kind: 'external_assertion',
@@ -240,11 +252,11 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
   return items;
 }
 
-function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now: string): RetainedTimelineItem[] {
-  return snapshots.slice(0, 60).flatMap((snapshot): RetainedTimelineItem[] => {
+function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now: string, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(snapshots, MAX_WEBSITE_SNAPSHOTS, 'Website snapshots outside the source bound', omissions).flatMap((snapshot): RetainedTimelineItem[] => {
     const observedAt = timestamp(snapshot.observedAt);
     const storedAt = timestamp(snapshot.savedAt);
-    if (!observedAt || !storedAt) return [];
+    if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated website snapshots', 1); return []; }
     const states = [...new Set(snapshot.sources.map((source) => text(source.state, 40)).filter(Boolean))];
     return [{
       id: `website:${snapshot.id}`,
@@ -271,14 +283,14 @@ function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now:
   });
 }
 
-function watchlistTimelineItems(watchlists: WatchlistCollection, now: string): RetainedTimelineItem[] {
+function watchlistTimelineItems(watchlists: WatchlistCollection, now: string, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
-  for (const [name, watchlist] of Object.entries(watchlists).slice(0, 100)) {
+  for (const [name, watchlist] of timelineSource(Object.entries(watchlists), MAX_WATCHLISTS, 'Watchlists outside the source bound', omissions)) {
     const storedAt = timestamp(watchlist.updatedAt);
-    if (!storedAt) continue;
-    for (const event of watchlist.history.slice(-12)) {
+    if (!storedAt) { omitTimelineSource(omissions, 'Undated watchlists', 1); continue; }
+    for (const event of timelineSource(watchlist.history, MAX_WATCHLIST_HISTORY_EVENTS, 'Watchlist checks outside the source bound', omissions, true)) {
       const observedAt = timestamp(event.checkedAt);
-      if (!observedAt) continue;
+      if (!observedAt) { omitTimelineSource(omissions, 'Undated watchlist checks', 1); continue; }
       const changedEntities = entities(event.changes.map((change) => change.domain));
       const complete = event.conclusiveCount === event.resultCount && event.omittedChanges === 0;
       items.push({
@@ -310,11 +322,11 @@ function watchlistTimelineItems(watchlists: WatchlistCollection, now: string): R
   return items;
 }
 
-function relationshipTimelineItems(records: readonly RelationshipObservation[], now: string): RetainedTimelineItem[] {
-  return records.slice(0, 300).flatMap((record): RetainedTimelineItem[] => {
+function relationshipTimelineItems(records: readonly RelationshipObservation[], now: string, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(records, MAX_RELATIONSHIP_OBSERVATIONS, 'Relationships outside the source bound', omissions).flatMap((record): RetainedTimelineItem[] => {
     const observedAt = timestamp(record.observedAt);
     const storedAt = timestamp(record.retainedAt);
-    if (!observedAt || !storedAt) return [];
+    if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated relationships', 1); return []; }
     return [{
       id: `relationship:${record.id}`,
       kind: 'relationship',
@@ -340,11 +352,11 @@ function relationshipTimelineItems(records: readonly RelationshipObservation[], 
   });
 }
 
-function bulkTimelineItems(sessions: readonly BulkSession[], now: string): RetainedTimelineItem[] {
-  return sessions.slice(0, 10).flatMap((session): RetainedTimelineItem[] => {
+function bulkTimelineItems(sessions: readonly BulkSession[], now: string, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(sessions, MAX_BULK_SESSIONS, 'Bulk sessions outside the source bound', omissions).flatMap((session): RetainedTimelineItem[] => {
     const observedAt = timestamp(session.completedAt ?? session.updatedAt ?? session.startedAt);
     const storedAt = timestamp(session.updatedAt);
-    if (!observedAt || !storedAt) return [];
+    if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated Bulk sessions', 1); return []; }
     const settled = session.results.length;
     const complete = session.state === 'complete'
       && settled === session.domains.length
@@ -397,19 +409,15 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   const relationships = Array.isArray(input.relationships) ? input.relationships : [];
   const websiteSnapshots = Array.isArray(input.websiteSnapshots) ? input.websiteSnapshots : [];
   const now = timestamp(input.now) ?? new Date().toISOString();
+  const omissions = new Map<string, number>();
   const all = [
-    ...caseTimelineItems(cases, now),
-    ...bulkTimelineItems(bulkSessions, now),
-    ...websiteTimelineItems(websiteSnapshots, now),
-    ...watchlistTimelineItems(watchlists, now),
-    ...relationshipTimelineItems(relationships, now),
+    ...caseTimelineItems(cases, now, omissions),
+    ...bulkTimelineItems(bulkSessions, now, omissions),
+    ...websiteTimelineItems(websiteSnapshots, now, omissions),
+    ...watchlistTimelineItems(watchlists, now, omissions),
+    ...relationshipTimelineItems(relationships, now, omissions),
   ].sort(itemSort);
-  const items = all.slice(0, MAX_RETAINED_TIMELINE_ITEMS);
-  const inputTruncated = cases.length > 500
-    || Object.keys(watchlists).length > 100
-    || bulkSessions.length > 10
-    || relationships.length > 300
-    || websiteSnapshots.length > 60;
+  const items = timelineSource(all, MAX_RETAINED_TIMELINE_ITEMS, 'Timeline entries outside the display bound', omissions);
   const counts = Object.fromEntries([
     ['all', items.length],
     ['evidence', items.filter((item) => item.eventType === 'evidence').length],
@@ -431,7 +439,8 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   };
   return {
     items,
-    truncated: inputTruncated || all.length > items.length,
+    truncated: omissions.size > 0,
+    omissions: [...omissions].map(([source, count]) => ({ source, count })),
     counts,
     entities: [...entityOptions].sort(),
     cases: [...caseOptions].map(([id, label]) => ({ id, label })).sort((left, right) => left.label.localeCompare(right.label)),

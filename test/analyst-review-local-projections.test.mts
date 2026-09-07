@@ -4,6 +4,8 @@ import { describe, test } from 'node:test';
 import { buildLocalAnalystReviewProjection } from '../frontend/src/lib/analysis/analyst-review-local-projections.ts';
 import { normalizeBrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { requiredValue } from './value-assertions.mts';
+import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
+import { emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../frontend/src/lib/analysis/analyst-review-state.ts';
 
 const NOW = '2026-08-23T04:00:00.000Z';
 const WINDOWS = Object.freeze({
@@ -48,6 +50,32 @@ function itemByTitlePart(items: ReturnType<typeof windowItems>, summary: string)
 }
 
 describe('local analyst Review Item projections', () => {
+  test('display admission does not orphan a retained decision whose subject still exists', () => {
+    const profiles = Array.from({ length: 4 }, (_, group) => {
+      const domains = Array.from({ length: 20 }, (_, index) => `domain-${group}-${index}.example`);
+      return requiredValue(normalizeBrandProfile({
+        id: `profile-${group}`, name: `Profile ${group}`, officialDomains: domains, createdAt: NOW, updatedAt: NOW,
+        desiredPostureBaselines: domains.map((domain) => ({
+          domain, updatedAt: '2026-08-22T04:00:00.000Z',
+          approvedChangeWindows: Array.from({ length: 8 }, (_, index) => ({ ...WINDOWS.first, id: `window-${index}`, summary: `Change ${index}` })),
+        })),
+      }));
+    });
+    const all = profiles.flatMap((entry) => buildLocalAnalystReviewProjection({ profiles: [entry] }, NOW).items);
+    assert.equal(all.length, 640);
+    const projection = buildLocalAnalystReviewProjection({ profiles }, NOW);
+    assert.equal(projection.items.length, 500);
+    assert.equal(projection.admission.currentSubjectKeys?.length, 640);
+    const visible = new Set(projection.items.map((entry) => entry.subjectKey));
+    const omitted = requiredValue(all.find((entry) => !visible.has(entry.subjectKey)));
+    const reviewState = setAnalystReviewDecision(emptyAnalystReviewStateStore(), omitted, {
+      disposition: 'expected', rationale: 'Reviewed the retained planned change.', reviewedAt: '2026-08-23T00:00:00.000Z', expiresAt: '2026-08-23T01:00:00.000Z',
+    });
+    const input = { projectedItems: projection.items, reviewState };
+    assert.ok(buildAnalystReviewInbox(input, NOW).items.some((entry) => entry.kind === 'orphaned_state'));
+    const inbox = buildAnalystReviewInbox({ ...input, projectedAdmissions: [projection.admission] }, NOW);
+    assert.ok(!inbox.items.some((entry) => entry.kind === 'orphaned_state'));
+  });
   test('projects structured change windows and suppressions with explicit due state', () => {
     const projection = buildLocalAnalystReviewProjection({ profiles: [profile()] }, NOW);
     const window = requiredValue(projection.items.find((item) => (

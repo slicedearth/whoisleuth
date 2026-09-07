@@ -50,6 +50,7 @@ describe('abuse recipient resolver', () => {
         securityTxtVersion: 1,
         state: 'present',
         finalUrl: 'https://target.example/.well-known/security.txt',
+        expiresAt: '2026-08-01T00:00:00.000Z',
         contacts: ['mailto:security@example.test', 'https://target.example/report#details'],
       },
       networkContext: {
@@ -98,6 +99,7 @@ describe('abuse recipient resolver', () => {
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
     assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
+    assert.equal(result.recipients[2]?.reviewAfter, '2026-08-01T00:00:00.000Z');
     assert.equal(result.recipients[3]?.kind, 'application_platform');
     assert.equal(result.recipients[3]?.actionType, 'network_hosting_report');
     assert.equal(result.recipients[4]?.kind, 'observed_edge');

@@ -289,6 +289,7 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
     admission: {
       omittedAtLeast,
       lowerBoundFamilies: [...lowerBoundFamilies],
+      currentSubjectKeys: [...new Set(all.map((item) => item.subjectKey))],
     },
     limitations: [
       'These Review Items are projections over retained browser-local records. They make no request and do not rewrite their source records.',

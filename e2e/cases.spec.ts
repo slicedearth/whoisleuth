@@ -691,6 +691,27 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expectNoHorizontalOverflow(page);
 });
 
+test('the timeline renders every supported Case snapshot after storage admission', async ({ page }) => {
+  await page.goto('/monitor?view=timeline');
+  const start = Date.parse('2026-07-22T00:00:00.000Z');
+  const history = Array.from({ length: 25 }, (_, index) => snapshot({
+    registrar: `Fixture registrar ${index}`,
+    capturedAt: new Date(start + index * 60_000).toISOString(),
+  }));
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ evidenceHistory: history })] },
+  });
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]?.value.evidenceHistory).toHaveLength(25);
+  const timeline = page.getByRole('region', { name: 'Investigation timeline' });
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(25);
+  await expect(timeline.locator('.partial')).toHaveCount(0);
+  const observed = await timeline.locator('article dl div', { has: page.getByText('Observed', { exact: true }) }).locator('time').evaluateAll((elements) => elements.map((element) => element.getAttribute('datetime')));
+  expect(new Set(observed)).toEqual(new Set(history.map((item) => item.capturedAt)));
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }) => {
   const observedAt = '2026-07-01T00:00:00.000Z';
   const identity = {

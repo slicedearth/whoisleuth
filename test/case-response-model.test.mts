@@ -297,6 +297,23 @@ describe('case response record normalization', () => {
     assert.match(changed.history.at(-1)?.limitations.join(' ') ?? '', /prior readiness.*no longer applies/iu);
   });
 
+  test('editing a route deadline invalidates review but operational follow-up does not', () => {
+    let actions = appendCaseAction([], { recipient: 'Published review desk', routeObservedAt: NOW, routeReviewAfter: LATEST }, NOW);
+    const id = requiredValue(actions[0]).id;
+    actions = appendCaseActionTransition(actions, id, { nextState: 'ready_for_review' }, LATER);
+    actions = appendCaseActionTransition(actions, id, { nextState: 'reviewed' }, NEXT);
+    const operational = updateCaseAction(actions, { id, followUpAt: LATEST }, LATEST);
+    assert.equal(operational[0]?.state, 'reviewed');
+    const changed = updateCaseAction(operational, { id, routeReviewAfter: NEXT }, LATEST);
+    assert.equal(changed[0]?.routeReviewAfter, NEXT);
+    assert.equal(changed[0]?.state, 'drafting');
+    assert.equal(changed[0]?.history.at(-1)?.provenance, 'material_action_change');
+    assert.deepEqual(changed[0]?.history.slice(0, -1), actions[0]?.history);
+    const submitted = appendCaseActionTransition(actions, id, { nextState: 'authorised' }, LATEST);
+    const sent = appendCaseActionTransition(submitted, id, { nextState: 'submitted' }, '2026-07-31T01:01:00.000Z');
+    assert.throws(() => updateCaseAction(sent, { id, routeReviewAfter: NEXT }, '2026-07-31T01:02:00.000Z'), /cannot be rewritten/u);
+  });
+
   test('migrates a v12 action as one deterministic legacy snapshot without inventing a sequence', () => {
     const fixture = JSON.parse(readFileSync(new URL('./fixtures/case-v12-response-lifecycle.json', import.meta.url), 'utf8'));
     const raw = fixture.cases[0].actions;

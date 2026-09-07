@@ -359,7 +359,8 @@
           <span>{route.contact}</span>
           <p><b>{route.channel}</b> · source: {route.source}</p>
           {#if route.limitations.length}<ul>{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul>{/if}
-          {#if route.officialSourceUrl}<p class="route-source"><a href={route.officialSourceUrl} target="_blank" rel="noreferrer">Review the official route source ↗</a>{route.catalogueReviewAfter ? ` · recheck before ${route.catalogueReviewAfter}` : ''}</p>{/if}
+          {#if route.officialSourceUrl}<p class="route-source"><a href={route.officialSourceUrl} target="_blank" rel="noreferrer">Review the official route source ↗</a></p>{/if}
+          {#if route.reviewAfter}<p class="route-source">Source review due <time datetime={route.reviewAfter}>{route.reviewAfter}</time></p>{/if}
           <div>
             <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record || actionBusy}>Record in case</button>
             <button class="btn small" type="button" onclick={() => copyDraft(route.contact, `${abuseRecipientKindLabel(route.kind).toLowerCase()} destination`)}>Copy destination</button>

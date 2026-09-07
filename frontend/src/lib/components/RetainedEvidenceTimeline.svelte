@@ -75,7 +75,7 @@
     <button type="button" class="btn" onclick={clearFilters} disabled={!entity&&!caseId&&!source&&!area&&freshness==='all'&&eventType==='all'&&time==='all'}>Clear filters</button>
   </div>
 
-  {#if timeline.truncated}<p class="partial">Partial timeline. One or more retained-record or projection bounds were reached.</p>{/if}
+  {#if timeline.truncated}<div class="partial"><p>Partial timeline. The omitted records remain in their owning collection.</p><ul>{#each timeline.omissions as omission}<li>{omission.source}: {omission.count}</li>{/each}</ul></div>{/if}
   <p class="result-count">{filtered.length} matching event{filtered.length === 1 ? '' : 's'}</p>
 
   {#if visible.length}

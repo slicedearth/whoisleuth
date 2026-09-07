@@ -892,7 +892,12 @@ test('a malformed successful response is rejected at the Lookup boundary', async
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
-test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {
+for (const publication of [
+  { state: 'current', expiresAt: '2027-01-01T00:00:00.000Z' },
+  { state: 'expired', expiresAt: '2026-07-22T11:00:00.000Z' },
+] as const) {
+test(`security.txt ${publication.state} collection retains its route deadline and is mobile safe`, async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-22T12:00:00.000Z'));
   await page.route('**/api/lookup?*', async (route) => {
     await route.fulfill({
       status: 200,
@@ -912,7 +917,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
           finalUrl: 'https://portal.example.test/.well-known/security.txt', httpStatus: 200,
           redirectCount: 0, contacts: ['mailto:security@example.test'],
           policies: ['https://portal.example.test/security-policy'], encryption: [], canonical: [],
-          preferredLanguages: ['en'], expiresAt: '2027-01-01T00:00:00.000Z', signed: false, canonicalMatches: null,
+          preferredLanguages: ['en'], expiresAt: publication.expiresAt, signed: false, canonicalMatches: null,
         },
       }),
     });
@@ -943,10 +948,25 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   await disclosure.locator('summary').click();
   await expect(disclosure.getByText('mailto:security@example.test', { exact: true })).toBeVisible();
   await expect(disclosure.getByText(/does not authorise testing/u)).toBeVisible();
+  if (publication.state === 'expired') {
+    await expect(disclosure.getByText('Recorded expiry has passed', { exact: true })).toBeVisible();
+    await expect(disclosure).not.toContainText('0 days to expiry');
+  }
+
+  await expandLookupFamilies(page);
+  await page.getByRole('button', { name: 'Create case', exact: true }).click();
+  const destination = page.locator('.response-actions article', { hasText: 'security@example.test' });
+  await expect(destination.locator('time')).toHaveAttribute('datetime', publication.expiresAt);
+  await destination.getByRole('button', { name: 'Record in case', exact: true }).click();
+  await expect.poll(async () => {
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    return stored.records.flatMap((item) => item.value.actions).map((action) => action.routeReviewAfter);
+  }).toEqual([publication.expiresAt]);
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expectNoHorizontalOverflow(page);
 });
+}
 
 test('newlines, commas, and semicolons all parse as multiple domains and hand off to Bulk', async ({ page }) => {
   // Each delimiter gets its own line: the client-side parser picks one

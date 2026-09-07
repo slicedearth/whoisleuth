@@ -2,6 +2,7 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.mts';
+import { responseRouteFreshness } from './response-route-freshness.mts';
 import { caseDispositionSupportsDefensiveResponse } from './case-record-operations.mts';
 import {
   buildCaseActionOutcomeSummary,
@@ -590,21 +591,6 @@ function actionContactKind(type: string): ResponseContactKind | 'manual' {
   return 'manual';
 }
 
-function routeFreshness(
-  observedAt: string | null,
-  reviewAfter: string | null,
-  generatedAt: string,
-): 'current' | 'stale' | 'unknown' {
-  if (!observedAt) return 'unknown';
-  const routeAge = Date.parse(generatedAt) - Date.parse(observedAt);
-  const reviewExpired = reviewAfter !== null && Date.parse(generatedAt) >= Date.parse(reviewAfter);
-  return routeAge < -MAX_RESPONSE_AUTHORISATION_CLOCK_SKEW_MS
-    || reviewExpired
-    || (reviewAfter === null && routeAge > RESPONSE_ROUTE_STALE_AFTER_DAYS * 86_400_000)
-    ? 'stale'
-    : 'current';
-}
-
 function selectedPacketAction(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
   const actionId = typeof input.actionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.actionId)
     ? input.actionId
@@ -680,7 +666,7 @@ function bindPacketRoute(
     source: text(action.contactSource, 120) || 'analyst supplied',
     observedAt,
     reviewAfter,
-    freshness: routeFreshness(observedAt, reviewAfter, generatedAt),
+    freshness: responseRouteFreshness(observedAt, reviewAfter, generatedAt),
     limitations: normalizeLimitations(action.contactLimitations),
   };
   const contacts: CaseResponsePacket['contacts'] = kind === 'manual' ? [] : [{

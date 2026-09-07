@@ -388,6 +388,7 @@ export class LookupCaseController {
           recipient: route.contact,
           contactSource: route.source,
           routeObservedAt: route.observedAt,
+          routeReviewAfter: route.reviewAfter,
           contactLimitations: [...route.limitations],
           state: 'planned',
         },

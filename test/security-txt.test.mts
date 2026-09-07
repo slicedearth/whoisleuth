@@ -9,6 +9,43 @@ import {
 } from '../lib/security-txt.mts';
 import type { SecurityTxtDependencies } from '../lib/security-txt.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import { resolveAbuseRecipients } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
+
+test('calendar-invalid disclosure expiries cannot become current reporting routes', () => {
+  for (const expiry of ['2027-02-30T00:00:00Z', '2027-02-29T12:00:00+10:00', '2026-04-31T00:00:00Z']) {
+    const result = parseSecurityTxt(`Contact: mailto:security@example.test\nExpires: ${expiry}`, { now: Date.parse('2026-09-08T00:00:00Z') });
+    assert.equal(result.state, 'malformed');
+    assert.equal(result.expiresAt, null);
+    assert.equal(resolveAbuseRecipients({ securityTxt: result }).recipients.length, 0);
+  }
+  for (const [expiry, expected] of [
+    ['2027-02-28T12:00:00+10:00', '2027-02-28T02:00:00.000Z'],
+    ['2028-02-29T00:00:00.123Z', '2028-02-29T00:00:00.123Z'],
+  ]) {
+    const result = parseSecurityTxt(`Contact: mailto:security@example.test\nExpires: ${expiry}`, { now: Date.parse('2026-09-08T00:00:00Z') });
+    assert.equal(result.state, 'present');
+    assert.equal(result.expiresAt, expected);
+  }
+});
+
+test('Canonical comparison counts unique full URLs and qualifies omitted comparisons', () => {
+  const finalUrl = 'https://example.test/.well-known/security.txt?edition=current';
+  const fields = ['Contact: mailto:security@example.test', 'Expires: 2027-01-01T00:00:00Z'];
+  const matched = parseSecurityTxt([
+    ...fields, ...Array.from({ length: 20 }, () => 'Canonical: https://other.example/security.txt'), `Canonical: ${finalUrl}`,
+  ].join('\n'), { finalUrl, now: Date.parse('2026-09-08T00:00:00Z') });
+  assert.equal(matched.state, 'present');
+  assert.equal(matched.canonicalMatches, true);
+  assert.equal(matched.truncated, false);
+  assert.equal(matched.canonical.length, 2);
+  const omitted = parseSecurityTxt([
+    ...fields, ...Array.from({ length: 11 }, (_, index) => `Canonical: https://example.test/.well-known/security.txt?edition=${index}`), `Canonical: ${finalUrl}`,
+  ].join('\n'), { finalUrl, now: Date.parse('2026-09-08T00:00:00Z') });
+  assert.equal(omitted.state, 'partial');
+  assert.equal(omitted.canonicalMatches, null);
+  assert.equal(omitted.truncated, true);
+  assert.ok(!omitted.limitations.some((value) => value.includes('was not listed')));
+});
 
 const now = Date.parse('2026-07-22T01:00:00.000Z');
 const validBody = [
