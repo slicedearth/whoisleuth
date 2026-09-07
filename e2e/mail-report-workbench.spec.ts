@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { gzipSync } from 'node:zlib';
 import { migrateLegacyBrowserData, openBrandWorkbench } from './helpers';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -44,8 +45,19 @@ test('reviews aggregate mail reports locally, exports them deliberately, and cle
 
   const workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
   await expect(workbench).toBeVisible();
+  const compressed = gzipSync(Buffer.from(DMARC_XML));
+  for (const offsets of [[8], [4], [8, 4]]) {
+    const corrupt = Buffer.from(compressed);
+    for (const offset of offsets) corrupt[corrupt.length - offset]! ^= 1;
+    await workbench.getByLabel('Choose reports').setInputFiles({
+      name: 'corrupt.xml.gz', mimeType: 'application/gzip', buffer: corrupt,
+    });
+    await expect(workbench.getByRole('status')).toHaveText('The gzip mail report could not be safely decompressed.');
+    await expect(workbench.getByRole('button', { name: 'Export review' })).toBeDisabled();
+    await expect(workbench.getByRole('group', { name: 'Imported mail report summary' })).toHaveCount(0);
+  }
   await workbench.getByLabel('Choose reports').setInputFiles([
-    { name: 'aggregate.xml', mimeType: 'application/xml', buffer: Buffer.from(DMARC_XML) },
+    { name: 'aggregate.xml.gz', mimeType: 'application/gzip', buffer: compressed },
     { name: 'tls.json', mimeType: 'application/json', buffer: Buffer.from(TLS_REPORT) },
   ]);
 

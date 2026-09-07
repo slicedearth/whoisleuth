@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import {
@@ -9,7 +10,7 @@ import {
 } from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore, caseAudienceExclusions, projectCaseForAudience } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   canonicalArtifactJsonV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
@@ -384,6 +385,48 @@ describe('CLI case pack', () => {
     const nested = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
     (nested.packet as Record<string, unknown>).unexpected = { actions: [{ recipient: 'leak' }], notes: ['leak'] };
     assert.throws(() => verifyCliCasePack(resign(nested)), /audience-sensitive data outside|unexpected packet envelope field/iu);
+  });
+
+  test('verifies immutable legacy packs and independently rejects hidden report audience leaks', () => {
+    for (const version of [12, 13, 14]) {
+      const name = version === 12 ? 'cli-case-pack-v2-case-v12-public.json' : `cli-case-pack-v2-case-v${version}.json`;
+      const bytes = readFileSync(new URL(`./fixtures/case-lifecycle/${name}`, import.meta.url), 'utf8');
+      const original = JSON.parse(bytes);
+      assert.deepEqual(verifyCliCasePack(original), { caseCount: 1 });
+      for (const audience of ['public', 'trusted'] as const) {
+        const pack = structuredClone(original);
+        const item = pack.cases[0];
+        const report = pack.packet.reports[0];
+        const response = report.analystResponse;
+        // Construct a valid historical-shaped input without altering the fixture.
+        // Negative expectations below use independent known-sensitive values.
+        const projection = projectCaseForAudience(normalizeCaseStore(pack).cases[0]!, audience);
+        for (const key of ['notes', 'actions', 'assertions', 'branches', 'observedEffects', 'closures', 'manualTrail', 'brandProfileIds'] as const) {
+          if (Object.hasOwn(item, key)) item[key] = structuredClone(projection[key]);
+          if (Object.hasOwn(response, key)) response[key] = structuredClone(projection[key]);
+          if (Object.hasOwn(report.case, key)) report.case[key] = structuredClone(projection[key]);
+        }
+        pack.packet.audience = audience;
+        pack.packet.redactionManifest.excluded = caseAudienceExclusions(audience, version);
+        assert.deepEqual(verifyCliCasePack(resign(pack)), { caseCount: 1 });
+
+        const mutations: Array<(value: typeof pack) => void> = [
+          (value) => { value.packet.reports[0].case.notes = [{ id: 'private-note', body: 'Private report note', createdAt: NOW }]; },
+          (value) => { value.packet.reports[0].analystResponse.manualTrail = [{ id: 'trail-leak', target: 'Private target', kind: 'pivot', summary: 'Reviewed', createdAt: NOW }]; },
+          (value) => { value.packet.reports[0].analystResponse.actions = [{ ...original.cases[0].actions[0], recipient: 'Private complaint recipient' }]; },
+        ];
+        if (audience === 'public') {
+          mutations.push((value) => { value.packet.reports[0].analystResponse.assertions = [{ statement: 'Private assessment' }]; });
+          mutations.push((value) => { value.packet.reports[0].analystResponse.branches = [{ name: 'Private branch' }]; });
+        }
+        for (const mutate of mutations) {
+          const leaked = structuredClone(pack);
+          mutate(leaked);
+          assert.throws(() => verifyCliCasePack(resign(leaked)), /excluded by its audience|unredacted action recipient/u);
+        }
+      }
+      assert.equal(readFileSync(new URL(`./fixtures/case-lifecycle/${name}`, import.meta.url), 'utf8'), bytes);
+    }
   });
 
 });

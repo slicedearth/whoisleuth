@@ -76,6 +76,22 @@ describe('certificate event intake', () => {
     assert.match(parsed.findings[0]?.limitations.join(' ') ?? '', /deterministic order/iu);
   });
 
+  test('retains mandatory event qualifications when all supplied limitation slots are used', () => {
+    const names = Array.from({ length: 30 }, (_, index) => `host-${String(index).padStart(2, '0')}.example.test`);
+    const supplied = Array.from({ length: 8 }, (_, index) => `Source qualification ${index + 1}`);
+    const input = batch([{ ...event(8, names), limitations: supplied }]);
+    const before = structuredClone(input);
+    const parsed = parseExternalFindingsDocument(buildCtEventFindings(input));
+    assert.equal(parsed.findings.length, 25);
+    for (const finding of parsed.findings) {
+      assert.equal(finding.limitations.length, 8);
+      assert.match(finding.limitations.join(' '), /not proof.*did not retain every DNS name.*30 unique domain observations.*first 25.*4 supplied limitations were omitted/u);
+      assert.deepEqual(finding.limitations.filter((item) => item.startsWith('Source qualification')), supplied.slice(0, 4));
+      assert.equal(finding.structuredObservation?.namesComplete, false);
+    }
+    assert.deepEqual(input, before);
+  });
+
   test('rejects malformed digests, unsupported completeness, and unknown fields', () => {
     const malformed = event(1);
     malformed.certificateSha256 = 'not-a-digest';

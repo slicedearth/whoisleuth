@@ -22,8 +22,10 @@ function lookup(state: 'success' | 'error', durationMs: number) {
       timing: { version: 1, sources: [{ source: 'rdap', durationMs }] },
     },
     availability: {
-      version: 1, status: state, source: 'rdap', observedAt: NOW,
-      complete: state === 'success', truncated: false, limitations: [], durationMs,
+      dns: {
+        version: 1, status: state, source: 'dns', observedAt: NOW,
+        complete: state === 'success', truncated: false, limitations: [], durationMs,
+      },
     },
   };
 }
@@ -50,12 +52,16 @@ describe('browser-local source reliability dashboard', () => {
     const dashboard = parseSourceReliabilityDashboard(JSON.stringify(report));
     const rdap = dashboard.rows.find((row) => row.source === 'rdap');
     assert.equal(dashboard.documentsReviewed, 6);
-    assert.equal(rdap?.stateSamples, 12);
+    assert.equal(rdap?.stateSamples, 6);
     assert.equal(rdap?.failureRate, 0.1667);
     assert.equal(rdap?.p95DurationMs, 900);
     assert.equal(rdap?.tone, 'attention');
     assert.equal(reliabilityRateLabel(rdap?.failureRate ?? null), '17%');
     assert.equal(reliabilityDurationLabel(rdap?.p95DurationMs ?? null), '900 ms');
+    const dns = dashboard.rows.find((row) => row.source === 'dns');
+    assert.equal(dns?.stateSamples, 6);
+    assert.equal(dns?.failureRate, 0.1667);
+    assert.equal(dns?.p95DurationMs, 900);
     const whois = dashboard.rows.find((row) => row.source === 'whois');
     assert.equal(whois?.stateSamples, 6);
     assert.equal(whois?.eligibleStateSamples, 0);

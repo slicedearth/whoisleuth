@@ -10,6 +10,8 @@ import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
@@ -20,6 +22,8 @@ export {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
@@ -165,12 +169,31 @@ function iso(value: unknown, label: string, optional = false): string | null {
 
 function limitations(value: unknown, index: number): string[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 8) {
-    throw new Error(`Finding ${index + 1} limitations must be an array with no more than 8 entries.`);
+  if (!Array.isArray(value) || value.length > MAX_EXTERNAL_FINDING_LIMITATIONS) {
+    throw new Error(`Finding ${index + 1} limitations must be an array with no more than ${MAX_EXTERNAL_FINDING_LIMITATIONS} entries.`);
   }
   const unique = new Set<string>();
-  for (const item of value) unique.add(requiredText(item, 240, `Finding ${index + 1} limitation`));
+  for (const item of value) unique.add(requiredText(item, MAX_EXTERNAL_FINDING_LIMITATION_LENGTH, `Finding ${index + 1} limitation`));
   return [...unique];
+}
+
+/** Keep provenance and omissions visible within the existing import bound. */
+export function retainExternalFindingLimitations(
+  supplied: readonly string[],
+  mandatory: readonly string[],
+): readonly string[] {
+  const required = limitations(mandatory, 0);
+  const optional = limitations(supplied, 0).filter((entry) => !required.includes(entry));
+  const available = MAX_EXTERNAL_FINDING_LIMITATIONS - required.length;
+  if (optional.length <= available) return Object.freeze([...required, ...optional]);
+  if (available < 1) throw new TypeError('Mandatory finding limitations leave no room to disclose omitted supplied limitations.');
+  const retained = optional.slice(0, available - 1);
+  const omitted = optional.length - retained.length;
+  return Object.freeze([
+    ...required,
+    ...retained,
+    `${omitted} supplied limitation${omitted === 1 ? ' was' : 's were'} omitted to retain mandatory provenance and omission notices; review the supplied input for the remaining qualifications.`,
+  ]);
 }
 
 function structuredObservation(value: unknown, index: number): ExternalFindingStructuredObservation | null {

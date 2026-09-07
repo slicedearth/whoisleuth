@@ -480,6 +480,12 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
       throw new TypeError('The CLI case pack contains invalid Brand Profile references.');
     }
     if (currentCaseSchema) assertCurrentReportProjection(report, normalisedCase);
+    else {
+      assertLegacyAudienceFields(reportCase, normalisedCase, audience);
+      const response = record(report.analystResponse);
+      if (!response) throw new TypeError('The CLI case pack contains an invalid analyst-response report.');
+      assertLegacyAudienceFields(response, normalisedCase, audience);
+    }
   }
 
   const omitted = redactionManifest.brandProfileReferencesOmitted;

@@ -121,6 +121,10 @@ retained events against reviewed issuer and SAN expectations without another
 request. Partial or omitted name sets remain indeterminate, and certificate
 digests are never compared with expected public-key digests.
 
+`ct-intake` and `map-observations` reserve limitation entries for provenance
+and exact omission counts. If supplied qualifications no longer fit, the
+output states how many were omitted; review the original input for them.
+
 ## Sanitised capture artefact manifest
 
 `whoisleuth.web-capture-manifest` version 2 imports reviewed metadata for a
@@ -169,6 +173,8 @@ Selected ZIP entries, aggregate decompressed WARC bytes, gzip expansion, entry
 count, manifest size, and declared package bytes are bounded before the
 existing WARC privacy filter runs. Indexes, page lists, screenshots, custom
 files, and descriptive package fields are not imported.
+Each GZIP member's CRC32 and expanded size are checked before its evidence is
+accepted. These detect corruption, not the authenticity of the source.
 
 ## Bounds and merge behaviour
 

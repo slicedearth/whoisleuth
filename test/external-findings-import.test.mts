@@ -7,6 +7,7 @@ import {
   mergeExternalFindingsIntoCase,
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
+  retainExternalFindingLimitations,
 } from '../frontend/src/lib/analysis/external-findings-import.ts';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
 
@@ -32,6 +33,15 @@ function document(overrides: Record<string, unknown> = {}) {
 }
 
 describe('strict external findings import', () => {
+  test('keeps bounded supplied qualifications intact unless mandatory facts need space', () => {
+    const supplied = Array.from({ length: 8 }, (_, index) => `Qualification ${index + 1}`);
+    assert.deepEqual(retainExternalFindingLimitations(supplied, []), supplied);
+    assert.deepEqual(retainExternalFindingLimitations(['Repeated', 'Repeated', 'Additional'], ['Repeated']), ['Repeated', 'Additional']);
+    assert.throws(() => retainExternalFindingLimitations(['Additional'], supplied), /no room to disclose/u);
+    assert.throws(() => retainExternalFindingLimitations(['x'.repeat(241)], []), /bounded text/u);
+    assert.throws(() => retainExternalFindingLimitations(supplied.concat('Additional'), []), /no more than 8/u);
+  });
+
   test('normalizes the documented inert schema', () => {
     const parsed = parseExternalFindingsDocument(document());
     assert.equal(parsed.source.name, 'Local analyst export');

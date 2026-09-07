@@ -151,6 +151,10 @@ concurrency and observer labels. They cannot add targets, enable Deep
 collection, choose output paths or approve network work. Explicit command
 options override profile defaults.
 
+`source-report` summarises collector-owned health envelopes in saved Lookup
+and Bulk output. Raw publications and extension fields are not interpreted as
+diagnostics, and missing health metadata remains unmeasured.
+
 ## Exit codes
 
 | Code | Meaning |

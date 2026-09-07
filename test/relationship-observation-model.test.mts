@@ -13,6 +13,7 @@ import {
   normalizeRelationshipObservation,
   normalizeRelationshipObservationStore,
   relationshipObservationId,
+  relationshipObservationStoreVersion,
   serializeRelationshipObservationStore,
   upsertRelationshipObservation,
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
@@ -46,6 +47,20 @@ function observation(overrides = {}, options = {}) {
 }
 
 describe('retained relationship observation model', () => {
+  test('rejects declared future and invalid portable versions before reading their records', () => {
+    const local = [observation()];
+    const before = structuredClone(local);
+    for (const version of [2, 1001, 999999, Number.MAX_SAFE_INTEGER]) {
+      assert.equal(relationshipObservationStoreVersion({ version }), version);
+      assert.throws(() => mergeRelationshipObservations(local, { version, observations: [] }), /newer schema/iu);
+    }
+    for (const version of [null, undefined, '1', 0, -1, true]) {
+      assert.throws(() => mergeRelationshipObservations(local, { version, observations: [] }), /version must be a positive safe integer/iu);
+    }
+    assert.equal(mergeRelationshipObservations(local, { observations: [] }).observations.length, 1);
+    assert.deepEqual(local, before);
+  });
+
   test('creates a deterministic bounded derived observation without mutating input', () => {
     const raw = input();
     const before = structuredClone(raw);

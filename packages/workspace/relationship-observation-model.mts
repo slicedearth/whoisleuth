@@ -276,7 +276,7 @@ export function relationshipObservationId(raw: RelationshipObservationInput): st
 
 export function relationshipObservationStoreVersion(raw: unknown): number | null {
   const value = record(raw);
-  return positiveInteger(value?.version);
+  return typeof value?.version === 'number' && Number.isSafeInteger(value.version) && value.version > 0 ? value.version : null;
 }
 
 function observationList(raw: unknown): unknown[] {
@@ -446,7 +446,7 @@ export function mergeRelationshipObservations(
 ): { observations: RelationshipObservation[]; added: number; updated: number; skipped: number; pruned: number } {
   assertWorkspaceInputGraph(localRaw, 'Local relationship-observation store');
   assertWorkspaceInputGraph(importedRaw, 'Imported relationship-observation document');
-  assertWorkspacePortableVersion(
+  const importedVersion = assertWorkspacePortableVersion(
     importedRaw,
     RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
     'Imported relationship-observation document',
@@ -455,7 +455,6 @@ export function mergeRelationshipObservations(
   if (importedRecord?.schema !== undefined && importedRecord.schema !== RELATIONSHIP_OBSERVATION_SCHEMA) {
     throw new Error('This JSON section is not a WHOISleuth relationship-observation export.');
   }
-  const importedVersion = relationshipObservationStoreVersion(importedRaw);
   if (importedVersion !== null && importedVersion > RELATIONSHIP_OBSERVATION_SCHEMA_VERSION) {
     throw new Error(`This relationship-observation section uses newer schema ${importedVersion}. Update the app before importing it.`);
   }

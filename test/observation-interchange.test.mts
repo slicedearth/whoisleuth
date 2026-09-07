@@ -39,6 +39,27 @@ describe('external observation mapping and asset bridge', () => {
     assert.match(document.findings[0]?.limitations.join(' ') ?? '', /profile fixture-profile version 1/iu);
   });
 
+  test('reserves bounded mapping and omission notices before supplied qualifications', () => {
+    const input = mappingInput();
+    input.profile.limitations = Array.from({ length: 8 }, (_, index) => `Source qualification ${index + 1}`);
+    input.records = Array.from({ length: 21 }, (_, index) => ({
+      ...structuredClone(input.records[0]!),
+      finding: { ...input.records[0]!.finding, summary: `Observation ${index}`, completeness: 'complete' },
+    }));
+    const before = structuredClone(input);
+    const document = mapExternalObservations(input);
+    assert.equal(document.findings.length, 20);
+    for (const finding of document.findings) {
+      assert.equal(finding.limitations.length, 8);
+      assert.match(finding.limitations.join(' '), /profile fixture-profile version 1.*20 of 21 unique findings.*3 supplied limitations were omitted/u);
+      assert.deepEqual(finding.limitations.filter((item) => item.startsWith('Source qualification')), input.profile.limitations.slice(0, 5));
+    }
+    assert.deepEqual(input, before);
+    const full = mapExternalObservations({ ...input, records: input.records.slice(0, 1) });
+    assert.match(full.findings[0]!.limitations.join(' '), /2 supplied limitations were omitted/u);
+    assert.doesNotMatch(full.findings[0]!.limitations.join(' '), /unique findings/u);
+  });
+
   test('rejects prototype paths, unsupported completeness, and additional fields', () => {
     const unsafe = mappingInput();
     unsafe.profile.domainField = '__proto__.domain';

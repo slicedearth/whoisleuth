@@ -165,24 +165,37 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
     '',
   ].join('\r\n'));
   const compressedWarc = gzipSync(Buffer.concat([headers, block, Buffer.from('\r\n\r\n')]));
-  const manifest = Buffer.from(JSON.stringify({
-    profile: 'data-package',
-    wacz_version: '1.1.1',
-    resources: [{
-      name: 'capture.warc.gz',
-      path: 'archive/capture.warc.gz',
-      hash: `sha256:${createHash('sha256').update(compressedWarc).digest('hex')}`,
-      bytes: compressedWarc.byteLength,
-    }],
-  }));
-  const wacz = zipSync({
-    'archive/capture.warc.gz': [compressedWarc, { level: 0 }],
-    'datapackage.json': manifest,
-    'datapackage-digest.json': Buffer.from(JSON.stringify({
-      path: 'datapackage.json',
-      hash: `sha256:${createHash('sha256').update(manifest).digest('hex')}`,
-    })),
-  });
+  function packageWarc(bytes: Uint8Array) {
+    const manifest = Buffer.from(JSON.stringify({
+      profile: 'data-package', wacz_version: '1.1.1',
+      resources: [{
+        name: 'capture.warc.gz', path: 'archive/capture.warc.gz',
+        hash: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        bytes: bytes.byteLength,
+      }],
+    }));
+    return zipSync({
+      'archive/capture.warc.gz': [bytes, { level: 0 }],
+      'datapackage.json': manifest,
+      'datapackage-digest.json': Buffer.from(JSON.stringify({
+        path: 'datapackage.json',
+        hash: `sha256:${createHash('sha256').update(manifest).digest('hex')}`,
+      })),
+    });
+  }
+  for (const offsets of [[8], [4], [8, 4]]) {
+    const corrupt = compressedWarc.slice();
+    for (const offset of offsets) corrupt[corrupt.length - offset]! ^= 1;
+    // The outer manifest digests and ZIP CRCs are valid. Only GZIP is corrupt.
+    await externalImport.locator('input[type="file"]').setInputFiles({
+      name: 'corrupt-evidence.wacz', mimeType: 'application/wacz', buffer: Buffer.from(packageWarc(corrupt)),
+    });
+    await expect(caseWorkspaceActionStatus(page)).toContainText('A compressed WACZ WARC resource could not be safely decompressed.');
+    await expect(externalImport.locator('input[type="file"]')).toBeEnabled();
+    await expect(externalImport.getByRole('button', { name: 'Import into cases' })).toHaveCount(0);
+    await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toHaveCount(0);
+  }
+  const wacz = packageWarc(compressedWarc);
   await externalImport.locator('input[type="file"]').setInputFiles({
     name: 'reviewed-evidence.wacz',
     mimeType: 'application/wacz',
