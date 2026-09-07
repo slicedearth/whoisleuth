@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
+import { runPlaywrightProcess } from './playwright-process.mts';
 import {
   createHostedBrowserWorkspace,
   runHostedBrowserWorkspace,
@@ -40,8 +41,7 @@ import {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_BASE_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
-const activeChildren = new Set<ChildProcess>();
-let interruptionRequested = false;
+const interruption = new AbortController();
 
 type SuiteOptions = Readonly<{ useBuild: boolean }>;
 
@@ -103,32 +103,20 @@ function runBuild(): void {
   if (child.status !== 0) throw new Error(`Frontend build failed with exit code ${child.status ?? 2}.`);
 }
 
-function runProcess(
+async function runProcess(
   executionRoot: string,
   label: string,
   args: readonly string[],
   environment: NodeJS.ProcessEnv,
 ): Promise<number> {
-  return new Promise((resolve, reject) => {
-    process.stdout.write(`Starting ${label}.\n`);
-    const child = spawn(process.execPath, args, {
-      cwd: executionRoot,
-      env: environment,
-      stdio: 'inherit',
-    });
-    activeChildren.add(child);
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      activeChildren.delete(child);
-      if (signal) {
-        process.stderr.write(`${label} stopped by ${signal}.\n`);
-        resolve(2);
-      } else {
-        process.stdout.write(`${label} finished with exit code ${code ?? 2}.\n`);
-        resolve(code ?? 2);
-      }
-    });
+  process.stdout.write(`Starting ${label}.\n`);
+  const code = await runPlaywrightProcess(args, {
+    cwd: executionRoot,
+    env: environment,
+    signal: interruption.signal,
   });
+  process.stdout.write(`${label} finished with exit code ${code}.\n`);
+  return code;
 }
 
 function runEnvironment(
@@ -192,10 +180,6 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
   }
 }
 
-function stopChildren(): void {
-  for (const child of activeChildren) child.kill('SIGTERM');
-}
-
 export async function runFunctionalRunsSerially(
   runs: readonly FunctionalRun[],
   dependencies: FunctionalRunDependencies,
@@ -237,12 +221,12 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
   const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
   const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
 
-  if (interruptionRequested) return 130;
+  if (interruption.signal.aborted) return 130;
 
   const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
   const ports = await selectPortRange(plan.shardCount + 1);
   try {
-    if (interruptionRequested) return 130;
+    if (interruption.signal.aborted) return 130;
     const performanceEnvironment = runEnvironment(
       executionRoot,
       ports[plan.shardCount]!,
@@ -255,7 +239,7 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
       playwrightPerformanceAuthorityArguments(playwrightCli),
       performanceEnvironment,
     );
-    if (interruptionRequested) return 130;
+    if (interruption.signal.aborted) return 130;
     if (performanceExit !== 0) return performanceExit;
     const performanceResult = resultData(executionRoot, performanceEnvironment);
 
@@ -278,7 +262,7 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
       execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
       verifyPortFree: (run) => requirePortRangeFree([run.port]),
       readResult: (run) => resultData(executionRoot, run.environment),
-      isInterrupted: () => interruptionRequested,
+      isInterrupted: () => interruption.signal.aborted,
     });
     if (functionalResult.interrupted) return 130;
     if (functionalResult.exits.some((code) => code !== 0)) return 2;
@@ -312,18 +296,17 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
     const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
-    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace), () => interruptionRequested);
+    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace), () => interruption.signal.aborted);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
-    return interruptionRequested ? 130 : 2;
+    return interruption.signal.aborted ? 130 : 2;
   }
 }
 
 function installSignalHandlers(): void {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.once(signal, () => {
-      interruptionRequested = true;
-      stopChildren();
+    process.on(signal, () => {
+      interruption.abort();
       process.exitCode = 130;
     });
   }

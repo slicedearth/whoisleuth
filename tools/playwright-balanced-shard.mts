@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +10,7 @@ import {
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
 import { playwrightJsonReporterEnvironment } from './playwright-run-artifacts.mts';
+import { runPlaywrightProcess } from './playwright-process.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
@@ -29,7 +29,11 @@ export function selectBalancedBrowserShard(value: string) {
   return Object.freeze({ plan, shard });
 }
 
-export function main(args = process.argv.slice(2)): number {
+export async function main(args = process.argv.slice(2)): Promise<number> {
+  const interruption = new AbortController();
+  const stop = () => interruption.abort();
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
   try {
     const runOptions = args.filter((value) => value.startsWith('--run='));
     const list = args.includes('--list');
@@ -51,8 +55,7 @@ export function main(args = process.argv.slice(2)): number {
       WHOISLEUTH_PLAYWRIGHT_SHARD: `${selection.shard.shard}/${selection.plan.shardCount}`,
       WHOISLEUTH_PLAYWRIGHT_PLANNED_WEIGHT_MS: String(selection.shard.plannedWeightMs),
     };
-    const child = spawnSync(
-      process.execPath,
+    return await runPlaywrightProcess(
       [
         PLAYWRIGHT_CLI,
         'test',
@@ -68,17 +71,18 @@ export function main(args = process.argv.slice(2)): number {
           ...childEnvironment,
           ...playwrightJsonReporterEnvironment(REPOSITORY_ROOT, childEnvironment),
         },
-        stdio: 'inherit',
+        signal: interruption.signal,
       },
     );
-    if (child.error) throw child.error;
-    return child.status ?? 2;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced browser shard failed.'}\n`);
     return 2;
+  } finally {
+    process.removeListener('SIGINT', stop);
+    process.removeListener('SIGTERM', stop);
   }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }

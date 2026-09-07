@@ -31,6 +31,7 @@ import {
   validateSchemaSourceCoverage,
 } from '../tools/schema-source-coverage.mts';
 import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
+import { PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import {
   buildBrandProfileExport,
   BRAND_PROFILE_SCHEMA,
@@ -254,6 +255,13 @@ function byId(inventory: SchemaCompatibilityInventory, id: string): SchemaCompat
 }
 
 describe('schema compatibility inventory', () => {
+  test('keeps published Brand Profile epochs independent of the next writer', () => {
+    assert.equal(PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION, 7);
+    for (const publishedVersion of [6, 7, 8] as const) {
+      assert.ok(SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.includes(publishedVersion));
+    }
+  });
+
   test('enumerates the reviewed persisted, exported, CLI, and derived contracts', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
+import { runPlaywrightProcess } from './playwright-process.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
@@ -238,38 +239,32 @@ async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
     WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: 'focused iteration',
   };
   process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), port ${port})\n`);
-  const child = spawn(process.execPath, [
-    PLAYWRIGHT_CLI,
-    'test',
-    ...specs,
-    `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
-    '--workers=1',
-    '--retries=0',
-  ], {
-    cwd: REPOSITORY_ROOT,
-    env: environment,
-    stdio: 'inherit',
-  });
+  const interruption = new AbortController();
   let requestedSignal: NodeJS.Signals | null = null;
   const stop = (signal: NodeJS.Signals) => {
     requestedSignal = signal;
-    try { child.kill('SIGTERM'); } catch { /* Port verification below remains authoritative. */ }
+    interruption.abort();
   };
   const onInterrupt = () => stop('SIGINT');
   const onTerminate = () => stop('SIGTERM');
-  process.once('SIGINT', onInterrupt);
-  process.once('SIGTERM', onTerminate);
+  process.on('SIGINT', onInterrupt);
+  process.on('SIGTERM', onTerminate);
 
   let exitCode: number | null = null;
-  let exitSignal: NodeJS.Signals | null = null;
   let failure: unknown;
   try {
-    const completion = await new Promise<Readonly<{ code: number | null; signal: NodeJS.Signals | null }>>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('exit', (code, signal) => resolve({ code, signal }));
+    exitCode = await runPlaywrightProcess([
+      PLAYWRIGHT_CLI,
+      'test',
+      ...specs,
+      `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
+      '--workers=1',
+      '--retries=0',
+    ], {
+      cwd: REPOSITORY_ROOT,
+      env: environment,
+      signal: interruption.signal,
     });
-    exitCode = completion.code;
-    exitSignal = completion.signal;
     if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
 
     const resultPath = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
@@ -296,7 +291,6 @@ async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
     failure ??= new Error(`Focused Playwright left port ${port} occupied.`);
   }
   if (failure) throw failure;
-  if (exitSignal) throw new Error(`Focused browser verification stopped with ${exitSignal}.`);
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {

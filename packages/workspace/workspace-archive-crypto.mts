@@ -390,27 +390,36 @@ export async function decryptWorkspaceArchive(
   const passphraseBytes = assertPassphrase(passphrase);
   const { ciphertext: _ciphertext, ...metadata } = envelope;
   try {
-    const key = await deriveArchiveKey(crypto, passphraseBytes, salt, ['decrypt']);
-    const plaintext = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: arrayBuffer(iv),
-        additionalData: arrayBuffer(encoder.encode(canonicalMetadata(metadata))),
-        tagLength: AES_GCM_TAG_BITS,
-      },
-      key,
-      arrayBuffer(ciphertext),
-    );
+    let plaintext: ArrayBuffer;
+    try {
+      const key = await deriveArchiveKey(crypto, passphraseBytes, salt, ['decrypt']);
+      plaintext = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: arrayBuffer(iv),
+          additionalData: arrayBuffer(encoder.encode(canonicalMetadata(metadata))),
+          tagLength: AES_GCM_TAG_BITS,
+        },
+        key,
+        arrayBuffer(ciphertext),
+      );
+    } catch {
+      // Authentication failure cannot distinguish a wrong key from tampering.
+      throw new Error('The backup passphrase is incorrect or the encrypted file is corrupted.');
+    }
     if (plaintext.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
       throw new Error('The decrypted workspace archive exceeds its byte limit.');
     }
-    return parseBoundedJson(decoder.decode(plaintext), {
+    let json: string;
+    try {
+      json = decoder.decode(plaintext);
+    } catch {
+      throw new Error('The backup decrypted, but its contents are not valid UTF-8.');
+    }
+    return parseBoundedJson(json, {
       label: 'Decrypted workspace archive',
       maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES,
     });
-  } catch (cause) {
-    if (cause instanceof Error && cause.message === 'The decrypted workspace archive exceeds its byte limit.') throw cause;
-    throw new Error('The backup passphrase is incorrect or the encrypted file is corrupted.');
   } finally {
     passphraseBytes.fill(0);
   }

@@ -63,7 +63,7 @@
   <nav class="reference-tree" aria-label="Documentation">
     <a class="reference-title" href="/resources"><span>WHOISleuth</span><strong>Documentation</strong></a>
     {#each PUBLIC_REFERENCE_GROUPS as group}
-      <section aria-labelledby={`reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>
+      <section>
         <h2 id={`reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>{group.label}</h2>
         {#each group.items as item}
           <a class:active={item.href === currentPath} aria-current={item.href === currentPath ? 'page' : undefined} href={item.href}>{item.label}</a>
@@ -84,7 +84,7 @@
     <summary><span>Browse documentation</span><strong>{currentLabel}</strong></summary>
     <nav class="independent-grid" aria-label="Documentation">
       {#each PUBLIC_REFERENCE_GROUPS as group}
-        <section aria-labelledby={`mobile-reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>
+        <section>
           <h2 id={`mobile-reference-group-${group.label.toLowerCase().replaceAll(' ', '-')}`}>{group.label}</h2>
           {#each group.items as item}
             <a class:active={item.href === currentPath} aria-current={item.href === currentPath ? 'page' : undefined} href={item.href}>{item.label}</a>

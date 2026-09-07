@@ -43,6 +43,13 @@ async function replaceAuthenticatedPlaintext(
   envelope: EncryptedWorkspaceArchiveEnvelope,
   value: unknown,
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
+  return replaceAuthenticatedBytes(envelope, new TextEncoder().encode(JSON.stringify(value)));
+}
+
+async function replaceAuthenticatedBytes(
+  envelope: EncryptedWorkspaceArchiveEnvelope,
+  plaintext: Uint8Array<ArrayBuffer>,
+): Promise<EncryptedWorkspaceArchiveEnvelope> {
   const encoder = new TextEncoder();
   const material = await crypto.subtle.importKey(
     'raw',
@@ -70,7 +77,7 @@ async function replaceAuthenticatedPlaintext(
     iv: decodeBase64url(envelope.cipher.iv),
     additionalData: encoder.encode(JSON.stringify(metadata)),
     tagLength: 128,
-  }, key, encoder.encode(JSON.stringify(value)));
+  }, key, plaintext);
   return { ...envelope, ciphertext: encodeBase64url(ciphertext) };
 }
 
@@ -205,6 +212,28 @@ async function noActiveProfileRiskArchive() {
 }
 
 describe('encrypted portable workspace archives', () => {
+  test('distinguishes authenticated invalid contents from a failed passphrase', async (context) => {
+    const envelope = await encryptWorkspaceArchive(await workspaceArchive(), PASSPHRASE);
+    const encoder = new TextEncoder();
+    for (const [label, plaintext, expected] of [
+      ['duplicate keys', encoder.encode('{"a":1,"a":2}'), /duplicate.*key/iu],
+      ['unsafe keys', encoder.encode('{"__proto__":1}'), /unsafe.*key/iu],
+      ['nesting bound', encoder.encode('['.repeat(60) + '0' + ']'.repeat(60)), /nesting/iu],
+      ['invalid JSON', encoder.encode('{'), /JSON/iu],
+      ['invalid UTF-8', new Uint8Array([0xc3, 0x28]), /decrypted.*UTF-8/iu],
+    ] as const) {
+      await context.test(label, async () => {
+        const malformed = await replaceAuthenticatedBytes(envelope, plaintext);
+        await assert.rejects(decryptWorkspaceArchive(malformed, PASSPHRASE), (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, expected);
+          assert.doesNotMatch(error.message, /passphrase/iu);
+          return true;
+        });
+      });
+    }
+  });
+
   test('round trips a checksummed workspace archive through authenticated encryption', async () => {
     const source = await workspaceArchive();
     const encrypted = await encryptWorkspaceArchive(source, PASSPHRASE);
