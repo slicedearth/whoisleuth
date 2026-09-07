@@ -320,8 +320,8 @@ function applyWhoisDialects(
       assignBoundedWhoisMatch(text, fields, 'updatedDate', /^[ \t]*Last modified[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
       assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Current Registar[ \t]*:[ \t]*(.+)$/im, truncatedFields);
       for (const pattern of [
-        /^[ \t]*Primary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/gim,
-        /^[ \t]*Secondary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/gim,
+        /^[ \t]*Primary server[ \t.]*:[ \t]*([^\s]+)/gim,
+        /^[ \t]*Secondary server[ \t.]*:[ \t]*([^\s]+)/gim,
       ]) {
         for (const match of text.matchAll(pattern)) {
           const result = addBoundedWhoisSetValue(nameservers, match[1], {

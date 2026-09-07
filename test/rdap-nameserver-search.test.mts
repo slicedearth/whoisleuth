@@ -23,6 +23,19 @@ function searchPayload(domains: unknown[], extra: Record<string, unknown> = {}) 
 }
 
 describe('registry-scoped RDAP nameserver search', () => {
+  test('propagates event subfield rejection without relying on invalid neighbouring records', () => {
+    const valid = { eventAction: 'registration', eventDate: '2020-01-01T00:00:00Z' };
+    for (const override of [{}, { eventDate: {} }, { eventActor: 'x'.repeat(161) }]) {
+      const result = normalizeRdapNameserverSearchPayload({ domainSearchResults: [{
+        objectClassName: 'domain', ldhName: 'one.example',
+        nameservers: [{ ldhName: 'ns1.infra.example' }], events: [{ ...valid, ...override }],
+      }] }, 'ns1.infra.example', 'example');
+      assert.ok(result);
+      assert.equal(result.domains.length, 1);
+      assert.equal(result.domains[0]?.partial, Object.keys(override).length > 0);
+    }
+  });
+
   test('normalizes the nameserver and one-label registry scope', () => {
     assert.equal(normalizeRdapNameserver(' NS1.BÜCHER.EXAMPLE. '), 'ns1.xn--bcher-kva.example');
     assert.equal(normalizeRdapRegistryScope('.COM'), 'com');

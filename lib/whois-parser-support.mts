@@ -4,7 +4,7 @@ import {
   boundedWhoisValue,
   whoisFieldLimit,
 } from './whois-values.mts';
-import type { WhoisScalarFields } from './whois-contracts.mts';
+import { MAX_WHOIS_STATUSES, type WhoisScalarFields } from './whois-contracts.mts';
 
 type WhoisParserContext = {
   expandedStreetFields: Set<string>;
@@ -15,7 +15,6 @@ type WhoisParserContext = {
 };
 
 const MAX_WHOIS_NAMESERVERS = 200;
-const MAX_WHOIS_STATUSES = 100;
 const WHOIS_DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 
 // ---------------------------------------------------------------------------
@@ -42,6 +41,12 @@ function addBoundedWhoisSetValue(set: Set<string>, rawValue: unknown, {
   maxEntries, maxLength, field, truncatedFields,
 }: { maxEntries: number; maxLength: number; field: string; truncatedFields: Set<string> }) {
   const bounded = boundedWhoisValue(rawValue, maxLength);
+  if (bounded.truncated) truncatedFields.add(field);
+  if (field === 'nameservers' && (bounded.truncated || !bounded.value
+    || !WHOIS_DOMAIN_RE.test(bounded.value.replace(/\.$/u, '')))) {
+    truncatedFields.add(field);
+    return 'ignored';
+  }
   if (!bounded.value || set.has(bounded.value)) return 'ignored';
   if (set.size >= maxEntries) {
     truncatedFields.add(field);

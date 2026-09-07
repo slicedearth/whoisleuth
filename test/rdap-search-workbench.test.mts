@@ -9,6 +9,21 @@ import {
 } from '../lib/rdap-search-workbench.mts';
 
 describe('RDAP reverse-search workbench', () => {
+  test('treats inherited property names as unrecognised mapping data', () => {
+    for (const property of ['constructor', 'toString', 'hasOwnProperty']) {
+      const inspection = inspectRdapReverseSearchResponse({
+        reverse_search_properties_mapping: [{ property, propertyPath: '$.entities[*].handle' }],
+      }, [property]);
+      assert.equal(inspection.state, 'partial');
+      assert.equal(inspection.mappings.length, 1);
+      assert.equal(inspection.mappings[0]?.state, 'unrecognized');
+      assert.equal(inspection.mappings[0]?.property, property.toLowerCase());
+    }
+    assert.equal(inspectRdapReverseSearchResponse({
+      reverse_search_properties_mapping: [{ property: '__proto__', propertyPath: '$.entities' }],
+    }, []).state, 'invalid');
+  });
+
   test('normalizes supported RFC-style help declarations without executing a request', () => {
     const summary = normalizeRdapSearchHelp({
       reverse_search_properties: [

@@ -172,6 +172,20 @@ describe('URLscan archived-verdict lookup', () => {
     assert.equal(result.state, 'not_found');
     assert.deepEqual(result.findings, []);
     assert.match(result.observation.limitations.join(' '), /not evidence.*safe/i);
+    assert.equal(result.observation.complete, true);
+    assert.equal(result.observation.truncated, false);
+  });
+
+  test('retains provider continuation even when the current page is empty', async () => {
+    const calls: FetchCall[] = [];
+    const adapter = fixtureAdapter(async () => jsonResponse({ results: [], has_more: true }), calls);
+    const result = await adapter.lookupDomain('example.test', { env: ENABLED_ENV });
+    assert.equal(result.state, 'partial');
+    assert.deepEqual(result.findings, []);
+    assert.equal(result.observation.complete, false);
+    assert.equal(result.observation.truncated, true);
+    assert.match(result.detail ?? '', /older scans may exist/u);
+    assert.equal(calls.length, 1);
   });
 
   test('keeps non-malicious scans neutral while discarding cross-domain and malformed records', async () => {

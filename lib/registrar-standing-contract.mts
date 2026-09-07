@@ -158,6 +158,7 @@ function validNullableTimestamp(value: unknown): boolean {
 function validNullableDate(value: unknown): boolean {
   return value === null || (typeof value === 'string'
     && ISO_DATE_RE.test(value)
+    && Number.isFinite(Date.parse(`${value}T00:00:00.000Z`))
     && new Date(`${value}T00:00:00.000Z`).toISOString().startsWith(value));
 }
 

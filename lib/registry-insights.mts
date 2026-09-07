@@ -8,6 +8,8 @@
 import { compareRegistrySources } from './registry-comparison.mts';
 import { inspectRdapCapabilities } from './rdap-capabilities.mts';
 import { isRecord, recordOrEmpty } from './json-record.mts';
+import { MAX_RDAP_REDACTIONS, MAX_RDAP_STATUSES } from './rdap-types.mts';
+import { MAX_WHOIS_STATUSES } from './whois-contracts.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type ContactDisclosureState =
@@ -52,6 +54,20 @@ function normalizedStatus(value: unknown): string {
   return text(value, 160).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
+function statusInventory(value: unknown, maximum: number) {
+  if (!Array.isArray(value)) return { values: [], partial: value !== undefined };
+  const unique = new Set<string>();
+  let partial = value.length > maximum;
+  for (const item of value.slice(0, maximum)) {
+    if (typeof item !== 'string' || item.length > 160 || CONTROL_RE.test(item) || !item.trim()) {
+      partial = true;
+      continue;
+    }
+    unique.add(item.trim());
+  }
+  return { values: [...unique], partial };
+}
+
 function sourceState(status: unknown, partial: boolean): PublicationState {
   if (partial || status === 'partial') return 'partial';
   return typeof status === 'string'
@@ -60,9 +76,13 @@ function sourceState(status: unknown, partial: boolean): PublicationState {
     : 'unavailable';
 }
 
-function redactionBlob(parsed: UnknownRecord): string {
-  const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, 50) : [];
-  return redactions.map((item) => {
+function registrantRedactionBlob(parsed: UnknownRecord): string {
+  const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, MAX_RDAP_REDACTIONS) : [];
+  return redactions.filter((item) => {
+    // A path or reason can mention a role without selecting it. Do not infer
+    // registrant scope from arbitrary JSONPath expressions or other prose.
+    return /^(?:registry )?registrant(?:\b|$)/iu.test(text(record(item).name, 240));
+  }).map((item) => {
     const value = record(item);
     return [
       value.name,
@@ -113,7 +133,8 @@ function disclosure(
     ? parsed.chainStatus === 'partial' || strings(parsed.fieldsTruncated, 20).length > 0
     : parsed.serverTruncated === true
       || parsed.entitiesTruncated === true
-      || parsed.statusesTruncated === true;
+      || parsed.statusesTruncated === true
+      || parsed.redactionsTruncated === true;
   const publicationState = sourceState(status, partial);
   if (publicationState === 'unavailable') {
     return {
@@ -131,7 +152,7 @@ function disclosure(
         parsed.registrantPhone,
         parsed.registrantAddress,
       ].map((part) => text(part, 320)).filter(Boolean).join(' ');
-  const redactions = redactionBlob(parsed);
+  const redactions = registrantRedactionBlob(parsed);
   const combined = `${registrant} ${redactions}`.trim();
   if (WITHHELD_RE.test(combined)) {
     return { source, state: 'withheld', detail: 'The publication indicates that registrant data was withheld or not disclosed.' };
@@ -144,6 +165,13 @@ function disclosure(
   }
   if (registrant) {
     return { source, state: 'public', detail: 'The source published at least one usable registrant contact field.' };
+  }
+  if (Array.isArray(parsed.redactions) && parsed.redactions.length > 0) {
+    return {
+      source,
+      state: 'unavailable',
+      detail: 'Redaction declarations do not establish registrant scope, so missing registrant fields remain unclassified.',
+    };
   }
   if (publicationState === 'partial') {
     return {
@@ -159,9 +187,9 @@ function disclosure(
   };
 }
 
-function lifecycle(statusesValue: unknown, evidenceState: PublicationState) {
-  const rawStatuses = strings(statusesValue);
-  const normalized = rawStatuses.map(normalizedStatus);
+function lifecycle(statuses: readonly string[], evidenceState: PublicationState) {
+  const rawStatuses = statuses.slice(0, MAX_REGISTRY_INSIGHT_STATUSES);
+  const normalized = statuses.map(normalizedStatus);
   const has = (value: string) => normalized.includes(value);
   const observedState = (value: string): boolean | null => has(value) ? true : evidenceState === 'complete' ? false : null;
   const pendingDelete = observedState('pendingdelete');
@@ -220,7 +248,8 @@ function lifecycle(statusesValue: unknown, evidenceState: PublicationState) {
       serverStatuses: serverLocks,
     },
     acquisitionPath,
-    limitation: 'EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success.',
+    limitation: 'EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success.'
+      + (statuses.length > rawStatuses.length ? ` The display lists ${rawStatuses.length} of ${statuses.length} distinct statuses; lifecycle decisions use the full admitted inventory.` : ''),
   };
 }
 
@@ -229,6 +258,7 @@ function publicationDiagnostic(
   parsedValue: unknown,
   status: unknown,
   observedAt: unknown,
+  statuses: ReturnType<typeof statusInventory>,
 ) {
   const usablePublication = isRecord(parsedValue);
   const parsed = record(parsedValue);
@@ -236,17 +266,22 @@ function publicationDiagnostic(
     || parsed.chainStatus === 'partial'
     || parsed.entitiesTruncated === true
     || parsed.statusesTruncated === true
+    || statuses.partial
+    || parsed.eventsTruncated === true
+    || parsed.redactionsTruncated === true
     || strings(parsed.fieldsTruncated, 20).length > 0;
   const state = usablePublication ? sourceState(status, partial) : 'unavailable';
   const issues: string[] = [];
   if (state === 'unavailable') issues.push('No usable publication was available from this source.');
   if (parsed.serverTruncated === true) issues.push('The RDAP server declared a truncated response.');
   if (parsed.entitiesTruncated === true) issues.push('The normalised entity inventory was capped.');
-  if (parsed.statusesTruncated === true) issues.push('The normalised status inventory was capped.');
+  if (parsed.statusesTruncated === true || statuses.partial) issues.push('The normalised status inventory contains omitted or rejected values.');
+  if (parsed.eventsTruncated === true) issues.push('The normalised event inventory contains omitted or rejected fields.');
+  if (parsed.redactionsTruncated === true) issues.push('The normalised redaction inventory contains omitted or rejected declarations.');
   if (strings(parsed.fieldsTruncated, 20).length) issues.push('One or more normalised WHOIS fields were capped.');
   if (parsed.chainStatus === 'partial') issues.push('The WHOIS referral chain was incomplete or conflicting.');
   const conformance = strings(parsed.conformance, 30);
-  const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, 50) : [];
+  const redactions = Array.isArray(parsed.redactions) ? parsed.redactions.slice(0, MAX_RDAP_REDACTIONS) : [];
   return {
     source,
     state,
@@ -313,14 +348,17 @@ export function buildRegistryInsights(input: {
         : counts.equivalent
           ? 'consistent'
           : 'unavailable';
+  const rdapStatuses = statusInventory(rdap.statuses, MAX_RDAP_STATUSES);
+  const whoisStatuses = statusInventory(whois.statuses, MAX_WHOIS_STATUSES);
   const publications = [
-    publicationDiagnostic('registry_rdap', input.rdapParsed, input.rdapStatus, input.rdapFetchedAt),
-    publicationDiagnostic('whois', input.whoisParsed, input.whoisStatus, input.whoisQueriedAt),
-    publicationDiagnostic('registrar_rdap', input.registrarRdapParsed, input.registrarRdapStatus, input.registrarRdapFetchedAt),
+    publicationDiagnostic('registry_rdap', input.rdapParsed, input.rdapStatus, input.rdapFetchedAt, rdapStatuses),
+    publicationDiagnostic('whois', input.whoisParsed, input.whoisStatus, input.whoisQueriedAt, whoisStatuses),
+    publicationDiagnostic('registrar_rdap', input.registrarRdapParsed, input.registrarRdapStatus, input.registrarRdapFetchedAt,
+      statusInventory(registrarRdap.statuses, MAX_RDAP_STATUSES)),
   ];
   const lifecycleCandidates = [
-    { statuses: strings(rdap.statuses), state: publications[0]!.state },
-    { statuses: strings(whois.statuses), state: publications[1]!.state },
+    { statuses: rdapStatuses.values, state: publications[0]!.state },
+    { statuses: whoisStatuses.values, state: publications[1]!.state },
   ].filter((candidate) => candidate.state !== 'unavailable');
   const lifecycleSource = lifecycleCandidates.find((candidate) => candidate.statuses.length)
     ?? lifecycleCandidates[0]

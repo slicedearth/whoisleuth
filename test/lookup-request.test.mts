@@ -17,6 +17,9 @@ import {
   MAX_HTTP_EVIDENCE_REDIRECTS,
 } from '../lib/http-evidence-bounds.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
+import { buildFixtureRegistrarStanding } from './registrar-standing-fixture.mts';
+import { validRegistrarStanding } from '../lib/registrar-standing-contract.mts';
+import { parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
 type FetchImplementation = NonNullable<LookupRequestOptions['fetchImpl']>;
 
@@ -63,6 +66,27 @@ function boundedHttpEvidence(redirectCount = MAX_HTTP_EVIDENCE_REDIRECTS) {
 }
 
 describe('Lookup browser request boundary', () => {
+  test('returns invalid-response rather than a network failure for malformed registrar action dates', async () => {
+    const standing = buildFixtureRegistrarStanding({ registrarIanaId: '4318', now: new Date('2026-09-03T12:00:00.000Z') });
+    assert.equal(validRegistrarStanding(standing), true);
+    assert.ok(standing.compliance.actions.length > 0);
+    const valid = { ...response(),
+      registrarStanding: standing,
+      rdap: { parsed: { domain: 'example.test', registrarIanaId: '4318' } },
+    };
+    assert.equal(parseLookupHttpResponse(valid).ok, true);
+    for (const issuedOn of ['2026-13-01', '2026-00-01', '2026-02-30', '2026-01-00', '2026-01-32']) {
+      const malformed = { ...standing, compliance: { ...standing.compliance,
+        actions: standing.compliance.actions.map((action, index) => index === 0 ? { ...action, issuedOn } : action),
+      } };
+      assert.equal(validRegistrarStanding(malformed), false);
+      const body = { ...valid, registrarStanding: malformed };
+      assert.equal(parseLookupHttpResponse(body).ok, false);
+      const result = await requestLookup('/api/lookup?q=example.test', { fetchImpl: async () => Response.json(body) });
+      assert.deepEqual(result, { ok: false, kind: 'invalid_response', message: 'Lookup returned an invalid response.' });
+    }
+  });
+
   test('accepts complete and partial authoritative response envelopes', async () => {
     for (const body of [
       response(),

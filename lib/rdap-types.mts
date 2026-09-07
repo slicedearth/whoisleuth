@@ -1,3 +1,6 @@
+export const MAX_RDAP_STATUSES = 100;
+export const MAX_RDAP_REDACTIONS = 100;
+
 export type LooseRdapRecord = Record<string, unknown>;
 
 export type RdapAttempt = {

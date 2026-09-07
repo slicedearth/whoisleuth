@@ -9,6 +9,7 @@ import {
 } from '../lib/threat-intelligence-types.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { parseRdap } from '../lib/rdap.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -25,6 +26,51 @@ test.beforeEach(async ({ page }) => {
     }));
   });
   await page.goto('/lookup');
+});
+
+test('registry interpretation retains late lifecycle evidence and role-scoped disclosure', async ({ page }, testInfo) => {
+  const parsed = parseRdap('domain', {
+    objectClassName: 'domain', ldhName: 'example.test',
+    status: [...Array.from({ length: 99 }, (_, index) => `status-${index}`), 'pending delete'],
+    entities: [{ roles: ['registrant'], vcardArray: ['vcard', [['fn', {}, 'text', 'Published Contact']]] }],
+    redacted: [{ name: { description: 'Technical Email' }, method: 'removal' }],
+    events: [{ eventAction: 'registration', eventDate: '2020-01-01T00:00:00Z', eventActor: 'x'.repeat(161) }],
+  });
+  expect(parsed).not.toBeNull();
+  expect(parsed?.statuses).toHaveLength(100);
+  expect(parsed?.eventsTruncated).toBe(true);
+  const insights = buildRegistryInsights({ rdapParsed: parsed, rdapStatus: 'success' });
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'example.test', type: 'domain', registrableDomain: 'example.test',
+      rdap: { parsed }, whois: { parsed: {}, chain: [] }, registryInsights: insights,
+      availability: { state: 'registered', domain: 'example.test' },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }),
+  }));
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const interpretation = page.locator('details.registry-insights');
+  await interpretation.locator(':scope > summary').click();
+  await expect(interpretation.getByText('Redemption: unavailable · pending delete: observed', { exact: true })).toBeVisible();
+  await expect(interpretation.getByText('RDAP: public · WHOIS: unavailable', { exact: true })).toBeVisible();
+  await expect(interpretation.locator('.raw-statuses code')).toHaveCount(40);
+  await expect(interpretation.getByText(/40 of 100 distinct statuses/u)).toBeVisible();
+  await interpretation.locator('.publication-quality > summary').click();
+  await expect(interpretation.getByText('The normalised event inventory contains omitted or rejected fields.', { exact: true })).toBeVisible();
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await expectNoHorizontalOverflow(page);
+      const disclosure = interpretation.getByText('RDAP: public · WHOIS: unavailable', { exact: true });
+      await disclosure.scrollIntoViewIfNeeded();
+      await expect(disclosure).toBeInViewport();
+      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`registry-interpretation-${theme}.png`) });
+    }
+  }
 });
 
 test('bounded RDAP contact roles and repeated channels render in Lookup', async ({ page }) => {

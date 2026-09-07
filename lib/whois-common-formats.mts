@@ -176,7 +176,7 @@ function applyWhoisCommonFormats(
       field: 'statuses', truncatedFields,
     }) === 'capped') break;
   }
-  for (const m of text.matchAll(/\[Name Server\][ \t]*([a-zA-Z0-9.\-]+)/gi)) {
+  for (const m of text.matchAll(/\[Name Server\][ \t]*([^\s]+)/gi)) {
     if (addBoundedWhoisSetValue(nameservers, m[1], {
       maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
       field: 'nameservers', truncatedFields,
@@ -188,21 +188,21 @@ function applyWhoisCommonFormats(
   // on every hop; "nserver:"/"Host Name:"/"DNS:" are real per-domain
   // labels on some registries (e.g. .ru, .kr, .mx) but only once we're
   // past the root hop, for the same reason as the field patterns above.
-  const nsLinePatterns = [/^[ \t*]*Name Server[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim];
+  const nsLinePatterns = [/^[ \t*]*Name Server[ \t.]*:[ \t]*([^\s]+)/gim];
   if (!isRootHop) {
     nsLinePatterns.push(
-      /^[ \t*]*nserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
-      /^[ \t*]*Nameserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
-      /^[ \t*]*Host Name[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
-      /^[ \t]*ns_name_\d{2}[ \t]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
+      /^[ \t*]*nserver[ \t.]*:[ \t]*([^\s]+)/gim,
+      /^[ \t*]*Nameserver[ \t.]*:[ \t]*([^\s]+)/gim,
+      /^[ \t*]*Host Name[ \t.]*:[ \t]*([^\s]+)/gim,
+      /^[ \t]*ns_name_\d{2}[ \t]*:[ \t]*([^\s]+)/gim
     );
     // Punktum dk uses `DNS: example.dk` for the queried domain, then
     // `Hostname:` inside its nameserver section. Other supported
     // registries use `DNS:` for an actual nameserver, so switch aliases
     // only when the full .dk marker set is present.
     nsLinePatterns.push(isPunktum
-      ? /^[ \t*]*Hostname[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
-      : /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim);
+      ? /^[ \t*]*Hostname[ \t.]*:[ \t]*([^\s]+)/gim
+      : /^[ \t*]*DNS[ \t.]*:[ \t]*([^\s]+)/gim);
   }
   for (const re of nsLinePatterns) {
     for (const m of text.matchAll(re)) {

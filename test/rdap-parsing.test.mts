@@ -400,6 +400,21 @@ describe('structured RDAP metadata', () => {
     assert.deepEqual(parsed.events[1], { action: 'expiration', date: null, actor: null });
     assert.deepEqual(parsed.events[2], { action: 'last changed', date: '2025-01-01', actor: null });
     assert.equal(parsed.lifecycle.updatedDate, '2025-01-01');
+    assert.equal(parsed.eventsTruncated, true);
+  });
+
+  test('qualifies rejected event subfields independently of whole-event loss', () => {
+    const valid = { eventAction: 'registration', eventDate: '2020-01-01T00:00:00Z' };
+    assert.equal(parseFixture('domain', { ldhName: 'example.test', events: [valid] }).eventsTruncated, false);
+    for (const override of [
+      { eventAction: {} }, { eventAction: 'registration\nforged' },
+      { eventDate: {} }, { eventDate: 'x'.repeat(65) },
+      { eventActor: 'x'.repeat(161) }, { eventActor: null },
+    ]) {
+      const parsed = parseFixture('domain', { ldhName: 'example.test', events: [{ ...valid, ...override }] });
+      assert.equal(parsed.events.length, 1);
+      assert.equal(parsed.eventsTruncated, true);
+    }
   });
 
   test('retains multiple nested contacts per recognized role and preserves primary compatibility fields', () => {

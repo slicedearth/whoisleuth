@@ -2,8 +2,68 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { parseRdap } from '../lib/rdap.mts';
 
 describe('registry insight interpretation', () => {
+  test('uses the full admitted status inventory independently of ordering, duplicates and display caps', () => {
+    for (const status of [
+      [...Array.from({ length: 80 }, () => 'active'), 'pending delete'],
+      ['pending delete', ...Array.from({ length: 80 }, () => 'active')],
+      [...Array.from({ length: 99 }, (_, index) => `status-${index}`), 'pending delete'],
+    ]) {
+      const parsed = parseRdap('domain', { ldhName: 'example.test', status });
+      assert.ok(parsed);
+      assert.equal(parsed.statuses.length, status.length);
+      assert.equal(parsed.statusesTruncated, false);
+      const result = buildRegistryInsights({ rdapParsed: parsed, rdapStatus: 'success' });
+      assert.equal(result.lifecycle.pendingDelete, true);
+      assert.equal(result.lifecycle.stage, 'pending_delete');
+      assert.equal(result.publications[0]?.state, 'complete');
+      assert.ok(result.lifecycle.rawStatuses.length <= 40);
+      if (status.length === 100) assert.match(result.lifecycle.limitation, /40 of 100/u);
+    }
+    for (const parsed of [
+      { statuses: [...Array.from({ length: 100 }, () => 'active'), 'pending delete'] },
+      { statuses: ['active', {}] },
+      parseRdap('domain', { ldhName: 'example.test', status: [...Array.from({ length: 100 }, () => 'active'), 'pending delete'] }),
+    ]) {
+      const result = buildRegistryInsights({ rdapParsed: parsed, rdapStatus: 'success' });
+      assert.equal(result.lifecycle.pendingDelete, null);
+      assert.equal(result.publications[0]?.state, 'partial');
+    }
+  });
+
+  test('scopes disclosure to registrant evidence rather than unrelated redaction prose', () => {
+    const entity = { roles: ['registrant'], vcardArray: ['vcard', [['fn', {}, 'text', 'Published Contact']]] };
+    for (const name of ['Technical Email', 'Unclassified Contact']) {
+      const parsed = parseRdap('domain', {
+        ldhName: 'example.test', entities: [entity],
+        redacted: [{ name: { description: name }, reason: { description: 'Registrant requested privacy' }, method: 'removal',
+          prePath: '$.entities[?(@.roles[0] == "technical")].vcardArray' }],
+      });
+      assert.ok(parsed);
+      assert.equal(parsed.redactions.length, 1);
+      assert.equal(parsed.registrant?.name, 'Published Contact');
+      const result = buildRegistryInsights({ rdapParsed: parsed, rdapStatus: 'success' });
+      assert.equal(result.contactDisclosure.registryRdap.state, 'public');
+      assert.equal(result.publications[0]?.redactionCount, 1);
+      const missing = buildRegistryInsights({ rdapParsed: { ...parsed, registrant: null }, rdapStatus: 'success' });
+      assert.equal(missing.contactDisclosure.registryRdap.state, 'unavailable');
+    }
+    const scoped = parseRdap('domain', { ldhName: 'example.test', entities: [entity],
+      redacted: [{ name: { description: 'Registrant Email' }, method: 'removal' }],
+    });
+    assert.ok(scoped);
+    assert.equal(scoped.redactions.length, 1);
+    assert.equal(buildRegistryInsights({ rdapParsed: scoped, rdapStatus: 'success' }).contactDisclosure.registryRdap.state, 'redacted');
+    const late = buildRegistryInsights({ rdapParsed: { ...scoped, redactions: [
+      ...Array.from({ length: 99 }, (_, index) => ({ name: `Technical field ${index}`, method: 'removal' })),
+      ...scoped.redactions,
+    ] }, rdapStatus: 'success' });
+    assert.equal(late.contactDisclosure.registryRdap.state, 'redacted');
+    assert.equal(late.publications[0]?.redactionCount, 100);
+  });
+
   test('keeps privacy proxy, raw lifecycle statuses, and registry locks distinct', () => {
     const result = buildRegistryInsights({
       rdapStatus: 'success',
