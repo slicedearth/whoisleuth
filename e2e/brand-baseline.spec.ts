@@ -1,5 +1,6 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, requiredValue } from './helpers';
+import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, requiredValue } from './helpers';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -125,6 +126,73 @@ async function openProfileForm(page: import('@playwright/test').Page) {
   await page.getByLabel('Brand name').fill('Example Brand');
   await page.getByLabel('Official domains').fill('example.com');
 }
+
+test('Brand Profile saving preserves a newer editable draft', async ({ page }) => {
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+    await page.getByLabel('Brand name', { exact: true }).fill('Later unsaved brand');
+  } finally { await release(); }
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Example Brand"');
+  await expect(page.getByLabel('Brand name', { exact: true })).toHaveValue('Later unsaved brand');
+  const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(snapshot.records.map((item) => item.value.name)).toEqual(['Example Brand']);
+});
+
+test('expected-setting drafts follow the selected profile even for a shared domain', async ({ page }) => {
+  const profiles = ['a', 'b'].map((suffix) => ({
+    ...profileFixture(), id: `profile-${suffix}`, name: `Profile ${suffix}`,
+    desiredPostureBaselines: [{ domain: 'stored.example', nameservers: [`ns-${suffix}.example`], updatedAt: ISO }],
+  }));
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore(profiles), [ACTIVE_KEY]: 'profile-a',
+  });
+  await openBrandWorkbench(page, 'baselines');
+  const baseline = page.locator('#desired-posture-baseline');
+  await expect(baseline.getByLabel('Nameservers', { exact: true })).toHaveValue('ns-a.example');
+  await baseline.getByLabel('Nameservers', { exact: true }).fill('unsaved-a.example');
+  await page.getByRole('radio', { name: 'Set Profile b active', exact: true }).check();
+  await expect(baseline.getByLabel('Nameservers', { exact: true })).toHaveValue('ns-b.example');
+  await baseline.getByRole('button', { name: 'Save expected settings', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved expected domain settings');
+  const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
+  expect(snapshot.records.find((item) => item.id === 'profile-a')?.value.desiredPostureBaselines[0]?.nameservers).toEqual(['ns-a.example']);
+  expect(snapshot.records.find((item) => item.id === 'profile-b')?.value.desiredPostureBaselines[0]?.nameservers).toEqual(['ns-b.example']);
+});
+
+test('passport export preserves an intentional empty selection and exports only reselected domains', async ({ page }) => {
+  const profile = {
+    ...profileFixture(), officialDomains: ['stored.example', 'second.example'],
+    desiredPostureBaselines: ['stored.example', 'second.example'].map((domain) => ({ domain, nameservers: ['ns.example'], updatedAt: ISO })),
+  };
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([profile]), [ACTIVE_KEY]: profile.id,
+  });
+  await openBrandWorkbench(page, 'passport');
+  const passport = page.getByRole('region', { name: 'Portable domain settings' });
+  const first = passport.getByRole('checkbox', { name: 'stored.example', exact: true });
+  const second = passport.getByRole('checkbox', { name: 'second.example', exact: true });
+  await expect(first).toBeChecked();
+  await expect(second).toBeChecked();
+  await first.uncheck();
+  await second.uncheck();
+  await expect(first).not.toBeChecked();
+  await expect(second).not.toBeChecked();
+  await expect(passport.getByRole('button', { name: 'Export passport', exact: true })).toBeDisabled();
+  await second.check();
+  const downloaded = page.waitForEvent('download');
+  await passport.getByRole('button', { name: 'Export passport', exact: true }).click();
+  const file = await downloaded;
+  const manifest = JSON.parse(await readFile(requiredValue(await file.path(), 'Passport download is missing.'), 'utf8'));
+  expect(manifest.entries.map((entry: { domain: string }) => entry.domain)).toEqual(['second.example']);
+  await expect(first).not.toBeChecked();
+  await expect(second).toBeChecked();
+});
 
 test('rapid repeated Brand Profile save persists only one record', async ({ page }) => {
   await cleanBrandStorage(page);

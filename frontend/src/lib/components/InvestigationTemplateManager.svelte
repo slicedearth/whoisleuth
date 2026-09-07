@@ -1,5 +1,6 @@
 <script lang="ts">
   import { parseBoundedJson } from '$lib/bounded-json';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
   import {
     deleteInvestigationTemplate,
@@ -35,6 +36,8 @@
   let summary = $state('');
   let stages = $state<StageDraft[]>([]);
   let message = $state('');
+  let saving = $state(false);
+  const draft = createDraftRevision(() => editingId);
   const recipe = $derived(INVESTIGATION_RECIPES.find((candidate) => candidate.id === recipeId) || INVESTIGATION_RECIPES[0]);
 
   function stageDrafts(selectedRecipeId: InvestigationRecipeId): StageDraft[] {
@@ -53,6 +56,7 @@
   }
 
   function beginNew() {
+    draft.changed();
     editing = true;
     editingId = '';
     recipeId = 'new_domain_triage';
@@ -63,6 +67,7 @@
   }
 
   function beginEdit(template: InvestigationTemplate) {
+    draft.changed();
     editing = true;
     editingId = template.id;
     recipeId = template.recipeId;
@@ -92,6 +97,10 @@
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
+    if (saving) return;
+    saving = true;
+    const unchanged = draft.capture();
+    const submittedLabel = label.trim();
     message = '';
     try {
       const next = await saveInvestigationTemplate({
@@ -110,11 +119,17 @@
           requiresApproval: stage.requiresApproval,
         })),
       });
-      onchange(next);
-      editing = false;
-      message = `Saved the ${label.trim()} template.`;
+      try {
+        onchange(next);
+        message = `Saved the ${submittedLabel} template.`;
+      } catch {
+        message = `Saved the ${submittedLabel} template, but the view could not be refreshed. Reload before saving again.`;
+      }
+      if (unchanged()) editing = false;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not save the investigation template.';
+    } finally {
+      saving = false;
     }
   }
 
@@ -206,10 +221,10 @@
   {/if}
 
   {#if editing}
-    <form onsubmit={save}>
+    <form oninput={draft.changed} onchange={draft.changed} onsubmit={save}>
       <div class="form-heading">
         <div><p class="eyebrow">{editingId ? 'Edit template' : 'New template'}</p><h3>{editingId ? label || 'Template' : 'Create from a standard guide'}</h3></div>
-        <button class="btn small" type="button" onclick={() => { editing = false; }}>Cancel</button>
+        <button class="btn small" type="button" onclick={() => { draft.changed(); editing = false; }}>Cancel</button>
       </div>
       <div class="template-fields">
         <label>Base guide<select value={recipeId} onchange={changeRecipe} disabled={Boolean(editingId)}>{#each INVESTIGATION_RECIPES as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
@@ -232,7 +247,7 @@
           </details>
         {/each}
       </div>
-      <button class="primary" type="submit">Save template</button>
+      <button class="primary" type="submit" disabled={saving}>Save template</button>
     </form>
   {/if}
   <p class="message" role="status">{message}</p>

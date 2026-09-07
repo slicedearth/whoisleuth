@@ -8,6 +8,7 @@
   } from '$lib/cases';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
 
   let { record, visible, mutationBusy, persist }: {
     record: CaseRecord;
@@ -31,6 +32,8 @@
   let sightingCompleteness = $state('complete');
   let sightingEvidencePinId = $state('');
   let sightingLimitations = $state('');
+  const pinDraft = createDraftRevision(() => record.id);
+  const sightingDraft = createDraftRevision(() => record.id);
 
   const sightingChronology = $derived(buildCaseSightingChronology(record.sightings));
   const sightingReviewConclusionCount = $derived(
@@ -43,6 +46,7 @@
   }
 
   async function addPin() {
+    const unchanged = pinDraft.capture();
     if (!await persist({
       evidencePin: {
         label: pinLabel,
@@ -52,13 +56,14 @@
         completeness: pinCompleteness,
         limitations: list(pinLimitations),
       },
-    }, `Pinned analyst-selected evidence for ${record.domain}.`)) return;
+    }, `Pinned analyst-selected evidence for ${record.domain}.`) || !unchanged()) return;
     pinLabel = '';
     pinValue = '';
     pinLimitations = '';
   }
 
   async function addSighting() {
+    const unchanged = sightingDraft.capture();
     if (!await persist({
       sighting: {
         state: sightingState,
@@ -69,7 +74,7 @@
         evidencePinId: sightingEvidencePinId || null,
         limitations: list(sightingLimitations),
       },
-    }, `Recorded a source-qualified sighting for ${record.domain}.`)) return;
+    }, `Recorded a source-qualified sighting for ${record.domain}.`) || !unchanged()) return;
     sightingLimitations = '';
   }
 
@@ -78,7 +83,7 @@
 {#if visible}
   <details id={`case-response-observation-${record.id}`}>
     <summary>Pin an observed fact</summary>
-    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
+    <form class="response-form" oninput={pinDraft.changed} onchange={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
       <div class="two-columns">
         <label class="field">Label
           <input bind:value={pinLabel} maxlength="80" required placeholder="Observed login form">
@@ -119,7 +124,7 @@
 
   <details id={`case-response-observation-sightings-${record.id}`}>
     <summary>Record a source-qualified sighting</summary>
-    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
+    <form class="response-form" oninput={sightingDraft.changed} onchange={sightingDraft.changed} onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
       <p class="notice">Use observed or reported states for source evidence. Analyst confirmed, not reproduced, and expired are review conclusions and do not alter the original observation.</p>
       <div class="two-columns">
         <label class="field">Sighting state

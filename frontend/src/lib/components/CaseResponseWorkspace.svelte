@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, type ComponentProps } from 'svelte';
   import {
     CASE_ACTION_EVENT_SOURCE_CLASSES,
     CASE_ACTION_STATES,
@@ -35,6 +35,7 @@
   } from '$lib/analysis/case-response-model.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
   import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
@@ -116,6 +117,14 @@
   let quickActionReference = $state('');
   let quickProviderOutcome = $state('');
   let quickOutcomeDetail = $state('');
+  const decisionDraft = createDraftRevision(() => record.id);
+  const assertionDraft = createDraftRevision(() => record.id);
+  const trailDraft = createDraftRevision(() => record.id);
+  const actionDraft = createDraftRevision(() => record.id);
+  const transitionDraft = createDraftRevision(() => `${record.id}:${selectedActionId}`);
+  const quickActionDraft = createDraftRevision(() => `${record.id}:${quickActionId}`);
+  const effectDraft = createDraftRevision(() => record.id);
+  const closureDraft = createDraftRevision(() => record.id);
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
   const investigationContext = $derived(caseInvestigationContext(record));
   const responseLifecycle = $derived(buildCaseResponseLifecycleSummary(record));
@@ -287,6 +296,7 @@
   }
 
   async function addDecision() {
+    const unchanged = decisionDraft.capture();
     if (decisionDisposition === 'unreviewed' || !decisionReviewReason) {
       onmessage('Select a reviewed disposition and review reason before recording a conclusion.');
       return;
@@ -305,7 +315,7 @@
         confidenceBasis: decisionConfidenceBasis,
         evidencePinIds: decisionPinIds,
       },
-    }, `Recorded an analyst decision for ${record.domain}.`)) return;
+    }, `Recorded an analyst decision for ${record.domain}.`) || !unchanged()) return;
     decisionSummary = '';
     decisionRationale = '';
     decisionConfidence = 'unknown';
@@ -315,6 +325,7 @@
   }
 
   async function addAssertion() {
+    const unchanged = assertionDraft.capture();
     if (!await persist({
       assertion: {
         kind: assertionKind,
@@ -323,7 +334,7 @@
         evidenceRelations: assertionEvidenceRelations,
         state: assertionState,
       },
-    }, `Recorded a structured analyst assertion for ${record.domain}.`)) return;
+    }, `Recorded a structured analyst assertion for ${record.domain}.`) || !unchanged()) return;
     assertionKind = 'hypothesis';
     assertionStatement = '';
     assertionRationale = '';
@@ -351,13 +362,14 @@
   }
 
   async function addTrailEvent() {
+    const unchanged = trailDraft.capture();
     if (!await persist({
       trailEvent: {
         kind: trailKind,
         summary: trailSummary,
         target: trailTarget,
       },
-    }, `Recorded a manual investigation step for ${record.domain}.`)) return;
+    }, `Recorded a manual investigation step for ${record.domain}.`) || !unchanged()) return;
     trailKind = 'pivot';
     trailSummary = '';
     trailTarget = '';
@@ -390,6 +402,8 @@
   }
 
   function selectAction(id: string) {
+    actionDraft.changed();
+    transitionDraft.changed();
     selectedActionId = id;
     const action = record.actions.find((item) => item.id === id);
     if (!action) {
@@ -409,10 +423,11 @@
   }
 
   async function saveAction() {
+    const unchanged = actionDraft.capture();
     const patch = selectedActionId
       ? { actionUpdate: { id: selectedActionId, ...actionInput() } }
       : { action: actionInput() };
-    if (!await persist(patch, `${selectedActionId ? 'Updated' : 'Recorded'} a case action for ${record.domain}.`)) return;
+    if (!await persist(patch, `${selectedActionId ? 'Updated' : 'Recorded'} a case action for ${record.domain}.`) || !unchanged()) return;
     clearAction();
   }
 
@@ -447,6 +462,7 @@
 
   async function addActionTransition() {
     if (!selectedAction) return;
+    const unchanged = transitionDraft.capture();
     if (!await persist({
       actionUpdate: {
         id: selectedAction.id,
@@ -463,10 +479,10 @@
           originActionId: selectedAction.originActionId,
         },
       },
-    }, `Appended a ${transitionNextState.replaceAll('_', ' ')} action event for ${record.domain}.`)) return;
+    }, `Appended a ${transitionNextState.replaceAll('_', ' ')} action event for ${record.domain}.`) || !unchanged()) return;
     clearTransition();
     await tick();
-    if (selectedAction) transitionNextState = nextTransitionState(selectedAction, 'analyst');
+    if (unchanged() && selectedAction) transitionNextState = nextTransitionState(selectedAction, 'analyst');
   }
 
   function quickActionVerb(action: CaseActionRecord): string {
@@ -481,6 +497,7 @@
 
   async function advanceQuickAction(action: CaseActionRecord) {
     if (action.state === 'terminal') return;
+    const unchanged = quickActionDraft.capture();
     const nextState: CaseActionState = action.state === 'drafting' ? 'ready_for_review'
       : action.state === 'ready_for_review' ? 'reviewed'
         : action.state === 'reviewed' ? 'authorised'
@@ -513,13 +530,14 @@
           originActionId: action.originActionId,
         },
       },
-    }, `${quickActionVerb(action)} recorded for ${record.domain}.`)) return;
+    }, `${quickActionVerb(action)} recorded for ${record.domain}.`) || !unchanged()) return;
     quickActionReference = '';
     quickProviderOutcome = '';
     quickOutcomeDetail = '';
   }
 
   async function addObservedEffectReview() {
+    const unchanged = effectDraft.capture();
     if (!await persist({
       observedEffectReview: {
         state: effectState,
@@ -532,13 +550,14 @@
         followUpAt: isoFromLocal(effectFollowUpAt),
         limitations: list(effectLimitations),
       },
-    }, `Recorded an independent observed-effect review for ${record.domain}.`)) return;
+    }, `Recorded an independent observed-effect review for ${record.domain}.`) || !unchanged()) return;
     effectLimitations = '';
     effectEvidencePinId = '';
     effectSightingId = '';
   }
 
   async function closeCaseDeliberately() {
+    const unchanged = closureDraft.capture();
     if (!await persist({
       closure: {
         reason: closureReason,
@@ -547,7 +566,7 @@
         actionId: closureActionId || null,
         limitations: list(closureLimitations),
       },
-    }, `Recorded a deliberate closure for ${record.domain}.`)) return;
+    }, `Recorded a deliberate closure for ${record.domain}.`) || !unchanged()) return;
     closureSummary = '';
     closureReviewId = '';
     closureActionId = '';
@@ -571,16 +590,13 @@
     target.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
   }
 
-  async function preparePacketDeliveryRecord(exported: Readonly<{
-    actionId: string;
-    exportedAt: string;
-    digestSha256: string;
-  }>) {
+  async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
-    if (!action) {
-      onmessage('The packet was exported, but its selected Case action is no longer available. Reload before recording delivery.');
+    if (record.id !== exported.caseId || !action || JSON.stringify(action) !== exported.actionSignature) {
+      onmessage('The packet was exported, but its Case action has changed or is no longer available. Review and export the current packet before recording delivery.');
       return;
     }
+    quickActionDraft.changed();
     quickActionId = action.id;
     quickActionReference = `response-packet-sha256:${exported.digestSha256}`;
     presentationMode = 'quick';
@@ -648,7 +664,7 @@
           {@const latestDecision = record.decisions.at(-1)}
           {#if latestDecision}<div class="retained-summary"><strong>{latestDecision.summary}</strong><p>{latestDecision.rationale}</p><small>Confidence: {latestDecision.confidence}{latestDecision.confidenceBasis ? ` — ${latestDecision.confidenceBasis}` : ''} · {latestDecision.evidencePinIds.length} retained evidence link{latestDecision.evidencePinIds.length === 1 ? '' : 's'} · {latestDecision.createdAt}</small></div>{/if}
         {/if}
-        <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
+        <form class="quick-form" oninput={decisionDraft.changed} onchange={decisionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
           <div class="two-columns">
             <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
             <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
@@ -671,7 +687,7 @@
       <section class="quick-task" aria-labelledby={`quick-response-${record.id}`}>
         <header><div><p class="eyebrow">Respond</p><h5 id={`quick-response-${record.id}`}>Prepare and track response</h5></div><span>{actionSummary.total} action{actionSummary.total === 1 ? '' : 's'}</span></header>
         {#if !record.actions.length}
-          <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
+          <form class="quick-form" oninput={actionDraft.changed} onchange={actionDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
             <div class="two-columns">
               <label class="field">Action type<select bind:value={actionType}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
               <label class="field">Recipient or owner<input bind:value={actionRecipient} maxlength="320" required></label>
@@ -681,7 +697,7 @@
             <button class="btn" type="submit" disabled={mutationBusy || !actionRecipient.trim() || !actionContactSource.trim()}>Create drafting action</button>
           </form>
         {:else if quickAction}
-          <div class="quick-form">
+          <div class="quick-form" oninput={quickActionDraft.changed} onchange={quickActionDraft.changed}>
             {#if record.actions.length > 1}<label class="field">Action<select value={quickAction.id} onchange={(event) => quickActionId = event.currentTarget.value}>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}
             <div class="retained-summary"><strong>{quickAction.type.replaceAll('_', ' ')} · {quickAction.state.replaceAll('_', ' ')}</strong><p>{quickAction.recipient}</p><small>Route source: {quickAction.contactSource}</small></div>
             {#if quickAction.state === 'authorised'}
@@ -703,7 +719,7 @@
       {#if record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state))}
         <section class="quick-task" aria-labelledby={`quick-recheck-${record.id}`}>
           <header><div><p class="eyebrow">Assure</p><h5 id={`quick-recheck-${record.id}`}>Record recheck outcome</h5></div><span>{record.observedEffects.reviews.length} review{record.observedEffects.reviews.length === 1 ? '' : 's'}</span></header>
-          <form class="quick-form" onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
+          <form class="quick-form" oninput={effectDraft.changed} onchange={effectDraft.changed} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
             <div class="two-columns">
               <label class="field">Observed effect<select bind:value={effectState}>{#each CASE_OBSERVED_EFFECT_STATES.filter((value) => value !== 'not_checked') as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
               <label class="field">Observed at<input type="datetime-local" bind:value={effectObservedAt}></label>
@@ -715,7 +731,7 @@
             <button class="btn" type="submit" disabled={mutationBusy || effectState === 'not_checked' || !effectSource.trim()}>Record independent outcome</button>
           </form>
           {#if record.observedEffects.reviews.length && !caseStatusIsClosed(record.status)}
-            <form class="quick-form closure-quick" onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
+            <form class="quick-form closure-quick" oninput={closureDraft.changed} onchange={closureDraft.changed} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
               <h6>Close deliberately</h6>
               <div class="two-columns">
                 <label class="field">Reason<select bind:value={closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
@@ -736,7 +752,7 @@
   {#if presentationMode === 'advanced'}
   <details id={`case-response-assessment-${record.id}`}>
     <summary>Record an analyst decision</summary>
-    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
+    <form class="response-form" oninput={decisionDraft.changed} onchange={decisionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
       <div class="two-columns">
         <label class="field">Disposition<select value={decisionDisposition} onchange={(event) => { decisionDisposition = event.currentTarget.value; decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDisposition)) decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
         <label class="field">Review reason<select value={decisionReviewReason} onchange={(event) => { decisionReviewReason = event.currentTarget.value; decisionClassificationDirty = true; }} disabled={decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
@@ -759,7 +775,7 @@
 
   <details id={`case-response-assessment-assertions-${record.id}`}>
     <summary>Structure facts, hypotheses, unknowns, and next steps</summary>
-    <form class="stack" onsubmit={(event) => { event.preventDefault(); void addAssertion(); }}>
+    <form class="stack" oninput={assertionDraft.changed} onchange={assertionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addAssertion(); }}>
       <div class="two-columns">
         <label class="field">Assertion type<select bind:value={assertionKind}>{#each CASE_ASSERTION_KINDS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
         <label class="field">State<select bind:value={assertionState}>{#each CASE_ASSERTION_STATES as value}<option {value}>{value}</option>{/each}</select></label>
@@ -799,7 +815,7 @@
 
   <details>
     <summary>Record and review the investigation trail</summary>
-    <form class="stack" onsubmit={(event) => { event.preventDefault(); void addTrailEvent(); }}>
+    <form class="stack" oninput={trailDraft.changed} onchange={trailDraft.changed} onsubmit={(event) => { event.preventDefault(); void addTrailEvent(); }}>
       <label class="field">Manual step type<select bind:value={trailKind}>{#each CASE_MANUAL_TRAIL_KINDS as value}<option {value}>{value}</option>{/each}</select></label>
       <label class="field">What did you do or decide?<textarea bind:value={trailSummary} maxlength="2000" rows="2" required></textarea></label>
       <label class="field">Target or destination <small>optional; do not paste credentials or sensitive query strings</small><input bind:value={trailTarget} maxlength="500"></label>
@@ -816,7 +832,7 @@
     <summary>Track append-only response actions</summary>
     <div class="response-form">
       <p class="notice">Action metadata and lifecycle events are separate. New actions start in drafting. Readiness, review, authorisation, submission, acknowledgement, and terminal handling require explicit legal transitions; editing metadata never rewrites earlier events.</p>
-      <form class="stack" onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
+      <form class="stack" oninput={actionDraft.changed} onchange={actionDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
         {#if record.actions.length}
           <label class="field">Action metadata<select value={selectedActionId} onchange={(event) => selectAction(event.currentTarget.value)}><option value="">Create a new action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
         {/if}
@@ -835,7 +851,7 @@
       </form>
 
       {#if selectedAction}
-        <form class="transition-form" aria-labelledby={`transition-title-${record.id}`} onsubmit={(event) => { event.preventDefault(); void addActionTransition(); }}>
+        <form class="transition-form" aria-labelledby={`transition-title-${record.id}`} oninput={transitionDraft.changed} onchange={transitionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addActionTransition(); }}>
           <div><strong id={`transition-title-${record.id}`}>Append transition for {selectedAction.recipient}</strong><span>Current projection: {selectedAction.state.replaceAll('_', ' ')}</span></div>
           {#if legalTransitionStates.length}
             <div class="two-columns">
@@ -920,7 +936,7 @@
       {#if record.observedEffects.preV13HistoryUnavailable || record.closures.preV13HistoryUnavailable}
         <p class="history-warning">This Case predates v13. Earlier independent review or deliberate closure history is unavailable and was not reconstructed.</p>
       {/if}
-      <form class="stack" aria-labelledby={`effect-review-title-${record.id}`} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
+      <form class="stack" aria-labelledby={`effect-review-title-${record.id}`} oninput={effectDraft.changed} onchange={effectDraft.changed} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
         <strong id={`effect-review-title-${record.id}`}>Append independent observed-effect review</strong>
         <div class="two-columns">
           <label class="field">Observed effect<select bind:value={effectState}>{#each CASE_OBSERVED_EFFECT_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
@@ -944,7 +960,7 @@
       {/if}
       {#if record.observedEffects.omitted}<p class="history-warning">{record.observedEffects.omitted} earlier independent review{record.observedEffects.omitted === 1 ? '' : 's'} omitted by bounded retention.</p>{/if}
 
-      <form class="stack closure-form" aria-labelledby={`closure-title-${record.id}`} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
+      <form class="stack closure-form" aria-labelledby={`closure-title-${record.id}`} oninput={closureDraft.changed} onchange={closureDraft.changed} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
         <strong id={`closure-title-${record.id}`}>Deliberate analyst closure</strong>
         <p class="notice">Closure records a reason and linked context. It does not alter provider events or independent observations, and it does not establish safety or legal sufficiency.</p>
         <div class="two-columns">

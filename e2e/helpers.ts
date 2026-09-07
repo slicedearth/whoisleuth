@@ -518,6 +518,48 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
   }, collection);
 }
 
+export async function holdBrowserLocalTransaction(page: Page): Promise<() => Promise<void>> {
+  await page.evaluate((databaseName) => new Promise<void>((resolve, reject) => {
+    const state = { released: false, finished: false };
+    const target = window as typeof window & { heldLocalTransaction?: typeof state };
+    if (target.heldLocalTransaction && !target.heldLocalTransaction.finished) {
+      reject(new Error('A browser-local transaction is already held.'));
+      return;
+    }
+    target.heldLocalTransaction = state;
+    const request = indexedDB.open(databaseName);
+    request.onupgradeneeded = () => request.transaction?.abort();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('manifests', 'readwrite');
+      const store = transaction.objectStore('manifests');
+      const deadline = performance.now() + 20_000;
+      transaction.oncomplete = () => { state.finished = true; database.close(); };
+      transaction.onabort = () => { state.finished = true; database.close(); reject(transaction.error); };
+      const keepAlive = () => {
+        const read = store.get('__held_transaction_control__');
+        read.onerror = () => reject(read.error);
+        read.onsuccess = () => {
+          resolve();
+          if (!state.released && performance.now() < deadline) keepAlive();
+          else if (!state.released) transaction.abort();
+        };
+      };
+      keepAlive();
+    };
+  }), LOCAL_DATA_DATABASE_NAME);
+  return async () => {
+    await page.evaluate(() => {
+      const state = (window as typeof window & { heldLocalTransaction?: { released: boolean } }).heldLocalTransaction;
+      if (state) state.released = true;
+    });
+    await expect.poll(() => page.evaluate(() =>
+      (window as typeof window & { heldLocalTransaction?: { finished: boolean } }).heldLocalTransaction?.finished
+    )).toBe(true);
+  };
+}
+
 export async function holdBrowserLocalReads(page: Page, delayMs = 750, triggerSelector?: string) {
   await page.evaluate(({ databaseName, delay, selector }) => new Promise<void>((resolve, reject) => {
     const trigger = selector ? document.querySelector<HTMLElement>(selector) : null;

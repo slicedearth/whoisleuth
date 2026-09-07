@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
@@ -44,6 +45,8 @@
   let typesOpenRecordId = $state('');
   let targetUrl = $state('');
   let busy = $state(false);
+  const typeDraft = createDraftRevision(() => record.id);
+  const targetDraft = createDraftRevision(() => record.id);
   const completeCaseNumber = $derived(caseNumber(record.id));
   const incidentTargets = $derived(caseIncidentTargets(record));
   const allIncidentTargets = $derived(caseIncidentTargets(record, { includeResolved: true }));
@@ -132,6 +135,7 @@
   }
 
   async function saveTypes() {
+    const unchanged = typeDraft.capture();
     let tags: string[];
     try {
       tags = caseTagsWithTypes(record.tags, selectedTypes);
@@ -139,12 +143,13 @@
       onmessage(cause instanceof Error ? cause.message : 'Could not prepare the selected Case types.');
       return;
     }
-    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`)) return;
+    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
     typesDirty = false;
     typesOpen = false;
   }
 
   async function addIncidentTarget() {
+    const unchanged = targetDraft.capture();
     if (incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS) {
       onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
       return;
@@ -160,7 +165,7 @@
       onmessage('That exact incident URL is already active in this Case.');
       return;
     }
-    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`)) return;
+    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
     targetUrl = '';
   }
 
@@ -225,7 +230,7 @@
 
   <details class="case-types" bind:open={typesOpen}>
     <summary><span>Case types</span><small>{selectedTypeSummary}{typesDirty ? ' · unsaved' : ''}</small></summary>
-    <form onsubmit={(event) => { event.preventDefault(); void saveTypes(); }}>
+    <form oninput={typeDraft.changed} onchange={typeDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveTypes(); }}>
       <fieldset disabled={busy}>
         <legend class="sr-only">Select Case types</legend>
         <p>Select every type supported by the current analyst assessment. Types organise the workflow; they do not prove a violation.</p>
@@ -256,7 +261,7 @@
 
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
     <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
-    <form class="target-form" onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
+    <form class="target-form" oninput={targetDraft.changed} onchange={targetDraft.changed} onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
       <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength="1979" placeholder="https://social.example/post/123" required></label>
       <button class="btn" type="submit" disabled={busy || !targetUrl.trim() || incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS}>Add incident link</button>
     </form>

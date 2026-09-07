@@ -1,5 +1,6 @@
 <script lang="ts">
   import { parseBoundedJson } from '$lib/bounded-json';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { untrack } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import {
@@ -40,6 +41,8 @@
   let match=$state<'all'|'any'>('all');
   let conditions=$state<Array<{field:string;operator:string;value:string}>>([newCondition()]);
   let message=$state('');
+  let creating=$state(false);
+  const draft=createDraftRevision(()=> 'new-rule');
 
   const evaluations=$derived(evaluateCasesAgainstRules(records,rules));
   const matchingEvaluations=$derived(evaluations.filter((result)=>result.matchedRules.length));
@@ -57,19 +60,26 @@
   function operatorLabel(value:string){return({equals:'equals',at_least:'at least',at_most:'at most',contains:'contains',present:'is present'} as Record<string,string>)[value]??value;}
   function updateField(index:number,value:string){const operator=operatorsForRuleField(value)[0]??'equals';const item={field:value,operator,value:operator==='present'?'true':definition(value)?.kind==='boolean'?'true':definition(value)?.values?.[0]??''};conditions=conditions.map((condition,i)=>i===index?item:condition);}
   function updateOperator(index:number,value:string){conditions=conditions.map((condition,i)=>i===index?{...condition,operator:value,value:value==='present'?'true':condition.value}:condition);}
-  function addCondition(){if(conditions.length<MAX_RULE_CONDITIONS)conditions=[...conditions,newCondition()];}
-  function removeCondition(index:number){if(conditions.length>1)conditions=conditions.filter((_,i)=>i!==index);}
+  function addCondition(){if(conditions.length<MAX_RULE_CONDITIONS){draft.changed();conditions=[...conditions,newCondition()];}}
+  function removeCondition(index:number){if(conditions.length>1){draft.changed();conditions=conditions.filter((_,i)=>i!==index);}}
   function resetDraft(){name='';riskDelta=0;tag='';match='all';conditions=[newCondition()];}
   async function create(){
+    if(creating)return;
+    creating=true;
+    const unchanged=draft.capture();
+    const submittedName=name.trim();
     try{
       const normalizedConditions:DetectionRuleCondition[]=conditions.map((condition)=>({
         field:condition.field,
         operator:operatorsForRuleField(condition.field).find((operator)=>operator===condition.operator)??'equals',
         value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value,
       }));
-      await refresh(await createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag}));
-      message=`Created custom rule “${name.trim()}”.`;resetDraft();
+      const next=await createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag});
+      try{await refresh(next);message=`Created custom rule “${submittedName}”.`;}
+      catch{message=`Created custom rule “${submittedName}”, but the view could not be refreshed. Reload before creating another rule.`;}
+      if(unchanged())resetDraft();
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the custom rule.';}
+    finally{creating=false;}
   }
   async function toggle(rule:DetectionRule){try{await refresh(await editDetectionRule(rule.id,{enabled:!rule.enabled}));message=`${rule.enabled?'Disabled':'Enabled'} “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not update the custom rule.';}}
   async function remove(rule:DetectionRule){if(!confirm(`Delete custom rule “${rule.name}”?`))return;try{await refresh(await deleteDetectionRule(rule.id));message=`Deleted “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete the custom rule.';}}
@@ -94,7 +104,7 @@
 
 <section class="rule-builder card">
   <header class="section-head"><div><p class="eyebrow">Custom detection</p><h2>Browser-local rules</h2><p>Combine bounded case-evidence checks without changing the built-in risk model.</p></div><div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!rules.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></header>
-  <form onsubmit={(event)=>{event.preventDefault();create();}}>
+  <form oninput={draft.changed} onchange={draft.changed} onsubmit={(event)=>{event.preventDefault();void create();}}>
     <div class="rule-fields">
       <label class="field">Name<input bind:value={name} maxlength={MAX_RULE_NAME_LENGTH} placeholder="Login page with copied assets" required></label>
       <label class="field">Match<select bind:value={match}><option value="all">All conditions</option><option value="any">Any condition</option></select></label>
@@ -119,7 +129,7 @@
       {/each}
       <button type="button" class="btn" onclick={addCondition} disabled={conditions.length>=MAX_RULE_CONDITIONS}>Add condition</button>
     </fieldset>
-    <button class="primary create" type="submit" disabled={!name.trim()}>Create custom rule</button>
+    <button class="primary create" type="submit" disabled={creating || !name.trim()}>Create custom rule</button>
     {#if name.trim() && draftPreview}
       <aside class="draft-preview" aria-live="polite">
         <div><strong>Preview only</strong><span>{caseSourceState === 'ready' ? `${draftPreview.matchCount} current case match${draftPreview.matchCount===1?'':'es'}` : 'Current case matches unavailable'} · custom contribution +{draftPreview.candidate.riskDelta}</span></div>

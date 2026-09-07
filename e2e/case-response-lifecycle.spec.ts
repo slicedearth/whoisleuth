@@ -1,11 +1,95 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
-import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
-import { addFixtureCasePin, caseWorkspaceActionStatus, openPacketWizardStep } from './case-response-fixtures';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
+import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
+import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
 
 // Case response mutation, failure recovery and lifecycle coverage.
+
+test('a pending Case save retains a later draft in the same form', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'newer-draft.invalid');
+  const workspace = await openCaseResponseWorkspace(page);
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.locator('summary').click();
+  await pin.getByLabel('Label', { exact: true }).fill('Submitted evidence');
+  await pin.getByLabel('Fact', { exact: true }).fill('The submitted observation.');
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await pin.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+    await expect(pin.getByRole('button', { name: 'Pin evidence', exact: true })).toBeDisabled();
+    await pin.getByLabel('Label', { exact: true }).fill('A later draft');
+    await pin.getByLabel('Fact', { exact: true }).fill('The next unsaved observation.');
+  } finally { await release(); }
+  await expect(pin.locator('ol.records > li')).toHaveCount(1);
+  await expect(pin.getByLabel('Label', { exact: true })).toHaveValue('A later draft');
+  await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('The next unsaved observation.');
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.evidencePins.map((item) => item.label)).toEqual(['Submitted evidence']);
+  await pin.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+  await expect(pin.locator('ol.records > li')).toHaveCount(2);
+  await expect(pin.getByLabel('Label', { exact: true })).toHaveValue('');
+});
+
+test('packet export rejects inputs changed during hashing and a stale delivery hand-off', async ({ page }) => {
+  const record = caseRecord({ id: 'case-packet-selection', domain: 'packet-selection.invalid', actions: ['action-a', 'action-b'].map((id) => currentActionFixture({
+    id, type: 'internal_review', recipient: `Owner ${id}`, contactSource: 'Analyst supplied internal owner',
+    routeObservedAt: null, contactLimitations: ['Internal review only'], dueAt: null, targetState: 'ready_for_review',
+    reference: null, followUpAt: null, outcome: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z',
+  })) });
+  await openSeededTimelineCase(page, record.domain, [record]);
+  await addFixtureCasePin(page, 'Selected observation');
+  const workspace = await openCaseResponseWorkspace(page);
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await packet.locator('summary').click();
+  await packet.getByLabel('Abuse category', { exact: true }).fill('Internal review');
+  await packet.getByLabel('Affected party', { exact: true }).fill('Example organisation');
+  await packet.getByLabel('Observed harm', { exact: true }).fill('A source-qualified fixture observation.');
+  await packet.getByLabel('Observed at', { exact: true }).fill('2026-09-07T10:00');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://packet-selection.invalid/review');
+  await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption('action-a');
+  await packet.getByRole('checkbox', { name: /Selected observation/ }).check();
+  await openPacketWizardStep(packet, 'Export and record');
+  const exportButton = packet.getByRole('button', { name: 'Export JSON draft or authorised packet', exact: true });
+  await expect(exportButton).toBeEnabled();
+  await page.evaluate(() => {
+    const target = window as typeof window & { heldDigest?: boolean; releaseDigest?: () => void };
+    const original = SubtleCrypto.prototype.digest;
+    SubtleCrypto.prototype.digest = async function (...args: Parameters<SubtleCrypto['digest']>) {
+      SubtleCrypto.prototype.digest = original;
+      target.heldDigest = true;
+      await new Promise<void>((resolve) => { target.releaseDigest = resolve; });
+      return original.apply(this, args);
+    };
+  });
+  let downloads = 0;
+  page.on('download', () => { downloads += 1; });
+  try {
+    await exportButton.click();
+    await expect.poll(() => page.evaluate(() => (window as typeof window & { heldDigest?: boolean }).heldDigest)).toBe(true);
+    await openPacketWizardStep(packet, 'Prepare');
+    await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption('action-b');
+  } finally {
+    await page.evaluate(() => (window as typeof window & { releaseDigest?: () => void }).releaseDigest?.());
+  }
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was downloaded');
+  expect(downloads).toBe(0);
+  await openPacketWizardStep(packet, 'Export and record');
+  await expect(packet.getByRole('button', { name: 'Continue to record delivery' })).toHaveCount(0);
+  const downloadPromise = page.waitForEvent('download');
+  await exportButton.click();
+  const downloaded = await downloadPromise;
+  const exported = JSON.parse(await readFile(requiredValue(await downloaded.path(), 'Packet download is missing.'), 'utf8'));
+  expect(exported.escalationHistory).toEqual([expect.objectContaining({ actionId: 'action-b' })]);
+  await openPacketWizardStep(packet, 'Prepare');
+  await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption('action-a');
+  await openPacketWizardStep(packet, 'Export and record');
+  await packet.getByRole('button', { name: 'Continue to record delivery' }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('changed after export');
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.actions.map((action) => action.reference)).toEqual([null, null]);
+});
 
 test('rapid repeated note submission persists one note and is shown in the record', async ({ page }) => {
   await openCasesView(page);

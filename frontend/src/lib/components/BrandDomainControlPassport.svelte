@@ -34,6 +34,7 @@
 
   const exportable = $derived(active.desiredPostureBaselines.filter((item) => active.officialDomains.includes(item.domain)));
   let selectedExports = $state<string[]>([]);
+  let exportSelectionOwner = $state<string | null>(null);
   let expiryDays = $state('90');
   let imported = $state<DomainControlPassport | null>(null);
   let selectedImports = $state<string[]>([]);
@@ -74,6 +75,7 @@
   }
 
   async function downloadPassport(): Promise<void> {
+    if (busy || !selectedExports.length) return;
     busy = true;
     message = '';
     try {
@@ -161,7 +163,8 @@
   $effect(() => {
     const available = new Set(exportable.map((item) => item.domain));
     const retained = selectedExports.filter((domain) => available.has(domain));
-    const next = retained.length ? retained : exportable.map((item) => item.domain);
+    const next = exportSelectionOwner === active.id ? retained : [...available];
+    exportSelectionOwner = active.id;
     if (next.length !== selectedExports.length || next.some((domain, index) => domain !== selectedExports[index])) {
       selectedExports = next;
     }

@@ -39,7 +39,7 @@
     visible: boolean;
     onmessage: (message: string) => void;
     onstagechange: (stage: CaseResponseStage) => void;
-    onpacketexported: (exported: Readonly<{ actionId: string; exportedAt: string; digestSha256: string }>) => void | Promise<void>;
+    onpacketexported: (exported: Readonly<{ caseId: string; actionId: string; actionSignature: string; exportedAt: string; digestSha256: string }>) => void | Promise<void>;
   } = $props();
 
   let packetCategory = $state('');
@@ -89,7 +89,7 @@
   let defaultsAppliedRecordId = $state('');
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
-  let lastPacketExport = $state<Readonly<{ actionId: string; exportedAt: string; digestSha256: string }> | null>(null);
+  let lastPacketExport = $state<(Parameters<typeof onpacketexported>[0] & { materialSignature: string }) | null>(null);
   const reviewNow = new Date().toISOString();
 
   const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
@@ -289,9 +289,20 @@
   async function downloadPacket(format: 'json' | 'md' | 'txt') {
     if (packetBusy) return;
     packetBusy = true;
+    lastPacketExport = null;
     try {
       const generatedAt = new Date().toISOString();
+      const materialSignature = packetMaterialSignature();
+      const caseId = record.id;
+      const domain = record.domain;
+      const action = record.actions.find((item) => item.id === packetActionId);
+      const actionId = action?.id ?? null;
+      const actionSignature = JSON.stringify(action);
       const built = await packet(generatedAt);
+      if (materialSignature !== packetMaterialSignature()) {
+        onmessage('The packet inputs changed while the export was being prepared. Nothing was downloaded; review the current inputs before exporting again.');
+        return;
+      }
       const content = format === 'json'
         ? JSON.stringify(built.json, null, 2)
         : format === 'md'
@@ -302,11 +313,14 @@
       }));
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = caseResponsePacketFilename(record.domain, format, generatedAt);
+      anchor.download = caseResponsePacketFilename(domain, format, generatedAt);
       anchor.click();
       URL.revokeObjectURL(url);
-      lastPacketExport = packetActionId ? {
-        actionId: packetActionId,
+      lastPacketExport = actionId && actionSignature ? {
+        caseId,
+        actionId,
+        actionSignature,
+        materialSignature,
         exportedAt: generatedAt,
         digestSha256: built.json.integrity.digestSha256,
       } : null;
@@ -333,7 +347,13 @@
   }
 
   async function continueToDeliveryRecord() {
-    if (lastPacketExport) await onpacketexported(lastPacketExport);
+    if (!lastPacketExport) return;
+    if (lastPacketExport.materialSignature !== packetMaterialSignature()) {
+      lastPacketExport = null;
+      onmessage('The Case or packet inputs changed after export. Review and export the current packet before using its digest in a delivery record.');
+      return;
+    }
+    await onpacketexported(lastPacketExport);
   }
 
   async function setPacketWizardStep(value: number) {

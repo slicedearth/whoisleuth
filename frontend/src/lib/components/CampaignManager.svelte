@@ -1,5 +1,6 @@
 <script lang="ts">
   import { parseBoundedJson } from '$lib/bounded-json';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { tick, untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
@@ -29,9 +30,15 @@
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
+  let creating=$state(false);
+  const createDraft=createDraftRevision(()=> 'new-campaign');
   let nameDraft=$state('');
   let descriptionDraft=$state('');
   let selectedDomain=$state('');
+  let savingDetails=$state(false);
+  let addingMember=$state(false);
+  const detailsDraft=createDraftRevision(()=>expandedId);
+  const memberDraft=createDraftRevision(()=>expandedId);
   let message=$state('');
   let page=$state(1);
   let memberPage=$state(1);
@@ -82,27 +89,61 @@
     oncount?.(campaigns.length);
     onchange?.(campaigns);
   }
+  async function reconcile(next:CampaignRecord[],success:string){
+    try{await refresh(next);message=success;}
+    catch{message=`${success} The change was saved, but the view could not be refreshed. Reload before changing this campaign again.`;}
+  }
   function open(campaign:CampaignRecord){
+    detailsDraft.changed();memberDraft.changed();
     if(expandedId===campaign.id){expandedId='';return;}
     showCampaign(campaign.id);expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';memberPage=1;
   }
   async function create(){
-    try{const result=await createCampaign({name:newName});await refresh(result.campaigns);const created=result.record;newName='';open(created);message=`Created campaign “${created.name}”.`;}
+    if(creating)return;
+    creating=true;
+    const unchanged=createDraft.capture();
+    const previousExpandedId=expandedId;
+    try{
+      const result=await createCampaign({name:newName});
+      const created=result.record;
+      await reconcile(result.campaigns,`Created campaign “${created.name}”.`);
+      if(unchanged())newName='';
+      if(unchanged()&&expandedId===previousExpandedId)open(created);
+    }
     catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
+    finally{creating=false;}
   }
   async function save(campaign:CampaignRecord){
+    if(savingDetails)return;
+    savingDetails=true;
+    const unchanged=detailsDraft.capture();
     const submittedName=nameDraft;
     const submittedDescription=descriptionDraft;
-    try{await refresh(await editCampaign(campaign.id,{name:submittedName,description:submittedDescription}));const current=campaigns.find((item)=>item.id===campaign.id);if(current&&expandedId===campaign.id&&nameDraft===submittedName&&descriptionDraft===submittedDescription){showCampaign(campaign.id);nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
+    try{
+      const next=await editCampaign(campaign.id,{name:submittedName,description:submittedDescription});
+      const current=next.find((item)=>item.id===campaign.id);
+      await reconcile(next,`Updated campaign “${current?.name??campaign.name}”.`);
+      if(current&&unchanged()){nameDraft=current.name;descriptionDraft=current.description;}
+    }
     catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
+    finally{savingDetails=false;}
   }
   async function add(campaign:CampaignRecord){
+    if(addingMember)return;
     if(!selectedDomain){message='Choose a case to add.';return;}
-    try{await refresh(await addCampaignDomain(campaign.id,selectedDomain));showCampaign(campaign.id);message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
+    addingMember=true;
+    const unchanged=memberDraft.capture();
+    const submittedDomain=selectedDomain;
+    try{
+      const next=await addCampaignDomain(campaign.id,submittedDomain);
+      await reconcile(next,`Added ${submittedDomain} to “${campaign.name}”.`);
+      if(unchanged())selectedDomain='';
+    }
     catch(cause){message=cause instanceof Error?cause.message:'Could not add the case.';}
+    finally{addingMember=false;}
   }
   async function removeDomain(campaign:CampaignRecord,domain:string){
-    try{await refresh(await removeCampaignDomain(campaign.id,domain));showCampaign(campaign.id);message=`Removed ${domain} from “${campaign.name}”.`;}
+    try{await reconcile(await removeCampaignDomain(campaign.id,domain),`Removed ${domain} from “${campaign.name}”.`);}
     catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
   }
   async function remove(campaign:CampaignRecord){
@@ -110,7 +151,7 @@
     const owner=componentRoot;
     const previousIndex=campaigns.findIndex((item)=>item.id===campaign.id);
     if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
-    try{await refresh(await deleteCampaign(campaign.id));message=`Deleted campaign “${campaign.name}”.`;}
+    try{await reconcile(await deleteCampaign(campaign.id),`Deleted campaign “${campaign.name}”.`);}
     catch(cause){message=cause instanceof Error?cause.message:'Could not delete the campaign.';}
     await tick();
     const active=document.activeElement;
@@ -135,9 +176,9 @@
 </script>
 
 <section class="campaign-toolbar card" bind:this={componentRoot}>
-  <form onsubmit={(event)=>{event.preventDefault();create();}}>
+  <form oninput={createDraft.changed} onchange={createDraft.changed} onsubmit={(event)=>{event.preventDefault();void create();}}>
     <label for="new-campaign">New campaign</label>
-    <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={!newName.trim()}>Create campaign</button></div>
+    <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={creating || !newName.trim()}>Create campaign</button></div>
   </form>
   <div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!campaigns.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div>
 </section>
@@ -155,12 +196,12 @@
         </button>
         {#if expandedId===campaign.id}
           <div class="campaign-body" id={`campaign-${campaign.id}`}>
-            <form class="campaign-edit" onsubmit={(event)=>{event.preventDefault();save(campaign);}}>
+            <form class="campaign-edit" oninput={detailsDraft.changed} onchange={detailsDraft.changed} onsubmit={(event)=>{event.preventDefault();void save(campaign);}}>
               <label for={`campaign-name-${campaign.id}`}>Name</label>
               <input id={`campaign-name-${campaign.id}`} bind:value={nameDraft} maxlength="100" required>
               <label for={`campaign-description-${campaign.id}`}>Description <small>optional</small></label>
               <textarea id={`campaign-description-${campaign.id}`} bind:value={descriptionDraft} maxlength="1000" rows="3" placeholder="Scope, working hypothesis, or handoff context"></textarea>
-              <button class="btn" type="submit" disabled={!nameDraft.trim()}>Save details</button>
+              <button class="btn" type="submit" disabled={savingDetails || !nameDraft.trim()}>Save details</button>
             </form>
 
             <section class="members" aria-label={`Cases in ${campaign.name}`}>
@@ -200,9 +241,9 @@
 
             {#if casesReady}<CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />{/if}
 
-            {#if casesReady}<form class="add-case" onsubmit={(event)=>{event.preventDefault();add(campaign);}}>
+            {#if casesReady}<form class="add-case" oninput={memberDraft.changed} onchange={memberDraft.changed} onsubmit={(event)=>{event.preventDefault();void add(campaign);}}>
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
-              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={!selectedDomain}>Add case</button></div>
+              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={addingMember || !selectedDomain}>Add case</button></div>
             </form>{/if}
             <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this browser. Membership organises review; it is not attribution.</p></details>
             <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)}>Delete campaign</button>
