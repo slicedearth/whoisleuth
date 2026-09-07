@@ -894,8 +894,13 @@ test('a capped search does not replace the previous complete baseline', async ({
   });
 
   await runCtSearch(page);
+  const complete = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1 });
+  const completeValue = complete.records[0]!.value as { domains: string[]; baselineAt: string };
+  expect(completeValue.domains).toEqual(['example.invalid']);
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('Capped results did not replace that baseline');
+  const capped = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1 });
+  expect(capped.records[0]?.value).toMatchObject({ domains: completeValue.domains, baselineAt: completeValue.baselineAt });
   await expect(page.locator('.ct-history-state.unclassified_partial')).toHaveCount(2);
   await expect(page.locator('.ct-history-state.reappeared')).toHaveCount(0);
   const history = page.locator('details.ct-history');
@@ -918,8 +923,8 @@ test('a capped search does not replace the previous complete baseline', async ({
   await expect(summary).toBeVisible();
   await expect(summary.locator('dd')).toHaveText(['1', 'At least 2', 'At least 2', 'At least 1', '1']);
 
-  // The third complete response matches the original baseline. If the capped
-  // response had replaced it, the original domain would be mislabelled new.
+  // Continue after independently proving that the capped write preserved the
+  // exact complete baseline, rather than inferring it from set intersection.
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('0 first observed · 0 reappeared · 1 continuing since the previous complete search');
   await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);

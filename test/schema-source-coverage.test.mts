@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { compile } from 'svelte/compiler';
 
 import { SCHEMA_SOURCE_CLASSIFICATIONS } from '../fixtures/schema-source-classifications.mts';
 import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
@@ -221,7 +222,7 @@ describe('schema source coverage', () => {
   test('ignores commented Svelte scripts and expression comments', () => {
     const result = discoverSchemaIdentifiersInSource(`
       <!-- <script>const HIDDEN_SCHEMA = 'whoisleuth.hidden-script';</script> -->
-      {/* whoisleuth.hidden-expression */}
+      { /* whoisleuth.hidden-expression */ '' }
       <script lang="ts">export const VISIBLE_SCHEMA = 'whoisleuth.visible';</script>
     `, 'fixture.svelte');
     assert.deepEqual(result.occurrences.map((item) => item.identifier), ['whoisleuth.visible']);
@@ -234,6 +235,20 @@ describe('schema source coverage', () => {
       '<p>whoisleuth.com</p>',
     ].join('\n'), 'fixture.svelte');
     assert.deepEqual(result.occurrences.map((item) => item.line), [1, 3]);
+  });
+
+  test('accepts compiler-valid expression syntax and uses decoded attribute values', () => {
+    for (const expression of ["'x'.replace(/{/g, '')", "'x'.replace(/}/g, '')", "`x${'y'}`", "(() => { /* } */ return 'x'; })()"] ) {
+      const source = `<p data-note="angle > marker">{${expression}}</p><p>whoisleuth.visible</p>`;
+      assert.doesNotThrow(() => compile(source, { generate: false }));
+      const result = discoverSchemaIdentifiersInSource(source, 'valid-expression.svelte');
+      assert.deepEqual(result.occurrences.map((item) => item.identifier), ['whoisleuth.visible']);
+      assert.deepEqual(result.dynamicConstructions, []);
+    }
+    const decoded = discoverSchemaIdentifiersInSource('<Widget schema="whois&#108;euth&period;fixture" />', 'decoded.svelte');
+    assert.deepEqual(decoded.emitters.map((item) => item.identifier), ['whoisleuth.fixture']);
+    assert.deepEqual(decoded.occurrences.map((item) => item.identifier), ['whoisleuth.fixture']);
+    assert.throws(() => discoverSchemaIdentifiersInSource('<p>{value</p>', 'invalid.svelte'), /valid bounded Svelte syntax/u);
   });
 
   test('discovers identifiers in parsed JSON values', () => {

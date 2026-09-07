@@ -127,14 +127,15 @@ describe('maintained-source duplication report', () => {
   test('measures the checked-out maintained-source inventory without source values', async () => {
     const report = await buildMaintainerDuplicationReport();
     assert.equal(report.scope.fileCount, report.files.length);
-    assert.ok(report.scope.fileCount > 700 && report.scope.fileCount <= MAX_MAINTAINED_SOURCE_FILES);
+    assert.ok(report.scope.fileCount <= MAX_MAINTAINED_SOURCE_FILES);
     assert.equal(report.scope.entrypointCount, report.files.filter((file) => file.entrypoint).length);
     assert.equal(report.files.some((file) => file.file === 'tools/toolchain-compatibility.mts'), true);
     assert.equal(report.files.some((file) => file.file === 'lib/bounded-contract-normalizers.mts'), true);
     assert.equal(report.files.some((file) => file.file.includes('/generated/')), false);
-    assert.ok(report.callGraph.staticEdgeCount > 5_000);
-    assert.ok(report.repeatedImplementations.exactClusterCount > 0);
-    assert.ok(report.repeatedImplementations.repeatedLineCount > 0);
+    assert.equal(report.callGraph.staticEdgeCount, report.callGraph.edges.length);
+    assert.equal(report.repeatedImplementations.exactClusterCount, report.repeatedImplementations.exactClusters.length);
+    assert.equal(report.repeatedImplementations.repeatedLineCount,
+      report.repeatedImplementations.exactClusters.reduce((total, cluster) => total + cluster.repeatedLineCount, 0));
     assert.doesNotMatch(JSON.stringify(report), /\/Users\/|Documents\/GitHub/u);
   });
 

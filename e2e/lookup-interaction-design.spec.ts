@@ -240,7 +240,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
     for (const [key, item] of Object.entries(value)) { keys.push(key); inspectKeys(item); }
   };
   inspectKeys(passport);
-  expect(keys).not.toEqual(expect.arrayContaining(['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']));
+  for (const forbidden of ['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']) {
+    expect(keys, `Portable passport must exclude ${forbidden} independently`).not.toContain(forbidden);
+  }
   expect(JSON.stringify(passport)).not.toMatch(/\/home|abuse@example\.test|Fixture Registrar/iu);
   await expect(detailedAssessment.getByRole('status')).toContainText('Downloaded a portable passport for Registration-state statement.');
   expect(await page.evaluate(() => (window as typeof window & { __claimPassportWrites?: number }).__claimPassportWrites)).toBe(0);

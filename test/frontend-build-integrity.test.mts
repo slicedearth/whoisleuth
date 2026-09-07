@@ -29,6 +29,7 @@ import {
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
+  retainFocusedBrowserDiagnostics,
   runHostedBrowserWorkspace,
 } from '../tools/hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
@@ -134,6 +135,37 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
+  test('copies focused failure and interruption diagnostics privately without changing the contributor checkout', (context) => {
+    for (const outcome of ['failed', 'interrupted'] as const) {
+      const root = fixtureRepository(context);
+      const { files, artifacts } = writeDiagnosticFixture(root, {});
+      const before = readFileSync(path.join(root, 'package.json'));
+      symlinkSync(path.join(root, 'package.json'), path.join(root, artifacts.testResults, 'source-link'));
+      const excessive = path.join(root, artifacts.testResults, 'excessive.bin');
+      writeFileSync(excessive, '');
+      truncateSync(excessive, HOSTED_BROWSER_DIAGNOSTIC_LIMITS.fileBytes + 1);
+      const retained = retainFocusedBrowserDiagnostics(root, REVISION, outcome);
+      context.after(() => rmSync(retained.directory, { recursive: true, force: true }));
+      assert.notEqual(retained.directory, root);
+      assert.equal(lstatSync(retained.directory).mode & 0o777, 0o700);
+      for (const [relative, expected] of files) {
+        assert.equal(readFileSync(path.join(root, relative), 'utf8'), expected);
+        assert.equal(readFileSync(path.join(retained.directory, relative), 'utf8'), expected);
+        assert.equal(lstatSync(path.join(retained.directory, relative)).mode & 0o777, 0o600);
+      }
+      assert.deepEqual(readFileSync(path.join(root, 'package.json')), before);
+      assert.equal(existsSync(path.join(root, artifacts.authFile)), true);
+      for (const relative of ['package.json', 'node_modules', 'frontend', artifacts.authFile,
+        `${artifacts.testResults}/source-link`, `${artifacts.testResults}/excessive.bin`]) {
+        assert.equal(existsSync(path.join(retained.directory, relative)), false, relative);
+      }
+      const metadata = JSON.parse(readFileSync(path.join(retained.directory, 'diagnostics.json'), 'utf8'));
+      assert.equal(metadata.outcome, outcome);
+      assert.equal(metadata.retainedFiles, 4);
+      assert.equal(metadata.omittedEntries, 2);
+    }
+  });
+
   test('retains available failure and interruption evidence at its original paths after cleanup', async (context) => {
     for (const exit of [2, 130]) {
       const { repository, workspace } = diagnosticWorkspace(context);
@@ -307,7 +339,10 @@ describe('frontend build integrity', () => {
 
   test('materialises local browser verification from only checkout files and declared artefacts', (context) => {
     const root = fixtureRepository(context);
+    write(root, 'test/removed.test.mts', 'export const removed = true;\n');
     initialiseFixtureCheckout(root);
+    rmSync(path.join(root, 'test/removed.test.mts'));
+    write(root, 'test/replacement.test.mts', 'export const replacement = true;\n');
     const retained = recordFrontendBuildIntegrity(root, ENVIRONMENT);
     const workspace = createHostedBrowserWorkspace(root, ENVIRONMENT);
     context.after(workspace.dispose);
@@ -315,6 +350,8 @@ describe('frontend build integrity', () => {
     assert.equal(workspace.root, realpathSync(workspace.root));
     assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
     assert.equal(existsSync(path.join(workspace.root, 'frontend/build/index.html')), true);
+    assert.equal(existsSync(path.join(workspace.root, 'test/removed.test.mts')), false);
+    assert.equal(readFileSync(path.join(workspace.root, 'test/replacement.test.mts'), 'utf8'), 'export const replacement = true;\n');
     const verified = assertFrontendBuildIntegrity(workspace.root, {
       WHOISLEUTH_BUILD_REVISION: retained.runtime.revision,
     });

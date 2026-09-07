@@ -109,8 +109,8 @@ test('does not publish an in-flight mail review under a different active profile
       if (!hold) return original.call(this);
       hold = false;
       return new Promise<ArrayBuffer>((resolve, reject) => {
-        Reflect.set(window, '__releaseMailReportRead', () => {
-          void original.call(this).then(resolve, reject);
+        Reflect.set(window, '__releaseMailReportRead', async () => {
+          await original.call(this).then(resolve, reject);
         });
       });
     };
@@ -125,11 +125,13 @@ test('does not publish an in-flight mail review under a different active profile
   await page.getByRole('radio', { name: 'Set Profile B active' }).check();
   workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
   await expect(workbench.getByText('Choose one or more aggregate report files to begin a transient review.')).toBeVisible();
-  await page.evaluate(() => {
+  await expect(workbench).toHaveAttribute('aria-busy', 'true');
+  await page.evaluate(async () => {
     const release = Reflect.get(window, '__releaseMailReportRead');
     if (typeof release !== 'function') throw new Error('The mail-report read gate was not installed.');
-    release();
+    await release();
   });
+  await expect(workbench).toHaveAttribute('aria-busy', 'false');
   await expect(workbench.getByRole('group', { name: 'Imported mail report summary' })).toHaveCount(0);
   await expect(workbench.getByRole('status')).toHaveCount(0);
   await expect(workbench.getByRole('button', { name: 'Export review' })).toBeDisabled();

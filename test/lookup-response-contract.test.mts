@@ -23,6 +23,7 @@ import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.m
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { buildTlsObservation, skippedTlsObservation } from '../lib/tls-intelligence.mts';
+import { parseCertificateExtensionProfile } from '../lib/certificate-extension-profile.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -209,6 +210,13 @@ function legacyResourceOnlyTechnologyProfile() {
 
 function canonicalTlsProfile(overrides: Record<string, unknown> = {}) {
   return { ...skippedTlsObservation('Fixture TLS collection was skipped.'), ...overrides };
+}
+
+function populatedTlsProfile() {
+  return buildTlsObservation({
+    sniHost: 'example.test',
+    peerCertificate: { subject: { CN: 'example.test' }, issuer: { CN: 'Example CA' }, fingerprint256: 'a'.repeat(64) },
+  }, { observedAt: '2026-07-13T04:05:06.000Z' });
 }
 
 describe('Lookup HTTP response contract', () => {
@@ -419,6 +427,29 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('accepts exact producer network bounds and rejects over-bound or nested collection values', () => {
+    const base = populatedTlsProfile();
+    const certificate = requiredValue(base.certificate);
+    const extension = parseCertificateExtensionProfile(null);
+    const tls = {
+      ...base,
+      limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
+      findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
+        id: `finding_${index}`, tone: 'neutral', label: `Finding ${index}`, detail: 'Bounded fixture detail.',
+      })),
+      chain: Array.from({ length: MAX_LOOKUP_TLS_CHAIN_CERTIFICATES }, (_, index) => ({
+        ...base.chain[0]!, fingerprintSha256: String(index).padStart(64, '0'),
+      })),
+      certificate: {
+        ...certificate,
+        subject: { ...certificate.subject, commonNames: Array.from({ length: MAX_LOOKUP_TLS_NAME_VALUES }, (_, index) => `name-${index}.example.test`) },
+        subjectAltNames: {
+          ...certificate.subjectAltNames!,
+          dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`),
+          classes: { ...certificate.subjectAltNames!.classes, dns: MAX_LOOKUP_TLS_ALT_NAMES },
+        },
+        extensionProfile: { ...extension, parsed: true, certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`), truncated: false } },
+      },
+    };
     const exact = response({
       reverseDns: { records: { ptr: Array.from({ length: MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS }, (_, index) => `ptr-${index}.example.test`) } },
       availability: {
@@ -432,24 +463,16 @@ describe('Lookup HTTP response contract', () => {
             https: [validHttpsRecord()],
           },
         },
-        tls: canonicalTlsProfile({
-          limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
-          findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
-            id: `finding-${index}`,
-            tone: 'neutral',
-            label: `Finding ${index}`,
-            detail: 'Bounded fixture detail.',
-          })),
-          chain: Array.from({ length: MAX_LOOKUP_TLS_CHAIN_CERTIFICATES }, (_, index) => ({ fingerprintSha256: String(index).padStart(64, '0') })),
-          certificate: {
-            subject: { commonNames: Array.from({ length: MAX_LOOKUP_TLS_NAME_VALUES }, (_, index) => `name-${index}.example.test`) },
-            subjectAltNames: { dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`), ipAddresses: [] },
-            extensionProfile: { certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`) } },
-          },
-        }),
+        tls,
       },
     });
-    assert.equal(parseLookupHttpResponse(exact).ok, true);
+    const retained = parseLookupHttpResponse(exact);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.tls, tls);
+    assert.equal(tls.chain.length, MAX_LOOKUP_TLS_CHAIN_CERTIFICATES);
+    assert.equal(tls.certificate.subject.commonNames.length, MAX_LOOKUP_TLS_NAME_VALUES);
+    assert.equal(tls.certificate.subjectAltNames.dnsNames.length, MAX_LOOKUP_TLS_ALT_NAMES);
+    assert.equal(tls.certificate.extensionProfile.certificatePolicies.oids.length, MAX_LOOKUP_TLS_CERTIFICATE_POLICIES);
 
     const invalidOuterEvidence = [
       response({ availability: { applicable: true, state: 'registered', dns: { records: { a: Array(MAX_LOOKUP_DNS_RECORDS_PER_TYPE + 1).fill('192.0.2.1') } } } }),
@@ -482,7 +505,7 @@ describe('Lookup HTTP response contract', () => {
   test('enforces registration, page, observation, and live-container producer bounds', () => {
     const profiles = canonicalPageProfiles();
     const postureFinding = (index: number) => ({
-      id: `posture-${index}`,
+      id: `posture_${index}`,
       category: 'transport',
       state: 'observed',
       tone: 'configured',
@@ -525,15 +548,22 @@ describe('Lookup HTTP response contract', () => {
           ...profiles.pageIdentity,
           embeddedOrigins: Array.from({ length: 20 }, (_, index) => `https://embed-${index}.example.test`),
           contactDomains: Array.from({ length: 20 }, (_, index) => `contact-${index}.example.test`),
-          forms: { externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
-          resources: { externalOrigins: Array.from({ length: 30 }, (_, index) => `https://asset-${index}.example.test`) },
+          forms: { ...profiles.pageIdentity.forms, count: 10, externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
+          resources: {
+            ...profiles.pageIdentity.resources, count: 30,
+            byType: { ...profiles.pageIdentity.resources.byType, script: 30 },
+            externalOrigins: Array.from({ length: 30 }, (_, index) => `https://asset-${index}.example.test`),
+          },
           downloads: {
+            ...profiles.pageIdentity.downloads,
+            count: 20, riskyCount: 20,
             riskyFileTypes: Array.from({ length: 20 }, (_, index) => `.type${index}`),
             externalOrigins: Array.from({ length: 20 }, (_, index) => `https://download-${index}.example.test`),
           },
         },
         securityPosture: {
           ...profiles.securityPosture,
+          diagnostics: { findings: MAX_SECURITY_POSTURE_FINDINGS, observed: MAX_SECURITY_POSTURE_FINDINGS, potentialExposure: 0, observedAbsence: 0, unavailable: 0 },
           summary: {
             observed: MAX_SECURITY_POSTURE_FINDINGS,
             potentialExposure: 0,
@@ -544,7 +574,10 @@ describe('Lookup HTTP response contract', () => {
         },
       },
     });
-    assert.equal(parseLookupHttpResponse(exact).ok, true);
+    const retained = parseLookupHttpResponse(exact);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.pageIdentity, recordValue(exact.availability).pageIdentity);
+    assert.deepEqual(retained.value.availability.securityPosture, recordValue(exact.availability).securityPosture);
 
     const invalid = [
       response({ rdap: { error: [Array(500).fill('nested')] } }),
@@ -593,23 +626,27 @@ describe('Lookup HTTP response contract', () => {
     });
     assert.equal(parseLookupHttpResponse(withNullProfiles).ok, true);
 
+    const base = populatedTlsProfile();
+    const certificate = requiredValue(base.certificate);
+    const names = { ...certificate.subject, commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] };
+    const tls = { ...base, certificate: { ...certificate, subject: names } };
     const exactNames = response({
       availability: {
         applicable: true,
         state: 'registered',
-        tls: canonicalTlsProfile({
-          certificate: {
-            subject: { commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] },
-          },
-        }),
+        tls,
       },
     });
-    assert.equal(parseLookupHttpResponse(exactNames).ok, true);
+    const retained = parseLookupHttpResponse(exactNames);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.tls, tls);
+    assert.equal(tls.certificate.subject.commonNames[0]!.length, 256);
+    assert.equal(tls.certificate.subject.organizations[0]!.length, 256);
     const malformed = parseLookupHttpResponse(response({
       availability: {
         applicable: true,
         state: 'registered',
-        tls: canonicalTlsProfile({ certificate: { subject: { commonNames: ['C'.repeat(257)] } } }),
+        tls: { ...tls, certificate: { ...tls.certificate, subject: { ...names, commonNames: ['C'.repeat(257)] } } },
       },
     }));
     assert.equal(malformed.ok, true);

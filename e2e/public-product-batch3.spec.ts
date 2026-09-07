@@ -260,13 +260,16 @@ test('contains an optional chunk preload failure without a page error', async ({
     return pathname === coverageChunkPath;
   };
   await page.route('**/*', (route) => (isCoverageChunk(route.request().url())
-    ? route.fulfill({ status: 200, contentType: 'text/javascript', body: 'throw new Error("synthetic chunk failure");' })
+    ? route.fulfill({ status: 200, contentType: 'text/javascript', body: 'globalThis.__coverageFailureEvaluated = true; throw new Error("synthetic chunk failure");' })
     : route.fallback()));
   const failedChunk = page.waitForRequest((request) => isCoverageChunk(request.url()));
   await page.goto('/coverage');
   await page.getByRole('button', { name: 'Open capability catalogue' }).hover();
   await failedChunk;
-  await expect.poll(() => pageErrors).toEqual([]);
+  await page.waitForFunction(() => Reflect.get(window, '__coverageFailureEvaluated') === true);
+  await page.getByRole('button', { name: 'Open capability catalogue' }).click();
+  await expect(page.getByRole('alert')).toContainText('Capability details could not be loaded.');
+  expect(pageErrors).toEqual([]);
 });
 
 test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {

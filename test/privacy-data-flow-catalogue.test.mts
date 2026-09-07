@@ -43,9 +43,19 @@ import {
   renderPrivacyDataFlowCatalogueJson,
   renderPrivacyDataFlowCatalogueMarkdown,
 } from '../tools/privacy-data-flow-catalogue-renderer.mts';
+import { renderPrivacyCatalogueFixtureMetadata } from '../tools/privacy-data-flow-catalogue.mts';
 
 const JSON_PATH = new URL('../docs/privacy-data-flow-catalogue.json', import.meta.url);
 const MARKDOWN_PATH = new URL('../docs/privacy-data-flow-catalogue.md', import.meta.url);
+
+test('the catalogue writer derives fixture bytes and digest without a second hand-maintained declaration', () => {
+  const metadata = renderPrivacyCatalogueFixtureMetadata('abc');
+  assert.match(metadata, /bytes: 3,/u);
+  assert.match(metadata, /sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'/u);
+  assert.notEqual(renderPrivacyCatalogueFixtureMetadata('abcd'), metadata);
+  assert.equal(readFileSync(new URL('../packages/contracts/generated/privacy-catalogue-fixture.mts', import.meta.url), 'utf8'),
+    renderPrivacyCatalogueFixtureMetadata(readFileSync(JSON_PATH, 'utf8')));
+});
 
 const ROOT_KEYS = [
   'schema', 'version', 'coverage', 'processingClasses', 'invariants', 'capabilityFlows',

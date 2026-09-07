@@ -25,7 +25,7 @@ function auditReport(entries: Record<string, unknown> = {}) {
   }
   return {
     auditReportVersion: 2,
-    vulnerabilities: entries,
+    vulnerabilities: structuredClone(entries),
     metadata: {
       vulnerabilities: { ...counts, total: Object.keys(entries).length },
       dependencies: { prod: 12, dev: 34, optional: 0, peer: 0, peerOptional: 0, total: 46 },
@@ -119,9 +119,15 @@ describe('production dependency audit policy', () => {
   });
 
   test('requires supported package entries and exact vulnerability metadata', async (context) => {
-    const entries = { fixture: vulnerability('fixture') };
+    const validReport = () => {
+      const report = auditReport({ fixture: vulnerability('fixture') });
+      // The package is vulnerable, but its independent report metadata is valid.
+      assert.deepEqual(assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings.map((item) => item.code),
+        ['production_vulnerability']);
+      return report;
+    };
     await context.test('name identity', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       (report.vulnerabilities.fixture as { name: string }).name = 'other';
       assert.equal(
         assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
@@ -136,7 +142,7 @@ describe('production dependency audit policy', () => {
       );
     });
     await context.test('severity count', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       report.metadata.vulnerabilities.low = 0;
       assert.equal(
         assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
@@ -144,7 +150,7 @@ describe('production dependency audit policy', () => {
       );
     });
     await context.test('unknown metadata field', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       (report.metadata.vulnerabilities as Record<string, number>).unknown = 1;
       assert.equal(
         assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
@@ -152,14 +158,14 @@ describe('production dependency audit policy', () => {
       );
     });
     await context.test('unsupported top-level report field', () => {
-      const report = { ...auditReport(entries), futureField: true };
+      const report = { ...validReport(), futureField: true };
       assert.equal(
         assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
         'audit_report_unsupported',
       );
     });
     await context.test('invalid dependency count', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       report.metadata.dependencies.prod = -1;
       assert.equal(
         assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
@@ -167,7 +173,7 @@ describe('production dependency audit policy', () => {
       );
     });
     await context.test('inconsistent dependency total', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       report.metadata.dependencies.total = 11;
       report.metadata.dependencies.prod = 12;
       assert.equal(
@@ -176,7 +182,7 @@ describe('production dependency audit policy', () => {
       );
     });
     await context.test('unbounded dependency chain', () => {
-      const report = auditReport(entries);
+      const report = validReport();
       (report.vulnerabilities.fixture as { via: unknown[] }).via = Array.from(
         { length: PRODUCTION_DEPENDENCY_AUDIT_MAX_PACKAGES + 1 },
         () => 'fixture',

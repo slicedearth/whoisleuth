@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
 import { runPlaywrightProcess } from './playwright-process.mts';
+import { retainFocusedBrowserDiagnostics } from './hosted-browser-workspace.mts';
+import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
@@ -27,6 +29,8 @@ const DEFAULT_PLAYWRIGHT_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_PLAYWRIGHT_RESULTS_BYTES = 64 * 1024 * 1024;
+
+class BrowserDiagnosticRetentionError extends Error {}
 
 type FocusedCommand = Readonly<{
   id: string;
@@ -229,7 +233,7 @@ async function selectPlaywrightPort(): Promise<number> {
   throw new Error(`Could not find a free local Playwright port from ${first}.`);
 }
 
-async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
+export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<void> {
   const port = await selectPlaywrightPort();
   const environment = {
     ...process.env,
@@ -238,6 +242,7 @@ async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: 'focused iteration',
   };
+  const revision = assertFrontendBuildIntegrity(REPOSITORY_ROOT, environment).runtime.revision;
   process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), port ${port})\n`);
   const interruption = new AbortController();
   let requestedSignal: NodeJS.Signals | null = null;
@@ -290,7 +295,17 @@ async function runBrowserSpecs(specs: readonly string[]): Promise<void> {
   if (!(await localPortIsFree(port))) {
     failure ??= new Error(`Focused Playwright left port ${port} occupied.`);
   }
-  if (failure) throw failure;
+  if (failure) {
+    try {
+      const retained = retainFocusedBrowserDiagnostics(REPOSITORY_ROOT, revision,
+        requestedSignal ? 'interrupted' : 'failed');
+      process.stderr.write(`Focused browser diagnostics retained at ${retained.directory}: ${retained.retainedFiles} files, `
+        + `${retained.retainedBytes} bytes, ${retained.omittedEntries} omitted files/subtrees. Remove after review.\n`);
+    } catch (cause) {
+      throw new BrowserDiagnosticRetentionError('Focused browser diagnostic retention failed; local artefacts were preserved for review.', { cause });
+    }
+    throw failure;
+  }
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
@@ -304,18 +319,18 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     process.stdout.write(renderExecutionPlan(plan, execution));
     if (options.list) return 0;
     for (const command of execution.commands) {
-      runCommand(command);
       if (execution.cleanupBrowserArtifacts
         && (command.id === 'typecheck' || command.id === 'check' || command.id === 'build')) {
         cleanupBrowserArtifacts = true;
       }
+      runCommand(command);
     }
-    if (execution.browserSpecs.length) await runBrowserSpecs(execution.browserSpecs);
+    if (execution.browserSpecs.length) await runFocusedBrowserSpecs(execution.browserSpecs);
   } catch (error) {
     failure = error;
   }
 
-  if (cleanupBrowserArtifacts) {
+  if (cleanupBrowserArtifacts && !(failure instanceof BrowserDiagnosticRetentionError)) {
     try {
       const cleanup = await inspectVerificationArtifacts('browser', false);
       process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} generated path(s).\n`);

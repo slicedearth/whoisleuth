@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import ts from 'typescript';
+import { parse as parseSvelte, type AST } from 'svelte/compiler';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -1216,320 +1217,127 @@ function discoverJsonSource(source: string, file: string): SourceFileDiscovery {
   };
 }
 
-function maskMatches(value: string[], source: string, pattern: RegExp): void {
-  for (const match of source.matchAll(pattern)) {
-    const start = match.index ?? 0;
-    for (let index = start; index < start + match[0].length; index += 1) {
-      if (value[index] !== '\n' && value[index] !== '\r') value[index] = ' ';
-    }
-  }
-}
-
-type ElementBlock = Readonly<{
-  start: number;
-  end: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-type MarkupExpressionBlock = Readonly<{
-  start: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-type MarkupOpeningTagBlock = Readonly<{
-  start: number;
-  end: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-function markupExpressionBlocks(source: string, file: string): MarkupExpressionBlock[] {
-  const blocks: MarkupExpressionBlock[] = [];
-  for (let start = 0; start < source.length; start += 1) {
-    if (source[start] !== '{') continue;
-    let depth = 1;
-    let quote: '"' | "'" | '`' | null = null;
-    let escaped = false;
-    let end = start + 1;
-    for (; end < source.length && depth > 0; end += 1) {
-      const character = source[end]!;
-      if (quote) {
-        if (escaped) escaped = false;
-        else if (character === '\\') escaped = true;
-        else if (character === quote) quote = null;
-        continue;
-      }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-      } else if (character === '{') {
-        depth += 1;
-      } else if (character === '}') {
-        depth -= 1;
-      }
-    }
-    if (depth !== 0) throw new TypeError(`Schema source ${file} contains an unterminated markup expression.`);
-    const contentStart = start + 1;
-    const contentEnd = end - 1;
-    const first = source.slice(contentStart, contentEnd).trimStart()[0] ?? '';
-    if (!'#/:@'.includes(first)) {
-      blocks.push({ start, contentStart, contentEnd });
-      if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} markup expressions.`);
-      }
-    }
-    start = contentEnd;
-  }
-  return blocks;
-}
-
-function elementBlocks(source: string, tagName: 'script' | 'style', file: string): ElementBlock[] {
-  const lower = source.toLowerCase();
-  const opening = `<${tagName}`;
-  const closing = `</${tagName}>`;
-  const blocks: ElementBlock[] = [];
-  let cursor = 0;
-  while (cursor < source.length) {
-    const start = lower.indexOf(opening, cursor);
-    if (start < 0) break;
-    const boundary = lower[start + opening.length] ?? '';
-    if (boundary && !/[\s>/]/u.test(boundary)) {
-      cursor = start + opening.length;
-      continue;
-    }
-    let quote: '"' | "'" | null = null;
-    let openingEnd = -1;
-    for (let index = start + opening.length; index < source.length; index += 1) {
-      const character = source[index]!;
-      if (quote) {
-        if (character === quote) quote = null;
-      } else if (character === '"' || character === "'") {
-        quote = character;
-      } else if (character === '>') {
-        openingEnd = index;
-        break;
-      }
-    }
-    if (openingEnd < 0) throw new TypeError(`Schema source ${file} contains an unterminated <${tagName}> tag.`);
-    const contentStart = openingEnd + 1;
-    const contentEnd = lower.indexOf(closing, contentStart);
-    if (contentEnd < 0) throw new TypeError(`Schema source ${file} contains an unterminated <${tagName}> block.`);
-    const end = contentEnd + closing.length;
-    blocks.push({ start, end, contentStart, contentEnd });
-    if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-      throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} element blocks.`);
-    }
-    cursor = end;
-  }
-  return blocks;
-}
-
-function markupOpeningTagBlocks(source: string, file: string): MarkupOpeningTagBlock[] {
-  const blocks: MarkupOpeningTagBlock[] = [];
-  for (let start = 0; start < source.length; start += 1) {
-    if (source[start] !== '<' || !/[A-Za-z]/u.test(source[start + 1] ?? '')) continue;
-    let quote: '"' | "'" | '`' | null = null;
-    let escaped = false;
-    let braceDepth = 0;
-    let end = start + 1;
-    for (; end < source.length; end += 1) {
-      const character = source[end]!;
-      if (quote) {
-        if (escaped) escaped = false;
-        else if (character === '\\') escaped = true;
-        else if (character === quote) quote = null;
-        continue;
-      }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-      } else if (character === '{') {
-        braceDepth += 1;
-      } else if (character === '}') {
-        braceDepth = Math.max(0, braceDepth - 1);
-      } else if (character === '>' && braceDepth === 0) {
-        break;
-      }
-    }
-    if (end >= source.length) throw new TypeError(`Schema source ${file} contains an unterminated markup tag.`);
-    blocks.push({ start, end: end + 1, contentStart: start + 1, contentEnd: end });
-    if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-      throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} markup tags.`);
-    }
-    start = end;
-  }
-  return blocks;
-}
-
-const SCHEMA_ATTRIBUTE_NAMED_REFERENCES = Object.freeze(new Map<string, string>([
-  ['NewLine', '\n'],
-  ['Tab', '\t'],
-  ['amp', '&'],
-  ['apos', "'"],
-  ['colon', ':'],
-  ['gt', '>'],
-  ['lowbar', '_'],
-  ['lt', '<'],
-  ['period', '.'],
-  ['quot', '"'],
-]));
-
-function decodeBoundedSchemaAttribute(value: string, file: string): Readonly<{ value: string; complete: boolean }> {
-  boundedCandidate(value, file);
-  let complete = true;
-  const decoded = value.replace(/&(#(?:[xX][0-9a-fA-F]+|\d+)|[A-Za-z][A-Za-z0-9]+);?/gu, (match, encoded: string) => {
-    if (encoded.startsWith('#')) {
-      const hexadecimal = encoded[1]?.toLowerCase() === 'x';
-      const digits = encoded.slice(hexadecimal ? 2 : 1);
-      const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10);
-      if (!Number.isSafeInteger(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
-        complete = false;
-        return match;
-      }
-      return String.fromCodePoint(codePoint);
-    }
-    const named = SCHEMA_ATTRIBUTE_NAMED_REFERENCES.get(encoded);
-    if (named === undefined) {
-      complete = false;
-      return match;
-    }
-    return named;
-  });
-  return Object.freeze({ value: boundedCandidate(decoded, file), complete });
-}
-
 function discoverSvelteSource(source: string, file: string): SourceFileDiscovery {
-  const occurrences: SourceOccurrence[] = [];
-  const definitions: SourceDefinition[] = [];
-  const dynamicConstructions: DynamicConstruction[] = [];
-  const imports: SourceImportBinding[] = [];
-  const aliases: SourceSchemaAlias[] = [];
-  const emitters: SourceSchemaEmitter[] = [];
-  const localDeclarations: SourceLocalDeclaration[] = [];
+  // The component compiler owns script, expression, comment and entity syntax.
+  // Reuse the existing TypeScript schema analysis only on compiler-owned ranges.
+  let root: AST.Root;
+  try {
+    root = parseSvelte(source, { filename: file, modern: true });
+  } catch (cause) {
+    throw new TypeError(`Schema source ${file} must contain valid bounded Svelte syntax.`, { cause });
+  }
+  const result = {
+    occurrences: [] as SourceOccurrence[],
+    definitions: [] as SourceDefinition[],
+    dynamicConstructions: [] as DynamicConstruction[],
+    imports: [] as SourceImportBinding[],
+    aliases: [] as SourceSchemaAlias[],
+    emitters: [] as SourceSchemaEmitter[],
+    localDeclarations: [] as SourceLocalDeclaration[],
+  };
   const referencedSymbols = new Set<string>();
   const locateLine = lineLocator(source);
-  const uncommented = source.split('');
-  maskMatches(uncommented, source, /<!--[\s\S]*?-->/gu);
-  maskMatches(uncommented, source, /\{\/\*[\s\S]*?\*\/\}/gu);
-  const admittedSource = uncommented.join('');
-  const withoutScripts = admittedSource.split('');
-  for (const block of elementBlocks(admittedSource, 'script', file)) {
-    const content = admittedSource.slice(block.contentStart, block.contentEnd);
-    const contentOffset = block.contentStart;
-    const result = discoverTypeScriptSource(content, file, locateLine(contentOffset) - 1);
-    appendBounded(occurrences, result.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
-    appendBounded(definitions, result.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(aliases, result.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(localDeclarations, result.localDeclarations, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} local declarations.`);
-    for (const symbol of result.referencedSymbols) {
+  const merge = (incoming: SourceFileDiscovery, script = false): void => {
+    appendBounded(result.occurrences, incoming.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES,
+      `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
+    appendBounded(result.emitters, incoming.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+    appendBounded(result.dynamicConstructions, incoming.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+    if (script) {
+      appendBounded(result.definitions, incoming.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.imports, incoming.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.aliases, incoming.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.localDeclarations, incoming.localDeclarations, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds local declarations.`);
+    }
+    for (const symbol of incoming.referencedSymbols) {
       if (!referencedSymbols.has(symbol) && referencedSymbols.size >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
+        throw new TypeError(`Schema source ${file} exceeds schema bindings.`);
       }
       referencedSymbols.add(symbol);
     }
-    for (let index = block.start; index < block.end; index += 1) {
-      withoutScripts[index] = ' ';
+  };
+  const sourceRange = (value: unknown): { start: number; end: number } => {
+    const node = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    if (typeof node.start !== 'number' || typeof node.end !== 'number'
+      || !Number.isSafeInteger(node.start) || !Number.isSafeInteger(node.end)
+      || node.start < 0 || node.end < node.start || node.end > source.length) {
+      throw new TypeError(`Schema source ${file} contains an invalid compiler range.`);
     }
+    return { start: node.start, end: node.end };
+  };
+  const snippet = (value: unknown): string => {
+    const { start, end } = sourceRange(value);
+    return source.slice(start, end);
+  };
+  const expression = (node: unknown, schema = false): void => {
+    const value = snippet(node);
+    const wrapped = schema ? `const __MARKUP_VALUE = { schema: (${value}) };`
+      : `const __MARKUP_VALUE = (${value});`;
+    merge(discoverTypeScriptSource(wrapped, file, locateLine(sourceRange(node).start) - 1));
+  };
+  for (const script of [root.module, root.instance]) {
+    if (script) merge(discoverTypeScriptSource(snippet(script.content), file, locateLine(sourceRange(script.content).start) - 1), true);
   }
-  const markupCharacters = withoutScripts;
-  const markupSource = markupCharacters.join('');
-  for (const block of elementBlocks(markupSource, 'style', file)) {
-    for (let index = block.start; index < block.end; index += 1) markupCharacters[index] = ' ';
-  }
-  const markup = markupCharacters.join('');
-  const openingTags = markupOpeningTagBlocks(markup, file);
-  const recordMarkupSchemaValue = (rawValue: string, position: number): void => {
-    const line = locateLine(position);
-    const decoded = decodeBoundedSchemaAttribute(rawValue, file);
-    if (!decoded.complete) {
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'unresolved_schema_emitter' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      return;
-    }
-    const identifier = exactSchemaIdentifier(decoded.value);
-    if (identifier) {
-      appendBounded(emitters, [{ identifier, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      if (decoded.value !== rawValue) {
-        appendBounded(occurrences, [{ identifier, file, line }], MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
+
+  const text = (value: string, start: number): void => {
+    for (const match of value.matchAll(CASE_INSENSITIVE_TOKEN_PATTERN)) {
+      const identifier = match[0]!;
+      const line = locateLine(start + (match.index ?? 0));
+      if (identifier === identifier.toLowerCase()) {
+        appendBounded(result.occurrences, [{ identifier, file, line }], MAX_SCHEMA_SOURCE_OCCURRENCES,
+          `Schema source ${file} exceeds identifier occurrences.`);
+      } else {
+        appendBounded(result.dynamicConstructions, [{ identifier: identifier.toLowerCase(), file, line, reason: 'case_changed' }],
+          MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
       }
-    } else if (/whoisleuth/iu.test(decoded.value)) {
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'malformed_schema_identifier' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
     }
   };
-  for (const tag of openingTags) {
-    const content = markup.slice(tag.contentStart, tag.contentEnd);
-    const staticAttribute = /(?:^|\s)(?:bind:)?schema\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>{}]+))/giu;
-    for (const match of content.matchAll(staticAttribute)) {
-      const value = match[1] ?? match[2] ?? match[3] ?? '';
-      recordMarkupSchemaValue(value, tag.contentStart + (match.index ?? 0));
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: root.fragment, depth: 0 }];
+  let nodes = 0;
+  while (stack.length) {
+    const { node: value, depth } = stack.pop()!;
+    if (!value || typeof value !== 'object') continue;
+    const node = value as Record<string, unknown>;
+    if (typeof node.type !== 'string') continue;
+    if (++nodes > MAX_SCHEMA_SOURCE_AST_NODES || depth > MAX_SCHEMA_SOURCE_AST_DEPTH) {
+      throw new TypeError(`Schema source ${file} exceeds bounded Svelte syntax nodes or nesting.`);
     }
-    const bareAttribute = /(?:^|\s)(?:bind:)?schema(?=\s|\/|$)(?!\s*=)/giu;
-    for (const match of content.matchAll(bareAttribute)) {
-      const line = locateLine(tag.contentStart + (match.index ?? 0));
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'unresolved_schema_emitter' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    }
-  }
-  for (const block of markupExpressionBlocks(markup, file)) {
-    const expression = markup.slice(block.contentStart, block.contentEnd);
-    const prefix = markup.slice(Math.max(0, block.start - 80), block.start);
-    const directSchemaAttribute = /\bschema\s*=\s*$/iu.test(prefix);
-    const insideOpeningTag = openingTags.some((tag) => block.start > tag.start && block.start < tag.end);
-    const shorthandSchemaAttribute = insideOpeningTag && expression.trim() === 'schema';
-    const schemaSpreadAttribute = insideOpeningTag && /^\.\.\.\s*schema$/u.test(expression.trim());
-    if (shorthandSchemaAttribute || schemaSpreadAttribute) {
-      const line = locateLine(block.start);
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: 'schema', role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      referencedSymbols.add('schema');
+    if (node.type === 'Comment') continue;
+    if (node.type === 'Text') {
+      const item = value as AST.Text;
+      text(item.data, item.start);
       continue;
     }
-    if (!directSchemaAttribute && !/(?:\bschema\b|whoisleuth)/iu.test(expression)) continue;
-    const wrapped = directSchemaAttribute
-      ? `const __MARKUP_VALUE = { schema: (${expression}) };`
-      : `const __MARKUP_VALUE = (${expression});`;
-    const result = discoverTypeScriptSource(wrapped, file, locateLine(block.contentStart) - 1);
-    appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    for (const symbol of result.referencedSymbols) {
-      if (!referencedSymbols.has(symbol) && referencedSymbols.size >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
+    if (node.type === 'Attribute' && node.name === 'schema') {
+      const item = value as AST.Attribute;
+      const parts = item.value === true ? [] : Array.isArray(item.value) ? item.value : [item.value];
+      const code = parts.length ? parts.map((part) => part.type === 'Text'
+        ? JSON.stringify(part.data) : `(${snippet(part.expression)})`).join(' + ') : 'true';
+      merge(discoverTypeScriptSource(`const __MARKUP_VALUE = { schema: ${code} };`, file, locateLine(item.start) - 1));
+      continue;
+    }
+    if (node.type === 'BindDirective' && node.name === 'schema') {
+      expression((value as AST.BindDirective).expression, true);
+      continue;
+    }
+    if (node.type === 'SpreadAttribute') {
+      const item = value as AST.SpreadAttribute;
+      // A schema shorthand/spread is still a marker use, not a new definition.
+      expression(item.expression, item.expression.type === 'Identifier' && item.expression.name === 'schema');
+      continue;
+    }
+    for (const [key, child] of Object.entries(node).reverse()) {
+      if (key === 'expression' || key === 'test' || key === 'key') {
+        if (child && typeof child === 'object') expression(child);
+      } else if (key === 'declaration' && child && typeof child === 'object') {
+        merge(discoverTypeScriptSource(snippet(child), file, locateLine((child as AST.BaseNode).start) - 1), true);
+      } else if (Array.isArray(child)) {
+        for (let index = child.length - 1; index >= 0; index -= 1) stack.push({ node: child[index], depth: depth + 1 });
+      } else if (child && typeof child === 'object' && 'type' in child) {
+        stack.push({ node: child, depth: depth + 1 });
       }
-      referencedSymbols.add(symbol);
     }
   }
-  for (const match of markup.matchAll(CASE_INSENSITIVE_TOKEN_PATTERN)) {
-    const raw = match[0];
-    if (!raw) continue;
-    if (raw !== raw.toLowerCase()) {
-      if (dynamicConstructions.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      }
-      dynamicConstructions.push({
-        file,
-        line: locateLine(match.index ?? 0),
-        identifier: raw.toLowerCase(),
-        reason: 'case_changed',
-      });
-    } else {
-      if (occurrences.length >= MAX_SCHEMA_SOURCE_OCCURRENCES) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
-      }
-      occurrences.push({ identifier: raw, file, line: locateLine(match.index ?? 0) });
-    }
-  }
-  return {
-    occurrences,
-    definitions,
-    dynamicConstructions,
-    imports,
-    aliases,
-    emitters,
-    localDeclarations,
-    referencedSymbols: [...referencedSymbols].sort(),
-  };
+  return { ...result, referencedSymbols: [...referencedSymbols].sort() };
 }
 
 export function discoverSchemaIdentifiersInSource(source: string, file: string): SourceFileDiscovery {

@@ -664,8 +664,8 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
       if (!hold) return original.call(this);
       hold = false;
       return new Promise<string>((resolve, reject) => {
-        Reflect.set(window, '__releaseReplayComparisonRead', () => {
-          void original.call(this).then(resolve, reject);
+        Reflect.set(window, '__releaseReplayComparisonRead', async () => {
+          await original.call(this).then(resolve, reject);
         });
       });
     };
@@ -676,6 +676,10 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
     buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
   });
   await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
+  await replay.locator('input[type="file"]').last().evaluate((control) => {
+    if (!(control instanceof HTMLInputElement) || !control.value) throw new Error('The held comparison input must retain its selection.');
+    Reflect.set(window, '__heldComparisonControl', control);
+  });
 
   await primaryInput.setInputFiles({
     name: 'primary-c.json',
@@ -683,11 +687,18 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
     buffer: Buffer.from(replayEvidence('primary-c.example.test', 'Registrar C')),
   });
   await expect(replay.getByRole('heading', { name: 'primary-c.example.test' })).toBeVisible();
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const release = Reflect.get(window, '__releaseReplayComparisonRead');
     if (typeof release !== 'function') throw new Error('The replay comparison read gate was not installed.');
-    release();
+    await release();
   });
+  // The original control is cleared in the completed handler, even after its
+  // DOM node was replaced with the new primary capture's controls.
+  await expect.poll(() => page.evaluate(() => {
+    const control = Reflect.get(window, '__heldComparisonControl');
+    if (!(control instanceof HTMLInputElement)) throw new Error('The held comparison control was not captured.');
+    return control.value;
+  })).toBe('');
   await expect(replay.locator('.comparison-status')).toBeEmpty();
   await expect(replay.locator('.comparison-counts')).toHaveCount(0);
   await expect(replay).not.toContainText('Compared comparison-b.json locally');

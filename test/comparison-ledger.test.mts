@@ -1232,7 +1232,7 @@ describe('retained comparison adapters', () => {
     assert.equal(index.omissions.invalidRecords, 1);
   });
 
-  test('deduplicates explicit Bulk pairs before deriving their comparison', () => {
+  test('deduplicates explicit Bulk pair identities and reports every omitted duplicate', () => {
     const earlier = bulkSession('bulk-dedupe-earlier', 'Earlier', EARLIER, [bulkResult('dedupe.reservation.invalid')]);
     const later = bulkSession('bulk-dedupe-later', 'Later', LATER, [bulkResult('dedupe.reservation.invalid')]);
     const pair = { earlierSessionId: earlier.id, laterSessionId: later.id };

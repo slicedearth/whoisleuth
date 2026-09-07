@@ -32,8 +32,8 @@ describe('test duration report', () => {
     assert.match(report, /Measured 3 tests across 2 files; 0 failed\./u);
     assert.match(report, /Accepted totals: 3 passed, 0 failed, 0 cancelled, 0 skipped, 0 todo\./u);
     assert.match(report, /Unit lane duration: 37\.0 ms\./u);
-    assert.ok(report.indexOf('test/first.test.mts: 25.0 ms') < report.indexOf('test/second.test.mts: 12.0 ms'));
-    assert.ok(report.indexOf('slow case: 25.0 ms') < report.indexOf('medium case: 10.0 ms'));
+    assert.match(report, /test\/first\.test\.mts: 25\.0 ms[\s\S]*test\/second\.test\.mts: 12\.0 ms/u);
+    assert.match(report, /slow case: 25\.0 ms[\s\S]*medium case: 10\.0 ms/u);
     assert.doesNotMatch(report, /quick case/u);
   });
 

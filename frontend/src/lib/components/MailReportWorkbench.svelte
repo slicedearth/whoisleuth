@@ -21,6 +21,7 @@
   let profileId = $state('');
   let profileSignature = $state('');
   let reviewGeneration = 0;
+  let pendingImports = $state(0);
 
   const dmarcReports = $derived(reports.filter((report): report is DmarcAggregateReport => report.kind === 'dmarc'));
   const tlsReports = $derived(reports.filter((report): report is TlsAggregateReport => report.kind === 'tls-rpt'));
@@ -65,6 +66,7 @@
     const retainedReports = [...reports];
     const generation = ++reviewGeneration;
     busy = true;
+    pendingImports += 1;
     message = '';
     try {
       if (selected.length > MAX_MAIL_REPORT_INPUT_FILES) {
@@ -94,6 +96,7 @@
       if (generation !== reviewGeneration || active.id !== expectedProfileId) return;
       message = cause instanceof Error ? cause.message : 'The selected mail reports could not be reviewed.';
     } finally {
+      pendingImports -= 1;
       if (generation === reviewGeneration) busy = false;
     }
   }
@@ -152,7 +155,7 @@
   });
 </script>
 
-<section class="mail-workbench card" aria-labelledby="mail-workbench-title">
+<section class="mail-workbench card" aria-labelledby="mail-workbench-title" aria-busy={busy || pendingImports > 0}>
   <header>
     <div>
       <p class="eyebrow">Local report review</p>
