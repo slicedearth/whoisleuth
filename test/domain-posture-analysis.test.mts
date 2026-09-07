@@ -75,7 +75,10 @@ describe('bounded SPF expansion', () => {
     );
 
     assert.deepEqual(resolver.requests, []);
-    assert.equal(result.branches.filter((branch) => branch.state === 'invalid').length, 2);
+    assert.equal(result.state, 'invalid');
+    assert.equal(result.branches.length, 1);
+    assert.equal(result.branches[0]?.state, 'invalid');
+    assert.equal(result.branches[0]?.issues.filter((issue) => issue.includes('invalid literal domain-spec')).length, 2);
   });
 
   test('stops expansion when the observed DNS-term budget is exceeded', async () => {

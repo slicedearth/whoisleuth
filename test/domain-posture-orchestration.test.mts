@@ -199,10 +199,10 @@ describe('domain-posture collection orchestration', () => {
 
   test('bounds selectors, SPF policy expansion and DMARC reporting authorisations', async () => {
     const includes = Array.from({ length: 14 }, (_, index) => `_spf${index}.example.net`);
-    const destinations = Array.from({ length: 14 }, (_, index) => `rua=mailto:r${index}@reports${index}.example.net`).join('; ');
+    const destinations = Array.from({ length: 14 }, (_, index) => `mailto:r${index}@reports${index}.example.net`).join(',');
     const txt: Record<string, FixtureValue> = {
       'example.test': [`v=spf1 ${includes.map((name) => `include:${name}`).join(' ')} -all`],
-      '_dmarc.example.test': [`v=DMARC1; p=reject; ${destinations}`],
+      '_dmarc.example.test': [`v=DMARC1; p=reject; rua=${destinations}`],
     };
     for (const include of includes) txt[include] = ['v=spf1 -all'];
     const fixture = fixtureDependencies({ txt });
@@ -218,7 +218,22 @@ describe('domain-posture collection orchestration', () => {
     assert.equal(report.spfExpansion.lookupLimit, 10);
     assert.ok(report.spfExpansion.lookupsUsed <= report.spfExpansion.lookupLimit);
     assert.ok(report.spfExpansion.branches.length <= 32);
-    assert.ok(report.dmarcAuthorizations.length <= 10);
+    assert.equal(report.dmarcAuthorizations.length, 10);
+    assert.match(requiredValue(report.checks.find((item) => item.id === 'dmarc')).detail, /10 of 14 destinations reviewed; 4 not checked/u);
+  });
+
+  test('does not present capped self-reporting destinations as complete external authorisation', async () => {
+    const self = Array.from({ length: 10 }, (_, index) => `mailto:r${index}@example.test`);
+    const fixture = fixtureDependencies({ txt: {
+      '_dmarc.example.test': [`v=DMARC1; p=reject; rua=${[...self, 'mailto:report@reports.example.net'].join(',')}`],
+    } });
+    const report = await checkDomainPosture('example.test', {}, fixture.dependencies);
+    assert.equal(report.dmarcAuthorizations.length, 10);
+    assert.ok(report.dmarcAuthorizations.every((item) => item.state === 'self'));
+    const dmarc = requiredValue(report.checks.find((item) => item.id === 'dmarc'));
+    assert.equal(dmarc.status, 'warning');
+    assert.match(dmarc.detail, /10 of 11 destinations reviewed; 1 not checked/u);
+    assert.ok(!fixture.calls.some((call) => call.includes('_report._dmarc.reports.example.net')));
   });
 
   test('does not start collection for an invalid target or fetch MTA-STS without a valid advertisement', async () => {

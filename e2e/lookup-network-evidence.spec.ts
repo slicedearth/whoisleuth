@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { readFile } from 'node:fs/promises';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import {
@@ -141,6 +142,71 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(healthyState).toHaveCount(1);
   await expect(healthyState).toHaveCSS('white-space', 'nowrap');
   await expectNoHorizontalOverflow(page);
+});
+
+test('DNS rehearsal retains null MX and exposes incomplete intent in the view and download', async ({ page }, testInfo) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'rehearsal.example.test', type: 'domain', registrableDomain: 'example.test',
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      availability: { state: 'registered', domain: 'example.test', dns: {
+        status: 'success', source: 'dns', scanMode: 'deep', complete: true, truncated: false,
+        records: { a: [], aaaa: [], ns: [], cname: [], spf: [], dmarc: [],
+          mx: [{ priority: 0, exchange: '' }],
+          caa: [{ critical: 0, tag: 'iodef', value: 'https://reports.example/Case?Ticket=One' }],
+        }, diagnostics: {},
+        delegation: {
+          delegationHealthVersion: 1, version: 1, status: 'partial',
+          observedAt: '2026-09-01T00:00:00.000Z', scanMode: 'deep', source: 'dns_delegation',
+          durationMs: 0, complete: false, truncated: false,
+          detail: 'Direct authority evidence is incomplete.', limitations: [],
+          parent: { state: 'success', nameservers: ['ns1.example'], error: null },
+          registry: { nameservers: ['ns1.example'], nameserverDetails: [], delegationSigned: false, dsRecordCount: 0, truncated: false },
+          authorities: [], recordMatrix: [], findings: [],
+        },
+      } },
+    }),
+  }));
+  await page.locator('#query').fill('rehearsal.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const card = page.locator('.dns-card');
+  await card.locator(':scope > summary').click();
+  await expect(card.getByText('0 .', { exact: true })).toBeVisible();
+  await card.getByText('Plan a domain control change', { exact: true }).click();
+  await card.getByLabel('Intended MX routing', { exact: false }).fill('0 .');
+  await card.getByLabel('Intended CAA policy', { exact: false }).fill('0 iodef https://REPORTS.EXAMPLE/Case?Ticket=One');
+  await card.getByRole('button', { name: 'Evaluate rehearsal' }).click();
+  await expect(card.getByText('MX routing is unchanged', { exact: true })).toBeVisible();
+  await expect(card.getByText('CAA policy is unchanged', { exact: true })).toBeVisible();
+  await card.getByLabel('Intended MX routing', { exact: false }).fill('0 .\ninvalid record');
+  await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeVisible();
+  await expect(card.getByText(/1 admitted, 1 invalid and 0 over-bound intended records/u)).toBeVisible();
+
+  const pendingDownload = page.waitForEvent('download');
+  await card.getByRole('button', { name: 'Download reviewed checklist' }).click();
+  const download = await pendingDownload;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
+  expect(exported.reviewState).toBe('unresolved');
+  expect(exported.observed.mx).toEqual(['0 .']);
+  expect(exported.analystProposed.caa).toEqual(['0 iodef https://reports.example/Case?Ticket=One']);
+  expect(exported.findings.find((finding: { id: string }) => finding.id === 'mx').state).toBe('blocked');
+
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await expectNoHorizontalOverflow(page);
+      await card.getByText('MX routing intent is incomplete', { exact: true }).scrollIntoViewIfNeeded();
+      await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeInViewport();
+      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) });
+    }
+  }
 });
 
 test('HTTP evidence presents bounded redirect provenance and response metadata', async ({ page }) => {

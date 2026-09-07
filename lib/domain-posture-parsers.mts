@@ -95,8 +95,9 @@ function parseSpfRecords(records: unknown) {
       return true;
     }
     const hostname = value.toLowerCase().replace(/\.$/u, '');
-    if (hostname.length > 253 || !hostname.includes('.') || !hostname.split('.').every((part) => /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/u.test(part))) {
+    if (/[^\x00-\x7f]/u.test(value) || hostname.length > 253 || !hostname.includes('.') || !hostname.split('.').every((part) => /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/u.test(part))) {
       result.issues.push(`${label} has an invalid literal domain-spec.`);
+      invalidSyntax = true;
       return false;
     }
     return true;

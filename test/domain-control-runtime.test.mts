@@ -79,6 +79,18 @@ function input(entry: Record<string, unknown> = { domain: 'example.test' }): Rec
 }
 
 describe('pure domain-control runtime ownership', () => {
+  test('normalises complete MX records without confusing root exchange with missing input', () => {
+    for (const value of ['0 .', { priority: 0, exchange: '' }, { preference: 0, host: '.' }]) {
+      assert.deepEqual(domainControlContract.normalizeMxRecord(value), { priority: 0, exchange: '.' });
+    }
+    for (const value of [null, '', '.', 'mail.example.test', { priority: true, exchange: '.' },
+      { priority: 0 }, { priority: 0, exchange: '.', host: 'mail.example.test' }]) {
+      assert.equal(domainControlContract.normalizeMxRecord(value), null);
+    }
+    assert.equal(domainControlContract.canonicalMxRecord('mail.example.test'), 'mail.example.test');
+    assert.throws(() => domainControlContract.canonicalMxRecord({ priority: 0, exchange: '.', host: 'mail.example.test' }), TypeError);
+  });
+
   test('keeps both historical frontend paths as exact runtime and type facades', () => {
     const expectedCoreExports = [
       'DOMAIN_CONTROL_MANIFEST_VERSION',

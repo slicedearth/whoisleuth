@@ -29,6 +29,11 @@ const REGISTRY = {
 };
 
 describe('DNS delegation health', () => {
+  test('retains null MX through the same record normaliser as other control projections', () => {
+    assert.deepEqual(normaliseAuthorityValues('MX', [{ priority: 0, exchange: '' }, { priority: 0, exchange: '.' }]), ['0 .']);
+    assert.deepEqual(normaliseAuthorityValues('MX', [{ priority: false, exchange: '.' }]), []);
+  });
+
   test('retains private and reserved addresses as observed record data only', () => {
     assert.deepEqual(normaliseAuthorityValues('A', ['10.0.0.1', '192.0.2.10', 'invalid']), [
       '10.0.0.1',

@@ -6,6 +6,29 @@ import {
   buildLookupPageDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
 
+test('DNS presentation retains null MX and withheld family evidence without claiming absence', () => {
+  const display = buildLookupNetworkDisplay({
+    ...emptyNetworkInput(),
+    dnsEvidence: { status: 'partial', diagnostics: {
+      mx: { status: 'success' },
+      spf: { status: 'not_found', discarded: 1 },
+      dmarc: { status: 'not_found', truncated: true },
+    } },
+    dnsRecords: { mx: [{ priority: 0, exchange: '' }], spf: [], dmarc: [] },
+  });
+  assert.equal(display.dnsRows.find((row) => row.label === 'MX')?.value, '0 .');
+  for (const label of ['SPF', 'DMARC']) {
+    assert.equal(display.dnsRows.find((row) => row.label === label)?.value, 'Not established (partial source)');
+  }
+  const positive = buildLookupNetworkDisplay({
+    ...emptyNetworkInput(),
+    dnsEvidence: { status: 'partial', diagnostics: { mx: { status: 'success', discarded: 1 } } },
+    dnsRecords: { mx: [{ priority: 10, exchange: 'mail.example.test' }] },
+  });
+  assert.equal(positive.dnsRows.find((row) => row.label === 'MX')?.value,
+    '10 mail.example.test · additional malformed or excess values withheld');
+});
+
 function emptyNetworkInput() {
   return {
     availability: {},

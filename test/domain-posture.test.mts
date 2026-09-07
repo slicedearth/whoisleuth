@@ -13,6 +13,7 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
   return {
     spf: query(['v=spf1 include:_spf.example.net -all']),
     dmarc: query(['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:dmarc@example.com']),
+    dmarcAuthorizations: [{ destination: 'example.com', reportType: 'aggregate', recordName: null, state: 'self', error: null }],
     mx: query([{ priority: 10, exchange: 'mail.example.com' }]),
     dnssec: { value: 'Signed', error: null },
     caa: query([{ critical: 0, issue: 'letsencrypt.org' }]),
@@ -193,6 +194,8 @@ describe('buildPostureReport', () => {
       'v=spf1 ip4:192.0.2.0/24 -all',
       'v=spf1 ip6:2001:db8::/32 -all',
       'v=spf1 ?ip4:192.0.2.1 -all',
+      'v=spf1 -include:invalid..example -all',
+      'v=spf1 -exists:invalid..example -all',
     ]) {
       input.spf = query([policy]);
       assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'warning', policy);

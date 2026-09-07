@@ -295,6 +295,11 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
   ];
   const external = authorizations.filter((authorization) => authorization.state !== 'self');
   const unresolvedExternal = external.filter((authorization) => authorization.state !== 'authorized');
+  const intendedDestinations = parsed.aggregateDestinations.length + parsed.failureDestinations.length;
+  const omittedDestinations = Math.max(0, intendedDestinations - authorizations.length);
+  if (omittedDestinations) {
+    details.push(`Reporting authorisation coverage: ${authorizations.length} of ${intendedDestinations} destinations reviewed; ${omittedDestinations} not checked within the bounded collection. Omitted destinations are not assumed authorised.`);
+  }
   if (external.length > 0) {
     details.push(
       `${external.length} external reporting destination${external.length === 1 ? '' : 's'} checked; `
@@ -319,11 +324,13 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
       remediation: 'Set sp and np to quarantine or reject unless weaker subdomain treatment is intentional.',
     });
   }
-  if (unresolvedExternal.length > 0) {
-    return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; external reporting authorization is incomplete`, {
+  if (unresolvedExternal.length > 0 || omittedDestinations > 0) {
+    return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; reporting authorisation is incomplete`, {
       detail: `${details.join(' ')} ${unresolvedExternal.map((authorization) => `${authorization.destination}: ${authorization.state}.`).join(' ')}`,
       records: parsed.records,
-      remediation: 'Publish the required external reporting authorisation record or remove the unavailable destination.',
+      remediation: omittedDestinations > 0
+        ? 'Review the unchecked destinations and confirm any required external reporting authorisation before relying on delivery.'
+        : 'Publish the required external reporting authorisation record or remove the unavailable destination.',
     });
   }
   if (!parsed.aggregateReporting) {

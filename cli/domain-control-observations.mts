@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { latestObservationCohort } from '../packages/evidence/latest-observations.mts';
+import { canonicalCaaRecord, canonicalDsRecord, canonicalMxRecord } from '../packages/evidence/domain-control-runtime.mts';
+import { MAX_DOMAIN_CONTROL_INPUT_RECORDS } from '../packages/contracts/domain-control-manifest.mts';
 
 import {
   scanBoundedJson,
@@ -79,34 +81,6 @@ function hostname(value: unknown): string | null {
   return text(value, 253)?.toLowerCase().replace(/\.$/u, '') ?? null;
 }
 
-function mxValue(value: unknown): string | null {
-  const item = record(value);
-  const exchange = hostname(item.exchange ?? item.host ?? item.value);
-  if (!exchange) return text(value);
-  const priority = Number.isSafeInteger(item.priority) && Number(item.priority) >= 0 ? Number(item.priority) : null;
-  return priority === null ? exchange : `${priority} ${exchange}`;
-}
-
-function caaValue(value: unknown): string | null {
-  const item = record(value);
-  const tag = text(item.tag, 32)?.toLowerCase();
-  const recordValue = text(item.value, 500)?.toLowerCase();
-  if (!tag || !recordValue) return text(value);
-  const critical = Number.isSafeInteger(item.critical) ? Number(item.critical) : Number.isSafeInteger(item.flags) ? Number(item.flags) : 0;
-  return `${critical} ${tag} ${recordValue}`;
-}
-
-function dsValue(value: unknown): string | null {
-  const item = record(value);
-  const keyTag = Number.isSafeInteger(item.keyTag) ? item.keyTag : null;
-  const algorithm = Number.isSafeInteger(item.algorithm) ? item.algorithm : null;
-  const digestType = Number.isSafeInteger(item.digestType) ? item.digestType : null;
-  const digest = text(item.digest, 512)?.toLowerCase();
-  return keyTag !== null && algorithm !== null && digestType !== null && digest
-    ? `${keyTag} ${algorithm} ${digestType} ${digest}`
-    : text(value);
-}
-
 function field(
   id: DomainControlFlightRecorderField,
   source: string,
@@ -114,6 +88,37 @@ function field(
   values: readonly string[],
 ): Field {
   return Object.freeze({ id, source, state: sourceState, values: Object.freeze([...values].sort()) });
+}
+
+function recordField(
+  id: DomainControlFlightRecorderField,
+  source: string,
+  sourceState: DomainControlObservationState,
+  input: unknown,
+  normalize: (value: unknown) => string,
+): Field {
+  const rows = Array.isArray(input) ? input.slice(0, MAX_DOMAIN_CONTROL_INPUT_RECORDS) : [];
+  const values = new Set<string>();
+  let invalid = Array.isArray(input) || (input === undefined && sourceState !== 'observed') ? 0 : 1;
+  for (const row of rows) {
+    let value = '';
+    try {
+      value = normalize(row);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+    }
+    if (value) values.add(value);
+    else invalid += 1;
+  }
+  const sorted = [...values].sort();
+  const omitted = Math.max(0, (Array.isArray(input) ? input.length : 0) - rows.length)
+    + Math.max(0, sorted.length - MAX_FLIGHT_RECORDER_VALUES);
+  return field(
+    id,
+    invalid || omitted ? `${source} (${invalid} invalid; ${omitted} omitted records)` : source,
+    sourceState === 'observed' && (invalid || omitted) ? 'partial' : sourceState,
+    sorted.slice(0, MAX_FLIGHT_RECORDER_VALUES),
+  );
 }
 
 function diagnostic(document: SavedLookupDocument, key: string): DomainControlObservationState {
@@ -167,9 +172,9 @@ export function domainControlObservationFromSavedLookup(document: SavedLookupDoc
     field('registry_nameservers', 'Registry RDAP', rdapState, list(rdapParsed.nameservers, hostname)),
     field('whois_nameservers', 'WHOIS', diagnostic(document, 'whois'), list(record(record(document.whois).parsed).nameservers, hostname)),
     field('delegated_nameservers', 'DNS', dnsState, list(dnsRecords.ns, hostname)),
-    field('delegation_ds', 'DNS delegation', state(delegation.status), list(delegationRecords.ds, dsValue)),
-    field('mail_exchangers', 'DNS', dnsState, list(dnsRecords.mx, mxValue)),
-    field('caa_policy', 'DNS', dnsState, list(record(dns.caaPolicy).records ?? dnsRecords.caa, caaValue)),
+    recordField('delegation_ds', 'DNS delegation', state(delegation.status), delegationRecords.ds, canonicalDsRecord),
+    recordField('mail_exchangers', 'DNS', dnsState, dnsRecords.mx, canonicalMxRecord),
+    recordField('caa_policy', 'DNS', state(record(dns.caaPolicy).status ?? dns.status), record(dns.caaPolicy).records ?? dnsRecords.caa, canonicalCaaRecord),
     field('tls_certificate', 'TLS', tlsState, list([certificate.fingerprintSha256 ?? tls.fingerprintSha256], (item) => text(item, 128))),
     field('tls_public_key', 'TLS', tlsState, list([publicKey.fingerprintSha256 ?? tls.spkiSha256], (item) => text(item, 128))),
     field('http_origin', 'HTTP', httpState, list([http.finalOrigin ?? availability.httpFinalOrigin], (item) => text(item, 500))),
@@ -210,10 +215,10 @@ function reviewFields(document: SavedLookupDocument, observation: DomainControlF
   });
 }
 
-function mergeConcurrentFields(observations: readonly (readonly Field[])[]): Field[] {
-  return (observations[0] ?? []).map((first) => ({
-    ...first,
-    ...concurrentFieldValues(observations.flatMap((fields) => fields.filter((candidate) => candidate.id === first.id))),
+function mergeConcurrentFields(observations: readonly (readonly Field[])[]): readonly Field[] {
+  return Object.freeze((observations[0] ?? []).map((first) => {
+    const merged = concurrentFieldValues(observations.flatMap((fields) => fields.filter((candidate) => candidate.id === first.id)));
+    return field(first.id, merged.source, merged.state, merged.values);
   }));
 }
 
@@ -272,13 +277,13 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     const captures = cohort.latest.map((document) => ({ document, observation: domainControlObservationFromSavedLookup(document) }));
     const first = captures[0];
     if (!first || !cohort.observedAt || cohort.undated.length) throw new CliUsageError('Saved Lookup observation times could not be ordered.');
-    const observation: DomainControlFlightRecorderObservation = {
+    const observation: DomainControlFlightRecorderObservation = Object.freeze({
       domain,
       observedAt: cohort.observedAt,
       collectionDepth: captures.every((capture) => capture.observation.collectionDepth === first.observation.collectionDepth)
         ? first.observation.collectionDepth : 'unknown',
       fields: mergeConcurrentFields(captures.map((capture) => capture.observation.fields)),
-    };
+    });
     return { observation, reviewFields: mergeConcurrentFields(captures.map((capture) => reviewFields(capture.document, capture.observation))) };
   });
   const observations = selected.map((item) => item.observation);

@@ -7,6 +7,7 @@ import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
 import { classifyMxRecords } from './dns-mx.mts';
+import { normalizeMxRecord } from '../packages/evidence/domain-control-runtime.mts';
 import {
   collectDnsDelegationHealth,
   skippedDnsDelegationHealth,
@@ -201,7 +202,7 @@ function boundedUnique(values: string[], limit = MAX_RECORDS_PER_TYPE): { record
 
 function normalizeAddresses(records: unknown, family: number): NormalizedRecords<string> {
   const values: string[] = [];
-  let discarded = 0;
+  let discarded = Array.isArray(records) ? 0 : 1;
   for (const record of Array.isArray(records) ? records : []) {
     const value = typeof record === 'string' ? record : record && typeof record === 'object' ? (record as Record<string, unknown>).address : null;
     if (typeof value !== 'string' || net.isIP(value) !== family) discarded += 1;
@@ -212,7 +213,7 @@ function normalizeAddresses(records: unknown, family: number): NormalizedRecords
 
 function normalizeHostnames(records: unknown): NormalizedRecords<string> {
   const values: string[] = [];
-  let discarded = 0;
+  let discarded = Array.isArray(records) ? 0 : 1;
   for (const record of Array.isArray(records) ? records : []) {
     const value = normalizeHostname(record);
     if (value) values.push(value);
@@ -223,13 +224,12 @@ function normalizeHostnames(records: unknown): NormalizedRecords<string> {
 
 function normalizeMx(records: unknown): NormalizedRecords<MxRecord> {
   const byKey = new Map<string, MxRecord>();
-  let discarded = 0;
+  let discarded = Array.isArray(records) ? 0 : 1;
   for (const record of Array.isArray(records) ? records : []) {
-    if (!record || typeof record !== 'object') { discarded += 1; continue; }
-    const value = record as Record<string, unknown>;
-    const exchange = value.exchange === '' || value.exchange === '.' ? '' : normalizeHostname(value.exchange);
-    const priority = Number(value.priority);
-    if (exchange === null || !Number.isInteger(priority) || priority < 0 || priority > 65535) { discarded += 1; continue; }
+    const value = normalizeMxRecord(record);
+    if (!value) { discarded += 1; continue; }
+    const { priority } = value;
+    const exchange = value.exchange === '.' ? '' : value.exchange;
     byKey.set(`${priority}:${exchange}`, { priority, exchange });
   }
   const values = [...byKey.values()].sort((a, b) => a.priority - b.priority || a.exchange.localeCompare(b.exchange));
@@ -238,7 +238,7 @@ function normalizeMx(records: unknown): NormalizedRecords<MxRecord> {
 
 function normalizeTxtPolicies(records: unknown, prefix: string): NormalizedRecords<string> {
   const values: string[] = [];
-  let discarded = 0;
+  let discarded = Array.isArray(records) ? 0 : 1;
   for (const chunks of Array.isArray(records) ? records : []) {
     if (!Array.isArray(chunks) || chunks.some((chunk) => typeof chunk !== 'string')) { discarded += 1; continue; }
     const value = chunks.join('').trim();
@@ -253,7 +253,7 @@ function normalizeTxtPolicies(records: unknown, prefix: string): NormalizedRecor
 
 function normalizeCaa(records: unknown): NormalizedRecords<CaaRecord> {
   const byKey = new Map<string, CaaRecord>();
-  let discarded = 0;
+  let discarded = Array.isArray(records) ? 0 : 1;
   for (const record of Array.isArray(records) ? records : []) {
     const entry = record && typeof record === 'object' ? record as Record<string, unknown> : {};
     const critical = Number(entry.critical);
@@ -484,10 +484,11 @@ function withTimeout<T>(factory: () => Promise<T> | T, timeoutMs: number): Promi
 async function query<T>(factory: () => Promise<unknown>, normalize: (value: unknown) => NormalizedRecords<T>, timeoutMs: number): Promise<DnsQueryResult<T>> {
   try {
     const normalized = normalize(await withTimeout(factory, timeoutMs));
+    const unusable = !normalized.records.length && (normalized.truncated || normalized.discarded > 0);
     return {
-      status: normalized.records.length ? 'success' : 'not_found',
+      status: unusable ? 'error' : normalized.records.length ? 'success' : 'not_found',
       records: normalized.records,
-      error: null,
+      error: unusable ? 'The returned record family could not be retained completely; absence is unknown.' : null,
       truncated: normalized.truncated,
       discarded: normalized.discarded || 0,
     };
@@ -495,6 +496,14 @@ async function query<T>(factory: () => Promise<unknown>, normalize: (value: unkn
     if (error && typeof error === 'object' && MISSING_CODES.has(String((error as NodeJS.ErrnoException).code))) return { status: 'not_found', records: [], error: null, truncated: false, discarded: 0 };
     return { status: 'error', records: [], error: boundedError(error), truncated: false, discarded: 0 };
   }
+}
+
+function completeQuery(result: DnsQueryResult<unknown>): boolean {
+  return result.status !== 'error' && !result.truncated && result.discarded === 0;
+}
+
+function observedPresence(result: DnsQueryResult<unknown>): boolean | null {
+  return result.records.length > 0 ? true : completeQuery(result) ? false : null;
 }
 
 type CaaPolicyQuery = {
@@ -569,7 +578,7 @@ async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOp
       truncated: result.truncated,
       discarded: result.discarded,
     });
-    if (result.status === 'error') {
+    if (result.status === 'error' && !result.truncated && result.discarded === 0) {
       return {
         ...createObservation({
           status: index === 0 ? 'error' : 'partial',
@@ -764,7 +773,8 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     || discardedCount > 0
     || (caaPolicy !== null && caaPolicy.complete !== true)
     || (delegation !== null && delegation.status !== 'success');
-  const classifiedMx = mx.status === 'error' ? null : classifyMxRecords(mx.records);
+  const classifiedMx = classifyMxRecords(mx.records);
+  const mxComplete = completeQuery(mx);
 
   return {
     ...createObservation({
@@ -823,11 +833,11 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
       ...(soa ? { soa: soa.records } : {}),
       ...(https ? { https: https.records } : {}),
     },
-    hasMx: classifiedMx ? classifiedMx.hasMx : null,
-    hasNullMx: classifiedMx ? classifiedMx.hasNullMx : null,
-    mxHosts: classifiedMx ? classifiedMx.mxHosts : [],
-    hasSpf: spf.status === 'error' ? null : spf.records.length > 0,
-    hasDmarc: dmarc.status === 'error' ? null : dmarc.records.length > 0,
+    hasMx: classifiedMx.hasMx ? true : mxComplete ? false : null,
+    hasNullMx: mxComplete ? classifiedMx.hasNullMx : null,
+    mxHosts: classifiedMx.mxHosts,
+    hasSpf: observedPresence(spf),
+    hasDmarc: observedPresence(dmarc),
     delegation,
     ...(caaPolicy ? { caaPolicy } : {}),
   };

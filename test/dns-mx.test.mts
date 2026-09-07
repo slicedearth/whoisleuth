@@ -46,3 +46,12 @@ test('no MX records at all is neither hasMx nor hasNullMx', () => {
   assert.equal(result.hasNullMx, false);
   assert.deepEqual(result.mxHosts, []);
 });
+
+test('only a single preference-zero root record is a null MX declaration', () => {
+  for (const records of [
+    [{ exchange: '.', priority: 10 }],
+    [{ exchange: '.' }],
+    [{ exchange: '.', priority: 0 }, { exchange: '.', priority: 10 }],
+    [{ exchange: '.', priority: 0 }, { exchange: 'mail.example.test', priority: 10 }],
+  ]) assert.equal(classifyMxRecords(records).hasNullMx, false);
+});

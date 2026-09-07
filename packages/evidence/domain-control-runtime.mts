@@ -275,21 +275,41 @@ function canonicalIntegerAlias(
   return normalised[0] ?? null;
 }
 
-export function canonicalMxRecord(value: unknown): string {
+type CanonicalMxParts = Readonly<{ priority: number | null; exchange: string }>;
+
+function mxRecordParts(value: unknown): CanonicalMxParts | null {
   const item = structuredRecord(value, MX_RECORD_KEYS, 'Domain control MX record');
   if (item) {
-    const host = canonicalStringAlias(item, ['exchange', 'host', 'value'], exchange, 'Domain control MX host');
+    const host = canonicalStringAlias(item, ['exchange', 'host', 'value'], (value) => value === '' ? '.' : exchange(value), 'Domain control MX host');
     const priority = canonicalIntegerAlias(item, ['priority', 'preference'], MAX_DOMAIN_CONTROL_MX_PRIORITY, 'Domain control MX priority');
-    return host && priority !== null ? `${priority} ${host}` : '';
+    return host && priority !== null ? { priority, exchange: host } : null;
   }
   const candidate = recordText(value, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH).toLowerCase();
   const match = /^(\d{1,5})\s+(.+)$/u.exec(candidate);
   if (match) {
     const priority = recordInteger(match[1], MAX_DOMAIN_CONTROL_MX_PRIORITY);
     const host = exchange(match[2]);
-    return priority !== null && host ? `${priority} ${host}` : '';
+    return priority !== null && host ? { priority, exchange: host } : null;
   }
-  return exchange(candidate);
+  const host = exchange(candidate);
+  return host ? { priority: null, exchange: host } : null;
+}
+
+export function canonicalMxRecord(value: unknown): string {
+  const parts = mxRecordParts(value);
+  return !parts ? '' : parts.priority === null ? parts.exchange : `${parts.priority} ${parts.exchange}`;
+}
+
+/** Resolver records require an explicit preference; the root exchange is retained as '.'. */
+export function normalizeMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+  try {
+    const parts = mxRecordParts(value);
+    return parts && parts.priority !== null
+      ? { priority: parts.priority, exchange: parts.exchange } : null;
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return null;
+  }
 }
 
 function caaValue(value: unknown, tag: string): string {

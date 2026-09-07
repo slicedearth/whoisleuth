@@ -14,6 +14,10 @@ import {
   normalizeSoa,
 } from '../lib/dns-intelligence.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import { parseCompactLookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { normalizeBulkScanResult } from '../frontend/src/lib/analysis/bulk-scan-normalizer.ts';
+import { toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
+import { normalizeBulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 
 type DnsOptions = NonNullable<Parameters<typeof collectDnsIntelligence>[1]>;
 type DnsResolvers = NonNullable<DnsOptions['resolvers']>;
@@ -38,6 +42,46 @@ function resolvers(overrides: Partial<DnsResolvers> = {}): DnsResolvers {
     ...overrides,
   };
 }
+
+test('unusable DNS answers remain unknown through compact Bulk admission and retention', async () => {
+  const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({
+    resolveMx: async () => [{ priority: 10, exchange: 'invalid..example' }],
+    resolveTxt: async (name) => [[name.startsWith('_dmarc.') ? `v=DMARC1; p=reject; ${'x'.repeat(5000)}` : `v=spf1 ${'x'.repeat(5000)}`]],
+  }) });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.hasMx, null);
+  assert.equal(result.hasNullMx, null);
+  assert.equal(result.hasSpf, null);
+  assert.equal(result.hasDmarc, null);
+  for (const family of ['mx', 'spf', 'dmarc'] as const) {
+    const diagnostic = recordValue(result.diagnostics[family]);
+    assert.equal(diagnostic.status, 'error');
+    assert.equal(diagnostic.discarded, 1);
+  }
+  const parsed = parseCompactLookupHttpResponse({
+    availability: { applicable: true, domain: 'example.test', state: 'registered', confidence: 'high', dns: result,
+      hasMx: result.hasMx, hasNullMx: result.hasNullMx, hasSpf: result.hasSpf, hasDmarc: result.hasDmarc },
+    diagnostics: { version: 7, rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }, 'example.test');
+  assert.ok(parsed.ok);
+  const bulk = normalizeBulkScanResult(parsed.value, { targetDomain: 'example.test', mode: 'deep', profile: null, candidate: null });
+  const retained = normalizeBulkSessionResult(toBulkSessionResult(bulk));
+  assert.ok(retained);
+  assert.equal(retained.hasMx, null);
+  assert.equal(retained.hasSpf, null);
+  assert.equal(retained.hasDmarc, null);
+  const empty = await collectDnsIntelligence('example.test', { resolvers: resolvers() });
+  assert.equal(empty.hasMx, false);
+  assert.equal(empty.hasSpf, false);
+  assert.equal(empty.hasDmarc, false);
+  const positivePartial = await collectDnsIntelligence('example.test', { resolvers: resolvers({
+    resolveMx: async () => [{ priority: 10, exchange: 'mx.example.test' }, { priority: -1, exchange: 'invalid.example.test' }],
+    resolveTxt: async () => [['v=spf1 -all'], [`v=spf1 ${'x'.repeat(5000)}`]],
+  }) });
+  assert.equal(positivePartial.hasMx, true);
+  assert.equal(positivePartial.hasNullMx, null);
+  assert.equal(positivePartial.hasSpf, true);
+});
 
 test('normalizers reject malformed neighbours, deduplicate, sort, and disclose caps', () => {
   assert.deepEqual(normalizeAddresses(['192.0.2.2', 'bad', '192.0.2.1', '192.0.2.1'], 4), {

@@ -50,6 +50,16 @@ function manifest() {
 }
 
 describe('CLI domain-control observations', () => {
+  test('retains null MX and case-sensitive CAA payloads in their canonical form', () => {
+    const value = lookup();
+    value.availability.dns.records.mx = [{ priority: 0, exchange: '' }];
+    value.availability.dns.records.caa = [{ critical: 0, tag: 'iodef', value: 'https://REPORTS.EXAMPLE/Case?Ticket=One' }];
+    const observation = domainControlObservationFromSavedLookup(parseSavedLookupDocument(JSON.stringify(value)));
+    assert.deepEqual(observation.fields.find((item) => item.id === 'mail_exchangers')?.values, ['0 .']);
+    assert.deepEqual(observation.fields.find((item) => item.id === 'caa_policy')?.values, ['0 iodef https://reports.example/Case?Ticket=One']);
+    assert.equal(observation.fields.find((item) => item.id === 'caa_policy')?.state, 'observed');
+  });
+
   test('maps separately attributed bounded lookup evidence without raw payloads', () => {
     const document = parseSavedLookupDocument(JSON.stringify(lookup()));
     const observation = domainControlObservationFromSavedLookup(document);
