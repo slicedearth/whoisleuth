@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildLookupSummaryModel } from '../frontend/src/lib/analysis/lookup-summary-model.ts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 test('builds bounded assessment signals and separately attributed diagnostics', () => {
   const summary = buildLookupSummaryModel({

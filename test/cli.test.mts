@@ -15,7 +15,7 @@ import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/termi
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,

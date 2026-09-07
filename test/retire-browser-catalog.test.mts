@@ -51,14 +51,40 @@ describe('pinned browser-library catalogue projection', () => {
     assert.equal(RETIRE_BROWSER_CATALOG.sourceSha256, SOURCE_SHA256);
   });
 
-  test('projects and renders deterministic bounded catalogue data', () => {
-    const projected = projectRepository(fixtureRepository(130));
-    const vulnerabilities = record(projected.fixture).vulnerabilities;
+  test('retains every valid advisory through the component limit without changing order', () => {
+    for (const count of [1, 128, 129, 159, 256]) {
+      const source = fixtureRepository(count);
+      const projected = projectRepository(source);
 
-    assert.ok(Array.isArray(vulnerabilities));
-    assert.equal(vulnerabilities.length, 128);
-    assert.equal(renderModule(projected), renderModule(projectRepository(fixtureRepository(130))));
-    assert.doesNotMatch(renderModule(projected), /129/);
+      assert.deepEqual(record(projected.fixture).vulnerabilities, source.fixture.vulnerabilities);
+      assert.equal(renderModule(projected), renderModule(projectRepository(source)));
+    }
+  });
+
+  test('rejects oversized advisory input before parsing its records or extractors', () => {
+    const source = fixtureRepository(257);
+    Object.defineProperty(source.fixture.vulnerabilities, 0, {
+      get() { throw new Error('An oversized advisory record was read.'); },
+    });
+    Object.defineProperty(source.fixture, 'extractors', {
+      get() { throw new Error('Oversized component extractors were read.'); },
+    });
+
+    assert.throws(() => projectRepository(source), {
+      name: 'RangeError',
+      message: /fixture.*257 advisories.*256.*without truncation/u,
+    });
+  });
+
+  test('does not conceal oversized advisory input by filtering invalid records or missing extractors', () => {
+    for (const extractors of [{}, fixtureRepository().fixture.extractors]) {
+      assert.throws(() => projectRepository({
+        fixture: { extractors, vulnerabilities: Array.from({ length: 257 }, () => null) },
+      }), {
+        name: 'RangeError',
+        message: /fixture.*257 advisories.*256.*without truncation/u,
+      });
+    }
   });
 
   test('qualifies retained expressions in an isolated bounded worker', () => {

@@ -97,9 +97,22 @@ describe('bounded browser-library profile', () => {
     const finding = profile.findings.find(({ id }) => id === 'nextjs');
 
     assert.ok(finding);
-    assert.equal(finding.advisoryCount, 25);
+    assert.equal(finding.advisoryCount, 32);
     assert.ok(finding.advisoryIdentifiers.length <= 16);
     assert.ok(finding.weaknessClasses.length <= 12);
+    assert.equal(profile.status, 'success');
+  });
+
+  test('retains advisory evidence beyond the former component truncation boundary', () => {
+    const profile = analyzeBrowserLibraries({
+      html: '<script>version="16.1.6";document.getElementById("__NEXT_DATA__").textContent</script>',
+      observedAt: OBSERVED_AT,
+    });
+    const finding = profile.findings.find(({ id }) => id === 'nextjs');
+
+    assert.ok(finding);
+    assert.ok(finding.advisoryIdentifiers.includes('CVE-2026-27980'));
+    assert.ok(finding.advisoryIdentifiers.includes('CVE-2026-29057'));
     assert.equal(profile.status, 'success');
   });
 

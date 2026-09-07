@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 
 import {
   buildCommonInfrastructureSnapshot,
+  DEFAULT_UPSTREAM_COMMIT,
   FRESHNESS_DAYS,
   MAX_SOURCE_BYTES,
   main,
@@ -278,7 +279,7 @@ describe('Common-infrastructure catalogue', () => {
 
   test('parses explicit maintenance arguments without accepting moving refs', () => {
     assert.deepEqual(parseArguments([]), {
-      commit: '950282a018f0552d99f156412b650d31e7ff4688',
+      commit: DEFAULT_UPSTREAM_COMMIT,
       checkOnly: false,
     });
     assert.deepEqual(parseArguments(['--commit', 'c'.repeat(40), '--check-only']), {

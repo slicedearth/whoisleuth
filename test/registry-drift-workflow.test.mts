@@ -1,7 +1,12 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
+import { parse } from 'yaml';
 
 const WORKFLOW = readFileSync(new URL('../.github/workflows/registry-drift.yml', import.meta.url), 'utf8');
 
@@ -49,7 +54,57 @@ describe('official registry drift workflow', () => {
     assert.match(WORKFLOW, /registry-fixture-freshness-report\.json/u);
     assert.match(WORKFLOW, /registrar-standing-report\.json/u);
     assert.match(WORKFLOW, /retention-days: 7/u);
-    assert.match(WORKFLOW, /name: Require manual review[\s\S]+run: exit 1/u);
+    const workflow = parse(WORKFLOW);
+    const review = workflow.jobs.audit.steps.find((step: { env?: Record<string, string> }) => step.env?.REGISTRAR_EXIT_CODE);
+    assert.ok(review);
+    assert.match(review.run, /process\.exitCode = 1;/u);
     assert.doesNotMatch(WORKFLOW, /\b(?:gh issue|git commit|git push)\b/u);
+  });
+
+  test('explains source drift in the job summary while retaining the failing result', async () => {
+    const workflow = parse(WORKFLOW);
+    const review = workflow.jobs.audit.steps.find((step: { env?: Record<string, string> }) => step.env?.REGISTRAR_EXIT_CODE);
+    assert.ok(review);
+    const directory = await mkdtemp(path.join(tmpdir(), 'registry-review-summary-'));
+    const summary = path.join(directory, 'summary.md');
+    try {
+      await Promise.all([
+        writeFile(path.join(directory, 'registry-drift-report.json'), JSON.stringify({ checks: [] })),
+        writeFile(path.join(directory, 'registry-fixture-freshness-report.json'), JSON.stringify({ files: [] })),
+        writeFile(path.join(directory, 'registrar-standing-report.json'), JSON.stringify({ checks: [
+          { id: 'iana_registrar_ids', status: 'drift', expectedItems: 10, observedItems: 11, expectedDigest: 'a'.repeat(64), observedDigest: 'b'.repeat(64) },
+          { id: 'catalogue_freshness', status: 'current', expectedItems: 2, observedItems: 2 },
+        ] })),
+      ]);
+      const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', review.run], {
+        cwd: directory,
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_STEP_SUMMARY: summary, REGISTRY_EXIT_CODE: '0', FIXTURE_EXIT_CODE: '0', REGISTRAR_EXIT_CODE: '1' },
+        timeout: 10_000,
+        maxBuffer: 64 * 1024,
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, 1, result.stderr);
+      const rendered = await readFile(summary, 'utf8');
+      assert.match(rendered, /Registrar standing \| 1/u);
+      assert.match(rendered, /iana_registrar_ids: drift; records 10 → 11/u);
+      assert.match(rendered, /Normalised digest a{64} → b{64}/u);
+      assert.doesNotMatch(rendered, /catalogue_freshness/u);
+      assert.match(result.stdout, /::error title=Registry maintenance requires review::/u);
+
+      await writeFile(path.join(directory, 'registrar-standing-report.json'), '{invalid');
+      const unavailable = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', review.run], {
+        cwd: directory,
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_STEP_SUMMARY: summary, REGISTRY_EXIT_CODE: '0', FIXTURE_EXIT_CODE: '0', REGISTRAR_EXIT_CODE: '2' },
+        timeout: 10_000,
+        maxBuffer: 64 * 1024,
+      });
+      assert.ifError(unavailable.error);
+      assert.equal(unavailable.status, 1);
+      assert.match(await readFile(summary, 'utf8'), /Registrar report is unavailable or malformed/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

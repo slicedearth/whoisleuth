@@ -23,7 +23,7 @@ import { compareRegistrySources } from '../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,

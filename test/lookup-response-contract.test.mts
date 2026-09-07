@@ -60,7 +60,7 @@ import {
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
 import { classifyQuery } from '../lib/classify.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 const THREAT_TARGET = Object.freeze({
   type: 'domain',
