@@ -155,6 +155,12 @@ options override profile defaults.
 and Bulk output. Raw publications and extension fields are not interpreted as
 diagnostics, and missing health metadata remains unmeasured.
 
+`mail-review` keeps failed input targets, incomplete DNS coverage and original
+collection times visible. Source-output and review-generation times do not
+stand in for missing observation times. `domain-change` and
+`domain-change-packet` retain authority, resolver and certificate observation
+times; previously published version-2 packets remain verifiable.
+
 ## Exit codes
 
 | Code | Meaning |

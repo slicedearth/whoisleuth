@@ -22,6 +22,13 @@ describe('STIX 2.1 schema conformance gate', () => {
     assert.equal(await schemaTreeSha256(), SCHEMA_TREE_SHA256);
     const bundles = conformanceBundles();
     assert.equal(bundles.length, 2);
+    const objects = (JSON.parse(bundles[0]!) as { objects: Array<Record<string, unknown>> }).objects;
+    for (const type of ['domain-name', 'indicator', 'observed-data', 'relationship', 'note']) {
+      assert.ok(objects.some((object) => object.type === type), `The conformance fixture must exercise ${type}.`);
+    }
+    assert.equal(objects.filter((object) => object.type === 'indicator').length, 2);
+    assert.equal(objects.filter((object) => object.type === 'observed-data').length, 1);
+    assert.equal(objects.filter((object) => object.type === 'note').length, 1);
     await Promise.all(bundles.map((bundle) => validateStixBundle(bundle)));
   });
 

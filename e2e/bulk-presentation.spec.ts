@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
 import { TLS_RELATIONSHIP_PROFILE_VERSION } from '../packages/comparison/relationship-evidence.mts';
+import { RISK_MODEL_VERSION } from '../lib/risk-scoring.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
 // Bulk responsive presentation, identifier and relationship-evidence coverage.
@@ -178,6 +179,7 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
+      observedAt: '2026-07-13T01:00:00.000Z',
       availability: {
         applicable: true, domain: 'candidate.example', state: 'registered', confidence: 'high',
         faviconHash: 'a'.repeat(64), externalAssetHosts: ['official.example'],
@@ -239,6 +241,7 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
   const bundle = JSON.parse(await readFile(stixPath!, 'utf8'));
   expect(bundle.type).toBe('bundle');
   expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'observed-data' && item.x_whoisleuth_evidence_kind === 'direct-observation')).toBe(true);
+  expect(bundle.objects.find((item: Record<string, unknown>) => item.type === 'observed-data').first_observed).toBe('2026-07-13T01:00:00.000Z');
   expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'indicator' && item.x_whoisleuth_evidence_kind === 'heuristic-inference')).toBe(true);
   expect(JSON.stringify(bundle)).not.toContain('official.example');
 
@@ -256,8 +259,64 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
   expect(event.distribution).toBe('0');
   expect(event.Attribute).toHaveLength(1);
   expect(event.Attribute[0]).toMatchObject({ value: 'candidate.example', type: 'domain', to_ids: false, disable_correlation: true });
+  expect(event.Attribute[0].first_seen).toBe('2026-07-13T01:00:00.000Z');
+  expect(event.Attribute[0].last_seen).toBe('2026-07-13T01:00:00.000Z');
   expect(JSON.stringify(event)).not.toContain('official.example');
   await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('saved candidates without observation times export unknown time without new collection', async ({ page }) => {
+  const savedAt = '2026-08-01T00:00:00.000Z';
+  const profile = { id: 'time-review-profile', name: 'Time review', officialDomains: ['official.example'], createdAt: savedAt, updatedAt: savedAt };
+  let collectionAttempts = 0;
+  await page.route('**/api/lookup?*', async (route) => { collectionAttempts += 1; await route.abort(); });
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+    'whois-rdap-active-brand-profile-v1': profile.id,
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{
+      id: 'unknown-time-review', name: 'Unknown-time review', mode: 'deep', state: 'complete',
+      inputDigest: `sha256:${'a'.repeat(64)}`, domains: ['unknown-time.example'],
+      startedAt: savedAt, updatedAt: savedAt, completedAt: savedAt,
+      results: [{
+        domain: 'unknown-time.example', status: 'complete', availability: 'registered', confidence: 'high',
+        registrar: 'Example Registrar', activity: 'Unknown', risk: 80, opportunity: null,
+        riskModelVersion: RISK_MODEL_VERSION, observedAt: null, scanDepth: 'deep', mutationTypes: [], trusted: null,
+        profileContext: { sourceState: 'ready', activeProfileId: profile.id, profileUpdatedAt: savedAt, limitation: '' },
+      }],
+    }]),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('region', { name: 'Saved Bulk sessions' }).getByRole('article').filter({ hasText: 'Unknown-time review' }).getByRole('button', { name: 'Load', exact: true }).click();
+  const row = page.locator('.results-table tbody tr', { hasText: 'unknown-time.example' });
+  await expect(row).toBeVisible();
+  await row.locator('.star').click();
+  await row.getByRole('button', { name: /Create case/u }).click();
+  await row.locator('select.case-disp').selectOption('suspicious');
+  await openBulkFilters(page);
+  for (const format of ['stix', 'misp']) {
+    await page.getByLabel('Defensive format').selectOption(format);
+    const downloads = await captureDownloads(page, async () => {
+      await page.getByRole('button', { name: 'Export 1 reviewed indicator' }).click();
+    });
+    const download = downloads.find((item) => item.suggestedFilename().endsWith(`.${format}.json`));
+    expect(download).toBeDefined();
+    const filename = await download!.path();
+    expect(filename).not.toBeNull();
+    const document = JSON.parse(await readFile(filename!, 'utf8'));
+    if (format === 'stix') {
+      expect(document.objects.filter((item: Record<string, unknown>) => item.type === 'observed-data')).toHaveLength(0);
+      expect(document.objects.filter((item: Record<string, unknown>) => item.type === 'note')).toHaveLength(1);
+      expect(document.objects.some((item: Record<string, unknown>) => item.type === 'domain-name' && item.value === 'unknown-time.example')).toBe(true);
+    } else {
+      expect(document.Event.Attribute).toHaveLength(1);
+      expect(Object.hasOwn(document.Event.Attribute[0], 'first_seen')).toBe(false);
+      expect(Object.hasOwn(document.Event.Attribute[0], 'last_seen')).toBe(false);
+      expect(document.Event.Attribute[0].comment).toContain('observed-at=unknown');
+    }
+  }
+  expect(collectionAttempts).toBe(0);
+  await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 });
 

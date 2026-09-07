@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
@@ -11,6 +12,19 @@ import {
 const DIGEST = 'a'.repeat(64);
 const NOW = '2026-07-29T02:00:00.000Z';
 const OBSERVED = '2026-07-28T01:00:00.000Z';
+
+test('current interchange fixtures retain unknown observation times through the browser importer', () => {
+  for (const format of ['stix', 'misp']) {
+    const content = readFileSync(new URL(`./fixtures/extracted-domain-lifecycle/${format}-indicators-v2.json`, import.meta.url), 'utf8');
+    const preview = parseExternalIntelligenceDocument(JSON.parse(content), DIGEST);
+    const known = preview.items.filter((item) => item.entityValue === 'known.example');
+    const unknown = preview.items.filter((item) => item.entityValue === 'unknown.example');
+    assert.ok(known.length > 0);
+    assert.ok(unknown.length > 0);
+    assert.ok(known.some((item) => item.observedAt === '2026-08-31T12:00:00.000Z'));
+    assert.ok(unknown.every((item) => item.observedAt === null));
+  }
+});
 
 function stixBundle(objects: unknown[]) {
   return {

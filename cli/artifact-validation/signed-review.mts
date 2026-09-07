@@ -32,8 +32,9 @@ import {
 import { normalizeDomainControlManifestDocument } from '../../packages/evidence/domain-control-runtime.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
-  DOMAIN_CHANGE_PACKET_VERSION,
+  DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS,
 } from '../../lib/domain-change-packet.mts';
+import { DOMAIN_CHANGE_REVIEW_SCHEMA } from '../../lib/domain-change-review.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../../packages/contracts/domain-control-manifest.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
@@ -366,20 +367,44 @@ function validateInvestigationManifest(value: UnknownRecord): void {
   validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, INVESTIGATION_MANIFEST_VERSION);
 }
 
-function validateReviewMatrix(value: unknown, label: string): void {
+function validateSourceObservations(value: unknown, label: string): UnknownRecord[] {
+  const names = new Set<string>();
+  return array(value, label, 16).map((candidate) => {
+    const source = exact(candidate, ['label', 'source', 'state', 'observedAt'], label);
+    const name = text(source.label, `${label} label`, 120).toLowerCase();
+    if (names.has(name)) fail(`${label} duplicate label`);
+    names.add(name);
+    text(source.source, `${label} source`, 240);
+    enumeration(source.state, ['observed', 'partial', 'unavailable'], `${label} state`);
+    iso(source.observedAt, `${label} observedAt`);
+    return source;
+  });
+}
+
+function validateReviewMatrix(value: unknown, label: string, sources?: readonly UnknownRecord[]): void {
   for (const [rowIndex, candidate] of array(value, label, 500).entries()) {
     const row = exact(candidate, ['owner', 'type', 'state', 'observations'], `${label} row ${rowIndex + 1}`);
     text(row.owner, `${label} owner`, 253);
     enumeration(row.type, DNS_TYPES, `${label} type`);
     const observations = array(row.observations, `${label} observations`, 16);
+    if (sources && observations.length !== sources.length) fail(`${label} source coverage`);
     let complete = 0;
     const signatures = new Set<string>();
+    const names = new Set<string>();
     for (const observationCandidate of observations) {
-      const observation = exact(observationCandidate, ['label', 'source', 'state', 'values', 'ttlRange'], `${label} observation`);
+      const observation = exact(observationCandidate, ['label', 'source', 'state', 'values', 'ttlRange', ...(sources ? ['observedAt'] : [])], `${label} observation`);
       text(observation.label, `${label} observation label`, 120);
       text(observation.source, `${label} observation source`, 240);
       const state = enumeration(observation.state, ['observed', 'partial', 'unavailable'], `${label} observation state`);
       const values = strings(observation.values, `${label} observation values`, 500, 16_384);
+      if (sources) {
+        const name = String(observation.label).toLowerCase();
+        if (names.has(name)) fail(`${label} duplicate observation`);
+        names.add(name);
+        const source = sources.find((item) => item.label === observation.label);
+        if (!source || ['label', 'source', 'state', 'observedAt'].some((key) => observation[key] !== source[key])) fail(`${label} source provenance`);
+        iso(observation.observedAt, `${label} observation time`);
+      }
       if (state === 'observed') { complete += 1; signatures.add(JSON.stringify(values)); }
       if (observation.ttlRange !== null) {
         const range = exact(observation.ttlRange, ['minimum', 'maximum'], `${label} TTL range`);
@@ -393,14 +418,16 @@ function validateReviewMatrix(value: unknown, label: string): void {
   }
 }
 
-function validateDomainChangeReview(value: unknown, label: string): UnknownRecord {
-  const review = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'state', 'authoritativeRecordMatrix', 'resolverDivergenceMatrix', 'dnssecAutomation', 'acmeDependencies', 'certificate', 'services', 'hsts', 'gate', 'limitations'], label);
-  if (review.schema !== 'whoisleuth.domain-change.review' || review.version !== 1) fail(label);
+function validateDomainChangeReview(value: unknown, label: string, version: number): UnknownRecord {
+  const retainedTimes = version >= 2;
+  const review = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'state', 'authoritativeRecordMatrix', 'resolverDivergenceMatrix', 'dnssecAutomation', 'acmeDependencies', 'certificate', 'services', 'hsts', 'gate', 'limitations', ...(retainedTimes ? ['sourceObservations'] : [])], label);
+  if (review.schema !== DOMAIN_CHANGE_REVIEW_SCHEMA || review.version !== version) fail(label);
   iso(review.generatedAt, `${label} generatedAt`);
   domain(review.domain, `${label} domain`);
   enumeration(review.state, ['ready', 'review'], `${label} state`);
-  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`);
-  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`);
+  const sources = retainedTimes ? exact(review.sourceObservations, ['authorities', 'resolvers'], `${label} source observations`) : null;
+  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`, sources ? validateSourceObservations(sources.authorities, `${label} authority sources`) : undefined);
+  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`, sources ? validateSourceObservations(sources.resolvers, `${label} resolver sources`) : undefined);
   const automation = exact(review.dnssecAutomation, ['state', 'cdsObserved', 'cdnskeyObserved', 'csyncObserved', 'conflictingTypes', 'detail'], `${label} DNSSEC automation`);
   enumeration(automation.state, ['not_observed', 'conflict', 'partial', 'review_ready'], `${label} DNSSEC automation`);
   boolean(automation.cdsObserved, `${label} CDS observed`);
@@ -416,8 +443,12 @@ function validateDomainChangeReview(value: unknown, label: string): UnknownRecor
     optionalText(dependency.provider, `${label} ACME provider`, 120);
     enumeration(dependency.state, ['confirmed', 'partial', 'unknown'], `${label} ACME state`);
   }
-  const certificate = exact(review.certificate, ['state', 'continuity', 'findings'], `${label} certificate`);
+  const certificate = exact(review.certificate, ['state', 'continuity', 'findings', ...(retainedTimes ? ['observedAt'] : [])], `${label} certificate`);
   enumeration(certificate.state, ['not_supplied', 'observed', 'partial', 'unavailable'], `${label} certificate state`);
+  if (retainedTimes) {
+    iso(certificate.observedAt, `${label} certificate observedAt`, true);
+    if ((certificate.state === 'not_supplied') !== (certificate.observedAt === null)) fail(`${label} certificate observation time`);
+  }
   enumeration(certificate.continuity, ['unknown', 'retained', 'changes'], `${label} certificate continuity`);
   strings(certificate.findings, `${label} certificate findings`, 8, 600);
   for (const candidate of array(review.services, `${label} services`, 1_000)) {
@@ -535,6 +566,9 @@ function expectedDomainChangeSummary(
 
 function validateDomainChangePacket(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'reference', 'state', 'gate', 'summary', 'evidence', 'limitations', 'integrity'], 'Domain change packet');
+  const version = integer(root.version, 'Domain change packet version', 1, 1_000);
+  const reviewVersion = DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS[version];
+  if (reviewVersion === undefined) fail('Domain change packet version');
   iso(root.generatedAt, 'Domain change packet generatedAt');
   domain(root.domain, 'Domain change packet domain');
   text(root.reference, 'Domain change packet reference', 200);
@@ -556,8 +590,8 @@ function validateDomainChangePacket(value: UnknownRecord): void {
   enumeration(summary.postChangeState, ['ready', 'review'], 'Domain change packet post-change state');
   enumeration(summary.assuranceState, ['incomplete', 'needs_review', 'ready'], 'Domain change packet assurance state');
   const evidence = exact(root.evidence, ['preChange', 'postChange', 'assurance'], 'Domain change packet evidence');
-  const pre = validateDomainChangeReview(evidence.preChange, 'Domain change packet pre-change review');
-  const post = validateDomainChangeReview(evidence.postChange, 'Domain change packet post-change review');
+  const pre = validateDomainChangeReview(evidence.preChange, 'Domain change packet pre-change review', reviewVersion);
+  const post = validateDomainChangeReview(evidence.postChange, 'Domain change packet post-change review', reviewVersion);
   const assurance = validatePlannedAssurance(evidence.assurance, 'Domain change packet assurance');
   const assuranceResult = assurance.result as UnknownRecord;
   if (pre.generatedAt !== root.generatedAt || post.generatedAt !== root.generatedAt || assurance.generatedAt !== root.generatedAt
@@ -584,7 +618,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
       || !sameValues(item.afterValues as unknown[], expected.afterValues);
   })) fail('Domain change packet summary');
   strings(root.limitations, 'Domain change packet limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, DOMAIN_CHANGE_PACKET_VERSION);
+  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, version);
 }
 
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {

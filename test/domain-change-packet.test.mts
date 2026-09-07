@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
@@ -68,6 +70,41 @@ function packetInput() {
 }
 
 describe('domain change packet', () => {
+  test('continues to verify the immutable published packet shape without inventing missing times', async () => {
+    const bytes = readFileSync(new URL('./fixtures/cli-domain-change-packet-v2.json', import.meta.url), 'utf8');
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), 'fa140ed955f32ed351a37316c5e0ca28cd0b85376d96afe051e0d7836d837868');
+    const original = JSON.parse(bytes);
+    assert.equal(original.version, 2);
+    assert.equal(original.evidence.preChange.version, 1);
+    assert.equal(Object.hasOwn(original.evidence.preChange.certificate, 'observedAt'), false);
+    assert.equal((await verifyOfflineArtifact(bytes)).state, 'verified');
+    assert.equal(JSON.stringify(original, null, 2) + '\n', bytes);
+  });
+
+  test('verifies source times in current packets and rejects missing or internally contradictory provenance', async () => {
+    const value = packetInput();
+    value.preChange.authoritySnapshots[0]!.observedAt = '2026-08-04T06:00:00.000Z';
+    const packet = await buildDomainChangePacket(value, NOW);
+    assert.equal(packet.version, 3);
+    assert.equal(packet.evidence.preChange.version, 2);
+    assert.equal(packet.evidence.preChange.authoritativeRecordMatrix[0]?.observations[0]?.observedAt, '2026-08-04T06:00:00.000Z');
+    assert.equal(packet.evidence.postChange.authoritativeRecordMatrix[0]?.observations[0]?.observedAt, NOW);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(packet))).state, 'verified');
+    const mutations: Array<(item: typeof packet) => void> = [
+      (item) => { Reflect.deleteProperty(item.evidence.preChange, 'sourceObservations'); },
+      (item) => { Reflect.deleteProperty(item.evidence.preChange.authoritativeRecordMatrix[0]!.observations[0]!, 'observedAt'); },
+      (item) => { Reflect.set(item.evidence.preChange.authoritativeRecordMatrix[0]!.observations[0]!, 'observedAt', NOW); },
+      (item) => { Reflect.set(item.evidence.preChange.certificate, 'observedAt', NOW); },
+      (item) => { Reflect.set(item.evidence.preChange, 'version', 1); },
+      (item) => { Reflect.set(item, 'version', 999); },
+    ];
+    for (const mutate of mutations) {
+      const invalid = structuredClone(packet);
+      mutate(invalid);
+      await assert.rejects(verifyOfflineArtifact(JSON.stringify(await redigest(invalid))), /unsupported|malformed|version/iu);
+    }
+  });
+
   test('assembles a ready digest-protected packet without collection', async () => {
     const packet = await buildDomainChangePacket(packetInput(), NOW);
     assert.equal(packet.schema, DOMAIN_CHANGE_PACKET_SCHEMA);

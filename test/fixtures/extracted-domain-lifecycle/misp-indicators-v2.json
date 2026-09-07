@@ -1,0 +1,42 @@
+{
+  "Event": {
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "date": "2026-09-01",
+    "info": "WHOISleuth heuristic defensive-domain candidates for analyst review (export v2)",
+    "threat_level_id": "4",
+    "analysis": "0",
+    "distribution": "0",
+    "published": false,
+    "timestamp": "1788220800",
+    "publish_timestamp": "0",
+    "disable_correlation": true,
+    "Attribute": [
+      {
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "type": "domain",
+        "category": "Network activity",
+        "value": "known.example",
+        "to_ids": false,
+        "distribution": "5",
+        "timestamp": "1788220800",
+        "first_seen": "2026-08-31T12:00:00.000Z",
+        "last_seen": "2026-08-31T12:00:00.000Z",
+        "comment": "Heuristic Bulk finding; availability=registered; risk=80; risk-model=v4; scan-depth=deep; observed-at=2026-08-31T12:00:00.000Z; timestamp-basis=scan; Review before operational use; false positives are possible.",
+        "disable_correlation": true,
+        "deleted": false
+      },
+      {
+        "uuid": "00000000-0000-4000-8000-000000000003",
+        "type": "domain",
+        "category": "Network activity",
+        "value": "unknown.example",
+        "to_ids": false,
+        "distribution": "5",
+        "timestamp": "1788220800",
+        "comment": "Heuristic Bulk finding; availability=registered; risk=80; risk-model=v4; scan-depth=deep; observed-at=unknown; timestamp-basis=unknown; Review before operational use; false positives are possible.",
+        "disable_correlation": true,
+        "deleted": false
+      }
+    ]
+  }
+}

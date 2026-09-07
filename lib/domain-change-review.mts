@@ -8,8 +8,9 @@ import {
 import { normaliseRdata } from './zone-intent-review.mts';
 
 export const DOMAIN_CHANGE_INPUT_SCHEMA = 'whoisleuth.domain-change.input';
+export const DOMAIN_CHANGE_INPUT_VERSION = 1;
 export const DOMAIN_CHANGE_REVIEW_SCHEMA = 'whoisleuth.domain-change.review';
-export const DOMAIN_CHANGE_REVIEW_VERSION = 1;
+export const DOMAIN_CHANGE_REVIEW_VERSION = 2;
 export const MAX_DOMAIN_CHANGE_VANTAGES = 16;
 export const MAX_DOMAIN_CHANGE_RECORDS = 500;
 
@@ -102,6 +103,10 @@ function normaliseSnapshots(value: unknown, apex: string, label: string) {
   return Object.freeze(snapshots);
 }
 
+function snapshotProvenance(snapshot: ReturnType<typeof normaliseSnapshots>[number]) {
+  return Object.freeze({ label: snapshot.label, source: snapshot.source, state: snapshot.state, observedAt: snapshot.observedAt });
+}
+
 function recordMatrix(snapshots: ReturnType<typeof normaliseSnapshots>) {
   const keys = [...new Set(snapshots.flatMap((snapshot) => snapshot.records.map((item) => `${item.owner}\u0000${item.type}`)))].sort();
   return Object.freeze(keys.map((key) => {
@@ -110,9 +115,7 @@ function recordMatrix(snapshots: ReturnType<typeof normaliseSnapshots>) {
       const matches = snapshot.records.filter((item) => item.owner === recordOwner && item.type === type);
       const ttls = matches.map((item) => item.ttl).filter((ttl): ttl is number => ttl !== null);
       return Object.freeze({
-        label: snapshot.label,
-        source: snapshot.source,
-        state: snapshot.state,
+        ...snapshotProvenance(snapshot),
         values: Object.freeze([...new Set(matches.map((item) => item.value))].sort()),
         ttlRange: ttls.length ? Object.freeze({
           minimum: Math.min(...ttls),
@@ -209,7 +212,7 @@ function normaliseCertificate(value: unknown) {
 }
 
 function reviewCertificate(certificate: ReturnType<typeof normaliseCertificate>) {
-  if (!certificate) return Object.freeze({ state: 'not_supplied' as const, continuity: 'unknown' as const, findings: Object.freeze([]) });
+  if (!certificate) return Object.freeze({ state: 'not_supplied' as const, observedAt: null, continuity: 'unknown' as const, findings: Object.freeze([]) });
   const continuity = !certificate.currentSpkiSha256 || !certificate.plannedSpkiSha256
     ? 'unknown' as const
     : certificate.currentSpkiSha256 === certificate.plannedSpkiSha256 ? 'retained' as const : 'changes' as const;
@@ -219,7 +222,7 @@ function reviewCertificate(certificate: ReturnType<typeof normaliseCertificate>)
     ...(certificate.embeddedSctCount === 0
       ? ['No embedded certificate-transparency timestamp was observed; this does not establish that the certificate was not logged by another mechanism.'] : []),
   ];
-  return Object.freeze({ state: certificate.state, continuity, findings: Object.freeze(findings) });
+  return Object.freeze({ state: certificate.state, observedAt: certificate.observedAt, continuity, findings: Object.freeze(findings) });
 }
 
 function normaliseHsts(value: unknown) {
@@ -246,7 +249,7 @@ function serviceInventory(snapshots: readonly ReturnType<typeof normaliseSnapsho
 
 export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
   const input = requireRecord(inputRaw, 'Domain change input');
-  if (input.schema !== DOMAIN_CHANGE_INPUT_SCHEMA || input.version !== 1) throw new TypeError(`Domain change input must use ${DOMAIN_CHANGE_INPUT_SCHEMA} version 1.`);
+  if (input.schema !== DOMAIN_CHANGE_INPUT_SCHEMA || input.version !== DOMAIN_CHANGE_INPUT_VERSION) throw new TypeError(`Domain change input must use ${DOMAIN_CHANGE_INPUT_SCHEMA} version ${DOMAIN_CHANGE_INPUT_VERSION}.`);
   exactKeys(input, ROOT_KEYS, 'Domain change input');
   const apex = domain(input.domain, 'domain');
   const authoritySnapshots = normaliseSnapshots(input.authoritySnapshots ?? [], apex, 'authoritySnapshots');
@@ -294,6 +297,10 @@ export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Dat
     generatedAt: timestamp(generatedAtValue, 'generatedAt'),
     domain: apex,
     state: reviewRequired ? 'review' as const : 'ready' as const,
+    sourceObservations: Object.freeze({
+      authorities: Object.freeze(authoritySnapshots.map(snapshotProvenance)),
+      resolvers: Object.freeze(resolverSnapshots.map(snapshotProvenance)),
+    }),
     authoritativeRecordMatrix: authorityMatrix,
     resolverDivergenceMatrix: resolverMatrix,
     dnssecAutomation: reviewDnssecAutomation(authorityMatrix),

@@ -341,7 +341,7 @@ describe('schema compatibility inventory', () => {
       assert.equal(byId(inventory, id).currentVersion, version);
     }
     assert.deepEqual(byId(inventory, 'cli.page-compare').supportedVersions, [4]);
-    assert.deepEqual(byId(inventory, 'cli.mail-review').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'cli.mail-review').supportedVersions, [CLI_MAIL_REVIEW_VERSION]);
     assert.equal(byId(inventory, 'cli.lookup-reconciliation').schema, 'whoisleuth.cli.lookup-reconciliation');
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');

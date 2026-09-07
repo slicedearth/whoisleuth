@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CRITICAL_MUTATION_MANIFEST,
   CRITICAL_MUTATION_MANIFEST_VERSION,
+  assertUniqueCriticalMutationPattern,
   MAX_CRITICAL_MUTANTS,
   MAX_CRITICAL_MUTATION_OUTPUT_BYTES,
   MAX_CRITICAL_MUTATION_TEXT_BYTES,
@@ -39,7 +40,6 @@ function validateManifest(): void {
   }
   for (const mutant of CRITICAL_MUTATION_MANIFEST) {
     if (!/^[a-z0-9][a-z0-9-]{2,79}$/u.test(mutant.id) || !SAFE_PATH.test(mutant.file)
-      || !Number.isSafeInteger(mutant.line) || mutant.line < 1
       || !Number.isSafeInteger(mutant.timeoutMs) || mutant.timeoutMs < 1_000 || mutant.timeoutMs > MAX_CRITICAL_MUTATION_TIMEOUT_MS
       || mutant.focusedTests.length < 1 || mutant.focusedTests.length > 8
       || mutant.focusedTests.some((file) => !/^test\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+\.test\.mts$/u.test(file))
@@ -50,9 +50,7 @@ function validateManifest(): void {
     const absolute = path.resolve(REPOSITORY_ROOT, mutant.file);
     if (!absolute.startsWith(`${REPOSITORY_ROOT}${path.sep}`) || !statSync(absolute).isFile()) throw new TypeError(`Critical mutant ${mutant.id} target is unavailable.`);
     const source = readFileSync(absolute, 'utf8');
-    if (source.split(mutant.search).length !== 2 || source.split('\n')[mutant.line - 1]?.includes(mutant.search.trim()) !== true) {
-      throw new TypeError(`Critical mutant ${mutant.id} source location or pattern drifted.`);
-    }
+    assertUniqueCriticalMutationPattern(source, mutant.search, `Critical mutant ${mutant.id}`);
     for (const test of mutant.focusedTests) if (!statSync(path.join(REPOSITORY_ROOT, test)).isFile()) throw new TypeError(`Critical mutant ${mutant.id} focused test is unavailable.`);
   }
 }

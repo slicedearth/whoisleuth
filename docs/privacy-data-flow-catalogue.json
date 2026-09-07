@@ -8808,9 +8808,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.internal.misp-indicators",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -8952,9 +8953,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.internal.stix-indicators",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -10797,7 +10799,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.internal.misp-indicators",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -10869,7 +10871,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.internal.stix-indicators",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",

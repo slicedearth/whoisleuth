@@ -3,6 +3,7 @@
 
 import {
   collectDefensiveIndicatorCandidates,
+  defensiveIndicatorProvenance,
   MAX_DEFENSIVE_INDICATORS,
 } from './defensive-indicator-export.mts';
 import { MISP_INDICATOR_EXPORT_VERSION } from '../contracts/analyst-interchange.mts';
@@ -19,10 +20,6 @@ type UuidFactory = () => unknown;
 type MispExportOptions = {
   generatedAt?: unknown;
   uuidFactory?: unknown;
-};
-type ObservationTime = {
-  observedAt: string;
-  basis: 'scan' | 'export';
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -54,50 +51,16 @@ function nextUuid(uuidFactory: UuidFactory, used: Set<string>): string {
   return uuid;
 }
 
-function riskScore(value: unknown): number | null {
-  const source = record(value);
-  const score = source.risk ?? source.riskScore;
-  return typeof score === 'number' && Number.isFinite(score)
-    ? Math.max(0, Math.min(100, Math.round(score)))
-    : null;
-}
-
-function riskModelVersion(value: unknown): number | null {
-  const source = record(value);
-  const saved = record(source.saved);
-  const version = source.riskModelVersion ?? saved.riskModelVersion;
-  return typeof version === 'number' && Number.isSafeInteger(version) && version > 0 && version <= 1000
-    ? version
-    : null;
-}
-
-function scanDepth(value: unknown): 'fast' | 'deep' | 'unknown' {
-  const source = record(value);
-  const saved = record(source.saved);
-  const depth = source.scanDepth ?? saved.scanDepth;
-  return depth === 'fast' || depth === 'deep' ? depth : 'unknown';
-}
-
-function observationTime(value: unknown, generatedAt: string): ObservationTime {
-  const source = record(value);
-  const saved = record(source.saved);
-  const observedAt = isoTimestamp(source.observedAt) || isoTimestamp(saved.observedAt);
-  return observedAt
-    ? { observedAt, basis: 'scan' }
-    : { observedAt: generatedAt, basis: 'export' };
-}
-
-function attributeComment(source: unknown, observation: ObservationTime): string {
-  const score = riskScore(source);
-  const modelVersion = riskModelVersion(source);
+function attributeComment(source: unknown, provenance: ReturnType<typeof defensiveIndicatorProvenance>): string {
+  const { riskScore: score, riskModelVersion: modelVersion, scanDepth, observedAt } = provenance;
   return [
     'Heuristic Bulk finding',
     `availability=${record(source).availability}`,
     `risk=${score ?? 'unknown'}`,
     ...(modelVersion === null ? [] : [`risk-model=v${modelVersion}`]),
-    `scan-depth=${scanDepth(source)}`,
-    `observed-at=${observation.observedAt}`,
-    `timestamp-basis=${observation.basis}`,
+    `scan-depth=${scanDepth}`,
+    `observed-at=${observedAt ?? 'unknown'}`,
+    `timestamp-basis=${observedAt ? 'scan' : 'unknown'}`,
     WARNING,
   ].join('; ');
 }
@@ -118,7 +81,7 @@ export function buildMispIndicatorExport(records: unknown, options: MispExportOp
   const eventUuid = nextUuid(uuidFactory, used);
   const epochSeconds = String(Math.floor(Date.parse(generatedAt) / 1000));
   const attributes = collected.entries.map(({ domain, source }) => {
-    const observation = observationTime(source, generatedAt);
+    const provenance = defensiveIndicatorProvenance(source);
     return {
       uuid: nextUuid(uuidFactory, used),
       type: 'domain',
@@ -127,9 +90,8 @@ export function buildMispIndicatorExport(records: unknown, options: MispExportOp
       to_ids: false,
       distribution: '5',
       timestamp: epochSeconds,
-      first_seen: observation.observedAt,
-      last_seen: observation.observedAt,
-      comment: attributeComment(source, observation),
+      ...(provenance.observedAt ? { first_seen: provenance.observedAt, last_seen: provenance.observedAt } : {}),
+      comment: attributeComment(source, provenance),
       disable_correlation: true,
       deleted: false,
     };

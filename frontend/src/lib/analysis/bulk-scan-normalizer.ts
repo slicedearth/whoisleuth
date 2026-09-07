@@ -1,6 +1,7 @@
 import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
 import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
 import { createPageBaseline } from './page-baseline.ts';
@@ -126,6 +127,7 @@ export function normalizeBulkScanResult(
   const saved: SavedScanRecord = {
     domain,
     scanDepth: context.mode,
+    observedAt: normalizeExplicitIsoTimestamp(body.observedAt),
     availability: body.availability.state,
     registrarName: entityDisplayName(availability.registrar) || '—',
     nameservers,

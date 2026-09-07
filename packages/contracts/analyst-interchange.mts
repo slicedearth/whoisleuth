@@ -15,9 +15,9 @@ export const DEFENSIVE_INDICATOR_EXPORT_VERSION = 2;
 export const DEFENSIVE_INDICATOR_MANIFEST_SCHEMA = 'whoisleuth.defensive-indicator-manifest';
 export const DEFENSIVE_INDICATOR_ROLLBACK_SCHEMA = 'whoisleuth.defensive-indicator-rollback';
 export const STIX_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.stix-indicators';
-export const STIX_INDICATOR_EXPORT_VERSION = 1;
+export const STIX_INDICATOR_EXPORT_VERSION = 2;
 export const MISP_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.misp-indicators';
-export const MISP_INDICATOR_EXPORT_VERSION = 1;
+export const MISP_INDICATOR_EXPORT_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
@@ -57,17 +57,17 @@ const DEFENSIVE_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
 });
 const STIX_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.stix-indicators', kind: 'export', schema: null,
-  currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [STIX_INDICATOR_EXPORT_VERSION],
+  currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1, STIX_INDICATOR_EXPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.',
+  note: 'STIX 2.1 bundle with observations separated from heuristic indicators. Version 2 uses a Note when observation time is unknown; Indicator validity starts at creation, not at a substituted sighting time.',
 });
 const MISP_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.misp-indicators', kind: 'export', schema: null,
-  currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [MISP_INDICATOR_EXPORT_VERSION],
+  currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1, MISP_INDICATOR_EXPORT_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Unpublished, non-IDS, non-correlating event for reviewed import.',
+  note: 'Unpublished, non-IDS, non-correlating event for reviewed import. Version 2 omits optional seen times when the source observation time is unknown.',
 });
 const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-summary', kind: 'export', schema: WEB_CAPTURE_SUMMARY_SCHEMA,
@@ -162,11 +162,17 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
     { descriptor: STIX_INDICATORS_COMPATIBILITY, lifecycleSchema: STIX_INDICATOR_LIFECYCLE_SCHEMA,
       requiredKeys: ['type', 'id', 'objects'], optionalKeys: ['x_whoisleuth_export_version'],
       hook: { module: 'packages/interchange/stix-indicator-export.mts', exportName: 'buildStixIndicatorExport', role: 'builder', runtime: 'shared' },
-      fixtures: [{ id: 'stix-indicators-v1', path: `${F}stix-indicators-v1.json`, bytes: 115, sha256: '517fe4aec65bbdb5252945d5f0f0a393c5c72a2eb8f48a1c8147ae5c6e681f8e', version: STIX_INDICATOR_EXPORT_VERSION }] },
+      fixtures: [
+        { id: 'stix-indicators-v1', path: `${F}stix-indicators-v1.json`, bytes: 115, sha256: '517fe4aec65bbdb5252945d5f0f0a393c5c72a2eb8f48a1c8147ae5c6e681f8e', version: 1 },
+        { id: 'stix-indicators-v2', path: `${F}stix-indicators-v2.json`, bytes: 5302, sha256: '09b3e53413944efbad81458b0042cc76e4d64f0895d5c1c2dbace3d52af0a6a4', version: STIX_INDICATOR_EXPORT_VERSION },
+      ] },
     { descriptor: MISP_INDICATORS_COMPATIBILITY, lifecycleSchema: MISP_INDICATOR_LIFECYCLE_SCHEMA,
       requiredKeys: ['Event'], optionalKeys: [],
       hook: { module: 'packages/interchange/misp-indicator-export.mts', exportName: 'buildMispIndicatorExport', role: 'builder', runtime: 'shared' },
-      fixtures: [{ id: 'misp-indicators-v1', path: `${F}misp-indicators-v1.json`, bytes: 167, sha256: '043102cfb145ead16f6eba9b4ebe723aed12cc02f5899c918a0d172674e74997', version: MISP_INDICATOR_EXPORT_VERSION }] },
+      fixtures: [
+        { id: 'misp-indicators-v1', path: `${F}misp-indicators-v1.json`, bytes: 167, sha256: '043102cfb145ead16f6eba9b4ebe723aed12cc02f5899c918a0d172674e74997', version: 1 },
+        { id: 'misp-indicators-v2', path: `${F}misp-indicators-v2.json`, bytes: 1611, sha256: '9bcf624c2bcc6da9e1299ef470b288ca2f2da51c65665f0729f332c513a3d558', version: MISP_INDICATOR_EXPORT_VERSION },
+      ] },
     { descriptor: WEB_CAPTURE_SUMMARY_COMPATIBILITY, lifecycleSchema: WEB_CAPTURE_SUMMARY_SCHEMA,
       requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: [],
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureSummary', role: 'normaliser', runtime: 'shared' },

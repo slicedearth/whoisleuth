@@ -32,7 +32,7 @@ test('builds an unpublished organization-only MISP event for analyst review', ()
   assert.equal(event.analysis, '0');
   assert.equal(event.threat_level_id, '4');
   assert.equal(event.disable_correlation, true);
-  assert.match(event.info, /analyst review \(export v1\)$/);
+  assert.match(event.info, /analyst review \(export v2\)$/);
   assert.equal(event.Attribute.length, 1);
 });
 
@@ -64,11 +64,15 @@ test('preserves scan observation time and its provenance basis', () => {
   assert.match(attribute.comment, /timestamp-basis=scan/);
 });
 
-test('uses export time only when no scan observation timestamp is available', () => {
-  const attribute = JSON.parse(exported([result('candidate.example', { saved: { scanDepth: 'fast' } })]).content).Event.Attribute[0];
-  assert.equal(attribute.first_seen, NOW);
-  assert.match(attribute.comment, /timestamp-basis=export/);
-  assert.match(attribute.comment, /scan-depth=fast/);
+test('leaves seen times absent when observation time is unknown or malformed', () => {
+  for (const observedAt of [undefined, null, '', 'invalid', '2026-02-30T00:00:00Z', '2026-07-14T08:00:00']) {
+    const attribute = JSON.parse(exported([result('candidate.example', { saved: { scanDepth: 'fast', observedAt } })]).content).Event.Attribute[0];
+    assert.equal(Object.hasOwn(attribute, 'first_seen'), false);
+    assert.equal(Object.hasOwn(attribute, 'last_seen'), false);
+    assert.equal(attribute.timestamp, String(Date.parse(NOW) / 1000));
+    assert.match(attribute.comment, /observed-at=unknown; timestamp-basis=unknown/);
+    assert.match(attribute.comment, /scan-depth=fast/);
+  }
 });
 
 test('canonicalizes, sorts, deduplicates, and excludes ineligible results', () => {
@@ -104,7 +108,7 @@ test('rejects non-array input and invalid or duplicate UUIDs', () => {
 
 test('returns a bounded local JSON download contract', () => {
   const output = exported([result('candidate.example')]);
-  assert.equal(output.version, 1);
+  assert.equal(output.version, 2);
   assert.equal(output.filename, 'whoisleuth-defensive-domains-2026-07-14.misp.json');
   assert.equal(output.mimeType, 'application/json;charset=utf-8');
   assert.equal(output.generatedAt, NOW);

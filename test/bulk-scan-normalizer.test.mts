@@ -10,6 +10,19 @@ import { normalizeBulkSessionResult } from '../frontend/src/lib/analysis/bulk-se
 import type { CompactLookupHttpResponse } from '../frontend/src/lib/analysis/lookup-response.ts';
 
 describe('Bulk scan normalizer', () => {
+  test('carries the source observation time into live export provenance without substituting a local clock', () => {
+    const context = { targetDomain: 'candidate.example', mode: 'deep', profile: null, candidate: null } as const;
+    for (const observedAt of ['2026-08-01T01:00:00+01:00', undefined, null, 'invalid', '2026-08-01T01:00:00']) {
+      const body = {
+        ...(observedAt === undefined ? {} : { observedAt }),
+        availability: { applicable: true, domain: 'candidate.example', state: 'registered', confidence: 'high' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      } as const satisfies CompactLookupHttpResponse;
+      const row = normalizeBulkScanResult(body, context);
+      assert.equal(row.saved.observedAt, observedAt === '2026-08-01T01:00:00+01:00' ? '2026-08-01T00:00:00.000Z' : null);
+    }
+  });
+
   test('retains only bounded derived evidence with separate source states', () => {
     const body = {
       availability: {

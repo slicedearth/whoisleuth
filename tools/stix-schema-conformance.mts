@@ -175,7 +175,12 @@ function conformanceBundles(): string[] {
   const generatedAt = '2026-08-01T00:00:00.000Z';
   const indicators = buildStixIndicatorExport([{
     domain: 'candidate.example', availability: 'registered', risk: 80, status: 'complete',
+    profileContext: { sourceState: 'ready' },
     saved: { scanDepth: 'deep', riskModelVersion: RISK_MODEL_VERSION, observedAt: generatedAt },
+  }, {
+    domain: 'unknown-time.example', availability: 'registered', risk: 80, status: 'complete',
+    profileContext: { sourceState: 'ready' },
+    saved: { scanDepth: 'fast', riskModelVersion: RISK_MODEL_VERSION, observedAt: null },
   }], { generatedAt, idFactory: idFactory() }).content;
   const caseRecord = createCase({
     domain: 'candidate.example',

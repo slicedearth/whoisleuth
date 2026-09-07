@@ -16,8 +16,6 @@ import {
   MAX_RELATIONSHIP_GRAPH_EDGES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
 } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
-import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
-import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 import {
   buildInvestigationCaseRelationships,
   type CaseRelationshipObservation,
@@ -329,8 +327,6 @@ describe('relationship graph interchange export', () => {
       () => buildRelationshipGraphExport(summary(), { generatedAt: NOW, format: 1 }),
       /must be JSON, GraphML, or GEXF/i,
     );
-    assert.equal(STIX_INDICATOR_EXPORT_VERSION, 1);
-    assert.equal(MISP_INDICATOR_EXPORT_VERSION, 1);
     assert.doesNotMatch(buildRelationshipGraphExport(summary(), { generatedAt: NOW }).content, /application\/stix|MISP event/);
   });
 });

@@ -11,6 +11,7 @@ import {
 } from './domain-assurance.mts';
 import {
   DOMAIN_CHANGE_INPUT_SCHEMA,
+  DOMAIN_CHANGE_REVIEW_VERSION,
   reviewDomainChange,
 } from './domain-change-review.mts';
 import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.mts';
@@ -18,7 +19,12 @@ import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../packages/evidence/art
 export const DOMAIN_CHANGE_PACKET_INPUT_SCHEMA = 'whoisleuth.domain-change-packet.input';
 export const DOMAIN_CHANGE_PACKET_SCHEMA = 'whoisleuth.domain-change-packet';
 export const DOMAIN_CHANGE_PACKET_INPUT_VERSION = 1;
-export const DOMAIN_CHANGE_PACKET_VERSION = 2;
+export const DOMAIN_CHANGE_PACKET_VERSION = 3;
+export const DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS: Readonly<Record<number, number>> = Object.freeze({
+  2: 1,
+  [DOMAIN_CHANGE_PACKET_VERSION]: DOMAIN_CHANGE_REVIEW_VERSION,
+});
+export const SUPPORTED_DOMAIN_CHANGE_PACKET_VERSIONS = Object.freeze(Object.keys(DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS).map(Number));
 export const MAX_DOMAIN_CHANGE_PACKET_INPUT_BYTES = 6 * 1024 * 1024;
 
 const ROOT_KEYS = new Set([

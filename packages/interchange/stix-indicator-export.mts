@@ -4,6 +4,7 @@
 
 import {
   collectDefensiveIndicatorCandidates,
+  defensiveIndicatorProvenance,
 } from './defensive-indicator-export.mts';
 import { STIX_INDICATOR_EXPORT_VERSION } from '../contracts/analyst-interchange.mts';
 
@@ -20,10 +21,6 @@ type StixExportOptions = {
   generatedAt?: unknown;
   idFactory?: unknown;
 };
-type ObservationTime = {
-  observedAt: string;
-  basis: 'scan' | 'export';
-};
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -35,39 +32,6 @@ function isoTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-}
-
-function riskScore(value: unknown): number | null {
-  const source = record(value);
-  const score = source.risk ?? source.riskScore;
-  return typeof score === 'number' && Number.isFinite(score)
-    ? Math.max(0, Math.min(100, Math.round(score)))
-    : null;
-}
-
-function riskModelVersion(value: unknown): number | null {
-  const source = record(value);
-  const saved = record(source.saved);
-  const version = source.riskModelVersion ?? saved.riskModelVersion;
-  return typeof version === 'number' && Number.isSafeInteger(version) && version > 0 && version <= 1000
-    ? version
-    : null;
-}
-
-function scanDepth(value: unknown): 'fast' | 'deep' | 'unknown' {
-  const source = record(value);
-  const saved = record(source.saved);
-  const depth = source.scanDepth ?? saved.scanDepth;
-  return depth === 'fast' || depth === 'deep' ? depth : 'unknown';
-}
-
-function observationTime(value: unknown, generatedAt: string): ObservationTime {
-  const source = record(value);
-  const saved = record(source.saved);
-  const observedAt = isoTimestamp(source.observedAt) || isoTimestamp(saved.observedAt);
-  return observedAt
-    ? { observedAt, basis: 'scan' }
-    : { observedAt: generatedAt, basis: 'export' };
 }
 
 function defaultIdFactory(type: string): string {
@@ -116,26 +80,33 @@ export function buildStixIndicatorExport(records: unknown, options: StixExportOp
   }];
 
   for (const { domain, source } of collected.entries) {
+    const provenance = defensiveIndicatorProvenance(source);
+    const { observedAt, riskScore: score, riskModelVersion: modelVersion } = provenance;
     const domainId = nextId('domain-name');
-    const observedDataId = nextId('observed-data');
+    const observationId = nextId(observedAt ? 'observed-data' : 'note');
     const indicatorId = nextId('indicator');
-    const relationshipId = nextId('relationship');
-    const observation = observationTime(source, generatedAt);
-    const score = riskScore(source);
-    const modelVersion = riskModelVersion(source);
+    const observationContext = {
+      created_by_ref: producerId, created: generatedAt, modified: generatedAt,
+      x_whoisleuth_observed_at_basis: observedAt ? 'scan' : 'unknown',
+      x_whoisleuth_source: 'bulk',
+      x_whoisleuth_availability: record(source).availability,
+      x_whoisleuth_scan_depth: provenance.scanDepth,
+    };
 
     objects.push(
       { type: 'domain-name', spec_version: '2.1', id: domainId, value: domain },
-      {
-        type: 'observed-data', spec_version: '2.1', id: observedDataId,
-        created_by_ref: producerId, created: generatedAt, modified: generatedAt,
-        first_observed: observation.observedAt, last_observed: observation.observedAt,
+      observedAt ? {
+        type: 'observed-data', spec_version: '2.1', id: observationId,
+        ...observationContext,
+        first_observed: observedAt, last_observed: observedAt,
         number_observed: 1, object_refs: [domainId],
         x_whoisleuth_evidence_kind: 'direct-observation',
-        x_whoisleuth_observed_at_basis: observation.basis,
-        x_whoisleuth_source: 'bulk',
-        x_whoisleuth_availability: record(source).availability,
-        x_whoisleuth_scan_depth: scanDepth(source),
+      } : {
+        type: 'note', spec_version: '2.1', id: observationId,
+        ...observationContext,
+        content: 'Observation time was not retained. This candidate is supplied for heuristic review; its export time is not a sighting time.',
+        object_refs: [domainId, indicatorId],
+        x_whoisleuth_evidence_kind: 'observation-context',
       },
       {
         type: 'indicator', spec_version: '2.1', id: indicatorId,
@@ -143,20 +114,21 @@ export function buildStixIndicatorExport(records: unknown, options: StixExportOp
         name: `Heuristic domain candidate: ${domain}`,
         description: WARNING,
         pattern: `[domain-name:value = '${domain}']`, pattern_type: 'stix', pattern_version: '2.1',
-        valid_from: observation.observedAt,
+        valid_from: generatedAt,
+        x_whoisleuth_validity_basis: 'export',
         labels: ['heuristic', 'defensive-review'],
         x_whoisleuth_evidence_kind: 'heuristic-inference',
         x_whoisleuth_risk_score: score,
         ...(modelVersion === null ? {} : { x_whoisleuth_risk_model_version: modelVersion }),
         x_whoisleuth_false_positive_warning: WARNING,
       },
-      {
-        type: 'relationship', spec_version: '2.1', id: relationshipId,
-        created_by_ref: producerId, created: generatedAt, modified: generatedAt,
-        relationship_type: 'based-on', source_ref: indicatorId, target_ref: observedDataId,
-        description: 'The heuristic Indicator is based on the separately represented domain observation.',
-      },
     );
+    if (observedAt) objects.push({
+      type: 'relationship', spec_version: '2.1', id: nextId('relationship'),
+      created_by_ref: producerId, created: generatedAt, modified: generatedAt,
+      relationship_type: 'based-on', source_ref: indicatorId, target_ref: observationId,
+      description: 'The heuristic Indicator is based on the separately represented domain observation.',
+    });
   }
 
   const bundle = { type: 'bundle', id: nextId('bundle'), objects };
