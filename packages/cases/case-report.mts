@@ -270,8 +270,7 @@ export function buildCaseReport(
         if (!previous) continue;
         const rawChanges = compareCaseEvidence(previous, snapshot);
         incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot) as ReportReason[];
-        const hostnameContextChanged = incomparableReasons.includes('observation-context');
-        if (rawChanges.length > 0 && !hostnameContextChanged) {
+        if (rawChanges.length > 0) {
           changes = rawChanges.map((change) => ({
             field: change.field,
             label: change.label,
@@ -676,6 +675,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     ? `- Latest independently observed change time: ${escapeMarkdownInline(report.responseLifecycle.latestObservedChangeAt)}`
     : `- Latest independently observed change time: Withheld because the independent change state is ${escapeMarkdownInline(report.responseLifecycle.observedChangeState)}.`);
   if (observedEffect) lines.push(`- Latest independent review: ${escapeMarkdownInline(observedEffect.state.replaceAll('_', ' '))} at ${escapeMarkdownInline(observedEffect.observedAt)} from ${escapeMarkdownInline(observedEffect.source)}.`);
+  else if (response.observedEffects.reviews.length) lines.push('- A single latest independent review cannot be selected from the retained observation times. Review the individual records below.');
   if (!response.observedEffects.reviews.length) lines.push('- No independent observed-effect review recorded.');
   for (const review of response.observedEffects.reviews) {
     lines.push(`- **${escapeMarkdownInline(review.state.replaceAll('_', ' '))}** (${escapeMarkdownInline(review.observedAt)}): ${escapeMarkdownInline(review.source)}; class ${escapeMarkdownInline(review.sourceClass)}; completeness ${escapeMarkdownInline(review.completeness)}.`);

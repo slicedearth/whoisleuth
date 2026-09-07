@@ -217,6 +217,17 @@ describe('buildCaseReport JSON', () => {
     assert.match(markdown, /does not establish independent remediation/iu);
   });
 
+  test('reports valid registration changes without cross-hostname page or score deltas', () => {
+    const rec = caseRecord({ evidenceHistory: [
+      snapshot({ id: 'first', fingerprint: 'first', inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, registrar: 'Old registrar' }),
+      snapshot({ id: 'second', fingerprint: 'second', inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, registrar: 'New registrar', capturedAt: LATER }),
+    ] });
+    const { json } = caseReport.buildCaseReport(rec, { generatedAt: LATEST });
+    const entry = requiredValue(json.evidenceTimeline.find((item) => !item.isBaseline));
+    assert.deepEqual(entry.changes?.map((change) => change.field), ['registrar']);
+    assert.ok(entry.incomparableReasons.includes('observation-context'));
+  });
+
   test('single-snapshot baseline', () => {
     const rec = caseRecord({
       evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],

@@ -424,6 +424,9 @@ export class LookupCaseController {
       };
     }
     const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
+    if (evidencePins.length !== new Set(selectedFields).size) {
+      return { record, status: 'A selected fact or its source observation time is unavailable. Review the current selection before saving a checkpoint.', mutationOutcome: 'rejected' };
+    }
     if (!evidencePins.length) {
       return {
         record,

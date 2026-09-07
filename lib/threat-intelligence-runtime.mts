@@ -5,6 +5,7 @@
 // output budgets before producing separately attributed normalized evidence.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../packages/evidence/latest-observations.mts';
 import type { ObservationStatus } from '../packages/evidence/observation.mts';
 import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
@@ -474,12 +475,23 @@ function createThreatIntelligenceResult(
   }
   normalizedFindings.sort(compareFindings);
   const findings: ThreatIntelligenceFinding[] = [];
-  const seen = new Set<string>();
+  const byIdentity = new Map<string, ThreatIntelligenceFinding[]>();
   for (const finding of normalizedFindings) {
     const key = findingKey(finding);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    findings.push(finding);
+    const group = byIdentity.get(key) ?? [];
+    group.push(finding);
+    byIdentity.set(key, group);
+  }
+  let conflictingIdentities = 0;
+  for (const group of byIdentity.values()) {
+    const cohort = latestObservationCohort(group, (finding) => finding.lastObservedAt);
+    const candidates = [...cohort.latest, ...cohort.undated];
+    if (new Set(candidates.map((finding) => JSON.stringify(finding))).size > 1) {
+      conflictingIdentities += 1;
+      discarded += candidates.length;
+      continue;
+    }
+    if (candidates[0]) findings.push(candidates[0]);
   }
   if (findings.length > MAX_FINDINGS) {
     discarded += findings.length - MAX_FINDINGS;
@@ -489,11 +501,12 @@ function createThreatIntelligenceResult(
   let state = requestedState;
   const sourceTruncated = resultInput.truncated === true;
   if (TERMINAL_STATES_WITHOUT_FINDINGS.has(state) && findings.length) state = 'partial';
-  if (state === 'success' && findings.length === 0) state = 'error';
+  if (state === 'success' && findings.length === 0) state = conflictingIdentities > 0 ? 'partial' : 'error';
   if ((discarded > 0 || sourceTruncated) && !['error', 'unavailable', 'rate_limited'].includes(state)) state = 'partial';
   const limitations = normalizeLimitations(resultInput.limitations);
   if (state === 'not_found') limitations.unshift(NO_MATCH_LIMITATION);
-  if (discarded > 0) limitations.unshift(`${discarded} invalid or over-limit provider finding${discarded === 1 ? ' was' : 's were'} omitted.`);
+  if (discarded > 0) limitations.unshift(`${discarded} invalid, conflicting or over-limit provider finding${discarded === 1 ? ' was' : 's were'} omitted.`);
+  if (conflictingIdentities > 0) limitations.unshift(`${conflictingIdentities} provider identit${conflictingIdentities === 1 ? 'y has' : 'ies have'} conflicting records at the latest or unknown observation time. No stronger record was selected from those conflicts.`);
   limitations.unshift(BASE_LIMITATION);
   const boundedLimitations = [...new Set(limitations)].slice(0, MAX_LIMITATIONS);
   const complete = ['success', 'not_found'].includes(state) && discarded === 0 && !sourceTruncated;

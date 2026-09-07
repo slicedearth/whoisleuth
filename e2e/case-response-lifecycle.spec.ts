@@ -7,6 +7,35 @@ import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portabi
 
 // Case response mutation, failure recovery and lifecycle coverage.
 
+test('equal-time independent reviews remain visible without a selected outcome', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'concurrent-reviews.invalid');
+  const workspace = await openCaseResponseWorkspace(page);
+  const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  await remediation.locator(':scope > summary').click();
+  const form = remediation.locator('form').filter({ hasText: 'Append independent observed-effect review' });
+  await expect(form).toHaveCount(1);
+  const reviews = remediation.getByRole('list', { name: 'Independent observed-effect reviews' });
+  for (const [index, state] of ['still_observed', 'not_reproduced'].entries()) {
+    await form.getByRole('combobox', { name: 'Observed effect', exact: true }).selectOption(state);
+    await form.getByLabel('Observation time', { exact: true }).fill('2026-09-01T10:00');
+    await form.getByLabel('Separately attributed source', { exact: true }).fill(`Independent fixture ${index + 1}`);
+    await form.getByRole('combobox', { name: 'Completeness', exact: true }).selectOption('complete');
+    await form.getByRole('button', { name: 'Record independent review' }).click();
+    await expect(reviews.locator('li')).toHaveCount(index + 1);
+  }
+  await expect(remediation).toContainText('A single latest independent review cannot be selected');
+  await expect(reviews).toContainText('still observed');
+  await expect(reviews).toContainText('not reproduced');
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  const reopened = await openCaseResponseWorkspace(page);
+  const retained = reopened.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  await retained.locator(':scope > summary').click();
+  await expect(retained).toContainText('A single latest independent review cannot be selected');
+  await expect(retained.getByRole('list', { name: 'Independent observed-effect reviews' }).locator('li')).toHaveCount(2);
+});
+
 test('a pending Case save retains a later draft in the same form', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'newer-draft.invalid');

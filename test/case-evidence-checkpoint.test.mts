@@ -110,6 +110,43 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('case evidence checkpoints', () => {
+  test('registration fallback keeps the selected publisher health and observation time', () => {
+    const before = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep', generatedAt: OBSERVED_AT });
+    const later = '2026-07-30T01:00:00.000Z';
+    const whoisTime = '2026-07-29T12:00:00.000Z';
+    const changed = response({
+      rdap: { fetchedAt: later, parsed: { statuses: ['active'] } },
+      whois: { parsed: { registrar: 'Another registrar' }, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial', queriedAt: whoisTime } },
+    });
+    const facts = buildLookupCheckpointFacts(changed, { collectionDepth: 'deep', generatedAt: later });
+    const registrar = facts.find((fact) => fact.field === 'registration.registrar');
+    assert.ok(registrar);
+    assert.equal(registrar.source, 'WHOIS');
+    assert.equal(registrar.sourceState, 'partial');
+    assert.equal(registrar.completeness, 'partial');
+    assert.equal(registrar.observedAt, whoisTime);
+    assert.equal(facts.find((fact) => fact.field === 'registration.statuses')?.source, 'Registry RDAP');
+    assert.equal(facts.find((fact) => fact.field === 'registration.statuses')?.observedAt, later);
+    const pins = normalizeCaseEvidencePins(checkpointPinInputs(before, ['registration.registrar'], { transitionExpectations: { 'registration.registrar': 'change' } }), OBSERVED_AT);
+    assert.equal(pins.length, 1);
+    assert.equal(compareCheckpointPins(pins, facts)[0]?.state, 'incomparable');
+    assert.equal(compareAcquisitionTransitionPins(pins, facts)[0]?.transitionState, 'indeterminate');
+    const sameSource = buildLookupCheckpointFacts(response({ rdap: { fetchedAt: later, parsed: { registrar: { name: 'Another registrar' } } } }), { collectionDepth: 'deep' });
+    assert.equal(compareAcquisitionTransitionPins(pins, sameSource)[0]?.transitionState, 'verified_change');
+  });
+
+  test('an unknown registration observation time cannot be replaced with checkpoint creation time', () => {
+    const facts = buildLookupCheckpointFacts(response({ rdap: { parsed: { registrar: { name: 'Undated registrar' } } } }), { generatedAt: OBSERVED_AT });
+    const registrar = facts.find((fact) => fact.field === 'registration.registrar');
+    assert.ok(registrar);
+    assert.equal(registrar.value, 'Undated registrar');
+    assert.equal(registrar.observedAt, null);
+    assert.equal(registrar.completeness, 'unknown');
+    assert.match(registrar.limitations.join(' '), /observation time is unavailable/u);
+    assert.deepEqual(checkpointPinInputs(facts, ['registration.registrar']), []);
+  });
+
   test('projects bounded normalized facts from every supported evidence family', () => {
     const ordinary = response();
     const source = response({

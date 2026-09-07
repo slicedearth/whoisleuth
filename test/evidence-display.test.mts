@@ -331,6 +331,14 @@ describe('deriveTimeline', () => {
     assert.equal(riskChange.after, 85);
   });
 
+  test('does not render cross-hostname score or page improvements as temporal changes', () => {
+    const before = deepSnapshot({ id: 'first', fingerprint: 'first', inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, registrar: 'Old registrar' });
+    const after = deepSnapshot({ id: 'second', fingerprint: 'second', inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, registrar: 'New registrar', capturedAt: LATER });
+    const entry = requiredValue(display.deriveTimeline([before, after])[0]);
+    assert.deepEqual(entry.changes?.map((change) => change.field), ['registrar']);
+    assert.ok(entry.incomparableReasons.includes('observation-context'));
+  });
+
   test('detects incomparable change when only deep-only evidence differs across depths', () => {
     // A deep snapshot with deep-only signals followed by a fast snapshot
     // where only the deep-only fields differ (nulled out in fast). The

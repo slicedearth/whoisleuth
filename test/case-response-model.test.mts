@@ -661,6 +661,21 @@ describe('case response record normalization', () => {
     assert.equal(ambiguous.latestObservedChangeAt, null);
   });
 
+  test('does not select an independent effect by identifier when latest reviews disagree', () => {
+    const effects = normalizeCaseObservedEffectHistory({ reviews: [
+      { id: 'first', state: 'still_observed', observedAt: NEXT, sourceClass: 'analyst', source: 'First independent check', completeness: 'complete', createdAt: NEXT },
+      { id: 'second', state: 'not_reproduced', observedAt: NEXT, sourceClass: 'analyst', source: 'Second independent check', completeness: 'complete', createdAt: NEXT },
+    ] }, NEXT);
+    assert.equal(effects.reviews.length, 2);
+    for (const reviews of [effects.reviews, [...effects.reviews].reverse(), effects.reviews.map((review, index) => ({ ...review, id: index ? 'a' : 'z' }))]) {
+      const summary = buildCaseResponseLifecycleSummary({ observedEffects: { ...effects, reviews } });
+      assert.equal(summary.latestObservedEffect, null);
+    }
+    const later = { ...effects.reviews[0]!, id: 'later', observedAt: LATEST };
+    assert.equal(buildCaseResponseLifecycleSummary({ observedEffects: { ...effects, reviews: [...effects.reviews, later] } }).latestObservedEffect?.reviewId, 'later');
+    assert.equal(effects.reviews.length, 2);
+  });
+
   test('keeps analyst assertions distinct from evidence and derives an explicit trail', () => {
     const pins = appendCaseEvidencePin([], { label: 'Registration', value: 'Observed as registered' }, NOW);
     const pin = requiredValue(pins[0]);

@@ -213,6 +213,7 @@ export type SnapshotOptions = {
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
   field: keyof CaseEvidenceSnapshot;
+  scope: 'registration' | 'hostname';
   label: string;
   type: string;
   depthGate?: 'both-deep' | 'comparable';

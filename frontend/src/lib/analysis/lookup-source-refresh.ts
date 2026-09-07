@@ -267,12 +267,14 @@ function summarizeSource(
   if (plan.id === 'rdap') {
     const upstreamStatus = Number(body.upstreamStatus);
     const parsed = record(body.parsed);
-    const complete = upstreamStatus === 200 && Object.keys(parsed).length > 0;
+    const truncated = parsed.serverTruncated === true || body.truncated === true;
+    const complete = upstreamStatus === 200 && Object.keys(parsed).length > 0 && !truncated && body.complete !== false;
     return {
       ...base,
       state: complete ? 'complete' : 'limited',
       detail: complete
         ? `Registry RDAP returned a validated ${upstreamStatus} response.`
+        : truncated ? 'Registry RDAP returned a truncated record; the refreshed source remains limited.'
         : `Registry RDAP returned ${Number.isFinite(upstreamStatus) ? `HTTP ${upstreamStatus}` : 'no complete structured record'}.`,
     };
   }

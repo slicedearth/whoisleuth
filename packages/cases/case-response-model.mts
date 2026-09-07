@@ -3,6 +3,7 @@
 // fact selected by an analyst, a decision records analyst reasoning, and an
 // action records a reviewed external or internal follow-up.
 
+import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import {
   MAX_ASSERTION_PROVENANCE_LABELS,
   MAX_ASSERTION_PROVENANCE_MARKINGS,
@@ -2119,27 +2120,24 @@ export function buildCaseResponseLifecycleSummary(input: Readonly<{
   const providerEvents = (input.actions ?? []).flatMap((action) => action.history
     .filter((event) => event.providerOutcome)
     .map((event) => ({ action, event })));
-  providerEvents.sort((left, right) => Date.parse(right.event.occurredAt) - Date.parse(left.event.occurredAt)
-    || compareCodeUnits(right.event.id, left.event.id));
-  const providerTime = providerEvents[0]?.event.occurredAt ?? null;
-  const providerEventsAtLatestTime = providerTime === null
-    ? []
-    : providerEvents.filter(({ event }) => event.occurredAt === providerTime);
-  const latestProvider = providerEventsAtLatestTime.length === 1 && providerEventsAtLatestTime[0]!.event.applied
+  const providerCohort = latestObservationCohort(providerEvents, ({ event }) => event.occurredAt);
+  const providerEventsAtLatestTime = providerCohort.latest;
+  const latestProvider = providerEventsAtLatestTime.length === 1 && !providerCohort.undated.length && providerEventsAtLatestTime[0]!.event.applied
     ? providerEventsAtLatestTime[0]!
     : null;
   const providerOutcomeState = providerEvents.length === 0
     ? 'missing' as const
     : latestProvider ? 'available' as const : 'ambiguous' as const;
-  const reviews = [...(input.observedEffects?.reviews ?? [])]
-    .sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt) || compareCodeUnits(right.id, left.id));
-  const latestObserved = reviews[0] ?? null;
+  const reviews = input.observedEffects?.reviews ?? [];
+  const observedCohort = latestObservationCohort(reviews, (review) => review.observedAt);
+  const latestObserved = observedCohort.latest.length === 1 && !observedCohort.undated.length
+    ? observedCohort.latest[0]!
+    : null;
   const changedReviews = reviews.filter((review) => review.state === 'changed');
-  const changedTime = changedReviews[0]?.observedAt ?? null;
-  const changedAtLatestTime = changedTime === null
-    ? []
-    : changedReviews.filter((review) => review.observedAt === changedTime);
-  const latestObservedChangeAt = changedAtLatestTime.length === 1 ? changedTime : null;
+  const changedCohort = latestObservationCohort(changedReviews, (review) => review.observedAt);
+  const latestObservedChangeAt = changedCohort.latest.length === 1 && !changedCohort.undated.length
+    ? changedCohort.observedAt
+    : null;
   const observedChangeState = changedReviews.length === 0
     ? 'missing' as const
     : latestObservedChangeAt ? 'available' as const : 'ambiguous' as const;

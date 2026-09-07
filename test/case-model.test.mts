@@ -1082,6 +1082,18 @@ describe('compareCaseEvidence', () => {
     assert.equal(change.tone, 'danger');
   });
 
+  test('withholds hostname-specific improvements while preserving registration changes', () => {
+    const before = requiredValue(model.normalizeSnapshot(deepEvidence({ inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, hasMx: true, registrar: 'Old registrar' }), { fallback: ISO, caseDomain: 'example.test' }));
+    const after = requiredValue(model.normalizeSnapshot(deepEvidence({ inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, hasMx: false, registrar: 'New registrar' }), { fallback: LATER, caseDomain: 'example.test' }));
+    assert.equal(before.inputHostname, 'login.example.test');
+    assert.equal(after.inputHostname, 'www.example.test');
+    assert.deepEqual(model.compareCaseEvidence(before, after).map((change) => change.field), ['registrar']);
+    assert.ok(model.caseEvidenceIncomparableReasons(before, after).includes('observation-context'));
+    const sameHost = { ...after, inputHostname: before.inputHostname };
+    assert.deepEqual(new Set(model.compareCaseEvidence(before, sameHost).map((change) => change.field)), new Set(['riskScore', 'registrar', 'hasMx', 'hasPasswordField']));
+    assert.deepEqual(model.compareCaseEvidence(before, { ...after, inputHostname: null }).map((change) => change.field), ['registrar']);
+  });
+
   test('keeps unversioned or differently-versioned risk scores readable but incomparable', () => {
     const unversioned = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 90 }, { fallback: ISO });
     const current = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });

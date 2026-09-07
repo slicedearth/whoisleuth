@@ -93,11 +93,12 @@
     <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
         <label>
-          <input type="checkbox" checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
+          <input type="checkbox" disabled={!fact.observedAt} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
           <span>
             <strong>{fact.label}</strong>
             <small>{fact.value}</small>
             <small>{fact.source} · {fact.sourceState} · {fact.completeness}{fact.truncated ? ' · truncated' : ''}</small>
+            {#if !fact.observedAt}<small>Observation time unavailable — a dated checkpoint cannot be saved.</small>{/if}
             {#if transitionMode && selectedFields.includes(fact.field)}
               <select aria-label={`Transition expectation for ${fact.label}`} value={transitionExpectations[fact.field] ?? 'preserve'} onchange={(event) => setExpectation(fact.field, event.currentTarget.value as CaseTransitionExpectation)}>
                 <option value="preserve">Preserve this value</option>
@@ -128,7 +129,7 @@
               <div><dt>Checkpoint</dt><dd>{item.before}</dd></div>
               <div><dt>Current</dt><dd>{item.after ?? 'Unavailable in this observation'}</dd></div>
             </dl>
-            <small>{item.source} · {item.observedAt}</small>
+            <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
           </article>
         {/each}
       </div>
@@ -147,7 +148,7 @@
               <div><dt>Checkpoint</dt><dd>{item.before}</dd></div>
               <div><dt>Current</dt><dd>{item.after ?? 'Not recorded in this observation'}</dd></div>
             </dl>
-            <small>{item.source} · {item.observedAt}</small>
+            <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
           </article>
         {/each}
       </div>

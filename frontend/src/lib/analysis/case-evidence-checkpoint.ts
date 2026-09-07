@@ -17,6 +17,7 @@ import type {
   CaseTransitionExpectation,
 } from './case-response-model.ts';
 import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
 export const MAX_CHECKPOINT_FACTS = 28;
@@ -39,7 +40,7 @@ export type CheckpointFact = Readonly<{
   value: string | null;
   source: string;
   sourceState: string;
-  observedAt: string;
+  observedAt: string | null;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: 'complete' | 'inconclusive' | 'partial' | 'unknown';
   truncated: boolean | null;
@@ -59,7 +60,7 @@ export type CheckpointComparison = Readonly<{
   after: string | null;
   state: CheckpointComparisonState;
   source: string;
-  observedAt: string;
+  observedAt: string | null;
   limitations: string[];
 }>;
 
@@ -175,6 +176,7 @@ function origin(value: unknown): string | null {
 }
 
 function entityName(value: unknown): string | null {
+  if (typeof value === 'string') return factValue(value);
   const entity = record(value);
   return factValue(entity.name ?? entity.org ?? entity.handle);
 }
@@ -197,9 +199,27 @@ export function buildLookupCheckpointFacts(
   const depth = options.collectionDepth ?? 'unknown';
   const rdapDiagnostic = record(view.diagnostics.rdap);
   const whoisDiagnostic = record(view.diagnostics.whois);
-  const registrationState = sourceState(rdapDiagnostic.status ?? whoisDiagnostic.status);
-  const registrationObservedAt = timestamp(view.rdap.fetchedAt ?? response.fetchedAt, generatedAt);
-  const registrationTruncated = view.rdapParsed.serverTruncated === true ? true : null;
+  const registrationSources = [
+    { source: 'Registry RDAP', publication: view.rdap, parsed: view.rdapParsed, diagnostic: rdapDiagnostic },
+    { source: 'WHOIS', publication: view.whois, parsed: view.whoisParsed, diagnostic: whoisDiagnostic },
+  ];
+  function registrationFact(field: string, label: string, value: (parsed: JsonObject) => unknown, notes: string[] = []): Omit<CheckpointFact, 'version' | 'sourceSchema'> {
+    const candidates = registrationSources.map((source) => ({ ...source, value: factValue(value(source.parsed)) }));
+    const selected = candidates.find((source) => source.value !== null) ?? candidates[0]!;
+    const observedAt = normalizeExplicitIsoTimestamp(selected.publication.fetchedAt ?? selected.diagnostic.observedAt ?? selected.diagnostic.fetchedAt ?? selected.diagnostic.queriedAt);
+    const truncated = selected.parsed.serverTruncated === true || selected.parsed.truncated === true || selected.diagnostic.truncated === true;
+    const state = sourceState(selected.diagnostic.status);
+    return {
+      field, label, category: 'registration', value: selected.value, source: selected.source,
+      sourceState: state, observedAt, collectionDepth: depth,
+      completeness: !observedAt ? 'unknown' : truncated || selected.diagnostic.complete === false ? 'partial' : completeness(state),
+      truncated: truncated ? true : null,
+      limitations: sourceLimitations([
+        ...(!observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
+        ...notes, ...sourceLimitations(selected.parsed.limitations), ...sourceLimitations(selected.diagnostic.limitations),
+      ]),
+    };
+  }
   const dns = record(view.availability.dns);
   const dnsRecords = record(dns.records);
   const dnsState = sourceState(dns.status);
@@ -227,11 +247,11 @@ export function buildLookupCheckpointFacts(
   const securityTxtObservedAt = timestamp(securityTxt.observedAt, generatedAt);
 
   const specifications: Array<Omit<CheckpointFact, 'version' | 'sourceSchema'>> = [
-    { field: 'registration.registrar', category: 'registration', label: 'Registrar', value: entityName(view.rdapParsed.registrar) ?? entityName(view.whoisParsed.registrar), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: ['Registrar publication is point-in-time registration context and does not prove present control.'] },
-    { field: 'registration.statuses', category: 'registration', label: 'Registration statuses', value: factValue(view.rdapParsed.statuses ?? view.whoisParsed.statuses), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: sourceLimitations(view.rdapParsed.limitations) },
-    { field: 'registration.created', category: 'registration', label: 'Creation date', value: factValue(lifecycleValue(view.rdapParsed, 'createdDate') ?? lifecycleValue(view.whoisParsed, 'createdDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
-    { field: 'registration.updated', category: 'registration', label: 'Updated date', value: factValue(lifecycleValue(view.rdapParsed, 'updatedDate') ?? lifecycleValue(view.whoisParsed, 'updatedDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
-    { field: 'registration.expires', category: 'registration', label: 'Expiry date', value: factValue(lifecycleValue(view.rdapParsed, 'expiryDate') ?? lifecycleValue(view.whoisParsed, 'expiryDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
+    registrationFact('registration.registrar', 'Registrar', (parsed) => entityName(parsed.registrar), ['Registrar publication is point-in-time registration context and does not prove present control.']),
+    registrationFact('registration.statuses', 'Registration statuses', (parsed) => parsed.statuses),
+    registrationFact('registration.created', 'Creation date', (parsed) => lifecycleValue(parsed, 'createdDate')),
+    registrationFact('registration.updated', 'Updated date', (parsed) => lifecycleValue(parsed, 'updatedDate')),
+    registrationFact('registration.expires', 'Expiry date', (parsed) => lifecycleValue(parsed, 'expiryDate')),
     { field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: factValue(availability.nameservers ?? view.rdapParsed.nameservers), source: 'DNS or registry publication', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.addresses', category: 'dns', label: 'A and AAAA addresses', value: factValue([...normalizedStrings(dnsRecords.a), ...normalizedStrings(dnsRecords.aaaa)]), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.mx', category: 'dns', label: 'MX hosts', value: factValue(availability.mxHosts ?? dnsRecords.mx), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
@@ -348,7 +368,7 @@ export function checkpointPinInputs(
     ? options.checkpointId
     : checkpointId();
   return facts
-    .filter((fact) => selected.has(fact.field) && fact.value !== null)
+    .filter((fact): fact is CheckpointFact & { observedAt: string } => selected.has(fact.field) && fact.value !== null && normalizeExplicitIsoTimestamp(fact.observedAt) !== null)
     .slice(0, MAX_CHECKPOINT_FACTS)
     .map((fact) => ({
       checkpointId: id,
@@ -425,6 +445,7 @@ export function compareCheckpointPins(
             && pin.sourceSchema.version === current.sourceSchema.version);
           const comparable = pin.completeness === 'complete'
             && current.completeness === 'complete'
+            && normalizeExplicitIsoTimestamp(current.observedAt) !== null
             && pin.truncated !== true
             && current.truncated !== true
             && pin.source === current.source
@@ -447,7 +468,7 @@ export function compareCheckpointPins(
         after: current?.value ?? null,
         state,
         source: current?.source ?? pin.source,
-        observedAt: current?.observedAt ?? pin.observedAt,
+        observedAt: current ? current.observedAt : pin.observedAt,
         limitations: [...new Set([
           ...(current?.limitations ?? pin.limitations),
           ...(qualificationLimitation ? [qualificationLimitation] : []),

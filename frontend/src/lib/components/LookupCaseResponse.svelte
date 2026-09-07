@@ -130,7 +130,7 @@
   const retainedContext = $derived(caseInvestigationContext(record));
   const currentIncidentUrl = $derived(incidentUrl || retainedContext?.incidentUrl || '');
   const incidentUrlDetails = $derived(parseIncidentUrlContext(currentIncidentUrl));
-  const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null));
+  const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null && fact.observedAt !== null));
   const conclusionIncomplete = $derived(
     !isReviewedCaseDisposition(caseDisposition)
       || !caseReviewReason

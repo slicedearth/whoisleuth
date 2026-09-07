@@ -1182,6 +1182,7 @@ function normalizeResponseLifecycle(
       'Provider workflow outcomes and independently observed technical effects are separate point-in-time records.',
       'A provider acknowledgement, terminal state, or reported resolution never becomes independently observed remediation, absence, or safety.',
       'Times are withheld when the corresponding typed event is missing or ambiguous.',
+      ...(!summary.latestObservedEffect && scopedRecord.observedEffects.reviews.length ? ['A single latest independent review cannot be selected from the retained observation times; all retained reviews remain separately attributed.'] : []),
       ...(!lineageComplete ? ['Provider-outcome time is withheld because the selected action origin lineage is incomplete.'] : []),
     ],
   };

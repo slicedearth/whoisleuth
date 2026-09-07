@@ -933,6 +933,9 @@
         <div><dt>Provider outcome time</dt><dd>{responseLifecycle.latestProviderOutcome ? `${responseLifecycle.latestProviderOutcome.occurredAt} · ${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')}` : `Withheld — ${responseLifecycle.providerOutcomeState}`}</dd></div>
         <div><dt>Independently observed change time</dt><dd>{responseLifecycle.latestObservedChangeAt ?? `Withheld — ${responseLifecycle.observedChangeState}`}</dd></div>
       </dl>
+      {#if record.observedEffects.reviews.length && !responseLifecycle.latestObservedEffect}
+        <p class="history-warning">A single latest independent review cannot be selected from the retained observation times. Review the individual records before drawing a conclusion.</p>
+      {/if}
       {#if record.observedEffects.preV13HistoryUnavailable || record.closures.preV13HistoryUnavailable}
         <p class="history-warning">This Case predates v13. Earlier independent review or deliberate closure history is unavailable and was not reconstructed.</p>
       {/if}

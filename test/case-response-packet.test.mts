@@ -145,6 +145,22 @@ describe('case response packet', () => {
     }
   });
 
+  test('withholds a latest independent verdict when the retained latest-time reviews disagree', async () => {
+    const caseRecord = reviewedCase();
+    const original = caseRecord.observedEffects.reviews[0];
+    assert.ok(original);
+    caseRecord.observedEffects = { ...caseRecord.observedEffects, reviews: [
+      { ...original, id: 'first-review', state: 'still_observed' },
+      { ...original, id: 'second-review', state: 'not_reproduced' },
+    ] };
+    const result = await buildCaseResponsePacket(caseRecord, packetInput(caseRecord), NOW);
+    assert.equal(result.json.responseLifecycle.latestObservedEffect, null);
+    assert.match(result.json.responseLifecycle.limitations.join(' '), /single latest independent review cannot be selected/u);
+    assert.doesNotMatch(result.markdown, /Latest independent review: (?:still observed|not reproduced)/u);
+    assert.equal(caseRecord.observedEffects.reviews.length, 2);
+    assert.equal(await verifyCaseResponsePacketIntegrity(result.json), true);
+  });
+
   test('builds reviewable JSON, Markdown, and email without a submission action', async () => {
     const caseRecord = reviewedCase();
     const input = packetInput(caseRecord);

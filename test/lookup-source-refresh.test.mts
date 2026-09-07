@@ -89,6 +89,22 @@ test('summarizes a separate WHOIS refresh without retaining its raw response', a
   });
 });
 
+test('a successful RDAP refresh preserves declared source truncation', async () => {
+  const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
+    { id: 'rdap', label: 'RDAP', category: 'registry', status: 'partial' },
+  ]), NOW, NOW).items[0];
+  assert.ok(plan);
+  for (const truncated of [false, true]) {
+    const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
+      now: () => NOW,
+      fetchImpl: async () => new Response(JSON.stringify({ upstreamStatus: 200, parsed: { domain: 'example.test', serverTruncated: truncated } }), { status: 200 }),
+    });
+    assert.ok(outcome.ok);
+    assert.equal(outcome.value.state, truncated ? 'limited' : 'complete');
+    if (truncated) assert.match(outcome.value.detail, /truncated/u);
+  }
+});
+
 test('recognizes complete deep and fast domain-evidence refresh contracts', async () => {
   const plan = {
     id: 'availability',

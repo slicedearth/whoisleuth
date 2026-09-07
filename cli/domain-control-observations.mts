@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { latestObservationCohort } from '../packages/evidence/latest-observations.mts';
 
 import {
   scanBoundedJson,
@@ -19,6 +20,7 @@ import {
 } from '../packages/contracts/domain-control-review.mts';
 import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
+  MAX_FLIGHT_RECORDER_VALUES,
   type DomainControlFlightRecorderField,
   type DomainControlFlightRecorderObservation,
   type DomainControlObservationState,
@@ -181,6 +183,40 @@ export function domainControlObservationFromSavedLookup(document: SavedLookupDoc
   });
 }
 
+function concurrentFieldValues(candidates: readonly Field[]): Pick<Field, 'source' | 'state' | 'values'> {
+  const first = candidates[0]!;
+  const identity = (candidate: Field) => JSON.stringify([candidate.source, candidate.state, candidate.values]);
+  if (candidates.every((candidate) => identity(candidate) === identity(first))) return first;
+  const sources = new Set(candidates.map((candidate) => candidate.source));
+  const values = [...new Set(candidates.flatMap((candidate) => candidate.values))].sort();
+  const omitted = Math.max(0, values.length - MAX_FLIGHT_RECORDER_VALUES);
+  return {
+    source: `${sources.size === 1 ? first.source : 'Multiple retained sources'} (conflicting latest observations${omitted ? `; ${omitted} values omitted` : ''})`,
+    state: 'partial',
+    values: values.slice(0, MAX_FLIGHT_RECORDER_VALUES),
+  };
+}
+
+function reviewFields(document: SavedLookupDocument, observation: DomainControlFlightRecorderObservation): Field[] {
+  return observation.fields.map((candidate) => {
+    if (candidate.id !== 'tls_certificate') return candidate;
+    const issuer = record(record(record(document.availability).tls).certificate).issuer;
+    return { ...candidate, values: list([issuer], (value) => {
+      const recordValue = record(value);
+      const commonNames = Array.isArray(recordValue.commonNames) ? recordValue.commonNames : [];
+      const organisationNames = Array.isArray(recordValue.organizationNames) ? recordValue.organizationNames : [];
+      return text(commonNames[0] ?? organisationNames[0] ?? value, 300);
+    }) };
+  });
+}
+
+function mergeConcurrentFields(observations: readonly (readonly Field[])[]): Field[] {
+  return (observations[0] ?? []).map((first) => ({
+    ...first,
+    ...concurrentFieldValues(observations.flatMap((fields) => fields.filter((candidate) => candidate.id === first.id))),
+  }));
+}
+
 export function buildCliDomainControlReview(inputText: string, generatedAt = new Date().toISOString()) {
   if (Buffer.byteLength(inputText, 'utf8') > MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES) {
     throw new CliUsageError(`Domain-control review input is limited to ${MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES} bytes.`);
@@ -223,19 +259,36 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   }
   const manifest = verifyDomainControlManifest(input.manifest);
   const lookups = input.lookups.map((item, index) => parseSavedLookupDocument(JSON.stringify(item), { label: `Lookup ${index + 1}` }));
-  const latest = new Map<string, SavedLookupDocument>();
+  const byDomain = new Map<string, SavedLookupDocument[]>();
   for (const lookup of lookups) {
-    const current = latest.get(lookup.registrableDomain);
-    if (!current || Date.parse(lookup.generatedAt) > Date.parse(current.generatedAt)) latest.set(lookup.registrableDomain, lookup);
+    const group = byDomain.get(lookup.registrableDomain) ?? [];
+    group.push(lookup);
+    byDomain.set(lookup.registrableDomain, group);
   }
-  const observations = [...latest.values()].map(domainControlObservationFromSavedLookup);
+  let ignoredHistoricalLookups = 0;
+  const selected = [...byDomain.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, documents]) => {
+    const cohort = latestObservationCohort(documents, (document) => document.generatedAt);
+    ignoredHistoricalLookups += cohort.superseded;
+    const captures = cohort.latest.map((document) => ({ document, observation: domainControlObservationFromSavedLookup(document) }));
+    const first = captures[0];
+    if (!first || !cohort.observedAt || cohort.undated.length) throw new CliUsageError('Saved Lookup observation times could not be ordered.');
+    const observation: DomainControlFlightRecorderObservation = {
+      domain,
+      observedAt: cohort.observedAt,
+      collectionDepth: captures.every((capture) => capture.observation.collectionDepth === first.observation.collectionDepth)
+        ? first.observation.collectionDepth : 'unknown',
+      fields: mergeConcurrentFields(captures.map((capture) => capture.observation.fields)),
+    };
+    return { observation, reviewFields: mergeConcurrentFields(captures.map((capture) => reviewFields(capture.document, capture.observation))) };
+  });
+  const observations = selected.map((item) => item.observation);
   const review = reviewDomainControlManifest({
     schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
     version: DOMAIN_CONTROL_REVIEW_VERSION,
     manifest,
-    observations: observations.map((item) => ({
-      domain: item.domain,
-      fields: Object.fromEntries(item.fields.flatMap((candidate) => {
+    observations: selected.map(({ observation, reviewFields: fields }) => ({
+      domain: observation.domain,
+      fields: Object.fromEntries(fields.flatMap((candidate) => {
         const mapping: Partial<Record<DomainControlFlightRecorderField, string>> = {
           registry_nameservers: 'nameservers',
           delegation_ds: 'ds',
@@ -247,15 +300,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
         };
         const target = mapping[candidate.id];
         if (!target) return [];
-        const candidateValues = candidate.id === 'tls_certificate'
-          ? list([record(record(record(latest.get(item.domain)?.availability).tls).certificate).issuer], (value) => {
-              const issuer = record(value);
-              const commonNames = Array.isArray(issuer.commonNames) ? issuer.commonNames : [];
-              const organisationNames = Array.isArray(issuer.organizationNames) ? issuer.organizationNames : [];
-              return text(commonNames[0] ?? organisationNames[0] ?? value, 300);
-            })
-          : candidate.values;
-        return [[target, { state: candidate.state, values: candidateValues, source: candidate.source, observedAt: item.observedAt }]];
+        return [[target, { state: candidate.state, values: candidate.values, source: candidate.source, observedAt: observation.observedAt }]];
       })),
     })),
   }, generatedAt);
@@ -268,7 +313,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     input: Object.freeze({
       lookupsReceived: lookups.length,
       latestDomainObservations: observations.length,
-      ignoredHistoricalLookups: lookups.length - observations.length,
+      ignoredHistoricalLookups,
     }),
     limitations: CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   });

@@ -111,6 +111,29 @@ describe('CLI domain-control observations', () => {
     assert.match(formatCliDomainControlReview(report), /Domain-control evidence review/u);
   });
 
+  test('keeps conflicting latest fields partial while comparing independent equal fields', () => {
+    const first = lookup();
+    const second = lookup();
+    second.rdap.parsed.nameservers = ['ns2.example.test'];
+    second.availability.tls.certificate.issuer.commonNames = ['Another issuer'];
+    const older = lookup('example.test', '2026-08-04T01:00:00.000Z');
+    const input = (lookups: ReturnType<typeof lookup>[]) => JSON.stringify({ schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: 1, manifest: manifest(), lookups });
+    const forward = buildCliDomainControlReview(input([older, first, second]), observedAt);
+    const reverse = buildCliDomainControlReview(input([second, first, older]), observedAt);
+    assert.deepEqual(forward, reverse);
+    const comparisons = forward.review.domains[0]!.comparisons;
+    assert.equal(comparisons.find((item) => item.field === 'nameservers')?.state, 'partial');
+    assert.equal(comparisons.find((item) => item.field === 'tlsIssuer')?.state, 'partial');
+    assert.equal(comparisons.find((item) => item.field === 'mx')?.state, 'aligned');
+    assert.equal(forward.input.ignoredHistoricalLookups, 1);
+    const nameservers = forward.observations[0]!.fields.find((item) => item.id === 'registry_nameservers');
+    assert.deepEqual(nameservers?.values, ['ns1.example.test', 'ns2.example.test']);
+    assert.match(nameservers?.source ?? '', /conflicting latest observations/u);
+    const duplicate = buildCliDomainControlReview(input([first, first]), observedAt);
+    assert.equal(duplicate.review.state, 'aligned');
+    assert.equal(duplicate.input.ignoredHistoricalLookups, 0);
+  });
+
   test('rejects an unknown root field', () => {
     assert.throws(() => buildCliDomainControlReview(JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,

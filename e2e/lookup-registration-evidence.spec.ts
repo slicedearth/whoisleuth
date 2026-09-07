@@ -324,6 +324,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
       rdap: {
         upstreamStatus: 200,
         rdapServer: 'https://registry.example/domain/registrar-source.example',
+        fetchedAt: '2026-07-14T01:02:03.000Z',
         parsed: {
           domain: 'REGISTRAR-SOURCE.EXAMPLE', handle: 'registry-object-handle',
           registrar: { name: 'Example Registrar' }, registrarIanaId: '999',
@@ -566,6 +567,50 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(checkpoint).toContainText('verified preserved');
   await expect(checkpoint).toContainText('change not observed');
   await expectNoHorizontalOverflow(page);
+});
+
+test('field checkpoints retain the supplying publication and reject an unknown observation time', async ({ page }, testInfo) => {
+  const observedAt = '2026-09-01T01:02:03.000Z';
+  let dated = true;
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      ...lookupDomainIdentity('checkpoint-source.invalid'),
+      availability: { state: 'registered', confidence: 'high', domain: 'checkpoint-source.invalid' },
+      rdap: { upstreamStatus: 200, fetchedAt: observedAt, parsed: { domain: 'checkpoint-source.invalid', statuses: ['active'] } },
+      whois: { parsed: { registrar: 'Fallback Registrar' }, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial', complete: false, queriedAt: dated ? observedAt : null }, availability: { status: 'complete' } },
+    }),
+  }));
+  await page.goto('/lookup?task=acquisition');
+  await page.locator('#query').fill('checkpoint-source.invalid');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  await page.locator('.case-card').getByRole('button', { name: 'Create case' }).click();
+  const checkpoint = page.locator('.checkpoint');
+  const registrar = checkpoint.getByRole('checkbox', { name: /^Registrar /u });
+  await expect(registrar).toBeEnabled();
+  await expect(registrar).toHaveAccessibleName(/WHOIS · partial · partial/u);
+  await registrar.check();
+  await checkpoint.getByRole('button', { name: 'Save 1 checkpoint fact', exact: true }).click();
+  await expect(page.locator('.case-status')).toContainText('Saved 1 analyst-selected checkpoint fact');
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.evidencePins).toEqual([expect.objectContaining({
+    field: 'registration.registrar', source: 'WHOIS', observedAt, completeness: 'partial', value: 'Fallback Registrar',
+  })]);
+
+  dated = false;
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  await expect(registrar).toBeDisabled();
+  await expect(registrar).toHaveAccessibleName(/Observation time unavailable/u);
+  await expect(checkpoint.getByRole('checkbox', { name: /^Registration statuses /u })).toBeEnabled();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+    await page.setViewportSize({ width: 320, height: 700 });
+    await expectNoHorizontalOverflow(page);
+    await checkpoint.screenshot({ path: testInfo.outputPath(`checkpoint-${theme}.png`) });
+  }
 });
 
 test('registrar RDAP unsupported and error states remain neutral source rows', async ({ page }) => {

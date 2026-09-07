@@ -5,9 +5,11 @@ import {
   expandLookupFamilies,
   expectNoHorizontalOverflow,
   lookupDomainIdentity,
+  migrateLegacyBrowserData,
   readBrowserLocalCollection,
 } from './helpers';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { caseRecord, snapshot } from './case-test-fixtures';
 
 const LOOKUP_TARGET = 'login.response-loop.invalid';
 const CASE_DOMAIN = 'response-loop.invalid';
@@ -42,6 +44,30 @@ async function runDeepLookup(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: CASE_DOMAIN, exact: true })).toBeVisible();
   await expandLookupFamilies(page);
 }
+
+test('a recheck across hostnames retains registration changes without offering an observed-effect verdict', async ({ page }) => {
+  const record = caseRecord({ domain: CASE_DOMAIN, evidenceHistory: [snapshot({
+    inputHostname: `other.${CASE_DOMAIN}`, registrar: 'Earlier Registrar', pageTitle: 'Earlier page',
+  })] });
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: 13, cases: [record] } }, { destination: '/lookup' });
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(2)),
+  }));
+  await runDeepLookup(page);
+  const caseCard = page.locator('.case-card');
+  await expect(caseCard.getByRole('button', { name: 'Recheck and refresh Case' })).toBeEnabled();
+  await caseCard.getByRole('button', { name: 'Recheck and refresh Case' }).click();
+  const comparison = caseCard.locator('.recheck-comparison');
+  await expect(comparison).toBeVisible();
+  await expect(comparison).toContainText('different or unknown hostnames');
+  await expect(comparison).toContainText('Earlier Registrar');
+  await expect(comparison).toContainText('Fixture Registrar LLC');
+  await expect(comparison).not.toContainText('Earlier page');
+  await expect(comparison.getByRole('button', { name: 'Record reviewed recheck outcome' })).toHaveCount(0);
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.evidenceHistory.map((item) => item.inputHostname)).toEqual([`other.${CASE_DOMAIN}`, LOOKUP_TARGET]);
+  await expectNoHorizontalOverflow(page);
+});
 
 test('an Incident URL sends only its hostname and retains exact Case context only by choice', async ({ page }) => {
   const incidentUrl = 'https://login.incident.invalid/sign-in?reference=fixture,secondary;third#review';

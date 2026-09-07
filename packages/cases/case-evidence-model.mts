@@ -484,38 +484,38 @@ export function caseLookupTarget(
 //                  a mode change is never reported.
 //   (absent)     - always comparable (data available in every capture).
 const COMPARE_FIELDS: CompareFieldSpec[] = [
-  { field: 'availability', label: 'Availability', type: 'availability' },
-  { field: 'confidence', label: 'Confidence', type: 'token' },
-  { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
-  { field: 'riskFactors', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
-  { field: 'opportunityScore', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
-  { field: 'opportunityFactors', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
-  { field: 'registrar', label: 'Registrar', type: 'registrar' },
-  { field: 'createdDate', label: 'Creation date', type: 'date' },
-  { field: 'expiryDate', label: 'Expiry date', type: 'date' },
-  { field: 'nameservers', label: 'Nameservers', type: 'set', emptyGuard: true },
-  { field: 'hasMx', label: 'MX', type: 'bool', depthGate: 'both-deep' },
-  { field: 'hasSpf', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
-  { field: 'hasDmarc', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
-  { field: 'activityStatus', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
-  { field: 'websiteProbeDetail', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
-  { field: 'pageTitle', label: 'Page title', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpEvidenceStatus', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpFinalOrigin', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpResponseStatus', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpTransportSecurity', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
-  { field: 'httpRedirectCount', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpCrossOriginRedirect', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
-  { field: 'httpHttpsDowngrade', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
-  { field: 'httpContentType', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpSecurityHeaders', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
-  { field: 'faviconMatch', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'faviconNearMatch', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'reusesOfficialAssets', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasPasswordField', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasExternalFormAction', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
-  { field: 'phishingLanguageMatch', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
-  { field: 'mutationTypes', label: 'Mutation types', type: 'set' },
+  { field: 'availability', scope: 'registration', label: 'Availability', type: 'availability' },
+  { field: 'confidence', scope: 'registration', label: 'Confidence', type: 'token' },
+  { field: 'riskScore', scope: 'hostname', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
+  { field: 'riskFactors', scope: 'hostname', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
+  { field: 'opportunityScore', scope: 'hostname', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
+  { field: 'opportunityFactors', scope: 'hostname', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
+  { field: 'registrar', scope: 'registration', label: 'Registrar', type: 'registrar' },
+  { field: 'createdDate', scope: 'registration', label: 'Creation date', type: 'date' },
+  { field: 'expiryDate', scope: 'registration', label: 'Expiry date', type: 'date' },
+  { field: 'nameservers', scope: 'registration', label: 'Nameservers', type: 'set', emptyGuard: true },
+  { field: 'hasMx', scope: 'hostname', label: 'MX', type: 'bool', depthGate: 'both-deep' },
+  { field: 'hasSpf', scope: 'hostname', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
+  { field: 'hasDmarc', scope: 'hostname', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
+  { field: 'activityStatus', scope: 'hostname', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
+  { field: 'websiteProbeDetail', scope: 'hostname', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
+  { field: 'pageTitle', scope: 'hostname', label: 'Page title', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpEvidenceStatus', scope: 'hostname', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpFinalOrigin', scope: 'hostname', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpResponseStatus', scope: 'hostname', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpTransportSecurity', scope: 'hostname', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
+  { field: 'httpRedirectCount', scope: 'hostname', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpCrossOriginRedirect', scope: 'hostname', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
+  { field: 'httpHttpsDowngrade', scope: 'hostname', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
+  { field: 'httpContentType', scope: 'hostname', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpSecurityHeaders', scope: 'hostname', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
+  { field: 'faviconMatch', scope: 'hostname', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'faviconNearMatch', scope: 'hostname', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'reusesOfficialAssets', scope: 'hostname', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasPasswordField', scope: 'hostname', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasExternalFormAction', scope: 'hostname', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
+  { field: 'phishingLanguageMatch', scope: 'hostname', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
+  { field: 'mutationTypes', scope: 'hostname', label: 'Mutation types', type: 'set' },
 ];
 
 function depthComparable(a: unknown, b: unknown): boolean {
@@ -726,8 +726,10 @@ export function compareCaseEvidence(
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
   const comparableOpportunityModel = opportunityModelComparable(previous, current);
+  const sameHostname = previous.inputHostname === current.inputHostname;
   const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
+    if (spec.scope === 'hostname' && !sameHostname) continue;
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;

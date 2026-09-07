@@ -112,6 +112,28 @@ describe('malware-IOC provider policy and configuration', () => {
 });
 
 describe('malware-IOC lookup', () => {
+  test('qualifies equal-time conflicting publisher records instead of selecting higher confidence', async () => {
+    const low = iocRecord({ confidence_level: 20 });
+    const high = iocRecord({ confidence_level: 90 });
+    for (const data of [[low, high], [high, low]]) {
+      const result = await fixtureAdapter(async () => jsonResponse({ query_status: 'ok', data })).lookupDomain('example.com', { env: ENABLED_ENV });
+      assert.equal(result.state, 'partial');
+      assert.equal(result.observation.complete, false);
+      assert.equal(result.observation.truncated, true);
+      assert.deepEqual(result.findings, []);
+      assert.match(result.observation.limitations.join(' '), /conflicting records/u);
+      assert.equal(result.observation.diagnostics.discarded, 2);
+    }
+    const duplicate = await fixtureAdapter(async () => jsonResponse({ query_status: 'ok', data: [low, low] })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(duplicate.state, 'success');
+    assert.equal(duplicate.findings.length, 1);
+    assert.equal(duplicate.observation.complete, true);
+    const newerLow = { ...low, last_seen: '2026-07-15 02:04:04 UTC' };
+    const newer = await fixtureAdapter(async () => jsonResponse({ query_status: 'ok', data: [high, newerLow] })).lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(newer.state, 'success');
+    assert.equal(newer.findings[0]?.confidence, 'low');
+  });
+
   test('rejects zone-less provider times and canonicalizes explicit offsets', async () => {
     const invalid = await fixtureAdapter(async () => jsonResponse({
       query_status: 'ok', data: [iocRecord({ first_seen: '2026-07-14T12:00:00.000', last_seen: null })],

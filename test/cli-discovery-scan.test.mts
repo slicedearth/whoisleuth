@@ -288,6 +288,61 @@ describe('discovery observation snapshots', () => {
     }
   });
 
+  test('resumed older observations cannot roll newer component baselines backwards', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-order-'));
+    const snapshot = path.join(directory, 'observed.json');
+    const selected = candidates().slice(0, 1);
+    const configuration = { deep: true, resolverServers: [] };
+    const priorAt = '2026-08-02T00:00:00.000Z';
+    try {
+      await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, priorAt);
+      const before = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      const resumed = { ...success(0, 'one.example', 'available'), observedAt: '2026-08-01T00:00:00.000Z', collectionOrigin: 'resumed_checkpoint' as const };
+      const report = await updateDiscoveryObservationSnapshot(snapshot, selected, [resumed], configuration, '2026-08-03T00:00:00.000Z');
+      const after = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      assert.deepEqual(report.changed, []);
+      assert.deepEqual(report.unavailableComponents, [{ domain: 'one.example', components: ['registration', 'dns'] }]);
+      assert.equal(after.registrationObservedAt, priorAt);
+      assert.equal(after.dnsObservedAt, priorAt);
+      assert.equal(after.observedAt, priorAt);
+      assert.equal(after.availabilityState, before.availabilityState);
+      assert.deepEqual(after.dns, before.dns);
+      assert.equal(after.latestAttemptState, 'partial');
+      assert.match(report.limitations.join(' '), /Older registration observations: 1/u);
+      const recovered = await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example', 'available')], configuration, '2026-08-04T00:00:00.000Z');
+      assert.equal(recovered.changed.length, 1);
+      assert.deepEqual(recovered.unavailable, []);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  test('equal-time component conflicts preserve the baseline and identify unavailable comparisons', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-tie-'));
+    const snapshot = path.join(directory, 'observed.json');
+    const selected = candidates().slice(0, 1);
+    const configuration = { deep: true, resolverServers: [] };
+    const at = '2026-08-02T00:00:00.000Z';
+    try {
+      await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, at);
+      const duplicate = await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, at);
+      assert.deepEqual(duplicate.unavailable, []);
+      assert.deepEqual(duplicate.changed, []);
+      const conflict = success(0, 'one.example', 'available');
+      assert.ok(conflict.ok);
+      const availability = (conflict.result as Record<string, unknown>).availability as Record<string, unknown>;
+      availability.dns = { status: 'success', records: { a: ['192.0.2.99'], aaaa: [], ns: [], mx: [] } };
+      const report = await updateDiscoveryObservationSnapshot(snapshot, selected, [conflict], configuration, at);
+      assert.deepEqual(report.changed, []);
+      assert.deepEqual(report.unavailableComponents, [{ domain: 'one.example', components: ['registration', 'dns'] }]);
+      assert.match(report.limitations.join(' '), /Conflicting equal-time registration observations: 1/u);
+      assert.match(report.limitations.join(' '), /Conflicting equal-time DNS observations: 1/u);
+      const stored = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      assert.equal(stored.availabilityState, 'registered');
+      assert.deepEqual(stored.dns.a, ['192.0.2.11']);
+      assert.equal(stored.latestRegistrationState, 'unavailable');
+      assert.equal(stored.latestAttemptState, 'partial');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   test('preserves complete DNS evidence when a later component is partial', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-partial-'));
     const snapshot = path.join(directory, 'observed.json');
