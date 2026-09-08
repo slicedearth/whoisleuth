@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openBulkWorkspaceTools, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, selectBulkResultView, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
@@ -9,6 +9,9 @@ import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-inte
 import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
+import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
+import { normalizeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -334,6 +337,82 @@ async function reviewWorkspaceBackup(
 function workspaceArchiveStatus(page: import('@playwright/test').Page) {
   return page.locator('.workspace-archive .status[role="status"]');
 }
+
+test('a rich 2,000-row Bulk workspace remains readable after saving and plain or encrypted restore', async ({ page }, testInfo) => {
+  test.slow();
+  const store = normalizeBulkSessionStore(richBulkSessionStore());
+  const startedAt = performance.now();
+  const productRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) productRequests.push(url.pathname);
+  });
+  await migrateLegacyBrowserData(page, { [BULK_SESSIONS_COLLECTION.legacyKey]: store }, { clearStorage: true, destination: '/bulk' });
+  const migrated = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 });
+  expect(migrated.records[0]?.value.results).toHaveLength(2_000);
+  expect(migrated.manifest?.source).toBe('legacy-localstorage');
+  expect(await page.evaluate((key) => localStorage.getItem(key), BULK_SESSIONS_COLLECTION.legacyKey)).toBe(JSON.stringify(store));
+  await openBulkWorkspaceTools(page);
+  await page.locator('.session-list article', { hasText: 'Retained Bulk workload' }).getByRole('button', { name: 'Load', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: /Loaded Retained Bulk workload: 2000 of 2000/ })).toBeVisible();
+  await openBulkWorkspaceTools(page);
+  await page.getByLabel('Session name').fill('Updated retained workload');
+  await page.getByRole('button', { name: 'Update saved session', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Updated Updated retained workload.' })).toBeVisible();
+  await page.reload();
+  const saved = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1, minimumRevision: 2 });
+  expect(saved.records[0]?.value.results).toHaveLength(2_000);
+  expect(saved.records[0]?.value.results.at(-1)?.domain).toBe('item1999.example');
+
+  await page.goto('/dashboard');
+  const plain = await downloadWorkspaceArchive(page);
+  const encrypted = await downloadEncryptedWorkspaceArchive(page, 'Example local archive passphrase');
+  expect(JSON.parse(plain.content).sections.bulkSessions.sessions[0].results).toHaveLength(2_000);
+  for (const [name, content] of [['plain', plain.content], ['encrypted', encrypted.content]] as const) {
+    await migrateLegacyBrowserData(page, {}, { clearStorage: true, destination: '/dashboard' });
+    await reviewWorkspaceBackup(page, { name: `${name}-workspace.json`, mimeType: 'application/json', buffer: Buffer.from(content) });
+    if (name === 'encrypted') {
+      await page.getByLabel('Backup passphrase').fill('Example local archive passphrase');
+      await page.getByRole('button', { name: 'Unlock and review' }).click();
+    }
+    const preview = page.locator('.preview');
+    await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
+    await preview.getByRole('button', { name: 'Add selected data' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Added backup data' }).first()).toBeVisible();
+    await page.goto('/bulk');
+    const restored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1, minimumRevision: 2 });
+    expect(restored.records[0]?.value.results).toHaveLength(2_000);
+    expect(restored.records[0]?.value.results.at(-1)?.hasDmarc).toBe(true);
+    await openBulkWorkspaceTools(page);
+    await page.locator('.session-list article', { hasText: 'Updated retained workload' }).getByRole('button', { name: 'Load', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: /Loaded Updated retained workload: 2000 of 2000/ })).toBeVisible();
+    await page.setViewportSize({ width: name === 'plain' ? 1_280 : 390, height: name === 'plain' ? 720 : 844 });
+    const theme = name === 'plain' ? 'dark' : 'light';
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expectNoHorizontalOverflow(page);
+  }
+  await selectBulkResultView(page, 'Analysis');
+  await page.getByRole('button', { name: /^Mail exposure\b/u }).click();
+  const mail = page.getByRole('region', { name: 'Lookalike mail exposure' });
+  await expect(mail.locator('tbody tr')).toHaveCount(2_000);
+  await expect(mail.getByRole('link', { name: 'item1999.example', exact: true })).toHaveCount(1);
+  const mailGroup = mail.getByRole('button', { name: /2000 Mail with SPF \+ DMARC/u });
+  await mailGroup.click();
+  await expect(mailGroup).toHaveAttribute('aria-pressed', 'true');
+  await expect(mail.locator('tbody tr')).toHaveCount(2_000);
+  await expectNoHorizontalOverflow(page);
+  await mail.getByRole('heading').scrollIntoViewIfNeeded();
+  expect(productRequests.filter((path) => !['/api/session', '/api/capabilities'].includes(path))).toEqual([]);
+  await testInfo.attach('bulk-workspace-admission', { body: JSON.stringify({
+    rows: 2_000,
+    storedBytes: saved.manifest?.serializedBytes,
+    plainDownloadBytes: Buffer.byteLength(plain.content),
+    encryptedDownloadBytes: Buffer.byteLength(encrypted.content),
+    durationMs: performance.now() - startedAt,
+  }), contentType: 'application/json' });
+  await page.screenshot({ path: testInfo.outputPath('restored-bulk-mobile.png'), fullPage: false });
+});
 
 test('the Dashboard waits for every collection and then presents only genuine first-use actions', {
   tag: ['@analyst-journey', '@journey-first-domain-assessment'],

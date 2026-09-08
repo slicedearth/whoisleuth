@@ -46,6 +46,7 @@ async function shortlistStoredRecord(value: unknown): Promise<BrowserLocalStored
     collection: 'shortlist',
     id: 'priority.invalid',
     value,
+    maximumBytes: SHORTLIST_COLLECTION.maximumBytes,
   });
   return {
     key: ['shortlist', encoded.lookupKey],

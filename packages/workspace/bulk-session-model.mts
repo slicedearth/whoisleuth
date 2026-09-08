@@ -592,7 +592,9 @@ export function bulkSessionStoreVersion(raw: unknown): number | null {
 }
 
 export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
-  assertWorkspaceInputGraph(raw, 'Bulk-session store');
+  // Preparation may combine an existing store and one incoming store before
+  // whole-session eviction. The persisted document still has its 4 MiB cap.
+  assertWorkspaceInputGraph(raw, 'Bulk-session store', { maximumBytes: MAX_BULK_SESSION_STORE_BYTES * 2 });
   assertWorkspaceDeclaredVersion(raw, 'Bulk-session store');
   const value = record(raw);
   if (value?.schema === BULK_SESSION_SCHEMA
@@ -788,8 +790,8 @@ export function mergeBulkSessions(
   localRaw: unknown,
   importedRaw: unknown,
 ): { sessions: BulkSession[]; added: number; updated: number; skipped: number; pruned: number } {
-  assertWorkspaceInputGraph(localRaw, 'Local Bulk-session store');
-  assertWorkspaceInputGraph(importedRaw, 'Imported Bulk-session document');
+  assertWorkspaceInputGraph(localRaw, 'Local Bulk-session store', { maximumBytes: MAX_BULK_SESSION_STORE_BYTES * 2 });
+  assertWorkspaceInputGraph(importedRaw, 'Imported Bulk-session document', { maximumBytes: MAX_BULK_SESSION_STORE_BYTES * 2 });
   assertWorkspacePortableVersion(importedRaw, BULK_SESSION_SCHEMA_VERSION, 'Imported Bulk-session document');
   const imported = record(importedRaw);
   if (!imported || imported.schema !== BULK_SESSION_SCHEMA || !Array.isArray(imported.sessions)) {

@@ -570,7 +570,7 @@ function manifestEntry(raw: unknown): WorkspaceArchiveManifestEntry | null {
 
 /** Validate structure, section byte counts, and checksums without applying data. */
 export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
-  assertWorkspaceInputGraph(raw, 'Workspace archive');
+  assertWorkspaceInputGraph(raw, 'Workspace archive', { maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES });
   const value = record(raw);
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');

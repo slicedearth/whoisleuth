@@ -1,4 +1,4 @@
-import { scanBoundedJson } from './bounded-json.ts';
+import { assertBoundedJsonStructure, boundedJsonLimitsForBytes, scanBoundedJson } from './bounded-json.ts';
 
 export const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 export const LOCAL_DATA_DATABASE_VERSION = 1;
@@ -81,8 +81,8 @@ export type DecodedLocalDataRecord = Readonly<{
  */
 export interface BrowserLocalDataCodec {
   readonly id: string;
-  encode(input: Readonly<{ collection: string; id: string; value: unknown }>): Promise<EncodedLocalDataRecord>;
-  decode(input: Readonly<{ collection: string; lookupKey: string; payload: string }>): Promise<DecodedLocalDataRecord>;
+  encode(input: Readonly<{ collection: string; id: string; value: unknown; maximumBytes: number }>): Promise<EncodedLocalDataRecord>;
+  decode(input: Readonly<{ collection: string; lookupKey: string; payload: string; maximumBytes: number }>): Promise<DecodedLocalDataRecord>;
 }
 
 export type BrowserLocalStoredRecord = Readonly<{
@@ -353,14 +353,21 @@ function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): L
   return definition;
 }
 
-export const plaintextJsonCodec: BrowserLocalDataCodec = Object.freeze({
+export const plaintextJsonCodec: BrowserLocalDataCodec = Object.freeze<BrowserLocalDataCodec>({
   id: 'json-v1',
-  async encode(input: Readonly<{ collection: string; id: string; value: unknown }>) {
+  async encode(input) {
     const id = boundedIdentifier(input.id, 'Record identifier', MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-    return { lookupKey: id, payload: JSON.stringify({ id, value: input.value }) };
+    const document = { id, value: input.value };
+    const limits = boundedJsonLimitsForBytes(input.maximumBytes);
+    assertBoundedJsonStructure(document, 'Browser-local record', limits);
+    const payload = JSON.stringify(document);
+    assertSerializedBound(payload, input.maximumBytes, 'Browser-local record');
+    return { lookupKey: id, payload };
   },
-  async decode(input: Readonly<{ collection: string; lookupKey: string; payload: string }>) {
-    scanBoundedJson(input.payload);
+  async decode(input) {
+    const limits = boundedJsonLimitsForBytes(input.maximumBytes);
+    assertSerializedBound(input.payload, input.maximumBytes, 'Browser-local record');
+    scanBoundedJson(input.payload, limits);
     const parsed = JSON.parse(input.payload) as { id?: unknown; value?: unknown };
     const id = boundedIdentifier(parsed?.id, 'Decoded record identifier', MAX_LOCAL_DATA_RECORD_ID_LENGTH);
     if (id !== input.lookupKey) {
@@ -684,7 +691,7 @@ export class BrowserLocalDataProvider {
     }
     let parsed: unknown;
     try {
-      scanBoundedJson(raw);
+      scanBoundedJson(raw, boundedJsonLimitsForBytes(definition.maximumBytes));
       parsed = JSON.parse(raw);
     } catch (cause) {
       throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_MALFORMED', `Legacy ${definition.label} data is malformed and was not migrated.`, { cause });
@@ -746,7 +753,7 @@ export class BrowserLocalDataProvider {
       if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
       seen.add(id);
       let encoded: EncodedLocalDataRecord;
-      try { encoded = await this.codec.encode({ collection: definition.id, id, value: record.value }); }
+      try { encoded = await this.codec.encode({ collection: definition.id, id, value: record.value, maximumBytes: definition.maximumBytes }); }
       catch (cause) {
         throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
       }
@@ -823,7 +830,7 @@ export class BrowserLocalDataProvider {
       if (record.ordinal >= records.length) {
         throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
       }
-      try { decoded.push(await this.codec.decode({ collection: definition.id, lookupKey: record.lookupKey, payload: record.payload })); }
+      try { decoded.push(await this.codec.decode({ collection: definition.id, lookupKey: record.lookupKey, payload: record.payload, maximumBytes: definition.maximumBytes })); }
       catch (cause) {
         throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains a record that could not be verified.`, { cause });
       }

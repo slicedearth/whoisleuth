@@ -446,6 +446,7 @@ export async function decodeBrowserLocalCollectionRecord<Collection extends Brow
     collection,
     lookupKey: record.lookupKey,
     payload: record.payload,
+    maximumBytes: definition.maximumBytes,
   });
   const normalizedDocument = definition.normalize(definition.join(
     [{ id: decoded.id, value: decoded.value }],

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
     MAX_WORKSPACE_ARCHIVE_BYTES,
@@ -92,7 +92,7 @@
     busy=true;
     try{
       if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error('Encrypted workspace archive imports are limited to 13.4 MiB.');
-      const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES});
+      const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
       if(isEncryptedWorkspaceArchive(value)){
         const inspected=inspectEncryptedWorkspaceArchive(value);
         encryptedImportValue=value;

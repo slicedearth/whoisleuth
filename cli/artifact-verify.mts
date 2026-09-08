@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
-import { parseBoundedJsonObject } from './bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from './bounded-json.mts';
 import {
   validateInvestigationCapsuleStructure,
   validateLookupEvidenceArtifactStructure,
@@ -240,7 +240,10 @@ function rejectUnsupportedCasePortabilityVersion(
 }
 
 function parseJson(raw: string): UnknownRecord {
-  return parseBoundedJsonObject(raw, { maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES });
+  return parseBoundedJsonObject(raw, {
+    maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES,
+    limits: boundedJsonLimitsForBytes(MAX_OFFLINE_ARTIFACT_BYTES),
+  });
 }
 
 export function hasVerifiedArtifactStructure(report: OfflineArtifactVerificationReport): boolean {

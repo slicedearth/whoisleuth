@@ -128,6 +128,12 @@ browser or private-browsing mode will persist IndexedDB. The interface reports
 quota, blocked, unavailable and timeout states and does not prune evidence
 silently.
 
+JSON storage and archive readers derive aggregate parsing work from those
+byte limits, while retaining independent nesting and per-container limits.
+The writer checks the same admission policy before committing; adding an
+ordinary field does not require another hand-maintained object-count allowance.
+Bulk sessions can retain up to 2,000 rows when the complete store fits 4 MiB.
+
 Histories remain in the existing atomic records. The current design adds no
 second database, synchronisation service, hosted custody or background network
 operation.

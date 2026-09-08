@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, scanBoundedJson } from '../lib/bounded-json.mts';
 
 import {
   decryptWorkspaceArchive,
@@ -94,7 +94,7 @@ function parseJson(raw: string): UnknownRecord {
   }
   let parsed: unknown;
   try {
-    scanBoundedJson(raw);
+    scanBoundedJson(raw, boundedJsonLimitsForBytes(MAX_OFFLINE_ARTIFACT_BYTES));
     parsed = JSON.parse(raw);
   } catch {
     throw new TypeError('Archive input must be valid bounded JSON without duplicate keys.');

@@ -10,6 +10,7 @@ type BoundedJsonLimits = Readonly<{
   maximumKeys?: number;
   maximumValues?: number;
   maximumContainerItems?: number;
+  maximumStringCodeUnits?: number;
 }>;
 
 type BoundedJsonParseOptions = Readonly<{
@@ -25,6 +26,24 @@ type BoundedJsonStringToken = Readonly<{
   propertyKey?: string;
 }>;
 type BoundedJsonStringObserver = (entry: BoundedJsonStringToken) => void;
+
+/** Aggregate work allowed by a separately enforced UTF-8 byte budget. */
+export function boundedJsonLimitsForBytes(maximumBytes: number): Readonly<{ maximumKeys: number; maximumValues: number; maximumStringCodeUnits: number }> {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
+    throw new TypeError('The JSON byte budget must be a positive safe integer.');
+  }
+  // A member needs at least five bytes (comma, two quotes, colon, value).
+  // Values need at least two bytes each, apart from a scalar root or the last
+  // array item. These upper bounds do not depend on a model's current fields.
+  // Nesting and individual-container limits remain independently bounded.
+  return {
+    maximumKeys: Math.floor(maximumBytes / 5),
+    maximumValues: Math.ceil(maximumBytes / 2),
+    // Decoded text is a lower bound on its UTF-8 JSON representation. Checking
+    // it before stringify also prevents an oversized string allocation.
+    maximumStringCodeUnits: maximumBytes,
+  };
+}
 
 function syntaxError(): never {
   throw new TypeError('Artefact input is not valid JSON.');
@@ -45,7 +64,14 @@ export function assertBoundedJsonStructure(
   const maximumContainerItems = limits.maximumContainerItems ?? MAX_BOUNDED_JSON_CONTAINER_ITEMS;
   let keys = 0;
   let values = 0;
+  let stringCodeUnits = 0;
   const ancestors = new Set<object>();
+  const text = (value: string): void => {
+    stringCodeUnits += value.length;
+    if (limits.maximumStringCodeUnits !== undefined && stringCodeUnits > limits.maximumStringCodeUnits) {
+      throw new TypeError(`${label} exceeds the aggregate text limit.`);
+    }
+  };
 
   const visit = (current: unknown, depth: number): void => {
     values += 1;
@@ -55,7 +81,8 @@ export function assertBoundedJsonStructure(
     if (depth > maximumDepth) {
       throw new TypeError(`${label} exceeds the ${maximumDepth}-level nesting limit.`);
     }
-    if (current === null || typeof current === 'string' || typeof current === 'boolean') return;
+    if (typeof current === 'string') { text(current); return; }
+    if (current === null || typeof current === 'boolean') return;
     if (typeof current === 'number') {
       if (!Number.isFinite(current)) throw new TypeError(`${label} contains a non-JSON number.`);
       return;
@@ -115,6 +142,7 @@ export function assertBoundedJsonStructure(
       }
       for (const key of objectKeys) {
         if (!isSafeJsonObjectKey(key)) throw new TypeError(`${label} contains an unsafe object key.`);
+        text(key);
         visit(descriptors[key]!.value, depth + 1);
       }
     }
@@ -136,6 +164,7 @@ export function scanBoundedJson(
   let index = 0;
   let keys = 0;
   let values = 0;
+  let stringCodeUnits = 0;
 
   const whitespace = () => {
     while (index < raw.length && /[\t\n\r ]/u.test(raw[index]!)) index += 1;
@@ -147,9 +176,15 @@ export function scanBoundedJson(
       const character = raw[index]!;
       if (character === '"') {
         index += 1;
+        let value: string;
         try {
-          return { value: JSON.parse(raw.slice(start, index)) as string, offset: start };
+          value = JSON.parse(raw.slice(start, index)) as string;
         } catch { syntaxError(); }
+        stringCodeUnits += value.length;
+        if (limits.maximumStringCodeUnits !== undefined && stringCodeUnits > limits.maximumStringCodeUnits) {
+          throw new TypeError('Artefact JSON exceeds the aggregate text limit.');
+        }
+        return { value, offset: start };
       }
       if (character === '\\') {
         index += 1;

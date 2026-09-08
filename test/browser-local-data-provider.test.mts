@@ -456,6 +456,7 @@ test('round-trips bounded plaintext records and rejects mismatched or malformed 
     collection: 'fixture',
     id: ' record-1 ',
     value: { retained: true },
+    maximumBytes: DEFINITION.maximumBytes,
   });
   assert.deepEqual(encoded, {
     lookupKey: 'record-1',
@@ -465,14 +466,62 @@ test('round-trips bounded plaintext records and rejects mismatched or malformed 
     collection: 'fixture',
     lookupKey: 'record-1',
     payload: encoded.payload,
+    maximumBytes: DEFINITION.maximumBytes,
   }), { id: 'record-1', value: { retained: true } });
   await assert.rejects(
-    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-2', payload: encoded.payload }),
+    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-2', payload: encoded.payload, maximumBytes: DEFINITION.maximumBytes }),
     (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_INTEGRITY',
   );
   await assert.rejects(
-    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-1', payload: '{' }),
+    plaintextJsonCodec.decode({ collection: 'fixture', lookupKey: 'record-1', payload: '{', maximumBytes: DEFINITION.maximumBytes }),
   );
+});
+
+test('plaintext writes and reads share byte and structure admission before serialization', async () => {
+  const value = Array.from({ length: 1_000 }, () => Object.fromEntries(
+    Array.from({ length: 51 }, (_, index) => [`field${index}`, index]),
+  ));
+  const input = { collection: 'fixture', id: 'record-1', value };
+  const maximumBytes = Buffer.byteLength(JSON.stringify({ id: input.id, value }));
+  const encoded = await plaintextJsonCodec.encode({ ...input, maximumBytes });
+  assert.deepEqual(await plaintextJsonCodec.decode({
+    collection: input.collection, lookupKey: encoded.lookupKey, payload: encoded.payload, maximumBytes,
+  }), { id: input.id, value });
+  await assert.rejects(plaintextJsonCodec.encode({ ...input, maximumBytes: maximumBytes - 1 }), /application limit/);
+  await assert.rejects(plaintextJsonCodec.decode({
+    collection: input.collection, lookupKey: encoded.lookupKey, payload: encoded.payload, maximumBytes: maximumBytes - 1,
+  }), /application limit/);
+  let accessorCalls = 0;
+  const accessor = Object.defineProperty({}, 'field', { enumerable: true, get() { accessorCalls += 1; return 'not read'; } });
+  for (const invalid of [accessor, { toJSON() { throw new Error('must not execute'); } }, [undefined], Number.NaN]) {
+    await assert.rejects(plaintextJsonCodec.encode({ ...input, value: invalid, maximumBytes: 1_024 }), /accessor|non-JSON/);
+  }
+  assert.equal(accessorCalls, 0);
+});
+
+test('over-budget updates leave the previous collection and manifest readable', async () => {
+  const provider = new BrowserLocalDataProvider({
+    databaseName: 'fixture-rejected-write',
+    indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION]),
+    storage: NULL_STORAGE,
+  });
+  try {
+    await provider.initialize([WRITE_DEFINITION]);
+    await assert.rejects(provider.update(WRITE_DEFINITION, () => ({
+      document: ['x'.repeat(WRITE_DEFINITION.maximumBytes)], result: 'not committed',
+    })), (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_QUOTA');
+    assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
+  } finally {
+    provider.close();
+  }
+});
+
+test('plaintext encoding rejects oversized aggregate text before creating JSON output', async (t) => {
+  const stringify = t.mock.method(JSON, 'stringify', () => { throw new Error('Serialization must not begin.'); });
+  await assert.rejects(plaintextJsonCodec.encode({
+    collection: 'fixture', id: 'record-1', value: ['x'.repeat(600), 'x'.repeat(600)], maximumBytes: 1_024,
+  }), /aggregate text limit/);
+  assert.equal(stringify.mock.callCount(), 0);
 });
 
 test('rejects invalid collection sets and returns no-op update results without writing', async () => {

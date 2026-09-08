@@ -9,7 +9,7 @@ import {
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.mts';
-import { parseBoundedJson } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../lib/bounded-json.mts';
 import {
   ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
@@ -419,6 +419,7 @@ export async function decryptWorkspaceArchive(
     return parseBoundedJson(json, {
       label: 'Decrypted workspace archive',
       maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES,
+      limits: boundedJsonLimitsForBytes(MAX_WORKSPACE_ARCHIVE_BYTES),
     });
   } finally {
     passphraseBytes.fill(0);
