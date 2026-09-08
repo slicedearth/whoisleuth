@@ -33,8 +33,9 @@ export const ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily
   serializerModule: 'packages/monitoring/analyst-review-state.mts',
   serializerExportName: 'serialiseAnalystReviewStateJson',
   plane: 'browser',
-  projection: 'browser_export',
-  retention: 'operator_controlled_output',
+  projection: 'browser_import',
+  retention: 'browser_indexeddb',
+  notePolicy: 'allowed_bounded',
   includedCategories: ['subject-identity', 'material-fingerprint', 'analyst-disposition', 'rationale', 'review-times', 'case-and-campaign-references'],
   excludedCategories: ['raw-upstream-responses', 'expanded-contacts', 'complete-query-urls', 'credentials', 'cookies', 'certificate-transparency-history'],
   formats: [{

@@ -620,8 +620,9 @@ The principal collection limits are:
 
 The `*Truncated` fields disclose when relevant upstream input exceeded these
 normalised limits. Invalid values are discarded without discarding valid
-neighbours. The raw source remains available only in full Lookup and deliberate
-evidence export.
+neighbours. Full Lookup can expose transient raw publications for inspection.
+Current evidence exports retain the supported minimised projection, not raw
+RDAP or WHOIS bodies or expanded contacts.
 
 ## Normalised WHOIS data
 
@@ -730,7 +731,7 @@ cache storage, transfer savings, delivery-provider identity, performance,
 privacy, or safety.
 
 Eligible captured HTML can carry nested `pageIdentity.publicationMetadata`
-version 1. One bounded tokenizer pass retains only fixed robots and Twitter
+version 1. The shared bounded document parser retains only fixed robots and Twitter
 Card declaration classes, heading counts, image alternative-text categories,
 and conservative explicit-head static blocking candidates. Raw declarations,
 titles, handles, URLs, image text, and resource paths are discarded. Partial
@@ -792,8 +793,8 @@ human-readable view of that JSON contract rather than defining additional
 evidence schemas. Both escape upstream strings, disclose omitted list values,
 and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
-Content Security Policy. The versioned JSON package remains the authoritative
-machine-readable export when complete captured source material is required.
+Content Security Policy. The versioned JSON package contains the complete
+supported minimised evidence projection, not the original source payloads.
 The Console's readable Markdown download uses a strict known-field projection
 of the typed Lookup response. It is created entirely in the browser, makes no
 network request, writes no browser-local record, and excludes raw registry and

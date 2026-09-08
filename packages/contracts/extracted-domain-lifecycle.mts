@@ -4,6 +4,7 @@ import type {
   SchemaLifecycleFamilyWithMetadataV2,
   SchemaLifecycleFamilyWithMetadataV3,
   SchemaLifecycleFamilyWithMetadataV4,
+  SchemaLifecyclePrivacyProfile,
 } from './schema-lifecycle.mts';
 
 export type ExtractedLifecycleHook = Readonly<{
@@ -36,8 +37,9 @@ export type ExtractedLifecycleFamilyOptions = Readonly<{
   formats: readonly ExtractedLifecycleFormat[];
   serializerModule?: string; serializerExportName: string;
   plane: 'browser' | 'node' | 'shared';
-  projection: 'bounded_passive_monitor' | 'browser_export' | 'browser_import' | 'review_output';
-  retention: 'none' | 'operator_controlled_output' | 'transient_report';
+  projection: SchemaLifecyclePrivacyProfile['projection'];
+  retention: SchemaLifecyclePrivacyProfile['retention'];
+  notePolicy?: SchemaLifecyclePrivacyProfile['notePolicy'];
   includedCategories: readonly string[];
   excludedCategories: readonly string[];
 }>;
@@ -241,7 +243,7 @@ function buildExtractedLifecycleFamily(
       projection: options.projection,
       includedCategories: options.includedCategories,
       excludedCategories: options.excludedCategories,
-      notePolicy: 'discarded' as const,
+      notePolicy: options.notePolicy ?? 'discarded' as const,
       retention: options.retention,
       network: 'none' as const,
       sharingReview: options.retention === 'operator_controlled_output' ? 'required' as const : 'not_applicable' as const,

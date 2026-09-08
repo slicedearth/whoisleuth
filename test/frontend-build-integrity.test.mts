@@ -36,7 +36,7 @@ import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
 
 const REVISION = '0123456789abcdef0123456789abcdef01234567';
 const ENVIRONMENT = Object.freeze({ WHOISLEUTH_BUILD_REVISION: REVISION });
-const SOURCE_DIRECTORIES = ['cli', 'frontend/src', 'frontend/static', 'lib', 'packages'];
+const SOURCE_DIRECTORIES = ['cli', 'frontend/src', 'frontend/static', 'lib', 'packages', 'tools'];
 const SOURCE_FILES = [
   '.nvmrc',
   'package.json',
@@ -390,7 +390,7 @@ describe('frontend build integrity', () => {
     }
   });
 
-  test('binds reuse to source bytes, runtime, and source revision', (context) => {
+  test('binds reuse to source bytes and source revision', (context) => {
     const root = fixtureRepository(context);
     recordFrontendBuildIntegrity(root, ENVIRONMENT);
     write(root, 'frontend/src/app.ts', 'export const app = false;\n');
@@ -401,6 +401,26 @@ describe('frontend build integrity', () => {
       () => assertFrontendBuildIntegrity(root, { WHOISLEUTH_BUILD_REVISION: 'abcdef0123456789abcdef0123456789abcdef01' }),
       /stale or mixed/u,
     );
+  });
+
+  test('preserves producer runtime provenance without requiring the same consumer environment', (context) => {
+    const root = fixtureRepository(context);
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const retained = markerObject(root);
+    const producer = { node: '24.18.0', platform: process.platform === 'linux' ? 'darwin' : 'linux', architecture: process.arch === 'x64' ? 'arm64' : 'x64', revision: REVISION };
+    write(root, FRONTEND_BUILD_INTEGRITY_MARKER, JSON.stringify({ ...retained, runtime: producer }));
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT).runtime, producer);
+    write(root, 'frontend/build/_app/immutable/entry/app.A.js', 'changed bytes');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+  });
+
+  test('discovers build-tool helpers without a separate source-file declaration', (context) => {
+    const root = fixtureRepository(context);
+    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 1;\n');
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.ok(snapshot.source.files.some((file) => file.path === 'tools/ordinary-build-helper.mts'));
+    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 2;\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
   });
 
   test('rejects malformed, future, oversized, and impossible markers', (context) => {

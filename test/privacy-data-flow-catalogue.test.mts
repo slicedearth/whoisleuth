@@ -48,6 +48,24 @@ import { renderPrivacyCatalogueFixtureMetadata } from '../tools/privacy-data-flo
 const JSON_PATH = new URL('../docs/privacy-data-flow-catalogue.json', import.meta.url);
 const MARKDOWN_PATH = new URL('../docs/privacy-data-flow-catalogue.md', import.meta.url);
 
+test('ordinary analyst review retention is distinct from deliberate workspace export', () => {
+  const profile = PRIVACY_DATA_FLOW_CATALOGUE.schemaPrivacyProfiles.find((entry) => entry.id === 'analyst-review-state.privacy');
+  assert.ok(profile);
+  assert.equal(profile.retention, 'browser_indexeddb');
+  assert.equal(profile.projection, 'browser_import');
+  assert.equal(profile.notePolicy, 'allowed_bounded');
+  assert.equal(profile.network, 'none');
+  assert.equal(profile.sharingReview, 'not_applicable');
+  const flow = PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.find((entry) => entry.familyId === 'analyst-review-state');
+  assert.ok(flow);
+  assert.ok(flow.processingClasses.includes('browser_local_retention'));
+  assert.equal(flow.processingClasses.includes('deliberate_local_file_export'), false);
+  const archive = PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.find((entry) => entry.id === 'workspace.portable.review.output');
+  assert.ok(archive);
+  assert.ok(archive.processingClasses.includes('deliberate_local_file_export'));
+  assert.equal(archive.processingClasses.includes('browser_local_retention'), false);
+});
+
 test('the catalogue writer derives fixture bytes and digest without a second hand-maintained declaration', () => {
   const metadata = renderPrivacyCatalogueFixtureMetadata('abc');
   assert.match(metadata, /bytes: 3,/u);

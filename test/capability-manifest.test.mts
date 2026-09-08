@@ -20,6 +20,7 @@ import {
   REQUEST_TIMEOUT_MS,
 } from '../lib/distributed-operation-budget.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
+
 import { computeOpportunityScore } from '../lib/opportunity-scoring.mts';
 import { computeRiskScore } from '../lib/risk-scoring.mts';
 import {
@@ -57,6 +58,15 @@ import { CLI_COMMAND_SEMANTICS } from '../packages/contracts/cli-command-semanti
 import { buildBulkCollectionPreflight, buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 import { renderCapabilityManifestMarkdown } from '../tools/capability-manifest-renderer.mts';
 import { OUTPUT_PATH, retainedDocument, writeAtomically } from '../tools/capability-manifest.mts';
+
+test('registration capability wording preserves precedence and the positive-only DNS fallback', () => {
+  const availability = CAPABILITY_MANIFEST.capabilities.find((entry) => entry.id === 'availability');
+  assert.ok(availability);
+  const explanation = availability.privacyLimitations.join(' ');
+  assert.match(explanation, /registration publications take precedence/iu);
+  assert.match(explanation, /inconclusive.*positive authoritative DNS delegation.*registered status at medium confidence/iu);
+  assert.match(explanation, /Missing DNS never proves availability/u);
+});
 
 const EXPECTED_CAPABILITY_IDS = [
   'lookup',

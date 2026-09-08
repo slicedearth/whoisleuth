@@ -283,8 +283,8 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 ### Authority-aware registration availability
 
-- Only authoritative registration evidence can establish an availability decision.
-- DNS, page, mail and heuristic evidence cannot decide registration existence.
+- Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.
+- Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence.
 
 ### Bounded domain evidence collection
 

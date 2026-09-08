@@ -225,8 +225,8 @@
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Only authoritative registration evidence can establish an availability decision.",
-        "DNS, page, mail and heuristic evidence cannot decide registration existence."
+        "Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.",
+        "Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence."
       ]
     },
     {
@@ -9297,7 +9297,7 @@
       "id": "analyst-review-state.privacy",
       "familyId": "analyst-review-state",
       "classification": "analyst_authored_sensitive",
-      "projection": "browser_export",
+      "projection": "browser_import",
       "includedCategories": [
         "subject-identity",
         "material-fingerprint",
@@ -9314,10 +9314,10 @@
         "cookies",
         "certificate-transparency-history"
       ],
-      "notePolicy": "discarded",
-      "retention": "operator_controlled_output",
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
       "network": "none",
-      "sharingReview": "required",
+      "sharingReview": "not_applicable",
       "consumerFlowIds": [
         "analyst-review-state.browser-analyst-review-state.consumer"
       ]
@@ -10978,10 +10978,10 @@
       },
       "privacyProfileId": "analyst-review-state.privacy",
       "requestMode": "none",
-      "retentionEffect": "operator_controlled_output",
+      "retentionEffect": "browser_indexeddb",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
+        "browser_local_retention",
         "offline_processing_no_request"
       ],
       "policyState": "current"

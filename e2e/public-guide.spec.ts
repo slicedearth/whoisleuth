@@ -2,6 +2,16 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 
+test('delivered third-party notices include browser framework code independently of dependency classification', async ({ request }) => {
+  const response = await request.get('/third-party-notices.txt');
+  expect(response.ok()).toBe(true);
+  const notice = await response.text();
+  expect(notice).toMatch(/^svelte@\d+\.\d+\.\d+\nRelationship: bundled browser dependency/mu);
+  expect(notice).toMatch(/^@sveltejs\/kit@\d+\.\d+\.\d+\nRelationship: bundled browser dependency/mu);
+  expect(notice).not.toMatch(/^(?:typescript|eslint|@playwright\/test)@/mu);
+  expect(notice).not.toContain('This is the production-package base.');
+});
+
 test('reference section navigation is available before client hydration', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();

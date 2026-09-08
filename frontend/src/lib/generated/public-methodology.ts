@@ -4,7 +4,7 @@ export const PUBLIC_METHODOLOGY = {
     {
       "id": "authority",
       "title": "Authority-aware registration decisions",
-      "summary": "Only applicable authoritative registry evidence decides registration state. Registrar, WHOIS, DNS, HTTP, mail, page and analyst signals remain supporting context.",
+      "summary": "Authoritative registration publications take precedence. If they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence. Missing DNS never proves availability; HTTP, mail, page and analyst signals remain supporting context.",
       "states": [
         "complete",
         "partial",

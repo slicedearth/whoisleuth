@@ -18,6 +18,7 @@ import { summarizeBulkProfileContexts, unavailableBulkProfileContext } from '../
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
 const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
+const initialThemePreferences = new WeakMap<Page, 'dark' | 'light' | 'system'>();
 const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
@@ -123,9 +124,39 @@ export function currentBulkSessionBrowserStore(sessions: readonly Record<string,
 }
 
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
-  await page.addInitScript(({ key, value }) => {
-    localStorage.setItem(key, value);
-  }, { key: THEME_STORAGE_KEY, value: preference });
+  if (page.url() === 'about:blank') {
+    const initial = initialThemePreferences.get(page);
+    if (initial !== undefined && initial !== preference) {
+      throw new Error('Set one initial theme before navigation; switch the active page after it loads.');
+    }
+    if (initial === undefined) {
+      await page.addInitScript(({ key, value }) => {
+        const seedKey = `${key}:test-seeded`;
+        if (sessionStorage.getItem(seedKey)) return;
+        localStorage.setItem(key, value);
+        sessionStorage.setItem(seedKey, '1');
+      }, { key: THEME_STORAGE_KEY, value: preference });
+      initialThemePreferences.set(page, preference);
+    }
+    return;
+  }
+  const root = page.locator('html');
+  if (await root.getAttribute('data-theme-preference') !== preference) {
+    const trigger = page.getByRole('button', { name: /^Colour theme,/u });
+    const navigation = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    const openedNavigation = !await trigger.isVisible();
+    if (openedNavigation) {
+      await expect(navigation).toBeVisible();
+      await expect(navigation).toHaveAttribute('aria-expanded', 'false');
+      await navigation.click();
+    }
+    await trigger.click();
+    const label = preference === 'dark' ? 'Dark' : preference === 'light' ? 'Light' : 'System';
+    await page.getByRole('option', { name: `${label} theme`, exact: true }).click();
+    if (openedNavigation && await navigation.getAttribute('aria-expanded') === 'true') await navigation.click();
+  }
+  await expect(root).toHaveAttribute('data-theme-preference', preference);
+  if (preference !== 'system') await expect(root).toHaveAttribute('data-theme', preference);
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {

@@ -303,12 +303,30 @@ test('keeps the final CLI section current at the end of the document', async ({ 
   await expect(contents.getByRole('link', { name: 'More documentation' })).toHaveAttribute('aria-current', 'location');
 });
 
-test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }) => {
+test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/methodology');
   await expect(page.locator('.topic-grid article')).toHaveCount(PUBLIC_METHODOLOGY.topics.length);
   await expect(page.getByRole('heading', { name: 'Authority-aware registration decisions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Deliberate non-inferences' })).toBeVisible();
+  const authority = page.locator('.topic-grid article').filter({ has: page.getByRole('heading', { name: 'Authority-aware registration decisions' }) });
+  await expect(authority).toContainText('positive authoritative DNS delegation can support registered status at medium confidence');
+  await expect(authority).toContainText('Missing DNS never proves availability');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await authority.scrollIntoViewIfNeeded();
+      await expect(authority).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
 
   await page.goto('/coverage');
   await expect(page.locator('.distinction-grid article')).toHaveCount(PUBLIC_COVERAGE_SUMMARY.distinctions.length);

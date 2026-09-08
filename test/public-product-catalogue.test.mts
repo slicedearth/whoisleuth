@@ -82,6 +82,11 @@ describe('public product catalogue', () => {
     const coverage = publicCoverage();
     const registry = registryStandardsCoverageSnapshot();
     assert.deepEqual(methodology.topics, METHODOLOGY_TOPICS);
+    const authority = methodology.topics.find((topic) => topic.id === 'authority');
+    assert.ok(authority);
+    assert.match(authority.summary, /registration publications take precedence/iu);
+    assert.match(authority.summary, /inconclusive.*positive authoritative DNS delegation.*registered status at medium confidence/iu);
+    assert.match(authority.summary, /Missing DNS never proves availability/u);
     assert.deepEqual(coverage.distinctions, COVERAGE_DISTINCTIONS);
     assert.equal(coverage.capabilities.length, CAPABILITY_MANIFEST.capabilities.length);
     assert.deepEqual(coverage.capabilities.map((item) => item.id), CAPABILITY_MANIFEST.capabilities.map((item) => item.id));

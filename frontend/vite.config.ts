@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { defineConfig, type Plugin } from 'vite';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { browserThirdPartyNoticesPlugin } from '../tools/third-party-notices.mts';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
@@ -92,7 +93,7 @@ export default defineConfig(async () => ({
     __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
     __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
   },
-  plugins: [themeInitializerPlugin(), sveltekit()],
+  plugins: [themeInitializerPlugin(), browserThirdPartyNoticesPlugin(fileURLToPath(new URL('..', import.meta.url))), sveltekit()],
   server: {
     proxy: {
       '/api': LOCAL_API_PROXY,

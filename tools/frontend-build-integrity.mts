@@ -47,6 +47,7 @@ const SOURCE_DIRECTORIES = Object.freeze([
   'frontend/static',
   'lib',
   'packages',
+  'tools',
 ] as const);
 const SOURCE_FILES = Object.freeze([
   '.nvmrc',
@@ -687,16 +688,12 @@ export function assertFrontendBuildIntegrity(
     MAX_MARKER_BYTES,
     'Frontend build-integrity marker',
   ).toString('utf8'));
-  const currentRuntime = Object.freeze({
-    node: process.versions.node,
-    platform: process.platform,
-    architecture: process.arch,
-    revision: resolvedBuildRevision(repositoryRoot, environment),
-  });
   const source = sourceIdentity(repositoryRoot);
   const served = outputIdentity(repositoryRoot, 'frontend/build');
   const html = htmlIntegrity(repositoryRoot, served, new Set(retained.manifestOutputs));
-  if (JSON.stringify(retained.runtime) !== JSON.stringify(currentRuntime)
+  // Producer runtime is diagnostic provenance, not a requirement for consuming static bytes.
+  // Development-runtime compatibility is enforced separately by the toolchain preflight.
+  if (retained.runtime.revision !== resolvedBuildRevision(repositoryRoot, environment)
     || JSON.stringify(retained.source) !== JSON.stringify(source)
     || JSON.stringify(retained.served) !== JSON.stringify(served)
     || retained.htmlDocuments !== html.documents

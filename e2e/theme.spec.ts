@@ -1,7 +1,35 @@
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
 
 const STORAGE_KEY = 'whoisleuth:theme:v1';
+
+test('theme preparation switches the current document and preserves that choice after navigation', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/methodology');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const navigationStart = await page.evaluate(() => performance.timeOrigin);
+  await useTheme(page, 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(navigationStart);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await useTheme(page, 'dark');
+  await page.goto('/resources');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const activePage = await page.context().newPage();
+  try {
+    await activePage.setViewportSize({ width: 320, height: 700 });
+    await activePage.goto('/lookup');
+    await useTheme(activePage, 'light');
+    await useTheme(activePage, 'dark');
+    await expect(activePage.getByRole('button', { name: 'Toggle navigation', exact: true })).toHaveAttribute('aria-expanded', 'false');
+    await activePage.reload();
+    await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
+  } finally {
+    await activePage.close();
+  }
+});
 
 async function chooseTheme(page: import('@playwright/test').Page, label: 'Dark' | 'Light' | 'System') {
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });

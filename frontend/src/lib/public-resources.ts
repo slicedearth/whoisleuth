@@ -52,7 +52,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     eyebrow: 'Domain investigation',
     summary: Object.freeze([
       'A useful domain investigation rarely comes from one database. Registration records describe the domain, DNS shows current publication, certificates show issued identities, and website observations describe one captured response.',
-      'WHOISleuth keeps those evidence classes separate. It uses authoritative registry evidence for registration decisions, then adds supporting context without converting a failed or missing source into a claim of absence or safety.',
+      'WHOISleuth keeps those evidence classes separate. Authoritative registration publications take precedence; positive authoritative DNS delegation can support registered status when those publications are inconclusive. Failed or missing sources never establish availability or safety.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Start with the question', body: 'Decide whether you are checking existence, identity, infrastructure, acquisition signals, brand similarity, or a material change. The question determines whether a Fast or Deep collection is proportionate.' }),
