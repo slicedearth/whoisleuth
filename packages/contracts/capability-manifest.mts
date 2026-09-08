@@ -5,6 +5,7 @@ import {
   type CliCommand,
 } from './cli-command-semantics.mts';
 import { SCHEDULED_MONITOR_CYCLE_BUDGET } from './scheduled-monitor-bounds.mts';
+import { INVESTIGATION_RUN_STATES } from './investigation-run.mts';
 
 const CAPABILITY_MANIFEST_SCHEMA = 'whoisleuth.capability-manifest';
 const CAPABILITY_MANIFEST_VERSION = 1 as const;
@@ -1217,7 +1218,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     cancellation: 'step_stops_admission',
     partialResults: 'explicit_step',
     outcomes: ['complete', 'partial', 'blocked'],
-    documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+    documentStates: INVESTIGATION_RUN_STATES,
     privacyLimitations: [
       'Only installed fixed-recipe steps can run, and each network invocation requires explicit approval.',
       'Analyst-selection placeholders pause without interpretation or collection.',
@@ -1687,7 +1688,7 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       cancellation: 'step_stops_admission',
       partialResults: 'explicit_step',
       outcomes: ['complete', 'partial', 'blocked'],
-      documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+      documentStates: INVESTIGATION_RUN_STATES,
       variants: [
         {
           id: 'unapproved_run',
@@ -1707,7 +1708,7 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
           cancellation: 'step_stops_admission',
           partialResults: 'explicit_step',
           outcomes: ['complete', 'partial', 'blocked'],
-          documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+          documentStates: INVESTIGATION_RUN_STATES,
         },
         {
           id: 'approved_run',
@@ -1727,7 +1728,7 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
           cancellation: 'step_stops_admission',
           partialResults: 'explicit_step',
           outcomes: ['complete', 'partial', 'blocked'],
-          documentStates: ['complete', 'awaiting_analyst_selection', 'step_failed'],
+          documentStates: INVESTIGATION_RUN_STATES.filter((state) => state !== 'awaiting_network_approval'),
         },
       ],
       privacyLimitations: [

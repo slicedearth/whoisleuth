@@ -798,7 +798,7 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(powershellCandidates('whoisleuth not-a-command -'), ['--help', '-h']);
     for (const [line, offersFiles] of powershellFileCases) {
       assert.equal(
-        powershellCandidates(line).some((candidate) => candidate.endsWith('package.json')),
+        powershellCandidates(line).some((candidate) => /[/\\]package\.json'?$/u.test(candidate)),
         offersFiles,
         line,
       );

@@ -145,6 +145,14 @@ _whoisleuth_direct_lookup_target() {
   case " ${CLI_COMMANDS.join(' ')} " in *" \${candidate} "*) return 1 ;; esac
   "\${COMP_WORDS[0]}" "\${candidate}" --plan --json >/dev/null 2>&1
 }
+_whoisleuth_complete_files() {
+  local candidate
+  COMPREPLY=()
+  # Readline handles quoting and escapes; preserve each path as one candidate.
+  while IFS= read -r candidate; do
+    COMPREPLY+=("\${candidate}")
+  done < <(compgen -o default -- "\${1}")
+}
 _whoisleuth_completion() {
   local current previous command options value_options file_limit positional_count expect_value foreign_option word integer_values seen_options i
   current="\${COMP_WORDS[COMP_CWORD]}"
@@ -184,7 +192,7 @@ ${commandValueCases}
 ${valueCases}
     esac
     case "\${command}:\${previous}" in
-      ${commandOptionPatterns(['file'])}) COMPREPLY=( $(compgen -f -- "\${current}") ); return ;;
+      ${commandOptionPatterns(['file'])}) _whoisleuth_complete_files "\${current}"; return ;;
 ${integerCases}
       ${commandOptionPatterns(['text'])}) COMPREPLY=(); return ;;
     esac
@@ -193,12 +201,12 @@ ${integerCases}
 ${positionalValueCases}
   esac
   if (( file_limit > positional_count && foreign_option == 0 && expect_value == 0 )) && [[ "\${current}" != -* ]]; then
-    COMPREPLY=( $(compgen -f -- "\${current}") )
+    _whoisleuth_complete_files "\${current}"
     return
   fi
   COMPREPLY=( $(compgen -W "\${options}" -- "\${current}") )
 }
-complete -F _whoisleuth_completion whoisleuth
+complete -o filenames -F _whoisleuth_completion whoisleuth
 `;
 }
 
@@ -509,6 +517,18 @@ function powershellCompletion(): string {
 Register-ArgumentCompleter -Native -CommandName whoisleuth -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $noMatch = { [System.Management.Automation.CompletionResult]::new(' ', 'no matches', 'ParameterValue', 'No completion available') }
+  $completeFiles = {
+    param($prefix)
+    $files = @([System.Management.Automation.CompletionCompleters]::CompleteFilename($prefix))
+    foreach ($file in $files) {
+      # Native arguments need literal paths, not provider wildcard escapes.
+      $path = $file.ToolTip
+      if ($file.ResultType -eq 'ProviderContainer') { $path += [IO.Path]::DirectorySeparatorChar }
+      $literal = "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($path) + "'"
+      [System.Management.Automation.CompletionResult]::new($literal, $file.ListItemText, $file.ResultType, $file.ToolTip)
+    }
+    if ($files.Count -eq 0) { & $noMatch }
+  }
   $commands = @(${CLI_COMMANDS.map((command) => `'${command}'`).join(', ')})
   $options = @{
 ${Object.entries(commandOptions).map(([command, options]) => `    '${command}' = @(${options.map((option) => `'${option}'`).join(', ')})`).join('\n')}
@@ -560,11 +580,7 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
   $activeOptions = if ($commandKnown) { $options[$command] } else { @(${COMMAND_META_ALIASES.map((alias) => `'${alias}'`).join(', ')}) }
   $previousOwned = $activeOptions -contains $previous
   if ($previousOwned -and $fileOptions.ContainsKey($command) -and $fileOptions[$command] -contains $previous) {
-    $files = @(Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue)
-    $files | ForEach-Object {
-      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
-    }
-    if ($files.Count -eq 0) { & $noMatch }
+    & $completeFiles $wordToComplete
     return
   }
   if ($previousOwned -and $textOptions.ContainsKey($command) -and $textOptions[$command] -contains $previous) {
@@ -632,11 +648,7 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
     return
   }
   if ($fileLimits.ContainsKey($command) -and $fileLimits[$command] -gt $positionCount -and -not $foreignOption -and -not $expectValue -and -not $wordToComplete.StartsWith('-')) {
-    $files = @(Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue)
-    $files | ForEach-Object {
-      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
-    }
-    if ($files.Count -eq 0) { & $noMatch }
+    & $completeFiles $wordToComplete
     return
   }
   $candidates = if ($rootCompletion -and -not $directLookup) {

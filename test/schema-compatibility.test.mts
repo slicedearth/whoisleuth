@@ -386,8 +386,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.trust-store-comparison-review').schema, 'whoisleuth.trust-store-comparison.review');
     assert.equal(byId(inventory, 'cli.nameserver-preflight-review').schema, 'whoisleuth.nameserver-preflight.review');
     assert.equal(byId(inventory, 'cli.investigation-run').schema, 'whoisleuth.cli.investigation-run');
-    assert.equal(byId(inventory, 'cli.investigation-run').currentVersion, 2);
-    assert.deepEqual(byId(inventory, 'cli.investigation-run').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'cli.investigation-run').currentVersion, 3);
+    assert.deepEqual(byId(inventory, 'cli.investigation-run').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.investigation-run').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'cli.collection-preflight').schema, 'whoisleuth.cli.collection-preflight');
     assert.equal(byId(inventory, 'cli.config').schema, 'whoisleuth.cli.config');

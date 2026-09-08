@@ -1,12 +1,16 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
 import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completion.mts';
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { unitTestExecutablePath } from '../tools/toolchain-compatibility.mts';
 import { runCli } from '../cli/runner.mts';
 import {
   assertSuccessfulShellProcess,
@@ -63,7 +67,9 @@ describe('CLI shell completion', () => {
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
       assert.match(bash, new RegExp(pattern, 'u'));
     }
-    assert.match(bash, /COMPREPLY=.*compgen -f/u);
+    const completionSpec = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', `${bash}\ncomplete -p whoisleuth`], { encoding: 'utf8' });
+    assertSuccessfulShellProcess(completionSpec, 'Bash filename completion registration');
+    assert.match(completionSpec.stdout, /-o filenames\b/u);
     assert.equal((bash.match(/completion:0\).*COMPREPLY=.*bash zsh fish powershell/gu) || []).length, 1);
     assert.doesNotMatch(bash, /^\s+completion\) COMPREPLY/gmu);
     const acceptedTargets = ['example.test', '192.0.2.10', '2001:db8::10', 'AS64496'] as const;
@@ -184,13 +190,13 @@ describe('CLI shell completion', () => {
       const candidates = completePowerShell(line);
       assert.equal(candidates.includes('registered'), false, line);
       assert.equal(candidates.includes('8'), false, line);
-      assert.equal(candidates.some((candidate) => candidate.endsWith('package.json')), false, line);
+      assert.equal(candidates.some((candidate) => /[/\\]package\.json'?$/u.test(candidate)), false, line);
     }
     for (const line of [
       'whoisleuth verify-artifact package.json --manifest ',
       'whoisleuth verify-artifact ',
     ]) {
-      assert.ok(completePowerShell(line).some((candidate) => candidate.endsWith('package.json')), line);
+      assert.ok(completePowerShell(line).some((candidate) => /[/\\]package\.json'?$/u.test(candidate)), line);
     }
   });
 
@@ -202,6 +208,57 @@ describe('CLI shell completion', () => {
     }
     for (const shell of ['bash', 'zsh', 'fish', 'powershell'] as const) {
       assert.doesNotMatch(buildShellCompletion(shell), /(?:--preset|-a) ['"]?custom/u);
+    }
+  });
+
+  test('completes ordinary filenames as one literal argument, including spaces, quotes and metacharacters', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-completion-'));
+    try {
+      const names = [
+        'My Evidence.json',
+        "Single 'quote'.json",
+        'Dollar $(printf not-executed).json',
+        'Ampersand & semi;.json',
+        'Bracket [literal].json',
+        ...(process.platform === 'win32' ? [] : ['Double "quote".json', 'Glob *?.json']),
+      ];
+      for (const name of names) writeFileSync(join(directory, name), '{}\n');
+      mkdirSync(join(directory, 'Nested Evidence'));
+      const positions = [['whoisleuth', 'verify-artifact'], ['whoisleuth', 'lookup', 'example.test', '--save-lookup']] as const;
+      const cases = positions.flatMap((position) => names.map((name) => [...position, join(directory, name.split(' ')[0]!)]));
+      const completeBash = prepareBashCompletionBatch(buildShellCompletion('bash'), cases, REPOSITORY_ROOT);
+      for (const position of positions) {
+        for (const name of names) {
+          const candidates = completeBash([...position, join(directory, name.split(' ')[0]!)]);
+          assert.deepEqual(candidates, [join(directory, name)], name);
+        }
+      }
+      const lines = positions.flatMap((position) => names.map((name) => `${position.join(' ')} ${join(directory, name.split(' ')[0]!)}`));
+      const directoryLine = `whoisleuth verify-artifact ${join(directory, 'Nested')}`;
+      const completePowerShell = preparePowerShellCompletionBatch(buildShellCompletion('powershell'), [...lines, directoryLine], REPOSITORY_ROOT);
+      const candidates = lines.map((line) => {
+        const matches = completePowerShell(line);
+        assert.equal(matches.length, 1, line);
+        return matches[0]!;
+      });
+      const parsed = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `
+$candidates = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$results = foreach ($candidate in $candidates) {
+  $tokens = $null; $errors = $null
+  $ast = [System.Management.Automation.Language.Parser]::ParseInput('whoisleuth verify-artifact ' + $candidate, [ref]$tokens, [ref]$errors)
+  $commands = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
+  if ($errors.Count -ne 0 -or $commands.Count -ne 1 -or $commands[0].CommandElements.Count -ne 3) { throw 'Completion is not one argument.' }
+  $argument = $commands[0].CommandElements[2]
+  if ($argument -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { throw 'Completion is not a literal argument.' }
+  $argument.Value
+}
+$results | ConvertTo-Json -Compress -AsArray`], { encoding: 'utf8', input: JSON.stringify(candidates) });
+      assertSuccessfulShellProcess(parsed, 'PowerShell completed-argument parsing');
+      assert.deepEqual(JSON.parse(parsed.stdout), positions.flatMap(() => names.map((name) => join(directory, name))));
+      assert.equal(completePowerShell(directoryLine).length, 1, 'Directories must remain navigable.');
+      assert.match(completePowerShell(directoryLine)[0]!, /Nested Evidence/u);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 
@@ -261,7 +318,7 @@ describe('CLI shell completion', () => {
     const stderr = capture();
     const code = await runCli(['completion', 'bash'], { stdout: stdout.stream, stderr: stderr.stream });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.match(stdout.value(), /complete -F _whoisleuth_completion whoisleuth/u);
+    assert.equal(stdout.value(), buildShellCompletion('bash'));
     assert.equal(stderr.value(), '');
     assert.deepEqual(parseCliArguments(['completion', 'fish']), { action: 'completion', shell: 'fish' });
     assert.deepEqual(parseCliArguments(['completion', 'powershell']), { action: 'completion', shell: 'powershell' });

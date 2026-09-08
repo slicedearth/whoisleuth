@@ -86,6 +86,10 @@ or domain-only output only where declared. `--output` writes a private local
 file atomically and refuses an existing path unless `--force` is selected.
 `--strict-exit` and `--fail-on` expose selected evidence states to automation.
 
+`workflow-run` pauses on a partial collection. Resume retains it without
+recollection and keeps exit code 4 even if later steps finish. Failed validation
+or export steps remain retryable. See `docs/cli.md` for checkpoint compatibility.
+
 Exit codes are 0 for completion, 2 for invalid input, 3 for collection or
 comparison failure, 4 for a partial result or unmet selected evidence policy,
 70 for internal bootstrap failure, 130 for cancellation and 143 for SIGTERM.

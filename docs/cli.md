@@ -135,6 +135,21 @@ cryptographic validation, and alignment differences can be legitimate.
 
 ## Output and automation
 
+### Resuming a fixed workflow
+
+`workflow-run` emits a checkpoint for an installed recipe. A partial collection
+pauses for review; resuming keeps that observation and does not collect it
+again. Later steps can finish without making the earlier evidence complete:
+the run still exits with code 4. Validation, usage and export failures remain
+failures and are retried on resume. Step diagnostics stay on stderr, separate
+from checkpoint JSON. New network steps still need `--approve-network`.
+
+Checkpoint version 3 reads versions 1 and 2. Older installations reject version
+3 rather than unknowingly repeating an incomplete collection. The checkpoint
+can contain selected local paths and evidence; review it before sharing.
+
+### Formats and exit behaviour
+
 Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML
 or domain-only output only where declared by the installed registry. Redirected
 and machine output contains no ANSI or transient progress text.

@@ -205,6 +205,31 @@ test('opens a directly linked CLI workflow section after the responsive layout s
   await expectNoHorizontalOverflow(page);
 });
 
+test('keeps workflow partial-result and resume guidance readable across reference layouts', async ({ page }, testInfo) => {
+  const requests = collectInvestigationRequests(page);
+  await page.goto('/cli#command-workflow-run');
+  const detail = page.locator('article[data-command-detail="workflow-run"]');
+  await expect(detail).toBeVisible();
+  const boundary = detail.getByText(/Partial collections pause for review and are retained, not recollected, on resume/u);
+  await expect(boundary).toBeVisible();
+  await expect(boundary).toContainText('failed validation or export steps remain retryable');
+  await expect(boundary).toContainText('Step diagnostics go to stderr, not the checkpoint');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await boundary.scrollIntoViewIfNeeded();
+      await expect(boundary).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
+      if ([320, 1280].includes(viewport.width)) {
+        await page.screenshot({ path: testInfo.outputPath(`workflow-guidance-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
+  expect(requests).toEqual([]);
+});
+
 test('reveals related CLI commands even when the current filters exclude them', async ({ page }) => {
   await page.goto('/cli');
   const catalogue = page.getByTestId('public-cli-catalogue');

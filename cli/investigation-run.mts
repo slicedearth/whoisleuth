@@ -10,12 +10,24 @@ import { hasUnsafeCliText } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import type { CliCommand } from './command-reference.mts';
+import {
+  CLI_INVESTIGATION_RUN_SCHEMA,
+  CLI_INVESTIGATION_RUN_VERSION,
+  SUPPORTED_CLI_INVESTIGATION_RUN_VERSIONS,
+  MAX_INVESTIGATION_RUN_BYTES,
+  MAX_INVESTIGATION_RUN_SELECTIONS,
+  MAX_INVESTIGATION_RUN_SELECTION_LENGTH,
+  type InvestigationRunState,
+} from '../packages/contracts/investigation-run.mts';
 
-export const CLI_INVESTIGATION_RUN_SCHEMA = 'whoisleuth.cli.investigation-run';
-export const CLI_INVESTIGATION_RUN_VERSION = 2;
-export const MAX_INVESTIGATION_RUN_BYTES = 24 * 1024 * 1024;
-export const MAX_INVESTIGATION_RUN_SELECTIONS = 16;
-export const MAX_INVESTIGATION_RUN_SELECTION_LENGTH = 1_024;
+export {
+  CLI_INVESTIGATION_RUN_SCHEMA,
+  CLI_INVESTIGATION_RUN_VERSION,
+  SUPPORTED_CLI_INVESTIGATION_RUN_VERSIONS,
+  MAX_INVESTIGATION_RUN_BYTES,
+  MAX_INVESTIGATION_RUN_SELECTIONS,
+  MAX_INVESTIGATION_RUN_SELECTION_LENGTH,
+};
 
 type ExecutionResult = Readonly<{ exitCode: number; stdout: string }>;
 type CompletedStep = Readonly<{
@@ -32,6 +44,9 @@ type InvestigationPlan = ReturnType<typeof buildInvestigationPlan>;
 type InvestigationStep = InvestigationPlan['steps'][number];
 
 const PLACEHOLDER_PATTERN = /^<[^>]+>$/u;
+// These collectors can return useful incomplete observations. Offline validation
+// and export failures are not observations and must remain retryable failures.
+const PARTIAL_OBSERVATION_COMMANDS: ReadonlySet<CliCommand> = new Set(['lookup', 'posture', 'discover-scan']);
 
 function boundedResult(value: string): unknown {
   if (Buffer.byteLength(value, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) {
@@ -52,6 +67,16 @@ function resultSchema(value: unknown): string | null {
   return value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>).schema === 'string'
     ? String((value as Record<string, unknown>).schema)
     : null;
+}
+
+function stepDisposition(step: InvestigationStep, exitCode: number, result: unknown): 'complete' | 'partial' | 'failed' {
+  const expectedContract = resultSchema(result) === step.produces;
+  if (exitCode === EXIT_CODES.SUCCESS) {
+    if (!expectedContract) throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract.`);
+    return 'complete';
+  }
+  return exitCode === EXIT_CODES.PARTIAL_FAILURE && step.mode === 'network'
+    && PARTIAL_OBSERVATION_COMMANDS.has(step.command) && expectedContract ? 'partial' : 'failed';
 }
 
 function sameArguments(left: unknown, right: readonly string[]): boolean {
@@ -185,7 +210,7 @@ function parseResumeState(
   try { parsed = JSON.parse(normalizedInput); } catch { throw new CliUsageError('Investigation resume state must be valid JSON.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   if (root.schema !== CLI_INVESTIGATION_RUN_SCHEMA
-    || (root.version !== 1 && root.version !== CLI_INVESTIGATION_RUN_VERSION)
+    || !SUPPORTED_CLI_INVESTIGATION_RUN_VERSIONS.some((version) => root.version === version)
     || root.recipe !== plan.recipe.id || root.subject !== plan.subject || !Array.isArray(root.completedSteps)) {
     throw new CliUsageError('Investigation resume state must match this versioned recipe and subject.');
   }
@@ -217,14 +242,11 @@ function parseResumeState(
       throw new CliUsageError('Investigation resume state does not match the installed fixed recipe.');
     }
     const exitCode = Number(item.exitCode);
-    if (exitCode !== 0 && exitCode !== 2) {
+    if (stepDisposition(planned, exitCode, item.result) === 'failed') {
       if (index !== root.completedSteps.length - 1) {
         throw new CliUsageError('A failed investigation step must be the final retained step.');
       }
       break;
-    }
-    if (resultSchema(item.result) !== planned.produces) {
-      throw new CliUsageError('Investigation resume state contains output from an unexpected command contract.');
     }
     completed.push(Object.freeze({
       id: planned.id,
@@ -259,7 +281,7 @@ export async function runInvestigationRecipe(
   const selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed);
   const selectionsByStep = new Map(selections.map((item) => [item.stepId, item.values]));
   const completed = [...prior.completed];
-  let state: 'complete' | 'awaiting_network_approval' | 'awaiting_analyst_selection' | 'step_failed' = 'complete';
+  let state: InvestigationRunState = completed.some((step) => step.exitCode === EXIT_CODES.PARTIAL_FAILURE) ? 'partial' : 'complete';
   let currentStep: typeof plan.steps[number] | null = null;
 
   for (const baseStep of plan.steps) {
@@ -280,9 +302,7 @@ export async function runInvestigationRecipe(
       throw options.signal?.reason || new DOMException('Cancelled', 'AbortError');
     }
     const parsedResult = boundedResult(result.stdout);
-    if ((result.exitCode === 0 || result.exitCode === 2) && resultSchema(parsedResult) !== step.produces) {
-      throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract.`);
-    }
+    const disposition = stepDisposition(step, result.exitCode, parsedResult);
     completed.push(Object.freeze({
       id: step.id,
       command: step.command,
@@ -291,8 +311,12 @@ export async function runInvestigationRecipe(
       exitCode: result.exitCode,
       result: parsedResult,
     }));
-    if (result.exitCode !== 0 && result.exitCode !== 2) {
+    if (disposition === 'failed') {
       state = 'step_failed';
+      break;
+    }
+    if (disposition === 'partial') {
+      state = 'partial';
       break;
     }
     currentStep = null;
@@ -313,17 +337,32 @@ export async function runInvestigationRecipe(
       'Only commands and arguments from the installed fixed recipe can execute; no shell, script, arbitrary command, or enforcement action is accepted.',
       'Network steps run only with --approve-network for the current invocation. Unresolved analyst selections pause; supplied values replace exact placeholders and are passed as arguments without shell interpretation.',
       'A resume file is a local checkpoint and can retain selected local paths or values. It is not proof that prior evidence remains current or that a human reviewed each stored result.',
+      'An incomplete collection pauses for review. Resuming retains it without recollection; the run remains partial even after later steps finish. Failed validation or export steps are retried, not accepted as evidence.',
     ]),
   });
 }
 
+export function investigationRunExitCode(document: Awaited<ReturnType<typeof runInvestigationRecipe>>): number {
+  if (document.state === 'step_failed') {
+    const code = document.completedSteps.at(-1)?.exitCode;
+    return typeof code === 'number' && code !== EXIT_CODES.SUCCESS && Object.values(EXIT_CODES).some((known) => code === known)
+      ? code : EXIT_CODES.INTERNAL_ERROR;
+  }
+  return document.completedSteps.some((step) => step.exitCode === EXIT_CODES.PARTIAL_FAILURE)
+    ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+}
+
 export function formatInvestigationRun(document: Awaited<ReturnType<typeof runInvestigationRecipe>>): string {
+  const stepLabel = document.state === 'step_failed' ? 'Failed' : document.state === 'partial' ? 'Review' : 'Next';
   return [
     `Investigation run: ${document.recipe}`,
     `Subject    ${document.subject}`,
     `State      ${document.state.replaceAll('_', ' ')}`,
-    `Completed  ${document.completedSteps.length}`,
-    ...(document.currentStep ? [`Next       ${document.currentStep.label}`, `Approval   ${document.currentStep.approval.replaceAll('_', ' ')}`] : []),
+    `Retained   ${document.completedSteps.length}`,
+    ...(document.currentStep ? [
+      `${stepLabel.padEnd(11)}${document.currentStep.label}`,
+      ...(document.state === 'partial' || document.state === 'step_failed' ? [] : [`Approval   ${document.currentStep.approval.replaceAll('_', ' ')}`]),
+    ] : []),
     '',
   ].join('\n');
 }

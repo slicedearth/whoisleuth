@@ -1,7 +1,7 @@
 import type { CliArguments } from './arguments.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { formatDomainControlMonitor, runDomainControlMonitor } from './domain-control-monitor.mts';
-import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import { boundedCliErrorMessage, createCliDiagnosticOutput, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatJsonDocument } from './formatters/json.mts';
@@ -14,6 +14,7 @@ import {
 import {
   MAX_INVESTIGATION_RUN_BYTES,
   formatInvestigationRun,
+  investigationRunExitCode,
   runInvestigationRecipe,
 } from './investigation-run.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts';
@@ -125,12 +126,17 @@ async function runWorkflowRecipeCommand(
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     execute: async (command, stepArguments) => {
       const stepStdout = createBufferedOutput();
-      const stepStderr = createBufferedOutput();
-      const exitCode = await context.executeCli([command, ...stepArguments], {
-        stdout: stepStdout.stream,
-        stderr: stepStderr.stream,
-      });
-      return { exitCode, stdout: stepStdout.value() };
+      const stepStderr = createCliDiagnosticOutput();
+      try {
+        const exitCode = await context.executeCli([command, ...stepArguments], {
+          stdout: stepStdout.stream,
+          stderr: stepStderr.stream,
+        });
+        return { exitCode, stdout: stepStdout.value() };
+      } finally {
+        const diagnostic = stepStderr.value();
+        if (diagnostic) context.writeStderr(`${command}: ${diagnostic}\n`);
+      }
     },
   });
   if (!args.quiet) {
@@ -138,7 +144,7 @@ async function runWorkflowRecipeCommand(
       ? formatJsonDocument(document)
       : context.terminal(formatInvestigationRun(document), args.color));
   }
-  return document.state === 'step_failed' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  return investigationRunExitCode(document);
 }
 
 const WORKFLOW_COMMAND_HANDLERS = Object.freeze({

@@ -328,7 +328,7 @@ describe('canonical capability manifest', () => {
     assert.deepEqual(cliOperationForCommand('workflow-run')?.outcomes, ['complete', 'partial', 'blocked']);
     assert.deepEqual(
       cliOperationForCommand('workflow-run')?.documentStates,
-      ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+      ['complete', 'partial', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
     );
   });
 

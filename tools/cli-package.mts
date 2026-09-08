@@ -1113,7 +1113,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       throw new TypeError('Installed direct target did not preserve the offline Lookup plan contract.');
     }
     const completionChecks = [
-      ['bash', 'complete -F _whoisleuth_completion whoisleuth', '--palette', '--save-lookup'],
+      ['bash', '-F _whoisleuth_completion whoisleuth', '--palette', '--save-lookup'],
       ['zsh', '#compdef whoisleuth', '--palette', '--save-lookup'],
       ['fish', 'complete -c whoisleuth', '-l palette', '-l save-lookup'],
       ['powershell', 'Register-ArgumentCompleter -Native -CommandName whoisleuth', '--palette', '--save-lookup'],

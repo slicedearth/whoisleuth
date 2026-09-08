@@ -25,6 +25,10 @@ function completionKey(words: readonly string[]): string {
   return JSON.stringify(words);
 }
 
+function shellLiteral(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function parseMarkedResults(stdout: string, expected: readonly (readonly string[])[]): ReadonlyMap<string, readonly string[]> {
   const lines = stdout.split(/\r?\n/gu);
   const results = new Map<string, readonly string[]>();
@@ -69,7 +73,7 @@ export function prepareBashCompletionBatch(
   repositoryRoot: string,
 ): (words: readonly string[]) => readonly string[] {
   const invocations = cases.map((words, index) => `
-COMP_WORDS=(${words.map((word) => JSON.stringify(word)).join(' ')})
+COMP_WORDS=(${words.map(shellLiteral).join(' ')})
 COMP_CWORD=${words.length - 1}
 printf '${START_MARKER}${index}__\\n'
 _whoisleuth_completion
@@ -93,7 +97,7 @@ export function prepareZshCompletionBatch(
   repositoryRoot: string,
 ): (words: readonly string[]) => readonly string[] {
   const invocations = cases.map((words, index) => `
-words=(${words.map((word) => JSON.stringify(word)).join(' ')})
+words=(${words.map(shellLiteral).join(' ')})
 CURRENT=${words.length}
 printf '${START_MARKER}${index}__\\n'
 _whoisleuth
