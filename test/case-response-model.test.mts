@@ -17,6 +17,7 @@ import {
   buildCaseClosureLinkContext,
   buildCaseInvestigationTrail,
   buildCaseResponseLifecycleSummary,
+  isLegalCaseActionTransition,
   MAX_CASE_ACTION_BYTES,
   MAX_CASE_ACTION_EVENTS_PER_ACTION,
   MAX_CASE_ACTION_HISTORY_BYTES_PER_CASE,
@@ -141,6 +142,8 @@ describe('case response record normalization', () => {
   });
 
   test('actions retain explicit legal transitions and derive mutable projections from history', () => {
+    assert.equal(isLegalCaseActionTransition('drafting', 'ready_for_review', 'analyst'), true);
+    assert.equal(isLegalCaseActionTransition('acknowledged', 'submitted', 'analyst'), false);
     let actions = appendCaseAction([], {
       type: 'registrar_report',
       recipient: 'abuse@example.test',

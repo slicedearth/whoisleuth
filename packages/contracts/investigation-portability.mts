@@ -160,6 +160,9 @@ const INVESTIGATION_FIXTURES = Object.freeze([
   { id: 'bulk-domain-comparison-v4', path: 'test/fixtures/investigation-portability/bulk-domain-comparison-v4.json', bytes: 17_079, sha256: 'b718af34c8f5f1ba4427807cd149561bc1b7e605a6e74206a694beaee078cc2d', schema: BULK_DOMAIN_COMPARISON_SCHEMA, version: 4, role: 'current' as const },
   { id: 'bulk-mail-exposure-v2', path: 'test/fixtures/investigation-portability/bulk-mail-exposure-v2.json', bytes: 2_582, sha256: '9ff6c4c9f2dda4c5451daf8fb11e36a3ee15b513a09ad3c93515cc37df5d6660', schema: BULK_MAIL_EXPOSURE_SCHEMA, version: 2, role: 'current' as const },
   { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2.json', bytes: 1_657, sha256: '1c90f4d0661357fc277360cc924f2464e463f9c8bd815a6b45408e95e1caf7d3', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'current' as const },
+  // Synthetic integrity examples deliberately combine independently versioned
+  // contracts. Their application labels are not captured-release provenance;
+  // historical/current here describes the supported capsule schema only.
   { id: 'investigation-capsule-v2', path: 'test/fixtures/investigation-capsule-v2.json', bytes: 3_286, sha256: 'fb71cb243020d401e3653bb714f9de07a71b81622fcf83c0027599b763dda070', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 2, role: 'historical' as const },
   { id: 'investigation-capsule-v3', path: 'test/fixtures/investigation-portability/investigation-capsule-v3.json', bytes: 6_132, sha256: '685123c8bd152ee1a8074441bcd56bbde9fb0304aa4a320ee9b37d02061ed82a', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 3, role: 'current' as const },
   { id: 'lookup-asset-graph-v2', path: 'test/fixtures/investigation-portability/lookup-asset-graph-v2.json', bytes: 1_157, sha256: '455397a2b2987180d54657199e76c4dc175e01aed0fa83d945a6f3ec30bdcd49', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: 2, role: 'current' as const },

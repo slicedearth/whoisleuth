@@ -209,6 +209,7 @@ describe('canonical Case portability lifecycle', () => {
   });
 
   test('rejects retired, future, and malformed roots without reinterpreting or mutating them', async () => {
+    assert.equal(caseModel.parseStoreVersion({ version: 16 }), 16);
     const rejectionCorpus = JSON.parse(await readFile(REJECTION_FIXTURE, 'utf8')) as Record<string, unknown>;
     const retired = rejectionCorpus.retired as Record<string, unknown>;
     const future = rejectionCorpus.future as Record<string, unknown>;

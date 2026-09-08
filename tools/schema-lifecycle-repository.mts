@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { types as utilTypes } from 'node:util';
 
 import ts from 'typescript';
+import { moduleForwardingSpecifier } from './module-forwarding.mts';
 
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
@@ -642,17 +643,9 @@ export async function loadSchemaLifecycleHookModules(
 }
 
 function forwardsAllValuesFrom(source: string, facade: string, owner: string): boolean {
-  const parsed = ts.createSourceFile(facade, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  validateSourceAstBounds(parsed, facade);
-  const diagnostics = (parsed as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
-  const statements = parsed.statements.filter((statement) => !ts.isEmptyStatement(statement));
-  const declaration = statements[0];
-  return diagnostics.length === 0 && statements.length === 1
-    && declaration !== undefined && ts.isExportDeclaration(declaration)
-    && !declaration.isTypeOnly && !declaration.exportClause && !declaration.attributes
-    && declaration.moduleSpecifier !== undefined && ts.isStringLiteral(declaration.moduleSpecifier)
-    && declaration.moduleSpecifier.text.startsWith('.')
-    && path.posix.normalize(path.posix.join(path.posix.dirname(facade), declaration.moduleSpecifier.text)) === owner;
+  const specifier = moduleForwardingSpecifier(source, facade);
+  return specifier !== null && specifier.startsWith('.')
+    && path.posix.normalize(path.posix.join(path.posix.dirname(facade), specifier)) === owner;
 }
 
 export function validateCasePortabilitySourceSnapshot(value: unknown): void {

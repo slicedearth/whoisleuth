@@ -65,7 +65,8 @@ test('investigation capsule links evidence and verifies embedded projections', a
   assert.ok(serializeInvestigationCapsule(capsule).endsWith('\n'));
 });
 
-test('investigation capsule retains frozen v2 whole-integrity compatibility', async () => {
+test('a frozen synthetic v2 capsule retains whole-integrity compatibility', async () => {
+  // This is a cross-contract integrity fixture, not a captured application release.
   const raw = await readFile(new URL('./fixtures/investigation-capsule-v2.json', import.meta.url), 'utf8');
   const capsule = JSON.parse(raw) as SupportedInvestigationCapsule;
   assert.equal(capsule.schemaVersion, 2);

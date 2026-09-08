@@ -1,5 +1,10 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { CASE_DOMAIN_COMPATIBILITY_FACADES } from '../packages/contracts/case-portability.mts';
+import { WORKSPACE_DOMAIN_COMPATIBILITY_FACADES } from '../packages/contracts/workspace-portability.mts';
+import { EXTERNAL_OBSERVATION_INTERCHANGE_COMPATIBILITY_FACADES } from '../packages/contracts/external-observation-interchange.mts';
+import { INVESTIGATION_DOMAIN_COMPATIBILITY_FACADES } from '../packages/contracts/investigation-portability.mts';
+import { OFFLINE_COMPARISON_COMPATIBILITY_FACADES } from '../packages/contracts/offline-comparison.mts';
 
 const FACADES = Object.freeze([
   ['../frontend/src/lib/analysis/scheduled-monitor-model.ts', '../packages/monitoring/scheduled-monitor-model.mts'],
@@ -39,16 +44,31 @@ const FACADES = Object.freeze([
   ['../lib/web-capture-contract.mts', '../packages/contracts/web-capture.mts'],
 ] as const);
 
+const facadesByPath = new Map<string, string>(FACADES);
+for (const [facade, owner] of [
+  ...CASE_DOMAIN_COMPATIBILITY_FACADES,
+  ...WORKSPACE_DOMAIN_COMPATIBILITY_FACADES,
+  ...EXTERNAL_OBSERVATION_INTERCHANGE_COMPATIBILITY_FACADES,
+  ...INVESTIGATION_DOMAIN_COMPATIBILITY_FACADES,
+  ...OFFLINE_COMPARISON_COMPATIBILITY_FACADES,
+]) {
+  const facadePath = `../${facade}`;
+  const ownerPath = `../${owner}`;
+  const previous = facadesByPath.get(facadePath);
+  assert.ok(previous === undefined || previous === ownerPath, `Conflicting forwarding owner: ${facade}`);
+  facadesByPath.set(facadePath, ownerPath);
+}
+
 describe('shared domain compatibility facades', () => {
-  test('re-export the exact canonical module identities', async () => {
-    for (const [facadePath, ownerPath] of FACADES) {
+  for (const [facadePath, ownerPath] of facadesByPath) {
+    test(`${facadePath} retains every canonical runtime export identity`, async () => {
       const [facade, owner] = await Promise.all([import(facadePath), import(ownerPath)]);
       assert.deepEqual(Object.keys(facade).sort(), Object.keys(owner).sort(), facadePath);
       for (const key of Object.keys(owner)) {
         assert.strictEqual(facade[key], owner[key], `${facadePath}#${key}`);
       }
-    }
-  });
+    });
+  }
 
   test('keeps browser adapters on the shared contract identities', async () => {
     const [demo, tabContracts, localDefinitions, localManifest] = await Promise.all([

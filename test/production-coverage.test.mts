@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,12 +9,14 @@ import { describe, test } from 'node:test';
 import {
   PRODUCTION_COVERAGE_EXCLUSIONS,
   PRODUCTION_COVERAGE_POLICY,
+  discoverForwardingCoverageExclusions,
   parseProductionCoverage,
   productionCoverageArguments,
   validateProductionCoverage,
   validateProductionCoverageInventory,
   type CoveragePolicy,
 } from '../tools/production-coverage.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier } from '../tools/module-forwarding.mts';
 
 function lcovRecord(source: string, values = [10, 9, 8, 6, 5, 5]): string {
   const [linesFound, linesHit, branchesFound, branchesHit, functionsFound, functionsHit] = values;
@@ -39,6 +41,72 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
+  test('recognises only an exact value-forwarding module without constraining formatting', () => {
+    for (const source of ["export * from './owner.mts';", '// A comment.\n; export * from "./owner.mts";\n;']) {
+      assert.equal(moduleForwardingSpecifier(source), './owner.mts');
+    }
+    for (const source of [
+      '', 'export * from', "export type * from './owner.mts';", "export * as nested from './owner.mts';",
+      "export { value } from './owner.mts';", "export {} from './owner.mts';",
+      "export * from './owner.mts' with { type: 'json' };",
+      "import './effect.mts'; export * from './owner.mts';",
+      "export * from './owner.mts'; globalThis.effect = true;",
+      "export * from './owner.mts'; export * from './another.mts';",
+      ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1),
+    ]) assert.equal(moduleForwardingSpecifier(source), null);
+  });
+
+  test('discovers an ordinary forwarding chain without a new exclusion declaration', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-forwarding-coverage-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      await writeFile(path.join(root, 'lib/owner.mts'), 'export const value = 1;');
+      await writeFile(path.join(root, 'lib/forward.mts'), '// A formatting change.\nexport * from "./owner.mts";');
+      await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts';");
+      const sources = ['lib/owner.mts', 'lib/forward.mts', 'lib/new-helper.mts'];
+      const report = parseProductionCoverage(lcovRecord('lib/owner.mts'));
+      const exclusions = await discoverForwardingCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(exclusions, [
+        { source: 'lib/forward.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
+        { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
+      ]);
+      assert.equal(validateProductionCoverageInventory(report, sources, exclusions, () => true).excludedFiles, 2);
+      const instrumented = parseProductionCoverage(`${lcovRecord('lib/owner.mts')}\n${lcovRecord('lib/forward.mts')}`);
+      assert.deepEqual(await discoverForwardingCoverageExclusions(instrumented, sources, root, []), [
+        { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/forward.mts' },
+      ]);
+      await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts'; export const extra = 2;");
+      const changed = await discoverForwardingCoverageExclusions(report, sources, root, []);
+      assert.equal(changed.length, 1);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, changed, () => true), /unreviewed source omissions: lib\/new-helper.mts/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test('cannot excuse an unmeasured implementation, unknown owner, cycle or unsafe source path', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-forwarding-refusal-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      const contents = {
+        'measured.mts': 'export const value = 1;',
+        'untested.mts': 'export const value = 2;',
+        'forward.mts': "export * from './untested.mts';",
+        'unknown.mts': "export * from './missing.mts';",
+        'cycle-a.mts': "export * from './cycle-b.mts';",
+        'cycle-b.mts': "export * from './cycle-a.mts';",
+      };
+      for (const [filename, source] of Object.entries(contents)) await writeFile(path.join(root, 'lib', filename), source);
+      const inventory = Object.keys(contents).map((filename) => `lib/${filename}`);
+      const report = parseProductionCoverage(lcovRecord('lib/measured.mts'));
+      assert.deepEqual(await discoverForwardingCoverageExclusions(report, inventory, root, []), []);
+      assert.throws(() => validateProductionCoverageInventory(report, inventory, [], () => true), /unreviewed source omissions/u);
+      await symlink(path.join(root, 'lib/measured.mts'), path.join(root, 'lib/link.mts'));
+      await assert.rejects(discoverForwardingCoverageExclusions(report, [...inventory, 'lib/link.mts'], root, []), /symbolic link/u);
+      await assert.rejects(discoverForwardingCoverageExclusions(report, ['../escape.mts'], root, []), /safe relative/u);
+      await writeFile(path.join(root, 'lib/oversized.mts'), ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1));
+      await assert.rejects(discoverForwardingCoverageExclusions(report, ['lib/oversized.mts'], root, []), /byte maximum/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('native instrumentation discovers ordinary modules and excludes generated code in any package', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-coverage-boundary-'));
     try {

@@ -163,7 +163,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'workspace-domain', area: 'browser-local workspace domain', priority: 40,
     matches: (value: string) => value.startsWith('packages/workspace/'),
-    focusedUnit: unit('test/workspace-domain-facades.test.mts', 'test/workspace-portability-lifecycle.test.mts', 'test/workspace-rollback.test.mts', 'test/model-contract-properties.test.mts'),
+    focusedUnit: unit('test/shared-domain-facades.test.mts', 'test/workspace-portability-lifecycle.test.mts', 'test/workspace-rollback.test.mts', 'test/model-contract-properties.test.mts'),
     focusedBrowser: browser('e2e/dashboard.spec.ts', 'e2e/local-data-platform.spec.ts'),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'analyst-journey-assurance'),
     browserRequired: true,

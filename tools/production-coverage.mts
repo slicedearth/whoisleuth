@@ -4,6 +4,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier } from './module-forwarding.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -55,14 +57,6 @@ export type CoverageExclusion = Readonly<{
 
 export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Object.freeze([
   Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-evidence-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-evidence-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-migration-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-migration-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-record-operations.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-record-operations.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-storage-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-storage-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/ct-query.ts', category: 'compatibility_re_export', owner: 'lib/ct-query.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/lookup-readable-report.ts', category: 'compatibility_re_export', owner: 'lib/lookup-readable-report.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/lookup-task-guidance.ts', category: 'compatibility_re_export', owner: 'packages/investigation/lookup-task-guidance.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/relationship-admission-preview.ts', category: 'compatibility_re_export', owner: 'packages/relationships/relationship-admission-preview.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-review-state.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-undo.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/bulk-review.ts', category: 'browser_adapter', owner: 'e2e/bulk-analysis.spec.ts' }),
@@ -211,6 +205,43 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
   const unique = [...new Set(sources)].sort();
   if (unique.length !== sources.length || unique.length < 1) throw new TypeError('Production source inventory must be non-empty and unique.');
   return Object.freeze(unique);
+}
+
+/** A pure forwarding chain is qualified only by a measured implementation. */
+export async function discoverForwardingCoverageExclusions(
+  report: ProductionCoverageReport,
+  inventory: readonly string[],
+  repositoryRoot = REPOSITORY_ROOT,
+  explicitExclusions: readonly CoverageExclusion[] = PRODUCTION_COVERAGE_EXCLUSIONS,
+): Promise<readonly CoverageExclusion[]> {
+  if (inventory.length > MAX_PRODUCTION_COVERAGE_FILES) throw new TypeError('Production source inventory exceeds the maintained file bound.');
+  const sources = new Set(inventory);
+  const measured = new Set(report.records.map((record) => record.source));
+  const explicit = new Set(explicitExclusions.map((item) => item.source));
+  const forwards = new Map<string, string>();
+  for (const source of inventory) {
+    if (measured.has(source) || explicit.has(source)) continue;
+    const bytes = await readBoundedRegularFileWithin(repositoryRoot, source, {
+      maximumBytes: MAX_FORWARDING_SOURCE_BYTES, label: 'Production forwarding candidate',
+    });
+    const specifier = moduleForwardingSpecifier(decodeBoundedUtf8(bytes, 'Production source'), source);
+    if (!specifier?.startsWith('.')) continue;
+    const owner = path.posix.normalize(path.posix.join(path.posix.dirname(source), specifier));
+    if (sources.has(owner)) forwards.set(source, owner);
+  }
+  const exclusions: CoverageExclusion[] = [];
+  for (const [source, firstOwner] of forwards) {
+    let owner: string | undefined = firstOwner;
+    const seen = new Set([source]);
+    while (owner && !seen.has(owner) && !measured.has(owner)) {
+      seen.add(owner);
+      owner = forwards.get(owner);
+    }
+    if (owner && measured.has(owner)) {
+      exclusions.push(Object.freeze({ source, category: 'compatibility_re_export', owner }));
+    }
+  }
+  return Object.freeze(exclusions);
 }
 
 function numericField(value: string, label: string): number {
@@ -378,7 +409,7 @@ export function formatProductionCoverage(
   return [
     `Production coverage: ${report.records.length} executable source files.`,
     ...(inventory ? [
-      `Inventory closure: ${inventory.measuredFiles}/${inventory.sourceFiles} measured; ${inventory.excludedFiles} explicitly owned outside unit instrumentation `
+      `Inventory closure: ${inventory.measuredFiles}/${inventory.sourceFiles} measured; ${inventory.excludedFiles} owned outside unit instrumentation `
       + `(${inventory.exclusionsByCategory.type_only} type-only, ${inventory.exclusionsByCategory.compatibility_re_export} compatibility re-exports, `
       + `${inventory.exclusionsByCategory.browser_adapter} browser adapters, ${inventory.exclusionsByCategory.framework_entry} framework entries, `
       + `${inventory.exclusionsByCategory.executable_entry} executable entries).`,
@@ -403,7 +434,7 @@ export function productionCoverageArguments(testPattern = 'test/*.test.mts'): st
   ];
 }
 
-export function main(args = process.argv.slice(2)): number {
+export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--run') {
       const result = spawnSync(process.execPath, productionCoverageArguments(), {
@@ -419,7 +450,9 @@ export function main(args = process.argv.slice(2)): number {
     if (size < 1 || size > MAX_PRODUCTION_COVERAGE_BYTES) throw new TypeError('LCOV file has an invalid byte count.');
     const report = parseProductionCoverage(readFileSync(coveragePath, 'utf8'));
     validateProductionCoverage(report);
-    const inventory = validateProductionCoverageInventory(report);
+    const sources = readProductionCoverageInventory();
+    const forwarding = await discoverForwardingCoverageExclusions(report, sources);
+    const inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...forwarding]);
     process.stdout.write(`${formatProductionCoverage(report, inventory)}\n`);
     return 0;
   } catch (error) {
@@ -429,5 +462,5 @@ export function main(args = process.argv.slice(2)): number {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }
