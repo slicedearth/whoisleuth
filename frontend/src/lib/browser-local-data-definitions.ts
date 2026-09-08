@@ -17,12 +17,14 @@ import {
 } from './analysis/brand-profile-model.ts';
 import type { BrandProfile } from './analysis/brand-profile-model.ts';
 import {
+  WATCHLIST_SCHEMA,
   normalizeWatchlistStore,
   serializeWatchlistStore,
   watchlistStoreVersion,
 } from './analysis/watchlist-store.ts';
 import type { WatchlistCollection, WatchlistEntry } from './analysis/watchlist-store.ts';
 import {
+  SHORTLIST_SCHEMA,
   normalizeShortlistStore,
   serializeShortlistStore,
   shortlistStoreVersion,
@@ -191,7 +193,7 @@ function arrayOrVersionedList(
 
 function watchlistVersionedRoot(raw: unknown): boolean {
   const value = record(raw);
-  return value?.schema === 'whoisleuth.watchlists'
+  return value?.schema === WATCHLIST_SCHEMA
     && positiveVersion(value.version)
     && record(value.watchlists) !== null;
 }
@@ -244,7 +246,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistColle
   serialize: serializeWatchlistStore,
   split: (watchlists) => Object.entries(watchlists).map(([id, value]) => ({ id, value })),
   join: (records, schemaVersion) => ({
-    schema: 'whoisleuth.watchlists',
+    schema: WATCHLIST_SCHEMA,
     version: schemaVersion,
     watchlists: Object.fromEntries(records.map((record) => [record.id, record.value])),
   }),
@@ -254,12 +256,12 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
   legacyKey: LEGACY_SHORTLIST_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: 'whoisleuth.shortlist' }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: SHORTLIST_SCHEMA }),
   normalize: (raw) => normalizeShortlistStore(raw).entries,
   version: shortlistStoreVersion,
   serialize: serializeShortlistStore,
   split: (entries) => recordsFromArray(entries, (record) => record.domain),
-  join: (records, schemaVersion) => ({ schema: 'whoisleuth.shortlist', version: schemaVersion, entries: arrayFromRecords(records) }),
+  join: (records, schemaVersion) => ({ schema: SHORTLIST_SCHEMA, version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
 export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore> = Object.freeze({

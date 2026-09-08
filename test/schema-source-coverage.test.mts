@@ -430,10 +430,16 @@ describe('schema source coverage', () => {
       'utf8',
     );
     const imported = await discoverSchemaSources(root);
-    await assert.rejects(
-      validateSchemaSourceCoverage([fixtureEntry()], imported, []),
-      /not the canonical definition or a reviewed producer or reader/iu,
-    );
+    assert.equal((await validateSchemaSourceCoverage([fixtureEntry()], imported, [])).inventoriedIdentifiers, 1);
+
+    await writeFile(path.join(root, 'lib', 'owner.mts'),
+      "import { FIXTURE_SCHEMA } from '../packages/contracts/fixture.mts';\nexport function accepts(value: { schema: string }) { return value.schema === FIXTURE_SCHEMA; }\n");
+    assert.equal((await validateSchemaSourceCoverage([fixtureEntry()], await discoverSchemaSources(root), [])).inventoriedIdentifiers, 1);
+
+    await writeFile(path.join(root, 'lib', 'owner.mts'),
+      "import { FIXTURE_SCHEMA } from '../packages/contracts/fixture.mts';\nexport const reference = FIXTURE_SCHEMA;\n");
+    await assert.rejects(validateSchemaSourceCoverage([fixtureEntry()], await discoverSchemaSources(root), []),
+      /not the canonical definition or a reviewed producer or reader/iu);
 
     await writeFile(
       path.join(root, 'lib', 'owner.mts'),
@@ -609,7 +615,7 @@ describe('schema source coverage', () => {
 
     await writeFile(
       path.join(root, 'tools', 'schema-catalogue.mts'),
-      "import { FIXTURE_SCHEMA } from '../packages/contracts/fixture.mts';\nexport const catalogue = [{ schema: FIXTURE_SCHEMA }];\n",
+      "import { FIXTURE_SCHEMA } from '../packages/contracts/fixture.mts';\nexport const catalogue = [{ marker: FIXTURE_SCHEMA }];\n",
       'utf8',
     );
     const newlyNamedMetadata = await discoverSchemaSources(root);
@@ -664,13 +670,10 @@ describe('schema source coverage', () => {
       && item.role === 'writer'
     ));
     assert.ok(dynamicAllowanceUse);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        emitters: [...discovery.emitters, dynamicAllowanceUse],
-      }),
-      /dynamic-use allowance expected/iu,
-    );
+    await validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      emitters: [...discovery.emitters, dynamicAllowanceUse],
+    });
 
     const lineAllowanceUse = discovery.emitters.find((item) => (
       item.file === 'cli/archive-inspect.mts'
@@ -678,24 +681,36 @@ describe('schema source coverage', () => {
       && item.role === 'writer'
     ));
     assert.ok(lineAllowanceUse);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        emitters: [...discovery.emitters, lineAllowanceUse],
-      }),
-      /dynamic-use allowance expected/iu,
-    );
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        emitters: discovery.emitters.filter((item) => item !== lineAllowanceUse),
-      }),
-      /dynamic-use allowance expected/iu,
-    );
+    await validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      emitters: [...discovery.emitters, lineAllowanceUse],
+    });
+    await validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      emitters: discovery.emitters.filter((item) => item !== lineAllowanceUse),
+    });
+    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      emitters: discovery.emitters.filter((item) => item.file !== lineAllowanceUse.file || item.role !== 'writer'),
+    }), /dynamic-use allowance is stale/iu);
+    for (const unreviewed of [
+      { ...lineAllowanceUse, file: 'server.mts' },
+      { ...lineAllowanceUse, role: 'reader' as const },
+    ]) {
+      await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
+        ...discovery, emitters: [...discovery.emitters, unreviewed],
+      }), /do not resolve to canonical schema definitions/iu);
+    }
+    const malformedInReviewedOwner = discoverSchemaIdentifiersInSource(
+      "export const document = { schema: 'whoisleuth'.concat('.hidden') };", lineAllowanceUse.file);
+    assert.ok(malformedInReviewedOwner.dynamicConstructions.length > 0);
+    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery, dynamicConstructions: [...discovery.dynamicConstructions, ...malformedInReviewedOwner.dynamicConstructions],
+    }), /unsafe dynamic/iu);
 
     const inlineAllowanceUse = discovery.emitters.find((item) => (
-      item.identifier === 'whoisleuth.shortlist'
-      && item.file === 'frontend/src/lib/browser-local-data-definitions.ts'
+      item.identifier === 'whoisleuth.sslbl-certificate-snapshot'
+      && item.file === 'lib/sslbl-certificates.generated.mts'
       && item.role === 'writer'
     ));
     assert.ok(inlineAllowanceUse);

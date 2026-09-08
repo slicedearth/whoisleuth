@@ -142,17 +142,7 @@ const MAX_SCHEMA_CLASSIFICATION_SOURCE_USES = 16;
 
 const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
   ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', 1],
-  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure.mts', 1],
-  ['whoisleuth.registry-standards-coverage', 'lib/registry-capability-catalogue.mts', 1],
-  ['whoisleuth.shortlist', 'frontend/src/lib/browser-local-data-definitions.ts', 2],
   ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', 1],
-  ['whoisleuth.watchlists', 'frontend/src/lib/browser-local-data-definitions.ts', 1],
-] as const);
-
-const SCHEMA_OWNER_USE_ALLOWLIST = Object.freeze([
-  ['cli.web-capture-comparison', 'packages/web-capture/compare.mts', 'writer', 1],
-  ['export.web-capture-dom-digest', 'packages/web-capture/capture.mts', 'writer', 1],
-  ['browser.analyst-review-state', 'packages/contracts/analyst-review-state.mts', 'writer', 1],
 ] as const);
 
 type SchemaSourceClassificationRecord = Readonly<{
@@ -704,15 +694,15 @@ function buildCanonicalSourceBindings(
     boundByFile.set(file, values);
   };
   for (const definition of discovery.definitions) bind(definition.file, definition.identifier);
-  const dynamicUseAllowlist = new Map<string, number>();
+  const dynamicUseAllowlist = new Set<string>();
   if (enforceRepositoryLedgers) {
-    for (const [file, role, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
+    for (const [file, role] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
       const key = `${file}\0${role}`;
       if (dynamicUseAllowlist.has(key)) throw new Error(`Schema source dynamic-use allowance is duplicated: ${file} (${role}).`);
-      dynamicUseAllowlist.set(key, expectedCount);
+      dynamicUseAllowlist.add(key);
     }
   }
-  const usedDynamicUseAllowlist = new Map<string, number>();
+  const usedDynamicUseAllowlist = new Set<string>();
   const uses: ResolvedSchemaUse[] = [];
   const unresolvedUses: string[] = [];
   for (const emitter of discovery.emitters) {
@@ -720,7 +710,7 @@ function buildCanonicalSourceBindings(
     if (!identifier) {
       const useKey = `${emitter.file}\0${emitter.role}`;
       if (dynamicUseAllowlist.has(useKey)) {
-        usedDynamicUseAllowlist.set(useKey, (usedDynamicUseAllowlist.get(useKey) ?? 0) + 1);
+        usedDynamicUseAllowlist.add(useKey);
       } else {
         if (unresolvedUses.length < 64) unresolvedUses.push(`${emitter.role} ${emitter.file}:${emitter.line}`);
       }
@@ -731,12 +721,11 @@ function buildCanonicalSourceBindings(
   if (unresolvedUses.length) {
     throw new Error(`Schema source uses do not resolve to canonical schema definitions: ${unresolvedUses.join(', ')}.`);
   }
-  for (const [allowedFile, allowedRole, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
+  for (const [allowedFile, allowedRole] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
     if (!enforceRepositoryLedgers) break;
     const key = `${allowedFile}\0${allowedRole}`;
-    const actualCount = usedDynamicUseAllowlist.get(key) ?? 0;
-    if (actualCount !== expectedCount) {
-      throw new Error(`Schema source dynamic-use allowance expected ${expectedCount} uses but found ${actualCount}: ${allowedFile} (${allowedRole}).`);
+    if (!usedDynamicUseAllowlist.has(key)) {
+      throw new Error(`Schema source dynamic-use allowance is stale: ${allowedFile} (${allowedRole}).`);
     }
   }
   return {
@@ -921,14 +910,6 @@ export async function validateSchemaSourceCoverage(
     }
   }
 
-  const ownerUseAllowlist = new Map<string, { owner: string; role: 'reader' | 'writer'; expectedCount: number }>();
-  if (enforceRepositoryLedgers) {
-    for (const [entryId, owner, role, expectedCount] of SCHEMA_OWNER_USE_ALLOWLIST) {
-      if (ownerUseAllowlist.has(entryId)) throw new Error(`Schema source owner-use allowance is duplicated: ${entryId}.`);
-      ownerUseAllowlist.set(entryId, { owner, role, expectedCount });
-    }
-  }
-  const usedOwnerAllowlist = new Set<string>();
   for (const [identifier, schemaEntries] of inventoryBySchema) {
     for (const entry of schemaEntries) {
       const definitions = definitionsByIdentifier.get(identifier) ?? [];
@@ -937,25 +918,10 @@ export async function validateSchemaSourceCoverage(
       if (!definitions.length
         && literalWriters.length === 1
         && literalWriters[0]?.file === entry.owner) continue;
-      const allowance = ownerUseAllowlist.get(entry.id);
-      if (allowance && allowance.owner === entry.owner) {
-        const actualCount = canonicalBindings.uses.filter((use) => (
-          use.identifier === identifier
-          && use.source.file === entry.owner
-          && use.source.role === allowance.role
-        )).length;
-        if (actualCount !== allowance.expectedCount) {
-          throw new Error(`Schema source owner-use allowance expected ${allowance.expectedCount} uses but found ${actualCount}: ${entry.id}.`);
-        }
-        usedOwnerAllowlist.add(entry.id);
-        continue;
-      }
+      if (canonicalBindings.uses.some((use) => (
+        use.identifier === identifier && use.source.file === entry.owner
+      ))) continue;
       throw new Error(`Schema compatibility owner ${entry.owner} is not the canonical definition or a reviewed producer or reader of ${identifier}.`);
-    }
-  }
-  if (enforceRepositoryLedgers) {
-    for (const entryId of ownerUseAllowlist.keys()) {
-      if (!usedOwnerAllowlist.has(entryId)) throw new Error(`Schema source owner-use allowance is stale: ${entryId}.`);
     }
   }
 

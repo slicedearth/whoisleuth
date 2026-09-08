@@ -4,6 +4,7 @@
 // ownership, intent, safety, or maliciousness.
 
 import snapshotValue from './common-infrastructure-snapshot.json' with { type: 'json' };
+import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES } from '../contracts/common-infrastructure.mts';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -31,8 +32,8 @@ type Source = Readonly<{
 }>;
 
 type Snapshot = Readonly<{
-  schema: 'whoisleuth.common-infrastructure';
-  version: 1;
+  schema: typeof COMMON_INFRASTRUCTURE_SCHEMA;
+  version: typeof COMMON_INFRASTRUCTURE_VERSION;
   generatedAt: string;
   source: Readonly<{
     project: string;
@@ -158,8 +159,8 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
   const source = record(value);
   const sourceMeta = record(source?.source);
   const sourceCommit = typeof sourceMeta?.commit === 'string' ? sourceMeta.commit : '';
-  if (source?.schema !== 'whoisleuth.common-infrastructure'
-    || source.version !== 1
+  if (source?.schema !== COMMON_INFRASTRUCTURE_SCHEMA
+    || source.version !== COMMON_INFRASTRUCTURE_VERSION
     || typeof source.generatedAt !== 'string'
     || !Array.isArray(source.sources)
     || source.sources.length < 1
@@ -193,7 +194,7 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
       || !validDate(item.sourceDate)
       || !SHA256_RE.test(digest)
       || !Array.isArray(item.values)
-      || item.values.length > 20_000 - entryCount
+      || item.values.length > MAX_SNAPSHOT_ENTRIES - entryCount
       || new Set(item.values).size !== item.values.length) {
       throw new TypeError('Common-infrastructure source has an invalid contract.');
     }
@@ -233,12 +234,12 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
   if (seenSourceIds.size !== EXPECTED_SOURCES.size
     || !sources.some((item) => item.id === 'public-dns-core')
     || entryCount !== source.entryCount
-    || entryCount > 20_000) {
+    || entryCount > MAX_SNAPSHOT_ENTRIES) {
     throw new TypeError('Common-infrastructure snapshot entry count is inconsistent.');
   }
   const snapshot: Snapshot = Object.freeze({
-    schema: 'whoisleuth.common-infrastructure',
-    version: 1,
+    schema: COMMON_INFRASTRUCTURE_SCHEMA,
+    version: COMMON_INFRASTRUCTURE_VERSION,
     generatedAt: source.generatedAt,
     source: Object.freeze({
       project: sourceMeta.project,

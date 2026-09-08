@@ -8,6 +8,18 @@ import { fileURLToPath } from 'node:url';
 
 import { writePrivateFile } from '../cli/output-file.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import {
+  COMMON_INFRASTRUCTURE_SCHEMA,
+  COMMON_INFRASTRUCTURE_VERSION,
+  MAX_SNAPSHOT_BYTES,
+  MAX_SNAPSHOT_ENTRIES,
+} from '../packages/contracts/common-infrastructure.mts';
+export {
+  COMMON_INFRASTRUCTURE_SCHEMA,
+  COMMON_INFRASTRUCTURE_VERSION,
+  MAX_SNAPSHOT_BYTES,
+  MAX_SNAPSHOT_ENTRIES,
+} from '../packages/contracts/common-infrastructure.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -61,12 +73,8 @@ type MainOptions = Readonly<{
 }>;
 
 export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
-export const COMMON_INFRASTRUCTURE_SCHEMA = 'whoisleuth.common-infrastructure';
-export const COMMON_INFRASTRUCTURE_VERSION = 1;
 export const DEFAULT_UPSTREAM_COMMIT = '1a2b119f7bd492b8e0626b947fc7b69ac4456df3';
 export const MAX_SOURCE_BYTES = 1024 * 1024;
-export const MAX_SNAPSHOT_BYTES = 1024 * 1024;
-export const MAX_SNAPSHOT_ENTRIES = 20_000;
 export const FRESHNESS_DAYS = 30;
 export const REVIEWED_PUBLIC_RESOLVERS_SOURCE_DATE = '2026-08-10';
 export const SOURCE_DEFINITIONS = Object.freeze([
