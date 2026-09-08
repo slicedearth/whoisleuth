@@ -4,6 +4,7 @@
 
 import { createPublicKey } from 'node:crypto';
 import { isIP } from 'node:net';
+import { domainToASCII } from 'node:url';
 
 type TagList = {
   tags: Record<string, string>;
@@ -205,9 +206,58 @@ function parseSpfRecords(records: unknown) {
   return result;
 }
 
+function hasDmarcVersion(record: string): boolean {
+  return /^[vV][ \t]*=[ \t]*DMARC1(?:[ \t]*;|[ \t]*$)/u.test(record);
+}
+
+function parseDmarcReportingAuthorization(record: unknown): Record<string, string> | null {
+  const text = joinTxtRecords([record])[0] || '';
+  if (!hasDmarcVersion(text)) return null;
+  const fields = text.split(';');
+  if (!fields[fields.length - 1]?.trim()) fields.pop();
+  // RFC 9990 section 4 requires a complete tag list, not a version prefix.
+  if (fields.some((field) => !/^[ \t]*[a-zA-Z]+[ \t]*=[ \t]*[\x20-\x3a\x3c-\x7e]+[ \t]*$/u.test(field))) return null;
+  const parsed = parseTagList(text);
+  return parsed.duplicates.length || parsed.malformed.length ? null : parsed.tags;
+}
+
+function parseReportingDestination(value: string): { scheme: 'mailto' | 'https'; host: string } | null {
+  // Validate URI spelling before URL parsing can repair whitespace, escapes or
+  // missing authority delimiters. DNS collection already bounds the input.
+  if (!value || /[^a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]/u.test(value) || /%(?![a-fA-F0-9]{2})/u.test(value)) return null;
+  if (/^mailto:/iu.test(value)) {
+    const parts = value.slice(7).split('?');
+    if (parts.length > 2 || value.includes('#')) return null;
+    const headers = parts[1];
+    if (headers !== undefined && !headers.split('&').every((field) => /^[a-zA-Z0-9._~!$'()*+,:@%\-]*=[a-zA-Z0-9._~!$'()*+,:@%\-]*$/u.test(field))) return null;
+    let address: string;
+    try { address = decodeURIComponent(parts[0] || ''); } catch { return null; }
+    const at = address.lastIndexOf('@');
+    if (at <= 0) return null;
+    const local = address.slice(0, at);
+    const dotAtom = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*$/u;
+    const quoted = /^"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\[\x20-\x7e])*"$/u;
+    if (!dotAtom.test(local) && !quoted.test(local)) return null;
+    const domain = address.slice(at + 1);
+    if (domain.startsWith('[') && domain.endsWith(']')) {
+      const literal = domain.slice(1, -1);
+      return isIP(literal.replace(/^IPv6:/iu, '')) ? { scheme: 'mailto', host: domain } : null;
+    }
+    const host = domainToASCII(domain).toLowerCase();
+    if (!host || host.length > 253 || !host.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label))) return null;
+    return { scheme: 'mailto', host };
+  }
+  const authority = /^https:\/\/([^/?#]+)/iu.exec(value)?.[1];
+  if (!authority || authority.includes('@') || value.includes('#')) return null;
+  try {
+    const uri = new URL(value);
+    return uri.hostname && !uri.username && !uri.password && !uri.hash ? { scheme: 'https', host: uri.hostname } : null;
+  } catch { return null; }
+}
+
 function parseDmarcRecords(records: unknown) {
   const allRecords = joinTxtRecords(records);
-  const dmarcRecords = allRecords.filter((record) => /^v\s*=\s*dmarc1(?:\s*;|$)/i.test(record));
+  const dmarcRecords = allRecords.filter(hasDmarcVersion);
   const result: {
     records: string[];
     valid: boolean;
@@ -280,8 +330,11 @@ function parseDmarcRecords(records: unknown) {
   result.failureReporting = Boolean(parsed.tags.ruf);
   result.aggregateDestinations = (parsed.tags.rua || '').split(',').map((value) => value.trim()).filter(Boolean);
   result.failureDestinations = (parsed.tags.ruf || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const emptyDestination = [parsed.tags.rua, parsed.tags.ruf].some((value) => value !== undefined && value.split(',').some((destination) => !destination.trim()));
+  if (emptyDestination) result.issues.push('A DMARC reporting URI list contains an empty destination.');
   result.valid = parsed.duplicates.length === 0
     && parsed.malformed.length === 0
+    && !emptyDestination
     && Boolean(result.policy && result.subdomainPolicy && result.nonexistentSubdomainPolicy)
     && (!parsed.tags.t || /^[yn]$/i.test(parsed.tags.t));
   return result;
@@ -350,7 +403,7 @@ function parseMtaStsPolicy(text: unknown) {
 
 function parseTlsRptRecords(records: unknown) {
   const allRecords = joinTxtRecords(records);
-  const policyRecords = allRecords.filter((record) => /^v\s*=\s*tlsrptv1(?:\s*;|$)/i.test(record));
+  const policyRecords = allRecords.filter((record) => /^v=TLSRPTv1(?:[ \t]*;|$)/u.test(record));
   const result: { records: string[]; valid: boolean; record: string | null; rua: string[]; issues: string[] } = { records: policyRecords, valid: false, record: policyRecords[0] || null, rua: [], issues: [] };
   if (policyRecords.length === 0) {
     result.issues.push('No TLS-RPT policy record was found.');
@@ -361,11 +414,21 @@ function parseTlsRptRecords(records: unknown) {
     return result;
   }
   const parsed = parseTagList(policyRecords[0]);
-  result.rua = (parsed.tags.rua || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const destinations = (parsed.tags.rua || '').split(',').map((value) => value.trim());
+  result.rua = destinations.filter(Boolean);
   if (result.rua.length === 0) result.issues.push('The TLS-RPT record has no aggregate report destination.');
+  if (destinations.some((destination) => /[!,;]/u.test(destination) || !parseReportingDestination(destination))) {
+    result.issues.push('TLS-RPT destinations must be complete supported mailto or HTTPS URIs; reserved reporting delimiters must be percent-encoded.');
+  }
+  const fields = (policyRecords[0] || '').split(';');
+  if (!fields[fields.length - 1]?.trim()) fields.pop();
+  if (fields.slice(1).some((field) => {
+    const text = field.trim();
+    return text.startsWith('rua=') ? false : !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,31}=[\x21-\x3a\x3c\x3e-\x7e]+$/u.test(text) || /^rua=/iu.test(text);
+  })) result.issues.push('The TLS-RPT record contains an invalid field name or value.');
   if (parsed.duplicates.length) result.issues.push(`Duplicate TLS-RPT tag${parsed.duplicates.length === 1 ? '' : 's'}: ${parsed.duplicates.join(', ')}.`);
   if (parsed.malformed.length) result.issues.push(`Malformed TLS-RPT field${parsed.malformed.length === 1 ? '' : 's'}: ${parsed.malformed.join(', ')}.`);
-  result.valid = result.rua.length > 0 && parsed.duplicates.length === 0 && parsed.malformed.length === 0;
+  result.valid = result.issues.length === 0;
   return result;
 }
 
@@ -489,6 +552,8 @@ export {
   parseTagList,
   parseSpfRecords,
   parseDmarcRecords,
+  parseDmarcReportingAuthorization,
+  parseReportingDestination,
   parseMtaStsDnsRecords,
   parseMtaStsPolicy,
   parseTlsRptRecords,

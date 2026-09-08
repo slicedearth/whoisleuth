@@ -3,6 +3,8 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   jsonRecordOrEmpty as record,
   sha256Text as moduleDigest,
@@ -17,7 +19,6 @@ const OUTPUT_DIGEST_PATH = 'lib/generated/cisa-kev-catalog.sha256';
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 128 * 1024;
 const MAX_ENTRIES = 10_000;
-const CVE_RE = /^CVE-[0-9]{4}-[0-9]{4,}$/;
 
 type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
@@ -58,6 +59,7 @@ function projectCatalogue(value: unknown, expectedVersion: string, expectedRelea
   if (source.catalogVersion !== expectedVersion || source.dateReleased !== expectedReleasedAt) {
     throw new Error('CISA KEV catalogue version or release date does not match the pinned metadata.');
   }
+  if (normalizeExplicitIsoTimestamp(source.dateReleased) === null) throw new TypeError('CISA KEV catalogue has an invalid release timestamp.');
   const vulnerabilities = Array.isArray(source.vulnerabilities) ? source.vulnerabilities : [];
   if (vulnerabilities.length === 0 || vulnerabilities.length > MAX_ENTRIES) {
     throw new RangeError(`CISA KEV catalogue must contain between 1 and ${MAX_ENTRIES} records.`);
@@ -65,7 +67,7 @@ function projectCatalogue(value: unknown, expectedVersion: string, expectedRelea
   const identifiers = new Set<string>();
   for (const item of vulnerabilities) {
     const cve = record(item).cveID;
-    if (typeof cve !== 'string' || !CVE_RE.test(cve)) throw new TypeError('CISA KEV catalogue contains an invalid CVE identifier.');
+    if (!isCveIdentifier(cve)) throw new TypeError('CISA KEV catalogue contains an invalid CVE identifier.');
     identifiers.add(cve);
   }
   if (identifiers.size !== vulnerabilities.length || source.count !== vulnerabilities.length) {

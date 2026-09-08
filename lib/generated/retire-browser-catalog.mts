@@ -3800,11 +3800,7 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         "cwe": [
           "CWE-79"
         ],
-        "identifiers": {
-          "CVE": [
-            "CVE-2007-01-09"
-          ]
-        }
+        "omittedCveIdentifiers": 1
       },
       {
         "below": "2.0.11",

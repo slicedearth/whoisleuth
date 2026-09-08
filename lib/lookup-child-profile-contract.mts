@@ -527,7 +527,7 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
     || !isJsonObject(knownExploitedCatalog)
     || !hasOnlyKeys(knownExploitedCatalog, ['name', 'version', 'releasedAt'])
     || !['name', 'version', 'releasedAt'].every((field) => validBoundedString(knownExploitedCatalog[field], 160))
-    || normalizeExplicitIsoTimestamp(knownExploitedCatalog.releasedAt) !== knownExploitedCatalog.releasedAt
+    || normalizeExplicitIsoTimestamp(knownExploitedCatalog.releasedAt) === null
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_LIBRARY_FINDINGS) return 'invalid';
   const methods = new Set(['script URL', 'script filename', 'inline signature', 'inline hash']);
@@ -552,6 +552,8 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
       || !validUint(candidate.knownExploitedCount, 10_000)
       || !validExactStringArray(candidate.knownExploitedIdentifiers, 16, 80)
       || !validExactStringArray(candidate.weaknessClasses, 12, 80)) return 'invalid';
+    // Published profiles could retain legacy upstream identifier spellings.
+    // Keep that reader boundary; current catalogue writers validate syntax.
     if (findingIds.has(candidate.id as string)
       || !(candidate.advisoryIdentifiers as JsonValue[]).every((identifier) => typeof identifier === 'string'
         && /^(?:CVE-[0-9X-]+|GHSA-[A-Z0-9-]+)$/u.test(identifier))
@@ -559,7 +561,9 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
         && /^CVE-[0-9X-]+$/u.test(identifier))
       || !(candidate.weaknessClasses as JsonValue[]).every((identifier) => typeof identifier === 'string'
         && /^CWE-[0-9]+$/u.test(identifier))
-      || Number(candidate.advisoryCount) < (candidate.advisoryIdentifiers as JsonValue[]).length
+      // One advisory can have several identifiers, including CVE and GHSA
+      // aliases. Their count is not the number of matching advisory records.
+      || (Number(candidate.advisoryCount) === 0 && (candidate.advisoryIdentifiers as JsonValue[]).length > 0)
       || Number(candidate.knownExploitedCount) < (candidate.knownExploitedIdentifiers as JsonValue[]).length) return 'invalid';
     findingIds.add(candidate.id as string);
   }

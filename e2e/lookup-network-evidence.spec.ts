@@ -8,6 +8,7 @@ import {
   WEBSITE_SECURITY_POSTURE_VERSION,
 } from '../lib/lookup-child-profile-contract.mts';
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
+import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -693,6 +694,52 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('real library projection retains advisory aliases and discloses malformed source identifiers', async ({ page }, testInfo) => {
+  const technologyProfile = analyzeWebsiteTechnology({
+    html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
+    observedAt: '2026-09-08T00:00:00.000Z',
+  });
+  expect(technologyProfile.browserLibraryProfile?.findings.map((finding) => finding.id)).toEqual(expect.arrayContaining(['DWR', 'jquery']));
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'library-evidence.test', type: 'domain', registrableDomain: 'library-evidence.test',
+      availability: { state: 'registered', confidence: 'high', domain: 'library-evidence.test', technologyProfile },
+      rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    }),
+  }));
+  await page.locator('#query').fill('library-evidence.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const technology = page.locator('.technology-card');
+  const disclosure = technology.locator(':scope > summary');
+  await disclosure.focus();
+  await disclosure.press('Enter');
+  await expect(disclosure).toBeFocused();
+  const libraries = technology.getByRole('region', { name: 'Observed browser libraries' });
+  await expect(libraries).toBeVisible();
+  await expect(libraries.locator('.evidence-status')).toHaveText('partial');
+  await expect(libraries.getByRole('heading', { name: 'DWR 1.1.3' })).toBeVisible();
+  await expect(libraries.getByRole('heading', { name: 'jquery 1.12.4' })).toBeVisible();
+  await expect(libraries).toContainText('CVE-2014-5325');
+  await expect(libraries).toContainText('GHSA-');
+  await expect(libraries).not.toContainText('CVE-2007-01-09');
+  await expect(libraries).toContainText('1 supplied CVE identifier entry was omitted');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await libraries.scrollIntoViewIfNeeded();
+      await expect(libraries).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if ([320, 1280].includes(viewport.width)) await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) });
+    }
+  }
 });
 
 test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {

@@ -20,6 +20,7 @@ import {
   STARTTLS_COMMAND,
   certificateObservation,
   collectMailTransportReview,
+  formatMailTransportReview,
   normalizeSmtpReply,
   resolveSelectedHost,
   runSmtpConversation,
@@ -64,6 +65,12 @@ const ANCHOR = {
 
 function reply(...lines: string[]) {
   return normalizeSmtpReply(lines);
+}
+
+function capabilityReply(count: number, starttls = false) {
+  const names = Array.from({ length: count }, (_, index) => 'X-FIXTURE-' + index);
+  if (starttls) names.push('STARTTLS');
+  return reply('250-fixture-mx', ...names.map((name, index) => '250' + (index === names.length - 1 ? ' ' : '-') + name));
 }
 
 function secureReport(target: string): DnssecChainReport {
@@ -242,6 +249,67 @@ describe('authorised SMTP transport review', () => {
     assert.equal(idleChecks, 3);
     assert.equal(destroyed, true);
     assert.doesNotMatch(commands.join(''), /(?:AUTH|MAIL FROM|RCPT TO|DATA|VRFY|EXPN)/iu);
+  });
+
+  test('recognises STARTTLS beyond the retained capability cap using the full bounded reply', async () => {
+    for (const preceding of [31, 32, 62]) {
+      const ehlo = capabilityReply(preceding, true);
+      const replies = [reply('220 fixture-mx ESMTP'), ehlo, reply('220 Begin TLS')];
+      const commands: string[] = [];
+      let destroyed = false;
+      let idleChecks = 0;
+      const result = await runSmtpConversation('mx.example.test', {
+        remoteAddress: PUBLIC_ADDRESS,
+        readReply: async () => { const value = replies.shift(); assert.ok(value); return value; },
+        assertIdle: () => { idleChecks += 1; },
+        write: async (command) => { commands.push(command); },
+        startTls: async () => ({ peerCertificate: null, authorized: null, authorizationError: null, protocol: 'TLSv1.3', cipherName: 'FIXTURE-CIPHER', remoteAddress: PUBLIC_ADDRESS }),
+        diagnostics: () => ({ bytesRead: ehlo.bytes + 40, lineCount: ehlo.lines.length + 2 }),
+        destroy: () => { destroyed = true; },
+      });
+      assert.equal(result.capabilities.length, 32);
+      assert.equal(result.capabilities.includes('STARTTLS'), preceding === 31);
+      assert.equal(result.starttlsAdvertised, true);
+      assert.equal(result.starttlsState, 'negotiated');
+      assert.deepEqual(commands, [EHLO_COMMAND, STARTTLS_COMMAND]);
+      assert.equal(idleChecks, 3);
+      assert.equal(destroyed, true);
+    }
+  });
+
+  test('qualifies retained capability omissions without changing published fields or losing a later failure', async () => {
+    for (const [count, failTlsa] of [[32, false], [33, false], [33, true]] as const) {
+      const ehlo = capabilityReply(count);
+      const review = await collectMailTransportReview({
+        schema: MAIL_TRANSPORT_INPUT_SCHEMA, version: 1, domain: 'example.test', mxHosts: ['mx.example.test'], policyContext: {},
+      }, {
+        resolver: PUBLIC_ADDRESS, trustAnchor: ANCHOR, ownedOrAuthorized: true, activeProbeAcknowledged: true,
+      }, {
+        now: () => 0,
+        observedAt: () => OBSERVED_AT,
+        resolveHost: async () => ({ addresses: [{ address: PUBLIC_ADDRESS, family: 4 }], aliases: [] }),
+        validateDnssec: async ({ target }) => ({ report: secureReport(String(target)), zone: String(target), keys: [] }),
+        collectTlsaEvidence: async () => {
+          if (failTlsa) throw new Error('Fixture TLSA failure');
+          return { state: 'not_published', recordCount: 0, signatureState: 'validated', dane: null, limitations: ['Fixture authenticated denial.'] };
+        },
+        probe: async ({ address }) => ({ ...probeResult(address), ehlo, capabilities: smtpCapabilities(ehlo) }),
+      });
+      const endpoint = review.endpoints[0];
+      assert.ok(endpoint);
+      assert.equal(review.version, 1);
+      assert.equal(review.runState, count === 32 ? 'complete' : 'partial');
+      assert.equal(endpoint.state, count === 32 ? 'complete' : 'partial');
+      assert.equal(endpoint.smtp.capabilities.length, 32);
+      assert.equal(endpoint.smtp.starttlsAdvertised, false);
+      assert.equal(endpoint.limitations.some((value) => /capability inventory is incomplete/u.test(value)), count > 32);
+      assert.equal(/capability inventory is incomplete/u.test(formatMailTransportReview(review)), count > 32);
+      assert.equal(endpoint.failure?.stage ?? null, failTlsa ? 'tlsa' : null);
+      assert.doesNotMatch(JSON.stringify(review), /fixture-mx|capabilitiesTruncated|"lines"/u);
+    }
+    const duplicate = reply('250-fixture-mx', ...Array.from({ length: 40 }, () => '250-SIZE 1024'), '250 STARTTLS');
+    assert.deepEqual(smtpCapabilities(duplicate), ['SIZE', 'STARTTLS']);
+    assert.deepEqual(smtpCapabilities(reply('550 EHLO unavailable')), []);
   });
 
   test('does not run a third idle checkpoint or handshake after a rejected STARTTLS reply', async () => {

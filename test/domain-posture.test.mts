@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { buildPostureReport, fetchMtaStsPolicy, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
+import { validateDmarcExternalReporting } from '../lib/domain-posture-analysis.mts';
 
 const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
 
@@ -32,6 +33,17 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
 function byId(report: ReturnType<typeof buildPostureReport>, id: string) {
   return requiredValue(report.checks.find((item) => item.id === id));
 }
+
+test('malformed reporting evidence cannot become a passing posture check', async () => {
+  const input = strongInput();
+  input.dmarc = query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']);
+  input.dmarcAuthorizations = await validateDmarcExternalReporting('example.test', input.dmarc, async () => query(['v=DMARC10']));
+  input.tlsRpt = query(['v=TLSRPTv1; rua=not-a-uri']);
+  const report = buildPostureReport('example.test', input);
+  assert.equal(byId(report, 'dmarc').status, 'warning');
+  assert.match(byId(report, 'dmarc').summary, /authorisation is incomplete/u);
+  assert.equal(byId(report, 'tls_rpt').status, 'danger');
+});
 
 describe('selector and MTA-STS hostname normalization', () => {
   test('normalizes IDNs and rejects non-domain audit targets', () => {

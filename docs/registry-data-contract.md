@@ -50,6 +50,8 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   bounded projected catalogue; retained advisory identifiers and weakness
   classes remain capped independently. A KEV match is prioritisation context,
   not evidence that the observed page exposes or executes affected code.
+  Invalid source CVE identifiers are omitted and disclosed without removing
+  their advisory matches. Published saved profiles remain readable.
   The accepted/current versions and bounds come from the
   [browser-safe child-profile contract](../lib/lookup-child-profile-contract.mts).
   Maintainers can run `npm run sources:health` for the single offline status

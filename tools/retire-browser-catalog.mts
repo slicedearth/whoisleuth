@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 
 import * as retire from 'retire';
 import {
@@ -25,7 +26,6 @@ const EXPRESSION_QUALIFICATION_INPUT_CHARS = 4_096;
 const EXTRACTOR_NAMES = Object.freeze(['uri', 'filename', 'filecontent', 'filecontentreplace', 'hashes']);
 const SEVERITIES = new Set(['none', 'low', 'medium', 'high', 'critical']);
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
-const CVE_RE = /^CVE-[0-9X-]+$/;
 const GHSA_RE = /^GHSA-[A-Z0-9-]+$/i;
 const CWE_RE = /^CWE-[0-9]+$/;
 
@@ -65,7 +65,9 @@ function projectVulnerability(value: unknown): UnknownRecord | null {
   const excludes = stringArray(vulnerability.excludes, 32, VERSION_RE);
   const cwe = stringArray(vulnerability.cwe, 16, CWE_RE);
   const identifiers = record(vulnerability.identifiers);
-  const cve = stringArray(identifiers.CVE, 32, CVE_RE);
+  const suppliedCve = identifiers.CVE === undefined ? [] : Array.isArray(identifiers.CVE) ? identifiers.CVE : [identifiers.CVE];
+  const cve = suppliedCve.slice(0, 32).filter(isCveIdentifier);
+  const omittedCveIdentifiers = suppliedCve.length - cve.length;
   const githubId = typeof identifiers.githubID === 'string' && GHSA_RE.test(identifiers.githubID)
     ? identifiers.githubID.toUpperCase()
     : null;
@@ -73,6 +75,7 @@ function projectVulnerability(value: unknown): UnknownRecord | null {
   if (atOrAbove) projected.atOrAbove = atOrAbove;
   if (excludes.length) projected.excludes = excludes;
   if (cwe.length) projected.cwe = cwe;
+  if (omittedCveIdentifiers) projected.omittedCveIdentifiers = omittedCveIdentifiers;
   if (cve.length || githubId) {
     projected.identifiers = {
       ...(cve.length ? { CVE: cve } : {}),

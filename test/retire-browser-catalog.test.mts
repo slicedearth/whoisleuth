@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
+import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 import {
   SOURCE_REVISION,
   SOURCE_SHA256,
@@ -36,6 +37,40 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 describe('pinned browser-library catalogue projection', () => {
+  test('accepts identifier grammar without asserting that an advisory exists', () => {
+    for (const value of ['CVE-1999-0001', 'CVE-2026-12345', 'CVE-2026-1234567']) assert.equal(isCveIdentifier(value), true);
+    for (const value of ['CVE-2007-01-09', 'CVE-XXXX-XXXX', 'CVE-2026-123', 'CVE-26-1234', 'CVE-2026-1234extra', 'cve-2026-1234', 'CVE-2026-1234\n', null, 2026]) assert.equal(isCveIdentifier(value), false);
+  });
+
+  test('retains advisories while reporting malformed or bounded-out identifier entries', () => {
+    const source = fixtureRepository();
+    assert.deepEqual(record(projectRepository(source).fixture).vulnerabilities, source.fixture.vulnerabilities);
+    const advisory = source.fixture.vulnerabilities[0];
+    assert.ok(advisory);
+    advisory.identifiers.CVE = ['CVE-2026-1234', 'CVE-2007-01-09', 'CVE-XXXX-XXXX'];
+    const projected = record(projectRepository(source).fixture).vulnerabilities;
+    assert.ok(Array.isArray(projected));
+    assert.equal(projected.length, 1);
+    assert.equal(record(projected[0]).omittedCveIdentifiers, 2);
+    assert.deepEqual(record(record(projected[0]).identifiers).CVE, ['CVE-2026-1234']);
+    assert.equal(advisory.identifiers.CVE.length, 3);
+    advisory.identifiers.CVE = Array.from({ length: 33 }, (_, index) => 'CVE-2026-' + String(index).padStart(4, '0'));
+    const bounded = record(projectRepository(source).fixture).vulnerabilities;
+    assert.ok(Array.isArray(bounded));
+    assert.equal(record(bounded[0]).omittedCveIdentifiers, 1);
+    assert.equal((record(record(bounded[0]).identifiers).CVE as unknown[]).length, 32);
+  });
+
+  test('retains explicit omission metadata in the generated source projection', () => {
+    const component = record(RETIRE_BROWSER_CATALOG.components.DWR);
+    const advisories = component.vulnerabilities;
+    assert.ok(Array.isArray(advisories));
+    const first = record(advisories[0]);
+    assert.equal(first.below, '1.1.4');
+    assert.equal(first.severity, 'high');
+    assert.equal(first.omittedCveIdentifiers, 1);
+    assert.equal(first.identifiers, undefined);
+  });
   test('automatically verifies the checked-in generated module digest', async () => {
     const [moduleText, expectedDigest] = await Promise.all([
       readFile(new URL('../lib/generated/retire-browser-catalog.mts', import.meta.url), 'utf8'),

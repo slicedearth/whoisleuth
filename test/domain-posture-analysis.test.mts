@@ -98,6 +98,43 @@ describe('bounded SPF expansion', () => {
 });
 
 describe('DMARC reporting authorization', () => {
+  test('does not authorise prefix matches, malformed records or cross-host overrides', async () => {
+    for (const record of [
+      'v=DMARC10', 'v=dmarc1', 'v=DMARC1; broken', 'v=DMARC1; v=DMARC1',
+      'v=DMARC1; rua=mailto:reports@different.example.test', 'v=DMARC1; rua=not-a-uri',
+    ]) {
+      const result = await validateDmarcExternalReporting('example.test', query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']), async () => query([record]));
+      assert.equal(result.length, 1);
+      assert.equal(result[0]?.state, 'not_found', record);
+    }
+    for (const records of [
+      [['v=DMARC', '1;']], ['unrelated=record', 'v=DMARC1; extension=known'],
+      ['v=DMARC1; rua=mailto:alternate@external.example.net'],
+    ]) {
+      const result = await validateDmarcExternalReporting('example.test', query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']), async () => query(records));
+      assert.equal(result[0]?.state, 'authorized');
+    }
+  });
+
+  test('rejects incomplete mailboxes and malformed size suffixes before a DNS query', async () => {
+    for (const destination of ['mailto:a..b@external.example.test', 'mailto:@external.example.test', 'mailto:a@external.example.test!oops', 'mailto:a%0D@external.example.test']) {
+      const resolver = fixtureResolver({});
+      const result = await validateDmarcExternalReporting('example.test', query(['v=DMARC1; p=reject; rua=' + destination]), resolver.resolveTxt);
+      assert.equal(result[0]?.state, 'invalid_destination', destination);
+      assert.deepEqual(resolver.requests, []);
+    }
+    assert.equal(reportDestinationDomain('mailto:%22report%20box%22@reports.example.test!10m'), 'reports.example.test');
+  });
+
+  test('does not issue an overlong external authorisation query', async () => {
+    const owner = 'a'.repeat(63) + '.' + 'b'.repeat(63) + '.example.test';
+    const recipient = 'c'.repeat(63) + '.' + 'd'.repeat(63) + '.example.test';
+    const resolver = fixtureResolver({});
+    const result = await validateDmarcExternalReporting(owner, query(['v=DMARC1; p=reject; rua=mailto:reports@' + recipient]), resolver.resolveTxt);
+    assert.equal(result[0]?.state, 'unavailable');
+    assert.match(result[0]?.error || '', /DNS name limit/u);
+    assert.deepEqual(resolver.requests, []);
+  });
   test('extracts bounded mail destinations and checks only external reporting domains', async () => {
     const resolver = fixtureResolver({
       'example.test._report._dmarc.reports.example.net': query(['v=DMARC1']),

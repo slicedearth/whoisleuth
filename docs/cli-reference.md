@@ -77,6 +77,8 @@ transport handles at most three selected MX hosts sequentially, sends `EHLO`
 and uses `STARTTLS` only when advertised. It does not send mail, authenticate,
 test relay, enumerate recipients or retry automatically. DNSSEC, TLSA/DANE,
 PKIX, STARTTLS and SMTP transport remain separate evidence states.
+STARTTLS detection uses the full bounded reply. If the retained capability
+inventory is shortened, the report remains partial and names the omission.
 
 The repository-only rendered-capture package is outside hosted and distributable
 collection. It executes remote page JavaScript only for an explicitly

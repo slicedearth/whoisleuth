@@ -9,7 +9,8 @@ import { Worker } from 'node:worker_threads';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
-import { createObservation } from '../packages/evidence/observation.mts';
+import { createObservation, normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 import {
   BROWSER_LIBRARY_PROFILE_VERSION,
   MAX_LIBRARY_FINDINGS,
@@ -50,6 +51,7 @@ type CatalogVulnerability = {
   excludes?: unknown;
   severity?: unknown;
   identifiers?: unknown;
+  omittedCveIdentifiers?: unknown;
   cwe?: unknown;
 };
 type CatalogComponent = {
@@ -78,7 +80,6 @@ const MAX_MATCHES_PER_PATTERN = 4;
 const MAX_VERSION_LENGTH = 64;
 const COMPONENT_RE = /^[a-z0-9._-]{1,80}$/i;
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
-const CVE_RE = /^CVE-[0-9X-]+$/;
 const GHSA_RE = /^GHSA-[A-Z0-9-]+$/;
 const CWE_RE = /^CWE-[0-9]+$/;
 const SEVERITY_WEIGHT: Readonly<Record<Severity, number>> = Object.freeze({
@@ -90,6 +91,8 @@ const SEVERITY_WEIGHT: Readonly<Record<Severity, number>> = Object.freeze({
 });
 const CATALOG_COMPONENTS = RETIRE_BROWSER_CATALOG.components as UnknownRecord;
 const KNOWN_EXPLOITED_IDENTIFIERS = new Set<string>(CISA_KEV_CATALOG.identifiers);
+const KNOWN_EXPLOITED_RELEASED_AT = normalizeExplicitIsoTimestamp(CISA_KEV_CATALOG.releasedAt);
+if (KNOWN_EXPLOITED_RELEASED_AT === null) throw new Error('Pinned known-exploited catalogue has an invalid release timestamp.');
 
 const INLINE_EXTRACTOR_CATALOGUE = Object.freeze(Object.entries(CATALOG_COMPONENTS).map(([component, value]) => {
   const extractors = record((record(value) as CatalogComponent).extractors);
@@ -381,12 +384,13 @@ function severity(value: unknown): Severity | null {
     : null;
 }
 
-function findingFromDetection(detected: DetectedComponent): BrowserLibraryFinding {
+function findingFromDetection(detected: DetectedComponent): { finding: BrowserLibraryFinding; omittedCveIdentifiers: number } {
   const component = record(CATALOG_COMPONENTS[detected.component]) as CatalogComponent;
   const vulnerabilities = matchingVulnerabilities(component, detected.version);
   let highestSeverity: Severity | null = null;
   const identifiers = new Set<string>();
   const weaknesses = new Set<string>();
+  let omittedCveIdentifiers = 0;
 
   for (const vulnerability of vulnerabilities) {
     const candidateSeverity = severity(vulnerability.severity);
@@ -396,7 +400,13 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
     ) highestSeverity = candidateSeverity;
 
     const vulnerabilityIdentifiers = record(vulnerability.identifiers);
-    for (const cve of boundedStringArray(vulnerabilityIdentifiers.CVE, 16, CVE_RE)) {
+    omittedCveIdentifiers += typeof vulnerability.omittedCveIdentifiers === 'number'
+      && Number.isSafeInteger(vulnerability.omittedCveIdentifiers) && vulnerability.omittedCveIdentifiers > 0
+      ? vulnerability.omittedCveIdentifiers : 0;
+    const suppliedCve = Array.isArray(vulnerabilityIdentifiers.CVE) ? vulnerabilityIdentifiers.CVE : [];
+    const validCve = suppliedCve.filter(isCveIdentifier);
+    omittedCveIdentifiers += suppliedCve.length - validCve.length;
+    for (const cve of validCve.slice(0, 16)) {
       if (identifiers.size < MAX_ADVISORY_IDENTIFIERS) identifiers.add(cve);
     }
     if (
@@ -411,7 +421,7 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
 
   const advisoryIdentifiers = [...identifiers].sort();
   const knownExploitedIdentifiers = advisoryIdentifiers.filter((identifier) => KNOWN_EXPLOITED_IDENTIFIERS.has(identifier));
-  return {
+  const finding: BrowserLibraryFinding = {
     id: detected.component,
     name: detected.component,
     apparentVersion: detected.version,
@@ -423,6 +433,7 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
     knownExploitedIdentifiers,
     weaknessClasses: [...weaknesses].sort(),
   };
+  return { finding, omittedCveIdentifiers };
 }
 
 function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
@@ -451,8 +462,9 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   const inlineSignatureResult = scanInlineSignatures(detected, inlineSignatureSamples.join('\u0000'));
   const inlineSignatureUnavailable = inlineSignatureResult.timedOut || inlineSignatureResult.unavailable;
 
-  const allFindings = [...detected.values()]
-    .map(findingFromDetection)
+  const projected = [...detected.values()].map(findingFromDetection);
+  const omittedCveIdentifiers = projected.reduce((total, entry) => total + entry.omittedCveIdentifiers, 0);
+  const allFindings = projected.map((entry) => entry.finding)
     .sort((left, right) => (
       (right.highestSeverity ? SEVERITY_WEIGHT[right.highestSeverity] : -1)
       - (left.highestSeverity ? SEVERITY_WEIGHT[left.highestSeverity] : -1)
@@ -468,7 +480,8 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     || htmlAnalysis.inlineLimitReached
     || inlineSignatureLimitReached
     || inlineSignatureUnavailable
-    || findingLimitReached;
+    || findingLimitReached
+    || omittedCveIdentifiers > 0;
   const limitations = [
     'Library versions are inferred from passive static signatures and may be absent, transformed, or misleading.',
     'A catalogue advisory match identifies a component version associated with a published advisory; it does not establish reachability or exploitability.',
@@ -484,6 +497,7 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   if (inlineSignatureResult.timedOut) limitations.push(`Passive library signature matching exceeded its ${MAX_INLINE_LIBRARY_SCAN_MS} ms isolated-worker deadline; hash evidence was still evaluated.`);
   if (inlineSignatureResult.unavailable) limitations.push('Passive library signature matching was unavailable in its isolated worker; hash evidence was still evaluated.');
   if (findingLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_FINDINGS} library findings were retained.`);
+  if (omittedCveIdentifiers) limitations.push(`${omittedCveIdentifiers} supplied CVE identifier ${omittedCveIdentifiers === 1 ? 'entry was' : 'entries were'} omitted from matching catalogue advisories because of invalid syntax or a source limit. Advisory matches are still counted.`);
 
   return {
     profileVersion: BROWSER_LIBRARY_PROFILE_VERSION,
@@ -495,7 +509,7 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     knownExploitedCatalog: {
       name: 'CISA KEV',
       version: CISA_KEV_CATALOG.catalogVersion,
-      releasedAt: CISA_KEV_CATALOG.releasedAt,
+      releasedAt: KNOWN_EXPLOITED_RELEASED_AT,
     },
     ...createObservation({
       status: truncated ? 'partial' : 'success',
