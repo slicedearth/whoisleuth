@@ -9,8 +9,7 @@ import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-inte
 import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
-import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
-import { normalizeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { richSourceQualifiedBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions';
 
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -340,7 +339,7 @@ function workspaceArchiveStatus(page: import('@playwright/test').Page) {
 
 test('a rich 2,000-row Bulk workspace remains readable after saving and plain or encrypted restore', async ({ page }, testInfo) => {
   test.slow();
-  const store = normalizeBulkSessionStore(richBulkSessionStore());
+  const store = richSourceQualifiedBulkSessionStore();
   const startedAt = performance.now();
   const productRequests: string[] = [];
   page.on('request', (request) => {
@@ -383,6 +382,9 @@ test('a rich 2,000-row Bulk workspace remains readable after saving and plain or
     const restored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1, minimumRevision: 2 });
     expect(restored.records[0]?.value.results).toHaveLength(2_000);
     expect(restored.records[0]?.value.results.at(-1)?.hasDmarc).toBe(true);
+    expect(restored.records[0]?.value.results.at(-1)?.profileContext.sourceState).toBe('unavailable');
+    expect(restored.records[0]?.value.results.at(-1)?.observedAt).toBe('2026-08-01T01:00:00.000Z');
+    expect(restored.records[0]?.value.results.at(-1)?.relationship.sourceEvidence.certificate?.[0]?.status).toBe('partial');
     await openBulkWorkspaceTools(page);
     await page.locator('.session-list article', { hasText: 'Updated retained workload' }).getByRole('button', { name: 'Load', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: /Loaded Updated retained workload: 2000 of 2000/ })).toBeVisible();

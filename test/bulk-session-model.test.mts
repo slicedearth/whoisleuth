@@ -13,6 +13,7 @@ import {
   normalizeBulkSession,
   normalizeBulkSessionResult,
   normalizeBulkSessionStore,
+  serializeBulkSessionStore,
   summarizeBulkProfileContexts,
   type BulkProfileContextProvenance,
   unavailableBulkProfileContext,
@@ -131,6 +132,33 @@ function session(id = 'session-one', overrides: Record<string, unknown> = {}) {
 }
 
 describe('saved Bulk sessions', () => {
+  test('only current versioned stores inherit identical session context; logical rows and mixed contexts remain explicit', () => {
+    const normalized = normalizeBulkSessionStore([session()]);
+    const wire = JSON.parse(serializeBulkSessionStore(normalized));
+    assert.equal(Object.hasOwn(wire.sessions[0].results[0], 'profileContext'), false);
+    assert.deepEqual(normalizeBulkSessionStore(wire), normalized);
+    assert.equal(normalizeBulkSession(wire.sessions[0]), null);
+    assert.deepEqual(normalizeBulkSessionStore(wire.sessions).sessions, []);
+    wire.sessions[0].results[0].relationship.version = 2;
+    assert.deepEqual(normalizeBulkSessionStore({ ...wire, version: 4 }).sessions, []);
+    for (const invalid of [null, {}, { sourceState: 'mixed' }, { sourceState: 'ready', activeProfileId: 'missing-revision' }]) {
+      const explicit = structuredClone(wire);
+      explicit.sessions[0].results[0].profileContext = invalid;
+      assert.deepEqual(normalizeBulkSessionStore(explicit).sessions, []);
+    }
+    const mixed = normalizeBulkSessionStore([session('mixed', {
+      domains: ['one.invalid', 'two.invalid'],
+      results: [result('one.invalid'), result('two.invalid', { profileContext: ACTIVE_PROFILE_CONTEXT })],
+    })]);
+    const mixedWire = JSON.parse(serializeBulkSessionStore(mixed));
+    assert.equal(mixedWire.sessions[0].profileContext.sourceState, 'mixed');
+    assert.equal(mixedWire.sessions[0].results[0].profileContext.activeProfileId, null);
+    assert.equal(mixedWire.sessions[0].results[1].profileContext.activeProfileId, 'profile-one');
+    assert.deepEqual(normalizeBulkSessionStore(mixedWire), mixed);
+    delete mixedWire.sessions[0].results[0].profileContext;
+    assert.deepEqual(normalizeBulkSessionStore(mixedWire).sessions, []);
+  });
+
   test('sanitizes impossible ready-without-profile claims without turning legitimate false values into absence', () => {
     const impossible = normalizeBulkSessionResult(result('forged.invalid', {
       trusted: 'official',
@@ -571,12 +599,12 @@ describe('saved Bulk sessions', () => {
     for (const version of [1, 2, 3]) {
       const unsupported = { ...exported, version };
       const before = structuredClone(unsupported);
-      assert.throws(() => mergeBulkSessions([], unsupported), /Expected Bulk session schema 4/u);
+      assert.throws(() => mergeBulkSessions([], unsupported), new RegExp(`Expected Bulk session schema ${BULK_SESSION_SCHEMA_VERSION}`, 'u'));
       assert.deepEqual(unsupported, before);
     }
     assert.throws(
-      () => mergeBulkSessions([], { ...exported, version: 5 }),
-      /newer schema 5/i,
+      () => mergeBulkSessions([], { ...exported, version: BULK_SESSION_SCHEMA_VERSION + 1 }),
+      /newer schema/i,
     );
   });
 

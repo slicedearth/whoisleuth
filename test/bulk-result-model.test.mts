@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import { describe, it } from 'node:test';
 
 import {
@@ -39,6 +40,7 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
     trusted: null,
     error: '',
     scanDepth: 'deep',
+    observedAt: null,
     createdDate: null,
     expiryDate: null,
     nameservers: ['ns1.example.test'],
@@ -69,17 +71,7 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
         spkiSha256: 'a'.repeat(64),
       },
     },
-    relationship: {
-      version: 2,
-      nameservers: [],
-      ipAddresses: [],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({}),
     sourceCoverage: [{ source: 'rdap', state: 'complete' }],
     profileContext: READY_PROFILE_CONTEXT,
     ...overrides,

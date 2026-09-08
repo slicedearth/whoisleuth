@@ -38,6 +38,8 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
   version: (raw: unknown) => number | null;
   serialize: (document: T) => string;
   split: (document: T) => LocalDataRecord[];
+  /** Optional compact wire records; split always exposes normalized values. */
+  storageRecords?: (document: T) => LocalDataRecord[];
   join: (records: LocalDataRecord[], schemaVersion: number) => unknown;
 }>;
 
@@ -60,6 +62,7 @@ export type AnyLocalDataCollectionDefinition = Readonly<{
   version(raw: unknown): number | null;
   serialize(document: unknown): string;
   split(document: unknown): LocalDataRecord[];
+  storageRecords?(document: unknown): LocalDataRecord[];
   join(records: LocalDataRecord[], schemaVersion: number): unknown;
 }>;
 
@@ -67,6 +70,10 @@ export type EncodedLocalDataRecord = Readonly<{
   lookupKey: string;
   payload: string;
 }>;
+
+export function localDataStorageRecords<T>(definition: LocalDataCollectionDefinition<T>, document: T): LocalDataRecord[] {
+  return definition.storageRecords ? definition.storageRecords(document) : definition.split(document);
+}
 
 export type DecodedLocalDataRecord = Readonly<{
   id: string;
@@ -737,7 +744,7 @@ export class BrowserLocalDataProvider {
     }
     const serialized = definition.serialize(document);
     const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);
-    const records = definition.split(document);
+    const records = localDataStorageRecords(definition, document);
     if (!Array.isArray(records) || records.length > definition.maximumRecords || records.length > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
       throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
     }

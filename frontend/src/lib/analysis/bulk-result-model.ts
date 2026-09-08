@@ -5,6 +5,7 @@ import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   normalizeBulkProfileContext,
@@ -212,6 +213,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     trusted: row.trusted,
     error: row.error,
     scanDepth: row.saved.scanDepth,
+    observedAt: normalizeExplicitIsoTimestamp(row.saved.observedAt),
     createdDate: row.saved.createdDate ?? null,
     expiryDate: row.saved.expiryDate ?? null,
     privacyProtected: row.saved.privacyProtected ?? null,
@@ -252,6 +254,7 @@ export function fromBulkSessionResult(
   const saved: SavedScanRecord = {
     domain: row.domain,
     scanDepth: row.scanDepth,
+    observedAt: row.observedAt,
     availability: row.availability,
     registrarName: row.registrar,
     nameservers: row.nameservers,

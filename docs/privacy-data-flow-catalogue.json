@@ -7749,12 +7749,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.bulk-session-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
@@ -7860,12 +7861,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.relationship-observation-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 786432,
       "storageClass": "browser_profile_storage",
@@ -8407,12 +8409,13 @@
       "schema": "whoisleuth.bulk-sessions",
       "lifecycleSchema": "whoisleuth.bulk-sessions",
       "coverageClass": "registered_schema",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 4194304,
       "storageClass": "deliberate_local_file",
@@ -8885,12 +8888,13 @@
       "schema": "whoisleuth.relationship-observations",
       "lifecycleSchema": "whoisleuth.relationship-observations",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 786432,
       "storageClass": "deliberate_local_file",
@@ -13652,7 +13656,8 @@
         {
           "schema": "whoisleuth.browser.bulk-session-store",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -13660,7 +13665,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.bulk-session-store",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13772,7 +13777,8 @@
         {
           "schema": "whoisleuth.browser.relationship-observation-store",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -13780,7 +13786,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.relationship-observation-store",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14002,7 +14008,8 @@
         {
           "schema": "whoisleuth.bulk-sessions",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -14027,7 +14034,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-sessions",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -14143,7 +14150,8 @@
         {
           "schema": "whoisleuth.relationship-observations",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14168,7 +14176,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.relationship-observations",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

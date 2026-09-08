@@ -137,13 +137,13 @@ describe('buildScanRelationships', () => {
     assert.equal(result.groups.some((item) => item.type === 'nameserver_set'), false);
   });
 
-  it('rejects stale and future relationship observation versions at the grouping boundary', () => {
+  it('rejects retired and future relationship observation versions at the grouping boundary', () => {
     const current = evidence.relationshipObservation({
       tls: { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success', certificate: { fingerprintSha256: 'c'.repeat(64) } },
     });
     const result = evidence.buildScanRelationships([
-      row('old-one.example', { ...current, version: evidence.RELATIONSHIP_EVIDENCE_VERSION - 1 }),
-      row('old-two.example', { ...current, version: evidence.RELATIONSHIP_EVIDENCE_VERSION - 1 }),
+      row('old-one.example', { ...current, version: 1 }),
+      row('old-two.example', { ...current, version: 1 }),
       row('new-one.example', { ...current, version: evidence.RELATIONSHIP_EVIDENCE_VERSION + 1 }),
       row('new-two.example', { ...current, version: evidence.RELATIONSHIP_EVIDENCE_VERSION + 1 }),
     ]);
@@ -163,6 +163,10 @@ describe('buildScanRelationships', () => {
       normalizedValue: 'static.official.example',
       domains: ['candidate.example'],
       description: 'One or more pages loaded an asset from this configured official domain or its subdomain.',
+      sourceEvidence: [{ domain: 'candidate.example', source: 'http', status: 'unknown', observedAt: null, complete: false, truncated: null }],
+      observedAt: null,
+      complete: false,
+      truncated: false,
     }]);
   });
 
@@ -201,6 +205,10 @@ describe('buildScanRelationships', () => {
       normalizedValue: 'c'.repeat(64),
       domains: ['one.example', 'two.example'],
       description: 'These domains presented the same leaf certificate in this scan. Multi-domain certificates, shared hosting, CDNs, and managed platforms are common.',
+      sourceEvidence: ['one.example', 'two.example'].map((domain) => ({ domain, source: 'tls', status: 'unknown', observedAt: null, complete: false, truncated: null })),
+      observedAt: null,
+      complete: false,
+      truncated: false,
     }]);
   });
 

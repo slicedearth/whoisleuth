@@ -13,6 +13,7 @@ import {
 import {
   BrowserLocalDataError,
   isExpectedBrowserLocalDataFailure,
+  localDataStorageRecords,
   plaintextJsonCodec,
 } from '../frontend/src/lib/browser-local-data.ts';
 import type {
@@ -70,7 +71,7 @@ function roundTrip(
 function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unknown) {
   const normalized = definition.normalize(document);
   const before = definition.serialize(normalized);
-  const joined = definition.normalize(definition.join(definition.split(normalized), definition.schemaVersion));
+  const joined = definition.normalize(definition.join(localDataStorageRecords(definition, normalized), definition.schemaVersion));
   return { before, after: definition.serialize(joined), joined };
 }
 

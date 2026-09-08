@@ -1,4 +1,6 @@
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { normalizeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 
 /** A settled, mail-bearing workload with per-row objects, arrays and sources. */
 export function richBulkSessionStore(count = 2_000) {
@@ -46,4 +48,20 @@ export function richBulkSessionStore(count = 2_000) {
       profileContext,
     }],
   };
+}
+
+/** Current per-source provenance, including a positive but incomplete TLS source. */
+export function richSourceQualifiedBulkSessionStore(count = 2_000) {
+  const store = normalizeBulkSessionStore(richBulkSessionStore(count));
+  const observedAt = '2026-08-01T01:00:00.000Z';
+  for (const row of store.sessions[0]!.results) {
+    row.observedAt = observedAt;
+    row.relationship = relationshipObservation({
+      nameservers: row.nameservers,
+      dns: { ...row.dns, version: 1, source: 'dns', observedAt, complete: true, truncated: false },
+      tls: { version: 1, profileVersion: 2, source: 'tls', status: 'partial', observedAt,
+        complete: false, truncated: false, certificate: { fingerprintSha256: 'a'.repeat(64) } },
+    });
+  }
+  return store;
 }

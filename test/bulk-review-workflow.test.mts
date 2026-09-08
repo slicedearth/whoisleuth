@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import {
   buildBulkDomainComparison,
   buildBulkDomainComparisonExport,
@@ -39,6 +40,7 @@ function result(
     trusted: null,
     error: '',
     scanDepth: 'deep',
+    observedAt: null,
     createdDate: '2026-07-01T00:00:00.000Z',
     expiryDate: '2027-07-01T00:00:00.000Z',
     nameservers: ['ns1.example.test'],
@@ -61,17 +63,7 @@ function result(
     dns: null,
     dnssec: null,
     comparisonEvidence: null,
-    relationship: {
-      version: 2,
-      nameservers: ['ns1.example.test'],
-      ipAddresses: ['192.0.2.10'],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({ nameservers: ['ns1.example.test'], dns: { records: { a: ['192.0.2.10'] } } }),
     sourceCoverage: [
       { source: 'rdap', state: 'complete' },
       { source: 'whois', state: 'complete' },

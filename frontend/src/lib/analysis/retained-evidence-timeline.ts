@@ -326,11 +326,11 @@ function relationshipTimelineItems(records: readonly RelationshipObservation[], 
   return timelineSource(records, MAX_RELATIONSHIP_OBSERVATIONS, 'Relationships outside the source bound', omissions).flatMap((record): RetainedTimelineItem[] => {
     const observedAt = timestamp(record.observedAt);
     const storedAt = timestamp(record.retainedAt);
-    if (!observedAt || !storedAt) { omitTimelineSource(omissions, 'Undated relationships', 1); return []; }
+    if (!storedAt) { omitTimelineSource(omissions, 'Undated relationships', 1); return []; }
     return [{
       id: `relationship:${record.id}`,
       kind: 'relationship',
-      eventType: 'evidence',
+      eventType: observedAt ? 'evidence' : 'change',
       title: `${text(record.label, 100) || 'Relationship'} retained`,
       detail: `${record.domains.length} domain${record.domains.length === 1 ? '' : 's'} shared the bounded observation by ${text(record.method, 120) || 'the recorded comparison method'}.`,
       entities: entities(record.domains),
@@ -339,15 +339,18 @@ function relationshipTimelineItems(records: readonly RelationshipObservation[], 
       owner: 'Retained relationship',
       href: `/monitor?view=relationships&observation=${encodeURIComponent(record.id)}`,
       areas: ['relationship'],
-      source: text(record.source, 80) || 'Relationship analysis',
+      source: observedAt ? text(record.source, 80) || 'Relationship analysis' : 'Analyst retention',
       sourceState: record.complete ? 'complete' : 'partial',
-      observedAt,
+      observedAt: observedAt ?? storedAt,
       storedAt,
-      ...freshnessMetadata('relationship', observedAt, now),
+      ...(observedAt ? freshnessMetadata('relationship', observedAt, now)
+        : { freshness: 'unknown' as const, ageDays: null, freshnessThresholdDays: RETAINED_TIMELINE_FRESHNESS_DAYS.relationship }),
       completeness: record.complete && !record.truncated ? 'complete' : 'partial',
       truncated: record.truncated,
       derived: true,
-      limitations: limitations(record.limitations, 'Shared infrastructure is an investigative lead, not proof of ownership, control, or intent.'),
+      limitations: limitations([...record.limitations,
+        ...(!observedAt ? ['This event dates the analyst retention only; contributing-source observation times were not recorded.'] : []),
+      ], 'Shared infrastructure is an investigative lead, not proof of ownership, control, or intent.'),
     }];
   });
 }

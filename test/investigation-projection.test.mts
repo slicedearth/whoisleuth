@@ -350,6 +350,7 @@ describe('typed local investigation projection', () => {
       value: '192.0.2.20',
       domains: ['first.invalid', 'second.invalid'],
       description: 'Bounded retained pivot.',
+      sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: EARLY, complete: true, truncated: false })),
     }, {
       observedAt: EARLY,
       retainedAt: LATE,
@@ -372,7 +373,7 @@ describe('typed local investigation projection', () => {
     assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
     assert.equal(entity(result, 'ip_address').properties.observationId, retained.id);
     assert.equal(retainedObservation.store, 'relationshipObservations');
-    assert.equal(retainedObservation.source, 'bulk_relationship_analysis');
+    assert.equal(retainedObservation.source, 'dns');
     assert.equal(retainedObservation.status, 'success');
     assert.deepEqual(retainedObservation.schemaVersions, {
       relationshipEvidence: RELATIONSHIP_EVIDENCE_VERSION,

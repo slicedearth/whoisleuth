@@ -47,7 +47,9 @@ describe('saved-data and CLI contract properties', () => {
     fc.assert(fc.property(fc.jsonValue({ maxDepth: 4 }), (value) => {
       const normalized = normalizeBulkSessionStore(value);
       assert.deepEqual(normalizeBulkSessionStore(normalized), normalized);
-      assert.equal(serializeBulkSessionStore(value), JSON.stringify(normalized));
+      const serialized = serializeBulkSessionStore(value);
+      assert.deepEqual(normalizeBulkSessionStore(JSON.parse(serialized)), normalized);
+      assert.equal(serializeBulkSessionStore(JSON.parse(serialized)), serialized);
     }), fastCheckParameters(200));
   });
 

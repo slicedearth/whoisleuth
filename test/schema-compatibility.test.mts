@@ -469,11 +469,11 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [4, 5]);
     assert.equal(byId(inventory, 'browser.website-snapshots').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
-    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4]);
-    assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'exact_current_only');
+    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4, 5]);
+    assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.bulk-sessions').acceptsUnversionedLegacy, false);
-    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [4]);
-    assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'exact_current_only');
+    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [4, 5]);
+    assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'export.bulk-sessions').acceptsUnversionedLegacy, false);
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, null);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);

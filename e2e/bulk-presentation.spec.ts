@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 import { TLS_RELATIONSHIP_PROFILE_VERSION } from '../packages/comparison/relationship-evidence.mts';
 import { RISK_MODEL_VERSION } from '../lib/risk-scoring.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
@@ -11,6 +11,81 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
+});
+
+test('partial contributing TLS stays qualified through saved Bulk restore and explicit relationship retention', async ({ page }, testInfo) => {
+  await useTheme(page, 'system');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/bulk');
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    requests.push(domain);
+    const partial = domain === 'second-source.example';
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      observedAt: '2026-08-01T03:00:00.000Z',
+      availability: { applicable: true, domain, state: 'registered', confidence: 'high',
+        tls: { version: 1, profileVersion: TLS_RELATIONSHIP_PROFILE_VERSION, source: 'tls',
+          status: partial ? 'partial' : 'success', complete: !partial, truncated: false,
+          observedAt: partial ? '2026-08-01T02:00:00.000Z' : '2026-08-01T01:00:00.000Z',
+          certificate: { fingerprintSha256: 'd'.repeat(64) } },
+      },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await runBulkScan(page, ['first-source.example', 'second-source.example']);
+  await openBulkWorkspaceTools(page);
+  await page.getByLabel('Session name').fill('Source-qualified review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Source-qualified review.' })).toBeVisible();
+  await page.reload();
+  await openBulkWorkspaceTools(page);
+  await page.locator('.bulk-sessions article', { hasText: 'Source-qualified review' }).getByRole('button', { name: 'Load' }).click();
+  await selectBulkResultView(page, 'Analysis');
+  await page.getByRole('button', { name: /^Relationships\b/u }).click();
+  const section = page.getByRole('region', { name: '1 observed relationship', exact: true });
+  await section.getByRole('button', { name: 'Preview retention' }).click();
+  const preview = section.getByRole('dialog', { name: 'Retain this relationship observation?' });
+  await expect(preview).toBeFocused();
+  await expect(preview).toContainText('partial · not truncated');
+  await preview.getByText('Contributing observations (2)', { exact: true }).click();
+  const sources = preview.locator('.relationship-sources li');
+  await expect(sources).toHaveCount(2);
+  await expect(sources.filter({ hasText: 'second-source.example' })).toContainText('tls · partial');
+  await expect(sources.filter({ hasText: 'first-source.example' })).toContainText('Complete source');
+  for (const { width, height, theme } of [
+    { width: 1280, height: 720, theme: 'dark' as const },
+    { width: 1024, height: 768, theme: 'light' as const },
+    { width: 390, height: 844, theme: 'dark' as const },
+    { width: 320, height: 700, theme: 'light' as const },
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expectNoHorizontalOverflow(page);
+    await preview.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`relationship-preview-${width}-${theme}.png`) });
+  }
+  await preview.getByRole('button', { name: 'Retain reviewed observation' }).click();
+  await expect(section.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
+  const stored = await readBrowserLocalCollection(page, 'relationship_observations', { minimumRecords: 1 });
+  expect(stored.records[0]?.value).toMatchObject({
+    complete: false, truncated: false, observedAt: '2026-08-01T02:00:00.000Z',
+    sourceEvidence: [
+      { domain: 'first-source.example', source: 'tls', status: 'success', observedAt: '2026-08-01T01:00:00.000Z', complete: true },
+      { domain: 'second-source.example', source: 'tls', status: 'partial', observedAt: '2026-08-01T02:00:00.000Z', complete: false },
+    ],
+  });
+  await page.goto('/monitor?view=relationships');
+  const retained = page.getByRole('region', { name: 'Retained relationship observations' });
+  await expect(retained).toContainText('Partial input');
+  await retained.getByText('Contributing observations (2)', { exact: true }).click();
+  await expect(retained.locator('.relationship-sources li').filter({ hasText: 'second-source.example' })).toContainText('tls · partial');
+  await expectNoHorizontalOverflow(page);
+  await retained.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('retained-sources-mobile-light.png') });
+  expect(requests).toEqual(['first-source.example', 'second-source.example']);
 });
 
 test('long domains retain a readable table column and wrap safely in mobile cards', async ({ page }) => {
@@ -359,7 +434,10 @@ test('deep results present bounded relationship evidence including exact native 
             },
           },
           tls: shared ? {
-            source: 'tls', profileVersion: TLS_RELATIONSHIP_PROFILE_VERSION, status: 'success',
+            version: 1, source: 'tls', profileVersion: TLS_RELATIONSHIP_PROFILE_VERSION,
+            status: partialRelationships && domain === 'second.example' ? 'partial' : 'success',
+            observedAt: domain === 'second.example' ? '2026-08-01T02:00:00.000Z' : '2026-08-01T01:00:00.000Z',
+            complete: !(partialRelationships && domain === 'second.example'), truncated: false,
             certificate: { fingerprintSha256: 'c'.repeat(64) },
           } : null,
         },
@@ -414,7 +492,7 @@ test('deep results present bounded relationship evidence including exact native 
   await previewRetention.click();
   const admission = section.getByRole('dialog', { name: 'Retain this relationship observation?' });
   await expect(admission).toBeFocused();
-  await expect(admission).toContainText('partial · truncated');
+  await expect(admission).toContainText('partial · not truncated');
   await expect(admission).toContainText('Exact leaf-certificate SHA-256');
   await expect(admission.getByText('2 requests', { exact: false })).toHaveCount(0);
   await expect(admission).toContainText('0 requests · no external service receives the target');

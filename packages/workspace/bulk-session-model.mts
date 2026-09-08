@@ -5,6 +5,9 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeCaaCritical } from './dns-record-normalization.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
+import { normalizeRelationshipSourceProjection } from '../comparison/relationship-provenance.mts';
+import type { RelationshipObservation } from '../comparison/relationship-evidence.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   BULK_SESSION_SCHEMA,
@@ -91,17 +94,7 @@ export type BulkProfileContextProvenance = {
   limitation: string;
 };
 
-export type BulkSessionRelationship = {
-  version: 2;
-  nameservers: string[];
-  ipAddresses: string[];
-  trackingIdentifiers: string[];
-  officialAssetHosts: string[];
-  faviconHash: string | null;
-  faviconPHash: string | null;
-  certificateFingerprint: string | null;
-  truncated: boolean;
-};
+export type BulkSessionRelationship = RelationshipObservation;
 
 export type BulkSessionDnsEvidence = {
   status: string | null;
@@ -140,6 +133,7 @@ export type BulkSessionResult = {
   trusted: 'allowlisted' | 'official' | 'partner' | null;
   error: string;
   scanDepth: BulkSessionMode;
+  observedAt: string | null;
   createdDate: string | null;
   expiryDate: string | null;
   privacyProtected?: boolean | null;
@@ -386,8 +380,11 @@ function nullableHash(value: unknown, expression: RegExp): string | null {
 
 function normalizeRelationship(value: unknown): BulkSessionRelationship {
   const item = record(value);
+  if (item?.version !== undefined && item.version !== 2 && item.version !== RELATIONSHIP_EVIDENCE_VERSION) {
+    throw new TypeError('This Bulk relationship projection uses an unsupported version. No source evidence was interpreted.');
+  }
   return {
-    version: 2,
+    version: RELATIONSHIP_EVIDENCE_VERSION,
     nameservers: boundedStrings(item?.nameservers, 20),
     ipAddresses: boundedStrings(item?.ipAddresses, 50),
     trackingIdentifiers: boundedTrackingIdentifiers(item?.trackingIdentifiers),
@@ -395,6 +392,7 @@ function normalizeRelationship(value: unknown): BulkSessionRelationship {
     faviconHash: nullableHash(item?.faviconHash, HASH_64_RE),
     faviconPHash: nullableHash(item?.faviconPHash, PHASH_RE),
     certificateFingerprint: nullableHash(item?.certificateFingerprint, HASH_64_RE),
+    sourceEvidence: item?.version === RELATIONSHIP_EVIDENCE_VERSION ? normalizeRelationshipSourceProjection(item.sourceEvidence) : {},
     truncated: item?.truncated === true,
   };
 }
@@ -458,13 +456,16 @@ export function normalizeBulkComparisonEvidence(value: unknown): BulkSessionComp
   };
 }
 
-export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | null {
+export function normalizeBulkSessionResult(
+  value: unknown,
+  inheritedProfileContext?: BulkProfileContextProvenance,
+): BulkSessionResult | null {
   const item = record(value);
   const domain = normalizeDomain(item?.domain);
   const status = boundedText(item?.status, 20);
   const scanDepth = boundedText(item?.scanDepth, 10);
   if (!item || !domain || !RESULT_STATES.has(status) || !MODES.has(scanDepth)) return null;
-  const rawProfileContext = record(item.profileContext);
+  const rawProfileContext = record(Object.hasOwn(item, 'profileContext') ? item.profileContext : inheritedProfileContext);
   if (!rawProfileContext || !['ready', 'unavailable'].includes(String(rawProfileContext.sourceState))) return null;
   const profileContext = normalizeBulkProfileContext(rawProfileContext);
   if (rawProfileContext.sourceState === 'ready' && profileContext.sourceState !== 'ready') return null;
@@ -497,6 +498,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     trusted: profileClaimsUsable && !readyWithoutActiveProfile && TRUST_STATES.has(trusted) ? trusted as BulkSessionResult['trusted'] : null,
     error: boundedText(item.error),
     scanDepth: scanDepth as BulkSessionMode,
+    observedAt: normalizeExplicitIsoTimestamp(item.observedAt),
     createdDate: boundedText(item.createdDate, 64) || null,
     expiryDate: boundedText(item.expiryDate, 64) || null,
     privacyProtected: nullableBoolean(item.privacyProtected),
@@ -530,7 +532,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
   };
 }
 
-export function normalizeBulkSession(value: unknown): BulkSession | null {
+export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number): BulkSession | null {
   const item = record(value);
   const id = boundedText(item?.id, 128);
   const name = boundedText(item?.name, MAX_BULK_SESSION_NAME_LENGTH);
@@ -553,21 +555,40 @@ export function normalizeBulkSession(value: unknown): BulkSession | null {
   const domains = domainList(item.domains);
   if (!domains.length) return null;
   if (!Array.isArray(item.results)) return null;
+  const rawProfileContext = record(item.profileContext);
+  if (!rawProfileContext) return null;
+  const declaredProfileContext = normalizeBulkProfileContext(rawProfileContext);
+  // Only an explicitly versioned current document may omit identical row
+  // context. Bare runtime rows and public schema 4 must carry their own context;
+  // an explicit invalid/null row value never falls back to the session.
+  const inheritedProfileContext = sourceStoreVersion === 5
+    && declaredProfileContext.sourceState !== 'mixed'
+    && rawProfileContext.sourceState === declaredProfileContext.sourceState
+    ? declaredProfileContext
+    : undefined;
   const allowed = new Set(domains);
   const results: BulkSessionResult[] = [];
   const seen = new Set<string>();
   for (const candidate of Array.isArray(item.results) ? item.results.slice(0, MAX_BULK_SESSION_ROWS * 2) : []) {
-    const result = normalizeBulkSessionResult(candidate);
+    const publicLegacyRow = sourceStoreVersion === 4;
+    if (publicLegacyRow && record(record(candidate)?.relationship)?.version === RELATIONSHIP_EVIDENCE_VERSION) {
+      throw new TypeError('Bulk schema 4 cannot contain newer relationship source evidence; no evidence was interpreted.');
+    }
+    const result = normalizeBulkSessionResult(candidate, inheritedProfileContext);
     if (!result || !allowed.has(result.domain) || seen.has(result.domain)) {
       return null;
+    }
+    // Public schema 4 never recorded a row observation time or qualified
+    // relationship sources. Ignore added fields rather than backdating them.
+    if (publicLegacyRow) {
+      result.observedAt = null;
+      result.relationship.sourceEvidence = {};
     }
     seen.add(result.domain);
     results.push(result);
   }
   if ((state === 'complete') !== (results.length === domains.length)) return null;
   const profileContext = summarizeBulkProfileContexts(results);
-  if (!record(item.profileContext)) return null;
-  const declaredProfileContext = normalizeBulkProfileContext(item.profileContext);
   if (!sameProfileContext(declaredProfileContext, profileContext)) return null;
   return {
     id,
@@ -610,7 +631,7 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
       : [];
   const byId = new Map<string, BulkSession>();
   for (const candidate of candidates.slice(0, MAX_BULK_SESSIONS * 4)) {
-    const session = normalizeBulkSession(candidate);
+    const session = normalizeBulkSession(candidate, bulkSessionStoreVersion(raw) ?? undefined);
     if (!session) continue;
     const existing = byId.get(session.id);
     if (!existing || existing.updatedAt < session.updatedAt) byId.set(session.id, session);
@@ -624,8 +645,19 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
   };
 }
 
+/** Current wire representation of an already-normalized session. */
+export function bulkSessionStorageValue(session: BulkSession) {
+  return {
+    ...session,
+    results: session.results.map(({ profileContext, ...row }) => sameProfileContext(profileContext, session.profileContext)
+      ? row
+      : { ...row, profileContext }),
+  };
+}
+
 export function serializeBulkSessionStore(raw: unknown): string {
-  return JSON.stringify(normalizeBulkSessionStore(raw));
+  const store = normalizeBulkSessionStore(raw);
+  return JSON.stringify({ ...store, sessions: store.sessions.map(bulkSessionStorageValue) });
 }
 
 function byteLength(value: string): number {
@@ -635,11 +667,16 @@ function byteLength(value: string): number {
 export function enforceBulkSessionStoreBudget(raw: unknown): { store: BulkSessionStore; pruned: number } {
   const store = normalizeBulkSessionStore(raw);
   let pruned = 0;
-  while (byteLength(JSON.stringify(store)) > MAX_BULK_SESSION_STORE_BYTES && store.sessions.length > 1) {
+  const sessionBytes = store.sessions.map((session) => byteLength(JSON.stringify(bulkSessionStorageValue(session))));
+  let bytes = byteLength(JSON.stringify({ ...store, sessions: [] }))
+    + sessionBytes.reduce((total, size) => total + size, 0)
+    + Math.max(0, sessionBytes.length - 1);
+  while (bytes > MAX_BULK_SESSION_STORE_BYTES && store.sessions.length > 1) {
+    bytes -= sessionBytes.pop()! + 1;
     store.sessions.pop();
     pruned += 1;
   }
-  if (byteLength(JSON.stringify(store)) > MAX_BULK_SESSION_STORE_BYTES) {
+  if (bytes > MAX_BULK_SESSION_STORE_BYTES) {
     throw new Error('This Bulk session exceeds the 4 MiB browser-local session limit.');
   }
   return { store, pruned };
@@ -778,7 +815,7 @@ export function buildBulkSessionExport(sessions: unknown, generatedAt: unknown =
     schema: BULK_SESSION_SCHEMA,
     version: BULK_SESSION_SCHEMA_VERSION,
     generatedAt: timestamp(generatedAt, new Date().toISOString()),
-    sessions: store.sessions,
+    sessions: store.sessions.map(bulkSessionStorageValue),
     limitations: [
       'Compact Bulk results and source states only; raw source payloads and contact records are excluded.',
       'Import is non-destructive and does not resume network collection automatically.',
@@ -808,7 +845,7 @@ export function mergeBulkSessions(
   let updated = 0;
   let skipped = 0;
   for (const candidate of imported.sessions.slice(0, MAX_BULK_SESSIONS * 4)) {
-    const normalized = normalizeBulkSession(candidate);
+    const normalized = normalizeBulkSession(candidate, Number(imported.version));
     if (!normalized) {
       skipped += 1;
       continue;

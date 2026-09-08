@@ -92,10 +92,10 @@ process.stdout.write(JSON.stringify({
   shortlistSavedAt: normalizeShortlistRecord({
     domain: 'example.invalid', scanDepth: 'deep', availability: 'registered', savedAt: candidateTimestamp,
   })?.savedAt,
-  relationshipMergeComplete: mergeRelationshipObservations(
+  relationshipMergeRetainedAt: mergeRelationshipObservations(
     [relationship(false, explicitBaseline)],
     { schema: 'whoisleuth.relationship-observations', version: 1, observations: [relationship(true, candidateTimestamp)] },
-  ).observations[0]?.complete,
+  ).observations[0]?.retainedAt,
   investigationOrder: normalizeInvestigationTemplateStore({
     schema: 'whoisleuth.investigation-templates', version: 2,
     templates: [template('explicit', explicitBaseline), template('candidate', candidateTimestamp)],
@@ -135,7 +135,7 @@ test('current browser-local timestamp decisions are timezone-independent', () =>
     campaignMergeWinner: 'Local',
     caseMergeStatus: 'escalated',
     shortlistSavedAt: '1970-01-01T00:00:00.000Z',
-    relationshipMergeComplete: false,
+    relationshipMergeRetainedAt: '2026-01-15T05:00:00.000Z',
     investigationOrder: ['explicit'],
     websiteOrder: ['explicit'],
     bulkReviewMergeWinner: 'Local',
@@ -151,7 +151,7 @@ test('current browser-local timestamp decisions are timezone-independent', () =>
     campaignMergeWinner: 'Imported',
     caseMergeStatus: 'escalated',
     shortlistSavedAt: '2026-01-15T11:00:00.000Z',
-    relationshipMergeComplete: true,
+    relationshipMergeRetainedAt: '2026-01-15T11:00:00.000Z',
     investigationOrder: ['candidate', 'explicit'],
     websiteOrder: ['candidate', 'explicit'],
     bulkReviewMergeWinner: 'Imported',

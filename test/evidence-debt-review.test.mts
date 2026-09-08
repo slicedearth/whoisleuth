@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import { describe, test } from 'node:test';
 import {
   buildEvidenceDebtReview,
@@ -28,6 +29,7 @@ function result(domain: string, sourceCoverage: BulkSessionSourceCoverage[]): Bu
     trusted: null,
     error: '',
     scanDepth: 'deep',
+    observedAt: null,
     createdDate: null,
     expiryDate: null,
     privacyProtected: null,
@@ -55,17 +57,7 @@ function result(domain: string, sourceCoverage: BulkSessionSourceCoverage[]): Bu
     dns: null,
     dnssec: null,
     comparisonEvidence: null,
-    relationship: {
-      version: 2,
-      nameservers: [],
-      ipAddresses: [],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({}),
     sourceCoverage,
     profileContext: {
       sourceState: 'ready',

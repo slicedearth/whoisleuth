@@ -51,6 +51,14 @@ without inventing decisions. The Brand Profile contract reads exact versions 6
 and 7 and writes version 8. Other historical formats and future versions are
 unsupported.
 
+Saved Bulk schema 5 reads public schema 4; retained relationship schema 2 reads
+public schema 1. Current records preserve each contributing source's identity,
+state, observation time and completeness. Unknown historical provenance stays
+unknown, and a partial source can still support an exact positive pivot. The
+archive versions these sections independently; its outer format is unchanged.
+An undated pivot's retention event is labelled as an analyst action, never as a
+newly dated source observation.
+
 ## IndexedDB behaviour
 
 The browser adapter provides:
@@ -133,6 +141,9 @@ byte limits, while retaining independent nesting and per-container limits.
 The writer checks the same admission policy before committing; adding an
 ordinary field does not require another hand-maintained object-count allowance.
 Bulk sessions can retain up to 2,000 rows when the complete store fits 4 MiB.
+Schema 5 stores identical row Profile context once on the session; mixed contexts
+remain per-row. The collection reader restores complete rows before application
+use. Schema 4 still requires its original explicit row context.
 
 Histories remain in the existing atomic records. The current design adds no
 second database, synchronisation service, hosted custody or background network

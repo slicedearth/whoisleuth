@@ -171,7 +171,7 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(decrypted.version, 5);
   });
 
-  test('keeps current writer shapes byte-for-byte aligned with frozen outputs', async () => {
+  test('keeps fixed writer shapes aligned without coupling independently versioned archive sections', async () => {
     const frozenExport = await fixture('case-export-v15');
     const cases = caseModel.mergeCases([], frozenExport).cases;
     const currentExport = caseModel.buildCaseExport(cases, NOW);
@@ -188,10 +188,24 @@ describe('canonical Case portability lifecycle', () => {
       casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW),
       await fixture(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID),
     );
-    assert.deepEqual(
-      await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: (await fixture<Record<string, unknown>>('workspace-archive-v8-empty-current')).generatedAt }),
-      await fixture('workspace-archive-v8-empty-current'),
-    );
+    const frozenArchive = await fixture<workspace.WorkspaceArchiveDocument>('workspace-archive-v8-empty-current');
+    const archive = await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: frozenArchive.generatedAt });
+    const { manifest: frozenManifest, sections: frozenSections, ...frozenEnvelope } = frozenArchive;
+    const { manifest, sections, ...envelope } = archive;
+    assert.deepEqual(envelope, frozenEnvelope);
+    assert.deepEqual(Object.keys(sections), Object.keys(frozenSections));
+    assert.deepEqual(Object.keys(manifest), Object.keys(frozenManifest));
+    assert.equal(manifest.sectionCount, frozenManifest.sectionCount);
+    assert.equal(manifest.totalRecords, frozenManifest.totalRecords);
+    // Each section has its own immutable version fixtures. Updating one must
+    // not rewrite a historical archive or advance the unchanged outer format.
+    assert.deepEqual(manifest.sections.map(({ id, schema, recordCount }) => ({ id, schema, recordCount })),
+      frozenManifest.sections.map(({ id, schema, recordCount }) => ({ id, schema, recordCount })));
+    for (const candidate of [frozenArchive, archive]) {
+      const read = await workspace.readWorkspaceArchive(candidate);
+      assert.ok(read.sections.length > 0);
+      assert.ok(read.sections.every((section) => section.status === 'ready'));
+    }
   });
 
   test('rejects retired, future, and malformed roots without reinterpreting or mutating them', async () => {

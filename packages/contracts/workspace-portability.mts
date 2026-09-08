@@ -112,9 +112,9 @@ export const MAX_RULE_RISK_DELTA = 25;
 export const MAX_CUSTOM_RISK_TOTAL = 50;
 
 export const RELATIONSHIP_OBSERVATION_SCHEMA = 'whoisleuth.relationship-observations';
-export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 1;
-export const RELATIONSHIP_OBSERVATION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([RELATIONSHIP_OBSERVATION_SCHEMA_VERSION]);
-export const RELATIONSHIP_OBSERVATION_EXPORT_SUPPORTED_VERSIONS = Object.freeze([RELATIONSHIP_OBSERVATION_SCHEMA_VERSION]);
+export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 2;
+export const RELATIONSHIP_OBSERVATION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION]);
+export const RELATIONSHIP_OBSERVATION_EXPORT_SUPPORTED_VERSIONS = RELATIONSHIP_OBSERVATION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_RELATIONSHIP_OBSERVATIONS = 300;
 export const MAX_RELATIONSHIP_OBSERVATION_INPUTS = 1_200;
 export const MAX_RELATIONSHIP_OBSERVATION_DOMAINS = 50;
@@ -132,8 +132,8 @@ export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
 export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 4;
-export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_SCHEMA_VERSION = 5;
+export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, BULK_SESSION_SCHEMA_VERSION]);
 export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = BULK_SESSION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
@@ -301,9 +301,9 @@ export const DETECTION_RULE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
 export const RELATIONSHIP_OBSERVATION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.relationship-observations', kind: 'browser_store', schema: null,
   currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: RELATIONSHIP_OBSERVATION_BROWSER_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Only explicit analyst selections from bounded Bulk relationship evidence are retained; identities are re-derived from normalised values and members.',
+  note: 'Public version 1 observations migrate with unknown contributing-source provenance. Version 2 retains bounded per-domain source states and times; identities remain derived from normalised values and members.',
 });
 export const WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.website-snapshots', kind: 'browser_store', schema: null,
@@ -315,9 +315,9 @@ export const WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY = defineSchemaCompatibility(
 export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-sessions', kind: 'browser_store', schema: null, currentVersion: BULK_SESSION_SCHEMA_VERSION,
   supportedVersions: BULK_SESSION_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public schema 4 writer is the exact browser baseline with bounded Brand Profile provenance; unsupported local checkpoints are preserved without rewrite.',
+  note: 'Public schema 4 sessions migrate with unknown row times and contributing-source provenance. Schema 5 retains those bounded fields without retaining raw lookup payloads; future versions are preserved without rewrite.',
 });
 export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.investigation-templates', kind: 'browser_store', schema: null,
@@ -372,9 +372,9 @@ export const DETECTION_RULE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const RELATIONSHIP_OBSERVATION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.relationship-observations', kind: 'export', schema: RELATIONSHIP_OBSERVATION_SCHEMA,
   currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: RELATIONSHIP_OBSERVATION_EXPORT_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Workspace-archive section for bounded analyst-selected derived pivots; raw scan and lookup responses are excluded.',
+  note: 'Version 1 archive sections migrate to version 2 without inventing source provenance. Bounded contributing-source states and times survive current export; raw lookup responses remain excluded.',
 });
 export const WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.website-snapshots', kind: 'export', schema: WEBSITE_SNAPSHOT_SCHEMA,
@@ -386,9 +386,9 @@ export const WEBSITE_SNAPSHOT_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-sessions', kind: 'export', schema: BULK_SESSION_SCHEMA, currentVersion: BULK_SESSION_SCHEMA_VERSION,
   supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public schema 4 portable sessions retain explicit source states, comparison limitations, and bounded profile-context provenance.',
+  note: 'Public schema 4 sessions migrate directly to schema 5 with unknown historical row times and source provenance. Current exports retain source-qualified relationship evidence and bounded profile context.',
 });
 export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA,
@@ -769,6 +769,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.browser.bulk-session-store",
     "version": 4,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.browser.bulk.v5",
+    "scope": "repository",
+    "shapeId": "workspace.browser.bulk.shape"
+  },
+  {
+    "id": "workspace.browser.bulk.v5",
+    "path": "test/fixtures/workspace-lifecycle/browser-bulk-v5.json",
+    "bytes": 77,
+    "sha256": "fca31e3190ff54669c06e14e9785f6d2e504ccbf837eb57caa881b5a8874ebfe",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.browser.bulk-session-store",
+    "version": 5,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
@@ -825,6 +839,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.browser.relationship-observation-store",
     "version": 1,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.browser.relationship.v2",
+    "scope": "repository",
+    "shapeId": "workspace.browser.relationship.shape"
+  },
+  {
+    "id": "workspace.browser.relationship.v2",
+    "path": "test/fixtures/workspace-lifecycle/browser-relationship-v2.json",
+    "bytes": 41,
+    "sha256": "951dbf0861636b4cf1389e954eb55e81e19dd94a6bf83236ed127f288788f564",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.browser.relationship-observation-store",
+    "version": 2,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
@@ -965,6 +993,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.bulk-sessions",
     "version": 4,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.portable.bulk.v5",
+    "scope": "repository",
+    "shapeId": "workspace.portable.bulk.shape"
+  },
+  {
+    "id": "workspace.portable.bulk.v5",
+    "path": "test/fixtures/workspace-lifecycle/portable-bulk-v5.json",
+    "bytes": 338,
+    "sha256": "c58b685ef707b713a08c5ae5986128d2ed1162646f84d926316de194b2b67232",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.bulk-sessions",
+    "version": 5,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,
@@ -1007,6 +1049,20 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly SchemaLifecycleFixtureV4[] = 
     "contentDigestSha256": null,
     "schema": "whoisleuth.relationship-observations",
     "version": 1,
+    "role": "historical",
+    "expectation": "normalises_to_current_output",
+    "expectedOutputFixtureId": "workspace.portable.relationship.v2",
+    "scope": "repository",
+    "shapeId": "workspace.portable.relationship.shape"
+  },
+  {
+    "id": "workspace.portable.relationship.v2",
+    "path": "test/fixtures/workspace-lifecycle/portable-relationship-v2.json",
+    "bytes": 363,
+    "sha256": "28322f41c059a060e77673e4aad0d9d5b7b1f6021eefcf5bfed9426588345fdf",
+    "contentDigestSha256": null,
+    "schema": "whoisleuth.relationship-observations",
+    "version": 2,
     "role": "current",
     "expectation": "accepted_exact",
     "expectedOutputFixtureId": null,

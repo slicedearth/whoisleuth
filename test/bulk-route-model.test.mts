@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import test from 'node:test';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
 import {
@@ -60,17 +61,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
     idn: null,
     dns: null,
     dnssec: null,
-    relationship: {
-      version: 2,
-      nameservers: [],
-      ipAddresses: [],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({}),
     sourceCoverage: [{ source: 'lookup', state: 'complete' }],
   };
   return {

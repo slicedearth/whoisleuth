@@ -1,5 +1,7 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
+import { RELATIONSHIP_TYPES, qualifyRelationshipSources, type RelationshipContribution } from '../comparison/relationship-provenance.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
@@ -23,14 +25,7 @@ export {
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
 } from '../contracts/workspace-portability.mts';
 
-export const RELATIONSHIP_OBSERVATION_TYPES = Object.freeze([
-  'nameserver_set',
-  'ip_address',
-  'certificate',
-  'tracking_identifier',
-  'favicon',
-  'official_asset',
-] as const);
+export const RELATIONSHIP_OBSERVATION_TYPES = RELATIONSHIP_TYPES;
 
 export type RelationshipObservationType = typeof RELATIONSHIP_OBSERVATION_TYPES[number];
 
@@ -46,7 +41,8 @@ export interface RelationshipObservation {
   classification: 'derived';
   source: 'bulk_relationship_analysis';
   sourceVersion: number;
-  observedAt: string;
+  observedAt: string | null;
+  sourceEvidence: RelationshipContribution[];
   retainedAt: string;
   complete: boolean;
   truncated: boolean;
@@ -74,6 +70,7 @@ export interface RelationshipObservationInput {
   value?: unknown;
   domains?: unknown;
   description?: unknown;
+  sourceEvidence?: unknown;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -285,7 +282,7 @@ function observationList(raw: unknown): unknown[] {
   return Array.isArray(value?.observations) ? value.observations : [];
 }
 
-export function normalizeRelationshipObservation(raw: unknown): RelationshipObservation | null {
+export function normalizeRelationshipObservation(raw: unknown, sourceStoreVersion: number = RELATIONSHIP_OBSERVATION_SCHEMA_VERSION): RelationshipObservation | null {
   const value = record(raw);
   if (!value || typeof value.type !== 'string' || !TYPES.has(value.type)) return null;
   const type = value.type as RelationshipObservationType;
@@ -300,7 +297,12 @@ export function normalizeRelationshipObservation(raw: unknown): RelationshipObse
   const id = observationId(canonical);
   const observedAt = timestamp(value.observedAt);
   const retainedAt = timestamp(value.retainedAt);
-  if (!observedAt || !retainedAt) return null;
+  if (!retainedAt || (value.observedAt !== null && !observedAt)) return null;
+  const sourceVersion = positiveInteger(value.sourceVersion) || 1;
+  if (value.sourceVersion !== undefined && !positiveInteger(value.sourceVersion)) throw new TypeError('This retained relationship uses an unsupported source-evidence version; no evidence was interpreted.');
+  if (sourceVersion > RELATIONSHIP_EVIDENCE_VERSION) throw new TypeError('This retained relationship uses a newer source-evidence version; no evidence was interpreted.');
+  if (sourceStoreVersion === 1 && sourceVersion > 2) throw new TypeError('Relationship schema 1 cannot contain newer source evidence; no evidence was interpreted.');
+  const qualified = qualifyRelationshipSources(sourceVersion === RELATIONSHIP_EVIDENCE_VERSION ? value.sourceEvidence : [], domains, { truncated: value.truncated === true, type });
   return {
     id,
     type,
@@ -312,11 +314,14 @@ export function normalizeRelationshipObservation(raw: unknown): RelationshipObse
     description: metadata.description,
     classification: 'derived',
     source: 'bulk_relationship_analysis',
-    sourceVersion: positiveInteger(value.sourceVersion) || 1,
-    observedAt,
+    sourceVersion,
+    // Legacy scan timestamps remain available, but cannot qualify missing
+    // contributing-source timestamps or turn the old complete flag into proof.
+    observedAt: qualified.observedAt ?? (observedAt || null),
+    sourceEvidence: qualified.sourceEvidence,
     retainedAt,
-    complete: value.complete === true,
-    truncated: value.truncated === true
+    complete: value.complete === true && qualified.complete,
+    truncated: qualified.truncated
       || (Array.isArray(value.domains) && value.domains.length > MAX_RELATIONSHIP_OBSERVATION_DOMAINS),
     limitations: observationLimitations(value.limitations),
   };
@@ -325,9 +330,13 @@ export function normalizeRelationshipObservation(raw: unknown): RelationshipObse
 export function normalizeRelationshipObservationStore(raw: unknown): RelationshipObservationStore {
   assertWorkspaceInputGraph(raw, 'Relationship-observation store');
   assertWorkspaceDeclaredVersion(raw, 'Relationship-observation store');
+  const sourceStoreVersion = relationshipObservationStoreVersion(raw) ?? RELATIONSHIP_OBSERVATION_SCHEMA_VERSION;
+  if (sourceStoreVersion > RELATIONSHIP_OBSERVATION_SCHEMA_VERSION) {
+    throw new TypeError(`This relationship-observation store uses newer schema ${sourceStoreVersion}; no evidence was interpreted.`);
+  }
   const byId = new Map<string, RelationshipObservation>();
   for (const candidate of observationList(raw).slice(0, MAX_RELATIONSHIP_OBSERVATION_INPUTS)) {
-    const observation = normalizeRelationshipObservation(candidate);
+    const observation = normalizeRelationshipObservation(candidate, sourceStoreVersion);
     if (!observation) continue;
     const existing = byId.get(observation.id);
     if (!existing || observation.retainedAt > existing.retainedAt) byId.set(observation.id, observation);
@@ -362,11 +371,15 @@ export function createRelationshipObservation(
     throw new Error('That relationship does not contain a supported bounded value and at least one valid domain.');
   }
   const now = new Date().toISOString();
-  const observedAt = Object.hasOwn(options, 'observedAt') ? timestamp(options.observedAt) : now;
+  const sourceVersion = Object.hasOwn(options, 'sourceVersion') ? positiveInteger(options.sourceVersion) : RELATIONSHIP_EVIDENCE_VERSION;
+  if (!sourceVersion || sourceVersion > RELATIONSHIP_EVIDENCE_VERSION) throw new TypeError('This relationship needs a supported source-evidence version.');
+  const qualified = qualifyRelationshipSources(sourceVersion === RELATIONSHIP_EVIDENCE_VERSION ? raw.sourceEvidence : [], domains, { truncated: options.truncated === true, type });
+  // Older callers can supply their original scan timestamp. It does not
+  // qualify the missing source metadata, and an explicit current projection
+  // never substitutes that timestamp for unknown contributing-source times.
+  const observedAt = qualified.observedAt
+    ?? (!Object.hasOwn(raw, 'sourceEvidence') ? timestamp(options.observedAt) || null : null);
   const retainedAt = timestamp(options.retainedAt) || now;
-  if (!observedAt) {
-    throw new Error('A relationship observation needs the contributing scan observation time; an unknown time is not replaced with the retention time.');
-  }
   const canonical = canonicalIdentity(type, normalizedValue, domains);
   const metadata = TYPE_METADATA[type];
   return {
@@ -380,11 +393,12 @@ export function createRelationshipObservation(
     description: metadata.description,
     classification: 'derived',
     source: 'bulk_relationship_analysis',
-    sourceVersion: positiveInteger(options.sourceVersion) || 1,
+    sourceVersion,
     observedAt,
+    sourceEvidence: qualified.sourceEvidence,
     retainedAt,
-    complete: options.complete === true,
-    truncated: options.truncated === true
+    complete: options.complete !== false && qualified.complete,
+    truncated: qualified.truncated
       || (Array.isArray(raw.domains) && raw.domains.length > MAX_RELATIONSHIP_OBSERVATION_DOMAINS),
     limitations: observationLimitations(options.limitations),
   };
@@ -465,7 +479,7 @@ export function mergeRelationshipObservations(
   let updated = 0;
   let skipped = Math.max(0, importedInput.length - MAX_RELATIONSHIP_OBSERVATION_INPUTS);
   for (const candidate of importedInput.slice(0, MAX_RELATIONSHIP_OBSERVATION_INPUTS)) {
-    const observation = normalizeRelationshipObservation(candidate);
+    const observation = normalizeRelationshipObservation(candidate, importedVersion ?? RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
     if (!observation) { skipped += 1; continue; }
     const existing = byId.get(observation.id);
     if (existing && existing.retainedAt >= observation.retainedAt) {

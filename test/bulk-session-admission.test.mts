@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { performance } from 'node:perf_hooks';
-import { richBulkSessionStore } from './bulk-session-fixture.mts';
+import { richBulkSessionStore, richSourceQualifiedBulkSessionStore } from './bulk-session-fixture.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from '../lib/bounded-json.mts';
-import { plaintextJsonCodec } from '../frontend/src/lib/browser-local-data.ts';
+import { localDataStorageRecords, plaintextJsonCodec } from '../frontend/src/lib/browser-local-data.ts';
 import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import {
   MAX_BULK_SESSION_STORE_BYTES,
@@ -30,7 +30,7 @@ test('rich Bulk records share write, codec and collection-read admission through
     const serialized = serializeBulkSessionStore(store);
     assert.ok(Buffer.byteLength(serialized) < MAX_BULK_SESSION_STORE_BYTES);
     assert.deepEqual(enforceBulkSessionStoreBudget(store), { store, pruned: 0 });
-    const records = await Promise.all(BULK_SESSIONS_COLLECTION.split(store.sessions).map(async ({ id, value }) => {
+    const records = await Promise.all(localDataStorageRecords(BULK_SESSIONS_COLLECTION, store.sessions).map(async ({ id, value }) => {
       const encoded = await plaintextJsonCodec.encode({
         collection: BULK_SESSIONS_COLLECTION.id, id, value, maximumBytes: BULK_SESSIONS_COLLECTION.maximumBytes,
       });
@@ -52,9 +52,9 @@ test('rich Bulk records share write, codec and collection-read admission through
   }
 });
 
-test('rich Bulk workspace backups survive plain, encrypted and both offline archive readers', async (t) => {
+test('source-qualified rich Bulk backups retain all 2,000 rows through quarantine, codecs and both offline archive readers', async (t) => {
   const start = performance.now();
-  const store = normalizeBulkSessionStore(richBulkSessionStore());
+  const store = richSourceQualifiedBulkSessionStore();
   const archive = await buildWorkspaceArchive({ bulkSessions: store.sessions }, { generatedAt: '2026-08-01T00:00:00.000Z' });
   const raw = JSON.stringify(archive);
   assert.ok(Buffer.byteLength(raw) < MAX_WORKSPACE_ARCHIVE_BYTES);
@@ -62,7 +62,23 @@ test('rich Bulk workspace backups survive plain, encrypted and both offline arch
   const read = await readWorkspaceArchive(parsed);
   const bulk = read.sections.find((section) => section.id === 'bulkSessions');
   assert.ok(bulk);
-  assert.equal(mergeBulkSessions([], bulk.data).sessions[0]?.results.length, 2_000);
+  const imported = mergeBulkSessions([], bulk.data);
+  assert.equal(imported.sessions[0]?.results.length, 2_000);
+  const importedBytes = Buffer.byteLength(serializeBulkSessionStore(imported.sessions));
+  assert.ok(importedBytes < MAX_BULK_SESSION_STORE_BYTES);
+  const records = await Promise.all(localDataStorageRecords(BULK_SESSIONS_COLLECTION, imported.sessions).map(async ({ id, value }) => {
+    const encoded = await plaintextJsonCodec.encode({ collection: 'bulk_sessions', id, value, maximumBytes: MAX_BULK_SESSION_STORE_BYTES });
+    return plaintextJsonCodec.decode({ collection: 'bulk_sessions', ...encoded, maximumBytes: MAX_BULK_SESSION_STORE_BYTES });
+  }));
+  const restored = BULK_SESSIONS_COLLECTION.normalize(BULK_SESSIONS_COLLECTION.join(records, store.version));
+  assert.deepEqual(restored, imported.sessions);
+  for (const row of restored[0]!.results) {
+    assert.equal(row.profileContext.sourceState, 'unavailable');
+    assert.equal(row.risk, null);
+    assert.equal(row.observedAt, '2026-08-01T01:00:00.000Z');
+    assert.equal(row.relationship.sourceEvidence.certificate?.[0]?.status, 'partial');
+    assert.equal(row.relationship.sourceEvidence.certificate?.[0]?.complete, false);
+  }
   const passphrase = 'Example local archive passphrase';
   const encrypted = await encryptWorkspaceArchive(archive, passphrase);
   const decrypted = await decryptWorkspaceArchive(encrypted, passphrase);
@@ -72,18 +88,18 @@ test('rich Bulk workspace backups survive plain, encrypted and both offline arch
   assert.equal(verified.checks.contentIntegrity, 'verified');
   const inspected = await inspectWorkspaceArchive(raw);
   assert.equal(inspected.sections.find((section) => section.id === 'bulkSessions')?.recordCount, 1);
-  t.diagnostic(JSON.stringify({ rows: 2_000, archiveBytes: Buffer.byteLength(raw), durationMs: performance.now() - start }));
+  t.diagnostic(JSON.stringify({ rows: 2_000, importedBytes, archiveBytes: Buffer.byteLength(raw), durationMs: performance.now() - start }));
 });
 
 test('the unchanged Bulk byte boundary accepts exactly 4 MiB and rejects the next byte without pruning the only session', async () => {
   const store = normalizeBulkSessionStore(richBulkSessionStore());
   const session = store.sessions[0]!;
-  let remaining = MAX_BULK_SESSION_STORE_BYTES - Buffer.byteLength(JSON.stringify(store));
+  let remaining = MAX_BULK_SESSION_STORE_BYTES - Buffer.byteLength(serializeBulkSessionStore(store));
   // All additions fit the existing per-field bounds. No production limit or
   // normaliser is replaced to construct the exact serialized boundary.
   for (const field of ['error', 'registrar', 'activity', 'pageTitle'] as const) {
     for (const row of session.results) {
-      const added = Math.min(200, remaining);
+      const added = Math.min(250 - (row[field]?.length ?? 0), remaining);
       row[field] = `${row[field] ?? ''}${'x'.repeat(added)}`;
       remaining -= added;
     }
@@ -91,9 +107,10 @@ test('the unchanged Bulk byte boundary accepts exactly 4 MiB and rejects the nex
   assert.equal(remaining, 0);
   assert.equal(Buffer.byteLength(serializeBulkSessionStore(store)), MAX_BULK_SESSION_STORE_BYTES);
   assert.equal(enforceBulkSessionStoreBudget(store).pruned, 0);
-  const encoded = await plaintextJsonCodec.encode({ collection: 'bulk_sessions', id: session.id, value: session, maximumBytes: MAX_BULK_SESSION_STORE_BYTES });
+  const wireRecord = localDataStorageRecords(BULK_SESSIONS_COLLECTION, [session])[0]!;
+  const encoded = await plaintextJsonCodec.encode({ collection: 'bulk_sessions', ...wireRecord, maximumBytes: MAX_BULK_SESSION_STORE_BYTES });
   const decoded = await plaintextJsonCodec.decode({ collection: 'bulk_sessions', ...encoded, maximumBytes: MAX_BULK_SESSION_STORE_BYTES });
-  assert.deepEqual(decoded.value, session);
+  assert.deepEqual(BULK_SESSIONS_COLLECTION.normalize(BULK_SESSIONS_COLLECTION.join([decoded], store.version)), [session]);
   session.results[0]!.error += 'x';
   const before = JSON.stringify(store);
   assert.equal(Buffer.byteLength(serializeBulkSessionStore(store)), MAX_BULK_SESSION_STORE_BYTES + 1);
@@ -112,4 +129,18 @@ test('byte-budgeted graph admission keeps hostile and aggregate-work limits', ()
   for (const [value, message] of [[accessor, /accessor/], [Array(2), /sparse/], [new Date(), /prototype/]] as const) {
     assert.throws(() => assertWorkspaceInputGraph(value, 'Fixture', options), message);
   }
+});
+
+test('whole-session eviction uses exact compact bytes and preserves the newest complete session', () => {
+  const oldest = richBulkSessionStore().sessions[0]!;
+  const newest = { ...structuredClone(oldest), id: 'newest', updatedAt: '2026-08-02T00:00:00.000Z' };
+  const input = [oldest, newest];
+  const before = structuredClone(input);
+  assert.ok(Buffer.byteLength(serializeBulkSessionStore(input)) > MAX_BULK_SESSION_STORE_BYTES);
+  const result = enforceBulkSessionStoreBudget(input);
+  assert.equal(result.pruned, 1);
+  assert.deepEqual(result.store.sessions.map(({ id }) => id), ['newest']);
+  assert.equal(result.store.sessions[0]?.results.length, 2_000);
+  assert.ok(Buffer.byteLength(serializeBulkSessionStore(result.store)) <= MAX_BULK_SESSION_STORE_BYTES);
+  assert.deepEqual(input, before);
 });

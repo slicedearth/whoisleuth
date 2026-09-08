@@ -565,7 +565,7 @@ if (relationshipObservationEnvelope?.state === 'ready') {
     const projected = addObservation({
       id: stableId(
         'observation',
-        `retained-relationship|${envelopeObservation.sourceRecordId}|${envelopeObservation.observedAt}`,
+        `retained-relationship|${envelopeObservation.sourceRecordId}|${envelopeObservation.id}`,
       ),
       kind: 'retained_relationship_observation',
       entityIds: mappedEntityIds,

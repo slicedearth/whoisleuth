@@ -534,10 +534,11 @@ describe('portable workspace archive', () => {
     assert.deepEqual(imported?.riskFactors, []);
   });
 
-  test('rejects every malformed v4 Bulk result set through an ordinary workspace preview', async () => {
-    const attacks: Array<{ label: string; mutate: (session: Record<string, unknown>) => void }> = [
+  test('preserves public Bulk row-context requirements and current compact defaults through workspace preview', async () => {
+    const attacks: Array<{ label: string; currentDefault?: boolean; mutate: (session: Record<string, unknown>) => void }> = [
       {
         label: 'missing row context',
+        currentDefault: true,
         mutate: (session) => Reflect.deleteProperty(requiredValue(session.results as Array<Record<string, unknown>>)[0]!, 'profileContext'),
       },
       {
@@ -573,22 +574,26 @@ describe('portable workspace archive', () => {
         mutate: (session) => { session.state = 'cancelled'; session.completedAt = null; },
       },
     ];
-    for (const attack of attacks) {
+    for (const version of [4, 5]) for (const attack of attacks) {
       const source = input();
       source.bulkSessions = [bulkSessionWithoutActiveProfileRisk()];
       const archive = structuredClone(await buildWorkspaceArchive(source, { generatedAt: NOW }));
       const section = recordValue(archive.sections.bulkSessions);
       const storedSession = requiredValue((section.sessions as Array<Record<string, unknown>>)[0]);
+      for (const row of storedSession.results as Array<Record<string, unknown>>) {
+        row.profileContext = structuredClone(storedSession.profileContext);
+        if (version === 4) row.relationship = { ...recordValue(row.relationship), version: 2 };
+      }
       attack.mutate(storedSession);
-      await refreshSectionIntegrity(archive, 'bulkSessions');
+      await retargetSectionVersion(archive, 'bulkSessions', version);
 
       const preview = await previewWorkspaceArchive(archive, emptyInput(), { selectedSectionIds: ['bulkSessions'] });
       const bulk = preview.sections.find((item) => item.id === 'bulkSessions');
       assert.equal(bulk?.status, 'ready', attack.label);
       assert.deepEqual(
         { added: bulk?.added, updated: bulk?.updated, skipped: bulk?.skipped },
-        { added: 0, updated: 0, skipped: 1 },
-        attack.label,
+        { added: version === 5 && attack.currentDefault ? 1 : 0, updated: 0, skipped: version === 5 && attack.currentDefault ? 0 : 1 },
+        `${version}: ${attack.label}`,
       );
     }
 

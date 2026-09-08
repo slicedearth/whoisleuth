@@ -51,6 +51,7 @@ import {
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
 import {
   BULK_SESSION_SCHEMA,
+  bulkSessionStorageValue,
   bulkSessionStoreVersion,
   normalizeBulkSessionStore,
   serializeBulkSessionStore,
@@ -310,6 +311,7 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   version: bulkSessionStoreVersion,
   serialize: serializeBulkSessionStore,
   split: (sessions) => recordsFromArray(sessions, (record) => record.id),
+  storageRecords: (sessions) => recordsFromArray(sessions.map(bulkSessionStorageValue), (record) => record.id),
   join: (records, schemaVersion) => ({
     schema: BULK_SESSION_SCHEMA,
     version: schemaVersion,

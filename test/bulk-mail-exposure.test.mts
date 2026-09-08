@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 
 import {
   buildBulkMailExposureExport,
@@ -27,6 +28,7 @@ function result(
     trusted: null,
     error: '',
     scanDepth: 'deep',
+    observedAt: null,
     createdDate: null,
     expiryDate: null,
     nameservers: ['ns1.example.test'],
@@ -48,17 +50,7 @@ function result(
     riskFactors: [],
     dns: null,
     dnssec: null,
-    relationship: {
-      version: 2,
-      nameservers: [],
-      ipAddresses: [],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({}),
     sourceCoverage: [{ source: 'dns', state: 'complete' }],
     profileContext: {
       sourceState: 'ready',

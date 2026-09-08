@@ -344,41 +344,67 @@ export function adaptRelationshipObservationsToEnvelope(
       .map((domain) => addEntity('domain', domain, domain, { domain }))
       .filter((entity): entity is ObservationEnvelopeEntity => entity !== null);
     if (!target || !domains.length) continue;
-    const observedAt = timestamp(retained.observedAt);
-    if (!observedAt) continue;
-    const observationId = observationEnvelopeId('observation', `retained-relationship|${retained.id}|${observedAt}`);
-    const entityIds = [target.id, ...domains.map((entity) => entity.id)].slice(0, MAX_ENVELOPE_REFERENCES);
-    if (entityIds.length < domains.length + 1) truncated = true;
     const limitations = boundedLimitations([
       ...retained.limitations,
       'This relationship was retained by an explicit analyst action after Bulk derived it from bounded observations.',
     ]);
-    const observation: ObservationEnvelopeObservation = {
-      version: 1,
-      id: observationId,
-      kind: 'retained_relationship_observation',
-      entityIds,
-      sourceRecordId: retained.id,
-      source: retained.source,
-      observedAt,
-      collectionDepth: null,
-      status: retained.complete && !retained.truncated ? 'success' : 'partial',
-      complete: retained.complete,
-      truncated: retained.truncated,
-      derivation: 'derived',
-      sourceSchema: {
-        ...SOURCE_SCHEMA,
-        version: declaredVersion ?? RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
-      },
-      upstreamSchemas: [{
-        collection: 'bulk_relationship_evidence',
-        schema: RELATIONSHIP_EVIDENCE_SCHEMA,
-        version: retained.sourceVersion,
-      }],
-      limitations,
-    };
-    observations.push(observation);
+    const sources = new Map<string, { domains: Set<string>; observation: ObservationEnvelopeObservation }>();
+    for (const evidence of retained.sourceEvidence) {
+      const domain = domains.find((entity) => entity.canonical === evidence.domain);
+      if (!domain) continue;
+      const nativeTime = timestamp(evidence.observedAt);
+      const legacyTime = evidence.source === 'unknown' ? timestamp(retained.observedAt) : '';
+      const observedAt = nativeTime || legacyTime || timestamp(retained.retainedAt);
+      if (!observedAt) continue;
+      // An undated source is not given a fabricated date. The separate,
+      // explicitly attributed selection event keeps the analyst's retained
+      // pivot available to the graph without claiming a dated source result.
+      const source = nativeTime ? evidence.source : legacyTime ? retained.source : 'analyst_retention';
+      const sourceLimitations = boundedLimitations([...limitations,
+        `Contributing source state: ${evidence.status.replaceAll('_', ' ')}.`,
+        ...(!nativeTime ? [legacyTime
+          ? 'The time is the original scan projection time; contributing-source times were not recorded.'
+          : `The time describes analyst retention only. The ${evidence.source.replaceAll('_', ' ')} source observation time was not recorded.`] : []),
+      ]);
+      const key = JSON.stringify([source, observedAt, evidence.source, evidence.status, evidence.complete, evidence.truncated]);
+      const existing = sources.get(key);
+      if (existing) { existing.domains.add(domain.id); continue; }
+      if (observations.length + sources.size >= MAX_ENVELOPE_OBSERVATIONS) { truncated = true; break; }
+      const observationId = observationEnvelopeId('observation', `retained-relationship|${retained.id}|${key}`);
+      const observation: ObservationEnvelopeObservation = {
+        version: 1,
+        id: observationId,
+        kind: 'retained_relationship_observation',
+        entityIds: [],
+        sourceRecordId: retained.id,
+        source,
+        observedAt,
+        collectionDepth: null,
+        status: nativeTime && evidence.complete && !retained.truncated ? 'success' : 'partial',
+        complete: Boolean(nativeTime) && evidence.complete && !retained.truncated,
+        truncated: retained.truncated || evidence.truncated,
+        derivation: nativeTime || legacyTime ? 'derived' : 'analyst',
+        sourceSchema: {
+          ...SOURCE_SCHEMA,
+          version: declaredVersion ?? RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+        },
+        upstreamSchemas: [{
+          collection: 'bulk_relationship_evidence',
+          schema: RELATIONSHIP_EVIDENCE_SCHEMA,
+          version: retained.sourceVersion,
+        }],
+        limitations: sourceLimitations,
+      };
+      sources.set(key, { domains: new Set([domain.id]), observation });
+    }
+    for (const entry of sources.values()) {
+      entry.observation.entityIds = [target.id, ...entry.domains].slice(0, MAX_ENVELOPE_REFERENCES);
+      if (entry.observation.entityIds.length < entry.domains.size + 1) truncated = true;
+      observations.push(entry.observation);
+    }
     for (const domain of domains) {
+      const evidence = [...sources.values()].filter((entry) => entry.domains.has(domain.id)).map((entry) => entry.observation);
+      if (!evidence.length) continue;
       if (relationships.length >= MAX_ENVELOPE_RELATIONSHIPS) {
         truncated = true;
         break;
@@ -391,12 +417,12 @@ export function adaptRelationshipObservationsToEnvelope(
         to: target.id,
         method: text(retained.method, 200),
         derivation: 'derived',
-        sourceObservationIds: [observation.id],
-        firstObservedAt: observedAt,
-        lastObservedAt: observedAt,
+        sourceObservationIds: evidence.map((entry) => entry.id),
+        firstObservedAt: evidence.map((entry) => entry.observedAt).sort()[0]!,
+        lastObservedAt: evidence.map((entry) => entry.observedAt).sort().at(-1)!,
         complete: retained.complete,
         truncated: retained.truncated,
-        limitations,
+        limitations: boundedLimitations(evidence.flatMap((entry) => entry.limitations)),
       });
     }
   }

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
+import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
 
 // Saved Bulk sessions, provenance, resumption and cancellation coverage.
@@ -288,7 +289,7 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
   await page.getByRole('button', { name: 'Save current session' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved Unavailable profile review.' })).toBeVisible();
   const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 });
-  expect(stored.manifest.schemaVersion).toBe(4);
+  expect(stored.manifest.schemaVersion).toBe(BULK_SESSION_SCHEMA_VERSION);
   expect(stored.records[0]?.value.profileContext).toMatchObject({ sourceState: 'unavailable' });
   expect(stored.records[0]?.value.results[0]).toMatchObject({
     risk: null,
@@ -308,7 +309,7 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
   const exportPath = await (await exportPromise).path();
   expect(exportPath).not.toBeNull();
   const exported = JSON.parse(await readFile(exportPath!, 'utf8'));
-  expect(exported).toMatchObject({ schema: 'whoisleuth.bulk-sessions', version: 4 });
+  expect(exported).toMatchObject({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION });
   expect(exported.sessions[0].profileContext.sourceState).toBe('unavailable');
   expect(exported.sessions[0].results[0].risk).toBeNull();
   expect(exported.sessions[0].results[0].idnReferenceMatch).toBeNull();

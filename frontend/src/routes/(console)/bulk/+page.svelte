@@ -19,7 +19,7 @@
   import { parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
-  import type { RelationshipRetentionAdmission } from '$lib/analysis/relationship-admission-preview.ts';
+  import { relationshipAdmissionMatchesCurrent, type RelationshipRetentionAdmission } from '$lib/analysis/relationship-admission-preview.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { BULK_SCORE_CSV_HEADERS, bulkScoreCsvFields, ctCsvFields } from '$lib/analysis/bulk-export.ts';
   import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
@@ -214,7 +214,6 @@
   // be misattributed to that broader domain.
   const provenanceByDomain=$derived(new Map((handoff?.candidates||[]).map(candidate=>[candidate.domain.toLowerCase(),candidate])));
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
-  const relationshipSourceIdentities=$derived([...new Set(results.flatMap((row)=>row.sourceCoverage.map((source)=>source.source)))].sort().slice(0,20));
   const relationshipSourceContextId=$derived(`${scanGeneration}\u0000${currentBulkSessionId||'transient'}\u0000${scanStartedAt}`);
   const parsedInput=$derived(parseDomainInput(input));
   const scanTargets=$derived(canonicalBulkTargets(parsedInput.entries));
@@ -481,21 +480,12 @@
   function setSortKey(key:BulkSortKey){const next=normalizeBulkPresentationSortKey(key);if(sortKey!==next){sortKey=next;sortDirection=defaultBulkSortDirection(next);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
   function loadDomains(domains:string[]){input=domains.join('\n');status=`Loaded ${domains.length} related domains into the scan queue.`;document.querySelector('.queue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
-  function sameRelationshipAdmissionTexts(left:readonly string[],right:readonly string[]){return left.length===right.length&&left.every((value,index)=>value===right[index]);}
-  function relationshipAdmissionMatchesCurrent(admission:RelationshipRetentionAdmission){
-    return admission.sourceContextId===relationshipSourceContextId
-      && admission.observedAt===scanStartedAt
-      && admission.complete===!relationshipSummary.truncated
-      && admission.truncated===relationshipSummary.truncated
-      && sameRelationshipAdmissionTexts(admission.sourceIdentities,relationshipSourceIdentities)
-      && sameRelationshipAdmissionTexts(admission.limitations,relationshipSummary.limitations)
-      && relationshipSummary.groups.some((relationship)=>relationshipObservationId(relationship)===relationshipObservationId(admission.relationship));
-  }
+  function admissionMatchesCurrent(admission:RelationshipRetentionAdmission){return relationshipAdmissionMatchesCurrent(admission,relationshipSummary.groups,relationshipSourceContextId,relationshipSummary.limitations);}
   async function retainObservation(admission:RelationshipRetentionAdmission):Promise<LocalMutationOutcome>{
     relationshipRetentionStatus='';
-    if(!relationshipAdmissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed. Open a fresh retention preview before recording the relationship.';return'stale';}
+    if(!admissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed. Open a fresh retention preview before recording the relationship.';return'stale';}
     await ensureRelationshipContext();
-    if(!relationshipAdmissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed while retention was loading. Open a fresh preview before recording the relationship.';return'stale';}
+    if(!admissionMatchesCurrent(admission)){relationshipRetentionStatus='The current scan evidence changed while retention was loading. Open a fresh preview before recording the relationship.';return'stale';}
     if(relationshipsSourceState!=='ready'||!relationshipApi){relationshipRetentionStatus='Retained relationship observations are unavailable. Reload before recording a relationship.';return'rejected';}
     try{
       const retainedAt=new Date().toISOString();
@@ -838,7 +828,7 @@
       <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
         <DeferredSurface
           load={()=>import('$lib/components/BulkRelationships.svelte')}
-          props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',observedAt:scanStartedAt,sourceIdentities:relationshipSourceIdentities,sourceContextId:relationshipSourceContextId}}
+          props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',sourceContextId:relationshipSourceContextId}}
           loadingLabel="Loading relationship analysis."
           unavailableLabel="Relationship analysis could not be loaded."
         />

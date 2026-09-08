@@ -74,6 +74,10 @@ candidate handoff uses a random token and is removed when accepted. Appearance
 preference can use `localStorage`. These records are not uploaded merely because
 they exist.
 
+Saved Bulk rows and deliberately retained relationships can include bounded
+contributing-source identities, states and observation times, not raw responses.
+Older records remain readable with missing provenance marked unknown.
+
 The browser can derive searches, filters, timelines, relationship views,
 posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
