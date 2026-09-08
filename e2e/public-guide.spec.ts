@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
+import { toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
 
 test('delivered third-party notices include browser framework code independently of dependency classification', async ({ request }) => {
   const response = await request.get('/third-party-notices.txt');
@@ -254,14 +255,23 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
   const toolCards = page.locator('.tool-guide article');
   const referenceCards = page.locator('.reference-guide article');
-  await expect(toolCards).toHaveCount(5);
-  await expect(referenceCards).toHaveCount(1);
+  await expect(toolCards).toHaveCount(toolGuides.length);
+  await expect(toolCards.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await expect(referenceCards).toHaveCount(referenceGuides.length);
   const desktopCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
-  expect(desktopCardWidths.at(-1) ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
+  const ordinaryWidth = desktopCardWidths[0]!;
+  expect(ordinaryWidth).toBeGreaterThan(0);
+  for (const [index, width] of desktopCardWidths.entries()) {
+    if (index === desktopCardWidths.length - 1 && desktopCardWidths.length % 2 !== 0) {
+      expect(width).toBeGreaterThan(ordinaryWidth * 1.9);
+    } else {
+      expect(Math.abs(width - ordinaryWidth)).toBeLessThanOrEqual(1);
+    }
+  }
   expect((await referenceCards.first().boundingBox())?.width ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
-  const finalToolDefinitionRows = toolCards.last().locator('dl > div');
-  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBe(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  const wideDefinitionRows = (toolGuides.length % 2 ? toolCards.last() : referenceCards.first()).locator('dl > div');
+  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBe(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
@@ -290,8 +300,8 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await page.setViewportSize({ width: 320, height: 700 });
   const mobileCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
   expect(new Set(mobileCardWidths).size).toBe(1);
-  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBeLessThan(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBeLessThan(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   await expectNoHorizontalOverflow(page);
 });
 

@@ -485,8 +485,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   const unreviewed = page.getByRole('article').filter({
     has: page.getByText('unreviewed-calibration.invalid', { exact: true }),
   });
-  const exportButton = page.getByRole('button', { name: 'Review calibration export (0)' });
-  await expect(exportButton).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Review calibration export/u })).toHaveCount(0);
   await expect(unreviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' })).toBeDisabled();
 
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
@@ -528,6 +527,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 
   await page.setViewportSize({ width: 390, height: 844 });
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).uncheck();
+  await expect(page.getByRole('button', { name: /^Review calibration export/u })).toHaveCount(0);
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
   await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
   await expect(page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' })).toBeVisible();

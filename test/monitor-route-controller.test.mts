@@ -35,6 +35,10 @@ describe('Monitor route controller', () => {
       monitorViewCollections('timeline'),
       ['cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
     );
+    assert.deepEqual(monitorViewCollections('cases'), []);
+    for (const path of ['/monitor?domain=case.example', '/monitor?investigation=1&domain=case.example']) {
+      assert.equal(monitorViewFromUrl(new URL(path, 'https://example.test')), 'cases');
+    }
   });
 
   it('builds one canonical navigation URL and clears stale focus state', () => {
@@ -63,6 +67,9 @@ describe('Monitor route controller', () => {
       id: 'case-1',
       responseHash: true,
     });
+    assert.deepEqual(monitorRouteTarget(new URL(
+      'https://example.test/cases?case=case-1#case-response-case-1',
+    )), { kind: 'case', id: 'case-1', responseHash: true });
     assert.deepEqual(
       monitorRouteTarget(new URL('https://example.test/monitor?watchlist=Daily')),
       { kind: 'watchlist', name: 'Daily' },

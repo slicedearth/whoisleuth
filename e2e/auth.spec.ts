@@ -10,6 +10,18 @@ import { expectVersionedSourceLink } from './helpers';
 // origin and console errors/warnings for every test in this file already.
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('sign-in retains a direct Case response link without creating the missing Case', async ({ page }) => {
+  const destination = '/cases?case=case-not-in-this-browser#case-response-case-not-in-this-browser';
+  await page.goto(destination);
+  await expect(page).toHaveURL(`/login?next=${encodeURIComponent(destination)}`);
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(destination);
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this browser workspace.');
+  await expect(page.locator('.case-head')).toHaveCount(0);
+});
+
 for (const authenticated of [false, true]) {
   test(`preserves a protected investigation deep link ${authenticated ? 'with an existing session' : 'through sign-in'}`, async ({ page }) => {
     const collectors: string[] = [];

@@ -43,7 +43,7 @@
   let commandReturnFocus: HTMLElement | undefined;
   let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
-  const wideWorkspace = $derived(['/lookup', '/bulk', '/monitor', '/brands'].includes(page.url.pathname));
+  const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
     void checkSession();

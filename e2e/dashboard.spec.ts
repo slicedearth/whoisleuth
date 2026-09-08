@@ -515,10 +515,10 @@ test('the Console navigation exposes semantic groups without changing link order
   const assure = consoleNavigation.getByRole('group', { name: 'Assure' });
   await expect(start.getByRole('link')).toHaveCount(1);
   await expect(investigate.getByRole('link')).toHaveCount(3);
-  await expect(respond.getByRole('link')).toHaveCount(1);
+  await expect(respond.getByRole('link')).toHaveCount(2);
   await expect(assure.getByRole('link')).toHaveCount(2);
   await expect(consoleNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).resolves.toEqual([
-    '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/monitor?view=watchlists', '/brands',
+    '/dashboard', '/lookup', '/discover', '/bulk', '/cases', '/monitor', '/monitor?view=watchlists', '/brands',
   ]);
 
   await investigate.getByRole('link', { name: /^Lookup/ }).focus();

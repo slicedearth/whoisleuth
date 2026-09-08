@@ -15,6 +15,7 @@ import {
   consoleNavigation,
   consoleNavigationGroups,
   bulkNavigation,
+  casesNavigation,
   discoverNavigation,
   isNavigationItemActive,
   isProtectedDestination,
@@ -76,6 +77,7 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Brands',
     'Discover',
     'Bulk',
+    'Cases',
     'Monitor',
   ]);
   const monitor = toolGuides.find((tool) => tool.id === 'monitor');
@@ -98,6 +100,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     lookupNavigation,
     discoverNavigation,
     bulkNavigation,
+    casesNavigation,
     monitorNavigation,
     monitorAssuranceNavigation,
     brandsNavigation,
@@ -108,7 +111,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
   })), [
     { label: 'Start', items: ['Dashboard'] },
     { label: 'Investigate', items: ['Lookup', 'Discover', 'Bulk'] },
-    { label: 'Respond', items: ['Monitor'] },
+    { label: 'Respond', items: ['Cases', 'Monitor'] },
     { label: 'Assure', items: ['Watchlists & controls', 'Brands'] },
   ]);
   assert.deepEqual(consoleNavigationGroups.flatMap((group) => group.items), consoleNavigation);
@@ -174,6 +177,7 @@ test('sign-in preserves bounded protected deep links without duplicating page qu
   for (const href of [
     '/lookup?q=continuation.invalid&task=brand&depth=deep#query',
     '/monitor?view=cases&case=case-1&response=1#case-response-case-1',
+    '/cases?case=case-1#case-response-case-1',
     '/monitor?view=watchlists&watchlist=review',
     '/brands?profile=profile-1&workbench=baselines#desired-posture-baseline',
     '/lookup?q=https%3A%2F%2Foutside.invalid%2Fa%3Fb%3Dc',

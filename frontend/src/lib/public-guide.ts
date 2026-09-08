@@ -38,7 +38,7 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     steps: Object.freeze([
       Object.freeze({ id: 'lookup', label: 'Lookup', href: '#tool-lookup' }),
       Object.freeze({ id: 'review-sources', label: 'Review sources', href: '#results' }),
-      Object.freeze({ id: 'save-evidence', label: 'Save useful evidence', href: '#tool-monitor' }),
+      Object.freeze({ id: 'save-evidence', label: 'Save useful evidence', href: '#tool-cases' }),
     ]),
   }),
   Object.freeze({
@@ -69,6 +69,7 @@ export const toolGuides: readonly GuideEntry[] = Object.freeze([
   Object.freeze({ id: 'brands', name: 'Brands', useWhen: 'You want a reviewed baseline for an official brand or owned domains.', input: 'Add official domains, product names, preferred domain endings, trusted infrastructure and any reviewed defensive-mail or domain-control context.', result: 'The browser-local profile supports candidate comparison, public posture review, dependency review and owned-domain controls.', next: 'Review gaps in the baseline, or open Discover to generate related candidates.' }),
   Object.freeze({ id: 'discover', name: 'Discover', useWhen: 'You want possible lookalikes, names from public certificate logs or a registry-scoped nameserver search.', input: 'Choose a Brand Profile or enter a focused keyword. Select a preset or exact mutation families; the separate Nameservers action accepts one hostname and one registry suffix.', result: 'Every candidate keeps its source and limits. Internationalised names show both DNS-safe ASCII and readable Unicode forms.', next: 'Review the cues, then send a focused shortlist to Bulk.' }),
   Object.freeze({ id: 'bulk', name: 'Bulk', useWhen: 'You need to compare several candidate domains consistently.', input: 'Paste domains or accept a Discover shortlist. A job accepts up to 500 Fast or 50 Deep targets, with explicit request pacing.', result: 'Bulk presents per-domain source states, Risk triage, relationships and two-domain comparison. Bulk Deep is compact and does not contain every single-domain field.', next: 'Act on an explicit selection, or open the strongest and most uncertain leads in Lookup.' }),
+  Object.freeze({ id: 'cases', name: 'Cases', useWhen: 'You want to retain evidence, document a decision or prepare a response.', input: 'Open a Case from Lookup, Bulk or a domain entered on the Cases page. Import JSON restores retained Cases.', result: 'Each Case holds evidence, notes, assessment, action history and closure review. Direct links open the retained Case in the current browser workspace.', next: 'Review the evidence, record a decision and prepare any complaint for manual submission. Add a follow-up date to recheck its outcome.' }),
   Object.freeze({ id: 'monitor', name: 'Monitor', useWhen: 'You want to retain evidence, document a decision, prepare a response or compare later observations.', input: 'Save selected cases, watchlists, evidence, snapshots, sessions or reviewed relationships from Lookup and Bulk.', result: 'Respond contains cases, campaigns and relationship work. Assure contains timelines, watchlists and local controls. Evidence gaps keep unavailable and partial sources visible.', next: 'Continue the relevant Respond or Assure work. Collection, response submission and control changes remain separate actions.' }),
 ]);
 

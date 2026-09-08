@@ -59,9 +59,8 @@
     <span><strong>Case response and packet workspace</strong><small>Open response planning, evidence packets, action tracking, and closure review</small></span>
     <span>{open ? 'Close workspace' : 'Open workspace'}</span>
   </summary>
-  <!-- The Cases view already preloads this module. Prepare one expanded Case
-       behind the closed native disclosure so opening it cannot insert a large
-       workspace after the input's layout-stability window. -->
+  <!-- The shared Case workspace preloads the response module. The expanded
+       Case prepares its response controls inside this closed disclosure. -->
   <div class="response-body">
     <DeferredSurface
       load={() => import('$lib/components/CaseResponseWorkspace.svelte')}

@@ -67,7 +67,7 @@ const MONITOR_VIEW_COLLECTIONS = Object.freeze({
     'website-snapshots',
   ]),
   watchlists: Object.freeze(['watchlists']),
-  cases: Object.freeze(['cases', 'profiles']),
+  cases: Object.freeze([]),
   certificates: Object.freeze(['cases', 'profiles', 'analyst-review-state']),
   campaigns: Object.freeze(['campaigns', 'cases', 'profiles', 'relationships']),
   relationships: Object.freeze([
@@ -81,6 +81,8 @@ const MONITOR_VIEW_COLLECTIONS = Object.freeze({
 
 function monitorViewFromUrl(url: URL): MonitorView {
   if (url.searchParams.has('case')) return 'cases';
+  const target = monitorRouteTarget(url);
+  if (target.kind === 'investigation' || target.kind === 'domain') return 'cases';
   const requested = url.searchParams.get('view');
   return requested && MONITOR_VIEW_SET.has(requested as MonitorView)
     ? requested as MonitorView

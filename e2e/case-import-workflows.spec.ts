@@ -307,7 +307,7 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(externalImport).not.toContainText('token=secret');
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
-  await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+  await expect(page.getByRole('region', { name: 'Cases', exact: true })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(JSON.stringify(stored.records)).not.toContain('private body');

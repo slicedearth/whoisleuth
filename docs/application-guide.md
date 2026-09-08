@@ -175,6 +175,10 @@ Monitor groups existing browser-local records into Respond and Assure views.
 
 ### Cases and response preparation
 
+Open **Cases** from the Respond navigation, or use the Cases view in Monitor.
+A Case's **Open Case page** link opens that record directly in this browser
+workspace. It does not share the record with another browser or person.
+
 Cases can retain bounded evidence snapshots, pins, checkpoints, analyst
 assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate

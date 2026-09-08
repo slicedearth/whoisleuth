@@ -42,7 +42,10 @@ Frontend compatibility paths may re-export shared modules, but their exports
 must remain identity-preserving facades. Non-frontend production code cannot
 import Svelte routes, components or browser adapters.
 
-The Case response workspace coordinates writes, reconciliation and focus.
+The Cases route and Monitor's Cases view use one Case workspace component.
+It owns the list, filters, selection, drafts and collection refresh; Monitor
+owns the separate inbox, watchlist, campaign and relationship projections.
+The Case response workspace coordinates response writes, reconciliation and focus.
 Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The
 domain model owns validation and append-only histories, and the browser-store

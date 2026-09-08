@@ -133,6 +133,7 @@ export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string,
   '/': 85.5,
   '/brands': 325.63,
   '/bulk': 381.51,
+  '/cases': 375.09, // Three clean builds, 2026-09-09: maximum 384,092 gzip bytes.
   '/cli': 82.98,
   '/contact': 71.52,
   '/coverage': 74.74,

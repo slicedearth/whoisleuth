@@ -63,7 +63,7 @@ export const bulkNavigation = {
 export const monitorNavigation = {
     href: '/monitor',
     label: 'Monitor',
-    detail: 'Review cases, prepare responses, campaigns, and follow-up',
+    detail: 'Review alerts, campaigns, relationships, and follow-up',
     icon: 'case',
     keywords: ['respond', 'case', 'response', 'campaign', 'follow-up', 'inbox'],
     activeQuery: {
@@ -72,6 +72,14 @@ export const monitorNavigation = {
       defaultValue: 'inbox',
     },
   } satisfies NavigationItem;
+
+export const casesNavigation = {
+  href: '/cases',
+  label: 'Cases',
+  detail: 'Review evidence, record decisions, and prepare responses',
+  icon: 'case',
+  keywords: ['case', 'evidence', 'response', 'report', 'closure'],
+} satisfies NavigationItem;
 
 export const monitorAssuranceNavigation = {
     href: '/monitor?view=watchlists',
@@ -97,6 +105,7 @@ export const toolNavigation = [
   lookupNavigation,
   discoverNavigation,
   bulkNavigation,
+  casesNavigation,
   monitorNavigation,
   brandsNavigation,
 ];
@@ -243,7 +252,7 @@ export const consoleNavigationGroups: readonly NavigationGroup[] = [
   },
   {
     label: 'Respond',
-    items: [monitorNavigation],
+    items: [casesNavigation, monitorNavigation],
   },
   {
     label: 'Assure',

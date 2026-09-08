@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
@@ -52,6 +52,7 @@
     brandProfiles,
     brandProfilesUnavailable,
     responseCaseId = '',
+    onready,
   }: {
     records: CaseRecord[];
     allRecords: CaseRecord[];
@@ -82,7 +83,10 @@
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
     responseCaseId?: string;
+    onready?: () => void | Promise<void>;
   } = $props();
+
+  onMount(() => { void onready?.(); });
 
   function focusMovedAway(origin: Element | null): boolean {
     const active = document.activeElement;
@@ -95,7 +99,7 @@
   async function removeAndFocus(record: CaseRecord) {
     const origin = document.activeElement;
     const owner = origin instanceof HTMLElement
-      ? origin.closest<HTMLElement>('#monitor-view-panel')
+      ? origin.closest<HTMLElement>('[data-case-workspace]')
       : null;
     const previousIndex = records.findIndex((item) => item.id === record.id);
     const previousPage = currentPage;
@@ -151,7 +155,7 @@
           </form>
           <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(record); }}>
             <label class="field" for={`note-${record.id}`}>Add note</label>
-            <textarea id={`note-${record.id}`} value={noteDraft} disabled={pendingNoteCaseIds.includes(record.id)} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
+            <textarea id={`note-${record.id}`} value={noteDraft} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
             <button class="btn" type="submit" disabled={!noteDraft.trim() || pendingNoteCaseIds.includes(record.id)}>{pendingNoteCaseIds.includes(record.id) ? 'Adding…' : 'Add note'}</button>
           </form>
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
@@ -160,7 +164,7 @@
           {#key record.id}<DeferredCaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} openInitially={responseCaseId===record.id} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
-          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Look up {caseLookupTarget(record) === record.domain ? 'domain' : 'latest hostname'}</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
+          <div class="case-actions"><a class="btn" href={`/cases?case=${encodeURIComponent(record.id)}`}>Open Case page</a><a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Look up {caseLookupTarget(record) === record.domain ? 'domain' : 'latest hostname'}</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
         </div>
       {/if}
     </article>

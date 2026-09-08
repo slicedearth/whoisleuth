@@ -318,18 +318,14 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('campaign');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
-  await search.fill('Start');
-  await expect(dialog.getByRole('option', { name: /Dashboard/ })).toBeVisible();
-  await expect(dialog.locator('[data-command-group]', { hasText: 'Start' })).toHaveCount(1);
-  await search.fill('Investigate');
-  await expect(dialog.getByRole('option')).toHaveCount(3);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Investigate', 'Investigate', 'Investigate']);
-  await search.fill('Respond');
-  await expect(dialog.getByRole('option')).toHaveCount(1);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Respond']);
-  await search.fill('Assure');
-  await expect(dialog.getByRole('option')).toHaveCount(2);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Assure', 'Assure']);
+  for (const group of ['Start', 'Investigate', 'Respond', 'Assure']) {
+    await search.fill(group);
+    const commands = consoleCommandNavigation.filter(command => command.group === group);
+    expect(commands.length).toBeGreaterThan(0);
+    await expect(dialog.getByRole('option')).toHaveCount(commands.length);
+    await expect(dialog.locator('.command-copy strong')).toHaveText(commands.map(command => command.label));
+    await expect(dialog.locator('[data-command-group]')).toHaveText(commands.map(command => command.group));
+  }
   await search.fill('Public');
   const publicMatches = consoleCommandNavigation.filter((command) => (
     `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`.toLowerCase().includes('public')
@@ -567,6 +563,7 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     ['/lookup', 'Lookup', 'Investigate'],
     ['/discover', 'Discover', 'Investigate'],
     ['/bulk', 'Bulk', 'Investigate'],
+    ['/cases', 'Cases', 'Respond'],
     ['/monitor', 'Monitor', 'Respond'],
     ['/brands', 'Brands', 'Assure'],
     ['/registry-support', 'Registry support', 'Reference'],
@@ -578,4 +575,24 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     await expect(heading.getByRole('heading', { level: 1, name: title })).toBeVisible();
     await expect(heading.locator('.eyebrow')).toHaveText(eyebrow);
   }
+});
+
+test('Console pages keep their content below the header on tall displays', async ({ page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 3840, height: 2160 });
+  await page.goto('/dashboard');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => localStorage.setItem('whoisleuth:theme:v1', value), theme);
+    for (const path of ['/dashboard', '/lookup', '/discover', '/bulk', '/cases', '/monitor', '/brands', '/registry-support']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const header = await page.getByRole('banner').boundingBox();
+      const main = await page.getByRole('main').boundingBox();
+      expect(header).not.toBeNull();
+      expect(main).not.toBeNull();
+      expect(Math.abs(main!.y - header!.y - header!.height), path).toBeLessThanOrEqual(1);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
 });
