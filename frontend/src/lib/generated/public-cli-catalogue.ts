@@ -4274,7 +4274,7 @@ export const PUBLIC_CLI_CATALOGUE = {
             ],
             "mode": "network",
             "approval": "network_disclosure",
-            "produces": "whoisleuth\u002edomain-control-review",
+            "produces": "whoisleuth\u002ecli.domain-control-monitor",
             "completion": "One later observation may remain partial, unavailable, stale, or conflicting."
           },
           {

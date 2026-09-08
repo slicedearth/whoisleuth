@@ -45,7 +45,7 @@ const KNOWN_ISSUERS: readonly Readonly<{ pattern: RegExp; identifiers: readonly 
   { pattern: /google trust|gts ca/iu, identifiers: ['pki.goog'] },
   { pattern: /amazon/iu, identifiers: ['amazon.com'] },
   { pattern: /globalsign/iu, identifiers: ['globalsign.com'] },
-  { pattern: /ssl\\.com/iu, identifiers: ['ssl.com'] },
+  { pattern: /ssl\.com/iu, identifiers: ['ssl.com'] },
   { pattern: /entrust/iu, identifiers: ['entrust.net'] },
 ]);
 

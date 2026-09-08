@@ -370,13 +370,23 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
         .filter((limitation): limitation is string => limitation !== null)
         .slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS)
     : [];
-  const findings = Array.isArray(input.findings)
-    ? input.findings
-        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS * 2)
-        .map((finding) => normalizeThreatFinding(finding, providerId))
-        .filter((finding): finding is JsonObject => finding !== null)
-        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS)
-    : [];
+  const inputFindings = Array.isArray(input.findings) ? input.findings : [];
+  const normalizedFindings = inputFindings
+    .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS * 2)
+    .map((finding) => normalizeThreatFinding(finding, providerId))
+    .filter((finding): finding is JsonObject => finding !== null);
+  const findings = normalizedFindings.slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS);
+  const omitted = inputFindings.length - findings.length;
+  const projectionIncomplete = omitted > 0 || !Array.isArray(input.findings);
+  const projectionTruncated = inputFindings.length > MAX_THREAT_INTELLIGENCE_FINDINGS * 2
+    || normalizedFindings.length > MAX_THREAT_INTELLIGENCE_FINDINGS;
+  if (projectionIncomplete) {
+    // Local qualification precedes supplied notices so a full limitation
+    // list cannot conceal evidence discarded at this trust boundary.
+    limitations.unshift(omitted > 0
+      ? `${omitted} invalid or over-limit provider finding${omitted === 1 ? ' was' : 's were'} omitted from this view.`
+      : 'Provider findings were not a supported array and were withheld from this view.');
+  }
   return {
     schema: THREAT_INTELLIGENCE_SCHEMA,
     version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
@@ -389,14 +399,14 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
       value: expectedDomain,
       exposure: 'registrable_domain',
     },
-    state,
+    state: projectionIncomplete && ['success', 'not_found'].includes(state) ? 'partial' : state,
     detail: boundedThreatText(input.detail),
     findings,
     observation: {
       observedAt: threatTimestamp(observationInput.observedAt),
-      limitations,
-      complete: typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
-      truncated: typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
+      limitations: limitations.slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS),
+      complete: projectionIncomplete ? false : typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
+      truncated: projectionTruncated ? true : typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
     },
   };
 }

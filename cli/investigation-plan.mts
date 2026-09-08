@@ -1,5 +1,7 @@
 import { domainToASCII } from 'node:url';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-control-monitor.mts';
+import { DOMAIN_CONTROL_REVIEW_SCHEMA } from '../packages/contracts/domain-control-review.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
@@ -79,7 +81,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     steps: (domain: string) => Object.freeze([
       step('posture', 'Collect bounded DNS posture', 'posture', [domain, '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.posture', 'Review mail profile and delegation evidence before interpreting missing records.'),
       step('lookup', 'Collect supporting Deep evidence', 'lookup', [domain, '--deep', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.lookup', 'Retain separately attributed registration, DNS, TLS, and page observations.'),
-      step('manifest', 'Review the domain control manifest', 'domain-control', ['<review-input.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.domain-control-review', 'Only complete supplied observations may produce drift.'),
+      step('manifest', 'Review the domain control manifest', 'domain-control', ['<review-input.json>', '--json'], 'offline', 'analyst_selection', DOMAIN_CONTROL_REVIEW_SCHEMA, 'Only complete supplied observations may produce drift.'),
     ]),
   }),
   'historical-comparison': Object.freeze({
@@ -155,7 +157,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     runnable: false,
     limitations: Object.freeze(['Planning and packaging never apply, submit, schedule, or enforce a change.']),
     steps: () => Object.freeze([
-      step('control', 'Review the desired-state manifest', 'domain-control', ['<review-input.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.domain-control-review', 'Only supplied complete observations may produce drift.'),
+      step('control', 'Review the desired-state manifest', 'domain-control', ['<review-input.json>', '--json'], 'offline', 'analyst_selection', DOMAIN_CONTROL_REVIEW_SCHEMA, 'Only supplied complete observations may produce drift.'),
       step('assure', 'Review change and recovery assumptions', 'assurance', ['<assurance-input.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.domain-assurance', 'Record uncertainty, rollback dependencies, and unavailable evidence explicitly.'),
       step('package', 'Build a reviewed change packet', 'change-packet', ['<change-packet-input.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.domain-change-packet', 'The packet is local reviewed material and performs no submission or enforcement.'),
     ]),
@@ -168,7 +170,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     runnable: false,
     limitations: Object.freeze(['This is a one-time recheck, not monitoring setup or proof that every resolver or service has converged.']),
     steps: () => Object.freeze([
-      step('recheck', 'Run one bounded retained-manifest review', 'monitor-once', ['<manifest.json>', '--limit', '1', '--json'], 'network', 'network_disclosure', 'whoisleuth.domain-control-review', 'One later observation may remain partial, unavailable, stale, or conflicting.'),
+      step('recheck', 'Run one bounded retained-manifest review', 'monitor-once', ['<manifest.json>', '--limit', '1', '--json'], 'network', 'network_disclosure', CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 'One later observation may remain partial, unavailable, stale, or conflicting.'),
       step('compare', 'Compare selected before and after evidence', 'diff', ['<before.json>', '<after.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.cli.lookup-diff', 'Materiality is derived from compatible retained evidence and does not infer intent.'),
       step('record', 'Record reviewed completion material', 'change-packet', ['<post-change-input.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.domain-change-packet', 'Recording reviewed material does not submit it or start automatic monitoring.'),
     ]),

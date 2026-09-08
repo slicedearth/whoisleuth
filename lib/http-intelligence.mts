@@ -207,14 +207,14 @@ function headerValidity(
   return { present: true, valid: header.state === 'observed' && Boolean(header.value && validator(header.value)) };
 }
 
-function validHttpDate(value: string): boolean {
+function validHttpDate(value: string, observedAt: string): boolean {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const longWeekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const time = '([01]\\d|2[0-3]):([0-5]\\d):([0-5]\\d)';
+  const time = '([01]\\d|2[0-3]):([0-5]\\d):([0-5]\\d|60)';
   const imfFixdate = value.match(new RegExp(`^(${weekdays.join('|')}), (0[1-9]|[12]\\d|3[01]) (${months.join('|')}) (\\d{4}) ${time} GMT$`, 'u'));
   const rfc850 = value.match(new RegExp(`^(${longWeekdays.join('|')}), (0[1-9]|[12]\\d|3[01])-(${months.join('|')})-(\\d{2}) ${time} GMT$`, 'u'));
-  const asctime = value.match(new RegExp(`^(${weekdays.join('|')}) (${months.join('|')}) ( {2}[1-9]| [12]\\d| 3[01]) ${time} (\\d{4})$`, 'u'));
+  const asctime = value.match(new RegExp(`^(${weekdays.join('|')}) (${months.join('|')}) ( [1-9]|0[1-9]|[12]\\d|3[01]) ${time} (\\d{4})$`, 'u'));
   let weekday: string;
   let day: number;
   let month: number;
@@ -237,10 +237,18 @@ function validHttpDate(value: string): boolean {
     day = Number(rfc850[2]);
     month = months.indexOf(rfc850[3]!);
     const shortYear = Number(rfc850[4]);
-    year = shortYear >= 70 ? 1900 + shortYear : 2000 + shortYear;
+    // RFC 9110's rolling window is relative to receipt, not a later review
+    // or the host's timezone. The observation supplies that stable reference.
+    const futureBoundary = new Date(observedAt);
+    futureBoundary.setUTCFullYear(futureBoundary.getUTCFullYear() + 50);
+    year = Math.floor(futureBoundary.getUTCFullYear() / 100) * 100 + shortYear;
     hour = Number(rfc850[5]);
     minute = Number(rfc850[6]);
     second = Number(rfc850[7]);
+    const candidate = new Date(0);
+    candidate.setUTCFullYear(year, month, day);
+    candidate.setUTCHours(hour, minute, Math.min(second, 59), 0);
+    if (candidate.getTime() > futureBoundary.getTime()) year -= 100;
     expectedWeekdays = longWeekdays;
   } else if (asctime) {
     weekday = asctime[1]!;
@@ -255,14 +263,16 @@ function validHttpDate(value: string): boolean {
   if (year < 1601 || month < 0) return false;
   const parsed = new Date(0);
   parsed.setUTCFullYear(year, month, day);
-  parsed.setUTCHours(hour, minute, second, 0);
+  // A leap-second spelling must not roll into the following calendar day
+  // while validating the declared date and weekday.
+  parsed.setUTCHours(hour, minute, Math.min(second, 59), 0);
   return parsed.getUTCFullYear() === year
     && parsed.getUTCMonth() === month
     && parsed.getUTCDate() === day
     && expectedWeekdays[parsed.getUTCDay()] === weekday;
 }
 
-function parseCachePolicy(headers: HeaderReader | null | undefined) {
+function parseCachePolicy(headers: HeaderReader | null | undefined, observedAt: string) {
   const cacheControl = deliveryHeader(headers, 'cache-control');
   const age = deliveryHeader(headers, 'age', 64);
   const etagHeader = deliveryHeader(headers, 'etag');
@@ -348,8 +358,8 @@ function parseCachePolicy(headers: HeaderReader | null | undefined) {
   const ageSeconds = age.state === 'observed' ? cacheSeconds(age.value, false) : null;
   if (age.state === 'observed' && ageSeconds === null) malformed = true;
   const etag = headerValidity(etagHeader, (value) => /^(?:W\/)?"[\x21\x23-\x7e]*"$/u.test(value));
-  const lastModified = headerValidity(lastModifiedHeader, validHttpDate);
-  const expires = headerValidity(expiresHeader, validHttpDate);
+  const lastModified = headerValidity(lastModifiedHeader, (value) => validHttpDate(value, observedAt));
+  const expires = headerValidity(expiresHeader, (value) => validHttpDate(value, observedAt));
   malformed = malformed || [etag, lastModified, expires].some((item) => item.present && item.valid === false);
   const headersObserved = [cacheControl, age, etagHeader, lastModifiedHeader, expiresHeader]
     .some((header) => header.state !== 'not_observed');
@@ -382,9 +392,9 @@ function parseCachePolicy(headers: HeaderReader | null | undefined) {
   };
 }
 
-function buildDeliveryMetadata(headers: HeaderReader | null | undefined) {
+function buildDeliveryMetadata(headers: HeaderReader | null | undefined, observedAt: string) {
   const contentEncoding = parseContentEncoding(headers);
-  const cacheResult = parseCachePolicy(headers);
+  const cacheResult = parseCachePolicy(headers, observedAt);
   const cachePolicy = cacheResult.value;
   const incomplete = [contentEncoding.status, cachePolicy.status].some((status) => ['partial', 'malformed'].includes(status));
   const truncated = contentEncoding.status === 'partial' || cacheResult.truncated;
@@ -486,21 +496,22 @@ function buildHttpObservation(detail: HttpDetail, options: HttpObservationOption
     { url: detail && detail.requestedUrl, httpStatus: status },
   ]);
 
+  const observation = createObservation({
+    status: incomplete ? 'partial' : 'success',
+    observedAt: options.observedAt,
+    scanMode: 'deep',
+    source: 'http',
+    durationMs: detail && detail.durationMs,
+    complete: !incomplete,
+    truncated: incomplete,
+    limitations,
+    diagnostics: {
+      redirectCount: redirects.length,
+      httpStatus: status,
+    },
+  });
   return {
-    ...createObservation({
-      status: incomplete ? 'partial' : 'success',
-      observedAt: options.observedAt,
-      scanMode: 'deep',
-      source: 'http',
-      durationMs: detail && detail.durationMs,
-      complete: !incomplete,
-      truncated: incomplete,
-      limitations,
-      diagnostics: {
-        redirectCount: redirects.length,
-        httpStatus: status,
-      },
-    }),
+    ...observation,
     requestUrl: requested ? requested.url : null,
     finalUrl: final ? final.url : null,
     transportSecurity: final ? final.url.split(':', 1)[0] : null,
@@ -526,7 +537,7 @@ function buildHttpObservation(detail: HttpDetail, options: HttpObservationOption
         bytes: capturedBodyBytes,
       } : null,
       securityHeaders: securityHeaders(response && response.headers),
-      deliveryMetadata: buildDeliveryMetadata(response && response.headers),
+      deliveryMetadata: buildDeliveryMetadata(response && response.headers, observation.observedAt),
     },
   };
 }

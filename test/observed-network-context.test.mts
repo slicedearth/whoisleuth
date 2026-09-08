@@ -8,6 +8,7 @@ import {
   selectObservedNetworkAddress,
 } from '../lib/observed-network-context.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
+import { parseRdap } from '../lib/rdap.mts';
 
 const OBSERVED_AT = '2026-07-22T03:04:05.000Z';
 const IPV4 = '93.184.216.34';
@@ -77,6 +78,54 @@ function ipRdap(overrides = {}) {
 }
 
 describe('observed network context', () => {
+  test('qualifies local route omission after real RDAP contact normalisation', async () => {
+    for (const count of [6, 7, 8]) {
+      const emails = Array.from({ length: count }, (_, index) => `route-${index}@network.example`);
+      const parsed = requiredValue(parseRdap('ipv4', {
+        objectClassName: 'ip network', handle: 'EXAMPLE-NETWORK',
+        startAddress: '93.184.216.0', endAddress: '93.184.216.255',
+        cidr0_cidrs: [{ v4prefix: '93.184.216.0', length: 24 }],
+        entities: [{
+          roles: ['abuse'],
+          vcardArray: ['vcard', emails.map((email) => ['email', {}, 'text', email])],
+        }],
+      }));
+      assert.equal(parsed.entitiesTruncated, false);
+      const sourceEntity = requiredValue(parsed.entitiesByRole.abuse?.[0]);
+      assert.equal(sourceEntity.truncated, false);
+      assert.deepEqual(sourceEntity.emails, emails);
+      const result = await collectObservedNetworkContext(availability(), {
+        fetchRdapRecord: async () => ipRdap({ parsed }), observedAt: () => OBSERVED_AT,
+      });
+      const routes = arrayValue(result.abuseRouting).map(recordValue);
+      assert.equal(routes.length, 6);
+      assert.deepEqual(routes.map((route) => route.contact), emails.slice(0, 6));
+      assert.equal(result.status, count === 6 ? 'success' : 'partial');
+      assert.equal(result.complete, count === 6);
+      assert.equal(result.truncated, count > 6);
+      assert.equal(result.limitations.some((value) => /local retention limit/u.test(value)), count > 6);
+      for (const route of routes) {
+        assert.equal(route.complete, count === 6);
+        assert.equal(route.truncated, count > 6);
+        assert.equal(arrayValue(route.limitations).some((value) => /local retention limit/u.test(String(value))), count > 6);
+      }
+      assert.deepEqual(sourceEntity.emails, emails);
+    }
+  });
+
+  test('does not mistake repeated fallback contacts for omitted routes', async () => {
+    const emails = Array.from({ length: 6 }, (_, index) => `route-${index}@network.example`);
+    const entity = { email: emails[0], emails: [...emails, emails[0]], phones: [] };
+    const result = await collectObservedNetworkContext(availability(), {
+      fetchRdapRecord: async () => ipRdap({
+        parsed: { ...ipRdap().parsed, entitiesByRole: { abuse: [entity, entity] }, abuse: entity },
+      }), observedAt: () => OBSERVED_AT,
+    });
+    assert.equal(arrayValue(result.abuseRouting).length, 6);
+    assert.equal(result.complete, true);
+    assert.equal(result.truncated, false);
+  });
+
   test('prefers the validated successful TLS connection address', () => {
     assert.deepEqual(selectObservedNetworkAddress(availability()), {
       address: IPV4, family: 4, selectedFrom: 'tls_connection',

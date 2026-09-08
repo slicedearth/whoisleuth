@@ -981,6 +981,60 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expectNoHorizontalOverflow(page);
 });
 
+test('locally omitted provider findings remain visibly partial with accessible qualification', async ({ page }, testInfo) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'example.test', type: 'domain', registrableDomain: 'example.test',
+      availability: { state: 'registered', domain: 'example.test' },
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      threatIntelligence: {
+        version: 1, providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA, version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search' },
+          target: { type: 'domain', value: 'example.test', exposure: 'registrable_domain' },
+          state: 'success', findings: [{
+            id: 'reversed-time', category: 'phishing',
+            firstObservedAt: '2026-07-02T00:00:00.000Z',
+            lastObservedAt: '2026-07-01T00:00:00.000Z',
+          }],
+          observation: {
+            observedAt: '2026-07-03T00:00:00.000Z', complete: true, truncated: false,
+            limitations: Array.from({ length: 12 }, (_, index) => `Supplied source limitation ${index}.`),
+          },
+        }],
+      },
+    }),
+  }));
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const article = page.locator('.threat-intelligence article');
+  await expect(article).toHaveCount(1);
+  await expect(article.getByText('URLscan archived verdicts', { exact: true })).toBeVisible();
+  await expect(article.locator('.chip')).toHaveText('partial');
+  await expect(article.getByRole('link', { name: 'View attributed provider record' })).toHaveCount(0);
+  const summary = article.locator('details > summary');
+  await summary.focus();
+  await summary.press('Enter');
+  await expect(summary).toBeFocused();
+  const qualification = article.getByText('1 invalid or over-limit provider finding was omitted from this view.', { exact: true });
+  await expect(qualification).toBeVisible();
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await qualification.scrollIntoViewIfNeeded();
+      await expect(qualification).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
+      if ([320, 1280].includes(viewport.width)) {
+        await page.screenshot({ path: testInfo.outputPath(`provider-omission-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
+});
+
 test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

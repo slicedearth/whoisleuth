@@ -93,6 +93,11 @@ function boundedText(value: unknown, maxLength: number): string | null {
   return normalized ? normalized.slice(0, maxLength) : null;
 }
 
+function identityText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string' || value.length > maxLength || /[\u0000-\u0020\u007f]/u.test(value)) return null;
+  return value || null;
+}
+
 function isoTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
   const trimmed = value.trim();
@@ -110,7 +115,7 @@ function retryAfterSeconds(response: Response): number | null {
 }
 
 function exactDomainFromUrl(value: unknown): string | null {
-  const raw = boundedText(value, 2_048);
+  const raw = identityText(value, 2_048);
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
@@ -123,7 +128,7 @@ function exactDomainFromUrl(value: unknown): string | null {
 }
 
 function exactDomain(value: unknown): string | null {
-  const raw = boundedText(value, 253);
+  const raw = identityText(value, 253);
   if (!raw) return null;
   try {
     const classified = classifyQuery(raw);
@@ -152,7 +157,7 @@ function normalizedUrlCount(value: unknown): number | null {
 
 function normalizeHostFinding(value: unknown, targetDomain: string) {
   if (!isRecord(value)) return null;
-  const id = boundedText(value.id, MAX_URL_ID_LENGTH);
+  const id = identityText(value.id, MAX_URL_ID_LENGTH);
   const status = boundedText(value.url_status, 16)?.toLowerCase();
   const threat = boundedText(value.threat, 64)?.toLowerCase();
   if (!id

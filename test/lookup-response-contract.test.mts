@@ -1195,7 +1195,51 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(findings[1]).confidence, 'unknown');
     assert.equal(recordValue(findings[2]).referenceUrl, null);
     assert.equal(arrayValue(recordValue(provider.observation).limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
+    assert.equal(provider.state, 'partial');
+    assert.equal(recordValue(provider.observation).complete, false);
+    assert.equal(recordValue(provider.observation).truncated, true);
+    assert.match(String(arrayValue(recordValue(provider.observation).limitations)[0]), /7 invalid or over-limit provider findings were omitted/u);
     assert.equal(rawProvider.findings.length, MAX_THREAT_INTELLIGENCE_FINDINGS + 7);
+  });
+
+  test('qualifies discarded findings independently of source state and supplied limitation capacity', () => {
+    const finding = {
+      id: 'fixture', category: 'phishing',
+      firstObservedAt: '2026-07-01T00:00:00.000Z', lastObservedAt: '2026-07-02T00:00:00.000Z',
+    };
+    const fixtures = [
+      { findings: [], omitted: 0, truncated: false },
+      { findings: [finding], omitted: 0, truncated: false },
+      { findings: Array.from({ length: 100 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 0, truncated: false },
+      { findings: [{ ...finding, firstObservedAt: finding.lastObservedAt, lastObservedAt: finding.firstObservedAt }], omitted: 1, truncated: false },
+      { findings: Array.from({ length: 101 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 1, truncated: true },
+      { findings: Array.from({ length: 201 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 101, truncated: true },
+    ];
+    for (const fixture of fixtures) {
+      for (const sourceState of ['success', 'not_found', 'error', 'rate_limited']) {
+        const rawProvider = {
+          schema: THREAT_INTELLIGENCE_SCHEMA, version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search' }, target: THREAT_TARGET, state: sourceState,
+          findings: fixture.findings,
+          observation: {
+            observedAt: '2026-07-03T00:00:00.000Z', complete: true, truncated: false,
+            limitations: Array.from({ length: MAX_THREAT_INTELLIGENCE_LIMITATIONS }, (_, index) => `Source limitation ${index}`),
+          },
+        };
+        const before = JSON.stringify(rawProvider);
+        const parsed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers: [rawProvider] } }));
+        assert.equal(parsed.ok, true);
+        const projected = requiredValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]);
+        const observation = recordValue(projected.observation);
+        assert.equal(arrayValue(projected.findings).length, fixture.findings.length - fixture.omitted);
+        assert.equal(projected.state, fixture.omitted && ['success', 'not_found'].includes(sourceState) ? 'partial' : sourceState);
+        assert.equal(observation.complete, fixture.omitted === 0);
+        assert.equal(observation.truncated, fixture.truncated);
+        assert.equal(arrayValue(observation.limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
+        if (fixture.omitted) assert.match(String(arrayValue(observation.limitations)[0]), /^(\d+) invalid or over-limit provider findings? (was|were) omitted from this view\.$/u);
+        assert.equal(JSON.stringify(rawProvider), before);
+      }
+    }
   });
 
   test('does not host-normalize zone-less threat-intelligence wire timestamps', () => {

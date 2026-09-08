@@ -25,6 +25,53 @@ const baseline: DesiredPostureBaseline = {
   updatedAt: '2026-07-31T00:00:00.000Z',
 };
 
+// These expectations are independent of the curated implementation table.
+for (const [issuer, identifier] of [
+  ["Let's Encrypt", 'letsencrypt.org'],
+  ['ISRG', 'letsencrypt.org'],
+  ['DigiCert', 'digicert.com'],
+  ['GeoTrust', 'digicert.com'],
+  ['Thawte', 'digicert.com'],
+  ['RapidSSL', 'digicert.com'],
+  ['Sectigo', 'sectigo.com'],
+  ['Comodo', 'comodoca.com'],
+  ['Google Trust', 'pki.goog'],
+  ['GTS CA', 'pki.goog'],
+  ['Amazon', 'amazon.com'],
+  ['GlobalSign', 'globalsign.com'],
+  ['SSL.com', 'ssl.com'],
+  ['Entrust', 'entrust.net'],
+]) {
+  test(`certificate issuer mapping distinguishes matching and unrelated CAA for ${issuer}`, () => {
+    for (const [value, state] of [
+      [identifier, 'aligned'],
+      ['unrelated.example', 'apparently_outside_current_policy'],
+    ]) {
+      const review = buildCertificatePolicyReview({
+        dnsEvidence: { source: 'dns', status: 'success', complete: true },
+        dnsRecords: { caa: [{ tag: 'issue', value, critical: 0 }] },
+        tlsEvidence: { source: 'tls', status: 'success', complete: true },
+        tlsIssuer: { organization: issuer },
+      });
+      const caa = review.findings.find((item) => item.id === 'caa');
+      assert.equal(caa?.state, state);
+      assert.match(caa?.limitations.join(' ') ?? '', /does not cryptographically verify issuance/u);
+    }
+  });
+}
+
+test('literal issuer punctuation is not a wildcard or escaped input', () => {
+  for (const issuer of ['SSLXcom', String.raw`SSL\.com`, 'Example Issuer']) {
+    const review = buildCertificatePolicyReview({
+      dnsEvidence: { source: 'dns', status: 'success', complete: true },
+      dnsRecords: { caa: [{ tag: 'issue', value: 'ssl.com', critical: 0 }] },
+      tlsEvidence: { source: 'tls', status: 'success', complete: true },
+      tlsIssuer: { organization: issuer },
+    });
+    assert.equal(review.findings.find((item) => item.id === 'caa')?.state, 'indeterminate');
+  }
+});
+
 test('certificate policy review aligns a recognized issuer with target CAA', () => {
   const review = buildCertificatePolicyReview({
     dnsEvidence: { source: 'dns', status: 'success', complete: true, records: {} },

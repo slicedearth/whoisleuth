@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { runDomainControlMonitor } from '../cli/domain-control-monitor.mts';
+import { buildInvestigationPlan } from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
@@ -60,6 +61,13 @@ describe('CLI one-shot domain control monitor', () => {
     assert.equal(calls, 1);
     const document = JSON.parse(stdout);
     assert.equal(document.schema, 'whoisleuth.cli.domain-control-monitor');
+    const recheck = buildInvestigationPlan('post-change-verification', 'alpha.test', NOW)
+      .steps.find((step) => step.id === 'recheck');
+    assert.ok(recheck);
+    assert.equal(recheck.command, 'monitor-once');
+    assert.equal(recheck.produces, document.schema);
+    assert.equal(document.review.schema, 'whoisleuth.domain-control-review');
+    assert.notEqual(recheck.produces, document.review.schema);
     assert.equal(document.flightRecorder.schema, DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA);
     const edge = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges
       .find((candidate) => candidate.id === 'domain-control-flight-recorder.cli-monitor-embedding');
