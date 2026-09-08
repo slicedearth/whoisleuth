@@ -3,14 +3,18 @@
 // a post-parse traversal limit alone would not bound hostile parser work.
 import { parse, defaultTreeAdapter as adapter, type DefaultTreeAdapterTypes, type TreeAdapter } from 'parse5';
 import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
+import {
+  MAX_STATIC_HTML_TAGS, MAX_STATIC_HTML_NODES, MAX_STATIC_HTML_DEPTH,
+} from '../packages/contracts/page-fingerprints.mts';
+export {
+  MAX_STATIC_HTML_TAGS, MAX_STATIC_HTML_NODES, MAX_STATIC_HTML_DEPTH,
+  MAX_STATIC_HTML_TREE_EVENTS,
+} from '../packages/contracts/page-fingerprints.mts';
 
 // UTF-8 decoding cannot produce more UTF-16 code units than captured bytes.
 // Direct string callers share this ceiling; tree construction remains bounded
 // independently of the source size.
 export const MAX_STATIC_HTML_CHARS = MAX_HOMEPAGE_BYTES;
-export const MAX_STATIC_HTML_TAGS = 8_192;
-export const MAX_STATIC_HTML_NODES = MAX_STATIC_HTML_TAGS * 3;
-export const MAX_STATIC_HTML_DEPTH = 512;
 const MAX_CONSTRUCTED_ATTRIBUTE_CHARS = MAX_STATIC_HTML_CHARS * 4;
 const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 

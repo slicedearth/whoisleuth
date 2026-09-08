@@ -498,7 +498,7 @@ describe('privacy data-flow catalogue', () => {
     assert.doesNotMatch(resourcesPage, /<PrivacyDataFlowSummary/u);
     assert.match(resourcesPage, /id="privacy"[\s\S]*href="\/privacy"/u);
     const apiGuidance = readFileSync(new URL('../docs/registry-data-contract.md', import.meta.url), 'utf8');
-    assert.match(apiGuidance, /fixed documentation, not a new runtime endpoint/u);
-    assert.match(apiGuidance, /neither changes nor\s+extends the version-1 `\/api\/capabilities` response/u);
+    assert.match(apiGuidance, /\]\(privacy-data-flow-catalogue\.md\)/u);
+    assert.match(apiGuidance, /\]\(privacy-data-flow-catalogue\.json\)/u);
   });
 });

@@ -3,7 +3,7 @@
 // markup. Only bounded transient projections leave this module, never a DOM.
 import {
   htmlTreeEvents, isHtmlElement, parseBoundedHtml,
-  MAX_STATIC_HTML_CHARS, MAX_STATIC_HTML_TAGS,
+  MAX_STATIC_HTML_CHARS, MAX_STATIC_HTML_TAGS, MAX_STATIC_HTML_TREE_EVENTS,
 } from './bounded-html-document.mts';
 
 import {
@@ -124,14 +124,14 @@ type StaticHtmlToken =
   | { kind: 'end'; name: string }
   | { kind: 'text'; value: string };
 
-const MAX_STATIC_STRUCTURE_TOKENS = 4_096;
+const MAX_STATIC_STRUCTURE_TOKENS = MAX_STATIC_HTML_TREE_EVENTS;
 const MAX_TAG_LENGTH = 4_096;
 const MAX_ATTRIBUTES_PER_TAG = 128;
 const MAX_SCRIPT_ELEMENTS = 64;
 const MAX_SCRIPT_REFERENCE_LENGTH = 2_048;
 const MAX_SCRIPT_MEDIA_TYPE_LENGTH = 120;
-const MAX_INLINE_SCRIPT_CHARS = 32_768;
 const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
+const MAX_INLINE_SCRIPT_CHARS = MAX_INLINE_SCRIPT_TOTAL_CHARS;
 const MAX_STATIC_VISIBLE_TEXT_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_STATIC_FORMS = 50;
 const MAX_STATIC_INPUTS = 500;
@@ -431,9 +431,8 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
 
   function appendInlineScript(chars: string): void {
     if (!activeInlineScript || !chars) return;
-    const perScriptRemaining = MAX_INLINE_SCRIPT_CHARS - activeInlineScript.inlineContent.length;
     const totalRemaining = MAX_INLINE_SCRIPT_TOTAL_CHARS - inlineCharactersExamined;
-    const retainedLength = Math.max(0, Math.min(chars.length, perScriptRemaining, totalRemaining));
+    const retainedLength = Math.max(0, Math.min(chars.length, totalRemaining));
     if (retainedLength > 0) {
       activeInlineScript.inlineContent += chars.slice(0, retainedLength);
       inlineCharactersExamined += retainedLength;

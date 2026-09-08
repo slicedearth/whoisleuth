@@ -1,4 +1,5 @@
 import { WORKSPACE_ARCHIVE_SECTION_IDS } from './case-portability.mts';
+export { PAGE_FINGERPRINT_VERSION, PAGE_FINGERPRINT_PARSERS } from './page-fingerprints.mts';
 import { defineSchemaCompatibility, type SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
 import {
   defineSchemaLifecycleFamily,
@@ -169,11 +170,6 @@ export const MAX_WORKSPACE_INPUT_STRING_CODE_UNITS = 8 * 1024 * 1024;
 
 export const PAGE_BASELINE_VERSION = 1;
 export const PAGE_IDENTITY_VERSION = 3;
-export const PAGE_FINGERPRINT_VERSION = 2;
-export const PAGE_FINGERPRINT_PARSERS = Object.freeze({
-  1: 'static-tag-sequence-v1',
-  [PAGE_FINGERPRINT_VERSION]: 'html-tree-v2',
-} as const);
 export const MAX_BASELINE_TITLE_LENGTH = 200;
 export const MAX_BASELINE_RESOURCE_HOSTS = 30;
 export const MAX_BASELINE_IDENTIFIERS = 30;

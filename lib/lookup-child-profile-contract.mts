@@ -12,6 +12,7 @@ import {
   PAGE_IDENTITY_VERSION,
 } from '../packages/contracts/workspace-portability.mts';
 import { validPagePublicationMetadata } from './homepage-metadata-contract.mts';
+import { PAGE_FINGERPRINT_TOKEN_LIMITS } from '../packages/contracts/page-fingerprints.mts';
 import {
   MAX_LOOKUP_TLS_ALT_NAMES,
   MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
@@ -230,6 +231,7 @@ function validFingerprintIdentifier(value: unknown): boolean {
 }
 
 function validPageFingerprintProfile(value: JsonObject): boolean {
+  const tokenLimit = PAGE_FINGERPRINT_TOKEN_LIMITS[value.fingerprintVersion as keyof typeof PAGE_FINGERPRINT_TOKEN_LIMITS];
   const normalizedHtml = value.normalizedHtml;
   const visibleText = value.visibleText;
   const domStructure = value.domStructure;
@@ -242,7 +244,7 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
     || normalizedHtml.algorithm !== 'sha256'
     || typeof normalizedHtml.value !== 'string'
     || !SHA256_RE.test(normalizedHtml.value)
-    || !validUint(normalizedHtml.tokenCount, 4_096)
+    || !validUint(normalizedHtml.tokenCount, tokenLimit)
     || typeof normalizedHtml.truncated !== 'boolean'
     || !(visibleText === null || isJsonObject(visibleText)
       && hasExactKeys(visibleText, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
@@ -258,7 +260,7 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
     || domStructure.algorithm !== 'sha256'
     || typeof domStructure.value !== 'string'
     || !SHA256_RE.test(domStructure.value)
-    || !validUint(domStructure.nodeCount, 4_096)
+    || !validUint(domStructure.nodeCount, tokenLimit)
     || domStructure.parser !== PAGE_FINGERPRINT_PARSERS[value.fingerprintVersion as keyof typeof PAGE_FINGERPRINT_PARSERS]
     || typeof domStructure.truncated !== 'boolean'
     || !(domStructure.similarity === undefined || domStructure.similarity === null || isJsonObject(domStructure.similarity)
@@ -266,8 +268,8 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
       && domStructure.similarity.algorithm === 'simhash64-v1'
       && typeof domStructure.similarity.value === 'string'
       && SIMHASH64_RE.test(domStructure.similarity.value)
-      && validUint(domStructure.similarity.tokenCount, 4_096)
-      && validUint(domStructure.similarity.featureCount, 4_096)
+      && validUint(domStructure.similarity.tokenCount, tokenLimit)
+      && validUint(domStructure.similarity.featureCount, tokenLimit)
       && typeof domStructure.similarity.truncated === 'boolean')
     || !(formStructure === null || isJsonObject(formStructure)
       && hasExactKeys(formStructure, ['algorithm', 'value', 'formCount', 'controlCount', 'truncated'])

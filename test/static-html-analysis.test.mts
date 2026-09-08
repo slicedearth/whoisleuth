@@ -2,13 +2,39 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { HTML_TREE_FIXTURES } from './html-tree-fixtures.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
-import { analyzeStaticHtml, MAX_STATIC_HTML_CHARS, MAX_STATIC_HTML_TAGS } from '../lib/static-html-analysis.mts';
+import { analyzeStaticHtml, MAX_STATIC_HTML_CHARS, MAX_STATIC_HTML_TAGS, MAX_INLINE_SCRIPT_TOTAL_CHARS } from '../lib/static-html-analysis.mts';
+import { createPageBaseline } from '../packages/workspace/page-baseline.mts';
 import { createPageFingerprints } from '../lib/page-fingerprints.mts';
 import { sanitizeLookupChildProfiles } from '../lib/lookup-child-profile-contract.mts';
 import { createHash } from 'node:crypto';
 import { recordValue } from './value-assertions.mts';
 
 describe('bounded native document evidence', () => {
+  test('a single inline script can use the aggregate allowance without raising total work', () => {
+    const first = 'x'.repeat(40_000);
+    const full = analyzeStaticHtml(`<script>${first}</script>`);
+    assert.equal(full.scripts[0]?.inlineContent, first);
+    assert.equal(full.inlineCharactersExamined, first.length);
+    assert.equal(full.inlineLimitReached, false);
+    const limited = analyzeStaticHtml(`<script>${first}</script><script>${first}</script>`);
+    assert.equal(limited.inlineCharactersExamined, MAX_INLINE_SCRIPT_TOTAL_CHARS);
+    assert.equal(limited.scripts.reduce((count, script) => count + script.inlineContent.length, 0), MAX_INLINE_SCRIPT_TOTAL_CHARS);
+    assert.equal(limited.inlineLimitReached, true);
+  });
+
+  test('large native fingerprints cross the response and retained-baseline boundaries', () => {
+    const html = '<main>' + '<div>record</div>'.repeat(4_000) + '<section>Later evidence</section></main>';
+    const result = extractHtmlSignals(html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
+    assert.ok(result.pageIdentity);
+    assert.ok(result.pageIdentity.fingerprints.normalizedHtml.tokenCount > 4_096);
+    assert.equal(sanitizeLookupChildProfiles({ availability: { pageIdentity: result.pageIdentity } }).availability.pageIdentity, result.pageIdentity);
+    const retained = createPageBaseline('example.test', result);
+    assert.ok(retained);
+    assert.equal(retained.normalizedHtml.tokenCount, result.pageIdentity.fingerprints.normalizedHtml.tokenCount);
+    assert.equal(retained.domStructure.nodeCount, result.pageIdentity.fingerprints.domStructure.nodeCount);
+    assert.equal(retained.complete, true);
+  });
+
   for (const fixture of HTML_TREE_FIXTURES) {
     test(fixture.name, () => {
       const analysis = analyzeStaticHtml(fixture.html, { includeVisibleText: true });
@@ -144,8 +170,8 @@ describe('bounded native document evidence', () => {
     assert.equal(result.technologyProfile?.complete, true);
     assert.equal(result.pageRoleProfile?.findings.some(({ role }) => role === 'content'), true);
     assert.equal(result.pageRoleProfile?.complete, true);
-    // The independently bounded similarity representation remains honest.
-    assert.equal(result.pageIdentity?.fingerprints.domStructure.truncated, true);
+    assert.ok((result.pageIdentity?.fingerprints.domStructure.nodeCount ?? 0) > 4_096);
+    assert.equal(result.pageIdentity?.fingerprints.domStructure.truncated, false);
   });
 
   test('an oversized drawing attribute limits fingerprints, not independent HTML technology evidence', () => {

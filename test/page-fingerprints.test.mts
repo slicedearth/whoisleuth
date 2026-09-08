@@ -10,6 +10,7 @@ import {
   createPageFingerprints,
 } from '../lib/page-fingerprints.mts';
 import { requiredValue } from './value-assertions.mts';
+import { MAX_STATIC_HTML_TAGS } from '../packages/contracts/page-fingerprints.mts';
 
 const BASE_OPTIONS = Object.freeze({ baseUrl: 'https://example.com/start' });
 
@@ -211,10 +212,25 @@ describe('page fingerprints', () => {
     assert.match(result.limitations.join(' '), /input was capped/);
   });
 
-  test('caps normalized and DOM tokens with explicit partial provenance', () => {
-    const result = fingerprints(Array.from({ length: MAX_FINGERPRINT_TOKENS + 1 }, () => '<i>x</i>').join(''));
-    assert.equal(result.normalizedHtml.tokenCount, MAX_FINGERPRINT_TOKENS);
-    assert.equal(result.domStructure.nodeCount, MAX_FINGERPRINT_TOKENS);
+  test('retains later structure and text throughout an admitted large document', () => {
+    const prefix = '<main>' + '<div>record</div>'.repeat(4_000);
+    const first = fingerprints(`${prefix}<section>original ending</section></main>`);
+    const changed = fingerprints(`${prefix}<article>different ending</article></main>`);
+    assert.ok(first.normalizedHtml.tokenCount > 4_096);
+    assert.ok(first.domStructure.nodeCount > 4_096);
+    assert.equal(first.complete, true);
+    assert.equal(changed.complete, true);
+    assert.notEqual(first.normalizedHtml.value, changed.normalizedHtml.value);
+    assert.notEqual(first.domStructure.value, changed.domStructure.value);
+    assert.ok(requiredValue(first.visibleText).tokenCount > 4_000);
+  });
+
+  test('keeps native construction bounds explicit without another shorter projection cap', () => {
+    const result = fingerprints('<section>record</section>'.repeat(MAX_STATIC_HTML_TAGS + 1));
+    assert.ok(result.normalizedHtml.tokenCount > 0);
+    assert.ok(result.normalizedHtml.tokenCount <= MAX_FINGERPRINT_TOKENS);
+    assert.ok(result.domStructure.nodeCount > 0);
+    assert.ok(result.domStructure.nodeCount <= MAX_FINGERPRINT_TOKENS);
     assert.equal(result.normalizedHtml.truncated, true);
     assert.equal(result.domStructure.truncated, true);
     assert.equal(result.complete, false);
@@ -240,12 +256,18 @@ describe('page fingerprints', () => {
   });
 
   test('upstream source truncation marks the fingerprint collection incomplete', () => {
-    const result = fingerprints('<main>Captured prefix</main>', {
+    const html = '<main>Captured prefix</main><form><input></form>';
+    const result = fingerprints(html, {
       sourceTruncated: true,
-      exactBodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 28 },
+      exactBodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: Buffer.byteLength(html) },
     });
     assert.equal(result.complete, false);
     assert.equal(result.truncated, true);
     assert.equal(result.exact.scope, 'captured-prefix');
+    assert.equal(result.normalizedHtml.truncated, true);
+    assert.equal(result.domStructure.truncated, true);
+    assert.equal(requiredValue(result.domStructure.similarity).truncated, true);
+    assert.equal(requiredValue(result.visibleText).truncated, true);
+    assert.equal(requiredValue(result.formStructure).truncated, true);
   });
 });

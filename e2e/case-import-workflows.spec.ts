@@ -261,29 +261,45 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await openCasesView(page);
   const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
-  const block = Buffer.from([
+  const prefix = [
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
     '',
-    '<!doctype html><html><head><title>Reviewed archive page</title></head><body>private body</body></html>',
-  ].join('\r\n'));
-  const digest = createHash('sha256').update(block).digest('hex');
-  const headers = Buffer.from([
-    'WARC/1.1',
-    'WARC-Type: response',
-    'WARC-Date: 2026-07-28T01:00:00.000Z',
-    'WARC-Record-ID: <urn:uuid:e2e-response>',
-    'WARC-Target-URI: https://archive-review.invalid/private?token=secret',
-    `WARC-Block-Digest: sha256:${digest}`,
-    'Content-Type: application/http; msgtype=response',
-    `Content-Length: ${block.byteLength}`,
-    '',
-    '',
-  ].join('\r\n'));
+    '<!doctype html><html><head><title>Reviewed archive page</title></head><body>private body',
+  ].join('\r\n');
+  const suffix = '</body></html>';
+  const recordBytes = 1_048_576;
+  const block = Buffer.from(prefix + 'x'.repeat(recordBytes - Buffer.byteLength(prefix + suffix)) + suffix);
+  expect(block.byteLength).toBe(recordBytes);
+  function archiveFor(response: Buffer): Buffer {
+    const headers = Buffer.from([
+      'WARC/1.1',
+      'WARC-Type: response',
+      'WARC-Date: 2026-07-28T01:00:00.000Z',
+      'WARC-Record-ID: <urn:uuid:e2e-response>',
+      'WARC-Target-URI: https://archive-review.invalid/private?token=secret',
+      `WARC-Block-Digest: sha256:${createHash('sha256').update(response).digest('hex')}`,
+      'Content-Type: application/http; msgtype=response',
+      `Content-Length: ${response.byteLength}`,
+      '',
+      '',
+    ].join('\r\n'));
+    return Buffer.concat([headers, response, Buffer.from('\r\n\r\n')]);
+  }
+  const malformedPrefix = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n';
+  const malformed = Buffer.from((malformedPrefix + '<title '.repeat(150_000)).slice(0, recordBytes));
+  expect(malformed.byteLength).toBe(recordBytes);
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'unfinished-title.warc', mimeType: 'application/warc', buffer: archiveFor(malformed),
+  });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WARC evidence' })).toBeVisible();
+  await expect(externalImport).toHaveAttribute('aria-busy', 'false');
+  await expect(externalImport).toContainText('HTTP status 200');
+  await expect(externalImport).not.toContainText('Observed title');
   await externalImport.locator('input[type="file"]').setInputFiles({
     name: 'reviewed-evidence.warc',
     mimeType: 'application/warc',
-    buffer: Buffer.concat([headers, block, Buffer.from('\r\n\r\n')]),
+    buffer: archiveFor(block),
   });
   await expect(externalImport.getByRole('heading', { name: 'Portable WARC evidence' })).toBeVisible();
   await expect(externalImport).toContainText('Reviewed archive page');
@@ -293,6 +309,9 @@ test('portable WARC evidence is normalized locally before deliberate case import
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Imported 1 finding into 1 new and 0 existing case.' })).toBeVisible();
   await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(JSON.stringify(stored.records)).not.toContain('private body');
+  expect(JSON.stringify(stored.records)).not.toContain('token=secret');
 });
 
 test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }) => {

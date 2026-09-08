@@ -6,6 +6,7 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { isInformativePerceptualHash as isInformativeFaviconHash } from '../../lib/perceptual-hash-comparison.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { PAGE_FINGERPRINT_TOKEN_LIMITS } from '../contracts/page-fingerprints.mts';
 import {
   MAX_BASELINE_IDENTIFIERS,
   MAX_BASELINE_RESOURCE_HOSTS,
@@ -28,7 +29,6 @@ export {
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 const SIMHASH_RE = /^[a-f0-9]{16}$/i;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const MAX_HTML_TOKENS = 4096;
 const MAX_TEXT_TOKENS = 8192;
 const MAX_FORMS = 50;
 const MAX_FORM_CONTROLS = 500;
@@ -147,11 +147,11 @@ function shaComponent<K extends string>(
   } as ShaComponent<K>;
 }
 
-function visibleTextComponent(raw: unknown): VisibleTextComponent | null {
+function visibleTextComponent(raw: unknown, maximum = MAX_TEXT_TOKENS): VisibleTextComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'simhash64-v1' || typeof value.value !== 'string' || !SIMHASH_RE.test(value.value)) return null;
-  const tokenCount = count(value.tokenCount, MAX_TEXT_TOKENS);
-  const featureCount = count(value.featureCount, MAX_TEXT_TOKENS);
+  const tokenCount = count(value.tokenCount, maximum);
+  const featureCount = count(value.featureCount, maximum);
   if (tokenCount === null || featureCount === null) return null;
   return {
     algorithm: 'simhash64-v1',
@@ -166,9 +166,10 @@ function domComponent(raw: unknown, fingerprintVersion: PageBaseline['fingerprin
   const value = record(raw);
   if (!value || value.algorithm !== 'sha256' || value.parser !== PAGE_FINGERPRINT_PARSERS[fingerprintVersion]) return null;
   const digest = sha256(value.value);
-  const nodeCount = count(value.nodeCount, MAX_HTML_TOKENS);
+  const maximum = PAGE_FINGERPRINT_TOKEN_LIMITS[fingerprintVersion];
+  const nodeCount = count(value.nodeCount, maximum);
   if (!digest || nodeCount === null) return null;
-  const similarity = value.similarity == null ? null : visibleTextComponent(value.similarity);
+  const similarity = value.similarity == null ? null : visibleTextComponent(value.similarity, maximum);
   return {
     algorithm: 'sha256',
     value: digest,
@@ -264,7 +265,7 @@ export function normalizePageBaseline(raw: unknown): PageBaseline | null {
   const pageIdentityVersion = count(value.pageIdentityVersion, PAGE_IDENTITY_VERSION);
   if (typeof value.fingerprintVersion !== 'number' || !Object.hasOwn(PAGE_FINGERPRINT_PARSERS, value.fingerprintVersion)) return null;
   const fingerprintVersion = value.fingerprintVersion as PageBaseline['fingerprintVersion'];
-  const normalizedHtml = shaComponent(value.normalizedHtml, 'tokenCount', MAX_HTML_TOKENS);
+  const normalizedHtml = shaComponent(value.normalizedHtml, 'tokenCount', PAGE_FINGERPRINT_TOKEN_LIMITS[fingerprintVersion]);
   const domStructure = domComponent(value.domStructure, fingerprintVersion);
   if (!domain || !lookupDomain || !observedAt || pageIdentityVersion !== PAGE_IDENTITY_VERSION
     || !normalizedHtml || !domStructure) return null;

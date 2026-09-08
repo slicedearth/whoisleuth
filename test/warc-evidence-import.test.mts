@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 
 import {
   MAX_WARC_IMPORT_BYTES,
+  MAX_WARC_RECORD_BYTES,
   parseWarcEvidenceArchive,
 } from '../frontend/src/lib/analysis/warc-evidence-import.ts';
 
@@ -65,6 +66,47 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('scans unfinished title tags without losing a later bounded title', async () => {
+    for (const [body, title] of [
+      ['<title '.repeat(145_000), null],
+      ['<title>'.repeat(120_000), null],
+      [`<title>${'x'.repeat(5_000)}</title><TITLE lang=en>Later &amp; bounded</TITLE>`, 'Later & bounded'],
+      ['</title><title-empty>Not a title</title-empty><title>Retained title</title>', 'Retained title'],
+    ] as const) {
+      const block = encoder.encode(`HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n${body}`);
+      assert.ok(block.byteLength <= MAX_WARC_RECORD_BYTES);
+      const result = await parseWarcEvidenceArchive(archive(record('response', block, {
+        target: 'https://example.test/',
+      })), 'capture.warc');
+      assert.equal(result.accepted, 1);
+      const summary = result.document.findings[0]?.summary ?? '';
+      if (title) assert.ok(summary.includes(`Observed title "${title}".`));
+      else assert.doesNotMatch(summary, /Observed title/u);
+    }
+  });
+
+  test('admits a complete one-MiB response record and rejects one byte beyond it', async () => {
+    const prefix = 'HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<!doctype html><title>Large captured page</title><main>';
+    const suffix = '</main>';
+    const padding = MAX_WARC_RECORD_BYTES - encoder.encode(prefix + suffix).byteLength;
+    const block = encoder.encode(prefix + 'x'.repeat(padding) + suffix);
+    assert.equal(block.byteLength, MAX_WARC_RECORD_BYTES);
+    const result = await parseWarcEvidenceArchive(archive(record('response', block, {
+      target: 'https://example.test/',
+    })), 'capture.warc');
+    assert.equal(result.accepted, 1);
+    assert.equal(result.excluded, 0);
+    assert.equal(result.document.findings[0]?.completeness, 'complete');
+    assert.match(result.document.findings[0]?.summary ?? '', /Large captured page/u);
+    assert.doesNotMatch(JSON.stringify(result), /x{50}/u);
+
+    const oversized = new Uint8Array(MAX_WARC_RECORD_BYTES + 1);
+    oversized.set(block);
+    await assert.rejects(() => parseWarcEvidenceArchive(archive(record('response', oversized, {
+      target: 'https://example.test/',
+    })), 'capture.warc'), /excessive Content-Length/u);
+  });
+
   test('requires an explicit timezone in WARC-Date', async () => {
     const block = responseBlock();
     await assert.rejects(

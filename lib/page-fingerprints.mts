@@ -4,7 +4,9 @@
 
 import { createHash } from 'node:crypto';
 import { analyzeStaticHtml, type StaticHtmlAnalysis } from './static-html-analysis.mts';
-import { PAGE_FINGERPRINT_VERSION, PAGE_FINGERPRINT_PARSERS } from '../packages/contracts/workspace-portability.mts';
+import {
+  PAGE_FINGERPRINT_VERSION, PAGE_FINGERPRINT_PARSERS, PAGE_FINGERPRINT_TOKEN_LIMITS,
+} from '../packages/contracts/page-fingerprints.mts';
 import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
 
 type ExactBodyHash = {
@@ -31,7 +33,7 @@ type FormShape = { method: string; action: string; controls: Record<string, numb
 
 const MAX_FINGERPRINT_SOURCE_BYTES = MAX_HOMEPAGE_BYTES;
 const MAX_FINGERPRINT_TAG_LENGTH = 4096;
-const MAX_FINGERPRINT_TOKENS = 4096;
+const MAX_FINGERPRINT_TOKENS = PAGE_FINGERPRINT_TOKEN_LIMITS[PAGE_FINGERPRINT_VERSION];
 const MAX_FINGERPRINT_ATTRIBUTES = 64;
 const MAX_VISIBLE_TEXT_TOKENS = 8192;
 const MAX_FORM_FINGERPRINTS = 50;
@@ -356,6 +358,9 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
   if (options.sourceTruncated === true && exact.scope === 'complete-body') exact = { ...exact, scope: 'captured-prefix' };
   const parsedStructure = !source.truncated && options.htmlAnalysis
     ? options.htmlAnalysis : analyzeStaticHtml(source.text, { baseUrl, includeVisibleText: true });
+  const documentIncomplete = options.sourceTruncated === true || source.truncated
+    || parsedStructure.inputLimitReached || parsedStructure.tagLimitReached;
+  const treeIncomplete = documentIncomplete || parsedStructure.structureLimitReached;
   const resolutionBase = parsedStructure.effectiveBaseUrl ?? baseUrl;
   const normalized = normalizedMarkupAndStructure(parsedStructure, resolutionBase);
   const text = visibleTextFingerprint(normalized.visibleText);
@@ -363,9 +368,8 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
   const forms = formStructureFingerprint(parsedStructure, resolutionBase);
   const resourceHosts = normalizedResourceHosts(options.resources);
   const identifiers = normalizedIdentifiers(options.trackingIdentifiers, options.identifiersTruncated === true);
-  const truncated = options.sourceTruncated === true || source.truncated || normalized.normalizedTruncated
-    || normalized.structureTruncated || parsedStructure.inputLimitReached || parsedStructure.tagLimitReached
-    || parsedStructure.structureLimitReached || text?.truncated === true || forms?.truncated === true
+  const truncated = treeIncomplete || normalized.normalizedTruncated
+    || normalized.structureTruncated || text?.truncated === true || forms?.truncated === true
     || resourceHosts.truncated || identifiers.truncated;
   const limitations = [
     'Fingerprints summarise capped static HTML and are comparison aids, not cryptographic proof of page authorship or intent.',
@@ -385,24 +389,24 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
       algorithm: 'sha256',
       value: sha256(normalized.normalizedTokens.join('\n')),
       tokenCount: normalized.normalizedTokens.length,
-      truncated: normalized.normalizedTruncated,
+      truncated: treeIncomplete || normalized.normalizedTruncated,
     },
-    visibleText: text,
+    visibleText: text ? { ...text, truncated: treeIncomplete || text.truncated } : null,
     domStructure: {
       algorithm: 'sha256',
       value: sha256(normalized.structureTokens.join('\n')),
       nodeCount: normalized.structureTokens.length,
       parser: PAGE_FINGERPRINT_PARSERS[PAGE_FINGERPRINT_VERSION],
-      truncated: normalized.structureTruncated,
+      truncated: treeIncomplete || normalized.structureTruncated,
       similarity: structureSimilarity ? {
         algorithm: 'simhash64-v1',
         value: structureSimilarity.value,
         tokenCount: parsedStructure.structureTokens.length,
         featureCount: structureSimilarity.featureCount,
-        truncated: parsedStructure.inputLimitReached || parsedStructure.tagLimitReached || parsedStructure.structureLimitReached,
+        truncated: treeIncomplete,
       } : null,
     },
-    formStructure: forms,
+    formStructure: forms ? { ...forms, truncated: documentIncomplete || forms.truncated } : null,
     resourceHosts,
     identifiers,
     complete: !truncated,

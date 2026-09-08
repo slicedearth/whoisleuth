@@ -147,8 +147,9 @@ that the metadata was imported and unverified.
 ## Portable WARC and WACZ response evidence
 
 The Cases importer accepts a strict uncompressed `.warc` file as a separate
-local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record,
-then retains at most 25 supported HTML response findings. Request records,
+local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record
+(including HTTP headers and body), then retains at most 25 supported HTML
+response findings. Request records,
 cookie or authorisation material, downloads, compressed response bodies,
 non-HTML content, invalid or credentialed target URLs, excessive HTML, and
 mismatched supported record digests are excluded. The importer never executes

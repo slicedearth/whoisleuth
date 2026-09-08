@@ -330,7 +330,12 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   const publishedBaseline = archive.sections.brandProfiles.profiles[0].pageBaseline;
   const publishedIdentity = archive.sections.websiteSnapshots.snapshots[0].identity;
   const domain = 'baseline.example';
-  const signals = extractHtmlSignals('<main><h1>Current account centre</h1><form><input type=password></form></main>', domain, { observedAt: ISO });
+  const html = `<main><h1>Current account centre</h1>${'<div>Account information</div>'.repeat(4_000)}<form><input type=password></form></main>`;
+  const signals = extractHtmlSignals(html, domain, { observedAt: ISO });
+  const fingerprints = requiredValue(signals.pageIdentity, 'The recaptured page identity is missing.').fingerprints;
+  expect(fingerprints.normalizedHtml.tokenCount).toBeGreaterThan(4_096);
+  expect(fingerprints.domStructure.nodeCount).toBeGreaterThan(4_096);
+  expect(fingerprints.complete).toBe(true);
   let requests = 0;
   await page.route('**/api/availability?*', async (route) => {
     requests += 1;
@@ -358,7 +363,11 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved');
   await page.reload();
   const current = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
-  expect(current.records[0]?.value.pageBaseline).toMatchObject({ fingerprintVersion: 2, domStructure: { parser: 'html-tree-v2' } });
+  expect(current.records[0]?.value.pageBaseline).toMatchObject({
+    fingerprintVersion: 2,
+    normalizedHtml: { tokenCount: fingerprints.normalizedHtml.tokenCount, truncated: false },
+    domStructure: { parser: 'html-tree-v2', nodeCount: fingerprints.domStructure.nodeCount, truncated: false },
+  });
   expect((await readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 1 })).records[0]?.value.identity).toEqual(publishedIdentity);
   expect(requests).toBe(1);
 });
