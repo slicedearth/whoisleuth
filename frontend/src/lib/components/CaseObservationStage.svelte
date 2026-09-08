@@ -4,18 +4,21 @@
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
     type CaseRecord,
-    type editCase,
   } from '$lib/cases';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
 
-  let { record, visible, mutationBusy, persist }: {
+  let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
-    visible: boolean;
+    mode: CaseResponsePresentation;
     mutationBusy: boolean;
-    persist: (patch: Parameters<typeof editCase>[1], success: string) => Promise<boolean>;
+    persist: PersistCaseResponse;
   } = $props();
+
+  let expanded = $state(false);
+  $effect(() => { expanded = mode === 'quick'; });
 
   // Keep this instance mounted for one Case while presentations change.
   // Only a committed write clears the corresponding accepted draft.
@@ -80,8 +83,8 @@
 
 </script>
 
-{#if visible}
-  <details id={`case-response-observation-${record.id}`}>
+<section class="case-response-stage" aria-label="Case observations">
+  <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
     <form class="response-form" oninput={pinDraft.changed} onchange={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
       <div class="two-columns">
@@ -202,42 +205,9 @@
     {/if}
   </details>
 
-{/if}
+</section>
 
 <style>
-  details {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--panel);
-  }
-  summary {
-    padding: 11px 12px;
-    cursor: pointer;
-    font: 700 var(--text-xs) var(--mono);
-  }
-  details[open] > summary { border-bottom: 1px solid var(--border); }
-  .response-form { display: grid; gap: 10px; padding: 12px; }
-  .two-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  textarea, input, select { width: 100%; }
-  .field small { color: var(--muted); }
-  .records { display: grid; gap: 8px; margin: 0; padding: 0 12px 12px; list-style: none; }
-  .records li {
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--panel-raised);
-  }
-  .records strong, .records small { display: block; }
-  .records p { margin: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .records small { color: var(--muted); font-size: var(--text-2xs); }
-  .notice {
-    margin: 0;
-    padding: 9px 10px;
-    border-left: 3px solid var(--amber);
-    background: rgb(var(--amber-rgb) / .06);
-    color: var(--muted);
-    font-size: var(--text-xs);
-  }
   .chronology {
     display: grid;
     gap: 8px;
@@ -255,7 +225,7 @@
   }
   .chronology>div>span,.chronology>p,.chronology>small {
     color: var(--muted);
-    font-size: var(--text-2xs);
+    font-size: var(--text-xs);
   }
   .chronology>p {
     margin: 0;
@@ -288,7 +258,7 @@
   }
   .chronology li>div>span,.chronology li>small {
     color: var(--muted);
-    font-size: var(--text-2xs);
+    font-size: var(--text-xs);
   }
   .chronology li>p {
     margin: 6px 0;
@@ -307,7 +277,7 @@
   }
   .chronology dt,.chronology dd {
     margin: 0;
-    font-size: var(--text-2xs);
+    font-size: var(--text-xs);
   }
   .chronology dt {
     color: var(--muted);
@@ -316,5 +286,4 @@
     font-family: var(--mono);
     overflow-wrap: anywhere;
   }
-  @media (max-width: 800px) { .two-columns { grid-template-columns: 1fr; } }
 </style>

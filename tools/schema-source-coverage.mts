@@ -64,7 +64,6 @@ export const SCHEMA_SOURCE_ROOTS = Object.freeze([
 ] as const);
 export const SCHEMA_SOURCE_ROOT_FILES = Object.freeze(['server.mts'] as const);
 export const SCHEMA_SOURCE_NON_SOURCE_FILES = Object.freeze([
-  'frontend/src/app.css',
   'frontend/src/app.html',
   'lib/generated/cisa-kev-catalog.sha256',
   'lib/generated/retire-browser-catalog.sha256',
@@ -105,6 +104,9 @@ const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.json', '.jsx', '.mjs
 // READMEs do not need a per-file exception; runtime templates still do.
 function isConventionalMarkdown(relative: string): boolean {
   return /^(?:[^/]+|packages\/[^/]+\/README)\.md$/u.test(relative);
+}
+function isFrontendStylesheet(relative: string): boolean {
+  return relative.startsWith('frontend/src/') && path.extname(relative).toLowerCase() === '.css';
 }
 const SCHEMA_SOURCE_NON_SOURCE_FILE_SET = new Set<string>(SCHEMA_SOURCE_NON_SOURCE_FILES);
 const CLASSIFICATION_KINDS = new Set(['exempt', 'member', 'non_schema']);
@@ -259,7 +261,7 @@ async function collectFiles(
       }
       if (!metadata.isFile()) throw new TypeError(`Schema source path ${relative} must be an ordinary file or directory.`);
       if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        if (isConventionalMarkdown(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
         if (!SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
         }
@@ -337,7 +339,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
     for (const relative of manifest) {
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
-        if (isConventionalMarkdown(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
         if (SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           observedNonSourceFiles.add(relative);
           continue;

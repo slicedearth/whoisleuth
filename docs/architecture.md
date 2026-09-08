@@ -42,6 +42,12 @@ Frontend compatibility paths may re-export shared modules, but their exports
 must remain identity-preserving facades. Non-frontend production code cannot
 import Svelte routes, components or browser adapters.
 
+The Case response workspace coordinates writes, reconciliation and focus.
+Observation, assessment, action and outcome components own their forms and
+temporary drafts; Quick and Advanced use the same form definitions. The
+domain model owns validation and append-only histories, and the browser-store
+adapter owns persistence.
+
 ## Request pipeline
 
 A hosted request passes through one protected pipeline:

@@ -1,3 +1,5 @@
+import type { CasePatch } from './case-model.ts';
+
 export const CASE_RESPONSE_STAGE_DEFINITIONS = Object.freeze({
   observation: Object.freeze({ number: 1, label: 'Observation' }),
   assessment: Object.freeze({ number: 2, label: 'Assessment' }),
@@ -16,3 +18,10 @@ export type CaseResponseStage = Readonly<{
   summary: string;
   nextRequirement: string;
 }>;
+export type CaseResponsePresentation = 'quick' | 'advanced';
+
+export type PersistCaseResponse = (
+  patch: CasePatch,
+  success: string,
+  focusFallback?: (() => HTMLElement | null) | null,
+) => Promise<boolean>;

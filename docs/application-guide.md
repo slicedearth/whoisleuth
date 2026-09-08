@@ -180,6 +180,12 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+Quick response includes observation, conclusion, recipient review, packet,
+manual delivery record, independent recheck and closure. Stage links open the
+relevant form. Advanced adds assertions, branches, manual investigation steps
+and detailed action transitions. Switching presentations preserves unfinished
+stage drafts for the open Case; navigating away does not save them.
+
 External imports open a paged review of every accepted finding or claim. Select
 records across pages and inspect **Retained fields** before importing; shortened
 values and omitted qualifications are identified. Unselected records do not

@@ -6,6 +6,58 @@ import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-desi
 
 // Shared visual-system, navigation and overflow coverage.
 
+test('native temporal fields share text-control sizing and theme while choices stay compact', async ({ page }) => {
+  await page.goto('/resources');
+  await page.evaluate(() => {
+    const group = document.createElement('fieldset');
+    group.id = 'native-control-fixture';
+    group.style.minWidth = '0';
+    group.style.maxWidth = '20rem';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Native input controls';
+    group.append(legend);
+    for (const type of ['text', 'date', 'datetime-local', 'time', 'month', 'week', 'checkbox', 'radio']) {
+      const label = document.createElement('label');
+      label.className = 'field';
+      label.append(type);
+      const input = document.createElement('input');
+      input.type = type;
+      label.append(input);
+      group.append(label);
+    }
+    document.querySelector('main')!.append(group);
+  });
+  try {
+    const group = page.getByRole('group', { name: 'Native input controls', exact: true });
+    await expect(group.locator('input')).toHaveCount(8);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        const inputs = await group.evaluate((element) => [...element.querySelectorAll('input')].map((input) => {
+          const style = getComputedStyle(input);
+          const box = input.getBoundingClientRect();
+          return { type: input.type, height: box.height, width: box.width, background: style.backgroundColor, border: style.borderRadius };
+        }));
+        const text = inputs.find((input) => input.type === 'text')!;
+        for (const input of inputs) {
+          if (input.type === 'checkbox' || input.type === 'radio') {
+            expect(input.width).toBeLessThanOrEqual(24);
+            expect(input.height).toBeLessThanOrEqual(24);
+          } else {
+            expect(input.height).toBeGreaterThanOrEqual(44);
+            expect(input.background).toBe(text.background);
+            expect(input.border).toBe(text.border);
+          }
+        }
+        await expectNoHorizontalOverflow(page);
+      }
+    }
+  } finally {
+    await page.evaluate(() => document.getElementById('native-control-fixture')?.remove());
+  }
+});
+
 test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
     { path: '/', selector: '.public-brand strong', width: 1280, height: 800, visible: true },

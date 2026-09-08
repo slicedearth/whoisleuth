@@ -340,13 +340,13 @@ input, select, textarea { caret-color: var(--interface-accent); }
    native size so a bare <input type="checkbox"> can never inflate into a
    44px-tall text box again. */
 select, textarea,
-input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], :not([type])) {
+input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], [type="date"], [type="datetime-local"], [type="time"], [type="month"], [type="week"], :not([type])) {
   width: 100%;
   border: 1px solid var(--quiet-control-border);
   border-radius: var(--radius-sm);
   background: var(--panel);
 }
-input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], :not([type])) {
+input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], [type="date"], [type="datetime-local"], [type="time"], [type="month"], [type="week"], :not([type])) {
   min-height: 44px;
   padding: 0 12px;
 }

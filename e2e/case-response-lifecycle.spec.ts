@@ -176,7 +176,8 @@ test('Quick and Advanced Case Response presentations keep one record and focus t
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
   await expect(workspace.getByRole('heading', { name: 'Evidence, reasoning, and actions' })).toBeVisible();
   await expect(workspace.getByRole('status', { name: 'Next Case requirement' })).toContainText('Observation');
-  await expect(workspace.locator('details[id^="case-response-observation-"]')).toHaveCount(0);
+  const quickObservation = workspace.getByRole('region', { name: 'Case observations', exact: true });
+  await expect(quickObservation.getByRole('button', { name: 'Pin evidence', exact: true })).toBeVisible();
   await workspace.getByRole('button', { name: 'Advanced history and fields' }).click();
   const observation = workspace.locator('details[id^="case-response-observation-"]').first();
   await expect(observation).toHaveAttribute('open', '');
@@ -205,7 +206,7 @@ test('observation drafts survive presentation changes and another stage save', a
   await sighting.getByLabel('Evidence category').selectOption('delegation');
   await sighting.getByLabel(/Limitations/).fill('Retained sighting limit');
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
-  await expect(pin).toHaveCount(0);
+  await expect(pin.getByLabel('Label')).toHaveValue('Retained draft');
   await workspace.getByLabel('Recipient or owner', { exact: true }).fill('Fixture internal reviewer');
   await workspace.getByRole('button', { name: 'Create drafting action' }).click();
   await expect(workspace.getByRole('button', { name: 'Ready for review', exact: true })).toBeVisible();
@@ -214,7 +215,7 @@ test('observation drafts survive presentation changes and another stage save', a
   expect(saved.records[0]!.value.actions[0]!.state).toBe('drafting');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
   await pin.locator('summary').click();
-  await sighting.locator('summary').click();
+  await expect(sighting).toHaveAttribute('open', '');
   await expect(pin.getByLabel('Label')).toHaveValue('Retained draft');
   await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('An unfinished evidence selection.');
   await expect(pin.getByLabel('Source', { exact: true })).toHaveValue('Draft source');
@@ -308,7 +309,8 @@ test('observation writes preserve another tab edit and coordinate rapid submissi
   } finally { await other.close(); }
 });
 
-test('observation forms remain usable across supported layouts and both themes', async ({ page }, testInfo) => {
+test('Case stage forms remain usable across supported layouts and both themes', async ({ page }, testInfo) => {
+  test.slow();
   await openCasesView(page);
   await createCase(page, 'observation-layout.invalid');
   const workspace = await openCaseResponseWorkspace(page);
@@ -322,11 +324,22 @@ test('observation forms remain usable across supported layouts and both themes',
   await expect(pin.locator('ol.records > li')).toHaveCount(1);
   await sighting.getByRole('button', { name: 'Record sighting' }).click();
   await expect(sighting.locator('.chronology')).toBeVisible();
+  await expect(pin).toHaveAttribute('open', '');
+  const stagePanels = [
+    workspace.getByRole('region', { name: 'Case assessment', exact: true }),
+    workspace.getByRole('region', { name: 'Case response actions', exact: true }),
+    workspace.getByRole('region', { name: 'Case independent review and closure', exact: true }),
+  ];
+  for (const stage of stagePanels) await stage.locator(':scope > details > summary').first().click();
+  await stagePanels[0]!.getByLabel('Decision summary', { exact: true }).fill('A reviewed conclusion with a deliberately long descriptive title');
+  await stagePanels[0]!.getByLabel('Rationale', { exact: true }).fill('The observation and its limitations remain readable at every supported width. '.repeat(6));
+  await stagePanels[1]!.getByLabel('Recipient or internal owner', { exact: true }).fill('Long fixture review-desk reference '.repeat(6));
+  await stagePanels[2]!.getByLabel('Closure summary', { exact: true }).fill('Retained observations remain separate from provider claims. '.repeat(6));
   for (const theme of ['Light theme', 'Dark theme']) {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.getByRole('button', { name: /Colour theme/ }).click();
     await page.getByRole('option', { name: theme }).click();
-    for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]]) {
+    for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700], [1920, 1080], [2560, 1440], [3840, 2160]]) {
       await page.setViewportSize({ width: width!, height: height! });
       await expectNoHorizontalOverflow(page);
       const fact = pin.getByLabel('Fact', { exact: true });
@@ -346,6 +359,32 @@ test('observation forms remain usable across supported layouts and both themes',
       await pin.scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
       await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+      for (const [index, stage] of stagePanels.entries()) {
+        const bounds = await stage.evaluate((element) => {
+          const panel = element.getBoundingClientRect();
+          const controls = [...element.querySelectorAll('input, select, textarea, button')]
+            .filter((control) => control.getClientRects().length > 0);
+          return {
+            count: controls.length,
+            tapReady: controls.every((control) =>
+              control instanceof HTMLInputElement && ['checkbox', 'radio'].includes(control.type)
+                || control.getBoundingClientRect().height >= 44),
+            fits: controls.every((control) => {
+              const box = control.getBoundingClientRect();
+              return box.width > 0 && box.left >= panel.left && box.right <= panel.right + 1;
+            }),
+          };
+        });
+        expect(bounds.count).toBeGreaterThan(0);
+        expect(bounds.fits).toBe(true);
+        expect(bounds.tapReady).toBe(true);
+        const field = stage.getByRole('textbox').first();
+        await field.focus();
+        await expect(field).toBeFocused();
+        await expect(field).toBeVisible();
+        expect(await stage.locator(':scope > details > summary').first().evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
+        await stage.screenshot({ path: testInfo.outputPath(`case-stage-${index}-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+      }
     }
   }
 });

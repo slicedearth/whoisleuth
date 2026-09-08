@@ -37,7 +37,6 @@ const POLICY_SOURCE_ROOTS = Object.freeze([
   'tools',
 ]);
 const POLICY_NON_SOURCE_FILES = Object.freeze([
-  'frontend/src/app.css',
   'frontend/src/app.html',
   'lib/generated/cisa-kev-catalog.sha256',
   'lib/generated/retire-browser-catalog.sha256',
@@ -399,7 +398,25 @@ describe('schema source coverage', () => {
     const removedAllowance = POLICY_NON_SOURCE_FILES[0];
     assert.ok(removedAllowance);
     await rm(path.join(root, removedAllowance));
-    await assert.rejects(discoverSchemaSources(root), /allowance is stale or missing.*app\.css/iu);
+    await assert.rejects(discoverSchemaSources(root), /allowance is stale or missing.*app\.html/iu);
+  });
+
+  test('discovers frontend stylesheets without individual schema exemptions in a checkout or source archive', async (t) => {
+    const root = await fixtureRepository(t);
+    for (const relative of ['frontend/src/app.css', 'frontend/src/lib/components/stage.css', 'frontend/src/styles/tokens.CSS']) {
+      await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
+      await writeFile(path.join(root, relative), '.stage { color: var(--text); }\n');
+    }
+    await writeFile(path.join(root, 'frontend/src/lib/components/stage.ts'), 'export const label = "Stage";\n');
+    const expected = ['frontend/src/lib/components/stage.ts', 'server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    await symlink(path.join(root, 'frontend/src/app.css'), path.join(root, 'frontend/src/styles/linked.css'));
+    await assert.rejects(discoverSchemaSources(root), /must not be a symbolic link/u);
+    await rm(path.join(root, 'frontend/src/styles/linked.css'));
+    await writeFile(path.join(root, 'frontend/src/lib/components/stage.html'), '<script>{"schema":"whoisleuth.hidden"}</script>');
+    await assert.rejects(discoverSchemaSources(root), /unclassified source path.*stage\.html/u);
   });
 
   test('discovers ordinary modules and conventional documentation without per-file exceptions', async (t) => {
