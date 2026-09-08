@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
 // Bulk queue, review, comparison and retained-work coverage.
@@ -89,13 +89,58 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await expect(page.getByText(/Saved views and review state could not be read/u)).toHaveCount(0);
   await openBulkWorkspaceTools(page);
   await expect(page.getByText(/Saved Bulk sessions could not be read/u)).toBeVisible();
+  const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
+  await expect(savedSessions).toBeVisible();
+  await expect(savedSessions.getByRole('article')).toHaveCount(0);
+  await expect(page.getByText('No Bulk sessions have been saved in this browser.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export sessions' })).toHaveCount(0);
+  await expect(page.getByLabel('Session name')).toHaveCount(0);
   await openBulkWorkspaceTools(page, 'review');
   await expect(page.getByText(/Saved views and review state could not be read/u)).toBeVisible();
   await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
-  await expect(page.getByText(/No saved Bulk sessions yet/u)).toHaveCount(0);
   await expect(page.getByText(/No shortlisted domains/u)).toHaveCount(0);
 });
+
+for (const width of [320, 1_280]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`distinguishes pending Bulk collections from empty or failed data at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await useTheme(page, theme);
+      await expect(page.locator('#domains')).toBeEditable();
+      const release = await holdBrowserLocalTransaction(page);
+      try {
+        await openBulkWorkspaceTools(page);
+        await expect(page.getByRole('status').filter({ hasText: 'Saved Bulk sessions are still loading.' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Export sessions' })).toHaveCount(0);
+        await expect(page.getByLabel('Session name')).toHaveCount(0);
+        await openBulkWorkspaceTools(page, 'review');
+        await expect(page.getByRole('status').filter({ hasText: 'Saved views and review state are still loading.' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Save current view' })).toHaveCount(0);
+        await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
+        await expect(page.getByRole('status').filter({ hasText: 'The shortlist is still loading.' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Shortlist · —', exact: true })).toBeVisible();
+        await expect(page.getByText(/No Bulk sessions have been saved|No shortlisted domains|could not be read/u)).toHaveCount(0);
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true });
+      } finally {
+        await release();
+      }
+      await expect(page.getByRole('button', { name: 'Save current view' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Shortlist · 0', exact: true })).toBeVisible();
+      await expect(page.getByText('No shortlisted domains yet. Star a Bulk result to save it locally.')).toBeVisible();
+      await openBulkWorkspaceTools(page);
+      await expect(page.getByLabel('Session name')).toBeEditable();
+      const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
+      await expect(savedSessions).toBeVisible();
+      await expect(savedSessions.getByRole('article')).toHaveCount(0);
+      await expect(page.getByText('No Bulk sessions have been saved in this browser.', { exact: true })).toBeVisible();
+      await expect(page.getByText(/still loading|could not be read/u)).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true });
+    });
+  }
+}
 
 test('rejects an over-bound directly pasted Bulk list before scanning', async ({ page }) => {
   const input = `${'one.example,'.repeat(20_001)}one.example`;

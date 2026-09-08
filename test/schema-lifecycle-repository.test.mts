@@ -475,8 +475,12 @@ describe('schema lifecycle repository closure', () => {
     assert.doesNotThrow(() => validateCasePortabilitySourceSnapshot(sources));
 
     const [firstFacade] = CASE_DOMAIN_COMPATIBILITY_FACADES[0]!;
+    const formatted = sources.map((source) => source.file === firstFacade
+      ? Object.freeze({ ...source, source: `// A descriptive comment is not a runtime contract.\n;\n${source.source.replaceAll("'", '"')}\n` })
+      : source);
+    assert.doesNotThrow(() => validateCasePortabilitySourceSnapshot(formatted));
     const staleFacade = sources.map((source) => source.file === firstFacade
-      ? Object.freeze({ ...source, source: `${source.source}\n` })
+      ? Object.freeze({ ...source, source: `${source.source}\nexport const unrelated = true;\n` })
       : source);
     assert.throws(
       () => validateCasePortabilitySourceSnapshot(staleFacade),
@@ -522,13 +526,31 @@ describe('schema lifecycle repository closure', () => {
     assert.doesNotThrow(() => validateWorkspacePortabilitySourceSnapshot(sources));
 
     const [firstFacade, firstOwner] = WORKSPACE_DOMAIN_COMPATIBILITY_FACADES[0]!;
+    const formatted = sources.map((source) => source.file === firstFacade
+      ? Object.freeze({ ...source, source: `// Formatting does not change the forwarded module.\n${source.source.replaceAll("'", '"')}\n;` })
+      : source);
+    assert.doesNotThrow(() => validateWorkspacePortabilitySourceSnapshot(formatted));
     const staleFacade = sources.map((source) => source.file === firstFacade
-      ? Object.freeze({ ...source, source: `${source.source}\n` })
+      ? Object.freeze({ ...source, source: `${source.source}\nexport const unrelated = true;\n` })
       : source);
     assert.throws(
       () => validateWorkspacePortabilitySourceSnapshot(staleFacade),
       /compatibility facade is stale/u,
     );
+    const original = sources.find((source) => source.file === firstFacade);
+    assert.ok(original);
+    for (const replacement of [
+      original.source.replace('export *', 'export type *'),
+      original.source.replace('export *', 'export * as nested'),
+      original.source.replace('export *', 'export {}'),
+      "export * from './another-owner.mts';",
+      `${original.source.trim().replace(/;$/u, '')} with { type: 'json' };`,
+      `${original.source}\nimport './side-effect.mts';`,
+      'export * from',
+    ]) {
+      assert.throws(() => validateWorkspacePortabilitySourceSnapshot(sources.map((source) => source.file === firstFacade
+        ? { ...source, source: replacement } : source)), /compatibility facade is stale/u);
+    }
 
     const duplicateIdentity = sources.map((source) => source.file === firstOwner
       ? Object.freeze({ ...source, source: `${source.source}\nconst BRAND_PROFILE_SCHEMA_VERSION = 6;\n` })

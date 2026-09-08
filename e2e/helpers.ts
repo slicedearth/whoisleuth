@@ -142,6 +142,10 @@ export async function useTheme(page: Page, preference: 'dark' | 'light' | 'syste
   }
   const root = page.locator('html');
   if (await root.getAttribute('data-theme-preference') !== preference) {
+    // The protected shell attaches after session initialisation. Absence is
+    // not evidence of a closed mobile menu. Public headers may contain both
+    // responsive controls, so wait for attachment before selecting visibility.
+    await expect(page.getByRole('button', { name: /^Colour theme,/u, includeHidden: true })).not.toHaveCount(0);
     const trigger = page.getByRole('button', { name: /^Colour theme,/u });
     const navigation = page.getByRole('button', { name: 'Toggle navigation', exact: true });
     const openedNavigation = !await trigger.isVisible();

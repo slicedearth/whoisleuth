@@ -9,11 +9,9 @@ import {
 } from '../cli/investigation-plan.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
 import { requestLookup, type LookupRequestOptions } from '../lib/lookup-request.mts';
-import {
-  CAPABILITY_MANIFEST,
-  CAPABILITY_OUTCOME_STATES,
-  type CapabilityOutcomeState,
-} from '../packages/contracts/capability-manifest.mts';
+import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { richBulkSessionStore } from './bulk-session-fixture.mts';
+import { requiredValue } from './value-assertions.mts';
 import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
@@ -197,26 +195,30 @@ describe('bounded verification state machines', () => {
     ), { ...PROPERTY_PARAMETERS, numRuns: Math.min(PROPERTY_PARAMETERS.numRuns, 30) });
   });
 
-  test('preserves partial, blocked, unavailable, unsupported, and stale source identities', (context) => {
+  test('preserves admitted limited source identities through storage, export and import', (context) => {
     replay(context, 'evidence source states');
-    const requiredStates = ['partial', 'blocked', 'unavailable', 'unsupported', 'stale'] as const;
-    const declaredOutcomes = CAPABILITY_MANIFEST.capabilities.flatMap((item) => item.outcomes);
-    for (const state of requiredStates) {
-      assert.ok(CAPABILITY_OUTCOME_STATES.includes(state));
-      assert.ok(declaredOutcomes.includes(state));
-    }
+    const requiredStates = ['partial', 'unavailable', 'unsupported', 'skipped', 'error', 'not_found'] as const;
     fc.assert(fc.property(
-      fc.array(fc.constantFrom(...requiredStates), { minLength: 1, maxLength: 40 }),
+      fc.array(fc.constantFrom(...requiredStates), { minLength: 1, maxLength: 10 }),
       (sequence) => {
-        const retained = new Map<string, CapabilityOutcomeState>();
-        sequence.forEach((state, index) => retained.set(`source-${index % 8}`, state));
-        for (const [source, state] of retained) {
-          assert.match(source, /^source-\d$/u);
-          assert.equal(CAPABILITY_OUTCOME_STATES.find((candidate) => candidate === state), state);
-          assert.notEqual(state, 'complete');
+        const raw = richBulkSessionStore(1);
+        const expected = sequence.map((state, index) => ({ source: `source-${index}`, state }));
+        const row = requiredValue(requiredValue(raw.sessions[0]).results[0]);
+        row.sourceCoverage = expected.map((item) => ({ ...item, rawSource: 'Private fixture source payload' }));
+        Object.assign(row, { rawWhois: 'Private fixture WHOIS body', notes: 'Private fixture analyst note' });
+        const before = structuredClone(raw);
+        const retained = normalizeBulkSessionStore(raw);
+        const restored = normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(retained)));
+        const exported = buildBulkSessionExport(restored, NOW);
+        const imported = mergeBulkSessions([], JSON.parse(JSON.stringify(exported)));
+        for (const sessions of [retained.sessions, restored.sessions, exported.sessions, imported.sessions]) {
+          const actual = requiredValue(requiredValue(sessions[0]).results[0]);
+          assert.deepEqual(actual.sourceCoverage, expected);
+          assert.doesNotMatch(JSON.stringify(sessions), /Private fixture/u);
         }
+        assert.deepEqual(raw, before);
       },
-    ), PROPERTY_PARAMETERS);
+    ), { ...PROPERTY_PARAMETERS, examples: [[requiredStates.slice()]] });
   });
 
   test('runs only fixed workflow prefixes and pauses at network or analyst approval boundaries', async (context) => {

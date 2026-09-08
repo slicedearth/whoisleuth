@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
   let {
     domains,
     status,
@@ -15,7 +16,7 @@
     downloadShortlist: () => void;
     importShortlistFile: (event: Event) => void | Promise<void>;
     removeAllShortlisted: () => void;
-    sourceState?: 'loading' | 'ready' | 'unavailable';
+    sourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
   const PAGE_SIZE=100;
@@ -38,7 +39,7 @@
   </header>
   {#if status}<p role="status" aria-live="polite">{status}</p>{/if}
   {#if sourceState !== 'ready'}
-    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>The shortlist {sourceState === 'loading' ? 'is still loading' : 'could not be read'}. Its count, empty state, imports, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>The shortlist {sourceState === 'idle' ? 'has not been loaded' : sourceState === 'loading' ? 'is still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {:else if domains.length}<div class="shortlist-items">{#each pagedDomains as domain}<span>{domain}</span>{/each}</div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Shortlist pages" />{:else}<p>No shortlisted domains yet. Star a Bulk result to save it locally.</p>{/if}
 </section>
 

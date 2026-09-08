@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import { compareSavedBulkSessions, type BulkSession } from '$lib/bulk-sessions';
   import { classifyBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
 
   let {
     sessions,
@@ -32,7 +33,7 @@
     canSave: boolean;
     profileContextLoading: boolean;
     running: boolean;
-    sourceState?: 'loading' | 'ready' | 'unavailable';
+    sourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
   let baselineId = $state('');
@@ -94,11 +95,11 @@
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
+    {#if sourceState === 'ready' && sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
   {#if sourceState !== 'ready'}
-    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Counts, empty states, exports, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'idle' ? 'have not been loaded' : sourceState === 'loading' ? 'are still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {:else}
   <div class="save-row">
     <label>

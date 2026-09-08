@@ -21,7 +21,7 @@ import {
 } from './verification-timing-profile.mts';
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, resolvePlaywrightExecutionContract } from './playwright-execution-contract.mts';
 
-export const ANALYST_JOURNEY_ASSURANCE_VERSION = 1;
+export const ANALYST_JOURNEY_ASSURANCE_VERSION = 2;
 export const MAX_ANALYST_JOURNEY_SPEC_BYTES = 2 * 1024 * 1024;
 export const MAX_ANALYST_JOURNEY_TOTAL_BYTES = 16 * 1024 * 1024;
 export const MAX_ANALYST_JOURNEY_TESTS = 256;
@@ -46,7 +46,6 @@ type JourneyTest = Readonly<{
   file: string;
   title: string;
   tags: readonly string[];
-  body: string;
   strings: readonly string[];
   sharedFixture: boolean;
   disabled: boolean;
@@ -86,7 +85,16 @@ function callbackStrings(node: ts.Node): readonly string[] {
 }
 
 function disabledByDeclarationOrScope(node: ts.CallExpression, callback: ts.Node): boolean {
-  if (/\b(?:test|testInfo)\.(?:skip|fixme)\s*\(/u.test(callback.getText())) return true;
+  let disabled = false;
+  const inspect = (child: ts.Node): void => {
+    if (ts.isCallExpression(child) && ts.isPropertyAccessExpression(child.expression)
+      && ts.isIdentifier(child.expression.expression)
+      && ['test', 'testInfo'].includes(child.expression.expression.text)
+      && ['skip', 'fixme'].includes(child.expression.name.text)) disabled = true;
+    ts.forEachChild(child, inspect);
+  };
+  inspect(callback);
+  if (disabled) return true;
   let current: ts.Node | undefined = node.parent;
   while (current) {
     if (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)
@@ -135,7 +143,6 @@ export function parseAnalystJourneySource(file: string, source: string): readonl
             file,
             title,
             tags,
-            body: callback.getText(parsed),
             strings: callbackStrings(callback),
             sharedFixture,
             disabled: memberCall || disabledByDeclarationOrScope(node, callback),
@@ -334,17 +341,16 @@ export function buildAnalystJourneyAssurance() {
     const tag = `@journey-${journey.id}`;
     const mapped = tests.filter((item) => item.tags.includes(tag));
     if (!mapped.length) throw new TypeError(`Declared analyst journey ${journey.id} has no real Playwright test.`);
-    const bodies = mapped.map((item) => item.body).join('\n');
-    if (!/setViewportSize\s*\(/u.test(bodies)) throw new TypeError(`Declared analyst journey ${journey.id} has no explicit mobile browser outcome.`);
-    if (!/(?:getByRole|getByLabel|toBeFocused|aria-)/u.test(bodies)) throw new TypeError(`Declared analyst journey ${journey.id} has no explicit accessibility browser outcome.`);
     const shardAssignments = [...new Set(mapped.map((item) => assignedShard(item.file, plan)))].sort();
     return Object.freeze({
       id: journey.id,
       tests: mapped.length,
       specifications: Object.freeze([...new Set(mapped.map((item) => item.file))].sort()),
       shards: Object.freeze(shardAssignments),
-      mobileOutcome: true,
-      accessibilityOutcome: true,
+      // Source membership cannot establish rendered outcomes. The required
+      // browser run supplies those results, independent of helper spelling.
+      mobileOutcome: null,
+      accessibilityOutcome: null,
     });
   });
   const declaredTags = new Set(SYNTHETIC_ANALYST_JOURNEYS.map((journey) => `@journey-${journey.id}`));

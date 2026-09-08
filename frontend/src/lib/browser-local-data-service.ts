@@ -16,6 +16,9 @@ export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'ready'; initialization: BrowserLocalDataInitialization }>
   | Readonly<{ state: 'error'; code: string; detail: string }>;
 
+/** Loading one collection is distinct from initialising the shared provider. */
+export type BrowserLocalCollectionLoadState = 'idle' | 'loading' | 'ready' | 'unavailable';
+
 export type BrowserLocalDataProviderBoundary = Readonly<{
   initialize: BrowserLocalDataProvider['initialize'];
   restoreLegacyCopies: BrowserLocalDataProvider['restoreLegacyCopies'];

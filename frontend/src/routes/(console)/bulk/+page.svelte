@@ -8,6 +8,7 @@
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, normalizeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
   import { consumeCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import type { ShortlistRecord } from '$lib/shortlist';
   import type { CaseRecord } from '$lib/cases';
@@ -128,15 +129,15 @@
   let profile = $state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
-  let shortlistSourceState=$state<'idle'|'loading'|'ready'|'unavailable'>('idle');
+  let shortlistSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');let caseMutationBusy=$state(false);
-  let casesSourceState=$state<'idle'|'loading'|'ready'|'unavailable'>('idle');
+  let casesSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
-  let relationshipsSourceState=$state<'idle'|'loading'|'ready'|'unavailable'>('idle');
+  let relationshipsSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let bulkSessions=$state<BulkSession[]>([]);let bulkSessionName=$state('');let bulkSessionStatus=$state('');let currentBulkSessionId=$state('');let scanStartedAt=$state('');
-  let bulkSessionsSourceState=$state<'idle'|'loading'|'ready'|'unavailable'>('idle');
+  let bulkSessionsSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let bulkReviewStore=$state<BulkReviewStore>({schema:BULK_REVIEW_SCHEMA,version:BULK_REVIEW_SCHEMA_VERSION,presets:[],rows:[]});let reviewStateFilter=$state<BulkReviewFilter>('');let bulkReviewStatus=$state('');
-  let bulkReviewSourceState=$state<'idle'|'loading'|'ready'|'unavailable'>('idle');
+  let bulkReviewSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let retryStatus=$state('');
   let localContextStatus=$state('');
   let workspaceToolsOpen=$state(false);

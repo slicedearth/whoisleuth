@@ -641,6 +641,20 @@ export async function loadSchemaLifecycleHookModules(
   return modules;
 }
 
+function forwardsAllValuesFrom(source: string, facade: string, owner: string): boolean {
+  const parsed = ts.createSourceFile(facade, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  validateSourceAstBounds(parsed, facade);
+  const diagnostics = (parsed as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
+  const statements = parsed.statements.filter((statement) => !ts.isEmptyStatement(statement));
+  const declaration = statements[0];
+  return diagnostics.length === 0 && statements.length === 1
+    && declaration !== undefined && ts.isExportDeclaration(declaration)
+    && !declaration.isTypeOnly && !declaration.exportClause && !declaration.attributes
+    && declaration.moduleSpecifier !== undefined && ts.isStringLiteral(declaration.moduleSpecifier)
+    && declaration.moduleSpecifier.text.startsWith('.')
+    && path.posix.normalize(path.posix.join(path.posix.dirname(facade), declaration.moduleSpecifier.text)) === owner;
+}
+
 export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   const sources = snapshotLifecycleSources(value);
   const sourceByPath = new Map(sources.map((source) => [source.file, source.source]));
@@ -657,10 +671,7 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
     if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
       throw new TypeError(`Case domain compatibility facade is not source-covered: ${facade}.`);
     }
-    const relative = path.posix.relative(path.posix.dirname(facade), owner);
-    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
-    const expected = `export * from '${specifier}';\n`;
-    if (sourceByPath.get(facade) !== expected) {
+    if (!forwardsAllValuesFrom(sourceByPath.get(facade)!, facade, owner)) {
       throw new TypeError(`Case domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
     }
   }
@@ -784,9 +795,7 @@ export function validateWorkspacePortabilitySourceSnapshot(value: unknown): void
     if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
       throw new TypeError(`Workspace domain compatibility facade is not source-covered: ${facade}.`);
     }
-    const relative = path.posix.relative(path.posix.dirname(facade), owner);
-    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
-    if (sourceByPath.get(facade) !== `export * from '${specifier}';\n`) {
+    if (!forwardsAllValuesFrom(sourceByPath.get(facade)!, facade, owner)) {
       throw new TypeError(`Workspace domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
     }
   }

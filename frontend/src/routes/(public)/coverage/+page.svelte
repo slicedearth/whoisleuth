@@ -43,7 +43,7 @@
 <section class="exclusions" id="exclusions" aria-labelledby="exclusions-title"><div class="section-intro"><p class="eyebrow">Current scope</p><h2 id="exclusions-title">Unsupported and excluded behaviour</h2></div><ul class="card">{#each PUBLIC_COVERAGE_SUMMARY.intentionallyExcluded as item}<li>{item}</li>{/each}</ul></section>
 
 <section class="full-catalogue" id="full-catalogue" aria-labelledby="full-catalogue-title"><div><p class="eyebrow">Capability details</p><h2 id="full-catalogue-title">Browse all capability families</h2><p>Filter the current capability inventory by analyst job or availability.</p></div>{#if !catalogueOpen}<button class="primary" type="button" onpointerenter={preloadCatalogue} onfocus={preloadCatalogue} onclick={() => catalogueOpen = true}>Open capability catalogue</button>{/if}</section>
-{#if catalogueOpen}<DeferredSurface load={() => import('$lib/components/PublicCoverageCatalogue.svelte')} loadingLabel="Loading capability details." unavailableLabel="Capability details could not be loaded." />{/if}
+{#if catalogueOpen}<DeferredSurface load={() => import('$lib/components/PublicCoverageCatalogue.svelte')} props={{}} loadingLabel="Loading capability details." unavailableLabel="Capability details could not be loaded." />{/if}
 </PublicReferenceDocument>
 
 <style>

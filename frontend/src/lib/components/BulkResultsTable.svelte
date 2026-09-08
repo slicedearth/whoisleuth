@@ -3,9 +3,9 @@
   import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
   import type { BulkRiskPresentation } from '$lib/analysis/bulk-route-model.ts';
   import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.ts';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
 
-  type CaseOption = { value: string; label: string };
-  type LocalSourceState = 'idle' | 'loading' | 'ready' | 'unavailable';
+  type CaseOption = Readonly<{ value: string; label: string }>;
   type DraftAction = { mailto: string; body: string };
   type CtEvidence = { lastObservedAt: string | null; hostnameCount: number; certificateCount: number };
   type ResultRow = {
@@ -65,7 +65,7 @@
     sortDirection: 1 | -1;
     setSort: (value: SortKey) => void;
     toggleSaved: (resultIndex: number) => void;
-    caseOptions: CaseOption[];
+    caseOptions: readonly CaseOption[];
     setDisposition: (resultIndex: number, value: string) => void;
     trackCase: (resultIndex: number) => void;
     inspectDomain: (resultIndex: number) => void | Promise<void>;
@@ -76,9 +76,9 @@
     draftStatus: string;
     caseStatus: string;
     setReviewState: (resultIndex: number, value: string) => void;
-    shortlistSourceState?: LocalSourceState;
-    caseSourceState?: LocalSourceState;
-    reviewSourceState?: LocalSourceState;
+    shortlistSourceState?: BrowserLocalCollectionLoadState;
+    caseSourceState?: BrowserLocalCollectionLoadState;
+    reviewSourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
   let expandedRows = $state<Set<number>>(new Set());

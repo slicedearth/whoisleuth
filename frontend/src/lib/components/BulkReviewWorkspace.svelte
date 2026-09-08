@@ -8,6 +8,7 @@
   } from '$lib/bulk-review';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
 
   let {
     store,
@@ -28,7 +29,7 @@
     loadView: (preset: BulkReviewPreset) => void;
     deleteView: (preset: BulkReviewPreset) => void | Promise<void>;
     status: string;
-    sourceState?: 'loading' | 'ready' | 'unavailable';
+    sourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
   let name = $state('');
@@ -83,7 +84,7 @@
   </div>
   <p class="review-status" role="status">{status}</p>
   {:else}
-    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Review filtering, counts, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'idle' ? 'have not been loaded' : sourceState === 'loading' ? 'are still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {/if}
 </section>
 

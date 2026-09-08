@@ -669,7 +669,7 @@ describe('verification architecture contracts', () => {
     assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
   });
 
-  test('binds every version-one analyst journey to enabled semantic mobile tests and one shard', () => {
+  test('binds every declared analyst journey to enabled tests without claiming rendered outcomes', () => {
     const assurance = buildAnalystJourneyAssurance();
     assert.equal(assurance.journeyContractVersion, 1);
     assert.equal(assurance.mappedJourneys, assurance.declaredJourneys);
@@ -685,7 +685,8 @@ describe('verification architecture contracts', () => {
     assert.ok(assurance.jobs.Investigate.length > 0);
     assert.ok(assurance.jobs.Respond.length > 0);
     assert.ok(assurance.jobs.Assure.length > 0);
-    assert.ok(assurance.journeyMappings.every((item) => item.mobileOutcome && item.accessibilityOutcome && item.shards.length > 0));
+    assert.equal(assurance.assuranceVersion, 2);
+    assert.ok(assurance.journeyMappings.every((item) => item.mobileOutcome === null && item.accessibilityOutcome === null && item.shards.length > 0));
     assert.deepEqual(assurance.privacy, {
       sharedSameOriginGuard: true,
       reservedTargets: true,
@@ -705,5 +706,22 @@ describe('verification architecture contracts', () => {
     `);
     assert.equal(disabled.length, 1);
     assert.equal(disabled[0]?.disabled, true);
+    const helperBased = parseAnalystJourneySource('e2e/helper-journey.spec.ts', `
+      import { test } from './fixtures';
+      test('helper-driven journey', { tag: '@analyst-journey' }, async ({ page }) => {
+        // test.skip() in a comment does not disable a real test.
+        const explanation = 'testInfo.fixme() is only text';
+        await checkNarrowLayoutAndKeyboard(page);
+      });
+    `);
+    assert.equal(helperBased.length, 1);
+    assert.equal(helperBased[0]?.disabled, false);
+    for (const declaration of ['test.skip(true)', 'testInfo.fixme(true)']) {
+      const conditionallyDisabled = parseAnalystJourneySource('e2e/conditional-journey.spec.ts', `
+        import { test } from './fixtures';
+        test('conditional journey', { tag: '@analyst-journey' }, async ({ page }) => { ${declaration}; });
+      `);
+      assert.equal(conditionallyDisabled[0]?.disabled, true);
+    }
   });
 });

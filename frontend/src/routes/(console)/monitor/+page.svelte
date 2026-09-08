@@ -677,7 +677,7 @@
   <details class="advanced-case-tools">
     <summary>Advanced Case tools</summary>
     <p>Calibration is a secondary reference for reviewing how triage performed.</p>
-    <DeferredSurface load={()=>import('$lib/components/RiskCalibrationDashboard.svelte')} loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
+    <DeferredSurface load={()=>import('$lib/components/RiskCalibrationDashboard.svelte')} props={{}} loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
   </details>
   <DeferredSurface load={()=>import('$lib/components/ExternalFindingsImport.svelte')} loadingLabel="Loading external-findings import…" unavailableLabel="External-findings import could not be loaded." props={{cases,oncomplete:refreshCases,oncommitted:installCommittedCaseSnapshot,onmessage:(value:string)=>caseMessage=value}} />
 
