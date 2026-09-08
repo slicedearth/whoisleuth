@@ -231,6 +231,13 @@ envelope in memory, and processes at most two existing Fast compact lookups and
 eight internal deliveries within a 24-second soft budget. Its encrypted cursor
 resumes bounded work after delays. Provider failures, conflicts, inconclusive
 observations, and deadlines cannot erase an earlier conclusive baseline.
+The same deadline covers storage, registry bootstrap, collection and completion.
+Expiry cancels active requests and defers unfinished observations; it does not
+record them as failed. A storage write already sent may still have committed,
+so the next tick rereads the cursor instead of blindly repeating the write.
+The Blob SDK can retain internal retry timers after cancellation, but the
+invocation-bound transport prevents those retries from making further requests.
+The soft budget is not a guarantee of process termination at exactly 24 seconds.
 
 Ordinary browser watchlists are not uploaded automatically. A signed-in analyst
 must deliberately schedule one through Monitor and can replace, restore, pause,

@@ -9,6 +9,9 @@ import {
   MAX_ENVELOPE_BYTES,
   parseScheduledMonitorKey,
 } from './scheduled-monitor-crypto.mts';
+import { abortable } from './abort.mts';
+
+type ScheduledMonitorOperationOptions = { signal?: AbortSignal };
 
 type VersionedTextSnapshot = {
   value: string | null;
@@ -16,11 +19,12 @@ type VersionedTextSnapshot = {
 };
 
 type VersionedTextStore = {
-  read: (key: string) => Promise<VersionedTextSnapshot>;
+  read: (key: string, options?: ScheduledMonitorOperationOptions) => Promise<VersionedTextSnapshot>;
   compareAndSet: (
     key: string,
     expectedVersion: string | null,
     nextValue: string,
+    options?: ScheduledMonitorOperationOptions,
   ) => Promise<boolean>;
 };
 
@@ -139,12 +143,13 @@ class ScheduledMonitorRepository<State, Recovery = never> {
     return this.inspect(value).state;
   }
 
-  async snapshot(): Promise<{
+  async snapshot(options: ScheduledMonitorOperationOptions = {}): Promise<{
     state: State;
     version: string | null;
     recovery: Recovery | null;
   }> {
-    const raw = normalizeSnapshot(await this.rawStore.read(this.namespace));
+    const raw = normalizeSnapshot(await abortable(() => this.rawStore.read(this.namespace, options), options.signal));
+    options.signal?.throwIfAborted();
     return { ...this.inspect(raw.value), version: raw.version };
   }
 
@@ -159,17 +164,25 @@ class ScheduledMonitorRepository<State, Recovery = never> {
 
   async update<Result>(
     mutator: (state: State) => ScheduledMonitorUpdate<Result> | Promise<ScheduledMonitorUpdate<Result>>,
+    options: ScheduledMonitorOperationOptions = {},
   ): Promise<{ state: State; result: Result; recovery: Recovery | null }> {
     if (typeof mutator !== 'function') throw new Error('A scheduled monitoring state update is required.');
     for (let attempt = 0; attempt < MAX_UPDATE_ATTEMPTS; attempt += 1) {
-      const current = await this.snapshot();
-      const outcome = normalizeUpdate<Result>(await mutator(structuredClone(current.state)));
+      options.signal?.throwIfAborted();
+      const current = await this.snapshot(options);
+      const outcome = normalizeUpdate<Result>(await abortable(() => mutator(structuredClone(current.state)), options.signal));
+      options.signal?.throwIfAborted();
       if (outcome.changed === false) {
         return { state: current.state, result: outcome.result, recovery: current.recovery };
       }
       const state = this.normalizeState(outcome.state);
       const encrypted = encryptScheduledMonitorState(state, this.encryptionKey, this.namespace);
-      const committed = await this.rawStore.compareAndSet(this.namespace, current.version, encrypted);
+      options.signal?.throwIfAborted();
+      // Cancellation after dispatch cannot prove a remote CAS did not commit.
+      // Stop this invocation; the next tick reads the durable cursor afresh.
+      const committed = await abortable(
+        () => this.rawStore.compareAndSet(this.namespace, current.version, encrypted, options), options.signal,
+      );
       if (committed === true) {
         return { state, result: outcome.result, recovery: current.recovery };
       }
@@ -187,6 +200,7 @@ export {
   ScheduledMonitorRepository,
 };
 export type {
+  ScheduledMonitorOperationOptions,
   ScheduledMonitorRepositoryOptions,
   ScheduledMonitorStateInspection,
   ScheduledMonitorUpdate,

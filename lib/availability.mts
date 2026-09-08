@@ -9,6 +9,7 @@
 // Shared by the Express server and the Netlify Functions.
 
 import { promises as dns } from 'node:dns';
+import { abortable } from './abort.mts';
 
 import { fetchRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
@@ -106,6 +107,7 @@ function rdapEventDate(events: UnknownRecord[], action: string): string | null {
 }
 
 type AvailabilityOptions = {
+  signal?: AbortSignal;
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
   includeInheritedCaa?: boolean;
@@ -266,15 +268,21 @@ function compactContact(contact: unknown): CompactContact | null {
 // domain has an active DNS delegation. Use that as a bounded, positive-only
 // fallback: no answer is never interpreted as availability because registered
 // domains can legitimately be undelegated.
-async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: { resolver?: (domain: string) => Promise<string[]> } = {}): Promise<DnsDelegation> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+async function checkDnsDelegation(domain: string, options: {
+  resolver?: (domain: string) => Promise<string[]>;
+  signal?: AbortSignal;
+} = {}): Promise<DnsDelegation> {
+  options.signal?.throwIfAborted();
+  // Cancel only this lookup's c-ares requests, never the shared DNS resolver.
+  const ownedResolver = options.resolver ? null : new dns.Resolver();
+  const resolve = options.resolver || ((name: string) => ownedResolver!.resolveNs(name));
+  const controller = new AbortController();
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+  const cancel = () => ownedResolver?.cancel();
+  signal.addEventListener('abort', cancel, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error('DNS delegation lookup timed out')), DNS_DELEGATION_TIMEOUT_MS);
   try {
-    const records = await Promise.race([
-      Promise.resolve().then(() => resolver(domain)),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('DNS delegation lookup timed out')), DNS_DELEGATION_TIMEOUT_MS);
-      }),
-    ]);
+    const records = await abortable(() => resolve(domain), signal);
     const validNameservers = [...new Set((Array.isArray(records) ? records : [])
       .filter((value) => typeof value === 'string')
       .map((value) => value.trim().replace(/\.+$/, '').toLowerCase())
@@ -289,6 +297,7 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
       error: null,
     };
   } catch (err) {
+    options.signal?.throwIfAborted();
     const error = errorRecord(err);
     if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) {
       return { delegated: false, nameservers: [], nameserversTruncated: false, error: null };
@@ -301,6 +310,7 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
     };
   } finally {
     clearTimeout(timer);
+    signal.removeEventListener('abort', cancel);
   }
 }
 
@@ -431,6 +441,7 @@ function registryPolicyDetail(domain: string, fast: boolean): string {
 // limits; anything it can't resolve (state "unknown") is meant to get a
 // follow-up deep check (fast: false, the default) on the shortlist only.
 async function checkDomainAvailability(domain: string, options: AvailabilityOptions = {}) {
+  options.signal?.throwIfAborted();
   const fast = options.fast === true;
   const collectDns = options.collectDnsIntelligence || collectDnsIntelligence;
   const collectTls = options.collectTlsIntelligence || collectTlsIntelligence;
@@ -475,10 +486,11 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       // also picks up that function's short-TTL cache (lib/lookup-cache.mts)
       // and upstream timeout for free.
       const recordValue = hasPreloadedRdapPromise
-        ? await options.rdapRecordPromise
+        ? await abortable(() => options.rdapRecordPromise!, options.signal)
         : hasPreloadedRdap
           ? options.rdapRecord
-          : await fetchRdapRecord('domain', domain);
+          : await fetchRdapRecord('domain', domain, options.signal ? { signal: options.signal } : {});
+      options.signal?.throwIfAborted();
       const record = errorRecord(recordValue);
       const recordRdapServer = typeof record.rdapServer === 'string' ? record.rdapServer : null;
       const upstreamStatus = typeof record.upstreamStatus === 'number' ? record.upstreamStatus : null;
@@ -527,6 +539,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         }
       }
     } catch {
+      options.signal?.throwIfAborted();
       /* fall through to WHOIS-based detection (deep mode only) */
     }
   }
@@ -534,18 +547,26 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   const dnsDelegationPromise = !rdapFound && dnsIntelligenceEnabled
     ? hasPreloadedDnsDelegation
       ? Promise.resolve(options.dnsDelegation)
-      : checkDnsDelegation(domain, { resolver: options.resolveNs || dns.resolveNs })
+      : checkDnsDelegation(domain, {
+          ...(options.resolveNs ? { resolver: options.resolveNs } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
+        })
     : null;
+
+  // DNS may settle while the independent WHOIS source is still pending. Keep
+  // its rejection observed even if WHOIS supplies an early conclusive return.
+  void dnsDelegationPromise?.catch(() => {});
 
   let whoisChain: Awaited<ReturnType<typeof buildWhoisChain>> | null = null;
   let whoisParsed: ReturnType<typeof parseWhoisChain> | null = null;
   if (!rdapFound && !fast && whoisEnabled) {
     try {
       whoisChain = (hasPreloadedWhoisPromise
-        ? await options.whoisChainPromise
+        ? await abortable(() => options.whoisChainPromise!, options.signal)
         : hasPreloadedWhois
           ? options.whoisChain
           : await buildWhoisChain(domain)) ?? null;
+      options.signal?.throwIfAborted();
       if (!Array.isArray(whoisChain)) throw new Error('WHOIS chain unavailable');
       const parsed = parseWhoisChain(whoisChain);
       whoisParsed = parsed;
@@ -590,6 +611,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         registrationSource = 'whois';
       }
     } catch {
+      options.signal?.throwIfAborted();
       /* if both RDAP and WHOIS fail, we simply can't determine availability */
     }
   }
@@ -609,6 +631,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       registrationConfidence = 'medium';
     }
   }
+  options.signal?.throwIfAborted();
 
   if (!rdapFound && !hasWhoisRegistrationData && !dnsDelegated) {
     const disabledSources = [

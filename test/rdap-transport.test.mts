@@ -1,10 +1,42 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { deferred } from './deferred.mts';
 
 import {
   fetchRdapDetailedWithTimeout,
   fetchRdapWithTimeout,
 } from '../lib/rdap-transport.mts';
+
+test('parent cancellation stops both a pending fetch and a pending response body', async () => {
+  for (const phase of ['fetch', 'body']) {
+    const controller = new AbortController();
+    const reached = deferred<void>();
+    let transportSignal: AbortSignal | undefined;
+    let cancelled = false;
+    const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+    const request = fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {
+      signal: controller.signal,
+    }, 7_000, {
+      fetch: async (_url, options) => {
+        transportSignal = options?.signal ?? undefined;
+        if (phase === 'fetch') {
+          reached.resolve();
+          return new Promise<Response>(() => {});
+        }
+        return response;
+      },
+      readText: () => {
+        reached.resolve();
+        return new Promise(() => {});
+      },
+    });
+    await reached.promise;
+    controller.abort(new DOMException('Cycle finished', 'TimeoutError'));
+    await assert.rejects(request, { name: 'TimeoutError' });
+    assert.equal(transportSignal?.aborted, true);
+    if (phase === 'body') assert.equal(cancelled, true);
+  }
+});
 
 test('returns bounded RDAP status and text through an injected safe transport', async () => {
   const result = await fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {

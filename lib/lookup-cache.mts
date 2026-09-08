@@ -11,6 +11,8 @@
 // applies globally on server.mts's one long-lived process, but only within
 // a single warm container on Netlify Functions.
 
+import { abortable } from './abort.mts';
+
 type CacheEntry = {
   value: unknown;
   expiresAt: number;
@@ -115,9 +117,19 @@ const inFlight = new Map<string, Promise<unknown>>();
 // The cache intentionally holds heterogeneous public lookup results. Callers
 // supply distinct result contracts, so this internal compatibility boundary
 // stays dynamically typed rather than asserting one shared payload shape.
-async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
+async function cached<T>(key: string, factory: CacheFactory<T>, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
   const hit = getCached(key);
   if (hit !== undefined) return hit as T;
+
+  // A deadline-scoped caller may reuse completed public data, but must own
+  // its cancellable work rather than aborting another caller's shared request.
+  if (signal) {
+    const value = await abortable(factory, signal);
+    signal.throwIfAborted();
+    setCached(key, value);
+    return value;
+  }
 
   const pending = inFlight.get(key);
   if (pending) return pending as Promise<T>;

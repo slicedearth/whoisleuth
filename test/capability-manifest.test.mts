@@ -26,7 +26,6 @@ import {
   MAX_CYCLE_DELIVERIES,
   MAX_CYCLE_LOOKUPS,
   MAX_CYCLE_MS,
-  MIN_LOOKUP_WINDOW_MS,
 } from '../lib/scheduled-monitor-cycle.mts';
 import {
   MAX_CAPTURE_HOSTS,
@@ -386,7 +385,7 @@ describe('canonical capability manifest', () => {
       maxLookups: MAX_CYCLE_LOOKUPS,
       maxProcessedDeliveries: MAX_CYCLE_DELIVERIES,
       softCycleBudgetMs: MAX_CYCLE_MS,
-      minLookupWindowMs: MIN_LOOKUP_WINDOW_MS,
+      minLookupWindowMs: 0,
     });
     assert.deepEqual(budgets.planes, ['hosted_bounded_passive']);
     assert.deepEqual(budgets.scanModes, []);

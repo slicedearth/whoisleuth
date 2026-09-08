@@ -5,6 +5,7 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -77,6 +78,28 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('fast compact cancellation reaches registry collection and cannot return an incomplete observation', async () => {
+    const started = deferred<void>();
+    const controller = new AbortController();
+    let availabilitySignal: AbortSignal | undefined;
+    const running = runUnifiedLookup(classifiedDomain, {
+      fast: true, compact: true, signal: controller.signal,
+      fetchRdapRecord: async (_type, _value, options) => {
+        assert.equal(options?.signal, controller.signal);
+        started.resolve();
+        return new Promise(() => {});
+      },
+      checkDomainAvailability: async (_domain, options) => {
+        availabilitySignal = options?.signal;
+        await options?.rdapRecordPromise;
+        throw new Error('Cancelled registry work must not yield availability.');
+      },
+    });
+    await started.promise;
+    controller.abort();
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(availabilitySignal, controller.signal);
+  });
   test('passes an explicit bounded DNS resolver selection into domain evidence collection', async () => {
     let capturedResolveNs: unknown = null;
     let capturedDnsResolverKeys: string[] = [];

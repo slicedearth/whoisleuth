@@ -4,6 +4,7 @@ import {
   type CapabilityId,
   type CliCommand,
 } from './cli-command-semantics.mts';
+import { SCHEDULED_MONITOR_CYCLE_BUDGET } from './scheduled-monitor-bounds.mts';
 
 const CAPABILITY_MANIFEST_SCHEMA = 'whoisleuth.capability-manifest';
 const CAPABILITY_MANIFEST_VERSION = 1 as const;
@@ -1247,12 +1248,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'The worker retains only the documented compact encrypted projection and is not general evidence custody.',
       'Disabling collection does not delete retained ciphertext; deletion remains deliberate.',
     ],
-    workerCycleBudget: {
-      maxLookups: 2,
-      maxProcessedDeliveries: 8,
-      softCycleBudgetMs: 24_000,
-      minLookupWindowMs: 16_000,
-    },
+    workerCycleBudget: SCHEDULED_MONITOR_CYCLE_BUDGET,
     legacyCapability: {
       status: 'unavailable', execution: 'worker', scanModes: ['fast'],
       reason: 'Scheduled monitoring is not configured.',

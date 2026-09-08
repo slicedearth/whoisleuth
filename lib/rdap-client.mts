@@ -50,13 +50,16 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
   bases: unknown,
   parseRdap: RdapParser,
   fetchUpstream: RdapFetch = fetchRdapDetailedWithTimeout,
+  signal?: AbortSignal,
 ): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
+  signal?.throwIfAborted();
   const candidates = uniqueRdapBases(bases).slice(0, MAX_RDAP_ENDPOINTS);
   if (candidates.length === 0) return null;
 
   const startedAt = Date.now();
   const attempts: RdapAttempt[] = [];
   for (const base of candidates) {
+    signal?.throwIfAborted();
     const elapsed = Date.now() - startedAt;
     const remaining = UPSTREAM_TOTAL_DEADLINE_MS - elapsed;
     if (remaining <= 0) break;
@@ -65,9 +68,10 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
     try {
       const upstream = await fetchUpstream(
         url,
-        { headers: { Accept: 'application/rdap+json' } },
+        { headers: { Accept: 'application/rdap+json' }, ...(signal ? { signal } : {}) },
         Math.min(UPSTREAM_TIMEOUT_MS, remaining),
       );
+      signal?.throwIfAborted();
       const selectedEndpoint = admitRdapObjectEndpoint(type, value, upstream.finalUrl ?? url);
       if (!selectedEndpoint) {
         attempts.push(rdapAttempt(url, 'invalid_response', {
@@ -154,6 +158,7 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
         attempts,
       };
     } catch (cause) {
+      signal?.throwIfAborted();
       const detail = String(errorProperty(cause, 'message') || 'request failed');
       const outcome =
         errorProperty(cause, 'name') === 'AbortError' ||
@@ -184,9 +189,10 @@ export async function fetchRdapRecordWithParser<const T extends string>(
   type: T,
   value: string,
   parseRdap: RdapParser,
+  options: { signal?: AbortSignal; fetchUpstream?: RdapFetch } = {},
 ): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
   return cached(`rdap:${type}:${value}`, async () => {
-    const bases = await findRdapBases(type, value);
-    return fetchRdapFromBasesWithParser(type, value, bases, parseRdap);
-  });
+    const bases = await findRdapBases(type, value, options);
+    return fetchRdapFromBasesWithParser(type, value, bases, parseRdap, options.fetchUpstream, options.signal);
+  }, options.signal);
 }

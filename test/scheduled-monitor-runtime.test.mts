@@ -199,7 +199,8 @@ test('a ready runtime composes encrypted storage and the fast compact cycle with
     env: readyEnv(),
     blobStore: blobs,
     lookup: async (domain, options) => {
-      calls.push({ domain, options: structuredClone(options) });
+      assert.ok(options.signal instanceof AbortSignal);
+      calls.push({ domain, options: { fast: options.fast, compact: options.compact } });
       return { availability: { state: 'registered' } };
     },
     now: () => START,

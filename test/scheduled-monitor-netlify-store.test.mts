@@ -7,6 +7,7 @@ import {
 } from '../lib/scheduled-monitor-netlify-store.mts';
 import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
 import { MAX_ENVELOPE_BYTES } from '../lib/scheduled-monitor-crypto.mts';
+import { deferred } from './deferred.mts';
 
 type BlobRead = Awaited<ReturnType<NetlifyBlobStore['getWithMetadata']>>;
 type BlobReadCall = { key: string; options: { consistency: 'strong'; type: 'stream' } };
@@ -44,6 +45,38 @@ function blobStream(value: string): ReadableStream<Uint8Array> {
 }
 
 describe('scheduled monitoring Netlify Blobs adapter', () => {
+  test('cancels a held body without waiting for an uncooperative cancellation promise', async () => {
+    const controller = new AbortController();
+    const reached = deferred<void>();
+    let cancelled = 0;
+    const blobs = new FakeBlobStore();
+    blobs.entry = { etag: '"v1"', data: {
+      getReader: () => ({
+        read: () => { reached.resolve(); return new Promise(() => {}); },
+        cancel: () => { cancelled += 1; return new Promise(() => {}); },
+      }),
+    } };
+    const pending = createNetlifyBlobVersionedTextStore(blobs).read('state', { signal: controller.signal });
+    await reached.promise;
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    assert.ok(cancelled > 0);
+  });
+
+  test('disposes of a response arriving after its read was cancelled', async () => {
+    const controller = new AbortController();
+    const reached = deferred<void>();
+    const response = deferred<BlobRead>();
+    const blobs = new FakeBlobStore();
+    blobs.getWithMetadata = () => { reached.resolve(); return response.promise; };
+    const pending = createNetlifyBlobVersionedTextStore(blobs).read('state', { signal: controller.signal });
+    await reached.promise;
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    const cancelled = deferred<void>();
+    response.resolve({ etag: '"v1"', data: new ReadableStream({ cancel() { cancelled.resolve(); } }) });
+    await cancelled.promise;
+  });
   test('uses a strongly consistent stream read and maps a missing Blob to an empty snapshot', async () => {
     const blobs = new FakeBlobStore();
     const store = createNetlifyBlobVersionedTextStore(blobs);

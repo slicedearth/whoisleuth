@@ -7,6 +7,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { _storeBytes, _storeSize, cached, MAX_ENTRIES, MAX_TOTAL_BYTES } from '../lib/lookup-cache.mts';
+import { deferred } from './deferred.mts';
+
+test('cancellable work cannot cancel a shared caller or cache a late result', async () => {
+  const key = 'lookup-cache-test:independent-cancellation';
+  const controller = new AbortController();
+  const ordinary = deferred<string>();
+  const signalled = deferred<string>();
+  const started = deferred<void>();
+  const shared = cached(key, () => ordinary.promise);
+  const interrupted = cached(key, () => { started.resolve(); return signalled.promise; }, controller.signal);
+  await started.promise;
+  controller.abort();
+  await assert.rejects(interrupted, { name: 'AbortError' });
+  signalled.resolve('cancelled value');
+  ordinary.resolve('independent value');
+  assert.equal(await shared, 'independent value');
+  assert.equal(await cached(key, () => 'unexpected replacement'), 'independent value');
+  assert.equal(await cached('lookup-cache-test:signal-success', () => 'complete', new AbortController().signal), 'complete');
+  assert.equal(await cached('lookup-cache-test:signal-success', () => 'unexpected replacement'), 'complete');
+});
 
 test('a synchronous factory failure is shared once and does not poison a later attempt', async () => {
   let calls = 0;

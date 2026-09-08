@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import test from 'node:test';
+import { deferred } from './deferred.mts';
 import {
   MAX_CYCLE_LOOKUPS,
   MAX_CYCLE_MS,
-  MIN_LOOKUP_WINDOW_MS,
   runScheduledMonitorCycle,
 } from '../lib/scheduled-monitor-cycle.mts';
 import { ScheduledMonitorRepository } from '../lib/scheduled-monitor-repository.mts';
@@ -19,6 +19,7 @@ import type {
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import type { ScheduledMonitorCycleOptions } from '../lib/scheduled-monitor-cycle.mts';
 import type { VersionedTextStore } from '../lib/scheduled-monitor-repository.mts';
+import type { ScheduledMonitorLookupOptions } from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
 
 const START = Date.parse('2026-07-16T10:00:00.000Z');
 
@@ -84,12 +85,12 @@ async function harness(domains: readonly string[] = []) {
   }
   const lookupCalls: Array<{
     domain: string;
-    options: { fast: true; compact: true };
+    options: ScheduledMonitorLookupOptions;
   }> = [];
   const options: ScheduledMonitorCycleOptions = {
     repository,
     lookup: async (domain, lookupOptions) => {
-      lookupCalls.push({ domain, options: structuredClone(lookupOptions) });
+      lookupCalls.push({ domain, options: { ...lookupOptions } });
       return { availability: { state: 'registered' } };
     },
     now: () => now,
@@ -125,10 +126,12 @@ test('a cycle starts at most two fast compact lookups and leaves durable progres
     lookupDeliveries: MAX_CYCLE_LOOKUPS,
     deferredDeliveries: 1,
   });
-  assert.deepEqual(h.lookupCalls.map((call) => call.options), [
+  assert.deepEqual(h.lookupCalls.map(({ options: { fast, compact } }) => ({ fast, compact })), [
     { fast: true, compact: true },
     { fast: true, compact: true },
   ]);
+  assert.ok(h.lookupCalls[0]?.options.signal instanceof AbortSignal);
+  assert.equal(h.lookupCalls[0]?.options.signal, h.lookupCalls[1]?.options.signal);
   let state = await h.repository.read();
   assert.ok(state.activeRun);
   assert.equal(state.activeRun.cursor, 2);
@@ -151,11 +154,11 @@ test('a cycle starts at most two fast compact lookups and leaves durable progres
   ]);
 });
 
-test('a cycle defers another lookup when the soft deadline no longer leaves a safe window', async () => {
+test('a late lookup result cannot advance the cursor or erase an earlier completed observation', async () => {
   const h = await harness(['alpha.invalid', 'beta.invalid']);
   h.options.lookup = async (domain, lookupOptions) => {
-    h.lookupCalls.push({ domain, options: structuredClone(lookupOptions) });
-    h.advance(MAX_CYCLE_MS - MIN_LOOKUP_WINDOW_MS + 1);
+    h.lookupCalls.push({ domain, options: { ...lookupOptions } });
+    h.advance(15_000);
     return { availability: { state: 'registered' } };
   };
   const result = await runScheduledMonitorCycle(h.options);
@@ -163,12 +166,105 @@ test('a cycle defers another lookup when the soft deadline no longer leaves a sa
     status: 'deferred',
     stopReason: 'deadline',
     processedDeliveries: 2,
-    lookupDeliveries: 1,
+    lookupDeliveries: 2,
     deferredDeliveries: 1,
   });
   const state = await h.repository.read();
   assert.ok(state.activeRun);
   assert.equal(state.activeRun.cursor, 1);
+});
+
+test('one deadline includes slow storage setup and interrupts collection without consuming its cursor', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await harness(['alpha.invalid']);
+  const read = h.repository.rawStore.read.bind(h.repository.rawStore);
+  const reading = deferred<void>();
+  const lookingUp = deferred<AbortSignal>();
+  let firstRead = true;
+  h.repository.rawStore.read = async (...args) => {
+    if (firstRead) {
+      firstRead = false;
+      reading.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 8_000));
+    }
+    return read(...args);
+  };
+  h.options.lookup = async (_domain, options) => {
+    assert.ok(options.signal);
+    lookingUp.resolve(options.signal);
+    return new Promise(() => {});
+  };
+  const running = runScheduledMonitorCycle(h.options);
+  await reading.promise;
+  context.mock.timers.tick(8_000);
+  const signal = await lookingUp.promise;
+  context.mock.timers.tick(MAX_CYCLE_MS - 8_000);
+  assert.deepEqual(await running, {
+    status: 'deferred', stopReason: 'deadline', processedDeliveries: 1,
+    lookupDeliveries: 1, deferredDeliveries: 1,
+  });
+  assert.equal(signal.aborted, true);
+  const state = await h.repository.read();
+  assert.ok(state.activeRun);
+  assert.equal(state.activeRun.cursor, 0);
+  assert.equal(state.activeRun.results.length, 0);
+  assert.equal(state.activeRun.errorCount, 0);
+  assert.equal(state.watchlists[0]?.entry.results[0]?.availability, 'available');
+  h.advance(5 * 60_000);
+  let resumed = 0;
+  h.options.lookup = async () => { resumed += 1; return { availability: { state: 'registered' } }; };
+  assert.equal((await runScheduledMonitorCycle(h.options)).status, 'complete');
+  assert.equal(resumed, 1);
+  assert.equal((await h.repository.read()).watchlists[0]?.entry.results[0]?.availability, 'registered');
+});
+
+test('a held initial repository read is deferred before any lookup or write', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await harness(['alpha.invalid']);
+  const reached = deferred<AbortSignal>();
+  h.repository.rawStore.read = async (_key, options) => {
+    assert.ok(options?.signal);
+    reached.resolve(options.signal);
+    return new Promise(() => {});
+  };
+  let writes = 0;
+  h.repository.rawStore.compareAndSet = async () => { writes += 1; return true; };
+  const running = runScheduledMonitorCycle(h.options);
+  const signal = await reached.promise;
+  context.mock.timers.tick(MAX_CYCLE_MS);
+  assert.deepEqual(await running, {
+    status: 'deferred', stopReason: 'deadline', processedDeliveries: 0,
+    lookupDeliveries: 0, deferredDeliveries: 1,
+  });
+  assert.equal(signal.aborted, true);
+  assert.equal(writes, 0);
+  assert.equal(h.lookupCalls.length, 0);
+});
+
+test('a completion written before cancellation is reconciled without repeating the observation', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await harness(['alpha.invalid']);
+  const write = h.repository.rawStore.compareAndSet.bind(h.repository.rawStore);
+  const committed = deferred<void>();
+  let writes = 0;
+  h.repository.rawStore.compareAndSet = async (...args) => {
+    writes += 1;
+    const result = await write(...args);
+    if (writes === 3) {
+      committed.resolve();
+      return new Promise(() => {});
+    }
+    return result;
+  };
+  const running = runScheduledMonitorCycle(h.options);
+  await committed.promise;
+  context.mock.timers.tick(MAX_CYCLE_MS);
+  assert.equal((await running).stopReason, 'deadline');
+  assert.equal(writes, 3);
+  assert.equal((await h.repository.read()).activeRun, null);
+  assert.equal((await runScheduledMonitorCycle(h.options)).status, 'idle');
+  assert.equal(h.lookupCalls.length, 1);
+  assert.equal(writes, 3);
 });
 
 test('cycle summaries contain counts and states but no domain or delivery payloads', async () => {

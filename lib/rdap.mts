@@ -47,13 +47,15 @@ async function fetchRdapRecord<const T extends string>(
   value: string,
   options: {
     fetchRecord?: typeof fetchRdapRecordWithParser;
+    signal?: AbortSignal;
   } = {},
 ) {
+  options.signal?.throwIfAborted();
   if (type === 'domain' && registryServiceAdmissionFor(value, 'rdap')?.allowed === false) {
     return null;
   }
   const fetchRecord = options.fetchRecord ?? fetchRdapRecordWithParser;
-  return fetchRecord(type, value, parseRdap);
+  return fetchRecord(type, value, parseRdap, options.signal ? { signal: options.signal } : {});
 }
 
 async function fetchRegistrarRdapRecord(

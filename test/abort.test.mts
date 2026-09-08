@@ -4,6 +4,14 @@ import { describe, test } from 'node:test';
 import { abortable, withTimeout } from '../lib/abort.mts';
 
 describe('bounded asynchronous control', () => {
+  test('does not start queued work if cancellation precedes its first microtask', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const pending = abortable(() => { calls += 1; }, controller.signal);
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    assert.equal(calls, 0);
+  });
   test('does not start work when the supplied signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort(new DOMException('Stopped', 'AbortError'));

@@ -80,18 +80,22 @@ export interface ScheduledMonitorRepositoryContract {
     mutator: (
       state: ScheduledMonitorState,
     ) => ScheduledMonitorUpdate<Result> | Promise<ScheduledMonitorUpdate<Result>>,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ state: ScheduledMonitorState; result: Result }>;
 }
 
+export type ScheduledMonitorLookupOptions = { fast: true; compact: true; signal?: AbortSignal };
+
 export interface ScheduledMonitorDispatcherOptions {
   repository: unknown;
-  lookup: (domain: string, options: { fast: true; compact: true }) => Promise<unknown>;
+  lookup: (domain: string, options: ScheduledMonitorLookupOptions) => Promise<unknown>;
   enqueue: (
     delivery: ScheduledMonitorDelivery,
     options: { deduplicationKey: string },
   ) => Promise<unknown>;
   now?: () => number;
   randomUUID: () => string;
+  signal?: AbortSignal;
 }
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -220,6 +224,7 @@ export class ScheduledMonitorDispatcher {
   enqueue: ScheduledMonitorDispatcherOptions['enqueue'];
   now: () => number;
   randomUUID: () => string;
+  signal: AbortSignal | undefined;
 
   constructor({
     repository,
@@ -227,6 +232,7 @@ export class ScheduledMonitorDispatcher {
     enqueue,
     now = () => Date.now(),
     randomUUID,
+    signal,
   }: ScheduledMonitorDispatcherOptions) {
     if (!repositoryContract(repository)) throw new Error('A scheduled monitoring repository is required.');
     if (typeof lookup !== 'function') throw new Error('A scheduled monitoring lookup function is required.');
@@ -239,6 +245,7 @@ export class ScheduledMonitorDispatcher {
     this.enqueue = enqueue;
     this.now = now;
     this.randomUUID = randomUUID;
+    this.signal = signal;
   }
 
   nowMs(): number {
@@ -254,6 +261,7 @@ export class ScheduledMonitorDispatcher {
   }
 
   async publish(delivery: unknown, deduplicationKey: string | null = null): Promise<void> {
+    this.signal?.throwIfAborted();
     const normalized = normalizeScheduledMonitorDelivery(delivery);
     if (!normalized) throw new Error('Scheduled monitoring attempted to publish an invalid delivery.');
     const key = deduplicationKey || (normalized.kind === 'tick'
@@ -263,6 +271,7 @@ export class ScheduledMonitorDispatcher {
   }
 
   async tick(): Promise<string> {
+    this.signal?.throwIfAborted();
     const nowMs = this.nowMs();
     const timestamp = new Date(nowMs).toISOString();
     const outcome = await this.repository.update((state) => {
@@ -335,12 +344,13 @@ export class ScheduledMonitorDispatcher {
           delivery: scheduledMonitorContinueDelivery(runId, 0),
         },
       };
-    });
+    }, this.signal ? { signal: this.signal } : undefined);
     if (outcome.result.delivery) await this.publish(outcome.result.delivery);
     return outcome.result.status;
   }
 
   async continue(delivery: unknown): Promise<string> {
+    this.signal?.throwIfAborted();
     const message = normalizeScheduledMonitorDelivery(delivery);
     if (!message || message.kind !== 'continue') return 'ignored';
     const nowMs = this.nowMs();
@@ -369,7 +379,7 @@ export class ScheduledMonitorDispatcher {
       };
       run.updatedAt = timestamp;
       return { state, result: { status: 'claimed', source: structuredClone(source) } };
-    });
+    }, this.signal ? { signal: this.signal } : undefined);
 
     if (claim.result.status === 'resumed') {
       await this.publish(scheduledMonitorContinueDelivery(message.runId, claim.result.cursor));
@@ -379,9 +389,14 @@ export class ScheduledMonitorDispatcher {
 
     let result;
     try {
-      const response = await this.lookup(claim.result.source.domain, { fast: true, compact: true });
+      this.signal?.throwIfAborted();
+      const response = await this.lookup(claim.result.source.domain, {
+        fast: true, compact: true, ...(this.signal ? { signal: this.signal } : {}),
+      });
+      this.signal?.throwIfAborted();
       result = scheduledLookupResult(claim.result.source, response);
     } catch {
+      this.signal?.throwIfAborted();
       result = failedLookupResult(claim.result.source);
     }
     const inconclusive = typeof result.availability !== 'string'
@@ -439,7 +454,7 @@ export class ScheduledMonitorDispatcher {
           prunedHistoryEvents: boundedState.pruned,
         },
       };
-    });
+    }, this.signal ? { signal: this.signal } : undefined);
 
     if (completion.result.status === 'continue') {
       await this.publish(scheduledMonitorContinueDelivery(message.runId, completion.result.cursor));

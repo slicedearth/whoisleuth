@@ -93,7 +93,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const skipWhois = fast || !whoisEnabled;
 
   const rdapPromise = rdapEnabled
-    ? measure('rdap', () => fetchRdap(classified.type, classified.value))
+    ? measure('rdap', () => fetchRdap(classified.type, classified.value, options.signal ? { signal: options.signal } : {}))
     : Promise.resolve(null);
   const whoisPromise = skipWhois
     ? Promise.resolve(null)
@@ -118,6 +118,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
         featurePolicy,
+        ...(options.signal ? { signal: options.signal } : {}),
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
         ...(selectedDnsResolvers ? {

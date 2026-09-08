@@ -14,7 +14,7 @@ import {
 import type { NetlifyBlobStore } from '../../lib/scheduled-monitor-netlify-store.mts';
 import type { RuntimeOptions } from '../../lib/scheduled-monitor-runtime.mts';
 
-type BlobStoreFactory = (name: string) => NetlifyBlobStore;
+type BlobStoreFactory = (name: string, options: { fetch: typeof globalThis.fetch }) => NetlifyBlobStore;
 type ScheduledDeployContext = {
   context?: unknown;
   published?: unknown;
@@ -100,8 +100,17 @@ async function runScheduledMonitorFunction(
     ...(options.randomUUID ? { randomUUID: options.randomUUID } : {}),
   };
   if (configuration.status === 'ready') {
-    const blobStoreFactory = options.blobStoreFactory || ((name) => getStore(name));
-    runtimeOptions.blobStore = blobStoreFactory(SCHEDULED_MONITOR_STORE_NAME);
+    const blobStoreFactory = options.blobStoreFactory || ((name, storeOptions) => getStore(name, storeOptions));
+    runtimeOptions.blobStore = (signal) => blobStoreFactory(SCHEDULED_MONITOR_STORE_NAME, {
+      fetch: (input, init) => {
+        signal.throwIfAborted();
+        const requestSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+        return globalThis.fetch(input, {
+          ...init,
+          signal: requestSignal ? AbortSignal.any([signal, requestSignal]) : signal,
+        });
+      },
+    });
   }
   return createScheduledMonitorRuntime(runtimeOptions).run();
 }

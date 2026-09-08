@@ -23,6 +23,7 @@ import {
   type ScheduledMonitorState,
 } from '../packages/monitoring/scheduled-monitor-model.mts';
 import type { NetlifyBlobStore } from './scheduled-monitor-netlify-store.mts';
+import type { ScheduledMonitorLookupOptions } from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
 import type {
   EnvironmentInput,
   RuntimeConfiguration,
@@ -31,12 +32,12 @@ import type {
 
 type RuntimeOptions = {
   env?: EnvironmentInput | null;
-  blobStore?: NetlifyBlobStore;
-  lookup?: (domain: string, options: { fast: true; compact: true }) => Promise<unknown>;
+  blobStore?: NetlifyBlobStore | ((signal: AbortSignal) => NetlifyBlobStore);
+  lookup?: (domain: string, options: ScheduledMonitorLookupOptions) => Promise<unknown>;
   now?: () => number;
   randomUUID?: () => string;
 };
-type RepositoryRuntimeOptions = Pick<RuntimeOptions, 'env' | 'blobStore'>;
+type RepositoryRuntimeOptions = Pick<RuntimeOptions, 'env'> & { blobStore?: NetlifyBlobStore };
 
 const SCHEDULED_MONITOR_UNAVAILABLE_CODE = 'SCHEDULED_MONITOR_UNAVAILABLE';
 
@@ -122,13 +123,16 @@ function createScheduledMonitorRuntime(options: RuntimeOptions = {}) {
       fast: true,
       compact: true,
       featurePolicy,
+      ...(requestOptions.signal ? { signal: requestOptions.signal } : {}),
     });
   });
-  const repository = createScheduledMonitorRepository({ env, blobStore: options.blobStore });
+  const blobStore = options.blobStore;
   return {
     ...configuration,
     run: () => runScheduledMonitorCycle({
-      repository,
+      repository: (signal: AbortSignal) => createScheduledMonitorRepository({
+        env, blobStore: typeof blobStore === 'function' ? blobStore(signal) : blobStore,
+      }),
       lookup,
       ...(options.now ? { now: options.now } : {}),
       randomUUID: options.randomUUID || randomUUID,

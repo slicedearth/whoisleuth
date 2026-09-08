@@ -12,6 +12,7 @@ import type {
 } from '../lib/scheduled-monitor-repository.mts';
 import { encryptScheduledMonitorState } from '../lib/scheduled-monitor-crypto.mts';
 import { recordValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 
 const key = randomBytes(32).toString('base64');
 const namespace = 'whoisleuth:scheduled-monitor:test';
@@ -81,6 +82,26 @@ function repository(
 }
 
 describe('provider-neutral scheduled monitoring repository', () => {
+  test('an interrupted conditional write never retries an uncertain commit', async () => {
+    const controller = new AbortController();
+    const raw = new MemoryVersionedTextStore();
+    const committed = deferred<void>();
+    const settle = deferred<boolean>();
+    const write = raw.compareAndSet.bind(raw);
+    raw.compareAndSet = async (...args) => {
+      await write(...args);
+      committed.resolve();
+      return settle.promise;
+    };
+    const repo = repository(raw);
+    const pending = repo.update((state) => ({ state: { ...state, count: 1 }, result: 'saved' }), { signal: controller.signal });
+    await committed.promise;
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    settle.resolve(false);
+    assert.equal(raw.writeCalls, 1);
+    assert.equal((await repo.read()).count, 1);
+  });
   test('initializes through the empty-state contract and stores only ciphertext', async () => {
     const rawStore = new MemoryVersionedTextStore();
     const repo = repository(rawStore);

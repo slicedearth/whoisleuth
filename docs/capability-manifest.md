@@ -155,7 +155,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 | Capability | Maximum lookups | Maximum processed deliveries | Soft cycle budget | Minimum lookup window |
 | --- | ---: | ---: | ---: | ---: |
-| `scheduled_monitoring` | 2 | 8 | 24000 ms | 16000 ms |
+| `scheduled_monitoring` | 2 | 8 | 24000 ms | 0 ms |
 
 ### Distributed-control bounds
 
