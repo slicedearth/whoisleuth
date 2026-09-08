@@ -10,6 +10,11 @@ import {
 } from './lookup-display-shared.ts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../../../../lib/website-security-posture.mts';
 import { technologyEvidenceRoles } from '../../../../lib/technology-evidence-role.mts';
+import {
+  MAX_EVIDENCE_PER_TECHNOLOGY,
+  MAX_LIBRARY_FINDINGS,
+  MAX_TECHNOLOGY_FINDINGS,
+} from '../../../../lib/lookup-child-profile-contract.mts';
 
 const SECURITY_POSTURE_STATES = new Set([
   'observed',
@@ -41,12 +46,10 @@ export function buildLookupPageProfileDisplay(input: {
   const credentialSurfaceActions = rec(credentialSurfaceForms.actions);
   const credentialSurfaceInputs = rec(credentialSurfaceProfile.inputs);
   const credentialSurfaceCategories = rec(credentialSurfaceInputs.categories);
-  const technologyFindings = records(technologyProfile.findings)
-    .slice(0, 24)
+  const technologyFindings = records(technologyProfile.findings, MAX_TECHNOLOGY_FINDINGS)
     .map((finding) => {
       const category = boundedTechnologyText(finding.category || 'technology', 80);
-      const evidence = records(finding.evidence)
-        .slice(0, 4)
+      const evidence = records(finding.evidence, MAX_EVIDENCE_PER_TECHNOLOGY)
         .map((item) => ({
           source: statusLabel(boundedTechnologyText(item.source || 'evidence', 80)),
           role: boundedTechnologyText(item.role, 40),
@@ -161,8 +164,7 @@ export function buildLookupPageProfileDisplay(input: {
       .slice(0, 10)
       .map((item) => boundedTechnologyText(item, 300))
       .filter(Boolean),
-    browserLibraries: records(browserLibraryProfile.findings)
-      .slice(0, 16)
+    browserLibraries: records(browserLibraryProfile.findings, MAX_LIBRARY_FINDINGS)
       .map((finding) => ({
         id: boundedTechnologyText(finding.id, 80),
         name: statusLabel(boundedTechnologyText(finding.name || 'unknown library', 80)),
@@ -181,6 +183,9 @@ export function buildLookupPageProfileDisplay(input: {
       .filter(Boolean),
   };
 }
+
+export type LookupTechnologyFinding = ReturnType<typeof buildLookupPageProfileDisplay>['technologyFindings'][number];
+export type LookupBrowserLibraryFinding = ReturnType<typeof buildLookupPageProfileDisplay>['browserLibraries'][number];
 
 export function buildLookupSecurityPostureDisplay(input: {
   securityPosture: JsonRecord;

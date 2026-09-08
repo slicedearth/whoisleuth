@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readLookupObservationTime } from '../frontend/src/lib/analysis/lookup-observation-time.ts';
+import { readObservationTime } from '../packages/evidence/observation.mts';
 import { buildLookupEvidenceQualityMatrix } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
 import { buildLookupSourceRefreshPlan } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
 import { buildEvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
@@ -10,16 +10,16 @@ import { createLookupViewModel, type LookupHttpResponse } from '../lib/lookup-re
 const NOW = '2026-07-30T00:00:00.000Z';
 
 test('source age uses explicit calendar-valid timestamps and never clamps a future observation to current', () => {
-  assert.deepEqual(readLookupObservationTime('2026-07-28T10:00:00+10:00', NOW), {
+  assert.deepEqual(readObservationTime('2026-07-28T10:00:00+10:00', NOW), {
     observedAt: '2026-07-28T00:00:00.000Z', ageDays: 2,
   });
   for (const value of [null, '', 0, '2026-02-30T00:00:00Z', '2026-07-29T00:00:00', '2026-07-29']) {
-    assert.deepEqual(readLookupObservationTime(value, NOW), { observedAt: null, ageDays: null });
+    assert.deepEqual(readObservationTime(value, NOW), { observedAt: null, ageDays: null });
   }
-  assert.deepEqual(readLookupObservationTime('2026-07-31T00:00:00Z', NOW), {
+  assert.deepEqual(readObservationTime('2026-07-31T00:00:00Z', NOW), {
     observedAt: '2026-07-31T00:00:00.000Z', ageDays: null,
   });
-  assert.equal(readLookupObservationTime(NOW, 'invalid').ageDays, null);
+  assert.equal(readObservationTime(NOW, 'invalid').ageDays, null);
 });
 
 test('missing and mixed source times do not borrow the envelope clock or invent a superseded cohort', () => {
@@ -69,7 +69,7 @@ test('page analysis keeps its own time instead of inheriting a newer HTTP observ
     ...result, rdap: { fetchedAt: 'invalid' }, diagnostics: { rdap: { fetchedAt: NOW } },
   };
   const invalidProjection = buildLookupObservationProjection(invalidSource, createLookupViewModel(invalidSource));
-  assert.equal(readLookupObservationTime(invalidProjection.evidenceObservedAtById.rdap, NOW).ageDays, null);
+  assert.equal(readObservationTime(invalidProjection.evidenceObservedAtById.rdap, NOW).ageDays, null);
 });
 
 test('missing times do not request unsupported, skipped or merely derived availability work', () => {

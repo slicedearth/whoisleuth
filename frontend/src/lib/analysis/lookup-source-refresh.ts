@@ -3,7 +3,7 @@ import type {
   EvidenceCoverageLedger,
 } from './evidence-coverage-ledger.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
-import { readLookupObservationTime } from './lookup-observation-time.ts';
+import { readObservationTime } from '../../../../packages/evidence/observation.mts';
 import {
   BoundedJsonResponseError,
   requestJsonCapped,
@@ -145,7 +145,7 @@ export function buildLookupSourceRefreshPlan(
     observedAtByEvidence?: Readonly<Record<string, unknown>>;
   }> = {},
 ): LookupSourceRefreshPlan {
-  const { ageDays } = readLookupObservationTime(observedAt, now);
+  const { ageDays } = readObservationTime(observedAt, now);
   const freshnessPolicy = buildLookupFreshnessPolicy(options.task ?? 'general', options.freshnessPolicy);
   const entries = ledger.entries.slice(0, 24);
   const plans: LookupSourceRefreshPlanItem[] = [];
@@ -195,7 +195,7 @@ export function buildLookupSourceRefreshPlan(
     const staleAfterDays = Math.min(...thresholds);
     // Availability is a derived decision; refresh age belongs to its collected inputs.
     const sourceTimes = evidenceIds.flatMap((id, index) => id === 'availability' ? [] : [{
-      ...readLookupObservationTime(options.observedAtByEvidence?.[id], now),
+      ...readObservationTime(options.observedAtByEvidence?.[id], now),
       threshold: thresholds[index]!,
     }]);
     const unknownTime = sourceTimes.some((time) => time.ageDays === null);

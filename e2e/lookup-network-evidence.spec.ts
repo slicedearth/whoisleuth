@@ -382,7 +382,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [{ source: 'passive response header', role: 'framework_runtime', description: 'A generic retained header indicates the fixture runtime.' }] },
           ],
           browserLibraryProfile: {
-            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-12T00:00:00.000Z',
             scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
             catalog: { name: 'Retire.js', version: 'retire.js-5.4.3', sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7' },
             knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01T00:00:00.000Z' },
@@ -605,18 +605,26 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
     .toContainText('No retained indicator');
   await expect(technologyCard.getByText('Authoritative nameservers', { exact: true }).locator('..'))
     .toContainText('ns1.example.test');
-  await expect(technologyCard.getByText(/Nameserver identity remains DNS evidence/i)).toBeVisible();
-  await expect(technologyCard.getByText(/do not establish provider ownership, control, a concealed origin, safety or maliciousness/i)).toBeVisible();
+  await expect(technologyCard.getByText(/Nameservers describe DNS infrastructure/i)).toBeVisible();
+  await expect(technologyCard.getByText(/does not identify a concealed origin host/i)).toBeVisible();
   await expect(technologyCard.getByText('Origin host', { exact: true }).locator('..'))
     .toContainText('Not established');
+  const technologyLimits = technologyCard.getByText('Technology sources and limits', { exact: true });
+  await technologyLimits.focus();
+  await technologyLimits.press('Enter');
+  await expect(technologyLimits).toBeFocused();
   await expect(technologyCard.getByText(/unmatched technology may still be present/i)).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Delivery Platform With An Exceptionally Long Provider Display Name' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: /Fixture Library 1\.2\.3/i })).toBeVisible();
   await expect(technologyCard.getByText('1 advisory match', { exact: true })).toBeVisible();
-  await expect(technologyCard.getByText(/does not download or execute referenced scripts/i)).toBeVisible();
-  await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
+  await technologyCard.getByText('Library sources and limits', { exact: true }).click();
+  await expect(technologyCard.getByText(/Referenced scripts are not downloaded or executed/i)).toBeVisible();
+  await expect(technologyCard.getByText(/without additional requests or changes to availability or Risk scoring/i)).toBeVisible();
+  await expect(technologyCard.locator(':scope > .evidence-body > .observation-time time')).toHaveAttribute('datetime', '2026-07-13T00:00:00.000Z');
+  await expect(technologyCard.locator('.library-profile > .observation-time time')).toHaveAttribute('datetime', '2026-07-12T00:00:00.000Z');
+  await expect(technologyCard.locator('.observation-time')).toContainText(['old at review', 'old at review']);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await expect(technologyCard.getByText('Application-platform indicator', { exact: true }).locator('..'))
@@ -729,6 +737,7 @@ test('real library projection retains advisory aliases and discloses malformed s
   await expect(libraries).toContainText('CVE-2014-5325');
   await expect(libraries).toContainText('GHSA-');
   await expect(libraries).not.toContainText('CVE-2007-01-09');
+  await libraries.getByText('Library sources and limits · incomplete analysis', { exact: true }).click();
   await expect(libraries).toContainText('1 supplied CVE identifier entry was omitted');
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
     await page.setViewportSize(viewport);

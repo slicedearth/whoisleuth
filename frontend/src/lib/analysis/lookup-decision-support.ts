@@ -6,7 +6,7 @@ import type { LookupSourceRefreshPlan } from './lookup-source-refresh.ts';
 import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
-import { readLookupObservationTime } from './lookup-observation-time.ts';
+import { readObservationTime } from '../../../../packages/evidence/observation.mts';
 
 export type LookupDecisionState = 'conflict' | 'uncertain';
 export type LookupDecisionImportance = 'high' | 'medium' | 'low';
@@ -693,7 +693,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   now?: unknown;
 }>): LookupEvidenceQualityMatrix {
   const now = input.now ?? new Date().toISOString();
-  const { observedAt, ageDays: currentAgeDays } = readLookupObservationTime(input.observedAt, now);
+  const { observedAt, ageDays: currentAgeDays } = readObservationTime(input.observedAt, now);
   const timings = timingByEvidence(input.timing);
   const refreshByEvidence = new Map<string, LookupSourceRefreshPlan['items'][number]>();
   for (const item of input.refreshPlan.items) {
@@ -704,7 +704,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   const entries = input.coverage.entries.slice(0, MAX_ENTRIES).map((entry) => {
     const timing = timings.get(entry.id);
     const refresh = refreshByEvidence.get(entry.id);
-    const sourceTime = readLookupObservationTime(input.observedAtByEvidence?.[entry.id], now);
+    const sourceTime = readObservationTime(input.observedAtByEvidence?.[entry.id], now);
     return {
       id: entry.id,
       label: entry.label,

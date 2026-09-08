@@ -44,8 +44,8 @@ const FACADE_TYPE_COMPATIBILITY: readonly [
   ExactType<CanonicalScanMode, FacadeScanMode>,
 ] = [true, true, true, true, true];
 
-test('keeps the historical observation import as an exact contract facade', () => {
-  assert.deepEqual(Object.keys(observationContract).sort(), [
+test('keeps every historical observation export identical to its canonical owner', () => {
+  assert.deepEqual(Object.keys(observationFacade).sort(), [
     'MAX_OBSERVATION_DIAGNOSTICS',
     'MAX_OBSERVATION_LIMITATIONS',
     'MAX_OBSERVATION_LIMITATION_LENGTH',
@@ -56,7 +56,9 @@ test('keeps the historical observation import as an exact contract facade', () =
     'normalizeLegacyIsoTimestamp',
     'readObservationEnvelope',
   ]);
-  assert.deepEqual(Object.keys(observationFacade).sort(), Object.keys(observationContract).sort());
+  for (const key of Object.keys(observationFacade) as Array<keyof typeof observationFacade>) {
+    assert.equal(observationFacade[key], observationContract[key]);
+  }
   assert.deepEqual(FACADE_TYPE_COMPATIBILITY, [true, true, true, true, true]);
   assert.equal(observationFacade.OBSERVATION_VERSION, observationContract.OBSERVATION_VERSION);
   assert.equal(observationFacade.createObservation, observationContract.createObservation);

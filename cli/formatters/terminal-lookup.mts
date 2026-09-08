@@ -1,8 +1,5 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
-import {
-  technologyEvidenceRoles,
-  type TechnologyEvidenceRole,
-} from '../../lib/technology-evidence-role.mts';
+import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import {
   appendSection,
@@ -30,14 +27,6 @@ const MAX_LOOKUP_TERMINAL_FINDINGS = 5;
 const MAX_LOOKUP_TERMINAL_ABUSE_ROUTES = 6;
 
 type LookupTerminalDetail = 'summary' | 'standard' | 'verbose';
-
-function terminalTechnologyRoleNames(findings: unknown[], role: TechnologyEvidenceRole): string {
-  const names = findings
-    .filter((finding) => technologyEvidenceRoles(finding).includes(role))
-    .slice(0, 6)
-    .map((finding) => safeTerminalValue(terminalRecord(finding).name, 'Unnamed indicator'));
-  return names.length ? boundedTerminalList(names, Math.max(0, findings.filter((finding) => technologyEvidenceRoles(finding).includes(role)).length - names.length)) : 'None retained';
-}
 
 function formatLookupDnsRecord(value: unknown): string | null {
   if (typeof value === 'string' || typeof value === 'number') return safeTerminalValue(value);
@@ -567,38 +556,10 @@ function formatTerminalLookup(
       });
       if (detail !== 'summary' && visible.length) websiteLines.push(`Declarations   ${safeTerminalValue(visible.join('; '))}`);
     }
-    if (technology.status || technology.source === 'derived') {
-      const findings = Array.isArray(technology.findings) ? technology.findings : [];
-      websiteLines.push(`Technology     ${titleCase(technology.status)} · ${findings.length} indicator${findings.length === 1 ? '' : 's'}`);
-      const visible = findings.slice(0, 6).map((finding: unknown) => {
-        const item = terminalRecord(finding);
-        const qualifiers = [item.category, item.confidence ? `${item.confidence} signature strength` : null].filter(Boolean).map((value) => safeTerminalValue(value));
-        return `${safeTerminalValue(item.name, 'Unnamed indicator')}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''}`;
-      });
-      if (detail !== 'summary' && visible.length) {
-        const omitted = findings.length - visible.length;
-        websiteLines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
-      }
-      if (detail !== 'summary') {
-        const nameservers = Array.isArray(availability.nameservers)
-          ? availability.nameservers.slice(0, MAX_LOOKUP_TERMINAL_NAMES).map((value) => safeTerminalValue(value))
-          : [];
-        websiteLines.push(`Nameservers   ${nameservers.length ? boundedTerminalList(nameservers, Math.max(0, (availability.nameservers as unknown[]).length - nameservers.length)) : 'Unavailable'} · identity does not establish operator or web-host ownership`);
-        websiteLines.push(`Observed edge  ${terminalTechnologyRoleNames(findings, 'observed_edge')}`);
-        websiteLines.push(`App platform   ${terminalTechnologyRoleNames(findings, 'application_platform')}`);
-        websiteLines.push(`Framework/run  ${terminalTechnologyRoleNames(findings, 'framework_runtime')}`);
-        websiteLines.push(`Embedded deps  ${terminalTechnologyRoleNames(findings, 'embedded_dependency')}`);
-        websiteLines.push('Origin host    Not established from retained evidence');
-      }
-      if (detail !== 'summary' && (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived')) {
-        const libraries = Array.isArray(browserLibraries.findings) ? browserLibraries.findings : [];
-        const advisoryMatches = libraries.filter((finding: unknown) => terminalCount(terminalRecord(finding).advisoryCount) > 0).length;
-        websiteLines.push(
-          `JS libraries   ${titleCase(browserLibraries.status)} · ${libraries.length} apparent · `
-          + `${advisoryMatches} with catalogue advisory match${advisoryMatches === 1 ? '' : 'es'}`,
-        );
-      }
-    }
+    appendTechnologyLines(websiteLines, {
+      technology, libraries: browserLibraries, nameservers: availability.nameservers,
+      generatedAt: document.generatedAt, detail,
+    });
     if (posture.status || posture.source === 'derived') {
       websiteLines.push(`Posture        ${titleCase(posture.status)}`);
       if (detail !== 'summary' && Object.keys(postureSummary).length) websiteLines.push(

@@ -139,7 +139,7 @@ describe('website technology profile', () => {
     assert.deepEqual(item.evidence, [{
       source: 'passive response header',
       role: 'application_platform',
-      description: 'A Netlify application-platform response header was observed.',
+      description: 'x-nf-request-id: A Netlify application-platform response header was observed.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /bounded-request-marker/u);
   });
@@ -230,7 +230,7 @@ describe('website technology profile', () => {
     assert.deepEqual(finding(result, 'craft-cms').evidence, [{
       source: 'passive response header',
       role: 'application_platform',
-      description: 'The passive X-Powered-By response header identifies Craft CMS.',
+      description: 'x-powered-by: The passive X-Powered-By response header identifies Craft CMS.',
     }]);
     assert.doesNotMatch(JSON.stringify(result), /5\.10\.13\.1/u);
   });

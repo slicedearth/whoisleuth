@@ -245,7 +245,7 @@ function responseHeaderEvidence(
 ): SignatureEvidence {
   return {
     source: 'passive response header',
-    description,
+    description: `${name}: ${description}`,
     confidence,
     matches: ({ responseHeaders }) => {
       if (!responseHeaders.has(name)) return false;

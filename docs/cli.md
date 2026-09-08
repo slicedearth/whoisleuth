@@ -144,6 +144,9 @@ or domain-only output only where declared by the installed registry. Redirected
 and machine output contains no ANSI or transient progress text.
 
 - `--summary` and `--verbose` change presentation, not collection.
+  Verbose Lookup includes retained technology signals and library advisory
+  identifiers. Their source times are separate; ages are measured at output
+  generation, not at a later replay.
 - `lookup --browse` provides an interactive terminal view; press `?` for keys.
 - `--events` writes versioned lifecycle events to stderr.
 - `--strict-exit` and `--fail-on` expose selected evidence states to automation.
