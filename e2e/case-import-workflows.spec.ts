@@ -1,13 +1,167 @@
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, runBulkScan } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
 import { caseWorkspaceActionStatus } from './case-response-fixtures';
 
 // Bounded external evidence imports, Case management and Bulk handoff coverage.
+
+function pagedFindingFile(count = 100, longFields = false) {
+  return {
+    name: 'bounded-review.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({
+      schema: 'whoisleuth.external-findings', schemaVersion: EXTERNAL_FINDINGS_VERSION,
+      source: { name: longFields ? 'S'.repeat(80) : 'Paged source review', reference: longFields ? 'r'.repeat(500) : 'Local fixture' },
+      findings: Array.from({ length: count }, (_, index) => ({
+        domain: `review-${Math.floor(index / 5)}.invalid`, category: 'page', evidenceClass: 'provider_report',
+        summary: longFields ? `${index + 1}: ${'v'.repeat(880)}` : `Independent observation ${index + 1}`,
+        observedAt: '2026-08-01T00:00:00.000Z', completeness: 'partial',
+        limitations: longFields ? Array.from({ length: 8 }, (_, number) => `Supplied qualification ${number + 1}`) : ['Not independently collected.'],
+        reference: longFields ? `${'x'.repeat(480)}-${index + 1}` : `finding-${index + 1}`,
+      })),
+    })),
+  };
+}
+
+test('every accepted finding is reachable and the final deselection stays empty across pages', async ({ page }) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const fileInput = importer.locator('input[type="file"]');
+  await fileInput.setInputFiles(pagedFindingFile());
+  const review = importer.getByRole('region', { name: 'Validated import review' });
+  await expect(review).toContainText('100 findings · 20 domains');
+  const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
+  const encountered: string[] = [];
+  await review.getByRole('button', { name: 'Clear selection' }).click();
+  for (let index = 0; index < 10; index += 1) {
+    await expect(navigation).toContainText(`Page ${index + 1} of 10`);
+    const checkboxes = review.getByRole('checkbox');
+    await expect(checkboxes).toHaveCount(10);
+    encountered.push(...await checkboxes.evaluateAll((elements) => elements.map((element) => element.getAttribute('aria-label') ?? '')));
+    if (index < 9) {
+      await navigation.getByRole('button', { name: 'Next', exact: true }).click();
+      await expect(navigation.getByRole('button', { name: 'Next', exact: true })).toBeFocused();
+    }
+  }
+  expect(encountered).toEqual(Array.from({ length: 100 }, (_, index) => `Include finding ${index + 1}: review-${Math.floor(index / 5)}.invalid`));
+  await expect(review).toContainText('0 of 100 findings selected');
+  await expect(review.getByRole('button', { name: 'Import into cases', exact: true })).toBeDisabled();
+  const last = review.getByRole('checkbox', { name: 'Include finding 100: review-19.invalid', exact: true });
+  await last.check();
+  await last.uncheck();
+  await expect(review).toContainText('0 of 100 findings selected');
+  await navigation.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(review).toContainText('0 of 100 findings selected');
+  await expect(review.getByRole('checkbox')).toHaveCount(10);
+  await expect(review.locator('input[type="checkbox"]:checked')).toHaveCount(0);
+  await navigation.getByRole('button', { name: 'Next', exact: true }).click();
+  await last.check();
+  await review.getByRole('button', { name: 'Import into cases', exact: true }).click();
+  await expect(page.locator('.case-head')).toHaveCount(1);
+  await expect(page.locator('.case-head')).toContainText('review-19.invalid');
+  await expect(fileInput).toBeFocused();
+  await page.locator('.case-head').click();
+  const response = await openCaseResponseWorkspace(page);
+  await expect(response).toContainText('Independent observation 100');
+  await expect(response).not.toContainText('Independent observation 99');
+});
+
+test('new files and cancellation reset review selection without writing Cases', async ({ page }) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const fileInput = importer.locator('input[type="file"]');
+  await fileInput.setInputFiles(pagedFindingFile());
+  const review = importer.getByRole('region', { name: 'Validated import review' });
+  await review.getByRole('button', { name: 'Clear selection' }).click();
+  await review.getByRole('navigation', { name: 'Import preview pages' }).getByRole('button', { name: 'Next' }).click();
+  await fileInput.setInputFiles(pagedFindingFile(1));
+  await expect(review).toContainText('1 of 1 finding selected');
+  await expect(review.getByRole('checkbox', { name: 'Include finding 1: review-0.invalid' })).toBeChecked();
+  await expect(review.getByRole('navigation', { name: 'Import preview pages' })).toHaveCount(0);
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  await expect(fileInput).toBeFocused();
+  await expect(page.locator('.case-head')).toHaveCount(0);
+});
+
+for (const outcome of ['write-failure', 'refresh-failure'] as const) {
+  test(`import selection preserves the correct retry boundary after ${outcome}`, async ({ page }) => {
+    await openCasesView(page);
+    await createCase(page, 'review-2.invalid');
+    const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+    await importer.getByText('Import bounded external findings', { exact: true }).click();
+    await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(12));
+    const review = importer.getByRole('region', { name: 'Validated import review' });
+    await review.getByRole('button', { name: 'Clear selection' }).click();
+    const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
+    await navigation.getByRole('button', { name: 'Next', exact: true }).click();
+    const selected = review.getByRole('checkbox', { name: 'Include finding 12: review-2.invalid', exact: true });
+    await selected.check();
+    if (outcome === 'write-failure') await failNextBrowserLocalManifestWrite(page, 'cases');
+    else await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+    const submit = review.getByRole('button', { name: 'Import into cases', exact: true });
+    await submit.click();
+    if (outcome === 'write-failure') {
+      await expect(caseWorkspaceActionStatus(page)).toContainText('out of storage space');
+      await expect(review).toContainText('1 of 12 findings selected');
+      await expect(navigation).toContainText('Page 2 of 2');
+      await expect(selected).toBeChecked();
+      await expect(submit).toBeFocused();
+      expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
+      await submit.click();
+    } else {
+      await expect(caseWorkspaceActionStatus(page)).toContainText('The import was saved, but Cases could not be reread');
+    }
+    await expect(review).toHaveCount(0);
+    const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
+    expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+    expect(committed.records).toHaveLength(1);
+    expect(committed.records[0]!.value.evidencePins).toHaveLength(1);
+    expect(committed.records[0]!.value.sightings).toHaveLength(1);
+    await expect(page.locator('.case-head')).toContainText('review-2.invalid');
+  });
+}
+
+for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`retained import fields remain readable and keyboard-scrollable at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: width < 700 ? 844 : 900 });
+      await useTheme(page, theme);
+      await openCasesView(page);
+      const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+      await importer.getByText('Import bounded external findings', { exact: true }).click();
+      await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(100, true));
+      const review = importer.getByRole('region', { name: 'Validated import review' });
+      await expect(review).toContainText('100 findings · 20 domains');
+      await expect(review.getByText(/Shortened Case fields:/)).toHaveCount(10);
+      const summary = review.getByText('Retained fields for finding 1', { exact: true });
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      const region = review.getByRole('region', { name: 'Retained Case fields for finding 1', exact: true });
+      await expect(region).toBeVisible();
+      const retained = JSON.parse(await region.innerText()) as { evidencePin: { value: string; source: string; truncated: boolean; limitations: string[] }; sighting: { observedAt: string; state: string } };
+      expect(retained.evidencePin.value).toHaveLength(1_000);
+      expect(retained.evidencePin.source).toHaveLength(80);
+      expect(retained.evidencePin.truncated).toBe(true);
+      expect(retained.evidencePin.limitations).toHaveLength(8);
+      expect(retained.evidencePin.limitations.some((value) => value.includes('4 supplied limitations were omitted'))).toBe(true);
+      expect(retained.sighting).toMatchObject({ observedAt: '2026-08-01T00:00:00.000Z', state: 'reported_by_provider' });
+      await page.keyboard.press('Tab');
+      await expect(region).toBeFocused();
+      expect(await region.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await page.keyboard.press('PageDown');
+      await expect.poll(() => region.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    });
+  }
+}
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
   await openCasesView(page);

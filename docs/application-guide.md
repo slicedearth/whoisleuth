@@ -181,6 +181,11 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+External imports open a paged review of every accepted finding or claim. Select
+records across pages and inspect **Retained fields** before importing; shortened
+values and omitted qualifications are identified. Unselected records do not
+change Cases. Intelligence claims require an existing target Case.
+
 Each Case has a stable `WS-` reference derived from its complete immutable local
 UUID, so it remains stable across browser exports without relying on a shared
 counter.

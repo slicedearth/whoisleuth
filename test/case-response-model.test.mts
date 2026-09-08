@@ -59,6 +59,19 @@ test('the response workflow retains one ordered canonical stage vocabulary', () 
 });
 
 describe('case response record normalization', () => {
+  test('import content identity is optional, bounded and not inferred for historical pins', () => {
+    const input = { label: 'Imported fact', value: 'Retained observation', importContentSha256: 'a'.repeat(64) };
+    const current = requiredValue(normalizeCaseEvidencePins([input], NOW, { sourceVersion: 15 })[0]);
+    assert.equal(current.importContentSha256, 'a'.repeat(64));
+    assert.equal(requiredValue(appendCaseEvidencePin([], input, NOW)[0]).importContentSha256, 'a'.repeat(64));
+    for (const sourceVersion of [12, 13, 14]) {
+      assert.equal(Object.hasOwn(requiredValue(normalizeCaseEvidencePins([input], NOW, { sourceVersion })[0]), 'importContentSha256'), false);
+    }
+    for (const value of [undefined, null, '', 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64), 'A'.repeat(64)]) {
+      assert.equal(Object.hasOwn(requiredValue(normalizeCaseEvidencePins([{ ...input, importContentSha256: value }], NOW)[0]), 'importContentSha256'), false);
+    }
+  });
+
   test('pins keep bounded provenance and explicit completeness', () => {
     const pins = appendCaseEvidencePin([], {
       label: 'Observed form',

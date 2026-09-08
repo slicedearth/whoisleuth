@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';
+import { appendCaseEvidencePin } from '../packages/cases/case-response-model.mts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 
@@ -90,6 +91,14 @@ describe('schema identity', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildCaseReport JSON', () => {
+  test('full reports retain optional import identity without adding it to other evidence', () => {
+    const pins = appendCaseEvidencePin([], { label: 'Imported observation', value: 'Retained value', importContentSha256: 'c'.repeat(64) }, ISO);
+    const both = appendCaseEvidencePin(pins, { label: 'Analyst observation', value: 'Another value' }, LATER);
+    const { json } = caseReport.buildCaseReport(caseRecord({ evidencePins: both }), { generatedAt: LATEST });
+    assert.equal(json.analystResponse.evidencePins[0]!.importContentSha256, 'c'.repeat(64));
+    assert.equal(Object.hasOwn(json.analystResponse.evidencePins[1]!, 'importContentSha256'), false);
+  });
+
   test('no-evidence case produces valid report', () => {
     const rec = caseRecord({ evidenceHistory: [] });
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });

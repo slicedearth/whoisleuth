@@ -7,11 +7,30 @@ import {
   assertExternalIntelligenceTreeBounds,
   mergeExternalIntelligenceIntoCase,
   parseExternalIntelligenceDocument,
+  externalIntelligenceAssertionContent,
 } from '../frontend/src/lib/analysis/external-intelligence-import.ts';
 
 const DIGEST = 'a'.repeat(64);
 const NOW = '2026-07-29T02:00:00.000Z';
 const OBSERVED = '2026-07-28T01:00:00.000Z';
+
+test('intelligence retention preview preserves source time and excludes generated save metadata', () => {
+  const preview = parseExternalIntelligenceDocument(stixBundle(stixObjects()), DIGEST);
+  const item = preview.items.find((value) => value.entityValue === 'candidate.invalid' && value.observedAt === OBSERVED);
+  assert.ok(item);
+  const content = externalIntelligenceAssertionContent(item, preview);
+  assert.equal(content.provenance?.sourceDigestSha256, DIGEST);
+  assert.equal(content.provenance?.observedAt, OBSERVED);
+  assert.equal(content.kind, 'unknown');
+  assert.equal(content.state, 'open');
+  assert.deepEqual(content.evidencePinIds, []);
+  assert.equal(Object.hasOwn(content, 'createdAt'), false);
+  assert.equal(Object.hasOwn(content, 'id'), false);
+  const target = createCase({ domain: 'candidate.invalid' }, NOW);
+  const merged = mergeExternalIntelligenceIntoCase([target], target.id, { ...preview, items: [item] }, NOW);
+  const { id: _id, createdAt: _created, updatedAt: _updated, ...saved } = merged.record.assertions[0]!;
+  assert.deepEqual(saved, content);
+});
 
 test('current interchange fixtures retain unknown observation times through the browser importer', () => {
   for (const format of ['stix', 'misp']) {

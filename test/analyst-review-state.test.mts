@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
+import { MAX_IDENTITY_DIGEST_BYTES, sha256IdentityHex } from '../packages/evidence/record-identity.mts';
 
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
@@ -52,6 +53,15 @@ function item(overrides: Partial<AnalystReviewItem> = {}): AnalystReviewItem {
 }
 
 describe('canonical analyst Review Item lifecycle', () => {
+  test('shared bounded record digests match independent vectors and the platform implementation', () => {
+    assert.equal(sha256IdentityHex(new Uint8Array()), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    assert.equal(sha256IdentityHex(new TextEncoder().encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    for (const length of [55, 56, 63, 64, 65, 1_023, MAX_IDENTITY_DIGEST_BYTES]) {
+      const bytes = Uint8Array.from({ length }, (_, index) => (index * 71 + 29) % 256);
+      assert.equal(sha256IdentityHex(bytes), createHash('sha256').update(bytes).digest('hex'));
+    }
+    assert.throws(() => sha256IdentityHex(new Uint8Array(MAX_IDENTITY_DIGEST_BYTES + 1)), /byte limit/u);
+  });
   test('keeps stable subject identity separate from material evidence identity', () => {
     assert.equal(
       analystReviewSubjectKey('case', ['evidence-gap', 'case-one']),

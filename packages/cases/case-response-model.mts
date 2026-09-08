@@ -233,6 +233,8 @@ export type CaseEvidencePin = {
     version: number;
   } | null;
   certificateObservation?: CaseCertificateObservation | null;
+  /** Identity of a complete imported finding; not source authentication. */
+  importContentSha256?: string;
   observedAt: string;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
@@ -681,6 +683,12 @@ function normalizePin(
         value,
         sourceSchema: normalizedSourceSchema,
       }, options);
+  // Introduced in Case 15. Older public records must not acquire an identity
+  // merely because an unrecognised input field resembles a digest.
+  if ((options.sourceVersion ?? CASE_SCHEMA_VERSION) >= 15
+    && typeof item.importContentSha256 === 'string' && SHA256_RE.test(item.importContentSha256)) {
+    normalized.importContentSha256 = item.importContentSha256;
+  }
   return normalized;
 }
 

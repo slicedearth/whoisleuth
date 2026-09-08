@@ -67,7 +67,6 @@ export const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['packages/contracts/extracted-domain-lifecycle.mts', 'writer', 'Projects statically registered lifecycle identities.'],
   ['packages/contracts/privacy-data-flow-catalogue.mts', 'writer', 'Projects validated canonical lifecycle identities.'],
   ['packages/interchange/external-findings-converters.mts', 'reader', 'Checks a marker supplied by a reviewed observation-row adapter.'],
-  ['packages/interchange/external-findings-import.mts', 'reader', 'Compares bounded nested source-provenance markers.'],
   ['packages/interchange/external-findings-import.mts', 'writer', 'Copies a validated nested source-provenance marker.'],
   ['packages/investigation/investigation-capsule.mts', 'writer', 'Projects the linked evidence contract marker.'],
   ['packages/monitoring/scheduled-monitor-model.mts', 'writer', 'Copies a normalised monitor-state marker into an export.'],

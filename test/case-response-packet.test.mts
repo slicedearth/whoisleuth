@@ -163,6 +163,7 @@ describe('case response packet', () => {
 
   test('builds reviewable JSON, Markdown, and email without a submission action', async () => {
     const caseRecord = reviewedCase();
+    caseRecord.evidencePins[0]!.importContentSha256 = 'd'.repeat(64);
     const input = packetInput(caseRecord);
     input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
     const result = await buildCaseResponsePacket(caseRecord, input, NOW);
@@ -170,6 +171,9 @@ describe('case response packet', () => {
     assert.equal(result.json.schemaVersion, CASE_RESPONSE_PACKET_VERSION);
     assert.equal(result.json.reviewRequired, true);
     assert.equal(result.json.submissionPerformed, false);
+    assert.equal(result.json.selectedEvidence.length, 1);
+    assert.equal(Object.hasOwn(result.json.selectedEvidence[0]!, 'importContentSha256'), false);
+    assert.equal(JSON.stringify(result.json).includes('d'.repeat(64)), false);
     assert.equal(result.json.authorisation.status, 'draft');
     assert.equal(result.json.profile.id, 'registrar');
     assert.match(result.json.profile.subject, /Reviewed domain abuse report/u);

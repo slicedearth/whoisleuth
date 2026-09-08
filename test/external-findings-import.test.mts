@@ -8,8 +8,9 @@ import {
   mergeExternalFindingsIntoCases,
   parseExternalFindingsDocument,
   retainExternalFindingLimitations,
+  externalFindingCaseProjection,
 } from '../frontend/src/lib/analysis/external-findings-import.ts';
-import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { buildCaseExport, createCase, mergeCases } from '../frontend/src/lib/analysis/case-model.ts';
 
 const NOW = '2026-07-28T04:00:00.000Z';
 
@@ -33,6 +34,63 @@ function document(overrides: Record<string, unknown> = {}) {
 }
 
 describe('strict external findings import', () => {
+  test('previews the exact retained material and keeps long reimports distinct from changed suffixes', () => {
+    const raw = document({
+      source: { name: 'S'.repeat(80), reference: 'R'.repeat(500) },
+      findings: [{ ...document().findings[0], summary: 'V'.repeat(900), reference: `${'x'.repeat(499)}A`,
+        limitations: Array.from({ length: 8 }, (_, index) => `Qualification ${index + 1}`) }],
+    });
+    const parsed = parseExternalFindingsDocument(raw);
+    const finding = parsed.findings[0]!;
+    const projection = externalFindingCaseProjection(finding, parsed.source);
+    assert.deepEqual(projection.shortenedFields, ['finding value', 'source label', 'source reference']);
+    assert.equal(projection.omittedLimitations, 4);
+    assert.equal(projection.evidencePin.value.length, 1_000);
+    assert.equal(projection.evidencePin.source.length, 80);
+    assert.equal(projection.evidencePin.truncated, true);
+    assert.equal(projection.evidencePin.limitations.length, 8);
+    assert.ok(projection.evidencePin.limitations.every((item) => item.length <= 240));
+    assert.ok(projection.evidencePin.limitations.some((item) => /4 supplied limitations were omitted/u.test(item)));
+    assert.match(projection.evidencePin.importContentSha256!, /^[a-f0-9]{64}$/u);
+    assert.match(projection.evidencePin.limitations[0]!, /did not collect or independently verify/u);
+    assert.equal(projection.sighting.state, 'reported_by_provider');
+    assert.equal(projection.sighting.sourceClass, 'provider');
+    assert.equal(projection.sighting.category, 'website');
+    assert.equal(projection.sighting.observedAt, '2026-07-27T01:00:00.000Z');
+    const merged = mergeExternalFindingsIntoCases([], parsed, NOW);
+    const retained = merged.cases[0]!;
+    const { id: _pinId, createdAt: _pinTime, ...material } = retained.evidencePins[0]!;
+    const { id: _sightingId, createdAt: _sightingTime, evidencePinId: _reference, ...sighting } = retained.sightings[0]!;
+    assert.deepEqual(material, projection.evidencePin);
+    assert.deepEqual(sighting, projection.sighting);
+    assert.equal(retained.evidencePins[0]!.createdAt, NOW);
+    const restored = mergeCases([], buildCaseExport(merged.cases, NOW));
+    assert.equal(restored.cases[0]!.evidencePins[0]!.importContentSha256, projection.evidencePin.importContentSha256);
+    assert.equal(mergeExternalFindingsIntoCases(restored.cases, parsed, NOW).duplicatesSkipped, 1);
+    assert.equal(mergeExternalFindingsIntoCases(merged.cases, parsed, NOW).duplicatesSkipped, 1);
+    const changed = parseExternalFindingsDocument({ ...raw, findings: [{ ...raw.findings[0], reference: `${'x'.repeat(499)}B` }] });
+    assert.equal(externalFindingCaseProjection(changed.findings[0]!, changed.source).evidencePin.value, projection.evidencePin.value);
+    const distinct = mergeExternalFindingsIntoCases(merged.cases, changed, NOW);
+    assert.equal(distinct.findingsAdded, 1);
+    assert.equal(distinct.cases[0]!.evidencePins.length, 2);
+    assert.notEqual(distinct.cases[0]!.evidencePins[0]!.importContentSha256, distinct.cases[0]!.evidencePins[1]!.importContentSha256);
+    const modified = structuredClone(merged.cases);
+    modified[0]!.evidencePins[0]!.value = 'Changed after import';
+    assert.equal(mergeExternalFindingsIntoCases(modified, parsed, NOW).findingsAdded, 1);
+    const historical = structuredClone(merged.cases);
+    delete historical[0]!.evidencePins[0]!.importContentSha256;
+    assert.equal(mergeExternalFindingsIntoCases(historical, parsed, NOW).findingsAdded, 1);
+  });
+
+  test('recognises complete historical marker-free pins but not changed qualifications', () => {
+    const parsed = parseExternalFindingsDocument(document());
+    const saved = mergeExternalFindingsIntoCases([], parsed, NOW);
+    const old = structuredClone(saved.cases);
+    for (const pin of old[0]!.evidencePins) delete pin.importContentSha256;
+    assert.equal(mergeExternalFindingsIntoCases(old, parsed, NOW).duplicatesSkipped, 1);
+    const changed = parseExternalFindingsDocument(document({ findings: [{ ...document().findings[0], limitations: ['A conflicting source qualification.'] }] }));
+    assert.equal(mergeExternalFindingsIntoCases(old, changed, NOW).findingsAdded, 1);
+  });
   test('keeps bounded supplied qualifications intact unless mandatory facts need space', () => {
     const supplied = Array.from({ length: 8 }, (_, index) => `Qualification ${index + 1}`);
     assert.deepEqual(retainExternalFindingLimitations(supplied, []), supplied);

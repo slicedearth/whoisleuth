@@ -6,6 +6,15 @@ import {
 } from '../cases/case-model.mts';
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
+import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import {
+  MAX_RESPONSE_LABEL_LENGTH,
+  MAX_RESPONSE_VALUE_LENGTH,
+  MAX_RESPONSE_LIMITATION_LENGTH,
+  normalizeCaseEvidencePins,
+  normalizeCaseSightings,
+} from '../cases/case-response-model.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -378,25 +387,17 @@ function importedSourceLabel(finding: ExternalFinding, sourceName: string): stri
     : `Provider report: ${sourceName}`;
 }
 
-function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourceName: string): string {
-  const expectedLabel = `External ${finding.category} finding`;
-  const expectedValue = finding.structuredObservation?.value ?? pinValue(finding);
-  const expectedSource = importedSourceLabel(finding, sourceName);
-  const observation = finding.structuredObservation;
-  return recordValue.evidencePins.some((pin) => (
-    pin.label === expectedLabel
-    && pin.value === expectedValue
-    && pin.source === expectedSource
-    && pin.observedAt === finding.observedAt
-    && pin.completeness === finding.completeness
-    && (!observation || (
-      pin.field === observation.field
-      && pin.sourceSchema?.collection === 'external_observations'
-      && pin.sourceSchema.schema === observation.sourceSchema
-      && pin.sourceSchema.version === observation.sourceVersion
-      && (observation.eventId === null || pin.certificateObservation?.eventId === observation.eventId)
-    ))
-  )) ? findingKey(finding, sourceName) : '';
+function alreadyRetained(recordValue: CaseRecord, projection: ReturnType<typeof externalFindingCaseProjection>): boolean {
+  const { importContentSha256: expectedIdentity, ...expected } = projection.evidencePin;
+  return recordValue.evidencePins.some((pin) => {
+    const { id: _id, createdAt: _createdAt, importContentSha256, ...material } = pin;
+    if (importContentSha256 && importContentSha256 !== expectedIdentity) return false;
+    // Older pins have no content digest. Only a complete, exact retained
+    // projection can establish duplication; a shortened prefix cannot.
+    if (!importContentSha256 && (projection.shortenedFields.length || projection.omittedLimitations)) return false;
+    // An imported digest alone cannot substitute for matching retained fields.
+    return canonicalArtifactJsonV2(material) === canonicalArtifactJsonV2(expected);
+  });
 }
 
 function structuredPinFields(finding: ExternalFinding): Record<string, unknown> {
@@ -429,41 +430,44 @@ function structuredPinFields(finding: ExternalFinding): Record<string, unknown> 
   };
 }
 
-function mergeExternalFindingIntoCase(
-  current: readonly CaseRecord[],
-  caseId: string,
+/** Exact material retained by both the import preview and Case mutation. */
+export function externalFindingCaseProjection(
   finding: ExternalFinding,
   source: ExternalFindingsDocument['source'],
-  now: string,
-): Readonly<{ cases: CaseRecord[]; record: CaseRecord; added: boolean }> {
-  const target = current.find((candidate) => candidate.id === caseId) ?? null;
-  if (!target) throw new Error('The selected Case is unavailable for this finding.');
-  if (existingPinKey(target, finding, source.name)) {
-    return { cases: [...current], record: target, added: false };
-  }
-  const sourceLimitations = [
+) {
+  const identitySha256 = sha256IdentityHex(new TextEncoder().encode(canonicalArtifactJsonV2({
+    sourceName: source.name, sourceReference: source.reference, finding,
+  })));
+  const value = finding.structuredObservation?.value ?? pinValue(finding);
+  const sourceLabel = importedSourceLabel(finding, source.name);
+  const sourceReference = source.reference ? `Source reference: ${source.reference}` : null;
+  const shortenedFields = [
+    ...(value.length > MAX_RESPONSE_VALUE_LENGTH ? ['finding value'] : []),
+    ...(sourceLabel.length > MAX_RESPONSE_LABEL_LENGTH ? ['source label'] : []),
+    ...(sourceReference && sourceReference.length > MAX_RESPONSE_LIMITATION_LENGTH ? ['source reference'] : []),
+  ];
+  const mandatory = [
     finding.evidenceClass === 'deployment_observation'
       ? `Imported as an observation made by ${source.name}; this browser session did not collect or independently verify it.`
       : `Reported by ${source.name}; WHOISleuth did not collect or independently verify this provider finding.`,
-    ...(source.reference ? [`Source reference: ${source.reference}`] : []),
-    ...finding.limitations,
+    ...(sourceReference ? [sourceReference.length > MAX_RESPONSE_LIMITATION_LENGTH
+      ? `${sourceReference.slice(0, MAX_RESPONSE_LIMITATION_LENGTH - 13)}… [shortened]` : sourceReference] : []),
+    ...(shortenedFields.length ? [`Case storage shortened ${shortenedFields.join(', ')}. The content digest covers the complete accepted finding.`] : []),
   ];
-  const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
-  let updated = updateCase([...current], target.id, {
-    evidencePin: {
+  const sourceLimitations = retainExternalFindingLimitations(finding.limitations, mandatory);
+  const omittedLimitations = finding.limitations.filter((item) => !sourceLimitations.includes(item)).length;
+  const pin = normalizeCaseEvidencePins([{
       ...structuredPinFields(finding),
+      importContentSha256: identitySha256,
       label: `External ${finding.category} finding`,
-      value: finding.structuredObservation?.value ?? pinValue(finding),
-      source: importedSourceLabel(finding, source.name),
+      value,
+      source: sourceLabel,
       observedAt: finding.observedAt,
       completeness: finding.completeness,
+      truncated: shortenedFields.length || omittedLimitations ? true : null,
       limitations: sourceLimitations,
-    },
-  }, now);
-  const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
-  if (!addedPin) throw new Error('The imported finding could not be retained as Case evidence.');
-  updated = updateCase(updated.cases, target.id, {
-    sighting: {
+  }], finding.observedAt)[0];
+  const observed = normalizeCaseSightings([{
       state: finding.evidenceClass === 'deployment_observation'
         ? 'observed_by_deployment'
         : 'reported_by_provider',
@@ -479,9 +483,31 @@ function mergeExternalFindingIntoCase(
       source: source.name,
       observedAt: finding.observedAt,
       completeness: finding.completeness,
-      evidencePinId: addedPin.id,
       limitations: sourceLimitations,
-    },
+  }], finding.observedAt)[0];
+  if (!pin || !observed) throw new TypeError('The finding has no valid retained Case projection.');
+  const { id: _pinId, createdAt: _pinCreatedAt, ...evidencePin } = pin;
+  const { id: _sightingId, createdAt: _sightingCreatedAt, evidencePinId: _pinReference, ...sighting } = observed;
+  return { evidencePin, sighting, identitySha256, shortenedFields, omittedLimitations };
+}
+
+function mergeExternalFindingIntoCase(
+  current: readonly CaseRecord[],
+  caseId: string,
+  finding: ExternalFinding,
+  source: ExternalFindingsDocument['source'],
+  now: string,
+): Readonly<{ cases: CaseRecord[]; record: CaseRecord; added: boolean }> {
+  const target = current.find((candidate) => candidate.id === caseId) ?? null;
+  if (!target) throw new Error('The selected Case is unavailable for this finding.');
+  const projection = externalFindingCaseProjection(finding, source);
+  if (alreadyRetained(target, projection)) return { cases: [...current], record: target, added: false };
+  const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
+  let updated = updateCase([...current], target.id, { evidencePin: projection.evidencePin }, now);
+  const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
+  if (!addedPin) throw new Error('The imported finding could not be retained as Case evidence.');
+  updated = updateCase(updated.cases, target.id, {
+    sighting: { ...projection.sighting, evidencePinId: addedPin.id },
   }, now);
   return { cases: updated.cases, record: updated.record, added: true };
 }
