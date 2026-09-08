@@ -7,13 +7,14 @@ import {
   parseRiskCalibrationDataset,
   RISK_CALIBRATION_DATASET_SCHEMA,
   RISK_CALIBRATION_DATASET_VERSION,
+  type ExplainRiskScore,
 } from '../cli/risk-calibration.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
 import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
 
-function reports() {
+function reports(explain: ExplainRiskScore = explainRiskScore) {
   const dataset = parseRiskCalibrationDataset(JSON.stringify({
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
     version: RISK_CALIBRATION_DATASET_VERSION,
@@ -27,7 +28,7 @@ function reports() {
         : { availability: 'registered', scanDepth: 'fast' },
     })),
   }));
-  const detailed = buildRiskCalibrationReport(dataset, explainRiskScore, {
+  const detailed = buildRiskCalibrationReport(dataset, explain, {
     generatedAt: NOW,
     modelVersion: RISK_MODEL_VERSION,
     reviewThreshold: RISK_REVIEW_THRESHOLD,
@@ -102,6 +103,22 @@ test('target-free calibration review stays tab-local, exact, accessible, and mob
 
   await dashboard.getByRole('button', { name: 'Clear summary' }).click();
   await expect(dashboard.getByText('20 / 20', { exact: true })).toHaveCount(0);
+  const high = reports((input) => {
+    const explained = explainRiskScore(input);
+    return explained ? { ...explained, score: 100 } : null;
+  }).summary;
+  const contradictory = {
+    ...summary,
+    strata: summary.strata.map((stratum) => stratum.dimension === 'scan_depth' && stratum.value === 'deep'
+      ? high.strata.find((candidate) => candidate.dimension === 'scan_depth' && candidate.value === 'deep')!
+      : stratum),
+  };
+  await input.setInputFiles({ name: 'contradictory-summary.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(contradictory)) });
+  await expect(dashboard.getByRole('alert')).toContainText('strata disagree with the current-threshold confusion counts');
+  await expect(dashboard.locator('tbody tr')).toHaveCount(0);
+  await input.setInputFiles({ name: 'consistent-summary.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(summary)) });
+  await expect(dashboard.getByText('20 / 20', { exact: true })).toBeVisible();
+  await dashboard.getByRole('button', { name: 'Clear summary' }).click();
   await input.setInputFiles({
     name: 'detailed-calibration.json',
     mimeType: 'application/json',

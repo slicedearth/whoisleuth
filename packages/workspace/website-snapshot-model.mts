@@ -471,6 +471,17 @@ export function websiteSnapshotComparisonEvidenceComplete(snapshot: WebsiteProfi
     && (!snapshot.certificate || websiteSnapshotFieldComplete(snapshot, 'certificate.observation'));
 }
 
+export function websiteSnapshotProfileComparability(
+  before: WebsiteProfileSnapshot,
+  after: WebsiteProfileSnapshot,
+  profile: keyof WebsiteSnapshotProfileProvenance,
+): 'legacy_unknown' | 'comparable' | 'detector_changed' {
+  const left = before.profileProvenance[profile].version;
+  const right = after.profileProvenance[profile].version;
+  if (left === null || right === null) return 'legacy_unknown';
+  return left === right ? 'comparable' : 'detector_changed';
+}
+
 function compareMap(
   field: string,
   before: ReadonlyMap<string, string>,
@@ -509,12 +520,8 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   const technologyVersionAfter = after.profileProvenance.technology.version;
   const postureVersionBefore = before.profileProvenance.securityPosture.version;
   const postureVersionAfter = after.profileProvenance.securityPosture.version;
-  const technologyComparability = technologyVersionBefore === null || technologyVersionAfter === null
-    ? 'legacy_unknown'
-    : technologyVersionBefore === technologyVersionAfter ? 'comparable' : 'detector_changed';
-  const postureComparability = postureVersionBefore === null || postureVersionAfter === null
-    ? 'legacy_unknown'
-    : postureVersionBefore === postureVersionAfter ? 'comparable' : 'detector_changed';
+  const technologyComparability = websiteSnapshotProfileComparability(before, after, 'technology');
+  const postureComparability = websiteSnapshotProfileComparability(before, after, 'securityPosture');
   const changes = [
     ...(technologyComparability === 'comparable' ? compareMap(
       'technology',

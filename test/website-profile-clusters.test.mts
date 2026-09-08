@@ -5,6 +5,7 @@ import {
   buildWebsiteClusterAssertion,
   buildWebsiteProfileClusters,
   filterWebsiteProfileClusters,
+  WEBSITE_PROFILE_CLUSTER_VERSION,
 } from '../frontend/src/lib/analysis/website-profile-clusters.ts';
 import type { WebsiteProfileSnapshot } from '../frontend/src/lib/analysis/website-snapshot-model.ts';
 
@@ -86,6 +87,84 @@ describe('website-profile clusters', () => {
     ]);
     assert.equal(summary.clusters.every((item) => item.complete === false), true);
     assert.match(summary.limitations.join(' '), /not converted into absence/i);
+  });
+
+  test('excludes every weighted component from incomplete input while retaining qualified exact pivots', () => {
+    const rich = (domain: string): WebsiteProfileSnapshot => ({
+      ...snapshot(domain, domain, '2026-02-01T00:00:00.000Z'),
+      identity: {
+        normalizedHtml: 'a'.repeat(64), visibleText: '0123456789abcdef',
+        domStructure: 'b'.repeat(64), formStructure: 'c'.repeat(64),
+        resourceHosts: 'd'.repeat(64), trackingIdentifiers: 'e'.repeat(64), faviconHash: 'f'.repeat(64),
+      },
+      identityValues: {
+        resourceHosts: ['shared.example'],
+        trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
+        formActionOrigins: ['https://forms.example'],
+      },
+    });
+    const first = rich('one.example');
+    const second = rich('two.example');
+    const control = buildWebsiteProfileClusters([first, second]);
+    assert.equal(control.version, WEBSITE_PROFILE_CLUSTER_VERSION);
+    assert.deepEqual(control.clusters.find((item) => item.kind === 'similarity')?.contributingFields.map((field) => field.field), [
+      'identity.faviconHash', 'identity.normalizedHtml', 'identity.trackingIdentifiers',
+      'identity.formStructure', 'identity.resourceHosts', 'identity.domStructure',
+      'identityValues.trackingIdentifiers', 'identityValues.formActionOrigins', 'identityValues.resourceHosts',
+      'technologies', 'identity.visibleText',
+    ]);
+    const incomplete = [
+      { ...first, complete: false }, { ...first, truncated: true },
+      ...['partial', 'blocked', 'error', 'unsupported', 'not_found'].map((state) => ({
+        ...first, sources: [{ source: 'http', state }],
+      })),
+      { ...first, sources: [{ source: 'http', state: 'success' }, { source: 'HTTP', state: 'partial' }] },
+    ];
+    for (const candidate of incomplete) for (const pair of [[candidate, second], [second, candidate]]) {
+      const summary = buildWebsiteProfileClusters(pair);
+      assert.equal(summary.clusters.some((item) => item.kind === 'similarity'), false);
+      assert.ok(summary.clusters.length > 0, 'positive exact observations remain reviewable');
+      assert.ok(summary.clusters.every((item) => item.score === null && !item.complete));
+      for (const cluster of summary.clusters) {
+        assert.equal(cluster.observations.find((item) => item.domain === first.domain)?.complete, false);
+      }
+    }
+  });
+
+  test('the reported fifty-point pair requires complete HTTP but not unrelated sources', () => {
+    const first = snapshot('one.example', 'one', '2026-02-01T00:00:00.000Z');
+    const second = snapshot('two.example', 'two', '2026-02-02T00:00:00.000Z');
+    const withIcon = (value: WebsiteProfileSnapshot) => ({ ...value, identity: { ...value.identity, faviconHash: 'd'.repeat(64) } });
+    const left = withIcon(first);
+    const right = withIcon(second);
+    assert.equal(buildWebsiteProfileClusters([left, right]).clusters.find((item) => item.kind === 'similarity')?.score, 50);
+    const unrelated = { ...left, sources: [...left.sources, { source: 'dns', state: 'partial' }, { source: 'tls', state: 'unavailable' }] };
+    assert.equal(buildWebsiteProfileClusters([unrelated, right]).clusters.find((item) => item.kind === 'similarity')?.score, 50);
+    assert.equal(buildWebsiteProfileClusters([{ ...left, complete: false, truncated: true }, right])
+      .clusters.some((item) => item.kind === 'similarity'), false);
+  });
+
+  test('detector compatibility gates only technology weight and admits equal historical versions', () => {
+    const first = snapshot('one.example', 'one', '2026-02-01T00:00:00.000Z');
+    const second = snapshot('two.example', 'two', '2026-02-02T00:00:00.000Z');
+    const pair = [first, second].map((item) => ({ ...item, identity: { ...item.identity, faviconHash: 'd'.repeat(64) } }));
+    const left = pair[0]!;
+    const right = pair[1]!;
+    for (const technology of [{ version: 12, state: 'known' }, { version: null, state: 'legacy_unknown' }] as const) {
+      const candidate = { ...left, profileProvenance: { ...left.profileProvenance, technology } };
+      for (const inputs of [[candidate, right], [right, candidate]]) {
+        const summary = buildWebsiteProfileClusters(inputs);
+        const weighted = summary.clusters.find((item) => item.kind === 'similarity');
+        assert.ok(weighted);
+        assert.equal(weighted.score, 44);
+        assert.deepEqual(weighted.contributingFields.map((item) => item.field), ['identity.faviconHash', 'identity.normalizedHtml']);
+        assert.ok(summary.clusters.some((item) => item.kind === 'technology'), 'exact observed identifier remains a qualified pivot');
+      }
+    }
+    const historical = pair.map((item) => ({ ...item, profileProvenance: {
+      ...item.profileProvenance, technology: { version: 5, state: 'known' as const },
+    } }));
+    assert.equal(buildWebsiteProfileClusters(historical).clusters.find((item) => item.kind === 'similarity')?.score, 50);
   });
 
   test('builds explainable weighted relationships from compatible latest components', () => {

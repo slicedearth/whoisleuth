@@ -712,7 +712,7 @@ test('the timeline renders every supported Case snapshot after storage admission
   await expectNoHorizontalOverflow(page);
 });
 
-test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }) => {
+test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }, testInfo) => {
   const observedAt = '2026-07-01T00:00:00.000Z';
   const identity = {
     normalizedHtml: 'a'.repeat(64),
@@ -721,7 +721,7 @@ test('saved website profiles form searchable cross-domain pivots without another
     formStructure: null,
     resourceHosts: null,
     trackingIdentifiers: null,
-    faviconHash: null,
+    faviconHash: 'b'.repeat(64),
   };
   const snapshotRecord = (domain: string, id: string) => ({
     id,
@@ -730,10 +730,16 @@ test('saved website profiles form searchable cross-domain pivots without another
     savedAt: '2026-07-02T00:00:00.000Z',
     complete: true,
     truncated: false,
+    profileProvenance: { technology: { version: 1, state: 'known' }, securityPosture: { version: 1, state: 'known' } },
     technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high' }],
     posture: [],
     identity,
     sources: [{ source: 'http', state: 'success' }],
+  });
+  const collectorRequests: string[] = [];
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectorRequests.push(pathname);
   });
   await page.goto('/monitor?view=relationships');
   await migrateLegacyBrowserData(page, {
@@ -746,6 +752,7 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
 
   const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
+  await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toBeVisible();
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'first.invalid' }).first()).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'second.invalid' }).first()).toBeVisible();
@@ -756,6 +763,26 @@ test('saved website profiles form searchable cross-domain pivots without another
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
+      snapshots: [
+        { ...snapshotRecord('first.invalid', 'profile-first'), sources: [{ source: 'http', state: 'partial' }] },
+        snapshotRecord('second.invalid', 'profile-second'),
+      ],
+    }),
+  });
+  await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('Weighted website-profile relationship', { exact: true })).toHaveCount(0);
+  const observedDomain = workspace.locator('li', { has: page.getByRole('link', { name: 'first.invalid', exact: true }) });
+  expect(await observedDomain.count()).toBeGreaterThan(0);
+  for (const observation of await observedDomain.all()) await expect(observation).toContainText('Partial saved evidence');
+  await workspace.getByLabel('Relationship type').selectOption('similarity');
+  await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
+  await workspace.getByLabel('Relationship type').selectOption('all');
+  await expectNoHorizontalOverflow(page);
+  await workspace.getByText('Example commerce', { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') });
+  expect(collectorRequests).toEqual([]);
 });
 
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {

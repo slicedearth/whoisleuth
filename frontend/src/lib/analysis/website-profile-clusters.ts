@@ -1,9 +1,11 @@
-import type {
-  WebsiteIdentityDigests,
-  WebsiteProfileSnapshot,
+import {
+  websiteSnapshotFieldComplete,
+  websiteSnapshotProfileComparability,
+  type WebsiteIdentityDigests,
+  type WebsiteProfileSnapshot,
 } from './website-snapshot-model.ts';
 
-export const WEBSITE_PROFILE_CLUSTER_VERSION = 2;
+export const WEBSITE_PROFILE_CLUSTER_VERSION = 3;
 export const MAX_WEBSITE_PROFILE_CLUSTERS = 80;
 export const MAX_WEBSITE_PROFILE_CLUSTER_DOMAINS = 20;
 export const MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED = 120;
@@ -43,7 +45,7 @@ export type WebsiteProfileCluster = Readonly<{
 }>;
 
 export type WebsiteProfileClusterSummary = Readonly<{
-  version: 2;
+  version: typeof WEBSITE_PROFILE_CLUSTER_VERSION;
   snapshotsReviewed: number;
   domainsReviewed: number;
   clusters: readonly WebsiteProfileCluster[];
@@ -135,7 +137,8 @@ function exactCluster(input: ClusterInput): WebsiteProfileCluster | null {
       observedAt: latest?.observedAt ?? range.lastObservedAt,
       firstObservedAt: range.firstObservedAt,
       lastObservedAt: range.lastObservedAt,
-      complete: history.every((snapshot) => snapshot.complete),
+      complete: history.every((snapshot) => websiteSnapshotFieldComplete(snapshot,
+        input.kind === 'technology' ? 'technology' : 'identity')),
       truncated: history.some((snapshot) => snapshot.truncated),
     };
   });
@@ -226,7 +229,7 @@ function similarityCluster(
   left: WebsiteProfileSnapshot,
   right: WebsiteProfileSnapshot,
 ): WebsiteProfileCluster | null {
-  const contributions = [
+  const candidates = [
     exactContribution('faviconHash', left, right, 24),
     exactContribution('normalizedHtml', left, right, 20),
     exactContribution('trackingIdentifiers', left, right, 14),
@@ -264,7 +267,7 @@ function similarityCluster(
   ].filter((item): item is WebsiteProfileContribution => item !== null);
   const textDistance = hammingDistance64(left.identity.visibleText, right.identity.visibleText);
   if (textDistance !== null && textDistance <= 12) {
-    contributions.push({
+    candidates.push({
       field: 'identity.visibleText',
       label: 'Visible-text fingerprint',
       method: 'simhash_distance',
@@ -273,6 +276,11 @@ function similarityCluster(
       sharedValues: [],
     });
   }
+  const contributions = candidates.filter((item) => {
+    const field = item.field === 'technologies' ? 'technology' : item.field;
+    return websiteSnapshotFieldComplete(left, field) && websiteSnapshotFieldComplete(right, field)
+      && (field !== 'technology' || websiteSnapshotProfileComparability(left, right, 'technology') === 'comparable');
+  });
   const score = Math.min(100, contributions.reduce((total, item) => total + item.weight, 0));
   const strongField = contributions.some((item) => [
     'identity.faviconHash',
