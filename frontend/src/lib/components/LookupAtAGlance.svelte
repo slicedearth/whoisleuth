@@ -3,8 +3,10 @@
   import {
     buildLookupAtAGlanceModel,
     type LookupAtAGlanceGroupId,
+    type LookupAtAGlanceItem,
   } from '$lib/analysis/lookup-at-a-glance-model.ts';
-  import type { LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
+  import { formatDate } from '$lib/analysis/lookup-display-shared.ts';
+  import type { LookupPresentedReviewAction, LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
   import type { LookupSummarySignal } from '$lib/analysis/lookup-summary-model.ts';
 
   let {
@@ -22,7 +24,11 @@
     return (priority.length ? priority : signals).slice(0, 4);
   });
   const nextReviews = $derived(reviewActions.recommendedNextReviews);
-  const metricGroups = $derived.by(() => buildLookupAtAGlanceModel(lookupDecisionFacts).groups);
+  const furtherReviews = $derived(nextReviews.rankedItems.slice(nextReviews.displayedCount));
+  let allReviewsOpen = $state(false);
+  const glance = $derived(buildLookupAtAGlanceModel(lookupDecisionFacts));
+  const metricGroups = $derived(glance.groups);
+  const factsById = $derived(new Map(glance.items.map((item) => [item.factId, item])));
   let selectedMetricId = $state<LookupAtAGlanceGroupId | null>(null);
   const selectedMetric = $derived(
     metricGroups.find((metric) => metric.id === selectedMetricId) ?? null,
@@ -33,12 +39,83 @@
   }
 </script>
 
+{#snippet factDetail(item: LookupAtAGlanceItem)}
+  <a class="metric-item-link" href={item.destination}>
+    <strong>{item.label}</strong>
+    <small><span class="state-label">{item.statePresentation.label}</span> · {item.detail}</small>
+  </a>
+  {#if item.contributors.length}
+    <ul class="contributors" aria-label={`Contributors for ${item.label}`}>
+      {#each item.contributors as contributor (contributor.id)}
+        <li>
+          <span class="contributor-heading">
+            <strong>{contributor.label}</strong>
+            <small>{contributor.provenancePresentation.label} · {contributor.evidencePresentation.label}</small>
+          </span>
+          <p class="source-time">Observed {#if contributor.observedAt}<time datetime={contributor.observedAt}>{formatDate(contributor.observedAt)}</time>{:else}time unavailable{/if}</p>
+          {#each contributor.limitations as limitation}
+            <p class="limitation"><strong>Limitation:</strong> {limitation}</p>
+          {/each}
+          {#if contributor.references.length}
+            <ul class="technical-references" aria-label={`References for ${contributor.label}`}>
+              {#each contributor.references as reference}<li><code>{reference}</code></li>{/each}
+            </ul>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#each item.contradictions as contradiction}
+    <p class="limitation"><strong>Disagreement:</strong> {contradiction}</p>
+  {/each}
+  {#each item.limitations as limitation}
+    <p class="limitation fact-limitation"><strong>Limitation:</strong> {limitation}</p>
+  {/each}
+  <p class="action-facts">Technical reference: <code>{item.factId}</code></p>
+  {#if item.references.length}
+    <ul class="technical-references" aria-label={`References for ${item.label}`}>
+      {#each item.references as reference}<li><code>{reference}</code></li>{/each}
+    </ul>
+  {/if}
+{/snippet}
+
+{#snippet reviewAction(nextAction: LookupPresentedReviewAction)}
+  <article class="review-action">
+    <a
+      class="next-action"
+      href={nextAction.href}
+      data-action-id={nextAction.id}
+      data-basis={nextAction.basis}
+      data-contributing-fact-ids={nextAction.contributingFactIds.join(',')}
+    >
+      <strong>{nextAction.label}</strong>
+      <span>{nextAction.reason}</span>
+      <small>{nextAction.expectedOutcome}</small>
+    </a>
+    {#if nextAction.contributingFactIds.length}
+      <details class="action-evidence">
+        <summary>Evidence and sources<span class="sr-only"> for {nextAction.label}</span></summary>
+        <ul class="metric-items">
+          {#each nextAction.contributingFactIds as factId (factId)}
+            {@const item = factsById.get(factId)}
+            <li class="metric-item" data-fact-id={factId}>
+              {#if item}{@render factDetail(item)}{:else}<p>Source details unavailable for <code>{factId}</code>.</p>{/if}
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {:else}
+      <small class="contextual-note">{nextAction.basisLabel}; not an observed finding.</small>
+    {/if}
+  </article>
+{/snippet}
+
 <section class="at-a-glance card" aria-labelledby="lookup-at-a-glance-title">
   <header class="glance-header">
     <div class="glance-intro">
-      <p class="eyebrow">Analyst synthesis</p>
-      <h4 id="lookup-at-a-glance-title">Analyst assessment</h4>
-      <p>Use one evidence-led view of the current observations, disagreements, unknowns and next review. Record the analyst's conclusion separately.</p>
+      <p class="eyebrow">Retained evidence</p>
+      <h4 id="lookup-at-a-glance-title">Evidence overview</h4>
+      <p>Review source coverage and disagreements before recording an assessment.</p>
     </div>
     <div class="metrics" role="group" aria-label="Evidence coverage and review cues">
       {#each metricGroups as metric (metric.id)}
@@ -83,28 +160,7 @@
         <ul class="metric-items">
           {#each selectedMetric.displayedItems as item (item.factId)}
             <li class="metric-item" data-fact-id={item.factId}>
-              <a class="metric-item-link" href={item.destination}>
-                <strong>{item.label}</strong>
-                <small><span class="state-label">{item.statePresentation.label}</span> · {item.detail}</small>
-              </a>
-              {#if item.contributors.length}
-                <ul class="contributors" aria-label={`Contributors for ${item.label}`}>
-                  {#each item.contributors as contributor (contributor.id)}
-                    <li>
-                      <span class="contributor-heading">
-                        <strong>{contributor.label}</strong>
-                        <small>{contributor.provenancePresentation.label} · {contributor.evidencePresentation.label}</small>
-                      </span>
-                      {#each contributor.limitations as limitation}
-                        <p class="limitation"><strong>Limitation:</strong> {limitation}</p>
-                      {/each}
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-              {#each item.limitations as limitation}
-                <p class="limitation fact-limitation"><strong>Fact limitation:</strong> {limitation}</p>
-              {/each}
+              {@render factDetail(item)}
             </li>
           {/each}
         </ul>
@@ -141,8 +197,8 @@
       <h5 id="lookup-next-review-title">Next review</h5>
       {#if nextReviews.displayedItems.length}
         <p class="action-counts" data-action-counts>
-          Showing <strong>{nextReviews.displayedCount}</strong> of <strong>{nextReviews.total}</strong> ranked review action{nextReviews.total === 1 ? '' : 's'}.
-          {#if nextReviews.omittedCount > 0}<span>{nextReviews.omittedCount} omitted from this bounded display.</span>{/if}
+          <strong>{nextReviews.displayedCount}</strong> priority review{nextReviews.displayedCount === 1 ? '' : 's'}.
+          {#if furtherReviews.length}<span>{furtherReviews.length} further review{furtherReviews.length === 1 ? '' : 's'} available below.</span>{/if}
         </p>
         <div
           class="next-actions"
@@ -152,25 +208,19 @@
           data-contributing-fact-ids={nextReviews.contributingFactIds.join(',')}
         >
           {#each nextReviews.displayedItems as nextAction (nextAction.id)}
-            <a
-              class="next-action"
-              href={nextAction.href}
-              data-action-id={nextAction.id}
-              data-basis={nextAction.basis}
-              data-contributing-fact-ids={nextAction.contributingFactIds.join(',')}
-            >
-              <strong>{nextAction.label}</strong>
-              <span>{nextAction.reason}</span>
-              <small>{nextAction.expectedOutcome}</small>
-              <small class="action-basis"><b>Basis:</b> {nextAction.basisLabel}</small>
-              {#if nextAction.contributingFactIds.length}
-                <small class="action-facts"><b>Decision Facts:</b> {nextAction.contributingFactIds.join(' · ')}</small>
-              {:else}
-                <small class="contextual-note">Contextual guidance; no evidence fact or provenance is claimed.</small>
-              {/if}
-            </a>
+            {@render reviewAction(nextAction)}
           {/each}
         </div>
+        {#if furtherReviews.length}
+          <details class="further-reviews" bind:open={allReviewsOpen}>
+            <summary>More reviews ({furtherReviews.length})</summary>
+            {#if allReviewsOpen}
+              <div class="additional-actions">
+                {#each furtherReviews as nextAction (nextAction.id)}{@render reviewAction(nextAction)}{/each}
+              </div>
+            {/if}
+          </details>
+        {/if}
       {:else}
         <p class="empty">No contextual action is available from the settled evidence. Review source coverage and freshness next.</p>
       {/if}
@@ -201,32 +251,32 @@
   .metric-icon[data-icon='state-unknown']::before{content:'?'}
   .metrics .tone-caution .metric-value>strong,.metrics .tone-caution .metric-icon{color:var(--amber)}
   .metrics .tone-conflict .metric-value>strong,.metrics .tone-conflict .metric-icon{color:var(--danger)}
-  .metric-detail{min-width:0;margin-top:10px;padding:10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .metric-detail{min-width:0;margin-top:10px;padding:12px 0;border-top:1px solid var(--border-strong)}
   .metric-detail>header>strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .metric-detail p{margin:6px 0 0;color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.5}
-  .metric-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 0;padding:0;list-style:none}
-  .metric-item{min-width:0;padding:8px;border-left:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent)}
+  .metric-detail p{margin:6px 0 0;color:var(--muted);font:var(--text-xs) var(--font-sans);line-height:1.5}
+  .metric-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px 24px;margin:8px 0 0;padding:0;list-style:none}
+  .metric-item{min-width:0;padding:10px 0;border-top:1px solid var(--border)}
   .metric-item-link{display:grid;gap:3px;min-width:0;text-decoration:none}
   .metric-item-link strong,.metric-item-link small,.contributor-heading strong,.contributor-heading small{overflow-wrap:anywhere}
   .metric-item-link>strong{font-size:var(--text-xs)}
-  .metric-item-link>small{color:var(--muted);font:var(--text-2xs) var(--font-sans);line-height:1.4}
+  .metric-item-link>small{color:var(--muted);font:var(--text-xs) var(--font-sans);line-height:1.5}
   .state-label{color:var(--text);font-weight:700}
   .contributors{display:grid;gap:5px;margin:7px 0 0;padding:7px 0 0;border-top:1px solid var(--border);list-style:none}
   .contributors>li{min-width:0}
   .contributor-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 7px;min-width:0}
-  .contributor-heading strong{color:var(--text);font-size:var(--text-2xs)}
-  .contributor-heading small{color:var(--muted);font:var(--text-2xs) var(--font-sans)}
-  .metric-detail .limitation{margin:3px 0 0;padding-left:9px;border-left:1px solid var(--amber);overflow-wrap:anywhere}
-  .metric-detail .limitation strong{color:var(--text);font-weight:600}
-  .metric-detail .fact-limitation{margin-top:7px}
+  .contributor-heading strong{color:var(--text);font-size:var(--text-xs)}
+  .contributor-heading small{color:var(--muted);font:var(--text-xs) var(--font-sans)}
+  .limitation{margin:6px 0 0;padding-left:9px;border-left:1px solid var(--amber);color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
+  .limitation strong{color:var(--text);font-weight:600}
+  .fact-limitation{margin-top:7px}
   .metric-detail .metric-omitted{overflow-wrap:anywhere}
   .metric-omitted a{white-space:normal}
   .metric-note{grid-column:1/-1;max-width:none;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;text-align:right;overflow-wrap:anywhere}
-  .glance-grid{grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);gap:9px;margin-top:14px}
-  .glance-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .glance-grid{grid-template-columns:minmax(0,1fr);gap:18px;margin-top:18px}
+  .glance-grid>section{min-width:0;padding:16px 0 0;border-top:1px solid var(--border)}
   h5{margin:0 0 9px;font:700 var(--text-xs) var(--mono)}
   .signals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
-  .signals li{display:grid;grid-template-columns:8px minmax(0,1fr);gap:8px;min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .signals li{display:grid;grid-template-columns:8px minmax(0,1fr);gap:8px;min-width:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .signals li>span{width:7px;height:7px;margin-top:4px;border:2px solid var(--muted);border-radius:50%}
   .signals .tone-danger>span{border-color:var(--danger)}
   .signals .tone-warn>span{border-color:var(--amber)}
@@ -234,13 +284,20 @@
   .signals strong,.signals small{display:block;overflow-wrap:anywhere}
   .signals strong{color:var(--text);font-size:var(--text-xs)}
   .signals small{margin-top:2px;color:var(--muted)}
-  .next-action{display:grid;gap:4px;padding:10px;border-left:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 5%,transparent)}
-  .next-actions{display:grid;gap:7px}
+  .next-action{display:grid;gap:5px;max-width:78ch}
+  .next-actions{display:grid}
+  .review-action{min-width:0;padding:12px 0;border-top:1px solid var(--border)}
+  .review-action:first-child{border-top:0}
   .next-action strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .next-action span,.next-action small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .next-action span,.next-action small{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .next-action small{color:var(--text)}
   .action-counts{margin:0 0 7px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.action-counts span{display:block}.action-counts strong{color:var(--text)}
-  .next-action .action-basis,.next-action .action-facts,.next-action .contextual-note{min-width:0;color:var(--muted);overflow-wrap:anywhere}.next-action .action-basis{padding-top:5px;border-top:1px solid var(--border)}.next-action .action-basis b,.next-action .action-facts b{color:var(--text)}
+  .action-evidence{margin-top:6px}
+  .action-evidence summary,.further-reviews>summary{display:list-item;min-height:44px;align-content:center;width:fit-content;max-width:100%;color:var(--accent);font:600 var(--text-xs) var(--mono);cursor:pointer;overflow-wrap:anywhere}
+  .further-reviews{border-top:1px solid var(--border)}
+  .action-facts,.source-time,.contextual-note{display:block;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
+  .technical-references{display:grid;gap:4px;margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .technical-references code,.action-facts code{font-size:inherit}
   .empty{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   @container(max-width:760px){
     .glance-header{grid-template-columns:minmax(0,1fr)}
@@ -248,9 +305,6 @@
   }
   @container(max-width:420px){
     .metrics{grid-template-columns:minmax(0,1fr)}
-  }
-  @media(max-width:840px){
-    .glance-grid{grid-template-columns:minmax(0,1fr)}
   }
   @media(max-width:520px){
     .signals{grid-template-columns:minmax(0,1fr)}

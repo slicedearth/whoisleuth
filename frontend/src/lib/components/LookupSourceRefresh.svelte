@@ -52,9 +52,9 @@
   <section class="source-refresh" aria-labelledby="source-refresh-title">
     <div>
       <h5 id="source-refresh-title">Retry or refresh a source</h5>
-      <p>{plan.stale && plan.ageDays !== null
-        ? `This unified result is ${plan.ageDays} days old. Refreshes stay separate so observation times are not silently mixed.`
-        : 'Only limited source families are offered. Refreshes stay separate so observation times are not silently mixed.'}</p>
+      <p>{plan.stale
+        ? 'Some source observations exceed the selected freshness window.'
+        : 'These sources have limited evidence or an unknown observation age.'} Refreshes remain separate from the original result.</p>
     </div>
     <ul class="refresh-actions">
       {#each plan.items as item}
@@ -73,7 +73,7 @@
           <li>
             <span class={`state state-${result.state}`}>{result.state}</span>
             <p><strong>{result.id.replaceAll('_', ' ')}</strong> · {result.detail}</p>
-            <small>{result.observedAt ? `Observed ${formatted(result.observedAt)}` : `Attempted ${formatted(result.attemptedAt)} · no new observation`} · supersedes {result.supersedesObservedAt ? formatted(result.supersedesObservedAt) : 'no earlier observation'} · transient only</small>
+            <small>{result.observedAt ? `Observed ${formatted(result.observedAt)}` : `Attempted ${formatted(result.attemptedAt)} · no new observation`} · {result.supersedesObservedAt ? `supersedes ${formatted(result.supersedesObservedAt)}` : 'earlier observation time unavailable'} · transient only</small>
           </li>
         {/each}
       </ul>

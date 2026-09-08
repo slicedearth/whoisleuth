@@ -6,6 +6,7 @@ import type { LookupSourceRefreshPlan } from './lookup-source-refresh.ts';
 import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
+import { readLookupObservationTime } from './lookup-observation-time.ts';
 
 export type LookupDecisionState = 'conflict' | 'uncertain';
 export type LookupDecisionImportance = 'high' | 'medium' | 'low';
@@ -281,18 +282,6 @@ function comparisonDetail(left: unknown, right: unknown): string {
   const valueLimit = Math.floor((MAX_LOOKUP_DECISION_DETAIL - separator.length - suffix.length) / 2);
   const display = (value: unknown) => summary(value, valueLimit) || 'not published';
   return `${display(left)}${separator}${display(right)}${suffix}`;
-}
-
-function isoDate(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-}
-
-function ageDays(value: string | null, now: unknown): number | null {
-  const current = isoDate(now);
-  if (!value || !current) return null;
-  return Math.max(0, Math.floor((Date.parse(current) - Date.parse(value)) / 86_400_000));
 }
 
 function taskGuidance(task: LookupTaskView): LookupTaskGuidance {
@@ -703,8 +692,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   observedAtByEvidence?: Readonly<Record<string, unknown>>;
   now?: unknown;
 }>): LookupEvidenceQualityMatrix {
-  const observedAt = isoDate(input.observedAt);
-  const currentAgeDays = ageDays(observedAt, input.now ?? new Date().toISOString());
+  const now = input.now ?? new Date().toISOString();
+  const { observedAt, ageDays: currentAgeDays } = readLookupObservationTime(input.observedAt, now);
   const timings = timingByEvidence(input.timing);
   const refreshByEvidence = new Map<string, LookupSourceRefreshPlan['items'][number]>();
   for (const item of input.refreshPlan.items) {
@@ -715,7 +704,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   const entries = input.coverage.entries.slice(0, MAX_ENTRIES).map((entry) => {
     const timing = timings.get(entry.id);
     const refresh = refreshByEvidence.get(entry.id);
-    const entryObservedAt = isoDate(input.observedAtByEvidence?.[entry.id]) ?? observedAt;
+    const sourceTime = readLookupObservationTime(input.observedAtByEvidence?.[entry.id], now);
     return {
       id: entry.id,
       label: entry.label,
@@ -726,8 +715,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       state: entry.state,
       statusLabel: entry.statusLabel,
       truncated: entry.truncated,
-      observedAt: entryObservedAt,
-      ageDays: ageDays(entryObservedAt, input.now ?? new Date().toISOString()),
+      observedAt: sourceTime.observedAt,
+      ageDays: sourceTime.ageDays,
       durationMs: timing?.durationMs ?? null,
       timingOutcome: timing?.outcome ?? null,
       refreshAvailable: refresh !== undefined,

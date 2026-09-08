@@ -3,6 +3,7 @@ import type {
   EvidenceCoverageLedger,
 } from './evidence-coverage-ledger.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import { readLookupObservationTime } from './lookup-observation-time.ts';
 import {
   BoundedJsonResponseError,
   requestJsonCapped,
@@ -125,20 +126,13 @@ export function buildLookupFreshnessPolicy(
   };
 }
 
-function observedAgeDays(observedAt: unknown, now: unknown): number | null {
-  if (typeof observedAt !== 'string' || typeof now !== 'string') return null;
-  const observedMs = Date.parse(observedAt);
-  const nowMs = Date.parse(now);
-  if (!Number.isFinite(observedMs) || !Number.isFinite(nowMs)) return null;
-  return Math.max(0, Math.floor((nowMs - observedMs) / 86_400_000));
-}
-
 function limited(entries: readonly EvidenceCoverageEntry[], ids: ReadonlySet<string>): boolean {
   return entries.some((entry) => ids.has(entry.id) && entry.manualReviewSuggested);
 }
 
 function availableIds(entries: readonly EvidenceCoverageEntry[], ids: ReadonlySet<string>): string[] {
-  return entries.filter((entry) => ids.has(entry.id)).map((entry) => entry.id).slice(0, 12);
+  return entries.filter((entry) => ids.has(entry.id) && entry.state !== 'skipped' && entry.state !== 'unsupported')
+    .map((entry) => entry.id).slice(0, 12);
 }
 
 export function buildLookupSourceRefreshPlan(
@@ -151,10 +145,12 @@ export function buildLookupSourceRefreshPlan(
     observedAtByEvidence?: Readonly<Record<string, unknown>>;
   }> = {},
 ): LookupSourceRefreshPlan {
-  const ageDays = observedAgeDays(observedAt, now);
+  const { ageDays } = readLookupObservationTime(observedAt, now);
   const freshnessPolicy = buildLookupFreshnessPolicy(options.task ?? 'general', options.freshnessPolicy);
   const entries = ledger.entries.slice(0, 24);
   const plans: LookupSourceRefreshPlanItem[] = [];
+  let stale = false;
+  let unknownSourceTimes = false;
   const groups: Array<{
     id: LookupSourceRefreshId;
     label: string;
@@ -191,19 +187,25 @@ export function buildLookupSourceRefreshPlan(
   for (const group of groups) {
     const evidenceIds = availableIds(entries, group.ids);
     if (!evidenceIds.length) continue;
-    const isLimited = limited(entries, group.ids);
     const thresholds = evidenceIds.map((id) => WEB_EVIDENCE_IDS.has(id)
       ? freshnessPolicy.thresholdsDays.web
       : NETWORK_EVIDENCE_IDS.has(id)
         ? freshnessPolicy.thresholdsDays.network
         : freshnessPolicy.thresholdsDays[group.threshold]);
     const staleAfterDays = Math.min(...thresholds);
-    const evidenceAges = evidenceIds
-      .map((id) => observedAgeDays(options.observedAtByEvidence?.[id] ?? observedAt, now))
-      .filter((value): value is number => value !== null);
-    const groupAgeDays = evidenceAges.length ? Math.max(...evidenceAges) : ageDays;
-    const groupStale = groupAgeDays !== null && groupAgeDays >= staleAfterDays;
+    // Availability is a derived decision; refresh age belongs to its collected inputs.
+    const sourceTimes = evidenceIds.flatMap((id, index) => id === 'availability' ? [] : [{
+      ...readLookupObservationTime(options.observedAtByEvidence?.[id], now),
+      threshold: thresholds[index]!,
+    }]);
+    const unknownTime = sourceTimes.some((time) => time.ageDays === null);
+    const groupAgeDays = unknownTime || !sourceTimes.length ? null : Math.max(...sourceTimes.map((time) => time.ageDays!));
+    const groupStale = sourceTimes.some((time) => time.ageDays !== null && time.ageDays >= time.threshold);
+    const isLimited = limited(entries, group.ids) || unknownTime;
+    stale ||= groupStale;
+    unknownSourceTimes ||= unknownTime;
     if (!isLimited && !groupStale) continue;
+    const observationTimes = new Set(sourceTimes.map((time) => time.observedAt));
     plans.push({
       id: group.id,
       label: group.label,
@@ -211,14 +213,11 @@ export function buildLookupSourceRefreshPlan(
       evidenceIds,
       reason: isLimited ? 'limited' : 'stale',
       requestDisclosure: group.disclosure,
-      supersedesObservedAt: typeof observedAt === 'string' && Number.isFinite(Date.parse(observedAt))
-        ? new Date(observedAt).toISOString()
-        : null,
+      supersedesObservedAt: !unknownTime && observationTimes.size === 1 ? sourceTimes[0]!.observedAt : null,
       ageDays: groupAgeDays,
       staleAfterDays,
     });
   }
-  const stale = plans.some((item) => item.reason === 'stale');
   return {
     version: LOOKUP_SOURCE_REFRESH_VERSION,
     stale,
@@ -226,6 +225,7 @@ export function buildLookupSourceRefreshPlan(
     freshnessPolicy,
     items: plans,
     limitations: [
+      ...(unknownSourceTimes ? ['Some source observation times are missing, invalid or in the future; their age is unknown.'] : []),
       'A source refresh is displayed separately and never merged into the original unified Lookup envelope.',
       'Run a complete Lookup before saving, comparing, or exporting replacement evidence collected at one review time.',
       'A retry can remain partial or unavailable and never proves that missing evidence is absent.',

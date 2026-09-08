@@ -252,6 +252,18 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
 });
 
 test('Unicode lookalikes show both domain forms and support evidence-aware filtering', async ({ page }) => {
+  const profile = {
+    id: 'visual-references', name: 'Reference set',
+    officialDomains: ['scope.invalid', 'xn--scpe-1nd.invalid', 'xn--scpe-65d.invalid', 'xn--cope-f9d.invalid'],
+    productNames: [], tlds: [], approvedPartnerDomains: [], allowlistedDomains: [],
+    allowlistedRegistrars: [], dkimSelectors: [], trademarkOwner: '', trademarkRegistration: '',
+    officialFaviconHash: '', officialFaviconPHash: '',
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  });
   await page.getByRole('button', { name: /^Impersonation\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
@@ -265,10 +277,22 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Scripts: Cyrillic, Latin');
   await expect(candidate).toContainText('Whole-label Unicode confusable');
   await expect(candidate).toContainText('Source or profile visual match');
-  await expect(candidate).toContainText('Visual match: scope.invalid');
-  const reviewSignals = candidate.locator('.candidate-badge.review');
+  const selectedBeforeReview = await candidate.getByRole('checkbox').isChecked();
+  const reviewSignals = candidate.locator('.review-cues > summary');
   await expect(reviewSignals).toHaveText(/[2-5] review cues/u);
-  await expect(reviewSignals).toHaveAttribute('title', /source or profile character match/u);
+  const cueList = candidate.locator('.review-cues ul');
+  await expect(cueList).toBeHidden();
+  await reviewSignals.focus();
+  await reviewSignals.press('Enter');
+  await expect(cueList).toBeVisible();
+  await expect(cueList).toContainText('source or profile character match');
+  await expect(candidate.getByRole('checkbox')).toBeChecked({ checked: selectedBeforeReview });
+  const references = candidate.locator('.reference-matches');
+  await references.locator('summary').click();
+  await expect(references.locator('summary')).toContainText('4 visual matches');
+  await expect(references.getByRole('listitem')).toHaveText(profile.officialDomains);
+  await expect(references.getByRole('listitem').last()).toBeVisible();
+  await expect(candidate.getByRole('checkbox')).toBeChecked({ checked: selectedBeforeReview });
   await expect(page.getByText('Visual matches and review cues are leads for further review, not findings.', { exact: true })).toBeVisible();
   const reviewCueScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="review-cues"]');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');

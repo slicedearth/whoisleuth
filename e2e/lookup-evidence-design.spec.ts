@@ -24,6 +24,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     ...sectionedLookupFixture('sectioned-result.invalid'),
     observedAt: reviewedAt.toISOString(),
   };
+  Object.assign(sectionedResult.rdap, { fetchedAt: '2026-08-21T11:00:00.000Z' });
   Object.assign(sectionedResult.whois.parsed, {
     domainName: 'different.invalid',
   });
@@ -59,7 +60,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
   expect(await activeNavigation.evaluate((link) => getComputedStyle(link).boxShadow)).toContain('inset');
 
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', level: 3 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
@@ -279,7 +280,22 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       ?.split(',').filter(Boolean) ?? [];
     expect(contributingFactIds.length).toBeGreaterThan(0);
     expect(contributingFactIds.every((id) => /^lookup-(?:decision|evidence):[a-z0-9._:-]+$/u.test(id))).toBe(true);
-    await expect(action.locator('.action-facts')).toContainText(contributingFactIds.join(' · '));
+    await expect(action).not.toContainText(/Decision Fact|lookup-(?:decision|evidence):/u);
+    const sourceDetail = action.locator('..').locator('details.action-evidence');
+    await expect(sourceDetail).toHaveCount(1);
+    await expect(sourceDetail.locator('.action-facts')).toHaveCount(contributingFactIds.length);
+    await expect(sourceDetail.locator('.action-facts').first()).toBeHidden();
+    const sourceToggle = sourceDetail.locator('summary');
+    await sourceToggle.focus();
+    await sourceToggle.press('Enter');
+    for (const id of contributingFactIds) {
+      const reference = sourceDetail.locator('.action-facts code').filter({ hasText: id });
+      await expect(reference).toBeVisible();
+    }
+    await expect(sourceDetail.locator('.metric-item-link').first()).toBeVisible();
+    await sourceToggle.press('Space');
+    await expect(sourceDetail.locator('.action-facts').first()).toBeHidden();
+    await expect(sourceToggle).toBeFocused();
   }
   expect(await nextReviewQueue.locator('.next-action').evaluateAll((actions) => actions.every((action) => (
     /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u.test(action.getAttribute('href') ?? '')
@@ -291,7 +307,22 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(acquisitionAction).toHaveCount(1);
   await expect(acquisitionAction).toHaveAttribute('data-basis', 'task_context');
   await expect(acquisitionAction).toHaveAttribute('data-contributing-fact-ids', '');
-  await expect(acquisitionAction.locator('.contextual-note')).toContainText('no evidence fact or provenance is claimed');
+  await expect(acquisitionAction.locator('..').locator('.contextual-note')).toContainText('Task context; not an observed finding.');
+  const furtherReviews = atAGlance.locator('.further-reviews');
+  await expect(furtherReviews).toHaveCount(1);
+  const primaryCount = Number(await nextReviewQueue.getAttribute('data-displayed-count'));
+  const allCount = Number(await nextReviewQueue.getAttribute('data-total'));
+  expect(allCount).toBeGreaterThan(primaryCount);
+  const moreToggle = furtherReviews.locator(':scope > summary');
+  await moreToggle.focus();
+  await moreToggle.press('Enter');
+  await expect(furtherReviews.locator('.next-action')).toHaveCount(allCount - primaryCount);
+  const allReviewIds = await atAGlance.locator('.next-action').evaluateAll((actions) => actions.map((action) => action.getAttribute('data-action-id')));
+  expect(allReviewIds).toHaveLength(allCount);
+  expect(new Set(allReviewIds).size).toBe(allCount);
+  await moreToggle.press('Space');
+  await expect(furtherReviews.locator('.next-action')).toHaveCount(0);
+  await expect(moreToggle).toBeFocused();
   expect(lookupRequests).toHaveLength(1);
 
   await taskQuestion.selectOption('brand');
@@ -346,12 +377,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const tlsImpact = impactPlan.locator('[data-fact-id="lookup-evidence:tls"]');
   const pageIdentityImpact = impactPlan.locator('[data-fact-id="lookup-evidence:page-identity"]');
   await expect(tlsImpact).toHaveAttribute('data-evidence-state', 'unknown');
-  await expect(tlsImpact).toHaveAttribute('data-freshness', 'current');
+  await expect(tlsImpact).toHaveAttribute('data-freshness', 'unknown');
   await expect(tlsImpact.locator('.fact-id')).toContainText('lookup-evidence:tls');
   await expect(tlsImpact.locator('[data-provenance="direct_observation"]')).toContainText('Direct observation');
-  await expect(tlsImpact.locator('[data-freshness="current"]')).toHaveAttribute('data-tone', 'neutral');
+  await expect(tlsImpact.locator('[data-freshness="unknown"]')).toHaveAttribute('data-tone', 'caution');
   await expect(pageIdentityImpact).toHaveAttribute('data-evidence-state', 'unknown');
-  await expect(pageIdentityImpact).toHaveAttribute('data-freshness', 'stale');
+  await expect(pageIdentityImpact).toHaveAttribute('data-freshness', 'unknown');
   const localImpact = localImpacts.first();
   await expect(localImpact).toHaveAttribute('data-basis', 'task_context');
   await expect(localImpact).toHaveAttribute('data-fact-id', '');
@@ -372,7 +403,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   await taskQuestion.selectOption('general');
   expect(lookupRequests).toHaveLength(1);
-  await expect(atAGlance.getByRole('heading', { name: 'Analyst assessment' })).toBeVisible();
+  await expect(atAGlance.getByRole('heading', { name: 'Evidence overview' })).toBeVisible();
   await expect(detailedAssessment.locator('.at-a-glance, .decision-support')).toHaveCount(0);
   const presentationStateBefore = await page.evaluate(() => ({
     hash: window.location.hash,

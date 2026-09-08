@@ -7,10 +7,14 @@ import {
 } from './lookup-display-shared.ts';
 import type { LookupTaskEvidenceKind } from './lookup-decision-support.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
   const timestamps = values
-    .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
+    .map((value) => {
+      const timestamp = normalizeExplicitIsoTimestamp(value);
+      return timestamp ? Date.parse(timestamp) : Number.NaN;
+    })
     .filter(Number.isFinite);
   return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
 }
@@ -20,6 +24,7 @@ export function buildLookupObservationProjection(
   lookupView: LookupViewModel,
 ) {
   const {
+    rdap,
     diagnostics,
     registrarRdap,
     registrarStanding,
@@ -40,10 +45,11 @@ export function buildLookupObservationProjection(
   } = lookupView;
   const rdapDiagnostic = rec(diagnostics.rdap);
   const whoisDiagnostic = rec(diagnostics.whois);
+  const rdapObservedAt = rdap.fetchedAt ?? rdapDiagnostic.fetchedAt;
   const lookupObservedAt = latestLookupTimestamp(
     result?.observedAt,
     result?.fetchedAt,
-    rdapDiagnostic.fetchedAt,
+    rdapObservedAt,
     whoisDiagnostic.queriedAt,
     registrarRdap.fetchedAt,
     reverseDns.observedAt,
@@ -64,24 +70,21 @@ export function buildLookupObservationProjection(
       .map((provider) => rec(rec(provider).observation).observedAt),
   );
   const evidenceObservedAtById: Record<string, unknown> = {
-    rdap: rdapDiagnostic.fetchedAt,
+    rdap: rdapObservedAt,
     whois: whoisDiagnostic.queriedAt,
-    availability: latestLookupTimestamp(dnsEvidence.observedAt, httpEvidence.observedAt, tlsEvidence.observedAt),
+    availability: lookupView.availability.observedAt,
     'registrar-rdap': registrarRdap.fetchedAt,
-    'registrar-standing': latestLookupTimestamp(
-      rec(registrarStanding.accreditation).observedAt,
-      rec(registrarStanding.compliance).reviewedAt,
-    ),
+    'registrar-standing': registrarStanding.observedAt,
     'reverse-dns': reverseDns.observedAt,
-    'network-context': latestLookupTimestamp(observedNetworkContext.observedAt, observedNetworkRdap.fetchedAt),
+    'network-context': observedNetworkContext.observedAt,
     dns: dnsEvidence.observedAt,
     http: httpEvidence.observedAt,
     tls: tlsEvidence.observedAt,
-    'page-identity': latestLookupTimestamp(pageIdentity.observedAt, httpEvidence.observedAt),
-    technology: latestLookupTimestamp(technologyProfile.observedAt, httpEvidence.observedAt),
-    'page-role': latestLookupTimestamp(pageRoleProfile.observedAt, httpEvidence.observedAt),
-    'client-behavior': latestLookupTimestamp(clientBehaviorProfile.observedAt, httpEvidence.observedAt),
-    'security-posture': latestLookupTimestamp(securityPosture.observedAt, httpEvidence.observedAt, tlsEvidence.observedAt),
+    'page-identity': pageIdentity.observedAt,
+    technology: technologyProfile.observedAt,
+    'page-role': pageRoleProfile.observedAt,
+    'client-behavior': clientBehaviorProfile.observedAt,
+    'security-posture': securityPosture.observedAt,
     'security-txt': securityTxt.observedAt,
     'sslbl-certificate': sslbl.observedAt,
   };

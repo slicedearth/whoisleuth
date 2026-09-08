@@ -88,7 +88,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Analyst assessment' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Evidence overview' })).toBeVisible();
   const atAGlance = page.locator('.at-a-glance');
   const glanceGeometry = await atAGlance.evaluate((section) => {
     const intro = section.querySelector('.glance-intro');
@@ -149,7 +149,13 @@ test('Lookup analyst question and disclosure controls change presentation withou
     const element = metric as HTMLElement;
     return { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth };
   }));
-  await expect(atAGlance.locator('.glance-grid')).toHaveCSS('align-items', 'start');
+  const readingOrder = await atAGlance.evaluate((section) => {
+    const observations = section.querySelector('[aria-labelledby="lookup-key-findings-title"]');
+    const reviews = section.querySelector('[aria-labelledby="lookup-next-review-title"]');
+    if (!observations || !reviews) throw new Error('Expected both populated evidence sections.');
+    return reviews.getBoundingClientRect().top - observations.getBoundingClientRect().bottom;
+  });
+  expect(readingOrder).toBeGreaterThanOrEqual(0);
   const nextActionsBeforeDisclosure = await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
     actions.map((action) => ({
       href: action.getAttribute('href'),

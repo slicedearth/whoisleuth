@@ -17,21 +17,31 @@ test('offers only limited source families for a current Lookup envelope', () => 
     { id: 'whois', label: 'WHOIS', category: 'registry', status: 'partial' },
     { id: 'dns', label: 'DNS', category: 'network', status: 'complete' },
   ]);
-  const plan = buildLookupSourceRefreshPlan(ledger, '2026-07-29T00:00:00.000Z', NOW);
+  const plan = buildLookupSourceRefreshPlan(ledger, '2026-07-29T00:00:00.000Z', NOW, {
+    observedAtByEvidence: { rdap: NOW, whois: NOW, dns: NOW },
+  });
   assert.equal(plan.stale, false);
   assert.deepEqual(plan.items.map((item) => item.id), ['whois']);
   assert.equal(plan.items[0]?.reason, 'limited');
 });
 
-test('offers existing source groups when the unified envelope is stale', () => {
+test('offers stale source observations independently of the envelope time', () => {
   const ledger = buildEvidenceCoverageLedger([
     { id: 'rdap', label: 'RDAP', category: 'registry', status: 'complete' },
     { id: 'whois', label: 'WHOIS', category: 'registry', status: 'complete' },
     { id: 'http', label: 'HTTP', category: 'web', status: 'complete' },
   ]);
-  const plan = buildLookupSourceRefreshPlan(ledger, '2026-06-20T00:00:00.000Z', NOW, { task: 'general' });
+  const plan = buildLookupSourceRefreshPlan(ledger, NOW, NOW, {
+    task: 'general',
+    observedAtByEvidence: {
+      rdap: '2026-06-20T00:00:00.000Z',
+      whois: '2026-06-20T00:00:00.000Z',
+      http: '2026-06-20T00:00:00.000Z',
+    },
+  });
   assert.equal(plan.stale, true);
-  assert.equal(plan.ageDays, 40);
+  assert.equal(plan.ageDays, 0);
+  assert.ok(plan.items.every((item) => item.ageDays === 40 && item.supersedesObservedAt === '2026-06-20T00:00:00.000Z'));
   assert.deepEqual(plan.items.map((item) => item.id), ['rdap', 'whois', 'availability']);
   assert.ok(plan.items.every((item) => item.reason === 'stale'));
 });
@@ -60,7 +70,7 @@ test('uses bounded task-specific and analyst-defined freshness thresholds', () =
 test('summarizes a separate WHOIS refresh without retaining its raw response', async () => {
   const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
     { id: 'whois', label: 'WHOIS', category: 'registry', status: 'partial' },
-  ]), NOW, NOW).items[0];
+  ]), NOW, NOW, { observedAtByEvidence: { whois: NOW } }).items[0];
   assert.ok(plan);
   const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
     now: () => NOW,
@@ -175,7 +185,7 @@ test('keeps failed source refreshes explicit and bounded', async () => {
     attemptedAt: NOW,
     reason: 'limited',
     evidenceIds: ['rdap'],
-    supersedesObservedAt: NOW,
+    supersedesObservedAt: null,
   } });
 });
 

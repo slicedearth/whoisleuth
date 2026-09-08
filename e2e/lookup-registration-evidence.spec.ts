@@ -490,7 +490,22 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   const evidenceQuality = page.locator('#evidence-quality');
   await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
-  await expect(evidenceQuality).not.toContainText('Observation time unavailable');
+  for (const [id, timestamp] of [
+    ['rdap', '2026-07-14T01:02:03.000Z'],
+    ['registrar-rdap', '2026-07-14T01:02:03.000Z'],
+    ['network-context', '2026-07-14T01:02:04.000Z'],
+  ] as const) {
+    const row = evidenceQuality.locator(`[data-evidence-id="${id}"]`);
+    await expect(row).toHaveCount(1);
+    const expectedTime = await page.evaluate((value) => new Date(value).toLocaleString(), timestamp);
+    await expect(row.locator('.observed')).toContainText(expectedTime);
+  }
+  for (const id of ['whois', 'http', 'tls']) {
+    const row = evidenceQuality.locator(`[data-evidence-id="${id}"]`);
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('.observed')).toContainText('Observation time unavailable');
+    await expect(row.locator('.observed')).toContainText('Freshness unknown');
+  }
 
   const agreementMatrix = page.locator('.agreement-matrix');
   await expect(agreementMatrix.locator('title').filter({
