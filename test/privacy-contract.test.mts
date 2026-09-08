@@ -38,11 +38,13 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
-  { id: 'date', pattern: /Last updated: 5 September 2026/u },
+  { id: 'date', pattern: /Last updated: \d{1,2} [A-Z][a-z]+ \d{4}/u },
   { id: 'local-first', pattern: /local-first.*ordinary investigation state stays.*browser profile/iu },
   { id: 'no-general-database', pattern: /no general (?:user, )?Case,? or workspace database/iu },
   { id: 'explicit-network', pattern: /deliberately started network(?:-capable)? operation sends (?:only )?its declared bounded target or evidence/iu },
   { id: 'single-bulk-network', pattern: /Single and Bulk lookups send the selected target/iu },
+  { id: 'lookup-url-minimisation', pattern: /browser sends only its full hostname for collection, without the port, path, query or fragment/iu },
+  { id: 'lookup-url-credentials', pattern: /Credential-bearing URLs are rejected/iu },
   { id: 'browser-plaintext', pattern: /IndexedDB as plaintext JSON/iu },
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
   { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${PUBLISHED_V2_2_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
@@ -88,6 +90,12 @@ test('public privacy notices share the current material data-handling contract',
   }
 
   const normalisedDisclosure = compact(disclosure);
+  const dates = [rootNotice, publicNotice].map((notice) => /Last updated: (\d{1,2} [A-Z][a-z]+ \d{4})/u.exec(notice)?.[1]);
+  assert.ok(dates[0]);
+  assert.equal(dates[0], dates[1], 'Both public privacy notices must describe the same revision.');
+  const date = new Date(`${dates[0]} 00:00:00 UTC`);
+  assert.equal(Number.isFinite(date.getTime()), true);
+  assert.equal(new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date), dates[0]);
   assert.match(normalisedDisclosure, /Hosted and distributable collection does not .*execute remote page scripts/iu);
   assert.match(normalisedDisclosure, /separate repo-local rendered-capture package is an explicit authorised exception/iu);
   assert.match(normalisedDisclosure, /executes page JavaScript in a disposable, network-bounded browser/iu);

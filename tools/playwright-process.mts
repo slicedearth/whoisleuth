@@ -1,17 +1,18 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-function forceStopOwnedTree(child: ChildProcess): void {
+function forceStopOwnedTree(child: ChildProcess): readonly number[] {
   const pid = child.pid;
-  if (!pid || child.exitCode !== null || child.signalCode !== null) return;
+  if (!pid || child.exitCode !== null || child.signalCode !== null) return [];
   if (process.platform === 'win32') {
     // Windows signals do not provide the runner's graceful POSIX shutdown.
     const result = spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
       shell: false, windowsHide: true, timeout: 5_000, maxBuffer: 64 * 1024,
     });
     if (result.error || result.status !== 0) throw new Error('Could not terminate the owned browser process tree.');
-    return;
+    return [];
   }
 
   // The browser and preview server can create their own process groups. A
@@ -41,6 +42,24 @@ function forceStopOwnedTree(child: ChildProcess): void {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
     }
   }
+  return [...owned];
+}
+
+async function waitForOwnedTreeExit(owned: readonly number[]): Promise<void> {
+  // Sending a signal is not the same as observing termination. In particular,
+  // the wrapper's close event can arrive before an independently grouped
+  // preview process has released its listener. Never signal these PIDs again.
+  const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
+  while (owned.some((pid) => {
+    try { process.kill(pid, 0); return true; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+      throw error;
+    }
+  })) {
+    if (Date.now() >= deadline) throw new Error('The owned browser process tree did not finish terminating.');
+    await delay(25);
+  }
 }
 
 /** Await the runner's shutdown before callers check ports or remove artefacts. */
@@ -64,9 +83,10 @@ export function runPlaywrightProcess(
     });
     let timer: NodeJS.Timeout | undefined;
     let shutdownFailure: unknown;
+    let stoppedProcesses: readonly number[] = [];
     const forceStop = () => {
       try {
-        forceStopOwnedTree(child);
+        stoppedProcesses = forceStopOwnedTree(child);
       } catch (error) {
         shutdownFailure = error;
         child.kill('SIGKILL');
@@ -93,10 +113,13 @@ export function runPlaywrightProcess(
       finish();
       reject(error);
     });
-    child.once('close', (code) => {
+    child.once('close', async (code) => {
       finish();
-      if (shutdownFailure) reject(shutdownFailure);
-      else resolve(options.signal.aborted ? 130 : code ?? 2);
+      try {
+        await waitForOwnedTreeExit(stoppedProcesses);
+        if (shutdownFailure) reject(shutdownFailure);
+        else resolve(options.signal.aborted ? 130 : code ?? 2);
+      } catch (error) { reject(shutdownFailure ?? error); }
     });
   });
 }

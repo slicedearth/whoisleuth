@@ -2,6 +2,7 @@
 // record normalization, and analyst updates.
 
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -117,15 +118,8 @@ export function normalizeCaseObjective(value: unknown): string {
 }
 
 export function parseIncidentUrlContext(value: unknown): IncidentUrlContext | null {
-  if (typeof value !== 'string' || !value || value.length > MAX_CASE_INCIDENT_URL_LENGTH) return null;
-  if (/[\u0000-\u001f\u007f]/u.test(value) || value.trim() !== value) return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return null;
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) return null;
+  const parsed = parseCredentialFreeHttpUrl(value, MAX_CASE_INCIDENT_URL_LENGTH);
+  if (!parsed) return null;
   const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
   const registrableDomain = canonicalRegistrableDomain(hostname);
   if (!registrableDomain) return null;

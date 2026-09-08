@@ -486,6 +486,18 @@ describe('continuous integration workflow', () => {
     `);
     assert.throws(() => assertAppliedBrowserSafety({ configurationFile: weakenedConfiguration }), /Applied Playwright configuration weakened/u);
 
+    for (const patch of [
+      "webServer: { ...configuration.webServer, command: 'node server.mts' }",
+      'globalTeardown: undefined',
+    ]) {
+      fs.writeFileSync(weakenedConfiguration, `
+        const imported = require(${JSON.stringify(configuration)});
+        const configuration = imported.default ?? imported;
+        module.exports = { ...configuration, testDir: ${JSON.stringify(E2E_DIRECTORY)}, ${patch} };
+      `);
+      assert.throws(() => assertAppliedBrowserSafety({ configurationFile: weakenedConfiguration }), /independent server egress guard/u);
+    }
+
     const fixtures = pathToFileURL(path.join(E2E_DIRECTORY, 'fixtures.ts')).href;
     for (const auto of [false, true]) {
       const disconnectedFixture = path.join(directory, `disconnected-${auto}.mts`);

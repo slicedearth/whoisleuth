@@ -6,6 +6,7 @@ import {
   isInformativePerceptualHash,
 } from '../../../../lib/perceptual-hash-comparison.mts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
+import { MAX_LOOKUP_INPUT_CHARACTERS } from '../../../../packages/evidence/lookup-target.mts';
 
 export { groupBySimilarFavicon } from '../../../../packages/comparison/favicon-similarity.mts';
 
@@ -89,7 +90,7 @@ function splitDelimitedLine(line: string, delimiter: string = ','): string[] {
 }
 
 const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
-export const MAX_DOMAIN_INPUT_CHARACTERS = 2 * 1024 * 1024;
+export const MAX_DOMAIN_INPUT_CHARACTERS = MAX_LOOKUP_INPUT_CHARACTERS;
 export const MAX_DOMAIN_INPUT_BYTES = 2 * 1024 * 1024;
 export const MAX_DOMAIN_INPUT_LINES = 10_000;
 export const MAX_DOMAIN_INPUT_SEPARATORS = 20_000;

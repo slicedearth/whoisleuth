@@ -8,6 +8,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { _storeBytes, _storeSize, cached, MAX_ENTRIES, MAX_TOTAL_BYTES } from '../lib/lookup-cache.mts';
 
+test('a synchronous factory failure is shared once and does not poison a later attempt', async () => {
+  let calls = 0;
+  const failure = new Error('Synthetic cache factory failure.');
+  const factory = () => { calls += 1; throw failure; };
+  const settled = await Promise.allSettled([
+    cached('lookup-cache-test:sync-failure', factory),
+    cached('lookup-cache-test:sync-failure', factory),
+  ]);
+  assert.equal(calls, 1);
+  assert.deepEqual(settled, [{ status: 'rejected', reason: failure }, { status: 'rejected', reason: failure }]);
+  assert.equal(await cached('lookup-cache-test:sync-failure', () => 'recovered'), 'recovered');
+});
+
 test('the cache never grows past MAX_ENTRIES, even when every key is unique', async () => {
   const extra = 50;
   for (let i = 0; i < MAX_ENTRIES + extra; i += 1) {

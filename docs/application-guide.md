@@ -59,6 +59,10 @@ mail-transport actions are separate again and never run through browser Lookup.
 
 ### Reading the result
 
+A pasted HTTP(S) URL selects its full hostname for collection, not its port,
+path, query or fragment. URLs containing credentials are rejected. Retaining
+an exact Incident URL in a Case is a separate, deliberate choice.
+
 The result starts with registration and availability because those decisions
 have specific authority rules. Supporting DNS, website, TLS, certificate,
 network and provider evidence cannot silently replace registry authority.

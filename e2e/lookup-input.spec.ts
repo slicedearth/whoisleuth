@@ -5,9 +5,9 @@ import { readFile } from 'node:fs/promises';
 import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
 
-// Every value here is deliberately dotless (no TLD), so classifyQuery on the
-// server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
-// never trigger a live lookup, only client-side parsing/navigation.
+// Invalid-input cases use dotless values; collectable targets use local
+// response fixtures. The independent server guard rejects missing fixtures
+// before any collector transport can make a request.
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
@@ -41,6 +41,38 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
   await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+});
+
+test('ordinary URL lookup sends only its full hostname and rejects credentials before collection', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'portal.example.test', type: 'domain', registrableDomain: 'example.test',
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain: 'example.test', deepScanComplete: true },
+        rdap: { error: 'Fixture source unavailable' }, whois: { parsed: {}, chain: [] },
+        diagnostics: { version: 8, rdap: { status: 'error' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      }) });
+  });
+  const query = page.locator('#query');
+  const submit = page.getByRole('button', { name: 'Run lookup' });
+  for (const task of ['general', 'incident']) {
+    await page.locator('.task-guidance').getByLabel('Analyst question').selectOption(task);
+    await query.fill('https://synthetic:private@portal.example.test/private-path?private-query=present');
+    await submit.click();
+    await expect(page.getByRole('alert')).toContainText('without credentials');
+    await expect(submit).toBeEnabled();
+    expect(requests).toEqual([]);
+  }
+  await page.locator('.task-guidance').getByLabel('Analyst question').selectOption('general');
+  await query.fill('https://portal.example.test:8443/private-path?private-query=present#private-fragment');
+  await submit.click();
+  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(submit).toBeEnabled();
+  expect(requests).toHaveLength(1);
+  expect(new URL(requests[0]!).searchParams.get('q')).toBe('portal.example.test');
+  expect(requests[0]).not.toMatch(/private-path|private-query|private-fragment|synthetic|8443/u);
 });
 
 test('task guidance recommends evidence depth without submitting a lookup', async ({ page }) => {

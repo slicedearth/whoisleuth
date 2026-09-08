@@ -119,7 +119,10 @@ npx playwright test e2e/public-guide.spec.ts --workers=1 --retries=0
 ```
 
 The suite uses deterministic fixtures and must not contact live registries,
-domains, resolvers or providers. Confirm the served process belongs to the
+domains, resolvers or providers. Browser routing and a separately preloaded
+server transport guard enforce this. An unexpected collector request fails
+the run and names the operation; supply the missing deterministic fixture
+rather than disabling the guard. Confirm the served process belongs to the
 intended checkout. After testing, remove generated reports and build artefacts
 unless they are an intentional deliverable, and confirm port 4173 is free.
 

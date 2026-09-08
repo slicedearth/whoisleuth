@@ -1,4 +1,5 @@
 import type { Page, TestInfo } from '@playwright/test';
+import path from 'node:path';
 
 export const PLAYWRIGHT_FUNCTIONAL_PROJECT = 'chromium';
 export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT = 'performance-measurement';
@@ -154,12 +155,16 @@ export function performanceSampleMedian(values: readonly number[]): number {
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
-export function resolvePlaywrightExecutionContract(environment: Environment = process.env) {
+export function resolvePlaywrightExecutionContract(environment: Environment = process.env, repositoryRoot = process.cwd()) {
   const hosted = Boolean(environment.CI);
   const useExistingBuild = hosted || environment.WHOISLEUTH_E2E_USE_BUILD === '1';
+  const guardedServer = 'node --import ./tools/browser-server-egress-guard.mts server.mts';
   return Object.freeze({
     hosted,
     useExistingBuild,
+    serverCommand: useExistingBuild ? guardedServer : `npm run build && ${guardedServer}`,
+    serverWorkingDirectory: path.resolve(repositoryRoot),
+    serverEgressTeardown: path.resolve(repositoryRoot, 'tools', 'browser-server-egress-teardown.cts'),
     includePerformanceAuthority: environment.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1',
     forbidOnly: true as const,
     failOnFlakyTests: true as const,

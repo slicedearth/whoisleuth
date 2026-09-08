@@ -52,6 +52,7 @@
   } from '$lib/analysis/lookup-request.ts';
   import {
     buildLookupRequestUrl,
+    prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
     lookupEvidenceTargetForHref,
@@ -697,28 +698,32 @@
     if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!lookupEntries.length||loading)return;
     if(lookupEntries.length>1){
+      let targets:string[];
+      try{targets=lookupEntries.slice(0,2000).map(prepareLookupCollectionTarget);}
+      catch(cause){error=cause instanceof Error?cause.message:'Lookup targets could not be prepared.';return;}
       result=null;error='';
-      const handoffResult=saveCandidateHandoff('manual',lookupEntries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
+      const handoffResult=saveCandidateHandoff('manual',targets.map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
       if(!handoffResult.saved){error='This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';return;}
       await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
       return;
     }
 
-    invalidateCaseActions();
-    invalidateWatchlistActions();
-    lookupAnchorController?.stop();
-    caseSourceState='loading';
-    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const submittedEntry=lookupEntries[0];if(!submittedEntry)return;
     const submittedIncident=taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry)
       ? parseIncidentUrlContext(submittedEntry)
       : null;
     if(taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry)&&!submittedIncident){
       error='Incident URLs must be absolute HTTP(S) URLs without credentials and within the Case URL bound.';
-      loading=false;
       return;
     }
-    const target=taskView==='incident'&&submittedIncident?submittedIncident.hostname:submittedEntry;
+    let target:string;
+    try{target=prepareLookupCollectionTarget(submittedEntry);}
+    catch(cause){error=cause instanceof Error?cause.message:'Lookup target could not be prepared.';return;}
+    invalidateCaseActions();
+    invalidateWatchlistActions();
+    lookupAnchorController?.stop();
+    caseSourceState='loading';
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
     const lookupUrl=buildLookupRequestUrl(target,{

@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 5 September 2026.
+Last updated: 8 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -119,6 +119,11 @@ briefly in server memory to reduce duplicate upstream requests. Optional
 security.txt and external intelligence results are not retained as a hosted
 investigation record. Hosting, edge and function providers can retain ordinary
 request or function-log metadata under their own configured policies.
+
+For a URL pasted into Lookup, the browser sends only its full hostname for
+collection, without the port, path, query or fragment. Credential-bearing URLs
+are rejected. Deliberate retention of an exact Incident URL in a Case remains
+separate from that collection request.
 
 Deep collection can disclose the target or related bounded query to the
 applicable registry or registrar, public DNS resolver, nameserver, HTTP origin,

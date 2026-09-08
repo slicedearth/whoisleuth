@@ -1,0 +1,48 @@
+// Collection needs an authority, not a pasted URL's private path or query.
+// Registration classification and network-address safety remain separate.
+export const MAX_LOOKUP_INPUT_CHARACTERS = 2 * 1024 * 1024;
+const URL_SCHEME = /^[a-z][a-z\d+.-]*:\/\//iu;
+const CONTROL = /[\u0000-\u001f\u007f]/u;
+
+export function parseCredentialFreeHttpUrl(value: unknown, maximumLength: number): URL | null {
+  if (typeof value !== 'string' || !value || value.length > maximumLength
+    || value.trim() !== value || CONTROL.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+      && !parsed.username && !parsed.password && parsed.hostname ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function prepareLookupCollectionTarget(value: string): string {
+  if (value.length > MAX_LOOKUP_INPUT_CHARACTERS || CONTROL.test(value) || value.includes('\\')) {
+    throw new TypeError('Lookup input exceeds its bound or contains control characters.');
+  }
+  const raw = value.trim();
+  if (!raw) throw new TypeError('Enter a domain, IP address or ASN.');
+  const absolute = URL_SCHEME.test(raw);
+  // An unbracketed IPv6 literal is not a URL with a port. Use the same URL
+  // parser to admit its syntax, then leave address safety and ASN bounds to
+  // the classifier; malformed colon-separated text must not become a request.
+  if (!absolute && !/[\s/@?#\\]/u.test(raw)) {
+    if (/^(?:AS)?\d+$/iu.test(raw)) return raw;
+    if ((raw.match(/:/gu)?.length ?? 0) > 1 && !raw.startsWith('[')) {
+      if (!parseCredentialFreeHttpUrl(`https://[${raw}]`, MAX_LOOKUP_INPUT_CHARACTERS + 10)) {
+        throw new TypeError('Enter a valid IPv6 address without a scope identifier.');
+      }
+      return raw;
+    }
+  }
+  const parsed = parseCredentialFreeHttpUrl(absolute ? raw : `https://${raw}`,
+    MAX_LOOKUP_INPUT_CHARACTERS + 'https://'.length);
+  if (!parsed) throw new TypeError('Enter a valid domain, IP, or ASN. URLs must use HTTP(S) without credentials.');
+  if (/^\d+\.\d+\.\d+\.\d+$/u.test(parsed.hostname)) {
+    const authority = (absolute ? raw.slice(raw.indexOf('://') + 3) : raw).split(/[/?#]/u)[0]!;
+    const originalHost = authority.split(':')[0]!.replace(/\.$/u, '');
+    if (originalHost !== parsed.hostname) throw new TypeError('Use a complete canonical IP address, not an abbreviated or encoded address.');
+  }
+  // WHATWG URLs bracket IPv6; the existing classifier accepts the bare address.
+  return parsed.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
+}

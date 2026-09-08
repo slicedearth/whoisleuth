@@ -122,7 +122,9 @@ async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
   const pending = inFlight.get(key);
   if (pending) return pending as Promise<T>;
 
-  const promise = (async () => {
+  // Register pending work before invoking the factory, including factories
+  // that throw synchronously. A rejected promise must never poison the key.
+  const promise = Promise.resolve().then(async () => {
     try {
       const value = await factory();
       setCached(key, value);
@@ -130,7 +132,7 @@ async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
     } finally {
       inFlight.delete(key);
     }
-  })();
+  });
   inFlight.set(key, promise);
   return promise;
 }

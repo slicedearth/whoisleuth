@@ -19,7 +19,7 @@ import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
-import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT } from './playwright-execution-contract.mts';
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, resolvePlaywrightExecutionContract } from './playwright-execution-contract.mts';
 
 export const ANALYST_JOURNEY_ASSURANCE_VERSION = 1;
 export const MAX_ANALYST_JOURNEY_SPEC_BYTES = 2 * 1024 * 1024;
@@ -205,6 +205,9 @@ export function assertAppliedBrowserSafety(options: Readonly<{
         const declaration = loaded.default ?? loaded;
         process.stdout.write(JSON.stringify({
           forbidOnly: config.forbidOnly, failOnFlakyTests: config.failOnFlakyTests, workers: config.workers,
+          serverCommand: declaration.webServer?.command,
+          serverWorkingDirectory: declaration.webServer?.cwd,
+          serverEgressTeardown: declaration.globalTeardown,
           projects: config.projects.map(project => ({
             name: project.name, retries: project.retries,
             fullyParallel: declaration.projects?.find(entry => entry.name === project.name)?.fullyParallel ?? declaration.fullyParallel ?? false,
@@ -232,6 +235,12 @@ export function assertAppliedBrowserSafety(options: Readonly<{
       || performance.fullyParallel !== false
       || !functional.testIgnore.length || JSON.stringify(functional.testIgnore) !== JSON.stringify(performance.testMatch)) {
       throw new TypeError('Applied Playwright configuration weakened the maintained execution contract.');
+    }
+    const execution = resolvePlaywrightExecutionContract(environment, REPOSITORY_ROOT);
+    if (configuration.serverCommand !== execution.serverCommand
+      || configuration.serverWorkingDirectory !== execution.serverWorkingDirectory
+      || configuration.serverEgressTeardown !== execution.serverEgressTeardown) {
+      throw new TypeError('Applied Playwright configuration disconnected the independent server egress guard.');
     }
 
     const fixtureUrl = pathToFileURL(options.fixtureFile ?? path.join(REPOSITORY_ROOT, 'e2e', 'fixtures.ts')).href;
@@ -278,6 +287,7 @@ export function assertAppliedBrowserSafety(options: Readonly<{
     const probeConfig = path.join(temporaryRoot, 'probe.config.cjs');
     writeFileSync(probeConfig, `module.exports = {
       testDir: __dirname, testMatch: 'guard.spec.mts', workers: 1, retries: 0,
+      globalTeardown: ${JSON.stringify(execution.serverEgressTeardown)},
       outputDir: ${JSON.stringify(path.join(temporaryRoot, 'results'))}, reporter: 'json'
     };`, { mode: 0o600 });
     const results = parse(run(['--config', probeConfig]), 1) as unknown as JSONReport;
