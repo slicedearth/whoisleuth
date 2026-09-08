@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { analyzeStaticHtml, type StaticHtmlAnalysis } from './static-html-analysis.mts';
 import { PAGE_FINGERPRINT_VERSION, PAGE_FINGERPRINT_PARSERS } from '../packages/contracts/workspace-portability.mts';
+import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
 
 type ExactBodyHash = {
   algorithm: 'sha256';
@@ -28,7 +29,7 @@ type PageFingerprintOptions = {
 
 type FormShape = { method: string; action: string; controls: Record<string, number> };
 
-const MAX_FINGERPRINT_SOURCE_BYTES = 300000;
+const MAX_FINGERPRINT_SOURCE_BYTES = MAX_HOMEPAGE_BYTES;
 const MAX_FINGERPRINT_TAG_LENGTH = 4096;
 const MAX_FINGERPRINT_TOKENS = 4096;
 const MAX_FINGERPRINT_ATTRIBUTES = 64;

@@ -17,6 +17,15 @@ describe('extractIconUrls', () => {
     assert.deepEqual(extractIconUrls(html, BASE), ['https://example.com/assets/fav.png']);
   });
 
+  test('uses the small precomputed icon projection without retaining or reparsing HTML', () => {
+    const htmlAnalysis = {
+      iconLinks: [{ href: 'brand.ico', priority: 0 }],
+      effectiveBaseUrl: 'https://example.test/assets/',
+    };
+    assert.deepEqual(extractIconUrls('', 'https://example.test/', htmlAnalysis), ['https://example.test/assets/brand.ico']);
+    assert.equal(buildFaviconCandidates('example.test', '', { htmlAnalysis })[0], 'https://example.test/assets/brand.ico');
+  });
+
   test('resolves an absolute asset-host href', () => {
     const html = '<link rel="icon" type="image/png" href="https://static.example-cdn.com/abc.png">';
     assert.deepEqual(extractIconUrls(html, BASE), ['https://static.example-cdn.com/abc.png']);

@@ -91,7 +91,6 @@ type StaticHtmlAnalysis = {
   title: string | null;
   effectiveBaseUrl: string | null;
   baseHrefState: 'absent' | 'valid' | 'invalid';
-  markup: string;
   elements: StaticHtmlElement[];
   iconLinks: Array<{ href: string; priority: number }>;
   tokens: StaticHtmlToken[];
@@ -126,7 +125,6 @@ type StaticHtmlToken =
   | { kind: 'text'; value: string };
 
 const MAX_STATIC_STRUCTURE_TOKENS = 4_096;
-const MAX_TECHNOLOGY_TAGS = 2_048;
 const MAX_TAG_LENGTH = 4_096;
 const MAX_ATTRIBUTES_PER_TAG = 128;
 const MAX_SCRIPT_ELEMENTS = 64;
@@ -335,27 +333,6 @@ function stylesheetCandidate(attributes: Array<{ name: string; value: string }>)
   };
 }
 
-function serializedStartTag(
-  tagName: string,
-  attributes: Array<{ name: string; value: string }>,
-): { markup: string | null; limitReached: boolean } {
-  let serialized = `<${tagName.toLowerCase()}`;
-  let limitReached = attributes.length > MAX_ATTRIBUTES_PER_TAG;
-  for (const attribute of attributes.slice(0, MAX_ATTRIBUTES_PER_TAG)) {
-    const escaped = attribute.value.toLowerCase().replace(/&/gu, '&amp;').replace(/"/gu, '&quot;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
-    const candidate = ` ${attribute.name.toLowerCase()}="${escaped}"`;
-    if (serialized.length + candidate.length + 1 > MAX_TAG_LENGTH) {
-      limitReached = true;
-      break;
-    }
-    serialized += candidate;
-  }
-  return {
-    markup: serialized.length + 1 <= MAX_TAG_LENGTH ? `${serialized}>` : null,
-    limitReached,
-  };
-}
-
 function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = {}): StaticHtmlAnalysis {
   const parsed = parseBoundedHtml(value);
   const { inputLimitReached } = parsed;
@@ -363,7 +340,6 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   let effectiveBaseUrl = documentUrl;
   let baseHrefState: StaticHtmlAnalysis['baseHrefState'] = 'absent';
   const includeVisibleText = options.includeVisibleText === true;
-  const markup: string[] = [];
   const elements: StaticHtmlElement[] = [];
   const iconLinks: StaticHtmlAnalysis['iconLinks'] = [];
   const iconCounts: [number, number] = [0, 0];
@@ -537,7 +513,10 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
       elementStack.push(elements.length);
       elements.push(element);
       appendToken({ kind: 'start', element });
-      if (element.attributesTruncated) tagLimitReached = true;
+      // Foreign drawing attributes are not HTML technology, form or resource
+      // inputs. Their per-element omission still reaches fingerprinting, but
+      // must not make unrelated HTML evidence incomplete.
+      if (htmlElement && element.attributesTruncated) tagLimitReached = true;
       if (!htmlElement) continue;
       if (tagName === 'link') {
         const rel = node.attrs.find((attribute) => attribute.name === 'rel')?.value;
@@ -730,14 +709,6 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
         }
       }
 
-      if (markup.length < MAX_TECHNOLOGY_TAGS) {
-        const serialized = serializedStartTag(tagName, token.attrs);
-        if (serialized.limitReached) tagLimitReached = true;
-        if (serialized.markup) markup.push(serialized.markup);
-      } else {
-        tagLimitReached = true;
-      }
-
       if (tagName === 'form') {
         if (forms.formsObserved >= MAX_STATIC_FORMS) {
           forms.truncated = true;
@@ -821,7 +792,6 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
     })(),
     effectiveBaseUrl: effectiveBaseUrl?.toString() ?? null,
     baseHrefState,
-    markup: markup.join('\n'),
     elements,
     iconLinks: iconLinks.sort((left, right) => left.priority - right.priority).slice(0, MAX_FAVICON_CANDIDATES),
     tokens,
@@ -859,7 +829,6 @@ export {
   MAX_STATIC_STRUCTURE_TOKENS,
   MAX_STATIC_VISIBLE_TEXT_CHARS,
   MAX_TAG_LENGTH,
-  MAX_TECHNOLOGY_TAGS,
   analyzeStaticHtml,
 };
 

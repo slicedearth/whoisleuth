@@ -33,6 +33,7 @@ import {
   type JsonValue,
 } from './lookup-contract-primitives.mts';
 import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from './technology-evidence-role.mts';
+import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
 
 export const TECHNOLOGY_PROFILE_VERSION = 12;
 export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, 11, TECHNOLOGY_PROFILE_VERSION]);
@@ -587,7 +588,9 @@ function pageFingerprintContractState(value: unknown): ChildContractState {
     || typeof profile.exact.value !== 'string'
     || !SHA256_RE.test(profile.exact.value)
     || !['complete-body', 'captured-prefix'].includes(String(profile.exact.scope))
-    || !validUint(profile.exact.bytes, 300_000)
+    // The published first-generation writer had a fixed 300,000-byte ceiling.
+    // Current native fingerprints share the collector's source-size policy.
+    || !validUint(profile.exact.bytes, profile.fingerprintVersion === 1 ? 300_000 : MAX_HOMEPAGE_BYTES)
     || !['captured-response-bytes', 'decoded-markup'].includes(String(profile.exact.source))
     || !validPageFingerprintProfile(profile)
     || profile.complete !== (profile.truncated !== true)) return 'invalid';

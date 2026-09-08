@@ -1,5 +1,6 @@
 // Target-free provenance for reviewed technology fixtures derived from
-// licence- or permission-reviewed local sources. Source artefacts and page
+// licence-reviewed local sources or minimised factual public observations.
+// Source artefacts and page
 // content are not retained; immutable package or repository references and
 // output digests let maintainers verify the derivation boundary separately
 // from fixture evidence.
@@ -1421,6 +1422,26 @@ export const TECHNOLOGY_REVIEWED_SOURCES: readonly TechnologyReviewedSource[] = 
     artifactSha256: 'b56c70e2f1939591fd0b25b6fc80c9cf2878ee951666b45ac0b5bd5843152337',
     responseMetadataSha256: null,
     derivation: 'reviewed-repository-artifact',
+    networkRequestsDuringFixtureEvaluation: 0,
+    rawArtifactIncluded: false,
+  }),
+  Object.freeze({
+    schema: TECHNOLOGY_REVIEWED_SOURCE_SCHEMA,
+    version: TECHNOLOGY_REVIEWED_SOURCE_VERSION,
+    fixtureId: 'official-squarespace-homepage-20260909',
+    sourceKind: 'demonstration',
+    sourceReference: 'official:squarespace/homepage',
+    sourceRevision: '2026-09-08T15:13:36.569Z',
+    sourceIntegrity: null,
+    sourceLicence: 'factual-observation',
+    licenceReviewedAt: '2026-09-08T15:39:02.294Z',
+    runtimeReference: null,
+    buildRecipe: 'official-public-demonstration',
+    buildEnvironment: null,
+    supportingEnvironments: Object.freeze([]),
+    artifactSha256: 'fa56dca904c0157a3354041bdde8e2a7caf9dda80e66eb508eb9d2ca314cf73d',
+    responseMetadataSha256: null,
+    derivation: 'reviewed-public-demonstration',
     networkRequestsDuringFixtureEvaluation: 0,
     rawArtifactIncluded: false,
   }),

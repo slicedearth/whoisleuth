@@ -443,8 +443,8 @@ async function safeFetch(url: string, options: RequestInit = {}, redirectsLeft =
 // them can be made to hold an arbitrarily large body in memory. `truncated`
 // tells the caller whether the real body was actually cut short - callers
 // that need well-formed content (e.g. JSON) should treat that as a hard
-// failure rather than parsing a partial blob; callers that only need to
-// scan for a substring (e.g. plain-text/HTML matching) can safely ignore it.
+// failure rather than parsing a partial blob. Partial-evidence consumers may
+// use the prefix, but must preserve its incomplete scope.
 async function readTextCapped(res: Response, maxBytes: number, options: CappedTextOptions = {}) {
   const hasher = options.includeSha256 === true ? crypto.createHash('sha256') : null;
   const result = (text: string, truncated: boolean, bytesRead: number) => ({

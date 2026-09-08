@@ -21,10 +21,11 @@ import {
 // candidate fails.
 
 type FaviconHash = { hash: string; phash: string | null };
+type FaviconHtmlEvidence = Pick<StaticHtmlAnalysis, 'iconLinks' | 'effectiveBaseUrl'>;
 type FaviconOptions = {
   html?: string;
   baseUrl?: string;
-  htmlAnalysis?: StaticHtmlAnalysis;
+  htmlAnalysis?: FaviconHtmlEvidence;
   fetcher?: typeof safeFetch;
   timeoutMs?: number;
 };
@@ -34,7 +35,7 @@ type FaviconOptions = {
 // standard "icon"/"shortcut icon" first, then "apple-touch-icon". data:
 // URIs are passed through verbatim - decodeFaviconCandidate handles them
 // without a network fetch.
-function extractIconUrls(html: string, baseUrl: string, suppliedAnalysis?: StaticHtmlAnalysis): string[] {
+function extractIconUrls(html: string, baseUrl: string, suppliedAnalysis?: FaviconHtmlEvidence): string[] {
   const analysis = suppliedAnalysis ?? analyzeStaticHtml(html, { baseUrl });
   const urls: string[] = [];
   for (const { href } of analysis.iconLinks) {
@@ -192,7 +193,7 @@ function buildFaviconCandidates(domain: string, html = '', options: Pick<Favicon
   const seen = new Set<string>();
   const add = (url: string) => { if (url && !seen.has(url)) { seen.add(url); candidates.push(url); } };
 
-  if (html) for (const url of extractIconUrls(html, options.baseUrl ?? `https://${domain}/`, options.htmlAnalysis)) add(url);
+  if (html || options.htmlAnalysis) for (const url of extractIconUrls(html, options.baseUrl ?? `https://${domain}/`, options.htmlAnalysis)) add(url);
   add(`https://${domain}/favicon.ico`);
   add(`https://${domain}/favicon.svg`);
   add(`http://${domain}/favicon.ico`);

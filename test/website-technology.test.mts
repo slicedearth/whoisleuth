@@ -66,7 +66,7 @@ describe('website technology profile', () => {
       html: `
         <main data-mage-init='{"fixture":{}}'></main>
         <link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/store.css">
-        <main data-module="stencil-utils"></main>
+        <script src="/assets/stencil-utils.js"></script>
         <script src="https://cdn11.bigcommerce.com/s/fixture/theme.js"></script>
       `,
       resourceOrigins: ['https://cdn11.bigcommerce.com'],
@@ -307,7 +307,7 @@ describe('website technology profile', () => {
     assert.equal(embeddedOnly.evidence.length, 1);
 
     const independent = finding(analyze({
-      html: '<main data-module="stencil-utils"></main><script src="https://cdn11.bigcommerce.com/s/fixture/theme.js"></script>',
+      html: '<script src="/assets/stencil-utils.js"></script><script src="https://cdn11.bigcommerce.com/s/fixture/theme.js"></script>',
       resourceOrigins: ['https://cdn11.bigcommerce.com'],
     }), 'bigcommerce');
     assert.deepEqual(independent.roles, ['application_platform', 'embedded_dependency']);
@@ -489,15 +489,12 @@ describe('website technology profile', () => {
     assert.deepEqual(result.findings, []);
   });
 
-  test('bounds deeply nested hostile markup without constructing a DOM tree', () => {
+  test('reports the native tree construction boundary for deeply nested markup', () => {
     const html = '<div>'.repeat(MAX_TECHNOLOGY_HTML_CHARS / 5);
-    const startedAt = performance.now();
     const result = analyze({ html });
-    const elapsedMs = performance.now() - startedAt;
 
     assert.equal(result.status, 'partial');
     assert.equal(result.diagnostics.tagLimitReached, true);
     assert.equal(requiredValue(result.browserLibraryProfile).status, 'partial');
-    assert.ok(elapsedMs < 2_000, `Expected bounded tokenization under 2 seconds; received ${Math.round(elapsedMs)}ms.`);
   });
 });

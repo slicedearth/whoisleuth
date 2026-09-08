@@ -348,8 +348,8 @@ async function fetchHomepage(
             durationMs: Date.now() - attemptStartedAt,
           };
       const res = detail.response;
-      // A truncated homepage is still fine here - only used to scan for a
-      // for-sale text match, not parsed as well-formed content. The
+      // Retain an explicitly partial prefix when the body exceeds its bound;
+      // downstream analyses must not treat it as a complete page. The
       // timeout stays armed through this read (cleared in `finally` below,
       // not here) - a malicious site could otherwise send headers
       // immediately and then trickle or stall the body forever, hanging
@@ -748,12 +748,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   ]);
   const page = homepage.text;
   const pageBaseUrl = typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : `https://${domain}/`;
-  const pageAnalysis = page ? analyzeStaticHtml(page, { baseUrl: pageBaseUrl, includeVisibleText: true }) : undefined;
-  const favicon = websiteProbeEnabled
-    ? await fetchFaviconForDomain(domain, { html: page || '', baseUrl: pageBaseUrl, ...(pageAnalysis ? { htmlAnalysis: pageAnalysis } : {}) }).catch(() => null)
-    : null;
-  const faviconHash = favicon ? favicon.hash : null;
-  const faviconPHash = favicon ? favicon.phash : null;
+  let pageAnalysis = page ? analyzeStaticHtml(page, { baseUrl: pageBaseUrl, includeVisibleText: true }) : undefined;
 
   let htmlSignals: HtmlSignals = {
     domainSaleSignal: null,
@@ -814,6 +809,20 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       observedAt: homepage.http?.observedAt,
     });
   }
+
+  // Complete synchronous consumers before an optional network wait. Only the
+  // small icon projection, not every parsed element/token, crosses that wait.
+  const faviconEvidence = pageAnalysis ? {
+    iconLinks: pageAnalysis.iconLinks, effectiveBaseUrl: pageAnalysis.effectiveBaseUrl,
+  } : undefined;
+  pageAnalysis = undefined;
+  const favicon = websiteProbeEnabled
+    ? await fetchFaviconForDomain(domain, {
+        baseUrl: pageBaseUrl, ...(faviconEvidence ? { htmlAnalysis: faviconEvidence } : {}),
+      }).catch(() => null)
+    : null;
+  const faviconHash = favicon ? favicon.hash : null;
+  const faviconPHash = favicon ? favicon.phash : null;
 
   const responsePolicy = qualifyResponsePolicyWithCspMeta(homepage.responsePolicy, htmlSignals.cspMetaPolicy);
   const retainedHttp = options.includeDeliveryMetadata === false

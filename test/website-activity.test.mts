@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { MAX_HOMEPAGE_BYTES } from '../lib/outbound-request-bounds.mts';
 
 import {
   checkDomainAvailability,
@@ -169,24 +171,72 @@ describe('website activity classification', () => {
 
   test('a capped homepage prefix is usable but explicitly partial', async () => {
     const result = await fetchHomepage('example.com', {
-      fetcher: async () => new Response(Buffer.alloc(300100, 0x61), { status: 200 }),
+      fetcher: async () => new Response(Buffer.alloc(MAX_HOMEPAGE_BYTES + 100, 0x61), { status: 200 }),
     });
 
     assert.equal(result.status, 'fetched');
     assert.equal(result.http.status, 'partial');
     const response = recordValue(result.http.response);
     const bodyHash = recordValue(response.bodyHash);
-    assert.equal(response.capturedBodyBytes, 300000);
+    assert.equal(response.capturedBodyBytes, MAX_HOMEPAGE_BYTES);
     assert.equal(response.bodyTruncated, true);
     assert.equal(bodyHash.algorithm, 'sha256');
-    assert.equal(bodyHash.value, '12e1b9b179b29a4f7e5889b185d7ac71bff0ad1f49a7b391d0911b737a0f5381');
+    assert.equal(bodyHash.value, createHash('sha256').update(Buffer.alloc(MAX_HOMEPAGE_BYTES, 0x61)).digest('hex'));
     assert.equal(bodyHash.scope, 'captured-prefix');
-    assert.equal(bodyHash.bytes, 300000);
+    assert.equal(bodyHash.bytes, MAX_HOMEPAGE_BYTES);
+  });
+
+  test('captures a large page and an exact-limit body completely without another request', async () => {
+    for (const size of [600 * 1024, MAX_HOMEPAGE_BYTES]) {
+      const suffix = '<main>Final captured evidence</main>';
+      const html = '<!--' + 'x'.repeat(size - 7 - suffix.length) + '-->' + suffix;
+      let requests = 0;
+      const result = await fetchHomepage('example.test', {
+        fetcher: async () => { requests += 1; return new Response(html); },
+      });
+      assert.equal(requests, 1);
+      assert.equal(result.text, html);
+      const response = recordValue(result.http.response);
+      assert.equal(response.capturedBodyBytes, size);
+      assert.equal(response.bodyTruncated, false);
+      assert.equal(recordValue(response.bodyHash).scope, 'complete-body');
+      assert.equal(recordValue(response.bodyHash).value, createHash('sha256').update(html).digest('hex'));
+    }
   });
 
   test('a fetched favicon resolves an otherwise inconclusive homepage probe', () => {
     assert.equal(deriveWebsiteActivity('inconclusive', true), 'active');
     assert.equal(deriveWebsiteActivity('inconclusive', false), 'unreachable');
+  });
+
+  test('passes only icon evidence across the favicon wait after completing page analysis', async () => {
+    let enter!: () => void;
+    let resume!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const resumed = new Promise<void>((resolve) => { resume = resolve; });
+    let iconRequest: { html?: string; htmlAnalysis?: object } | undefined;
+    const observation = checkDomainAvailability('example.test', {
+      ...registeredLookupOptions(async () => fetchHomepage('example.test', {
+        fetcher: async () => new Response('<link rel=icon href="/brand.ico"><form><input type=password></form>'),
+      })),
+      fetchFaviconHash: async (_domain, options) => {
+        iconRequest = options;
+        enter();
+        await resumed;
+        return null;
+      },
+    });
+    await entered;
+    try {
+      assert.equal(iconRequest?.html, undefined);
+      assert.deepEqual(Object.keys(iconRequest?.htmlAnalysis ?? {}).sort(), ['effectiveBaseUrl', 'iconLinks']);
+      assert.equal(recordValue(iconRequest?.htmlAnalysis).iconLinks !== undefined, true);
+    } finally {
+      resume();
+    }
+    const result = recordValue(await observation);
+    assert.equal(result.hasPasswordField, true);
+    assert.equal(result.activityStatus, 'active');
   });
 
   test('parking evidence remains stronger than generic HTTP activity', () => {

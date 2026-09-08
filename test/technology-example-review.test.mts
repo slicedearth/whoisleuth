@@ -294,10 +294,23 @@ describe('reviewed technology reference-build intake', () => {
     assert.equal(result.provenance.runtimeReference, null);
     assert.equal(result.provenance.derivation, 'reviewed-repository-artifact');
     assert.deepEqual(result.fixture.input, {
-      html: '<main data-wf-page="fixture"></main>',
+      html: '<main data-wf-page="fixture"></main><main data-wf-site="fixture"></main>',
       observedAt: positiveOptions.observedAt,
     });
     assert.doesNotMatch(JSON.stringify(result), /private-page-id|private-site-id|Excluded copy/u);
+  });
+
+  test('preserves the matched structural alternative instead of inventing a different platform marker', () => {
+    for (const [html, expectedId, expectedMarkup] of [
+      ['<html data-wf-site="private-site-id"></html>', 'webflow', '<main data-wf-site="fixture"></main>'],
+      ['<script src="/_next/static/private-build.js"></script>', 'nextjs', '<link href="/_next/static/fixture.js">'],
+    ]) {
+      const result = buildTechnologyExampleReview(html!, {
+        ...positiveOptions, expectedIds: [expectedId!],
+      }, { fixtures: [], sources: [] });
+      assert.equal(result.fixture.input.html, expectedMarkup);
+      assert.doesNotMatch(JSON.stringify(result.fixture), /private-site-id|private-build|__NEXT_DATA__/u);
+    }
   });
 
   test('accepts public-domain repository artefacts without broadening source retention', () => {
@@ -382,6 +395,31 @@ describe('reviewed technology reference-build intake', () => {
       buildRecipe: 'official-public-demonstration',
     });
     assert.equal(offset.provenance.sourceRevision, '2026-08-05T02:52:53.000Z');
+  });
+
+  test('reviews a complete maximum-size artefact without retaining its unrelated source', () => {
+    const tail = '<main data-wf-site="fixture"></main>';
+    const html = '<!--' + 'x'.repeat(MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES - tail.length - 7) + '-->' + tail;
+    const result = buildTechnologyExampleReview(html, {
+      ...positiveOptions, id: 'official-large-demonstration', expectedIds: ['webflow'],
+      licenceBasis: 'factual-observation', sourceReference: 'official:webflow/demo',
+      sourceRevision: positiveOptions.observedAt, sourceIntegrity: null,
+      sourceLicence: 'factual-observation', runtimeReference: null,
+      buildRecipe: 'official-public-demonstration',
+    });
+    assert.equal(result.provenance.sourceKind, 'demonstration');
+    assert.equal(result.provenance.sourceLicence, 'factual-observation');
+    assert.equal(result.fixture.licenseBasis, 'factual-observation');
+    assert.equal(result.fixture.input.html, tail);
+    assert.deepEqual(result.fixture.expectedIds, ['webflow']);
+    assert.ok(JSON.stringify(result).length < 8_192);
+    assert.throws(() => buildTechnologyExampleReview(html + ' ', {
+      ...positiveOptions, id: 'too-large-source',
+    }), /Reference HTML must be between/u);
+    assert.throws(() => buildTechnologyExampleReview('<main></main>', {
+      ...positiveOptions, id: 'invented-source-licence', licenceBasis: 'factual-observation',
+      sourceLicence: 'factual-observation',
+    }), /licen[cs]e|demonstration/u);
   });
 
   test('minimises response metadata and preserves explicit mixed controls', () => {
@@ -565,7 +603,7 @@ describe('reviewed technology reference-build intake', () => {
         runtimeReference: null,
         buildRecipe: 'official-public-demonstration',
       }),
-      /reviewed demonstration terms basis/iu,
+      /matching reviewed demonstration terms/iu,
     );
   });
 

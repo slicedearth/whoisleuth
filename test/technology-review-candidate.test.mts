@@ -98,6 +98,21 @@ describe('technology review candidate intake', () => {
     });
   });
 
+  test('does not turn an embedded path into an application-platform claim during review', () => {
+    const profile = analyzeWebsiteTechnology({
+      html: '<script src="https://assets.example.test/_next/static/private.js"></script>',
+      observedAt: '2026-08-05T09:00:00.000Z',
+    });
+    const candidate = buildTechnologyReviewCandidate(savedLookup({ availability: { technologyProfile: profile } }), {
+      ...options, expectedIds: ['nextjs'],
+    });
+    const reviewed = buildReviewedTechnologyFixture(candidate);
+    assert.deepEqual(analyzeWebsiteTechnology(reviewed.input).findings.map(({ id, roles }) => [id, roles]), [
+      ['nextjs', ['embedded_dependency']],
+    ]);
+    assert.doesNotMatch(JSON.stringify(reviewed), /assets\.example|private\.js/u);
+  });
+
   test('requires complete current evidence and exact analyst confirmation', () => {
     assert.throws(
       () => buildTechnologyReviewCandidate(savedLookup({

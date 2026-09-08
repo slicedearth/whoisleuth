@@ -115,6 +115,15 @@ const positiveFixtures: TechnologySignatureFixture[] = [
 ];
 
 const negativeFixtures: TechnologySignatureFixture[] = [
+  negative('negative-quoted-structural-markers', 'Marker names quoted in unrelated attributes', {
+    html: '<main title="data-drupal-selector= data-mesh-id= data-wf-site= data-framer-name= ng-version= data-sveltekit-reload=" data-example="shopify-section squarespace-context stencil-utils"></main>',
+  }),
+  negative('negative-resource-query-markers', 'Framework paths mentioned only in queries or fragments', {
+    html: '<script src="/asset.js?example=/_next/static/fixture"></script><link href="/style.css#/_app/immutable/fixture"><img src="/image.png?example=/wp-content/plugins/woocommerce/"><a href="index.php?example=route=common/home"></a>',
+  }),
+  negative('negative-deceptive-elements', 'Lookalike element names and foreign-namespace attributes', {
+    html: '<astro-island-example></astro-island-example><div name="__VIEWSTATE" id="__NEXT_DATA__"></div><svg><g data-mage-init="{}" data-wf-site="fixture"></g></svg>',
+  }),
   negative('negative-plain-page', 'Ordinary static page', {
     html: '<main><h1>Example service</h1><p>No implementation metadata is declared.</p></main>',
   }),

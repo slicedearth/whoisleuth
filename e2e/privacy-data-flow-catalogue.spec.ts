@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { MAX_HOMEPAGE_BYTES } from '../lib/outbound-request-bounds.mts';
 import {
   CASE_SCHEMA_VERSION,
   PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
@@ -30,10 +31,14 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
   });
 
   for (const surface of [
-    { width: 1440, height: 1000, theme: 'light' },
-    { width: 1440, height: 1000, theme: 'dark' },
+    { width: 1280, height: 720, theme: 'light' },
+    { width: 1280, height: 720, theme: 'dark' },
+    { width: 1024, height: 768, theme: 'light' },
+    { width: 1024, height: 768, theme: 'dark' },
     { width: 390, height: 844, theme: 'light' },
     { width: 390, height: 844, theme: 'dark' },
+    { width: 320, height: 700, theme: 'light' },
+    { width: 320, height: 700, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });
     dataRequests.length = 0;
@@ -70,5 +75,32 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
       dataRequests,
       `/privacy made a request beyond the existing public-navigation session-status check at ${surface.width}px in ${surface.theme} theme`,
     ).toEqual(['GET /api/session']);
+    const policyLink = page.getByRole('link', { name: 'request-policy limits', exact: true });
+    await expect(policyLink).toHaveAttribute('href', '/request-policy');
+    if (surface.width === 320 || surface.width === 1280) {
+      await page.getByRole('heading', { name: 'Privacy policy', exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`privacy-${surface.width}-${surface.theme}.png`) });
+    }
+  }
+});
+
+test('request policy exposes the current capture boundary across supported widths and themes', async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 },
+  ]) {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize(viewport);
+      await page.goto('/request-policy');
+      await selectTheme(page, theme);
+      await expect(page.getByRole('heading', { name: 'Outbound request policy', exact: true })).toBeVisible();
+      const captureLimit = page.locator('#web-title').locator('..').getByText(`${MAX_HOMEPAGE_BYTES.toLocaleString('en-US')} bytes`, { exact: false });
+      await captureLimit.scrollIntoViewIfNeeded();
+      await expect(captureLimit).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: test.info().outputPath(`request-policy-${viewport.width}-${theme}.png`) });
+      }
+    }
   }
 });

@@ -135,6 +135,10 @@ TLS endpoint, certificate-search service, security.txt endpoint or selected
 public-address registration service. Each recipient can observe the source
 network address and apply its own logging, rate limits and retention.
 
+Homepage HTML is processed transiently within the [request-policy limits](https://www.whoisleuth.com/request-policy).
+Raw HTML is not added to browser-local records or ordinary evidence exports.
+Capture and analysis limits are disclosed as incomplete evidence, not absence.
+
 Deep domain collection can query A, AAAA, CAA and MX once through one selected
 public address per nameserver, retaining at most sixteen normalised values
 for each record type. Direct-authority results stay separately attributed.

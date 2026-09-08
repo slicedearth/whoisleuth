@@ -25,6 +25,7 @@ import {
 } from '../fixtures/technology-reviewed-sources.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { MAX_HOMEPAGE_BYTES } from '../lib/outbound-request-bounds.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
   boundedControlFreeText as boundedText,
@@ -34,6 +35,7 @@ import {
 import {
   PASSIVE_TECHNOLOGY_HEADER_NAMES,
   TECHNOLOGY_SIGNATURE_CATALOGUE,
+  minimiseTechnologyMarkup,
 } from '../lib/website-technology.mts';
 import {
   buildReviewedTechnologyFixture,
@@ -43,7 +45,7 @@ import { reconstructTechnologyReviewProfile } from './technology-review-candidat
 
 export const TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA = 'whoisleuth.technology-example-review';
 export const TECHNOLOGY_EXAMPLE_REVIEW_VERSION = 5;
-export const MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES = 512 * 1024;
+export const MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES = MAX_HOMEPAGE_BYTES;
 export const MAX_TECHNOLOGY_EXAMPLE_CORPUS_ENTRIES = 96;
 
 type WritableLike = { write(value: string): unknown };
@@ -89,6 +91,7 @@ const OCI_BUILD_ENVIRONMENT_RE = /^oci:(?:[a-z0-9.-]+\/)*[a-z0-9._-]+:[a-z0-9._-
 const MAX_SUPPORTING_ENVIRONMENTS = 4;
 const PASSIVE_HEADERS = new Set<string>(PASSIVE_TECHNOLOGY_HEADER_NAMES);
 const REFERENCE_LICENCE_BASES = new Set<TechnologyReviewLicenceBasis>([
+  'factual-observation',
   'minimized-with-permission',
   'public-domain',
   'permissively-licensed-source',
@@ -268,10 +271,14 @@ function validateOptions(options: ExampleReviewOptions) {
   const source = sourceIdentity(options);
   const sourceLicence = boundedText(options.sourceLicence, 'Source licence', 80);
   if (source.kind === 'demonstration') {
-    if (sourceLicence !== 'official-demonstration-terms') {
-      throw new TypeError('Official demonstrations must record the reviewed demonstration terms basis.');
+    if (!['official-demonstration-terms', 'factual-observation'].includes(options.licenceBasis)
+      || sourceLicence !== options.licenceBasis) {
+      throw new TypeError('Official demonstrations must record matching reviewed demonstration terms or minimised factual-observation provenance.');
     }
   } else {
+    if (options.licenceBasis === 'factual-observation') {
+      throw new TypeError('Factual-observation provenance is for minimised public demonstrations, not copied source or claimed builds.');
+    }
     if (options.licenceBasis === 'official-demonstration-terms') {
       throw new TypeError('Official demonstration terms apply only to an official demonstration source.');
     }
@@ -282,10 +289,9 @@ function validateOptions(options: ExampleReviewOptions) {
     : boundedText(options.runtimeReference, 'Runtime reference', 80).toLowerCase();
   const isRepositoryArtifact = options.buildRecipe === 'reviewed-repository-artifact';
   if (source.kind === 'demonstration') {
-    if (options.licenceBasis !== 'official-demonstration-terms'
-      || options.buildRecipe !== 'official-public-demonstration'
+    if (options.buildRecipe !== 'official-public-demonstration'
       || runtimeReference !== null) {
-      throw new TypeError('Official demonstrations require reviewed demonstration terms, the demonstration recipe, and no inferred runtime version.');
+      throw new TypeError('Official demonstrations require the demonstration recipe and no inferred runtime version.');
     }
   } else if (isRepositoryArtifact) {
     if (source.kind !== 'repository' || runtimeReference !== null) {
@@ -370,6 +376,9 @@ export function buildTechnologyExampleReview(
   let reviewInput: Record<string, unknown>;
   if (checked.expectedIds.length) {
     const reconstructed = reconstructTechnologyReviewProfile(profile, checked.expectedIds);
+    // Retain the actual structural alternatives that matched this artefact,
+    // not a different marker chosen merely because the final label matched.
+    const markup = minimiseTechnologyMarkup({ html, documentOrigin: 'https://fixture.invalid' });
     reviewInput = {
       schema: TECHNOLOGY_REVIEW_INPUT_SCHEMA,
       version: TECHNOLOGY_REVIEW_INPUT_VERSION,
@@ -379,7 +388,7 @@ export function buildTechnologyExampleReview(
       licenseBasis: options.licenceBasis,
       expectedIds: reconstructed.expectedIds,
       negativeFor: checked.negativeFor,
-      input: reconstructed.input,
+      input: { ...reconstructed.input, ...(markup ? { html: markup } : {}) },
     };
   } else {
     if (!profile || profile.status !== 'success' || profile.complete !== true || profile.truncated === true) {

@@ -20,6 +20,7 @@ import {
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   TECHNOLOGY_PROFILE_VERSION,
   analyzeWebsiteTechnology,
+  minimiseTechnologyMarkup,
   type TechnologyInput,
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
@@ -49,61 +50,13 @@ const SHARED_VENDOR_HOSTS = new Set([
   'wixstatic.com',
   'static.squarespace.com',
   'static1.squarespace.com',
+  'assets.squarespace.com',
   'framerusercontent.com',
   'editmysite.com',
   'cloudfront.net',
 ]);
 const SHARED_VENDOR_HOST_RECONSTRUCTIONS: ReadonlyArray<readonly [RegExp, string]> = Object.freeze([
   [/^cdn\d+\.bigcommerce\.com$/iu, 'cdn11.bigcommerce.com'],
-]);
-const SAFE_MARKERS: ReadonlyArray<Readonly<{ marker: string; output: string }>> = Object.freeze([
-  { marker: '/wp-content/', output: '<link href="/wp-content/fixture.css">' },
-  { marker: '/wp-includes/', output: '<script src="/wp-includes/fixture.js"></script>' },
-  { marker: 'data-drupal-selector=', output: '<main data-drupal-selector="fixture"></main>' },
-  { marker: 'data-drupal-link-system-path=', output: '<main data-drupal-link-system-path="fixture"></main>' },
-  { marker: 'drupal-settings-json', output: '<script type="application/json" data-drupal-selector="drupal-settings-json"></script>' },
-  { marker: 'ghost/api/content/', output: '<link href="/ghost/api/content/">' },
-  { marker: 'data-ghost-search', output: '<main data-ghost-search></main>' },
-  { marker: 'shopify-section', output: '<section class="shopify-section"></section>' },
-  { marker: 'shopify.theme', output: '<main data-marker="shopify.theme"></main>' },
-  { marker: 'data-mage-init=', output: '<main data-mage-init="{}"></main>' },
-  { marker: 'type="text/x-magento-init"', output: '<script type="text/x-magento-init">{}</script>' },
-  { marker: "type='text/x-magento-init'", output: '<script type="text/x-magento-init">{}</script>' },
-  { marker: 'cdn11.bigcommerce.com/s-', output: '<link href="https://cdn11.bigcommerce.com/s-fixture/theme.css">' },
-  { marker: 'stencil-utils', output: '<script src="/stencil-utils.js"></script>' },
-  { marker: '/wp-content/plugins/woocommerce/', output: '<link href="/wp-content/plugins/woocommerce/fixture.css">' },
-  { marker: '/modules/ps_', output: '<link href="/modules/ps_fixture/fixture.css">' },
-  { marker: 'index.php?route=common/home', output: '<a href="index.php?route=common/home"></a>' },
-  { marker: 'image/catalog/opencart-logo.png', output: '<img src="image/catalog/opencart-logo.png" alt="">' },
-  { marker: 'data-mesh-id=', output: '<main data-mesh-id="fixture"></main>' },
-  { marker: 'squarespace-context', output: '<main data-marker="squarespace-context"></main>' },
-  { marker: 'data-wf-page=', output: '<main data-wf-page="fixture"></main>' },
-  { marker: 'data-wf-site=', output: '<main data-wf-site="fixture"></main>' },
-  { marker: 'data-framer-name=', output: '<main data-framer-name="fixture"></main>' },
-  { marker: 'id="wsite-base-style"', output: '<link id="wsite-base-style" href="/fixture.css">' },
-  { marker: "id='wsite-base-style'", output: '<link id="wsite-base-style" href="/fixture.css">' },
-  { marker: 'title="wsite-theme-css"', output: '<link title="wsite-theme-css" href="/fixture.css">' },
-  { marker: "title='wsite-theme-css'", output: '<link title="wsite-theme-css" href="/fixture.css">' },
-  { marker: ' ng-version=', output: '<main ng-version="fixture"></main>' },
-  { marker: ' name="__viewstate"', output: '<input name="__VIEWSTATE">' },
-  { marker: ' id="__viewstate"', output: '<input id="__VIEWSTATE">' },
-  { marker: 'id="__next_data__"', output: '<script id="__NEXT_DATA__"></script>' },
-  { marker: "id='__next_data__'", output: '<script id="__NEXT_DATA__"></script>' },
-  { marker: '/_next/static/', output: '<script src="/_next/static/fixture.js"></script>' },
-  { marker: 'id="__nuxt"', output: '<main id="__nuxt"></main>' },
-  { marker: "id='__nuxt'", output: '<main id="__nuxt"></main>' },
-  { marker: '/_nuxt/', output: '<script src="/_nuxt/fixture.js"></script>' },
-  { marker: 'id="___gatsby"', output: '<main id="___gatsby"></main>' },
-  { marker: "id='___gatsby'", output: '<main id="___gatsby"></main>' },
-  { marker: '/page-data/app-data.json', output: '<link href="/page-data/app-data.json">' },
-  { marker: 'data-sveltekit-preload-data=', output: '<a data-sveltekit-preload-data="hover"></a>' },
-  { marker: 'data-sveltekit-reload=', output: '<a data-sveltekit-reload></a>' },
-  { marker: 'href="/_app/immutable/', output: '<link href="/_app/immutable/fixture.css">' },
-  { marker: 'src="/_app/immutable/', output: '<script src="/_app/immutable/fixture.js"></script>' },
-  { marker: '<astro-island', output: '<astro-island></astro-island>' },
-  { marker: '<astro-slot', output: '<astro-slot></astro-slot>' },
-  { marker: 'href="/_astro/', output: '<link href="/_astro/fixture.css">' },
-  { marker: 'src="/_astro/', output: '<script src="/_astro/fixture.js"></script>' },
 ]);
 const REVIEW_INPUT_KEYS = new Set([
   'schema',
@@ -182,13 +135,11 @@ function normalizeMarkup(value: unknown): string | undefined {
   if (EMAIL_RE.test(markup) || IPV4_RE.test(markup) || /<!--|<style\b/iu.test(markup)) {
     throw new TypeError('Minimised HTML contains contact, address, comment, or style material.');
   }
-  const outputs = SAFE_MARKERS
-    .filter(({ marker }) => markup.includes(marker))
-    .map(({ output }) => output);
-  if (!outputs.length) {
-    throw new TypeError('Minimised HTML contains no recognised catalogue marker.');
+  const output = minimiseTechnologyMarkup({ html: markup });
+  if (!output) {
+    throw new TypeError('Minimised HTML contains no recognised structural catalogue marker.');
   }
-  return [...new Set(outputs)].join('');
+  return output;
 }
 
 function negativeMarkup(ids: readonly string[]): string {

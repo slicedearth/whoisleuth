@@ -94,6 +94,11 @@ provider results retain separate source identities and observation times. A
 source failure or truncated response remains explicit. Supporting evidence
 cannot decide authoritative registration availability.
 
+Homepage capture, native analysis, fingerprints and offline technology review
+share the source-size policy in `lib/outbound-request-bounds.mts`.
+Native tree construction, derived outputs, deadlines and concurrency have
+separate bounds. Consumers reuse the parsed element evidence.
+
 Active mail review admits only analyst-selected owned or authorised targets. It
 performs the fixed bounded DNS, connection, `EHLO` and optional `STARTTLS`
 exchange; it sends no message, authenticates no account and does not test relay,

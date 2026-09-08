@@ -5,6 +5,8 @@ import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { analyzeStaticHtml, MAX_STATIC_HTML_CHARS, MAX_STATIC_HTML_TAGS } from '../lib/static-html-analysis.mts';
 import { createPageFingerprints } from '../lib/page-fingerprints.mts';
 import { sanitizeLookupChildProfiles } from '../lib/lookup-child-profile-contract.mts';
+import { createHash } from 'node:crypto';
+import { recordValue } from './value-assertions.mts';
 
 describe('bounded native document evidence', () => {
   for (const fixture of HTML_TREE_FIXTURES) {
@@ -97,5 +99,62 @@ describe('bounded native document evidence', () => {
       assert.equal(result.publicationMetadata.documentTruncated, true);
       assert.ok(result.elements.length <= MAX_STATIC_HTML_TAGS + 3);
     }
+  });
+
+  test('analyses late evidence through the whole admitted large body and preserves its exact hash', () => {
+    for (const size of [600 * 1024, MAX_STATIC_HTML_CHARS]) {
+      const suffix = '<main data-wf-site="fixture"><h1>Late evidence</h1><form><input type=password></form></main>';
+      const html = '<!--' + 'x'.repeat(size - 7 - suffix.length) + '-->' + suffix;
+      const analysis = analyzeStaticHtml(html, { includeVisibleText: true });
+      const result = extractHtmlSignals(html, 'example.test', { htmlAnalysis: analysis });
+      assert.equal(analysis.inputLimitReached, false);
+      assert.equal(analysis.tagLimitReached, false);
+      assert.equal(result.hasPasswordField, true);
+      assert.deepEqual(result.technologyProfile?.findings.map(({ id }) => id), ['webflow']);
+      assert.equal(result.technologyProfile?.complete, true);
+      assert.equal(result.pageIdentity?.fingerprints.exact.bytes, size);
+      assert.equal(result.pageIdentity?.fingerprints.exact.value, createHash('sha256').update(html).digest('hex'));
+      assert.equal(result.pageIdentity?.fingerprints.exact.scope, 'complete-body');
+      assert.equal(sanitizeLookupChildProfiles({ availability: { pageIdentity: result.pageIdentity } }).availability.pageIdentity, result.pageIdentity);
+      const current = result.pageIdentity!.fingerprints;
+      const legacy = { ...result.pageIdentity, fingerprints: {
+        ...current, fingerprintVersion: 1,
+        domStructure: { ...current.domStructure, parser: 'static-tag-sequence-v1' },
+      } };
+      const rejected = recordValue(recordValue(sanitizeLookupChildProfiles({ availability: { pageIdentity: legacy } }).availability.pageIdentity).fingerprints);
+      assert.equal(rejected.status, 'error');
+      assert.equal(rejected.compatibility, 'malformed');
+      assert.equal(Object.hasOwn(rejected, 'exact'), false);
+    }
+  });
+
+  test('an over-bound source stays partial and does not inspect the suffix', () => {
+    const html = ' '.repeat(MAX_STATIC_HTML_CHARS) + '<form><input type=password></form>';
+    const result = extractHtmlSignals(html, 'example.test');
+    assert.equal(result.hasPasswordField, false);
+    assert.equal(result.technologyProfile?.complete, false);
+    assert.equal(result.pageIdentity?.fingerprints.exact.scope, 'captured-prefix');
+    assert.equal(result.pageIdentity?.fingerprints.exact.bytes, MAX_STATIC_HTML_CHARS);
+  });
+
+  test('native element evidence is not cut off by the former reconstruction limit', () => {
+    const html = '<div></div>'.repeat(2_500) + '<main data-wf-site="fixture"><h1>Later page</h1></main>';
+    const result = extractHtmlSignals(html, 'example.test');
+    assert.deepEqual(result.technologyProfile?.findings.map(({ id }) => id), ['webflow']);
+    assert.equal(result.technologyProfile?.complete, true);
+    assert.equal(result.pageRoleProfile?.findings.some(({ role }) => role === 'content'), true);
+    assert.equal(result.pageRoleProfile?.complete, true);
+    // The independently bounded similarity representation remains honest.
+    assert.equal(result.pageIdentity?.fingerprints.domStructure.truncated, true);
+  });
+
+  test('an oversized drawing attribute limits fingerprints, not independent HTML technology evidence', () => {
+    const html = '<svg><path d="' + 'M1 2L3 4 '.repeat(1_000) + '"></path></svg><main data-wf-site="fixture"></main>';
+    const result = extractHtmlSignals(html, 'example.test');
+    assert.equal(result.technologyProfile?.complete, true);
+    assert.deepEqual(result.technologyProfile?.findings.map(({ id }) => id), ['webflow']);
+    assert.equal(result.pageIdentity?.fingerprints.complete, false);
+    const htmlAttribute = extractHtmlSignals('<main data-description="' + 'x'.repeat(5_000) + '" data-wf-site="fixture"></main>', 'example.test');
+    assert.equal(htmlAttribute.technologyProfile?.complete, false);
   });
 });
