@@ -9,7 +9,7 @@ import {
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
 function collectInvestigationRequests(page: Page): string[] {
@@ -112,6 +112,53 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(documentation.getByRole('link', { name: 'CLI', exact: true })).toHaveAttribute('aria-current', 'page');
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
+});
+
+test('long reference labels remain distinct and the mobile navigator works by keyboard', async ({ page }, testInfo) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.goto('/resources/reporting-and-takedown-guidance');
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const browser = page.locator('.reference-browser');
+      const summary = browser.locator(':scope > summary');
+      await expect(summary).toHaveCount(1);
+      if (viewport.width > 1080) {
+        await expect(browser).toBeHidden();
+        await expect(page.locator('.reference-tree').getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+      } else {
+        await expect(summary).toBeVisible();
+        await expect(summary.locator('span')).toHaveText('Browse documentation');
+        await expect(summary.locator('strong')).toHaveText('Reporting and takedown guidance');
+        const geometry = await summary.evaluate((element) => {
+          const a = element.querySelector('span')!.getBoundingClientRect();
+          const b = element.querySelector('strong')!.getBoundingClientRect();
+          const bounds = element.getBoundingClientRect();
+          return {
+            separated: a.right < b.left || a.bottom < b.top,
+            contained: [a, b].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
+          };
+        });
+        expect(geometry.separated).toBe(true);
+        expect(geometry.contained).toBe(true);
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(browser).toHaveAttribute('open', '');
+        await expect(browser.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(summary).toBeFocused();
+        await page.keyboard.press('Space');
+        await expect(browser).not.toHaveAttribute('open', '');
+      }
+      await expectNoHorizontalOverflow(page);
+      await page.evaluate(() => scrollTo(0, 0));
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
 });
 
 test('filters and opens the canonical CLI catalogue entirely by keyboard', async ({ page }) => {

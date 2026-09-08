@@ -195,7 +195,7 @@
     {
       id: 'assessment', ...CASE_RESPONSE_STAGE_DEFINITIONS.assessment,
       status: evidenceLinkedDecisionCount ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch')}.`,
+      summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch', 'investigation branches')}.`,
       nextRequirement: !record.decisions.length
         ? 'Record a bounded analyst decision and rationale linked to retained evidence.'
         : !evidenceLinkedDecisionCount
@@ -230,8 +230,8 @@
     return adjusted.toISOString().slice(0, 16);
   }
 
-  function countLabel(count: number, singular: string): string {
-    return `${count} ${singular}${count === 1 ? '' : 's'}`;
+  function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+    return `${count} ${count === 1 ? singular : plural}`;
   }
 
   function assertionItemId(id: string): string {
@@ -611,7 +611,7 @@
 <section id={sectionId || `case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')} · {countLabel(record.branches?.length ?? 0, 'branch')}</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')} · {countLabel(record.branches?.length ?? 0, 'branch', 'branches')}</span>
   </header>
   <div class="presentation-switch" role="group" aria-label="Case response presentation">
     <button type="button" aria-pressed={presentationMode === 'quick'} onclick={() => presentationMode = 'quick'}>Quick</button>

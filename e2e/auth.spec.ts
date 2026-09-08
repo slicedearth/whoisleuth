@@ -10,6 +10,38 @@ import { expectVersionedSourceLink } from './helpers';
 // origin and console errors/warnings for every test in this file already.
 test.use({ storageState: { cookies: [], origins: [] } });
 
+for (const authenticated of [false, true]) {
+  test(`preserves a protected investigation deep link ${authenticated ? 'with an existing session' : 'through sign-in'}`, async ({ page }) => {
+    const collectors: string[] = [];
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith('/api/') && !['/api/login', '/api/session', '/api/capabilities'].includes(pathname)) {
+        collectors.push(pathname);
+      }
+    });
+    const target = '/lookup?q=continuation.invalid&task=brand&depth=deep#query';
+    const signIn = `/login?next=${encodeURIComponent(target)}`;
+    if (authenticated) {
+      await page.goto('/login');
+      await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page).toHaveURL('/dashboard');
+      await page.goto(signIn);
+    } else {
+      await page.goto(target);
+      await expect(page).toHaveURL(signIn);
+      await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+    }
+    await expect(page).toHaveURL(target);
+    await expect(page.locator('#query')).toHaveValue('continuation.invalid');
+    await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+    await expect(page.getByLabel('Analyst question')).toHaveValue('brand');
+    await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+    expect(collectors).toEqual([]);
+  });
+}
+
 test('signs in through the login form and back out again', async ({ page }) => {
   test.slow();
   // A local, all-levels console capture just for the password-leak check

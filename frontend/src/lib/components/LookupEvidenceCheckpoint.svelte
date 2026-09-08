@@ -139,7 +139,7 @@
 
   {#if comparison.length}
     <details>
-      <summary>Compare with latest saved checkpoint <span>{comparison.length} facts</span></summary>
+      <summary>Compare with latest saved checkpoint <span>{comparison.length} fact{comparison.length === 1 ? '' : 's'}</span></summary>
       <div class="comparison">
         {#each comparison as item (item.field)}
           <article data-state={item.state}>

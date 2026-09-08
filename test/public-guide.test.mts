@@ -22,6 +22,7 @@ import {
   monitorAssuranceNavigation,
   monitorNavigation,
   protectedDestinations,
+  protectedReturnTarget,
   publicCommandNavigation,
   publicFooterNavigation,
   publicHeaderNavigation,
@@ -166,6 +167,35 @@ test('shared Monitor destinations keep exactly one workflow active without chang
   }
   assert.equal(isNavigationItemActive(brandsNavigation, new URL('/brands', 'https://console.example')), true);
   assert.equal(isProtectedDestination(new URL('/privacy', 'https://console.example')), false);
+});
+
+test('sign-in preserves bounded protected deep links without duplicating page query policies', () => {
+  const origin = 'https://console.example';
+  for (const href of [
+    '/lookup?q=continuation.invalid&task=brand&depth=deep#query',
+    '/monitor?view=cases&case=case-1&response=1#case-response-case-1',
+    '/monitor?view=watchlists&watchlist=review',
+    '/brands?profile=profile-1&workbench=baselines#desired-posture-baseline',
+    '/lookup?q=https%3A%2F%2Foutside.invalid%2Fa%3Fb%3Dc',
+    '/lookup?unrecognised=page-owned',
+    ...protectedDestinations.map((item) => item.href),
+  ]) assert.equal(protectedReturnTarget(href, origin), href);
+  const prefix = '/lookup?q=';
+  const boundary = prefix + 'a'.repeat(4_096 - prefix.length);
+  assert.equal(protectedReturnTarget(boundary, origin), boundary);
+  assert.equal(protectedReturnTarget(`${boundary}a`, origin), '/dashboard');
+});
+
+test('sign-in cannot redirect to another origin, a public page or a normalised path alias', () => {
+  const origin = 'https://console.example';
+  for (const input of [
+    null, '', 'lookup', '/privacy', '/login', '/api/lookup', '/lookup/extra',
+    'https://outside.invalid/lookup', 'https://console.example/lookup',
+    '//outside.invalid/lookup', '/\\outside.invalid/lookup', '\\lookup',
+    'javascript:alert(1)', 'data:text/plain,example', '/%2foutside.invalid/lookup',
+    '/lookup/../dashboard', '/unknown/%2e%2e/lookup', '/%6cookup', '/lookup/',
+    '/lookup\n?task=brand', '/lookup\t', ' /lookup', '/lookup\u007f',
+  ]) assert.equal(protectedReturnTarget(input, origin), '/dashboard', String(input));
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {

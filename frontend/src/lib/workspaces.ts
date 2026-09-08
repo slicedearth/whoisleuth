@@ -282,3 +282,20 @@ export function isProtectedDestination(currentUrl: URL): boolean {
     new URL(item.href, currentUrl.origin).pathname === currentUrl.pathname
   ));
 }
+
+export function protectedReturnTarget(requested: string | null, origin: string): string {
+  const fallback = dashboard.href;
+  if (!requested || requested.length > 4_096 || !requested.startsWith('/')
+    || requested.startsWith('//') || /[\\\u0000-\u0020\u007f]/u.test(requested)) return fallback;
+  try {
+    const destination = new URL(requested, origin);
+    const pathname = requested.split(/[?#]/u, 1)[0];
+    if (destination.origin !== origin || destination.pathname !== pathname
+      || !isProtectedDestination(destination)) return fallback;
+    // Each destination already validates its own query and fragment state.
+    // Sign-in confines the redirect; it must not duplicate those page contracts.
+    return `${destination.pathname}${destination.search}${destination.hash}`;
+  } catch {
+    return fallback;
+  }
+}

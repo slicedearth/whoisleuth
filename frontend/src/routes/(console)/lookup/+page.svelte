@@ -1021,7 +1021,7 @@
         <LookupFamilySummary
           label="Case and response"
           description="Save reviewed evidence, keep analyst assertions separate, and prepare human-reviewed response routes without sending anything automatically."
-          metrics={[caseSourceState==='ready'?(caseRecord?'Case saved':'No case saved'):caseSourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published routes`]}
+          metrics={[caseSourceState==='ready'?(caseRecord?'Case saved':'No case saved'):caseSourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published ${abuseRecipientResolution.recipients.length===1?'route':'routes'}`]}
           expanded={sectionDetailVisible('case-response')}
           onpreload={()=>preloadLookupSection('case-response')}
           onshow={()=>void showSectionDetail('case-response')}

@@ -123,9 +123,9 @@
     .reference-sidebar{position:static;max-height:none;overflow:visible}
     .reference-tree{display:none}
     .reference-browser{display:block;margin:0 0 28px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-    .reference-browser>summary{grid-template-columns:minmax(0,1fr) minmax(0,auto) 14px;min-height:46px;gap:14px;padding:10px 13px;font-family:var(--mono)}
-    .reference-browser>summary span{color:var(--muted);font-size:var(--text-2xs)}
-    .reference-browser>summary strong{margin-left:auto;color:var(--text);font-size:var(--text-xs);text-align:right}
+    .reference-browser>summary{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 14px;min-height:46px;gap:14px;padding:10px 13px;font-family:var(--mono)}
+    .reference-browser>summary span{min-width:0;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
+    .reference-browser>summary strong{min-width:0;overflow-wrap:anywhere;color:var(--text);font-size:var(--text-xs);text-align:right}
     .reference-browser>nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:16px;border-top:1px solid var(--border)}
     .reference-browser section{min-width:0}
     .reference-browser h2{margin-inline:0}
@@ -133,5 +133,10 @@
     .reference-browser section>a:hover,.reference-browser section>a:focus-visible,.reference-browser section>a.active{color:var(--accent)}
     .reference-browser .mobile-page-sections{grid-column:1/-1;padding-top:14px;border-top:1px solid var(--border)}
   }
-  @media(max-width:520px){.reference-browser>nav{grid-template-columns:1fr}}
+  @media(max-width:520px){
+    .reference-browser>summary{grid-template-columns:minmax(0,1fr) 14px;row-gap:4px}
+    .reference-browser>summary span,.reference-browser>summary strong{grid-column:1;text-align:left}
+    .reference-browser>summary::after{grid-column:2;grid-row:1 / span 2}
+    .reference-browser>nav{grid-template-columns:1fr}
+  }
 </style>

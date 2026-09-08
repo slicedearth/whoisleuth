@@ -73,6 +73,8 @@ type Point = { x: number; y: number };
 const WIDTH = 820;
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 58;
+const NODE_GAP = 14;
+const COLUMN_PADDING = 42;
 const TARGET_WIDTH = 220;
 const TARGET_HEIGHT = 76;
 const LEFT_X = 30;
@@ -391,8 +393,7 @@ export function normalizeEvidenceTopologyStatus(
 function yPositions(ids: string[], height: number) {
   const scale = scalePoint<string>()
     .domain(ids)
-    .range([42, height - NODE_HEIGHT - 42])
-    .padding(ids.length > 1 ? 0.35 : 0.5);
+    .range([COLUMN_PADDING, height - NODE_HEIGHT - COLUMN_PADDING]);
   return new Map(ids.map((id) => [id, scale(id) ?? (height - NODE_HEIGHT) / 2]));
 }
 
@@ -445,7 +446,7 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
   const leftIds = accepted.filter((node) => node.side === 'left').map((node) => node.id);
   const rightIds = accepted.filter((node) => node.side === 'right').map((node) => node.id);
   const maxColumn = Math.max(leftIds.length, rightIds.length, 1);
-  const height = Math.min(500, Math.max(300, 92 + maxColumn * 72));
+  const height = Math.max(300, 2 * COLUMN_PADDING + NODE_HEIGHT + (maxColumn - 1) * (NODE_HEIGHT + NODE_GAP));
   const leftY = yPositions(leftIds, height);
   const rightY = yPositions(rightIds, height);
   const target = {

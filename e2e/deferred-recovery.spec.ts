@@ -261,6 +261,62 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   await expectNoHorizontalOverflow(page);
 });
 
+for (const navigation of ['back', 'another command', 'another page'] as const) {
+  test(`late CLI catalogue completion respects navigation to ${navigation}`, async ({ page }) => {
+    const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');
+    let release = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let heldRequests = 0;
+    await page.route('**/*', async (route) => {
+      if (!isChunk(route, chunkPath)) { await route.fallback(); return; }
+      heldRequests += 1;
+      await held;
+      const response = await route.fetch();
+      await route.fulfill({ response, body: `${await response.text()}\nglobalThis.__cliSelectionModuleEvaluated = true;` });
+    });
+    try {
+      await page.goto('/cli#commands');
+      const catalogue = page.getByTestId('public-cli-catalogue');
+      await expect(catalogue).toHaveAttribute('data-client-ready', 'true');
+      await catalogue.locator('article[data-command="commands"] .command-open').click();
+      await expect(page).toHaveURL('/cli#command-commands');
+      await expect.poll(() => heldRequests).toBe(1);
+      await expect(catalogue.locator('[data-command-detail]')).toHaveCount(0);
+      if (navigation === 'back') {
+        await page.goBack();
+        await expect(page).toHaveURL('/cli#commands');
+      } else if (navigation === 'another command') {
+        await catalogue.locator('article[data-command="doctor"] .command-open').click();
+        await expect(page).toHaveURL('/cli#command-doctor');
+      } else {
+        await page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources', exact: true }).click();
+        await expect(page).toHaveURL('/resources');
+        await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+      }
+      const focusBeforeRelease = await page.evaluateHandle(() => document.activeElement);
+      release();
+      await page.waitForFunction(() => Reflect.get(globalThis, '__cliSelectionModuleEvaluated') === true);
+      await waitForAnimationFrames(page);
+      if (navigation === 'another command') {
+        await expect(catalogue.locator('[data-command-detail="doctor"]')).toBeVisible();
+        await expect(catalogue.locator('[data-command-detail]')).toHaveCount(1);
+        await expect(page).toHaveURL('/cli#command-doctor');
+      } else {
+        await expect(page.locator('[data-command-detail]')).toHaveCount(0);
+        await expect(page).toHaveURL(navigation === 'back' ? '/cli#commands' : '/resources');
+        expect(await page.evaluate((previous) => document.activeElement === previous, focusBeforeRelease)).toBe(true);
+      }
+      if (navigation === 'back') {
+        await page.goForward();
+        await expect(catalogue.locator('[data-command-detail="commands"]')).toBeVisible();
+        await expect(page).toHaveURL('/cli#command-commands');
+      }
+      expect(heldRequests).toBe(1);
+      await focusBeforeRelease.dispose();
+    } finally { release(); }
+  });
+}
+
 test('a cached CLI module failure recovers only after the accessible reload action', async ({ page }) => {
   const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');
   const requestCount = await failChunkOnce(page, chunkPath);

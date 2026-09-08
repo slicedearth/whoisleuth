@@ -717,6 +717,7 @@ test('field checkpoints retain the supplying publication and reject an unknown o
   await registrar.check();
   await checkpoint.getByRole('button', { name: 'Save 1 checkpoint fact', exact: true }).click();
   await expect(page.locator('.case-status')).toContainText('Saved 1 analyst-selected checkpoint fact');
+  await expect(checkpoint.locator('summary', { hasText: 'Compare with latest saved checkpoint' })).toHaveText('Compare with latest saved checkpoint 1 fact');
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(stored.records[0]!.value.evidencePins).toEqual([expect.objectContaining({
     field: 'registration.registrar', source: 'WHOIS', observedAt, completeness: 'partial', value: 'Fallback Registrar',

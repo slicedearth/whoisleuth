@@ -65,37 +65,50 @@
     void ensureCatalogue().catch(() => undefined);
   }
 
-  async function openCommand(id: string) {
+  function currentSelection(request: number): boolean {
+    return active && request === loadGeneration;
+  }
+
+  function clearCommandSelection(): number {
+    loadGeneration += 1;
+    expandedId = '';
+    loadingId = '';
+    return loadGeneration;
+  }
+
+  async function openCommand(id: string, request: number) {
     if (expandedId === id || loadError) return;
-    const request = ++loadGeneration;
     loadError = '';
     loadingId = id;
     try {
       await ensureCatalogue();
-      if (!active || request !== loadGeneration) return;
+      if (!currentSelection(request)) return;
       expandedId = id;
     } catch {
-      if (!active || request !== loadGeneration) return;
+      if (!currentSelection(request)) return;
       loadError = 'Command details are unavailable.';
     } finally {
-      if (active && request === loadGeneration) loadingId = '';
+      if (currentSelection(request)) loadingId = '';
     }
   }
 
   async function revealCommand(id: string): Promise<void> {
+    const request = ++loadGeneration;
     if (!filtered.some((command) => command.id === id)) {
       resetFilters();
       await tick();
     }
-    await openCommand(id);
-    if (expandedId !== id) return;
+    if (!currentSelection(request)) return;
+    await openCommand(id, request);
+    if (!currentSelection(request) || expandedId !== id) return;
     await tick();
     requestAnimationFrame(() => {
+      if (!currentSelection(request)) return;
       const target = document.getElementById(`command-${id}`);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start' });
       requestAnimationFrame(() => {
-        if (!target) return;
+        if (!currentSelection(request) || !target?.isConnected) return;
         const filterBottom = document.querySelector('.filters')?.getBoundingClientRect().bottom ?? 0;
         const targetTop = target.getBoundingClientRect().top;
         if (targetTop < filterBottom + 12) window.scrollBy(0, targetTop - filterBottom - 12);
@@ -113,9 +126,10 @@
     event.preventDefault();
     const returnId = expandedId;
     pushState('#commands', page.state);
-    expandedId = '';
+    const request = clearCommandSelection();
     await tick();
     requestAnimationFrame(() => {
+      if (!currentSelection(request)) return;
       const target = document.querySelector<HTMLButtonElement>(`article[data-command="${CSS.escape(returnId)}"] .command-open`);
       target?.focus();
       target?.scrollIntoView({ block: 'center' });
@@ -193,7 +207,7 @@
     function openHashCommand() {
       const id = location.hash.match(/^#command-(.+)$/u)?.[1] ?? '';
       if (PUBLIC_CLI_INDEX.commands.some((command) => command.id === id)) void revealCommand(id);
-      else expandedId = '';
+      else clearCommandSelection();
     }
 
     readFiltersFromLocation();

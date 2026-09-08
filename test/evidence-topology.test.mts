@@ -54,6 +54,34 @@ describe('evidence topology projection', () => {
     assert.ok(graph.nodes.every((node) => node.family === 'registry'));
   });
 
+  test('every admitted column distribution fits without overlapping source cards', () => {
+    for (let total = 0; total <= MAX_EVIDENCE_TOPOLOGY_NODES; total += 1) {
+      for (let left = 0; left <= total; left += 1) {
+        const graph = projectEvidenceTopology({ label: 'example.test' },
+          Array.from({ length: total }, (_, index) => ({
+            id: `source-${index}`, label: `Source ${index}`,
+            side: index < left ? 'left' as const : 'right' as const,
+          })));
+        assert.equal(graph.nodes.length, total);
+        assert.equal(graph.truncated, false);
+        for (const node of graph.nodes) {
+          assert.ok(node.x >= 0 && node.y >= 0);
+          assert.ok(node.x + node.width <= graph.width);
+          assert.ok(node.y + node.height <= graph.height);
+        }
+        for (const side of ['left', 'right']) {
+          const column = graph.nodes.filter((node) => node.side === side).sort((a, b) => a.y - b.y);
+          for (let index = 1; index < column.length; index += 1) {
+            const previous = column[index - 1]!;
+            const current = column[index]!;
+            assert.ok(current.y > previous.y + previous.height,
+              `${left}/${total - left} ${side} cards need visible separation`);
+          }
+        }
+      }
+    }
+  });
+
   test('sanitises terminal controls and bidi formatting in displayed evidence text', () => {
     const graph = projectEvidenceTopology(
       { label: 'Target\u009b\u202e label', detail: 'Target\u00ad detail' },

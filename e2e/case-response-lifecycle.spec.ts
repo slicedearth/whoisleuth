@@ -503,7 +503,9 @@ test('rapid repeated branch submission persists one investigation branch', async
   await createCase(page, 'branch-single.invalid');
   await addFixtureCasePin(page, 'Single branch pin');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
+  const workspace = await openCaseResponseWorkspace(page);
+  await expect(workspace.locator(':scope > header > span')).toContainText('0 branches');
+  const details = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await details.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await details.getByLabel('Branch name').fill('Single branch');
   await details.getByRole('checkbox', { name: 'Single branch pin' }).check();
@@ -513,6 +515,8 @@ test('rapid repeated branch submission persists one investigation branch', async
   });
 
   await expect(details.locator('.branches li')).toHaveCount(1);
+  await expect(workspace.locator(':scope > header > span')).toContainText('1 branch');
+  await expect(workspace.locator(':scope > header > span')).not.toContainText('1 branches');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,

@@ -5,17 +5,15 @@
   import BrandMark from '$lib/components/BrandMark.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
-  import { protectedDestinations } from '$lib/workspaces';
+  import { protectedReturnTarget } from '$lib/workspaces';
 
   let password=$state('');
   let error=$state('');
   let busy=$state(false);
   let checking=$state(true);
-  const allowedTargets=new Set(protectedDestinations.map((item)=>item.href));
 
   function returnTarget(){
-    const requested=page.url.searchParams.get('next');
-    return requested&&allowedTargets.has(requested)?requested:'/dashboard';
+    return protectedReturnTarget(page.url.searchParams.get('next'),page.url.origin);
   }
 
   onMount(()=>{void checkSession();});
