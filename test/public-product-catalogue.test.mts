@@ -72,9 +72,24 @@ describe('public product catalogue', () => {
       assert.deepEqual(command.inputs, definition.grammar.positionals);
       assert.deepEqual(command.importantOptions, definition.completion.options);
       assert.deepEqual(command.supportedSchemaIdentifiers, definition.documentation.supportedSchemaIdentifiers);
-      assert.deepEqual(command.outputFormats, definition.documentation.outputFormats);
+      assert.deepEqual(command.presentationOptions, definition.documentation.presentationOptions);
+      assert.equal(command.fileOutput, definition.grammar.options.some((option) => option.option === '--output'));
       assert.deepEqual(command.primaryEvidenceArtefacts, definition.documentation.primaryEvidenceArtefacts);
     }
+  });
+
+  test('separates native artefacts, format flags and output destinations', () => {
+    const commands = publicCliCatalogue().commands;
+    const exported = commands.find((command) => command.id === 'export')!;
+    assert.deepEqual(exported.primaryEvidenceArtefacts, ['Portable evidence report']);
+    assert.deepEqual(exported.presentationOptions, [
+      { option: '--markdown', format: 'Markdown' },
+      { option: '--html', format: 'HTML' },
+    ]);
+    assert.equal(exported.fileOutput, true);
+    const inventory = commands.find((command) => command.id === 'commands')!;
+    assert.deepEqual(inventory.primaryEvidenceArtefacts, []);
+    assert.deepEqual(inventory.presentationOptions, [{ option: '--json', format: 'JSON' }]);
   });
 
   test('keeps methodology and coverage tied to canonical contract owners', () => {

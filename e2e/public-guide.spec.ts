@@ -164,7 +164,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(page.locator('.page-sections')).toBeVisible();
   await expect(page.locator('.resource-grid article')).toHaveCount(PUBLIC_RESOURCES.length);
   await page.locator('.resource-grid').getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources' })).toHaveAttribute('aria-current', 'location');
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
@@ -210,7 +210,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources/reporting-and-takedown-guidance');
-  await expect(page.getByRole('heading', { name: 'Prepare and track an abuse or infringement report' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prepare an abuse or infringement report' })).toBeVisible();
   const reportingReferences = page.locator('#primary-references');
   await expect(reportingReferences.getByRole('heading', { name: 'Official reporting guidance' })).toBeVisible();
   await expect(reportingReferences).toContainText('verify the current reporting route, eligibility and disclosure terms');
@@ -342,42 +342,34 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 });
 
-test('public footer keeps an even compact rhythm on mobile', async ({ page }) => {
-  await page.setViewportSize({ width: 412, height: 915 });
-  await page.goto('/');
-
-  const footer = page.locator('footer.site-footer');
-  const links = footer.locator('.footer-links a');
-  await expect(footer).toBeVisible();
-  await expect(footer.getByRole('link', { name: 'Privacy', exact: true })).toHaveAttribute('href', '/privacy');
-  await expect(footer.getByRole('link', { name: 'Terms', exact: true })).toHaveAttribute('href', '/terms');
-  await expect(footer.getByRole('link', { name: 'Request policy', exact: true })).toHaveAttribute('href', '/request-policy');
-  await expect(footer.getByRole('link', { name: 'Contact', exact: true })).toHaveAttribute('href', '/contact');
-  await expect(links).toHaveCount(5);
-  const footerHrefs = await links.evaluateAll((elements) => elements.map((element) => element.getAttribute('href')));
-  expect(new Set(footerHrefs).size).toBe(footerHrefs.length);
-
-  const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
-    const box = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    return {
-      height: box.height,
-      y: box.y,
-      marginLeft: style.marginLeft,
-      marginRight: style.marginRight,
-      paddingLeft: style.paddingLeft,
-      paddingRight: style.paddingRight
-    };
-  }));
-
-  expect(linkLayout.every((link) => link.height <= 32)).toBe(true);
-  const rows = [...new Set(linkLayout.map((link) => Math.round(link.y)))].sort((a, b) => a - b);
-  expect(rows.length).toBeLessThanOrEqual(3);
-  expect(rows.slice(1).every((row, index) => row - rows[index]! <= 40)).toBe(true);
-  expect(linkLayout.every((link) => link.marginLeft === '0px' && link.marginRight === '0px')).toBe(true);
-  expect(linkLayout.every((link) => link.paddingLeft === '0px' && link.paddingRight === '0px')).toBe(true);
-  expect((await footer.boundingBox())?.height).toBeLessThan(210);
-  await expectNoHorizontalOverflow(page);
+test('public footer keeps five links in balanced accessible mobile rows', async ({ page }) => {
+  for (const width of [320, 390, 412]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    const footer = page.locator('footer.site-footer');
+    const links = footer.locator('.footer-links a');
+    await expect(footer).toBeVisible();
+    for (const [label, href] of [['Privacy', '/privacy'], ['Terms', '/terms'], ['Request policy', '/request-policy'], ['Contact', '/contact']] as const) {
+      await expect(footer.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+    }
+    await expect(links).toHaveCount(5);
+    const layout = await links.evaluateAll((elements) => elements.map((element) => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x, y, width, height, href: element.getAttribute('href') };
+    }));
+    expect(new Set(layout.map(link => link.href)).size).toBe(5);
+    expect(layout.every(link => link.height >= 44 && link.x >= 0 && link.x + link.width <= width)).toBe(true);
+    const rows = [...new Set(layout.map(link => Math.round(link.y)))];
+    expect(rows.map(row => layout.filter(link => Math.round(link.y) === row).length)).toEqual([3, 2]);
+    for (const [index, link] of layout.entries()) {
+      for (const other of layout.slice(index + 1)) {
+        const overlaps = Math.min(link.x + link.width, other.x + other.width) > Math.max(link.x, other.x)
+          && Math.min(link.y + link.height, other.y + other.height) > Math.max(link.y, other.y);
+        expect(overlaps).toBe(false);
+      }
+    }
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 test('authenticated console groups its public reference without duplicating Ctrl+K', async ({ page }) => {

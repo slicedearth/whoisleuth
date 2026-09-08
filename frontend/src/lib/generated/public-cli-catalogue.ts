@@ -55,9 +55,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -114,10 +113,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "runtime_diagnostics",
@@ -179,10 +181,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -232,9 +237,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -303,10 +307,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -374,10 +381,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -446,10 +456,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -537,13 +550,25 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JUnit XML",
-        "Markdown",
-        "HTML"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        },
+        {
+          "option": "--markdown",
+          "format": "Markdown"
+        },
+        {
+          "option": "--html",
+          "format": "HTML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Source-qualified Lookup",
         "Lookup request plan"
@@ -641,15 +666,33 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "JUnit XML",
-        "CSV",
-        "domain list",
-        "query list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        },
+        {
+          "option": "--csv",
+          "format": "CSV"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        },
+        {
+          "option": "--queries",
+          "format": "query list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Bulk result",
         "Bulk checkpoint"
@@ -728,10 +771,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "certificate_transparency",
@@ -800,10 +846,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -882,12 +931,21 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "domain list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Candidate set",
         "Discovery snapshot"
@@ -986,13 +1044,25 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "CSV",
-        "domain list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--csv",
+          "format": "CSV"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Reviewed candidate queue",
         "Observation snapshot"
@@ -1076,11 +1146,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "SARIF"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--sarif",
+          "format": "SARIF"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "domain_posture",
@@ -1153,10 +1229,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "website_probe",
@@ -1227,10 +1306,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "tls_intelligence",
@@ -1305,10 +1387,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "dnssec_validation",
@@ -1383,10 +1468,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "mail_transport_review",
@@ -1460,10 +1548,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1531,10 +1622,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1603,10 +1697,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1662,9 +1759,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1734,11 +1830,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "summary JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--summary-json",
+          "format": "summary JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1807,10 +1909,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1882,10 +1987,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Offline verification report"
       ],
@@ -1957,10 +2065,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2036,10 +2147,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2107,9 +2221,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2178,10 +2291,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2251,10 +2367,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2323,10 +2442,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2395,10 +2517,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2467,10 +2592,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2539,10 +2667,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2619,10 +2750,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2692,10 +2826,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2767,10 +2904,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Reviewed Case-pack v2"
       ],
@@ -2841,10 +2981,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2919,11 +3062,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JUnit XML"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "lookup",
@@ -3001,10 +3150,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3074,10 +3226,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3153,10 +3308,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3250,10 +3408,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Plan-only workflow document"
       ],
@@ -3341,10 +3502,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Resumable workflow state"
       ],
@@ -3432,10 +3596,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Retained-evidence comparison"
       ],
@@ -3506,10 +3673,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -3578,10 +3748,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Bounded retained-observation timeline"
       ],
@@ -3653,12 +3826,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "Markdown",
-        "HTML",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--markdown",
+          "format": "Markdown"
+        },
+        {
+          "option": "--html",
+          "format": "HTML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Portable evidence report"
       ],

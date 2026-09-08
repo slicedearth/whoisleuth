@@ -117,7 +117,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
   const trigger = page.getByRole('button', { name: 'Colour theme, System selected' });
   await expect(trigger).toHaveAttribute('title', 'System theme');
-  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText('System');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
@@ -209,7 +209,7 @@ test('light preference applies before reload and persists across public pages', 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
   await expect(trigger.locator('[data-theme-symbol="light"]')).toBeVisible();
-  await expect(trigger).not.toContainText('Light');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Light');
 });
 
 test('source text and graph stroke tokens stay distinct and contrast-safe in both themes', async ({ page }) => {
@@ -551,6 +551,11 @@ test('the theme trigger controls only a rendered option list', async ({ page }) 
   await trigger.click();
   await expect(trigger).toHaveAttribute('aria-controls', 'colour-theme-options');
   await expect(page.locator('#colour-theme-options')).toBeVisible();
+  for (const label of ['Dark', 'Light', 'System']) {
+    const option = page.getByRole('option', { name: `${label} theme` });
+    await expect(option.locator('span')).toHaveText(label);
+    await expect(option.locator('span')).toBeVisible();
+  }
 
   await page.getByRole('option', { name: 'System theme' }).click();
   await expect(trigger).not.toHaveAttribute('aria-controls');
@@ -730,7 +735,7 @@ test('the mobile option list is anchored directly beneath its trigger', async ({
   await page.goto('/');
 
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
-  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText(/\S/u);
   await expect(trigger.locator('.theme-trigger-label')).toBeVisible();
   await trigger.click();
   const options = page.getByRole('listbox', { name: 'Colour theme options' });

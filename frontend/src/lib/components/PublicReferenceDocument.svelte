@@ -93,19 +93,20 @@
 <style>
   .reference-shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:clamp(28px,4vw,52px);align-items:start}
   .reference-document{min-width:0}
-  .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 22px;color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4}
+  .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 16px;color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4}
   .breadcrumbs a{color:var(--accent)}
-  .reference-heading{max-width:850px;padding:0 0 36px}
-  .reference-heading h1{max-width:820px;margin:.35rem 0 1rem;font:750 clamp(2.15rem,5vw,3.65rem)/1.03 var(--mono);letter-spacing:-.06em}
-  .reference-heading>p:not(.eyebrow){max-width:72ch;margin:.65rem 0 0;color:var(--muted);font-size:clamp(.98rem,1.5vw,1.08rem);line-height:1.7}
-  .reference-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .reference-heading{max-width:850px;padding:0 0 24px}
+  .reference-heading h1{max-width:820px;margin:.35rem 0 .8rem;font:750 clamp(1.9rem,4vw,2.8rem)/1.12 var(--mono);letter-spacing:-.045em}
+  .reference-heading>p:not(.eyebrow){max-width:72ch;margin:.65rem 0 0;color:var(--muted);font-size:1rem;line-height:1.6}
+  .reference-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
   .reference-body,.reference-content{min-width:0}
+  .reference-content :global(p){max-width:78ch}
   .reference-content :global([id]){scroll-margin-top:24px}
   .reference-pagination{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:58px;padding-top:22px;border-top:1px solid var(--border)}
   .reference-pagination a{display:grid;gap:5px;min-width:0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .reference-pagination a:hover,.reference-pagination a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}
   .reference-pagination a.next{text-align:right}
-  .reference-pagination span{color:var(--muted);font:650 .58rem var(--mono);letter-spacing:.07em;text-transform:uppercase}
+  .reference-pagination span{color:var(--muted);font:650 var(--text-2xs) var(--mono);letter-spacing:.07em;text-transform:uppercase}
   .reference-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   @media(max-width:1080px){.reference-shell{grid-template-columns:1fr;gap:0}}
   @media(max-width:520px){.reference-pagination{grid-template-columns:1fr}.reference-pagination>span{display:none}.reference-pagination a.next{text-align:left}}

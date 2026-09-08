@@ -828,17 +828,16 @@ describe('canonical CLI command registry', () => {
     }
   });
 
-  test('keeps the installed registry authoritative and documents the scaffold bootstrap exception', () => {
+  test('documents the scaffold bootstrap exception in the reference and installed help', () => {
     const reference = readFileSync(new URL('../docs/cli-reference.md', import.meta.url), 'utf8');
-    assert.match(reference, /Installed `whoisleuth <command> --help`,[\s\S]*exact grammar, option and[\s\S]*command authorities/iu);
-    assert.doesNotMatch(reference, /This release supports/iu);
-    for (const source of [
-      reference,
+    for (const source of [reference, HELP]) {
+      assert.match(source, /registry-scaffold[\s\S]*--profile[\s\S]*--config/iu);
+    }
+    for (const guide of [
       readFileSync(new URL('../docs/cli.md', import.meta.url), 'utf8'),
       readFileSync(new URL('../packages/cli/README.md', import.meta.url), 'utf8'),
-      HELP,
     ]) {
-      assert.match(source, /registry-scaffold[\s\S]*--profile[\s\S]*--config/iu);
+      assert.match(guide, /cli-reference\.md/u);
     }
   });
 

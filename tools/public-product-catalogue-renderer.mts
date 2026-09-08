@@ -65,7 +65,8 @@ function publicCliCatalogue() {
       supportedSchemaIdentifiers: definition.documentation.supportedSchemaIdentifiers,
       inputLimits: definition.documentation.inputLimits,
       outputLimits: definition.documentation.outputLimits,
-      outputFormats: definition.documentation.outputFormats,
+      presentationOptions: definition.documentation.presentationOptions,
+      fileOutput: definition.documentation.fileOutput,
       primaryEvidenceArtefacts: definition.documentation.primaryEvidenceArtefacts,
       capability: Object.freeze({
         familyId: operation.capabilityFamilyId,

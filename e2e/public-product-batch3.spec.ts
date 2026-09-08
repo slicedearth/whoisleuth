@@ -161,6 +161,32 @@ test('long reference labels remain distinct and the mobile navigator works by ke
   }
 });
 
+test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/cli');
+    const firstCommand = page.locator('.start-steps .copyable-command').first();
+    await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
+    const commandBox = await firstCommand.boundingBox();
+    expect(commandBox).not.toBeNull();
+    expect(commandBox!.y).toBeGreaterThan(0);
+    expect(commandBox!.y + commandBox!.height).toBeLessThanOrEqual(700);
+    await expectNoHorizontalOverflow(page);
+
+    for (const width of [1920, 3840]) {
+      await page.setViewportSize({ width, height: 1080 });
+      await page.goto('/resources/lookalike-domain-checker');
+      const paragraph = page.locator('.reference-heading > p:not(.eyebrow)');
+      await expect(paragraph).toContainText('Similar spelling is a lead');
+      const proseBox = await paragraph.boundingBox();
+      expect(proseBox).not.toBeNull();
+      expect(proseBox!.width).toBeLessThanOrEqual(800);
+      await expectNoHorizontalOverflow(page);
+    }
+  }
+});
+
 test('filters and opens the canonical CLI catalogue entirely by keyboard', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/cli');
@@ -238,6 +264,45 @@ test('opens a directly linked CLI command without loading unrelated command deta
   }).toBe(true);
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
+});
+
+test('command and return links preserve open-in-new-tab activation', async ({ page, context }) => {
+  await page.goto('/cli#command-lookup');
+  const command = page.locator('[data-command-detail="lookup"]');
+  await expect(command).toBeVisible();
+  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results')]) {
+    await expect(link).toBeVisible();
+    const href = await link.getAttribute('href');
+    expect(href).toMatch(/^#(?:command-|commands)/u);
+    const expectedHref = new URL(href!, page.url()).href;
+    const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
+    const opened = context.waitForEvent('page');
+    await link.click({ modifiers: ['ControlOrMeta'] });
+    const destination = await opened;
+    await expect.poll(() => destination.evaluate(() => ({
+      href: location.href,
+      ready: document.readyState,
+      clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
+      detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
+    }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+    await expect(page).toHaveURL(/#command-lookup$/u);
+    await expect(command).toBeVisible();
+    await destination.close();
+  }
+});
+
+test('command details distinguish an artefact from its presentation and destination', async ({ page }) => {
+  await page.goto('/cli#command-export');
+  const command = page.locator('[data-command-detail="export"]');
+  await expect(command).toBeVisible();
+  await expect(command.locator('.command-facts')).toContainText('Portable evidence report');
+  const formats = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+  await expect(formats).toContainText('--markdown');
+  await expect(formats).toContainText('--html');
+  await expect(formats).not.toContainText('--json');
+  await expect(command.locator('.command-facts')).toContainText('--output <file>');
+  await command.getByText('Limits and contracts', { exact: true }).click();
+  await expect(command.locator('.contract-details')).toContainText('Exit 0 reports command completion');
 });
 
 test('opens a directly linked CLI workflow section after the responsive layout settles', async ({ page }) => {

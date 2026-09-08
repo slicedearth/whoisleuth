@@ -110,19 +110,19 @@
   .reference-title span{color:var(--muted);font-size:var(--text-2xs);letter-spacing:.06em;text-transform:uppercase}
   .reference-title strong{font-size:var(--text-sm)}
   .reference-tree section+section{margin-top:20px}
-  h2{margin:0 8px 7px;color:var(--muted);font:700 .58rem var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  h2{margin:0 8px 7px;color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.08em;text-transform:uppercase}
   .reference-tree section>a{display:block;padding:7px 8px;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-xs) var(--mono);line-height:1.35}
   .reference-tree section>a:hover,.reference-tree section>a:focus-visible{color:var(--text);background:rgb(var(--accent-rgb) / .07)}
   .reference-tree section>a.active{color:var(--accent);background:rgb(var(--accent-rgb) / .09);box-shadow:inset 2px 0 var(--accent)}
   .page-sections{display:grid;gap:1px;margin:5px 0 2px 9px;padding:7px 0 7px 11px;border-left:1px solid var(--border)}
-  .page-sections h3{margin:0 0 4px;color:var(--muted);font:700 .55rem var(--mono);letter-spacing:.07em;text-transform:uppercase}
-  .page-sections a{display:flex;min-height:24px;align-items:center;padding:4px 6px;color:var(--muted);font:600 .67rem/1.35 var(--mono);overflow-wrap:anywhere}
+  .page-sections h3{margin:0 0 4px;color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.07em;text-transform:uppercase}
+  .page-sections a{display:flex;min-height:24px;align-items:center;padding:4px 6px;color:var(--muted);font:600 var(--text-xs)/1.4 var(--mono);overflow-wrap:anywhere}
   .page-sections a:hover,.page-sections a:focus-visible,.page-sections a.active{color:var(--accent)}
   .reference-browser{display:none}
   @media(max-width:1080px){
     .reference-sidebar{position:static;max-height:none;overflow:visible}
     .reference-tree{display:none}
-    .reference-browser{display:block;margin:0 0 28px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+    .reference-browser{display:block;margin:0 0 18px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
     .reference-browser>summary{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 14px;min-height:46px;gap:14px;padding:10px 13px;font-family:var(--mono)}
     .reference-browser>summary span{min-width:0;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
     .reference-browser>summary strong{min-width:0;overflow-wrap:anywhere;color:var(--text);font-size:var(--text-xs);text-align:right}

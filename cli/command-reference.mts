@@ -133,6 +133,8 @@ type CliCommandDefinition = Readonly<{
     inputLimits: readonly string[];
     outputLimits: readonly string[];
     outputFormats: readonly string[];
+    presentationOptions: readonly Readonly<{ option: string; format: string }>[];
+    fileOutput: boolean;
     primaryEvidenceArtefacts: readonly string[];
   }>;
 }>;
@@ -424,10 +426,13 @@ const QUIET_OUTPUT_CONSTRAINT = constraint({
   kind: 'mutually_exclusive',
   options: ['--quiet', '--output'],
 });
-const MACHINE_OUTPUT_OPTIONS = Object.freeze([
-  '--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--markdown',
-  '--html', '--sarif', '--summary-json',
-]);
+const PRESENTATION_OPTIONS = Object.freeze([
+  ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
+  ['--csv', 'CSV'], ['--domains', 'domain list'], ['--queries', 'query list'],
+  ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
+  ['--summary-json', 'summary JSON'],
+] as const);
+const MACHINE_OUTPUT_OPTIONS: readonly string[] = Object.freeze(PRESENTATION_OPTIONS.map(([option]) => option));
 
 function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScope): CliOptionSpec {
   const definition = CLI_OPTION_DEFINITIONS[option];
@@ -1554,16 +1559,11 @@ function documentationMetadata(
   const explicitAuthorisationRequired = commandOptions.some((option) => (
     option === '--owned-or-authorized' || option === '--active-probe' || option === '--approve-network'
   ));
-  const outputOptionFormats = [
-    ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
-    ['--csv', 'CSV'], ['--domains', 'domain list'], ['--queries', 'query list'],
-    ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
-    ['--summary-json', 'summary JSON'],
-  ] as const;
+  const presentationOptions = Object.freeze(PRESENTATION_OPTIONS
+    .filter(([option]) => commandOptions.includes(option))
+    .map(([option, format]) => Object.freeze({ option, format })));
   const outputFormats = new Set<string>(['terminal']);
-  for (const [option, label] of outputOptionFormats) {
-    if (commandOptions.includes(option)) outputFormats.add(label);
-  }
+  for (const { format } of presentationOptions) outputFormats.add(format);
   for (const format of seed.additionalOutputFormats) outputFormats.add(format);
   const positionalLimits = positionals.map((item) => (
     `${item.name}: ${item.minimum}-${item.maximum} ${item.valueKind} value${item.maximum === 1 ? '' : 's'}`
@@ -1589,6 +1589,8 @@ function documentationMetadata(
         : []),
     ]),
     outputFormats: Object.freeze([...outputFormats]),
+    presentationOptions,
+    fileOutput: commonOptions.includes('--output'),
     primaryEvidenceArtefacts: seed.primaryArtefacts,
   });
 }

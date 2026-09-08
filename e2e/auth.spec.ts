@@ -211,7 +211,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
     expect(themeBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(menuBox).not.toBeNull();
-    await expect(themeButton.locator('.theme-trigger-label')).toHaveText('Theme');
+    await expect(themeButton.locator('.theme-trigger-label')).toHaveText(/\S/u);
     await expect(themeButton.locator('.theme-trigger-label')).toBeVisible();
     const menuTops = [themeBox!.y, consoleBox!.y, menuBox!.y];
     const menuBottoms = [themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, menuBox!.y + menuBox!.height];

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { handlesLocalLink } from '$lib/link-activation';
 
   let {
     label,
@@ -67,8 +68,9 @@
   }
 
   function activateLink(event: MouseEvent, href: `#${string}`) {
+    if (!handlesLocalLink(event)) return;
     selectHref(href);
-    if (!onnavigate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!onnavigate) return;
     event.preventDefault();
     onnavigate(href);
   }

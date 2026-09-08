@@ -119,7 +119,7 @@
       bind:this={trigger}
       onclick={() => { open = !open; }}
       onkeydown={handleTriggerKeydown}
-    ><span class="theme-trigger-label">Theme</span>{@render themeSymbol(preference)}<span class="chevron" aria-hidden="true"></span></button>
+    ><span class="theme-trigger-label">{labelFor(preference)}</span>{@render themeSymbol(preference)}<span class="chevron" aria-hidden="true"></span></button>
     {#if open}
       <div class="theme-options" id="colour-theme-options" role="listbox" aria-label="Colour theme options">
         {#each options as option, index}
@@ -133,7 +133,7 @@
             title={`${option.label} theme`}
             onclick={() => chooseTheme(option.value)}
             onkeydown={(event) => handleOptionKeydown(event, index)}
-          >{@render themeSymbol(option.value)}<span class="sr-only">{option.label}</span></button>
+          >{@render themeSymbol(option.value)}<span>{option.label}</span></button>
         {/each}
       </div>
     {/if}
@@ -142,7 +142,7 @@
 {#if storageWarning}<span class="sr-only" role="status">{storageWarning}</span>{/if}
 
 <style>
-  .theme-selector{--theme-trigger-width:104px;--theme-trigger-surface:transparent;--theme-options-surface:var(--panel);display:flex;flex:0 0 var(--theme-trigger-width);width:var(--theme-trigger-width);min-width:0;align-items:center;color:var(--muted);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
+  .theme-selector{--theme-trigger-width:116px;--theme-trigger-surface:transparent;--theme-options-surface:var(--panel);display:flex;flex:0 0 var(--theme-trigger-width);width:var(--theme-trigger-width);min-width:0;align-items:center;color:var(--muted);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .theme-control{position:relative;width:100%;min-width:0}
   .theme-selector .theme-trigger{display:inline-flex;width:100%;min-width:0;height:30px;align-items:center;justify-content:space-between;gap:8px;padding:0 9px;border:1px solid var(--quiet-control-border);border-radius:var(--radius-sm);background:var(--theme-trigger-surface);color:var(--text);font-family:var(--mono);font-size:inherit;font-weight:700;line-height:1}
   .theme-trigger:hover,.theme-trigger:focus-visible{border-color:var(--accent);background:var(--theme-trigger-surface)}
@@ -151,19 +151,16 @@
   .theme-symbol .moon-star{fill:currentColor;stroke:none}
   .chevron{width:6px;height:6px;flex:0 0 auto;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
   .theme-options{display:grid;position:absolute;top:var(--theme-options-top,calc(100% + 6px));bottom:var(--theme-options-bottom,auto);left:0;z-index:100;box-sizing:border-box;width:100%;min-width:0;gap:2px;padding:4px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--theme-options-surface);box-shadow:0 12px 32px rgb(var(--shadow-rgb) / .24)}
-  .theme-option{display:inline-flex;width:100%;min-height:34px;align-items:center;justify-content:center;padding:0;border:0;border-radius:4px;background:transparent;color:var(--text);font:700 var(--text-2xs) var(--mono)}
+  .theme-option{display:inline-flex;width:100%;min-height:40px;align-items:center;justify-content:flex-start;gap:8px;padding:0 6px;border:0;border-radius:4px;background:transparent;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .theme-option:hover,.theme-option:focus-visible,.theme-option.selected{background:rgb(var(--accent-rgb) / .11);color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   @media(max-width:720px){
-    .theme-selector{--theme-trigger-width:88px}
+    .theme-selector{--theme-trigger-width:104px}
     .theme-selector .theme-trigger{gap:5px;padding-inline:6px}
   }
   @media(max-width:440px){
-    .theme-selector{--theme-trigger-width:70px}
+    .theme-selector{--theme-trigger-width:90px}
     .theme-selector .theme-trigger{gap:3px;padding-inline:3px}
     .theme-symbol{width:16px;height:16px}
-  }
-  @media(max-width:360px){
-    .theme-selector{--theme-trigger-width:68px}
   }
 </style>
