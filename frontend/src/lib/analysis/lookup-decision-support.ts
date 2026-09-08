@@ -95,7 +95,9 @@ export type LookupEvidenceQualityMatrix = Readonly<{
 type JsonRecord = Record<string, unknown>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
-const MAX_TEXT = 320;
+export const MAX_LOOKUP_DECISION_DETAIL = 320;
+export const MAX_LOOKUP_DECISION_LABEL = 160;
+export const MAX_LOOKUP_DECISION_ENTRIES = 16;
 const MAX_ENTRIES = 24;
 export const MAX_LOOKUP_SOURCE_ACTIONS = 6;
 export const MAX_LOOKUP_PRESENTED_ACTIONS = 3;
@@ -253,21 +255,32 @@ function record(value: unknown): JsonRecord {
     : {};
 }
 
-function text(value: unknown, maximum = MAX_TEXT): string {
+function text(value: unknown, maximum = MAX_LOOKUP_DECISION_DETAIL): string {
   return String(value ?? '')
     .replace(CONTROL_CHARACTERS, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
-    .slice(0, maximum);
+    .slice(0, maximum)
+    .trimEnd();
 }
 
 function idPart(value: unknown): string {
   return text(value, 80).toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
 }
 
-function display(value: unknown): string {
-  const normalized = text(value, 180);
-  return normalized || 'not published';
+function summary(value: unknown, maximum: number): string {
+  const normalized = text(value, maximum + 2);
+  return normalized.length > maximum
+    ? `${normalized.slice(0, maximum - 1).replace(/[\uD800-\uDBFF]$/u, '').trimEnd()}…`
+    : normalized;
+}
+
+function comparisonDetail(left: unknown, right: unknown): string {
+  const separator = ' compared with ';
+  const suffix = '.';
+  const valueLimit = Math.floor((MAX_LOOKUP_DECISION_DETAIL - separator.length - suffix.length) / 2);
+  const display = (value: unknown) => summary(value, valueLimit) || 'not published';
+  return `${display(left)}${separator}${display(right)}${suffix}`;
 }
 
 function isoDate(value: unknown): string | null {
@@ -307,7 +320,7 @@ function comparisonEntries(
         state: 'conflict',
         importance: ['Domain', 'Registrar', 'Name servers', 'Statuses'].includes(label) ? 'high' : 'medium',
         title: `${label} differs between registration sources`,
-        detail: `${display(left)} compared with ${display(right)}.`,
+        detail: comparisonDetail(left, right),
         sources: kind === 'registry-whois'
           ? ['Registry RDAP', 'WHOIS']
           : ['Registry RDAP', 'Registrar RDAP'],
@@ -483,7 +496,13 @@ function prioritizeEntries(
     return importance[left.importance] - importance[right.importance]
       || leftBoost - rightBoost
       || left.title.localeCompare(right.title);
-  }).slice(0, 16);
+  }).slice(0, MAX_LOOKUP_DECISION_ENTRIES).map((entry) => ({
+    ...entry,
+    // These are inspection summaries, not retained source values. Apply the
+    // same contract to every producer, including composed hostname details.
+    title: summary(entry.title, MAX_LOOKUP_DECISION_LABEL),
+    detail: summary(entry.detail, MAX_LOOKUP_DECISION_DETAIL),
+  }));
 }
 
 function normalizedTaskEvidenceKinds(values: readonly unknown[] | undefined): Set<LookupTaskEvidenceKind> {

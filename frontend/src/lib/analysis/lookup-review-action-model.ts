@@ -13,6 +13,9 @@ import type {
   LookupReviewActionBasis,
 } from './lookup-evidence-impact.ts';
 import {
+  MAX_LOOKUP_DECISION_DETAIL,
+  MAX_LOOKUP_DECISION_ENTRIES,
+  MAX_LOOKUP_DECISION_LABEL,
   MAX_LOOKUP_PRESENTED_ACTIONS,
   MAX_LOOKUP_SOURCE_ACTIONS,
   rankLookupNextActions,
@@ -122,8 +125,8 @@ function validateSupport(support: LookupDecisionSupport): void {
   if (support.actions.length > MAX_LOOKUP_SOURCE_ACTIONS) {
     throw new RangeError(`Lookup decision support exceeds the ${MAX_LOOKUP_SOURCE_ACTIONS}-action bound.`);
   }
-  if (support.entries.length > 16) {
-    throw new RangeError('Lookup decision support exceeds the 16-entry bound.');
+  if (support.entries.length > MAX_LOOKUP_DECISION_ENTRIES) {
+    throw new RangeError(`Lookup decision support exceeds the ${MAX_LOOKUP_DECISION_ENTRIES}-entry bound.`);
   }
   const entryIds = new Set<string>();
   for (const entry of support.entries) {
@@ -131,8 +134,8 @@ function validateSupport(support: LookupDecisionSupport): void {
       || entryIds.has(entry.id)
       || (entry.state !== 'conflict' && entry.state !== 'uncertain')
       || !IMPORTANCE.has(entry.importance)
-      || !canonicalText(entry.title, 160)
-      || !canonicalText(entry.detail, 320)
+      || !canonicalText(entry.title, MAX_LOOKUP_DECISION_LABEL)
+      || !canonicalText(entry.detail, MAX_LOOKUP_DECISION_DETAIL)
       || !SAFE_FRAGMENT.test(entry.href)) {
       throw new TypeError(`Lookup decision support entry ${entry.id} is ambiguous or non-canonical.`);
     }
@@ -142,9 +145,9 @@ function validateSupport(support: LookupDecisionSupport): void {
   for (const action of support.actions) {
     if (!SAFE_ID.test(action.id)
       || actionIds.has(action.id)
-      || !canonicalText(action.label, 160)
-      || !canonicalText(action.reason, 320)
-      || !canonicalText(action.expectedOutcome, 320)
+      || !canonicalText(action.label, MAX_LOOKUP_DECISION_LABEL)
+      || !canonicalText(action.reason, MAX_LOOKUP_DECISION_DETAIL)
+      || !canonicalText(action.expectedOutcome, MAX_LOOKUP_DECISION_DETAIL)
       || !SAFE_FRAGMENT.test(action.href)
       || !IMPORTANCE.has(action.priority)) {
       throw new TypeError(`Lookup decision support action ${action.id} is ambiguous or non-canonical.`);

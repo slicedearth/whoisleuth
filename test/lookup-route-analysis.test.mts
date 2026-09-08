@@ -132,6 +132,39 @@ describe('Lookup route analysis', () => {
     assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
   });
 
+  test('retains complete registration values when long comparison summaries enter the review model', () => {
+    const nameservers = (prefix: string) => Array.from({ length: 8 }, (_, index) => (
+      `${prefix}-${index}.${'n'.repeat(50)}.example.test`
+    ));
+    const rdapNameservers = nameservers('rdap');
+    const whoisNameservers = nameservers('whois');
+    const result = response({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', nameservers: rdapNameservers } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', nameservers: whoisNameservers, contactsByRole: {} }, chain: [] },
+    });
+    const before = structuredClone(result);
+    const analysis = buildLookupRouteAnalysis({
+      result, lookupView: createLookupViewModel(result), profile: null,
+      task: 'general', completedLookupDepth: 'fast',
+    });
+    const comparison = analysis.comparison.fields.find((field) => field.label === 'Name servers');
+    assert.ok(comparison);
+    assert.equal(comparison.status, 'conflict');
+    for (const name of rdapNameservers) assert.ok(comparison.rdapDisplay.includes(name));
+    for (const name of whoisNameservers) assert.ok(comparison.whoisDisplay.includes(name));
+    const entry = analysis.lookupDecisionSupport.entries.find((item) => item.id === 'registry-whois-name-servers');
+    assert.ok(entry);
+    assert.ok(entry.detail.length <= 320);
+    assert.match(entry.detail, /… compared with .*…\.$/u);
+    assert.equal(entry.href, '#registry');
+    assert.ok(analysis.lookupReviewActionModel.recommendedNextReviews.rankedItems.some((action) => (
+      action.contributingFactIds.includes('lookup-decision:registry-whois-name-servers')
+    )));
+    assert.ok(analysis.lookupDecisionFacts.some((fact) => fact.id === 'lookup-decision:registry-whois-name-servers'));
+    assert.equal(analysis.caseEvidence.availability, 'registered');
+    assert.deepEqual(result, before);
+  });
+
   test('keeps registrar standing outside Risk and Opportunity scoring', () => {
     const baseline = response();
     const withStanding = response({

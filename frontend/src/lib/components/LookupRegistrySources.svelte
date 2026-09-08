@@ -723,6 +723,13 @@
   .publication-comparison .chip{white-space:normal}
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}
+  @media(min-width:651px){
+    .lane-table,.comparison table,.publication-comparison table{table-layout:fixed}
+    .lane-table thead th:first-child,.comparison thead th:first-child,.publication-comparison thead th:first-child{width:18%}
+    .lane-table thead th:last-child,.comparison thead th:last-child,.publication-comparison thead th:last-child{width:20%}
+    .lane-table th,.comparison th,.publication-comparison th,.comparison .chip,.publication-comparison .chip{overflow-wrap:normal;word-break:normal}
+    .comparison td,.publication-comparison td{overflow-wrap:anywhere}
+  }
   @media(max-width:650px){
     .registrar-standing .section-head{display:grid}.standing-badge{max-width:none;width:max-content;text-align:left}.standing-sources{grid-template-columns:1fr}.standing-actions li{grid-template-columns:1fr}.standing-actions li>a{grid-row:2}.standing-actions p{grid-column:1}
     .authority-trace>header{display:grid}.authority-trace>header>span{max-width:none;text-align:left}.trace-sources{grid-template-columns:1fr}
@@ -777,5 +784,9 @@
     .comparison td>*,.publication-comparison td>*{grid-column:2;min-width:0}
     dl{grid-template-columns:1fr;gap:4px}
     dt:not(:first-child){margin-top:7px}
+  }
+  @media(max-width:420px){
+    .comparison th[scope='row'],.comparison td,.publication-comparison th[scope='row'],.publication-comparison td{grid-template-columns:minmax(0,1fr);gap:5px}
+    .comparison td>*,.publication-comparison td>*{grid-column:1}
   }
 </style>

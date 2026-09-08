@@ -28,6 +28,83 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
 });
 
+test('long registration comparisons retain complete source values and a usable review link', async ({ page }, testInfo) => {
+  const nameservers = (prefix: string) => Array.from({ length: 8 }, (_, index) => (
+    `${prefix}-${index}.${'n'.repeat(50)}.example.test`
+  ));
+  const registryNames = nameservers('registry');
+  const whoisNames = nameservers('whois');
+  let requests = 0;
+  await page.route('**/api/lookup?*', async (route) => {
+    requests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'example.test', type: 'domain', registrableDomain: 'example.test',
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', nameservers: registryNames } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', nameservers: whoisNames, contactsByRole: {} }, chain: [] },
+      availability: { state: 'registered', domain: 'example.test' },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const review = page.locator('.next-action[data-action-id="review-priority-conflict"]');
+  await expect(review).toBeVisible();
+  await expect(review).toHaveAttribute('data-contributing-fact-ids', 'lookup-decision:registry-whois-name-servers');
+  await review.focus();
+  await review.press('Enter');
+  await expect(page).toHaveURL(/#registry$/u);
+  const comparison = page.locator('details.comparison');
+  await expect(comparison).toBeVisible();
+  await expect(comparison).toHaveAttribute('open', '');
+  const row = comparison.getByRole('row').filter({
+    has: page.getByRole('rowheader').filter({ hasText: /^Name servers$/u }),
+  });
+  await expect(row).toHaveCount(1);
+  for (const name of [...registryNames, ...whoisNames]) await expect(row).toContainText(name);
+  const summary = comparison.locator(':scope > summary');
+  await summary.focus();
+  await summary.press('Enter');
+  await expect(row).toBeHidden();
+  await summary.press('Enter');
+  await expect(row).toBeVisible();
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await expectNoHorizontalOverflow(page);
+      await expect(row.getByRole('cell').filter({ hasText: registryNames.at(-1)! })).toBeVisible();
+      await expect(row.getByRole('cell').filter({ hasText: whoisNames.at(-1)! })).toBeVisible();
+      await row.getByRole('rowheader').scrollIntoViewIfNeeded();
+      await expect(row.getByRole('rowheader')).toBeInViewport();
+      const textGeometry = await row.evaluate((element) => {
+        const lines = (selector: string) => {
+          const cell = element.querySelector(selector);
+          if (!cell) throw new Error(`Required comparison content is missing: ${selector}`);
+          const range = document.createRange();
+          range.selectNodeContents(cell);
+          return range.getClientRects().length;
+        };
+        const source = element.querySelector('td');
+        if (!source) throw new Error('The first publication cell is missing.');
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        return { fieldLines: lines('th'), badgeLines: lines('.chip'),
+          publicationTextWidth: range.getBoundingClientRect().width, publicationCellWidth: source.getBoundingClientRect().width };
+      });
+      expect(textGeometry.fieldLines).toBeLessThanOrEqual(2);
+      expect(textGeometry.badgeLines).toBe(1);
+      if (viewport.width <= 390) {
+        expect(textGeometry.publicationTextWidth).toBeGreaterThan(textGeometry.publicationCellWidth * 0.7);
+      }
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: testInfo.outputPath(`long-registration-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
+  expect(requests).toBe(1);
+});
+
 test('registry interpretation retains late lifecycle evidence and role-scoped disclosure', async ({ page }, testInfo) => {
   const parsed = parseRdap('domain', {
     objectClassName: 'domain', ldhName: 'example.test',
