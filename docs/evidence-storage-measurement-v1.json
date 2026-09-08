@@ -1,6 +1,6 @@
 {
   "schema": "whoisleuth.evidence-storage-measurement",
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-08-22T00:00:00.000Z",
   "startingRevision": "d3349cf85cded65989ab5ec542967429414bc1b7",
   "fixtureIdentity": {
@@ -96,9 +96,7 @@
         "indexedDbRecordEnvelopeBytes": 49342,
         "indexedDbManifestBytes": 283,
         "indexedDbSerializedContractBytes": 49625,
-        "currentQuotaRatio": 0.0104,
-        "projectedContentAddressedBytes": 78278,
-        "projectedQuotaRatio": 0.018663
+        "currentQuotaRatio": 0.0104
       },
       "duplication": {
         "eligiblePayloads": 40,
@@ -110,20 +108,7 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 0,
         "grossCanonicalDuplicateBytes": 0,
-        "currentEligibleBytes": 31582,
-        "artifactBytes": 38630,
-        "referenceBytes": 4888,
-        "manifestBytes": 200,
-        "indexBytes": 7264,
-        "orphanMetadataBytes": 4960,
-        "collisionMetadataBytes": 5176,
-        "repairPreviewMetadataBytes": 5120,
-        "operationalMetadataBytes": 15256,
-        "candidateBytesBeforeOperationalReserve": 50982,
-        "candidateBytesAfterAllOverhead": 66238,
-        "netSavingsBytes": -34656,
-        "deduplicableBytesAfterAllOverhead": 0,
-        "architectureDeltaBytes": 34656
+        "currentEligibleBytes": 31582
       },
       "portable": {
         "workspaceArchive": {
@@ -159,9 +144,7 @@
         "indexedDbRecordEnvelopeBytes": 148128,
         "indexedDbManifestBytes": 285,
         "indexedDbSerializedContractBytes": 148413,
-        "currentQuotaRatio": 0.03121,
-        "projectedContentAddressedBytes": 158383,
-        "projectedQuotaRatio": 0.037761
+        "currentQuotaRatio": 0.03121
       },
       "duplication": {
         "eligiblePayloads": 120,
@@ -355,20 +338,7 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 49452,
         "grossCanonicalDuplicateBytes": 49452,
-        "currentEligibleBytes": 94820,
-        "artifactBytes": 60176,
-        "referenceBytes": 14664,
-        "manifestBytes": 201,
-        "indexBytes": 15240,
-        "orphanMetadataBytes": 10416,
-        "collisionMetadataBytes": 10848,
-        "repairPreviewMetadataBytes": 10752,
-        "operationalMetadataBytes": 32016,
-        "candidateBytesBeforeOperationalReserve": 90281,
-        "candidateBytesAfterAllOverhead": 122297,
-        "netSavingsBytes": -27477,
-        "deduplicableBytesAfterAllOverhead": 0,
-        "architectureDeltaBytes": 27477
+        "currentEligibleBytes": 94820
       },
       "portable": {
         "workspaceArchive": {
@@ -404,9 +374,7 @@
         "indexedDbRecordEnvelopeBytes": 2328890,
         "indexedDbManifestBytes": 287,
         "indexedDbSerializedContractBytes": 2329177,
-        "currentQuotaRatio": 0.485664,
-        "projectedContentAddressedBytes": 1000778,
-        "projectedQuotaRatio": 0.238604
+        "currentQuotaRatio": 0.485664
       },
       "duplication": {
         "eligiblePayloads": 2000,
@@ -480,20 +448,7 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 1283927,
         "grossCanonicalDuplicateBytes": 1283927,
-        "currentEligibleBytes": 1286500,
-        "artifactBytes": 3278,
-        "referenceBytes": 244500,
-        "manifestBytes": 201,
-        "indexBytes": 734,
-        "orphanMetadataBytes": 504,
-        "collisionMetadataBytes": 517,
-        "repairPreviewMetadataBytes": 520,
-        "operationalMetadataBytes": 1541,
-        "candidateBytesBeforeOperationalReserve": 248713,
-        "candidateBytesAfterAllOverhead": 250254,
-        "netSavingsBytes": 1036246,
-        "deduplicableBytesAfterAllOverhead": 1036246,
-        "architectureDeltaBytes": -1036246
+        "currentEligibleBytes": 1286500
       },
       "portable": {
         "workspaceArchive": {
@@ -510,100 +465,12 @@
       }
     }
   ],
-  "decision": {
-    "outcome": "no_build",
-    "representativeScenario": "representative-duplication",
-    "representativeNetSavingsBytes": 0,
-    "representativeNetSavingsRatio": 0,
-    "threshold": {
-      "minimumRepresentativeNetSavingsBytes": 524288,
-      "minimumRepresentativeNetSavingsRatio": 0.2,
-      "minimumQuotaPressureRatio": 0.75
-    },
-    "rationale": "Representative repeated immutable evidence does not recover the digest, reference, manifest, index, collision, orphan, and repair overhead required by a second persistence layer.",
-    "reconsiderWhen": {
-      "evidence": "A refreshed representative corpus, not only a synthetic worst case, must meet both savings thresholds.",
-      "minimumNetSavingsBytes": 524288,
-      "minimumNetSavingsRatio": 0.2,
-      "quotaPressureRatio": 0.75
-    }
-  },
-  "historicalCompatibility": {
-    "starting": {
-      "revision": "d3349cf85cded65989ab5ec542967429414bc1b7",
-      "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 54,
-      "lifecycleContracts": 53,
-      "legacyContracts": 32,
-      "retiredOutputContracts": 12,
-      "migrations": 29,
-      "readerEdges": 10,
-      "writerEdges": 9,
-      "readerVersionSlots": 61,
-      "lifecycleFixtures": 87,
-      "lifecycleFixtureBytes": 579486,
-      "legacyAndRetiredFixtures": 45,
-      "legacyAndRetiredFixtureBytes": 302908,
-      "lifecycleShapes": 19,
-      "lifecycleBoundProfiles": 7,
-      "lifecycleHooks": 18,
-      "lifecycleSerialisationProfiles": 7,
-      "lifecyclePrivacyProfiles": 3,
-      "lifecycleConsumerEdges": 16,
-      "versionSensitiveProductionLines": 365,
-      "versionSensitiveBranches": 79,
-      "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 17,
-      "focusedVerification": {
-        "testFiles": 13,
-        "tests": 276,
-        "passed": 276,
-        "failed": 0,
-        "skipped": 0,
-        "durationMs": 35068.222209,
-        "elapsedSeconds": 35.24,
-        "reliability": "single_local_observation_not_drift_gated"
-      }
-    },
-    "postConsolidation": {
-      "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 25,
-      "lifecycleContracts": 25,
-      "legacyContracts": 16,
-      "retiredOutputContracts": 0,
-      "migrations": 9,
-      "readerEdges": 11,
-      "writerEdges": 9,
-      "readerVersionSlots": 34,
-      "lifecycleFixtures": 29,
-      "lifecycleFixtureBytes": 168234,
-      "legacyAndRetiredFixtures": 16,
-      "legacyAndRetiredFixtureBytes": 80937,
-      "lifecycleShapes": 23,
-      "lifecycleBoundProfiles": 7,
-      "lifecycleHooks": 18,
-      "lifecycleSerialisationProfiles": 7,
-      "lifecyclePrivacyProfiles": 3,
-      "lifecycleConsumerEdges": 17,
-      "versionSensitiveProductionLines": 239,
-      "versionSensitiveBranches": 58,
-      "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 13,
-      "sourceMeasurement": {
-        "sourceFiles": 15,
-        "versionSensitiveProductionLines": 239,
-        "versionSensitiveBranches": 58,
-        "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
-      }
-    }
-  },
   "limitations": [
     "The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.",
     "IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.",
-    "Quota ratios compare the current and proposed logical Case representations with the 4 MiB application Case ceiling; they are not browser-origin quota estimates.",
+    "Quota ratios compare serialised Case bytes with the application Case ceiling; they are not browser-origin quota estimates.",
     "Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.",
-    "The high-duplication boundary is deliberately synthetic and cannot by itself justify a second persistence abstraction.",
-    "Digest identity would establish only byte identity under the declared canonicalisation, not source truth, authority, ownership, or safety.",
-    "The focused verification duration is one local observation and is retained for maintenance context, not as a deterministic drift threshold."
+    "All scenarios are synthetic; their duplication rates do not establish representative real-world usage.",
+    "Duplicate digests identify content under the stated exact or canonical comparison; they do not establish source truth, authorship, authority, ownership or safety."
   ]
 }

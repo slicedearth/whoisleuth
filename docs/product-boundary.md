@@ -63,8 +63,7 @@ control.
 
 WHOISleuth does not provide multi-tenant accounts, shared case custody,
 background workspace synchronisation, role-based collaboration or automated
-enforcement. Those are outside the current product rather than partially
-implemented features.
+enforcement.
 
 ## Compatibility
 

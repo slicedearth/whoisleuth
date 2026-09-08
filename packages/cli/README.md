@@ -51,14 +51,7 @@ only `bulk` accepts multiple targets.
 
 ## Command groups
 
-| Group | Common commands |
-| --- | --- |
-| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `mail-headers`, `brief` |
-| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` |
-| Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
-| Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
-
-Use the installed registry for the complete inventory:
+Use the installed registry to browse Investigate, Respond, Assure and Utilities:
 
 ```bash
 whoisleuth commands --group investigate
@@ -66,10 +59,6 @@ whoisleuth commands --group respond --mode offline
 whoisleuth commands --json
 whoisleuth manual | man -l -
 ```
-
-`registry-scaffold` has a separate fixture contract: its `--profile` selects a
-fixed fixture profile and it rejects shared `--config` profiles. It creates
-sanitised local fixture material.
 
 ## Collection and output
 
@@ -90,9 +79,8 @@ file atomically and refuses an existing path unless `--force` is selected.
 recollection and keeps exit code 4 even if later steps finish. Failed validation
 or export steps remain retryable. See `docs/cli.md` for checkpoint compatibility.
 
-Exit codes are 0 for completion, 2 for invalid input, 3 for collection or
-comparison failure, 4 for a partial result or unmet selected evidence policy,
-70 for internal bootstrap failure, 130 for cancellation and 143 for SIGTERM.
+The included `docs/cli-reference.md` lists common exit codes and compatibility
+contracts. A completed command can still contain partial source evidence.
 
 ## Repository checkout
 

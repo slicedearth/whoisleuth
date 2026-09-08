@@ -85,15 +85,8 @@ Only `bulk` accepts multiple targets.
 
 ## Command groups
 
-The installed registry groups commands under the same analyst vocabulary as the
-application:
-
-| Group | Common commands |
-| --- | --- |
-| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `mail-headers`, `brief` |
-| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` (local handoff from browser-created Cases) |
-| Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
-| Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
+The installed catalogue groups commands under Investigate, Respond, Assure and
+Utilities, with each command's inputs, output and network boundary.
 
 Filter the canonical index without running the selected commands:
 
@@ -103,10 +96,6 @@ whoisleuth commands --group respond --mode offline
 whoisleuth commands --json
 whoisleuth manual | man -l -
 ```
-
-`registry-scaffold` has a separate fixture bootstrap contract: its `--profile`
-selects one fixed fixture profile and it rejects shared `--config` profiles.
-It creates sanitised local fixtures and does not contact a registry.
 
 ## Collection boundaries
 
@@ -178,15 +167,9 @@ times; previously published version-2 packets remain verifiable.
 
 ## Exit codes
 
-| Code | Meaning |
-| ---: | --- |
-| 0 | The command completed. |
-| 2 | Invalid command, option or input. |
-| 3 | Collection, lookup or comparison failed. |
-| 4 | The result was partial or a selected evidence policy was not met. |
-| 70 | Internal CLI bootstrap failure. |
-| 130 | The analyst cancelled the command. |
-| 143 | The process received SIGTERM. |
+See the [exit-code reference](cli-reference.md#files-output-and-automation).
+A completed command can still contain partial sources; use the selected
+command's strict-exit policy when automation requires complete evidence.
 
 ## Command details
 

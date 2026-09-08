@@ -35,9 +35,10 @@ collection.
 Build and run the portable Express host with:
 
 ```bash
-npm run build
 npm start
 ```
+
+`npm start` builds the frontend before starting Express.
 
 The application reads deployment settings from the environment. Never commit
 passwords, session secrets, provider credentials or production configuration.
@@ -45,13 +46,8 @@ passwords, session secrets, provider credentials or production configuration.
 ## Frontend development
 
 The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
-commands, so ordinary development can remain at repository root:
-
-```bash
-npm run dev
-npm run check
-npm run build
-```
+commands. Run `npm run check` for Svelte validation or `npm run build` for a
+standalone production build from the repository root.
 
 The browser application imports runtime-neutral contracts from `packages/` and
 keeps Svelte state, DOM access, IndexedDB and downloads in frontend adapters.
@@ -173,10 +169,9 @@ refresh or network request, and does not fail an ordinary run merely because an
 optional retained source has aged. Use `npm run sources:health -- --strict` for
 the explicit maintenance gate; each entry names its narrower strict command.
 
-Candidate-acceptance, catalogue-update, staging-evidence, first-use-study and
-release-publication commands are deliberate maintainer actions rather than
-ordinary verification. Use the owning documentation or command help and do not
-run them as part of an unrelated change.
+Source refresh, catalogue updates and release publication are separate from
+ordinary verification. Use the corresponding guide or command help before
+running an operation that changes data or contacts an external service.
 
 ## Command-line interface
 
@@ -203,14 +198,5 @@ boundaries. Installed `whoisleuth <command> --help`, `whoisleuth commands` and
 
 ## Project layout
 
-| Path | Responsibility |
-| --- | --- |
-| `frontend/` | SvelteKit routes, components and browser adapters. |
-| `lib/` | Shared hosted/runtime collection and presentation-neutral services. |
-| `packages/` | Runtime-neutral contracts and domain modules. |
-| `cli/` and `bin/` | CLI grammar, handlers, terminal output and entry points. |
-| `netlify/functions/` | Netlify adapters over the shared hosted boundary. |
-| `test/` and `e2e/` | Deterministic unit, contract and browser verification. |
-| `tools/` | Explicit maintainer checks and generated-contract renderers. |
-
-See [architecture](architecture.md) for ownership and dependency boundaries.
+See [component ownership](architecture.md#component-ownership) for the directory
+map and [Contributing](../CONTRIBUTING.md#find-the-owner) for common editing paths.

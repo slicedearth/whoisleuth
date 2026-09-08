@@ -12,20 +12,8 @@ contains the exhaustive recipient, retention and export metadata.
 
 ## Installation
 
-Public releases require Node.js 24 or later. Release verification uses the
-exact Node.js 24 maintainer runtime and separately exercises the installed
-package on Node.js 26:
-
-```bash
-npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
-npm install --global --ignore-scripts @slicedearth/whoisleuth-cli
-whoisleuth doctor
-```
-
-The scoped package and application share one semantic version. The package
-requires no dependency lifecycle scripts and does not call the hosted
-WHOISleuth deployment. From a repository checkout, replace `whoisleuth` with
-`node bin/whoisleuth.mts`.
+Use the [installation guide](cli.md#installation) for runtime requirements,
+installation and updates. The CLI runs locally without a hosted account.
 
 ## Find and inspect commands
 
@@ -63,12 +51,8 @@ disclosures without collecting. Fast is the Lookup default. Deep adds the
 applicable registration, DNS, HTTP, TLS, page, technology and network context.
 Optional browser providers are not implicit CLI actions.
 
-`mail-headers` is an offline review of one analyst-selected RFC-style header
-block. It reports domain-only identity, header-reported authentication,
-exact-domain alignment, and bounded `Received` routing. It retains no address
-local parts, display names, subject, body, attachment, or raw header value in
-its output. It does not independently validate SPF, DKIM, DMARC, or ARC and
-does not treat divergence as proof of abuse.
+The [message-header review](cli.md#message-header-review) is offline and reports
+publisher claims, not independent DNS or cryptographic validation.
 
 `dnssec-validate` and `mail-transport` are isolated authorised actions. Both
 require a selected literal public resolver, a local trust-anchor document and
@@ -155,8 +139,9 @@ evidence is accurate, current, safe to share or attributable to a person.
   `workflow-run` executes only installed steps, requires approval for network
   work and pauses at unresolved analyst selections. Repeat
   `--select <step-id>=<path-or-value>` in placeholder order to resume a selected
-  step; version-1 checkpoints remain readable and version 2 retains the exact
-  selections in the local checkpoint.
+  step. Checkpoints retain exact selections and distinguish incomplete
+  collection from retryable failures; see [resuming a fixed workflow](cli.md#resuming-a-fixed-workflow)
+  for the supported versions and resume behaviour.
 
 Use the installed focused help for positional inputs, exact ceilings, options,
 network effects, outputs and command-specific exit behaviour.

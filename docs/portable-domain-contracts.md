@@ -1,22 +1,20 @@
 # Portable domain compatibility
 
-The portable runtime boundary is split by meaning rather than by presentation
-layer. Schema identity, versions, bounds, compatibility metadata, and lifecycle
+Schema identity, versions, bounds, compatibility metadata, and lifecycle
 relationships live in `packages/contracts/`. Parsing, normalisation, merging,
 projection, canonicalisation, and integrity verification live in the matching
 pure domain package. Browser storage, downloads, passphrase controls, terminal
 formatting, filesystem access, and environment adapters remain outside those
 packages.
 
-Historical paths under `frontend/src/lib/analysis/` are exact re-export
+Compatibility paths under `frontend/src/lib/analysis/` are exact re-export
 facades. Browser callers keep the same exported values and functions, while CLI
 and other non-frontend consumers import the dependency-neutral owner directly.
 The architecture gate rejects any CLI dependency path into frontend source.
 
 The generated [Case portability reference](case-contracts.md) and
 `npm run schema:inventory` record current writers and supported public formats.
-This guide describes why those families remain separate without maintaining
-another version list.
+The sections below identify each family's runtime owner and data boundary.
 
 ## Registered families
 
@@ -25,7 +23,7 @@ another version list.
 `packages/contracts/investigation-portability.mts` owns the compatibility
 descriptors, lifecycle contracts, and immutable fixtures. Runtime behaviour is
 owned by `packages/investigation/`. The generated schema inventory reports the
-exact tier and retained versions, so this narrative does not repeat them.
+exact tier and supported versions.
 
 The exact public investigation-capsule writer remains readable alongside its
 single v2 successor. Other investigation documents retain only their public
@@ -78,19 +76,18 @@ or coordination.
 ### Workspace archive section
 
 `packages/contracts/case-portability.mts` remains the sole lifecycle owner for
-ordinary and encrypted workspace archives and now also registers the exact
+ordinary and encrypted workspace archives and registers the exact
 version-1 workspace-settings section. Pure archive composition, parsing,
 preview, checksum validation, and injected-Web-Crypto envelope behaviour live
 in `packages/workspace/`. Browser storage, download, and passphrase UI remain
-adapters. Exact public ordinary archive version 5 reads directly alongside the
-v2 archive writer, while encrypted envelope version 1 remains unchanged.
-Earlier reader-only archives fail explicitly without mutation.
+adapters. Current writers and supported public archive versions are listed in
+the [Case portability reference](case-contracts.md). Unsupported archives fail
+explicitly without mutation.
 
 ## Compatibility and privacy bounds
 
-All newly registered claims bind exact fixture bytes and SHA-256 digests.
+Compatibility fixtures bind exact bytes and SHA-256 digests.
 Unsupported future portable formats fail before partial parsing or merge, and
-output-only history gains no writer. The relocation adds no archive section,
-browser persistence, network request, collector, provider, telemetry, score,
-availability rule, or authority decision. Raw registry payloads, expanded
+output-only history gains no writer. These domain modules perform no storage
+or network operations. Raw registry payloads, expanded
 contacts, credentials, cookies, and query-bearing URLs remain excluded.

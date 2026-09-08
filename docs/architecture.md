@@ -2,8 +2,7 @@
 
 WHOISleuth is a TypeScript modular monolith with a SvelteKit browser interface,
 a shared Express/Netlify request boundary and a separately packaged local CLI.
-The design keeps evidence rules independent from presentation and makes every
-network, storage and active-operation boundary explicit.
+Evidence rules sit below the browser, CLI and deployment adapters.
 
 The [current product boundaries](product-boundary.md) define the supported
 jobs and execution planes. The [threat model](threat-model.md) describes the
@@ -65,7 +64,7 @@ existing deadline. Only a validated final envelope can become a result.
 
 ### Collection profiles
 
-| Profile | Intended use | Boundary |
+| Profile | Use | Boundary |
 | --- | --- | --- |
 | **Fast** | High-volume registration triage. | RDAP-led registration analysis with bounded authoritative DNS fallback where required; WHOIS and rich website/TLS work are skipped explicitly. |
 | **Deep, compact** | Analyst-selected richer Bulk triage. | Adds bounded WHOIS, DNS, website and TLS evidence needed for compact comparison while omitting rich follow-ups and raw publications. |
@@ -126,8 +125,7 @@ The generated [capability contract](capability-manifest.md),
 [privacy/data-flow catalogue](privacy-data-flow-catalogue.md),
 [schema inventory](case-contracts.md) and
 [portable compatibility reference](portable-domain-contracts.md) provide the
-exhaustive metadata. Human guides link to those owners rather than repeating
-their matrices.
+exhaustive metadata.
 
 ## Data ownership and persistence
 
@@ -198,15 +196,3 @@ Verification is layered:
 Automated tests use deterministic fixtures and make no live investigation
 requests. Timing-sensitive tests use the repository stress convention, and a
 failure is diagnosed before any retry is accepted.
-
-## Deliberate trade-offs
-
-- A modular monolith keeps contracts shared without adding service-to-service
-  authentication, deployment or evidence-custody boundaries.
-- Buffered hosted responses preserve one validated final-result contract.
-- IndexedDB keeps ordinary evidence under the user's browser profile without a
-  hosted workspace database.
-- Bounded known-field projections favour explainability and privacy over raw
-  response retention.
-- Human review remains mandatory for response, acquisition, defensive-control
-  and authorised active operations.

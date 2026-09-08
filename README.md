@@ -97,17 +97,9 @@ For changes to the project, see [Contributing](CONTRIBUTING.md).
 
 ## Architecture
 
-The application is a TypeScript modular monolith:
-
-- `packages/` owns runtime-neutral contracts and domain rules;
-- `lib/` owns shared bounded hosted/runtime services;
-- `frontend/` owns SvelteKit routes, browser state and IndexedDB adapters;
-- `cli/` and `bin/` own local command grammar, handlers and terminal output;
-- Express and Netlify functions adapt the same hosted request boundary.
-
-The backend has no general investigation database. The browser decides which
-bounded records to retain or export. The CLI has separate offline, networked and
-authorised-active contracts. See [architecture](docs/architecture.md),
+The application is a TypeScript modular monolith with shared domain rules,
+browser-local storage and separate browser, CLI and deployment adapters. The
+backend has no general investigation database. See [architecture](docs/architecture.md),
 [current product boundaries](docs/product-boundary.md) and the
 [threat model](docs/threat-model.md).
 
@@ -136,11 +128,8 @@ current writers and direct migrations are described in the
 Start with the checks relevant to your change:
 
 ```bash
-npm test
-npm run typecheck
-npm run check
-npm run build
-git diff --check
+npm run verification:focused -- --list
+npm run verification:focused
 ```
 
 The complete gate matrix, including browser, architecture, privacy,

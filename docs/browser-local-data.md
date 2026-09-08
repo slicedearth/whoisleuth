@@ -17,8 +17,7 @@ Each collection has a canonical owner that declares its current schema,
 supported readers, record and byte limits, normalisation rules, future-version
 behaviour and write semantics. The generated
 [schema inventory](case-contracts.md) and
-[privacy catalogue](privacy-data-flow-catalogue.md) project those declarations;
-this document does not duplicate their complete tables.
+[privacy catalogue](privacy-data-flow-catalogue.md) project those declarations.
 
 The active IndexedDB codec is plaintext JSON. Browser access controls protect
 the profile boundary, but IndexedDB is not encrypted at rest by WHOISleuth.
@@ -150,9 +149,8 @@ Schema 5 stores identical row Profile context once on the session; mixed context
 remain per-row. The collection reader restores complete rows before application
 use. Schema 4 still requires its original explicit row context.
 
-Histories remain in the existing atomic records. The current design adds no
-second database, synchronisation service, hosted custody or background network
-operation.
+Histories are stored in the same atomic collection records. Normalisation and
+storage-pressure reporting perform no network operation.
 
 ## Separate storage boundaries
 

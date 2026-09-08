@@ -43,13 +43,11 @@ It uses a five-minute outer deadline, bounds and validates the JSON report, then
 prints a concise deterministic result. A missing, failed or timed-out advisory
 response fails closed rather than being mistaken for a clean audit.
 
-Registry availability is deliberately not part of the required per-push CI
-path. Pull requests that change a manifest or lockfile are blocked by the
+Pull requests that change a manifest or lockfile are checked by the
 pinned GitHub Dependency Review action, while the full online production audit
 runs on its own weekly or manually dispatched workflow and remains a release
 gate. Required local and hosted CI both install the exact lockfile with
-install-time auditing disabled, avoiding four redundant advisory requests and
-preventing a registry delay from obscuring source or test failures.
+install-time auditing disabled.
 Scheduled maintenance workflows make the same choice. The CLI release workflow
 runs the explicit production audit before its audited-disabled locked install,
 so publication cannot rely on an implicit install summary.
@@ -91,5 +89,4 @@ gh api \
 The export reflects GitHub's current dependency graph, not a byte-for-byte
 inventory of a deployed bundle. Retain the lockfile, production dependency
 notice, build output checks, and deployment record when exact release evidence
-is required. Add another SBOM format or generator only when a specific consumer
-cannot accept the built-in SPDX export.
+is required.

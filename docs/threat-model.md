@@ -1,31 +1,10 @@
 # Threat Model
 
-This threat model describes the WHOISleuth product boundary accepted in the
-[product decision](product-boundary.md). It supplements the
+This threat model covers the [current product boundaries](product-boundary.md).
+It supplements the
 [architecture orientation](architecture.md), [security policy](../SECURITY.md),
 and [privacy notice](../PRIVACY.md). It is not a claim that upstream public data
 is correct, complete, current, or safe.
-
-## Security objectives
-
-WHOISleuth should:
-
-- prevent an investigated target or imported artefact from reaching private or
-  reserved network resources;
-- keep credentials, sessions, analyst notes, raw payloads, personal data, and
-  deliberate local evidence within their documented custody boundaries;
-- preserve source identity, observation time, completeness, truncation, and
-  limitations through derivation, storage, export, replay, and comparison;
-- prevent malformed, oversized, duplicate-key, deeply nested, or future-version
-  input from escaping its bound or being silently reinterpreted;
-- keep active actions deliberate, authorised, rate-bounded, cancellable where
-  promised, and separate from ordinary Lookup, Bulk, monitoring, and offline
-  review;
-- make signed, hashed, or cryptographically validated claims only about the
-  exact bytes, projection, key, trust anchor, and validation family checked;
-  and
-- fail closed when a required security, privacy, authority, schema, or budget
-  condition cannot be established.
 
 ## Protected assets
 
@@ -120,9 +99,8 @@ entries, aggregate bytes, browser stores, and rendered output require limits
 before accumulation or expensive parsing. A post-parse or post-read size check
 is not sufficient.
 
-Residual risk is bounded process disruption within the configured limit. The
-limits are therefore chosen with the deployment and local runtime in mind and
-must be reviewed when formats or environments change.
+Residual risk includes process disruption within the configured bounds. Byte
+and operation limits do not guarantee identical memory or latency across runtimes.
 
 ### Evidence confusion and false certainty
 
@@ -160,12 +138,11 @@ retained. Exporters and their strict readers must form a tested closure.
 
 ### Active-operation abuse
 
-Active mail, DNSSEC, or future protocol actions require explicit operator scope,
+Active mail and DNSSEC commands require explicit operator scope,
 disclosure, acknowledgement, bounded public targets, strict command and input
 separation, deadlines, rate budgets, and fixture-only automated tests. They
 must never send mail, authenticate, enumerate recipients, test relay, expand
-into Fast or Compact, or retry automatically unless a later approved contract
-explicitly says so.
+into Fast or Compact, or retry automatically.
 
 ### Authentication and hosted custody
 
@@ -192,7 +169,7 @@ release-candidate assembly, archive digests, and installed-package workflows
 must refer to the exact candidate. A passing source test does not prove that a
 different package or deployment contains the reviewed bytes.
 
-## Deliberate non-goals
+## Out of scope
 
 WHOISleuth does not claim to provide:
 

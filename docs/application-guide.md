@@ -63,9 +63,9 @@ A pasted HTTP(S) URL selects its full hostname for collection, not its port,
 path, query or fragment. URLs containing credentials are rejected. Retaining
 an exact Incident URL in a Case is a separate, deliberate choice.
 
-The result starts with registration and availability because those decisions
-have specific authority rules. Supporting DNS, website, TLS, certificate,
-network and provider evidence cannot silently replace registry authority.
+The result starts with registration and availability. Supporting DNS, website,
+TLS, certificate, network and provider evidence cannot silently replace
+registry authority.
 
 Each source shows its state, observation time and limitations. Long supporting
 sections use disclosures, while important unavailable or contradictory evidence
@@ -90,16 +90,15 @@ handling.
 
 ### Retaining a Lookup
 
-Creating or refreshing a Case is deliberate. Case schema 15 retains the exact
+Creating or refreshing a Case is deliberate. A Case retains the exact
 normalised submitted hostname on the new point-in-time evidence snapshot while
 the Case remains keyed by canonical registrable domain. Different hostnames can
-therefore remain attached to different snapshots. Published v2 schema-13 and
-schema-14 and public v1 schema-12 Cases migrate directly and may retain a null hostname;
-WHOISleuth does not reconstruct one from URLs, certificates, redirects or other
-weaker evidence.
+therefore remain attached to different snapshots. Migrated Cases may retain a
+null hostname; WHOISleuth does not reconstruct one from URLs, certificates,
+redirects or other weaker evidence.
 
-Ordinary transient Lookups create no hostname history. Case report v11 and
-response packet v9 do not add the snapshot hostname, while ordinary Case,
+Ordinary transient Lookups create no hostname history. Case reports and
+response packets do not add the snapshot hostname, while ordinary Case,
 workspace and trusted Case-pack exports can contain it and require sharing
 review.
 
@@ -283,14 +282,11 @@ current browser profile. Failed reads, quota errors and unsupported versions
 remain explicit. Clearing site data removes the workspace; downloaded files
 remain under the user's control.
 
-Workspace archive version 8 is current and accepts exact versions 5, 6 and 7.
-Version 5 contains public Case schema 12 and gains an empty Analyst Review Item
-section during migration. Version 6 retains its existing sections, while the
-current writer stores Case schema 15 in version 8. Import validates the full
-checksummed envelope before a non-destructive merge, and an omitted section
-never deletes local data.
+Import validates the full checksummed archive before a non-destructive merge;
+an omitted section never deletes local data. The [Case and workspace contracts](case-contracts.md)
+list supported versions and migrations.
 
-The encrypted envelope remains version 1 and uses browser-local password-based
+Encrypted archives use browser-local password-based
 authenticated encryption. It protects the downloaded file while locked, not an
 open Console or active IndexedDB. A checksummed unsupported future Case section
 is isolated as unsupported.
