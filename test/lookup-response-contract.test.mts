@@ -655,37 +655,38 @@ describe('Lookup HTTP response contract', () => {
 
   test('fails closed for malformed and future nested profiles while retaining independent evidence', () => {
     const profiles = canonicalPageProfiles();
-    const futureTechnology = { ...profiles.technologyProfile, profileVersion: 999 };
-    const raw = response({
-      availability: {
-        applicable: true,
-        domain: 'example.test',
-        state: 'registered',
-        pageIdentity: profiles.pageIdentity,
-        technologyProfile: futureTechnology,
-        securityPosture: profiles.securityPosture,
-        tls: canonicalTlsProfile(),
-      },
-    });
-    const before = structuredClone(raw);
-    const first = parseLookupHttpResponse(raw);
-    const second = parseLookupHttpResponse(raw);
-    assert.equal(first.ok, true);
-    assert.deepEqual(first, second);
-    assert.deepEqual(raw, before);
-    assert.notEqual(first.value, raw);
-    assert.equal(first.value.availability.pageIdentity, profiles.pageIdentity);
-    assert.equal(first.value.availability.securityPosture, profiles.securityPosture);
-    assert.deepEqual(recordValue(first.value.availability.technologyProfile), {
-      status: 'unsupported',
-      source: 'derived',
-      complete: false,
-      truncated: false,
-      compatibility: 'unsupported_version',
-      limitations: ['Technology profile uses a newer unsupported version; its evidence was withheld.'],
-      findings: [],
-      browserLibraryProfile: null,
-    });
+    for (const profileVersion of [999, 1_000, 65_536, Number.MAX_SAFE_INTEGER]) {
+      const raw = response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          pageIdentity: profiles.pageIdentity,
+          technologyProfile: { ...profiles.technologyProfile, profileVersion },
+          securityPosture: profiles.securityPosture,
+          tls: canonicalTlsProfile(),
+        },
+      });
+      const before = structuredClone(raw);
+      const first = parseLookupHttpResponse(raw);
+      const second = parseLookupHttpResponse(JSON.parse(JSON.stringify(raw)));
+      assert.equal(first.ok, true);
+      assert.deepEqual(first, second);
+      assert.deepEqual(raw, before);
+      assert.notEqual(first.value, raw);
+      assert.equal(first.value.availability.pageIdentity, profiles.pageIdentity);
+      assert.equal(first.value.availability.securityPosture, profiles.securityPosture);
+      assert.deepEqual(recordValue(first.value.availability.technologyProfile), {
+        status: 'unsupported',
+        source: 'derived',
+        complete: false,
+        truncated: false,
+        compatibility: 'unsupported_version',
+        limitations: ['Technology profile uses a newer unsupported version; its evidence was withheld.'],
+        findings: [],
+        browserLibraryProfile: null,
+      });
+    }
 
     for (const technologyProfile of [
       { ...profiles.technologyProfile, status: 'unknown_status' },
