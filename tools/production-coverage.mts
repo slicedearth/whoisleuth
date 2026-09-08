@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +10,13 @@ export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SAFE_SOURCE_PATH = /^(?:[-a-zA-Z0-9._+()@\[\]]+\/)*[-a-zA-Z0-9._+()@\[\]]+$/u;
-const GENERATED_SOURCE = /(?:^|\/)(?:generated\/|[^/]+\.generated\.(?:mts|ts)$)/u;
+const SOURCE_ROOTS = Object.freeze([
+  'lib', 'cli', 'bin', 'frontend/src/lib', 'frontend/src/routes', 'netlify/functions', 'packages',
+]);
+const GENERATED_SOURCE_GLOBS = Object.freeze(['**/generated/**', '**/*.generated.mts', '**/*.generated.ts']);
+function generatedSource(source: string): boolean {
+  return GENERATED_SOURCE_GLOBS.some((pattern) => path.matchesGlob(source, pattern));
+}
 const RECORD_FIELDS = Object.freeze(['LF', 'LH', 'BRF', 'BRH', 'FNF', 'FNH'] as const);
 
 export type CoverageCount = Readonly<{
@@ -71,8 +78,6 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/controllers/lookup-anchor-controller.ts', category: 'browser_adapter', owner: 'e2e/lookup-anchor-navigation.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/ct-history.ts', category: 'browser_adapter', owner: 'e2e/discover.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/detection-rules.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/investigation-guide-storage.ts', category: 'browser_adapter', owner: 'e2e/investigation-guide.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/investigation-guide.ts', category: 'browser_adapter', owner: 'e2e/investigation-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-search.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-templates.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/local-data-platform-probe.ts', category: 'browser_adapter', owner: 'e2e/local-data-platform.spec.ts' }),
@@ -84,7 +89,6 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/+layout.ts', category: 'framework_entry', owner: 'frontend/src/routes/+layout.svelte' }),
   Object.freeze({ source: 'lib/netlify-function-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
-  Object.freeze({ source: 'lib/whois-contracts.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'packages/investigation/lookup-artefact-inputs.mts', category: 'type_only', owner: 'tsconfig.json' }),
 ]);
 
@@ -186,15 +190,6 @@ function sourceArea(source: string): string | null {
 }
 
 export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT): readonly string[] {
-  const roots = Object.freeze([
-    'lib',
-    'cli',
-    'bin',
-    'frontend/src/lib',
-    'frontend/src/routes',
-    'netlify/functions',
-    'packages',
-  ]);
   const sources: string[] = [];
   const visit = (relativeDirectory: string): void => {
     const entries = readdirSync(path.join(repositoryRoot, relativeDirectory), { withFileTypes: true })
@@ -202,7 +197,7 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
     for (const entry of entries) {
       const relative = `${relativeDirectory}/${entry.name}`;
       if (entry.isDirectory()) visit(relative);
-      else if (entry.isFile() && /\.(?:mts|ts)$/u.test(entry.name) && !GENERATED_SOURCE.test(relative)) {
+      else if (entry.isFile() && /\.(?:mts|ts)$/u.test(entry.name) && !generatedSource(relative)) {
         if (!SAFE_SOURCE_PATH.test(relative)) throw new TypeError(`Production source inventory contains an unsafe path: ${relative}.`);
         sources.push(relative);
         if (sources.length > MAX_PRODUCTION_COVERAGE_FILES) throw new TypeError('Production source inventory exceeds the maintained file bound.');
@@ -211,7 +206,7 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
       }
     }
   };
-  for (const root of roots) visit(root);
+  for (const root of SOURCE_ROOTS) visit(root);
   if (existsSync(path.join(repositoryRoot, 'server.mts'))) sources.push('server.mts');
   const unique = [...new Set(sources)].sort();
   if (unique.length !== sources.length || unique.length < 1) throw new TypeError('Production source inventory must be non-empty and unique.');
@@ -230,7 +225,7 @@ function finishRecord(raw: MutableRecord, index: number): ProductionCoverageReco
   if (!SAFE_SOURCE_PATH.test(raw.source) || path.isAbsolute(raw.source) || raw.source.includes('..')) {
     throw new TypeError(`Coverage record ${index} has an unsafe source path.`);
   }
-  if (GENERATED_SOURCE.test(raw.source)) {
+  if (generatedSource(raw.source)) {
     throw new TypeError(`Generated source must not contribute to production coverage: ${raw.source}.`);
   }
   for (const field of RECORD_FIELDS) {
@@ -393,9 +388,32 @@ export function formatProductionCoverage(
   ].join('\n');
 }
 
+// Instrumentation and validation share the same source boundaries and global
+// floors. Generated files discovered in another package need no script edit.
+export function productionCoverageArguments(testPattern = 'test/*.test.mts'): string[] {
+  return [
+    '--test', '--test-concurrency=4', '--experimental-test-coverage',
+    ...Object.entries(PRODUCTION_COVERAGE_POLICY.global).map(([metric, minimum]) => `--test-coverage-${metric}=${minimum}`),
+    ...SOURCE_ROOTS.flatMap((root) => ['mts', 'ts'].map((extension) => `--test-coverage-include=${root}/**/*.${extension}`)),
+    '--test-coverage-include=server.mts',
+    ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
+    '--test-reporter=spec', '--test-reporter-destination=stdout',
+    '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
+    testPattern,
+  ];
+}
+
 export function main(args = process.argv.slice(2)): number {
   try {
-    if (args.length > 1) throw new TypeError('Usage: node tools/production-coverage.mts [lcov-path]');
+    if (args.length === 1 && args[0] === '--run') {
+      const result = spawnSync(process.execPath, productionCoverageArguments(), {
+        cwd: REPOSITORY_ROOT, env: process.env, stdio: 'inherit',
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0) return result.status ?? 2;
+      args = [];
+    }
+    if (args.length > 1 || args[0]?.startsWith('-')) throw new TypeError('Usage: node tools/production-coverage.mts [--run|lcov-path]');
     const coveragePath = path.resolve(REPOSITORY_ROOT, args[0] ?? 'test-coverage.lcov');
     const size = statSync(coveragePath).size;
     if (size < 1 || size > MAX_PRODUCTION_COVERAGE_BYTES) throw new TypeError('LCOV file has an invalid byte count.');

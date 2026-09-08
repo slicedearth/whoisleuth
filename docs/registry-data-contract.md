@@ -37,8 +37,8 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Current profile version 11 uses one
-  standards-compliant bounded HTML tokenization pass and expands the curated
+  curated software and delivery indicators. The current profile uses one
+  standards-compliant bounded HTML tree-construction pass and expands the curated
   generator, element, attribute, static-asset, and resource-origin catalogue
   for common content, commerce, site-building, framework, and static-site
   platforms. It also carries a nested version-2 browser-library profile
@@ -254,7 +254,7 @@ availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
 browser-local stores. A published PTR name is routing context, not proof of
 hosting control, ownership, intent, or maliciousness.
 
-The current deep TLS profile, version 3, extends the retained leaf-certificate
+The current deep TLS profile extends the retained leaf-certificate
 projection with the signature algorithm and OID, a capped extended-key-usage purpose list,
 fixed subject-alternative-name class counts, and classified Authority
 Information Access presence counts. It retains at most 100 SAN entries, 16

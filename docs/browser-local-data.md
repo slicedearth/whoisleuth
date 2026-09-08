@@ -47,9 +47,14 @@ are append-only and bounded.
 The current workspace archive is version 8. It contains Case schema 15 and a
 bounded analyst review-state section. Exact workspace versions 5, 6 and 7 remain
 readable and migrate directly; version 5 adds an empty review-state section
-without inventing decisions. The Brand Profile contract reads exact versions 6
-and 7 and writes version 8. Other historical formats and future versions are
-unsupported.
+without inventing decisions. Brand Profiles write version 9 and read exact
+versions 6–8; website snapshots write version 6 and read exact versions 4–5.
+Other historical formats and future versions are unsupported.
+
+Native HTML fingerprints use algorithm 2. Public algorithm-1 baselines retain
+their hashes and remain readable; HTML-derived comparisons across algorithms
+are unavailable rather than a match or a change. Refresh a baseline deliberately
+to use the current parser. Exact favicon-byte comparison remains separate.
 
 Saved Bulk schema 5 reads public schema 4; retained relationship schema 2 reads
 public schema 1. Current records preserve each contributing source's identity,

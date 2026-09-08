@@ -4,6 +4,7 @@
 // values, certificate errors, URLs, and DNS record contents are not copied.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import { RESPONSE_POLICY_VERSION } from './response-policy.mts';
 import {
   MAX_SECURITY_POSTURE_FINDINGS,
   WEBSITE_SECURITY_POSTURE_VERSION,
@@ -164,12 +165,16 @@ const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDef
     detail: () => 'The effective selected script source included a wildcard or broad scheme source. This fixed observation does not establish that an unsafe script is reachable.',
   },
   csp_unsafe_eval: {
-    label: 'CSP permits unsafe evaluation',
-    detail: () => "The effective selected script source included 'unsafe-eval'.",
+    label: 'CSP evaluation allowance observed',
+    detail: () => "The selected response policies allow evaluation through script-src or default-src. Element and attribute directives do not govern this allowance; other browser controls were not evaluated.",
   },
   csp_unsafe_inline: {
-    label: 'Response CSP header permits unqualified inline script',
-    detail: () => "The selected response header included 'unsafe-inline' without a nonce or hash source in that directive. A separate page policy was not observed early enough to qualify this response-scoped finding.",
+    label: 'Response CSP allows unqualified inline script blocks',
+    detail: () => "The selected response policies allow inline script blocks through script-src-elem, script-src or default-src without a valid nonce/hash source or strict-dynamic suppressing unsafe-inline. No earlier page policy qualified this response-scoped finding.",
+  },
+  csp_unsafe_inline_attributes: {
+    label: 'Response CSP allows unqualified inline event handlers',
+    detail: () => 'The selected response policies allow inline event attributes through script-src-attr, script-src or default-src. This header-only observation does not establish whether a handler exists or executes; page-policy timing was not evaluated for attributes.',
   },
   csp_inline_constrained_by_meta: {
     label: 'Page CSP further constrains inline script',
@@ -210,7 +215,7 @@ const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDef
 
 function responsePolicyFindings(value: unknown): PostureFinding[] {
   const policy = record(value);
-  if (![1, 2].includes(Number(policy.responsePolicyVersion))) return [];
+  if (![1, 2, RESPONSE_POLICY_VERSION].includes(Number(policy.responsePolicyVersion))) return [];
   const findings: PostureFinding[] = [];
   const components = record(policy.components);
   const componentLabels: Array<[string, string]> = [

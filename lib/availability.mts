@@ -19,6 +19,7 @@ import { collectDnsIntelligence, skippedDnsIntelligence } from './dns-intelligen
 import type { DnsResolver } from './dns-intelligence.mts';
 import { fetchFaviconHash } from './favicon.mts';
 import { extractHtmlSignals } from './html-signals.mts';
+import { analyzeStaticHtml } from './static-html-analysis.mts';
 import { featureDecision, networkFeaturePolicy } from './feature-policy.mts';
 import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from './http-intelligence.mts';
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
@@ -174,8 +175,6 @@ const PARKING_NS_PATTERNS = [
   /dsredirection\.com$/i,
 ];
 
-const FOR_SALE_TEXT_RE =
-  /(this domain (?:name )?(?:may be|is) for sale|buy this domain|domain(?: name)? for sale|make (?:an|your) offer|inquire about (?:this|the) domain|purchase this domain|this domain is available for purchase|backorder this domain|bid on this domain|premium domain for sale|own this domain|click here to buy this domain|would you like to buy this domain|this domain is (?:available for lease|listed for sale))/i;
 const FOR_SALE_PATH_RE = /\/(?:premium-)?domains?-for-sale(?:\/|$)/i;
 
 function forSaleRedirectSignal(httpObservation: unknown): string | null {
@@ -748,13 +747,16 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       : Promise.resolve(skippedTlsObservation()),
   ]);
   const page = homepage.text;
+  const pageBaseUrl = typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : `https://${domain}/`;
+  const pageAnalysis = page ? analyzeStaticHtml(page, { baseUrl: pageBaseUrl, includeVisibleText: true }) : undefined;
   const favicon = websiteProbeEnabled
-    ? await fetchFaviconForDomain(domain, { html: page || '' }).catch(() => null)
+    ? await fetchFaviconForDomain(domain, { html: page || '', baseUrl: pageBaseUrl, ...(pageAnalysis ? { htmlAnalysis: pageAnalysis } : {}) }).catch(() => null)
     : null;
   const faviconHash = favicon ? favicon.hash : null;
   const faviconPHash = favicon ? favicon.phash : null;
 
   let htmlSignals: HtmlSignals = {
+    domainSaleSignal: null,
     pageTitle: null,
     hasPasswordField: false,
     phishingLanguageMatch: null,
@@ -771,16 +773,12 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
 
   if (homepage.status === 'fetched') {
     if (page) {
-      const saleMatch = page.match(FOR_SALE_TEXT_RE);
-      if (saleMatch) {
-        forSaleSignal = forSaleSignal || `homepage text ("${saleMatch[0]}")`;
-        activityStatus = 'parked';
-      }
       const responseContentType = homepage.http?.response?.contentType;
       const pageIdentityEligible = typeof responseContentType !== 'string'
         || responseContentType.trim() === ''
         || /^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(responseContentType.trim());
       htmlSignals = extractHtmlSignals(page, domain, {
+        ...(pageAnalysis ? { htmlAnalysis: pageAnalysis } : {}),
         ...(typeof homepage.http?.finalUrl === 'string' ? { baseUrl: homepage.http.finalUrl } : {}),
         ...(typeof homepage.http?.observedAt === 'string' ? { observedAt: homepage.http.observedAt } : {}),
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
@@ -800,6 +798,10 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
           ? { includeTechnologyProfile: options.includeTechnologyProfile }
           : {}),
       });
+      if (pageIdentityEligible && htmlSignals.domainSaleSignal) {
+        forSaleSignal = forSaleSignal || htmlSignals.domainSaleSignal;
+        activityStatus = 'parked';
+      }
     }
   }
 
@@ -817,7 +819,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   const retainedHttp = options.includeDeliveryMetadata === false
     ? withoutHttpDeliveryMetadata(homepage.http)
     : homepage.http;
-  const { cspMetaPolicy: _cspMetaPolicy, ...retainedHtmlSignals } = htmlSignals;
+  const { cspMetaPolicy: _cspMetaPolicy, domainSaleSignal: _domainSaleSignal, ...retainedHtmlSignals } = htmlSignals;
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
     responsePolicy,

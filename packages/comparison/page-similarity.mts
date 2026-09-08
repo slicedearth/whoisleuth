@@ -257,6 +257,7 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
   const observed = normalizePageBaseline(rawObserved);
   if (!reference || !observed) return null;
 
+  const sameFingerprintVersion = reference.fingerprintVersion === observed.fingerprintVersion;
   const components = [
     digestComponent('normalized_html', 'Normalised HTML', 'Normalized-HTML', reference.normalizedHtml, observed.normalizedHtml),
     visibleTextComponent(reference.visibleText, observed.visibleText),
@@ -265,7 +266,10 @@ export function comparePageBaselines(rawReference: unknown, rawObserved: unknown
     faviconComponent(reference, observed),
     setComponent('resource_hosts', 'External resource hosts', 'host', reference.resourceHosts, observed.resourceHosts, (value) => value),
     setComponent('tracking_identifiers', 'Tracking identifiers', 'identifier', reference.trackingIdentifiers, observed.trackingIdentifiers, (value) => `${value.type}:${value.value}`),
-  ];
+  ].map((item) => sameFingerprintVersion || item.id === 'favicon' ? item : component(
+    item.id, item.label, item.method, 'unavailable', 'Different fingerprint versions',
+    'These captures use different HTML fingerprint algorithms. Retain the older baseline and capture a new baseline to compare current page evidence.', true,
+  ));
   const counts = { same: 0, overlap: 0, different: 0, notObserved: 0, unavailable: 0 };
   for (const item of components) {
     if (item.status === 'not_observed') counts.notObserved += 1;

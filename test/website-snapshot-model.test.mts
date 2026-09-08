@@ -34,6 +34,7 @@ function snapshot(
     profileProvenance: {
       technology: { version: 11, state: 'known' },
       securityPosture: { version: 2, state: 'known' },
+      pageFingerprint: { version: 1, state: 'known' },
     },
     technologies: [{ id: 'cms-one', name: 'CMS One', category: 'cms', confidence: 'high', roles: ['application_platform'], raw: 'excluded' }],
     posture: [{ id: 'https', state: 'observed', explanation: 'excluded' }],
@@ -76,6 +77,22 @@ function snapshot(
 }
 
 describe('website profile snapshots', () => {
+  test('parser changes and unknown versions cannot become page changes or absence', () => {
+    const old = snapshot('old');
+    for (const version of [2, null, 999]) {
+      const current = snapshot('current', LATER, {
+        profileProvenance: { ...old.profileProvenance, pageFingerprint: { version, state: 'known' } },
+        identity: { ...old.identity, normalizedHtml: 'c'.repeat(64) },
+        identityValues: { resourceHosts: [], trackingIdentifiers: [], formActionOrigins: [] },
+      });
+      const compared = compareWebsiteSnapshots(old, current);
+      assert.equal(compared.complete, false);
+      assert.equal(compared.changes.some((change) => change.field === 'identity.normalizedHtml'), false);
+      assert.equal(compared.changes.some((change) => change.field.startsWith('identityValues.')), false);
+      assert.ok(compared.changes.some((change) => change.field === 'identity.profileVersion' && change.state === 'incomparable'));
+    }
+  });
+
   test('normalizes only the bounded curated evidence contract', () => {
     const normalized = normalizeWebsiteProfileSnapshot(snapshot('snapshot-one'));
 
@@ -257,14 +274,24 @@ describe('website profile snapshots', () => {
     );
   });
 
-  test('migrates the exact public v4 fixture to v5 with legacy-incomparable detector provenance', () => {
+  test('migrates exact public v4 and v5 fixtures without inventing detector provenance', () => {
     const publicV4 = JSON.parse(readFileSync(new URL('./fixtures/website-snapshot-v4.json', import.meta.url), 'utf8'));
-    const expectedV5 = JSON.parse(readFileSync(new URL('./fixtures/website-snapshot-v5-migrated.json', import.meta.url), 'utf8'));
+    const publicV5 = JSON.parse(readFileSync(new URL('./fixtures/website-snapshot-v5-migrated.json', import.meta.url), 'utf8'));
+    const expectedCurrent = {
+      ...publicV5, version: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+      snapshots: publicV5.snapshots.map((snapshot: Record<string, unknown>) => ({
+        ...snapshot, profileProvenance: {
+          ...(snapshot.profileProvenance as Record<string, unknown>),
+          pageFingerprint: { version: 1, state: 'known' },
+        },
+      })),
+    };
     const migrated = normalizeWebsiteSnapshotStore(publicV4);
 
-    assert.deepEqual(migrated, expectedV5);
-    assert.deepEqual(JSON.parse(serializeWebsiteSnapshotStore(publicV4)), expectedV5);
-    assert.deepEqual(normalizeWebsiteSnapshotStore(migrated), expectedV5);
+    assert.deepEqual(migrated, expectedCurrent);
+    assert.deepEqual(normalizeWebsiteSnapshotStore(publicV5), expectedCurrent);
+    assert.deepEqual(JSON.parse(serializeWebsiteSnapshotStore(publicV4)), expectedCurrent);
+    assert.deepEqual(normalizeWebsiteSnapshotStore(migrated), expectedCurrent);
 
     const legacy = migrated.snapshots[0];
     assert.ok(legacy);
@@ -278,6 +305,7 @@ describe('website profile snapshots', () => {
     assert.deepEqual(comparison.profileComparability, {
       technology: 'legacy_unknown',
       securityPosture: 'legacy_unknown',
+      pageFingerprint: 'comparable',
     });
     assert.equal(comparison.changes.some((change) => change.field.startsWith('technology.')
       && change.field !== 'technology.profileVersion'), false);
@@ -291,6 +319,7 @@ describe('website profile snapshots', () => {
       profileProvenance: {
         technology: { version: 12, state: 'known' },
         securityPosture: { version: 3, state: 'known' },
+        pageFingerprint: { version: 1, state: 'known' },
       },
       technologies: [],
       posture: [],
@@ -299,6 +328,7 @@ describe('website profile snapshots', () => {
     assert.deepEqual(comparison.profileComparability, {
       technology: 'detector_changed',
       securityPosture: 'detector_changed',
+      pageFingerprint: 'comparable',
     });
     assert.ok(comparison.changes.some((change) => change.field === 'technology.profileVersion'
       && change.state === 'changed'));

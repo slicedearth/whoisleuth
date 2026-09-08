@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-import { TECHNOLOGY_PROFILE_VERSION } from '../lib/lookup-child-profile-contract.mts';
-import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { LATEST_PUBLIC_APPLICATION_VERSION } from '../packages/contracts/case-portability.mts';
 
@@ -20,17 +18,8 @@ test('critical profiles and the canonical compatibility reference identify curre
     documentation('docs/case-contracts.md'),
   ]);
 
-  assert.match(
-    registryContract,
-    new RegExp(`Current profile version ${TECHNOLOGY_PROFILE_VERSION}\\b`, 'u'),
-  );
-  assert.match(
-    registryContract,
-    new RegExp(`current deep TLS profile, version ${TLS_PROFILE_VERSION}\\b`, 'u'),
-  );
   assert.match(registryContract, /lookup-child-profile-contract\.mts/u);
   assert.match(registryContract, /lookup-network-evidence-bounds\.mts/u);
-  assert.equal((registryContract.match(/Current profile version/gu) ?? []).length, 1);
 
   const currentVersion = WHOISLEUTH_APPLICATION_VERSION.replaceAll('.', '\\.');
   const publicVersion = LATEST_PUBLIC_APPLICATION_VERSION.replaceAll('.', '\\.');

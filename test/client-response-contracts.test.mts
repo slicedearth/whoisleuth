@@ -10,6 +10,7 @@ import {
   parseDomainPostureHttpResponse,
 } from '../frontend/src/lib/analysis/client-response-contracts.ts';
 import { pagePublicationMetadataFixture } from './homepage-metadata-fixtures.mts';
+import { PAGE_FINGERPRINT_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 const CHECKED_AT = '2026-07-27T00:00:00.000Z';
 
@@ -124,7 +125,7 @@ describe('official-site capture response contract', () => {
           source: 'html',
           status: 'success',
           observedAt: CHECKED_AT,
-          fingerprints: { fingerprintVersion: 2 },
+          fingerprints: { fingerprintVersion: PAGE_FINGERPRINT_VERSION + 1 },
         },
       }),
       availability({

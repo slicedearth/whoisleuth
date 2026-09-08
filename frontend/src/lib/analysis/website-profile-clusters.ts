@@ -279,7 +279,9 @@ function similarityCluster(
   const contributions = candidates.filter((item) => {
     const field = item.field === 'technologies' ? 'technology' : item.field;
     return websiteSnapshotFieldComplete(left, field) && websiteSnapshotFieldComplete(right, field)
-      && (field !== 'technology' || websiteSnapshotProfileComparability(left, right, 'technology') === 'comparable');
+      && (field !== 'technology' || websiteSnapshotProfileComparability(left, right, 'technology') === 'comparable')
+      && (!field.startsWith('identity') || field === 'identity.faviconHash'
+        || websiteSnapshotProfileComparability(left, right, 'pageFingerprint') === 'comparable');
   });
   const score = Math.min(100, contributions.reduce((total, item) => total + item.weight, 0));
   const strongField = contributions.some((item) => [
@@ -345,9 +347,11 @@ export function buildWebsiteProfileClusters(
     for (const [field, label] of Object.entries(IDENTITY_LABELS) as Array<[keyof WebsiteIdentityDigests, string]>) {
       const digest = snapshot.identity[field];
       if (!digest) continue;
+      const version = snapshot.profileProvenance.pageFingerprint.version;
+      if (field !== 'faviconHash' && version === null) continue;
       add(values, {
         kind: 'identity',
-        key: `identity:${field}:${digest}`,
+        key: `identity:${field}:${field === 'faviconHash' ? 'exact-image' : version}:${digest}`,
         label,
         evidence: `${digest.slice(0, 12)}…`,
       }, snapshot);

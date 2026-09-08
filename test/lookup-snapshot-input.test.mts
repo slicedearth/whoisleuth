@@ -85,6 +85,7 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     { id: 'framework', name: 'Framework', category: 'framework', confidence: 'high', roles: ['framework_runtime'] },
   ]);
   assert.deepEqual(snapshot.profileProvenance, {
+    pageFingerprint: { version: 1, state: 'known' },
     technology: { version: 11, state: 'known' },
     securityPosture: { version: 2, state: 'known' },
   });

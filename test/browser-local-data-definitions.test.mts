@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import {
   BROWSER_LOCAL_COLLECTIONS,
   ANALYST_REVIEW_STATE_COLLECTION,
@@ -9,6 +10,7 @@ import {
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
 } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import {
   BrowserLocalDataError,
@@ -76,6 +78,16 @@ function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unkno
 }
 
 describe('browser-local collection definitions', () => {
+  test('public HTML baselines retain their algorithm through collection splitting and encoding', () => {
+    const archive = JSON.parse(readFileSync(new URL('./fixtures/workspace-html-baseline-v8-public.json', import.meta.url), 'utf8'));
+    const profiles = roundTrip(PROFILES_COLLECTION, archive.sections.brandProfiles);
+    assert.equal(profiles.before, profiles.after);
+    assert.equal(profiles.joined[0]?.pageBaseline?.fingerprintVersion, 1);
+    const snapshots = roundTrip(WEBSITE_SNAPSHOTS_COLLECTION, archive.sections.websiteSnapshots);
+    assert.equal(snapshots.before, snapshots.after);
+    assert.equal(snapshots.joined[0]?.profileProvenance.pageFingerprint.version, 1);
+  });
+
   test('degraded local-data views suppress only expected storage failures', () => {
     assert.equal(
       isExpectedBrowserLocalDataFailure(new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Unavailable.')),

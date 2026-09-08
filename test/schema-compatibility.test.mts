@@ -466,7 +466,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.relationship-observations').currentVersion, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'browser.website-snapshots').schema, null);
     assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
-    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [4, 5]);
+    assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
     assert.equal(byId(inventory, 'browser.website-snapshots').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
     assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4, 5]);
@@ -873,11 +873,10 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.case-report').tier, 'durable_interchange');
     assert.equal(byId(inventory, 'derived.case-response-review-inputs').tier, 'internal');
     assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [12, 13, 14, 15]);
-    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [6, 7, 8]);
+    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'browser.ct-history').supportedVersions, [3]);
-    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [6, 7, 8]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);

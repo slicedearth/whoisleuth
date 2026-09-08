@@ -7,6 +7,8 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { PUBLIC_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { extractHtmlSignals } from '../lib/html-signals.mts';
+import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -321,6 +323,44 @@ test('captures and persists only a bounded official-site baseline after profile 
   expect(pageBaseline.trackingIdentifiers.values).toEqual([{ type: 'google-analytics', value: 'G-ABC123' }]);
   const serialized = JSON.stringify(persisted);
   expect(serialized).not.toMatch(/rawHtml|must-not-persist|private\/path|token=|diagnostics|limitations|"exact"/);
+});
+
+test('public HTML baselines migrate unchanged and a deliberate recapture adopts native fingerprints', async ({ page }) => {
+  const archive = JSON.parse(await readFile('test/fixtures/workspace-html-baseline-v8-public.json', 'utf8'));
+  const publishedBaseline = archive.sections.brandProfiles.profiles[0].pageBaseline;
+  const publishedIdentity = archive.sections.websiteSnapshots.snapshots[0].identity;
+  const domain = 'baseline.example';
+  const signals = extractHtmlSignals('<main><h1>Current account centre</h1><form><input type=password></form></main>', domain, { observedAt: ISO });
+  let requests = 0;
+  await page.route('**/api/availability?*', async (route) => {
+    requests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      applicable: true, state: 'registered', confidence: 'high', domain, ...signals,
+      faviconHash: null, faviconPHash: null, http: { finalUrl: `https://${domain}/` },
+    }) });
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: { version: archive.sections.brandProfiles.version, profiles: archive.sections.brandProfiles.profiles },
+    [ACTIVE_KEY]: 'baseline-profile',
+    [LEGACY_WEBSITE_SNAPSHOTS_KEY]: archive.sections.websiteSnapshots,
+  }, { clearStorage: true });
+  const migrated = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(migrated.records[0]?.value.pageBaseline).toEqual(publishedBaseline);
+  const website = await readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 1 });
+  expect(website.records[0]?.value.identity).toEqual(publishedIdentity);
+  expect(website.records[0]?.value.profileProvenance.pageFingerprint).toEqual({ version: 1, state: 'known' });
+  expect(requests).toBe(0);
+  await page.getByRole('button', { name: 'Edit Example account (baseline-profile)', exact: true }).click();
+  await page.getByRole('button', { name: 'Update official-site baseline' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Captured a complete page baseline');
+  await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved');
+  await page.reload();
+  const current = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(current.records[0]?.value.pageBaseline).toMatchObject({ fingerprintVersion: 2, domStructure: { parser: 'html-tree-v2' } });
+  expect((await readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 1 })).records[0]?.value.identity).toEqual(publishedIdentity);
+  expect(requests).toBe(1);
 });
 
 test('a baseline is discarded when it no longer belongs to an official domain', async ({ page }) => {

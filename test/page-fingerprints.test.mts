@@ -39,7 +39,7 @@ describe('page fingerprints', () => {
     assert.equal(requiredValue(result.visibleText).algorithm, 'simhash64-v1');
     assert.match(requiredValue(result.visibleText).value, /^[a-f0-9]{16}$/);
     assert.equal(result.domStructure.algorithm, 'sha256');
-    assert.equal(result.domStructure.parser, 'static-tag-sequence-v1');
+    assert.equal(result.domStructure.parser, 'html-tree-v2');
     assert.equal(result.domStructure.similarity?.algorithm, 'simhash64-v1');
     assert.match(requiredValue(result.domStructure.similarity).value, /^[a-f0-9]{16}$/);
     assert.equal(requiredValue(result.formStructure).formCount, 1);

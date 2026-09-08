@@ -7711,11 +7711,12 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.brand-profile-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7916,10 +7917,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.website-snapshot-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -8317,11 +8319,12 @@
       "schema": "whoisleuth.brand-profiles",
       "lifecycleSchema": "whoisleuth.brand-profiles",
       "coverageClass": "registered_schema",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9052,10 +9055,11 @@
       "schema": "whoisleuth.website-profile-snapshots",
       "lifecycleSchema": "whoisleuth.website-profile-snapshots",
       "coverageClass": "registered_schema",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -13626,7 +13630,8 @@
           "versions": [
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -13634,7 +13639,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.brand-profile-store",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13929,7 +13934,8 @@
           "schema": "whoisleuth.browser.website-snapshot-store",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -13937,7 +13943,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.website-snapshot-store",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13961,7 +13967,8 @@
           "versions": [
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -13986,7 +13993,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.brand-profiles",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -14387,7 +14394,8 @@
           "schema": "whoisleuth.website-profile-snapshots",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -14412,7 +14420,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.website-profile-snapshots",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

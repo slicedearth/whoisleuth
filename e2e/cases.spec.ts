@@ -5,6 +5,7 @@ import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snaps
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
 import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
+import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
 
 // Monitor workflows, retained evidence and local control coverage.
 
@@ -723,18 +724,24 @@ test('saved website profiles form searchable cross-domain pivots without another
     trackingIdentifiers: null,
     faviconHash: 'b'.repeat(64),
   };
-  const snapshotRecord = (domain: string, id: string) => ({
+  const snapshotRecord = (domain: string, id: string): WebsiteProfileSnapshot => ({
     id,
     domain,
     observedAt,
     savedAt: '2026-07-02T00:00:00.000Z',
     complete: true,
     truncated: false,
-    profileProvenance: { technology: { version: 1, state: 'known' }, securityPosture: { version: 1, state: 'known' } },
-    technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high' }],
+    profileProvenance: {
+      technology: { version: 1, state: 'known' }, securityPosture: { version: 1, state: 'known' },
+      pageFingerprint: { version: 1, state: 'known' },
+    },
+    technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high', roles: [] }],
     posture: [],
     identity,
+    identityValues: { resourceHosts: [], trackingIdentifiers: [], formActionOrigins: [] },
     sources: [{ source: 'http', state: 'success' }],
+    dependencies: [],
+    certificate: null,
   });
   const collectorRequests: string[] = [];
   page.on('request', (request) => {
@@ -756,6 +763,18 @@ test('saved website profiles form searchable cross-domain pivots without another
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'first.invalid' }).first()).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'second.invalid' }).first()).toBeVisible();
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
+      snapshots: ['first', 'second'].map((name) => {
+        const record = snapshotRecord(`${name}.invalid`, `profile-${name}`);
+        return { ...record, profileProvenance: {
+          ...record.profileProvenance, pageFingerprint: { version: null, state: 'legacy_unknown' },
+        } };
+      }),
+    }),
+  });
+  await expect(workspace.getByText('30/100 across 2 contributing fields', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toHaveCount(0);
   await workspace.getByLabel('Search saved profiles').fill('DOM structure');
   await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
   await workspace.getByLabel('Search saved profiles').fill('second.invalid');

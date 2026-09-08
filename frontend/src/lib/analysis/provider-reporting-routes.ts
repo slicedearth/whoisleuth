@@ -1,4 +1,4 @@
-import { TECHNOLOGY_PROFILE_VERSION } from '../../../../lib/lookup-child-profile-contract.mts';
+import { SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS } from '../../../../lib/lookup-child-profile-contract.mts';
 
 export type ProviderReportingRole = 'application_platform' | 'observed_edge';
 export type ProviderReportingChannel = 'email' | 'url';
@@ -118,7 +118,8 @@ function profileState(value: unknown): Readonly<{
   const profile = record(value);
   const observedAt = validObservedAt(profile.observedAt);
   if (
-    profile.profileVersion !== TECHNOLOGY_PROFILE_VERSION
+    typeof profile.profileVersion !== 'number'
+    || !SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS.includes(profile.profileVersion)
     || profile.source !== 'derived'
     || !['success', 'partial'].includes(String(profile.status))
     || !observedAt
@@ -162,7 +163,7 @@ export function resolveProviderReportingRoutes(
       coverage: ROLES.map((role) => ({
         role,
         state: 'not_collected' as const,
-        detail: 'A current, source-attributed technology profile was not available for provider-route matching.',
+        detail: 'A supported, source-attributed technology profile was not available for provider-route matching.',
       })),
     };
   }

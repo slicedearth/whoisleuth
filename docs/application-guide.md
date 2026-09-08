@@ -165,9 +165,10 @@ Brand views can provide:
 The register is a read-only view. One-hop candidates do not become authored
 scope or further anchors. Missing or partial sources remain explicit.
 
-Brand Profile version 8 is current. Exact public version 6 and published-v2
-version 7 remain readable. The version-6 migration supplies deterministic
-identifiers for approved windows without inventing an analyst decision.
+Published Brand Profiles remain readable. Saved page baselines keep their
+original fingerprint algorithm; refresh one deliberately to adopt the current
+parser. Different algorithms are not treated as equivalent evidence. See the
+[storage compatibility reference](browser-local-data.md) for supported formats.
 
 ## Monitor, Respond and Assure
 

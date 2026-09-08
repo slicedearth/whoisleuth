@@ -309,6 +309,7 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
 
   const truncated = input.sourceTruncated === true
     || htmlAnalysis.inputLimitReached
+    || htmlAnalysis.tagLimitReached
     || htmlAnalysis.scriptLimitReached
     || htmlAnalysis.inlineLimitReached
     || limitReached;

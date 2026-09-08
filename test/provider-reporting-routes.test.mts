@@ -47,11 +47,24 @@ describe('provider reporting-route catalogue', () => {
     assert.equal(result.coverage.find((item) => item.role === 'observed_edge')?.state, 'stale');
   });
 
-  test('ignores malformed, legacy, and unattributed technology profiles', () => {
+  test('retains published profile evidence without accepting unknown detector versions', () => {
+    const observed = profile([{ id: 'netlify', confidence: 'medium', roles: ['application_platform'] }]);
+    for (const profileVersion of [10, 11, TECHNOLOGY_PROFILE_VERSION]) {
+      const result = resolveProviderReportingRoutes({ ...observed, profileVersion }, new Date('2026-09-05T00:00:00.000Z'));
+      assert.deepEqual(result.routes.map((route) => route.providerId), ['netlify']);
+      assert.equal(result.routes[0]?.observedAt, OBSERVED_AT);
+    }
+    for (const profileVersion of [9, TECHNOLOGY_PROFILE_VERSION + 1, '11', null]) {
+      const result = resolveProviderReportingRoutes({ ...observed, profileVersion }, new Date('2026-09-05T00:00:00.000Z'));
+      assert.equal(result.routes.length, 0);
+      assert.equal(result.coverage.every((item) => item.state === 'not_collected'), true);
+    }
+  });
+
+  test('ignores malformed and unattributed technology profiles', () => {
     for (const value of [
       null,
       profile([{ id: 'netlify', confidence: 'medium', roles: 'application_platform' }]),
-      { ...profile([]), profileVersion: TECHNOLOGY_PROFILE_VERSION - 1 },
       { ...profile([]), source: 'imported' },
       { ...profile([]), observedAt: 'not-a-time' },
     ]) {

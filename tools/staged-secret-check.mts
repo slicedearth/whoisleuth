@@ -20,21 +20,32 @@ const RULES = Object.freeze([
   { id: 'npm-token', pattern: /\bnpm_[A-Za-z0-9]{36}\b/gu },
   {
     id: 'assigned-secret',
-    pattern: /\b(?:[a-z0-9]+[_-])*(?:api[_-]?key|auth[_-]?key|client[_-]?secret|password|private[_-]?key|secret(?:[_-]?key)?|token)\s*[:=]\s*(?:"[^"\r\n]{12,256}"|'[^'\r\n]{12,256}'|[^\s#'"`]{12,256})/giu,
+    pattern: /["']?\b(?:[a-z0-9]+[_-])*(?:api[_-]?key|auth[_-]?key|client[_-]?secret|password|private[_-]?key|secret(?:[_-]?key)?|token)["']?\s*[:=]\s*(?:"[^"\r\n]{12,256}"|'[^'\r\n]{12,256}'|`[^`\r\n]{12,256}`|[^\s#'"`]{12,256})/giu,
   },
 ]);
 
 const ASSIGNED_PLACEHOLDER_VALUE_RE = /^(?:example|fixture|placeholder|redacted|replace[_ -]?me|must[_ -]?not[_ -]?render|your[_ -]?(?:api[_ -]?key|auth[_ -]?key|client[_ -]?secret|password|private[_ -]?key|secret|token)|test-only-(?:secret|session-signing-secret)|<[^>]+>)$/iu;
 const COMMIT_RANGE_RE = /^(?:[a-f0-9]{40})\.\.(?:[a-f0-9]{40})$/u;
+const SCRIPT_SOURCE_RE = /\.(?:[cm]?[jt]sx?|svelte)$/iu;
 
-function isAssignedPlaceholder(match: string): boolean {
+function isAssignedSecret(match: string, file: string, line: string): boolean {
   const separator = match.search(/[:=]/u);
   if (separator < 0) return false;
   let value = match.slice(separator + 1).trim();
   const first = value.charAt(0);
   const last = value.charAt(value.length - 1);
-  if ((first === '"' && last === '"') || (first === "'" && last === "'")) value = value.slice(1, -1);
-  return ASSIGNED_PLACEHOLDER_VALUE_RE.test(value);
+  const quoted = (first === '"' && last === '"') || (first === "'" && last === "'") || (first === '`' && last === '`');
+  if (quoted) {
+    value = value.slice(1, -1);
+    if (first === '`' && value.includes('${')) return false;
+  } else if (SCRIPT_SOURCE_RE.test(file) && !/^\s*(?:\/\/|\/\*|\*)/u.test(line)) {
+    // A type annotation or identifier expression is not a literal credential.
+    // Keep numeric literals; configuration files and comments still admit bare
+    // values. Provider-specific signatures are checked independently above.
+    const numeric = value.replace(/[;,\])}]+$/u, '').replace(/n$/u, '').replaceAll('_', '');
+    if (!/^\d/u.test(numeric) || !Number.isFinite(Number(numeric))) return false;
+  }
+  return !ASSIGNED_PLACEHOLDER_VALUE_RE.test(value);
 }
 
 type AddedDiffScanner = Readonly<{
@@ -81,7 +92,7 @@ function createAddedDiffScanner(): AddedDiffScanner {
     for (const rule of RULES) {
       rule.pattern.lastIndex = 0;
       const matches = [...value.matchAll(rule.pattern)].map((match) => match[0]);
-      if (!matches.some((matched) => rule.id !== 'assigned-secret' || !isAssignedPlaceholder(matched))) continue;
+      if (!matches.some((matched) => rule.id !== 'assigned-secret' || isAssignedSecret(matched, file, value))) continue;
       findings.push({ file, addedLine, rule: rule.id });
       break;
     }

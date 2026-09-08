@@ -11,7 +11,7 @@ import {
   MAX_BASELINE_RESOURCE_HOSTS,
   MAX_BASELINE_TITLE_LENGTH,
   PAGE_BASELINE_VERSION,
-  PAGE_FINGERPRINT_VERSION,
+  PAGE_FINGERPRINT_PARSERS,
   PAGE_IDENTITY_VERSION,
 } from '../contracts/workspace-portability.mts';
 
@@ -21,6 +21,7 @@ export {
   MAX_BASELINE_TITLE_LENGTH,
   PAGE_BASELINE_VERSION,
   PAGE_FINGERPRINT_VERSION,
+  PAGE_FINGERPRINT_PARSERS,
   PAGE_IDENTITY_VERSION,
 } from '../contracts/workspace-portability.mts';
 
@@ -50,7 +51,7 @@ export type DomStructureComponent = {
   algorithm: 'sha256';
   value: string;
   nodeCount: number;
-  parser: 'static-tag-sequence-v1';
+  parser: typeof PAGE_FINGERPRINT_PARSERS[keyof typeof PAGE_FINGERPRINT_PARSERS];
   truncated: boolean;
   similarity?: VisibleTextComponent | null;
 };
@@ -88,7 +89,7 @@ export type PageBaseline = {
   lookupDomain: string;
   observedAt: string;
   pageIdentityVersion: typeof PAGE_IDENTITY_VERSION;
-  fingerprintVersion: typeof PAGE_FINGERPRINT_VERSION;
+  fingerprintVersion: keyof typeof PAGE_FINGERPRINT_PARSERS;
   pageTitle: string | null;
   canonicalHost: string | null;
   faviconHash: string | null;
@@ -161,9 +162,9 @@ function visibleTextComponent(raw: unknown): VisibleTextComponent | null {
   };
 }
 
-function domComponent(raw: unknown): DomStructureComponent | null {
+function domComponent(raw: unknown, fingerprintVersion: PageBaseline['fingerprintVersion']): DomStructureComponent | null {
   const value = record(raw);
-  if (!value || value.algorithm !== 'sha256' || value.parser !== 'static-tag-sequence-v1') return null;
+  if (!value || value.algorithm !== 'sha256' || value.parser !== PAGE_FINGERPRINT_PARSERS[fingerprintVersion]) return null;
   const digest = sha256(value.value);
   const nodeCount = count(value.nodeCount, MAX_HTML_TOKENS);
   if (!digest || nodeCount === null) return null;
@@ -172,7 +173,7 @@ function domComponent(raw: unknown): DomStructureComponent | null {
     algorithm: 'sha256',
     value: digest,
     nodeCount,
-    parser: 'static-tag-sequence-v1',
+    parser: PAGE_FINGERPRINT_PARSERS[fingerprintVersion],
     truncated: value.truncated === true,
     ...(value.similarity == null ? {} : { similarity }),
   };
@@ -261,11 +262,12 @@ export function normalizePageBaseline(raw: unknown): PageBaseline | null {
   const lookupDomain = normalizeDomain(value.lookupDomain);
   const observedAt = timestamp(value.observedAt);
   const pageIdentityVersion = count(value.pageIdentityVersion, PAGE_IDENTITY_VERSION);
-  const fingerprintVersion = count(value.fingerprintVersion, PAGE_FINGERPRINT_VERSION);
+  if (typeof value.fingerprintVersion !== 'number' || !Object.hasOwn(PAGE_FINGERPRINT_PARSERS, value.fingerprintVersion)) return null;
+  const fingerprintVersion = value.fingerprintVersion as PageBaseline['fingerprintVersion'];
   const normalizedHtml = shaComponent(value.normalizedHtml, 'tokenCount', MAX_HTML_TOKENS);
-  const domStructure = domComponent(value.domStructure);
+  const domStructure = domComponent(value.domStructure, fingerprintVersion);
   if (!domain || !lookupDomain || !observedAt || pageIdentityVersion !== PAGE_IDENTITY_VERSION
-    || fingerprintVersion !== PAGE_FINGERPRINT_VERSION || !normalizedHtml || !domStructure) return null;
+    || !normalizedHtml || !domStructure) return null;
 
   const visibleText = value.visibleText == null ? null : visibleTextComponent(value.visibleText);
   const formStructure = value.formStructure == null ? null : formComponent(value.formStructure);

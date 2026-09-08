@@ -1,5 +1,5 @@
 // Static client-side behaviour indicators derived from the existing bounded
-// HTML tokenizer pass. Scripts are never fetched or executed. Only fixed
+// HTML parse. Scripts are never fetched or executed. Only fixed
 // indicator identifiers, descriptions, evidence classes, and bounded counts
 // leave this module; script references and contents are discarded.
 
@@ -54,7 +54,6 @@ function patternCount(value: string, pattern: RegExp): number {
 
 function analyzeClientBehavior(input: ClientBehaviorProfileInput = {}) {
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
-  const markup = htmlAnalysis.markup;
   const inlineScripts = htmlAnalysis.scripts
     .filter((script) => script.reference === null)
     .map((script) => script.inlineContent)
@@ -76,7 +75,8 @@ function analyzeClientBehavior(input: ClientBehaviorProfileInput = {}) {
     'inline_event_handlers',
     'Inline event handlers',
     'static_markup',
-    patternCount(markup, /\son[a-z]{2,24}="/gu),
+    htmlAnalysis.elements.reduce((count, element) => count
+      + element.attributes.filter((attribute) => /^on[a-z]{2,24}$/u.test(attribute.name)).length, 0),
     'Inline HTML event-handler attributes were observed.',
   );
   add(

@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,
   WEBSITE_SECURITY_POSTURE_VERSION,
@@ -27,8 +28,8 @@ function websiteSnapshot(
   id: string,
   domain: string,
   observedAt: string,
-  options: Readonly<{ complete?: boolean; technologies?: readonly Record<string, string>[] }> = {},
-) {
+  options: Readonly<{ complete?: boolean; technologies?: readonly WebsiteSnapshotTechnology[] }> = {},
+): WebsiteProfileSnapshot {
   const complete = options.complete ?? true;
   return {
     id,
@@ -40,14 +41,15 @@ function websiteSnapshot(
     profileProvenance: {
       technology: { version: TECHNOLOGY_PROFILE_VERSION, state: 'known' },
       securityPosture: { version: WEBSITE_SECURITY_POSTURE_VERSION, state: 'known' },
+      pageFingerprint: { version: 1, state: 'known' },
     },
-    technologies: options.technologies ?? [{
+    technologies: [...(options.technologies ?? [{
       id: 'cms',
       name: 'Example CMS',
       category: 'framework',
       confidence: 'high',
       roles: ['framework_runtime'],
-    }],
+    }])],
     posture: [],
     identity: {
       normalizedHtml: null,

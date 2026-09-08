@@ -9,6 +9,7 @@ import {
 } from '../lib/availability.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { analyzeResponsePolicyHeaders } from '../lib/response-policy.mts';
+import { WEBSITE_SECURITY_POSTURE_VERSION } from '../lib/website-security-posture.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import { httpDeliveryMetadataFixture } from './homepage-metadata-fixtures.mts';
 
@@ -33,6 +34,27 @@ function registeredLookupOptions(homepageFetcher: () => ReturnType<typeof fetchH
 }
 
 describe('website activity classification', () => {
+  test('requires contextual domain-sale evidence, not generic commerce or inert copy', async () => {
+    for (const [html, expected] of [
+      ['<main><h1>Used equipment</h1><button>Make an offer</button></main>', 'registered'],
+      ['<!-- This domain is for sale --><main>Ordinary content</main>', 'registered'],
+      ['<script>"This domain is for sale"</script><main>Ordinary content</main>', 'registered'],
+      ['<article><h1>About domain sales</h1><p>An example of a landing page says this domain is for sale.</p></article>', 'registered'],
+      ['<main>This domain is for sale. Make an offer.</main>', 'for_sale'],
+      ['<title>Example.test is for sale</title><main>This domain is for sale.<form><input type=email><button>Make an offer</button></form></main>', 'for_sale'],
+    ]) {
+      let requests = 0;
+      const result = recordValue(await checkDomainAvailability('example.test', registeredLookupOptions(async () => {
+        requests += 1;
+        return fetchHomepage('example.test', { fetcher: async () => new Response(html, { headers: { 'content-type': 'text/html' } }) });
+      })));
+      assert.equal(result.state, expected, html);
+      assert.equal(result.activityStatus, expected === 'for_sale' ? 'parked' : 'active');
+      assert.equal('domainSaleSignal' in result, false);
+      assert.equal(requests, 1);
+    }
+  });
+
   test('any HTTP response proves that a web service is active', async () => {
     for (const status of [401, 403, 404, 503]) {
       const result = await fetchHomepage('example.com', {
@@ -287,7 +309,7 @@ describe('website activity classification', () => {
     assert.equal(clientBehaviorProfile.source, 'derived');
     assert.equal(clientBehaviorProfile.status, 'partial');
     assert.doesNotMatch(JSON.stringify({ pageRoleProfile, clientBehaviorProfile }), /token=|key=|secret|submit/);
-    assert.equal(securityPosture.postureVersion, 2);
+    assert.equal(securityPosture.postureVersion, WEBSITE_SECURITY_POSTURE_VERSION);
     assert.equal(securityPosture.source, 'derived');
     assert.equal(securityPosture.status, 'partial');
     assert.equal(securityFindings.some((item) => item.id === 'external_form_destinations'), true);

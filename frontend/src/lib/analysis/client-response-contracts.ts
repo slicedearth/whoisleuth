@@ -1,5 +1,5 @@
 import { normalizeDomain } from './case-model.ts';
-import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
+import { PAGE_FINGERPRINT_PARSERS, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
 import { isRecord as isUnknownRecord } from '../../../../lib/json-record.mts';
 
@@ -152,7 +152,8 @@ function validPageIdentity(value: unknown): boolean {
     || !Number.isFinite(Date.parse(value.observedAt))
     || !isRecord(value.fingerprints)
     || Object.keys(value.fingerprints).length > MAX_PAGE_FINGERPRINT_KEYS
-    || value.fingerprints.fingerprintVersion !== PAGE_FINGERPRINT_VERSION
+    || typeof value.fingerprints.fingerprintVersion !== 'number'
+    || !Object.hasOwn(PAGE_FINGERPRINT_PARSERS, value.fingerprints.fingerprintVersion)
     || value.publicationMetadata !== undefined
       && !validPagePublicationMetadata(value.publicationMetadata)
   ) {

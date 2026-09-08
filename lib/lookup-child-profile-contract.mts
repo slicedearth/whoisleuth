@@ -8,7 +8,7 @@ import {
   normalizeExplicitIsoTimestamp,
 } from '../packages/evidence/observation.mts';
 import {
-  PAGE_FINGERPRINT_VERSION,
+  PAGE_FINGERPRINT_PARSERS,
   PAGE_IDENTITY_VERSION,
 } from '../packages/contracts/workspace-portability.mts';
 import { validPagePublicationMetadata } from './homepage-metadata-contract.mts';
@@ -34,8 +34,8 @@ import {
 } from './lookup-contract-primitives.mts';
 import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from './technology-evidence-role.mts';
 
-export const TECHNOLOGY_PROFILE_VERSION = 11;
-export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, TECHNOLOGY_PROFILE_VERSION]);
+export const TECHNOLOGY_PROFILE_VERSION = 12;
+export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, 11, TECHNOLOGY_PROFILE_VERSION]);
 export const MAX_TECHNOLOGY_FINDINGS = 24;
 export const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 export const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
@@ -43,7 +43,7 @@ export const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
 export const BROWSER_LIBRARY_PROFILE_VERSION = 2;
 export const MAX_LIBRARY_FINDINGS = 16;
 
-export const WEBSITE_SECURITY_POSTURE_VERSION = 2;
+export const WEBSITE_SECURITY_POSTURE_VERSION = 3;
 export const MAX_SECURITY_POSTURE_FINDINGS = 32;
 
 export const CREDENTIAL_SURFACE_PROFILE_VERSION = 1;
@@ -258,7 +258,7 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
     || typeof domStructure.value !== 'string'
     || !SHA256_RE.test(domStructure.value)
     || !validUint(domStructure.nodeCount, 4_096)
-    || domStructure.parser !== 'static-tag-sequence-v1'
+    || domStructure.parser !== PAGE_FINGERPRINT_PARSERS[value.fingerprintVersion as keyof typeof PAGE_FINGERPRINT_PARSERS]
     || typeof domStructure.truncated !== 'boolean'
     || !(domStructure.similarity === undefined || domStructure.similarity === null || isJsonObject(domStructure.similarity)
       && hasExactKeys(domStructure.similarity, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
@@ -571,7 +571,7 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
 }
 
 function pageFingerprintContractState(value: unknown): ChildContractState {
-  const versionState = childVersionState(value, 'fingerprintVersion', [PAGE_FINGERPRINT_VERSION]);
+  const versionState = childVersionState(value, 'fingerprintVersion', Object.keys(PAGE_FINGERPRINT_PARSERS).map(Number));
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
   if (!hasExactKeys(profile, [
@@ -714,7 +714,7 @@ function tlsProfileContractState(value: unknown): ChildContractState {
 }
 
 function securityPostureContractState(value: unknown): ChildContractState {
-  const versionState = childVersionState(value, 'postureVersion', [WEBSITE_SECURITY_POSTURE_VERSION]);
+  const versionState = childVersionState(value, 'postureVersion', [2, WEBSITE_SECURITY_POSTURE_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
   if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'postureVersion', 'summary', 'findings'])

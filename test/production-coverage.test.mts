@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { describe, test } from 'node:test';
 
 import {
   PRODUCTION_COVERAGE_EXCLUSIONS,
   PRODUCTION_COVERAGE_POLICY,
   parseProductionCoverage,
+  productionCoverageArguments,
   validateProductionCoverage,
   validateProductionCoverageInventory,
   type CoveragePolicy,
@@ -33,6 +39,44 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
+  test('native instrumentation discovers ordinary modules and excludes generated code in any package', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-coverage-boundary-'));
+    try {
+      const modules = [
+        'lib/ordinary.mts', 'packages/example/ordinary.mts',
+        'packages/example/generated/catalogue.mts', 'packages/example/catalogue.generated.mts',
+        'frontend/src/lib/generated/catalogue.ts', 'lib/catalogue.generated.ts',
+      ];
+      for (const filename of modules) {
+        await mkdir(path.dirname(path.join(root, filename)), { recursive: true });
+        await writeFile(path.join(root, filename), 'export const ready = true;\n');
+      }
+      await mkdir(path.join(root, 'test'));
+      await writeFile(path.join(root, 'test/probe.test.mts'), [
+        "import assert from 'node:assert/strict';",
+        "import { test } from 'node:test';",
+        ...modules.map((filename, index) => `import { ready as value${index} } from '../${filename}';`),
+        `test('fixture modules execute', () => assert.ok([${modules.map((_, index) => `value${index}`).join(',')}].every(Boolean)));`,
+      ].join('\n'));
+      // This is a separate test-runner invocation, not a worker in the parent
+      // run. The inherited worker marker prevents a recursive test run.
+      const environment = { ...process.env };
+      delete environment.NODE_TEST_CONTEXT;
+      delete environment.NODE_V8_COVERAGE;
+      await promisify(execFile)(process.execPath, productionCoverageArguments('test/probe.test.mts'), {
+        cwd: root, env: environment, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      });
+      const report = parseProductionCoverage(await readFile(path.join(root, 'test-coverage.lcov'), 'utf8'));
+      assert.deepEqual(report.records.map((record) => record.source).sort(), [
+        'lib/ordinary.mts', 'packages/example/ordinary.mts',
+      ]);
+      assert.equal(report.global.lines.percentage, 100);
+      for (const filename of modules.slice(2)) {
+        assert.throws(() => parseProductionCoverage(lcovRecord(filename)), /Generated source/u);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('retains explicit browser owners and coverage floors for critical production paths', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/discriminated-command-handlers.mts'], {
       lines: 100, branches: 100, functions: 100,

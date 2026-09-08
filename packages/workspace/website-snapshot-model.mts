@@ -5,6 +5,7 @@ import {
   MAX_WEBSITE_SNAPSHOTS,
   MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN,
   MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  PAGE_FINGERPRINT_PARSERS,
   SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS,
   WEBSITE_SNAPSHOT_SCHEMA,
   WEBSITE_SNAPSHOT_SCHEMA_VERSION,
@@ -30,6 +31,7 @@ export type WebsiteSnapshotTechnology = Readonly<{
 export type WebsiteSnapshotProfileProvenance = Readonly<{
   technology: Readonly<{ version: number | null; state: 'known' | 'legacy_unknown' }>;
   securityPosture: Readonly<{ version: number | null; state: 'known' | 'legacy_unknown' }>;
+  pageFingerprint: Readonly<{ version: number | null; state: 'known' | 'legacy_unknown' }>;
 }>;
 export type WebsiteSnapshotPosture = Readonly<{ id: string; state: string }>;
 export type WebsiteSnapshotSource = Readonly<{ source: string; state: string }>;
@@ -164,18 +166,26 @@ function profileVersion(value: unknown): number | null {
     : null;
 }
 
-function profileProvenance(value: unknown, legacy = false): WebsiteSnapshotProfileProvenance {
+function profileProvenance(value: unknown, sourceVersion?: number): WebsiteSnapshotProfileProvenance {
+  const legacy = sourceVersion === 4;
   if (legacy) {
     return {
       technology: { version: null, state: 'legacy_unknown' },
       securityPosture: { version: null, state: 'legacy_unknown' },
+      pageFingerprint: { version: 1, state: 'known' },
     };
   }
   const item = record(value);
   const technologyItem = record(item?.technology);
   const securityPostureItem = record(item?.securityPosture);
+  const pageFingerprintItem = record(item?.pageFingerprint);
   const technologyVersion = profileVersion(technologyItem?.version);
   const securityPostureVersion = profileVersion(securityPostureItem?.version);
+  // Exact published snapshot writers 4 and 5 used fingerprint algorithm 1.
+  // Unversioned records do not receive invented historical provenance.
+  const candidateFingerprintVersion = sourceVersion === 5 ? 1 : profileVersion(pageFingerprintItem?.version);
+  const pageFingerprintVersion = candidateFingerprintVersion !== null && Object.hasOwn(PAGE_FINGERPRINT_PARSERS, candidateFingerprintVersion)
+    ? candidateFingerprintVersion : null;
   return {
     technology: {
       version: technologyVersion,
@@ -185,6 +195,7 @@ function profileProvenance(value: unknown, legacy = false): WebsiteSnapshotProfi
       version: securityPostureVersion,
       state: securityPostureVersion === null ? 'legacy_unknown' : 'known',
     },
+    pageFingerprint: { version: pageFingerprintVersion, state: pageFingerprintVersion === null ? 'legacy_unknown' : 'known' },
   };
 }
 function posture(value: unknown): WebsiteSnapshotPosture | null {
@@ -305,7 +316,7 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown, sourceVersion?: nu
     savedAt,
     complete: value?.complete === true,
     truncated: value?.truncated === true,
-    profileProvenance: profileProvenance(value?.profileProvenance, sourceVersion === 4),
+    profileProvenance: profileProvenance(value?.profileProvenance, sourceVersion),
     technologies: values(value?.technologies, 40, technology) as WebsiteSnapshotTechnology[],
     posture: values(value?.posture, 40, posture) as WebsiteSnapshotPosture[],
     identity: identity(value?.identity),
@@ -522,6 +533,7 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   const postureVersionAfter = after.profileProvenance.securityPosture.version;
   const technologyComparability = websiteSnapshotProfileComparability(before, after, 'technology');
   const postureComparability = websiteSnapshotProfileComparability(before, after, 'securityPosture');
+  const fingerprintComparability = websiteSnapshotProfileComparability(before, after, 'pageFingerprint');
   const changes = [
     ...(technologyComparability === 'comparable' ? compareMap(
       'technology',
@@ -592,10 +604,17 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   for (const key of Object.keys(before.identity) as Array<keyof WebsiteIdentityDigests>) {
     const left = before.identity[key];
     const right = after.identity[key];
+    if (key !== 'faviconHash' && fingerprintComparability !== 'comparable') continue;
     if (left === right) continue;
     changes.push({ field: `identity.${key}`, state: left === null || right === null ? 'unavailable' : 'changed', before: left, after: right });
   }
-  changes.push(
+  if (fingerprintComparability !== 'comparable') {
+    changes.push({
+      field: 'identity.profileVersion', state: 'incomparable',
+      before: before.profileProvenance.pageFingerprint.version?.toString() ?? null,
+      after: after.profileProvenance.pageFingerprint.version?.toString() ?? null,
+    });
+  } else changes.push(
     ...compareMap(
       'identityValues.resourceHosts',
       new Map(before.identityValues.resourceHosts.map((item) => [item, item])),
@@ -668,10 +687,12 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
     complete: websiteSnapshotComparisonEvidenceComplete(before)
       && websiteSnapshotComparisonEvidenceComplete(after)
       && technologyComparability === 'comparable'
-      && postureComparability === 'comparable',
+      && postureComparability === 'comparable'
+      && fingerprintComparability === 'comparable',
     profileComparability: {
       technology: technologyComparability,
       securityPosture: postureComparability,
+      pageFingerprint: fingerprintComparability,
     },
     changes,
     dependencyTransitions,

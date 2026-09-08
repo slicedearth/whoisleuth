@@ -15,6 +15,7 @@ type ResponsePolicySignalId =
   | 'csp_permissive_script_source'
   | 'csp_unsafe_eval'
   | 'csp_unsafe_inline'
+  | 'csp_unsafe_inline_attributes'
   | 'csp_inline_constrained_by_meta'
   | 'hsts_disabled'
   | 'hsts_short_max_age'
@@ -73,7 +74,7 @@ type CspMetaPolicyAnalysis = {
   truncated: boolean;
 };
 
-export const RESPONSE_POLICY_VERSION = 2;
+export const RESPONSE_POLICY_VERSION = 3;
 export const MAX_RESPONSE_POLICY_HEADER_BYTES = 8 * 1024;
 export const MAX_CSP_META_POLICIES = 4;
 export const MAX_RESPONSE_POLICY_DIRECTIVES = 64;
@@ -86,7 +87,9 @@ export const MIN_RECOMMENDED_HSTS_SECONDS = 180 * 24 * 60 * 60;
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const DIRECTIVE_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 const ATTRIBUTE_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/;
-const CSP_NONCE_OR_HASH_RE = /^'(?:nonce-[^']+|sha(?:256|384|512)-[^']+)'$/i;
+// CSP source-list grammar, not an entropy or digest-strength judgement. Invalid
+// source expressions are ignored by browsers and cannot suppress unsafe-inline.
+const CSP_NONCE_OR_HASH_RE = /^'(?:nonce-|sha(?:256|384|512)-)[A-Za-z0-9+/_-]+={0,2}'$/i;
 const REFERRER_POLICIES = new Set([
   'no-referrer',
   'no-referrer-when-downgrade',
@@ -113,7 +116,8 @@ function readHeader(headers: HeaderReader | null | undefined, name: string): Hea
   }
   if (raw === null || raw.trim() === '') return { state: 'absent', value: null };
   if (CONTROL_RE.test(raw)) return { state: 'malformed', value: null };
-  if (new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_POLICY_HEADER_BYTES) {
+  if (raw.length > MAX_RESPONSE_POLICY_HEADER_BYTES
+    || new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_POLICY_HEADER_BYTES) {
     return { state: 'partial', value: null };
   }
   return { state: 'present', value: raw.trim() };
@@ -128,56 +132,92 @@ function unavailableHeaderState(header: HeaderResult): ResponsePolicyComponentSt
   return header.state === 'present' ? 'malformed' : header.state;
 }
 
-function analyzeCsp(header: HeaderResult, signals: ResponsePolicySignal[]): CspAnalysis {
+function inlineControl(sources: string[] | undefined, scriptsBlocked: boolean): CspInlineControl {
+  if (scriptsBlocked) return 'restricted';
+  if (!sources) return 'uncontrolled';
+  return sources.includes("'unsafe-inline'")
+    && !sources.includes("'strict-dynamic'")
+    && !sources.some((token) => CSP_NONCE_OR_HASH_RE.test(token))
+    ? 'unqualified'
+    : 'restricted';
+}
+
+function intersectInlineControls(controls: CspInlineControl[]): CspInlineControl {
+  if (controls.includes('restricted')) return 'restricted';
+  if (controls.includes('unknown')) return 'unknown';
+  return controls.includes('unqualified') ? 'unqualified' : 'uncontrolled';
+}
+
+function analyzeCsp(
+  header: HeaderResult,
+  signals: ResponsePolicySignal[],
+  fromMeta = false,
+): CspAnalysis {
   if (header.state !== 'present' || !header.value) {
     return { state: unavailableHeaderState(header), inlineControl: 'unknown' };
   }
 
-  const directives = new Map<string, string[]>();
+  // Fetch combines repeated policy headers with commas. Each policy is
+  // independently enforced; later policies cannot loosen an earlier one.
+  const policies: Map<string, string[]>[] = [];
+  let directiveCount = 0;
   let tokenCount = 0;
-  let partial = false;
-  for (const rawDirective of header.value.split(';')) {
-    const normalized = rawDirective.trim();
-    if (!normalized) continue;
-    const [rawName = '', ...rawTokens] = normalized.split(/\s+/u);
-    const name = rawName.toLowerCase();
-    if (!DIRECTIVE_NAME_RE.test(name)) return { state: 'malformed', inlineControl: 'unknown' };
-    if (directives.has(name)) continue;
-    if (directives.size >= MAX_RESPONSE_POLICY_DIRECTIVES) {
-      partial = true;
-      break;
+  for (const rawPolicy of (fromMeta ? [header.value] : header.value.split(','))) {
+    const directives = new Map<string, string[]>();
+    for (const rawDirective of rawPolicy.split(';')) {
+      const normalized = rawDirective.trim();
+      if (!normalized) continue;
+      const [rawName = '', ...rawTokens] = normalized.split(/[\t\n\f\r ]+/u);
+      const name = rawName.toLowerCase();
+      if (!DIRECTIVE_NAME_RE.test(name)) return { state: 'malformed', inlineControl: 'unknown' };
+      // Duplicate directives use their first value. Count even ignored input
+      // against the aggregate work bound rather than resetting per policy.
+      directiveCount += 1;
+      tokenCount += rawTokens.length;
+      if (directiveCount > MAX_RESPONSE_POLICY_DIRECTIVES || tokenCount > MAX_RESPONSE_POLICY_TOKENS) {
+        return { state: 'partial', inlineControl: 'unknown' };
+      }
+      if (!directives.has(name)) directives.set(name, rawTokens.map((token) => token.toLowerCase()));
     }
-    const remaining = Math.max(0, MAX_RESPONSE_POLICY_TOKENS - tokenCount);
-    const tokens = rawTokens.slice(0, remaining).map((token) => token.toLowerCase());
-    if (tokens.length !== rawTokens.length) partial = true;
-    tokenCount += tokens.length;
-    directives.set(name, tokens);
+    if (directives.size) policies.push(directives);
   }
 
-  if (!directives.size) return { state: 'malformed', inlineControl: 'unknown' };
-  const defaultSources = directives.get('default-src');
-  const scriptSources = directives.get('script-src') || defaultSources;
-  if (!defaultSources) addSignal(signals, 'csp_default_source_missing');
-  if (!directives.has('base-uri')) addSignal(signals, 'csp_base_uri_missing');
-  if (!directives.has('object-src') && !defaultSources) addSignal(signals, 'csp_object_source_unbounded');
-  let inlineControl: CspInlineControl = scriptSources ? 'restricted' : 'uncontrolled';
-  if (scriptSources) {
-    if (scriptSources.some((token) => ['*', 'http:', 'https:', 'data:', 'blob:'].includes(token))) {
-      addSignal(signals, 'csp_permissive_script_source');
-    }
-    if (scriptSources.includes("'unsafe-eval'")) addSignal(signals, 'csp_unsafe_eval');
-    if (
-      scriptSources.includes("'unsafe-inline'")
-      && !scriptSources.some((token) => CSP_NONCE_OR_HASH_RE.test(token))
-    ) {
-      addSignal(signals, 'csp_unsafe_inline');
-      inlineControl = 'unqualified';
-    }
+  if (!policies.length) return { state: 'malformed', inlineControl: 'unknown' };
+  if (policies.every((policy) => !policy.has('default-src'))) addSignal(signals, 'csp_default_source_missing');
+  if (policies.every((policy) => !policy.has('base-uri'))) addSignal(signals, 'csp_base_uri_missing');
+  if (policies.every((policy) => !policy.has('object-src') && !policy.has('default-src'))) {
+    addSignal(signals, 'csp_object_source_unbounded');
   }
-  return {
-    state: partial ? 'partial' : 'parsed',
-    inlineControl: partial ? 'unknown' : inlineControl,
-  };
+  const contexts = policies.map((policy) => {
+    const scripts = policy.get('script-src') ?? policy.get('default-src');
+    const elements = policy.get('script-src-elem') ?? scripts;
+    const attributes = policy.get('script-src-attr') ?? scripts;
+    const sandbox = fromMeta ? undefined : policy.get('sandbox');
+    const scriptsBlocked = sandbox !== undefined && !sandbox.includes('allow-scripts');
+    return {
+      blocks: inlineControl(elements, scriptsBlocked),
+      attributes: inlineControl(attributes, scriptsBlocked),
+      // script-src-elem/attr never govern evaluation, even when they contain
+      // an unsafe-eval token. An absent script/default source is uncontrolled.
+      evaluation: !scriptsBlocked && (!scripts || scripts.includes("'unsafe-eval'")),
+      declaresEvaluation: scripts?.includes("'unsafe-eval'") === true,
+      broadSource: !scriptsBlocked && (!elements || (!elements.includes("'strict-dynamic'")
+        && elements.some((token) => ['*', 'http:', 'https:', 'data:', 'blob:'].includes(token)))),
+      declaresBroadSource: elements !== undefined,
+    };
+  });
+  if (contexts.every((context) => context.broadSource) && contexts.some((context) => context.declaresBroadSource)) {
+    addSignal(signals, 'csp_permissive_script_source');
+  }
+  if (contexts.every((context) => context.evaluation) && contexts.some((context) => context.declaresEvaluation)) {
+    addSignal(signals, 'csp_unsafe_eval');
+  }
+  const blocks = intersectInlineControls(contexts.map((context) => context.blocks));
+  if (blocks === 'unqualified') addSignal(signals, 'csp_unsafe_inline');
+  if (intersectInlineControls(contexts.map((context) => context.attributes)) === 'unqualified') {
+    addSignal(signals, 'csp_unsafe_inline_attributes');
+  }
+  return { state: 'parsed', inlineControl: blocks };
 }
 
 export function analyzeCspMetaPolicies(
@@ -200,7 +240,7 @@ export function analyzeCspMetaPolicies(
     }
     const policyContent = policy.content;
     const content = readHeader({ get: () => policyContent }, 'content-security-policy');
-    const analysis = analyzeCsp(content, []);
+    const analysis = analyzeCsp(content, [], true);
     if (analysis.state !== 'parsed') {
       truncated = true;
       continue;

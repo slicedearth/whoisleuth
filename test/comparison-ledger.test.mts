@@ -101,7 +101,7 @@ function websiteSnapshot(
     savedAt: observedAt,
     complete: true,
     truncated: false,
-    profileProvenance: { technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
+    profileProvenance: { pageFingerprint: { version: 1, state: 'known' }, technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
     technologies: [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high', roles: ['framework_runtime'] }],
     posture: [{ id: 'headers', state: 'present' }],
     identity: identity(),

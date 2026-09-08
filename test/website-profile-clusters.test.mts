@@ -23,7 +23,7 @@ function snapshot(
     savedAt: observedAt,
     complete: true,
     truncated: false,
-    profileProvenance: { technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
+    profileProvenance: { technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' }, pageFingerprint: { version: 1, state: 'known' } },
     technologies: [{ id: technology, name: 'Example platform', category: 'commerce', confidence: 'high', roles: ['application_platform'] }],
     posture: [],
     identity: {

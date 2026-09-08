@@ -102,6 +102,10 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
       || baseline?.truncated,
     ),
     profileProvenance: {
+      pageFingerprint: {
+        version: baseline?.fingerprintVersion ?? null,
+        state: baseline ? 'known' : 'legacy_unknown',
+      },
       technology: {
         version: Number.isSafeInteger(technologyProfile.profileVersion)
           ? Number(technologyProfile.profileVersion)
