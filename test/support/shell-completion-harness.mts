@@ -11,13 +11,22 @@ type CompletionResult = Readonly<{
 const START_MARKER = '__WHOISLEUTH_COMPLETION_START_';
 const END_MARKER = '__WHOISLEUTH_COMPLETION_END_';
 
+// A hang guard for complete fixture batches, not a completion-latency budget.
+export const SHELL_COMPLETION_PROCESS_OPTIONS = Object.freeze({
+  encoding: 'utf8' as const,
+  timeout: 60_000,
+  killSignal: 'SIGKILL' as const,
+});
+
 export function assertSuccessfulShellProcess(child: SpawnSyncReturns<string>, label: string): void {
   const detail = typeof child.stderr === 'string' ? child.stderr.trim().slice(0, 2_048) : '';
-  const outcome = child.error
-    ? `failed to start: ${child.error.message.slice(0, 512)}`
-    : child.signal
-      ? `terminated by ${child.signal}`
-      : `exited with status ${String(child.status)}`;
+  const outcome = (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT'
+    ? 'exceeded its process deadline'
+    : child.error
+      ? `failed to start: ${child.error.message.slice(0, 512)}`
+      : child.signal
+        ? `terminated by ${child.signal}`
+        : `exited with status ${String(child.status)}`;
   assert.equal(child.status, 0, `${label} ${outcome}${detail ? `: ${detail}` : ''}`);
 }
 
@@ -82,8 +91,8 @@ printf '${END_MARKER}${index}__\\n'
 `).join('\n');
   const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }\n${script}\n${invocations}`;
   const child = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', harness], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
   assertSuccessfulShellProcess(child, 'Bash completion batch');
@@ -119,8 +128,8 @@ compadd() {
 ${script}
 ${invocations}`;
   const child = spawnSync(unitTestExecutablePath('zsh'), ['-f', '-c', harness], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
   assertSuccessfulShellProcess(child, 'Zsh completion batch');
@@ -166,8 +175,8 @@ $results = foreach ($lineValue in $lines) {
 }
 $results | ConvertTo-Json -Compress -Depth 4 -AsArray`;
   const child = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', invocation], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     input: JSON.stringify(lines),
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });

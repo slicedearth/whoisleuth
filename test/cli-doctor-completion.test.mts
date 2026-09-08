@@ -13,6 +13,7 @@ import EXIT_CODES from '../cli/exit-codes.mts';
 import { unitTestExecutablePath } from '../tools/toolchain-compatibility.mts';
 import { runCli } from '../cli/runner.mts';
 import {
+  SHELL_COMPLETION_PROCESS_OPTIONS,
   assertSuccessfulShellProcess,
   prepareBashCompletionBatch,
   preparePowerShellCompletionBatch,
@@ -31,10 +32,37 @@ function capture() {
 
 describe('CLI shell completion', () => {
   test('reports an unavailable shell with its bounded process diagnostic', () => {
-    const unavailable = spawnSync('whoisleuth-unavailable-shell-fixture', [], { encoding: 'utf8' });
+    const unavailable = spawnSync('whoisleuth-unavailable-shell-fixture', [], SHELL_COMPLETION_PROCESS_OPTIONS);
     assert.throws(
       () => assertSuccessfulShellProcess(unavailable, 'Fixture shell'),
       /Fixture shell failed to start: .*ENOENT/u,
+    );
+  });
+
+  test('terminates a hanging process and distinguishes its deadline from a failed launch', () => {
+    const hanging = spawnSync(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'], {
+      ...SHELL_COMPLETION_PROCESS_OPTIONS,
+      timeout: 25,
+    });
+    assert.equal((hanging.error as NodeJS.ErrnoException | undefined)?.code, 'ETIMEDOUT');
+    assert.equal(hanging.status, null);
+    assert.equal(hanging.signal, 'SIGKILL');
+    assert.throws(
+      () => assertSuccessfulShellProcess(hanging, 'Fixture process'),
+      /Fixture process exceeded its process deadline/u,
+    );
+  });
+
+  test('reports a completed failure without accepting or exposing unbounded stderr', () => {
+    const failed = spawnSync(process.execPath, ['--eval', "process.stderr.write('x'.repeat(3_000)); process.exitCode = 7"],
+      SHELL_COMPLETION_PROCESS_OPTIONS);
+    assert.equal(failed.status, 7);
+    assert.throws(
+      () => assertSuccessfulShellProcess(failed, 'Fixture process'),
+      (error: unknown) => error instanceof assert.AssertionError
+        && error.message.includes('Fixture process exited with status 7')
+        && error.message.includes('x'.repeat(2_048))
+        && !error.message.includes('x'.repeat(2_049)),
     );
   });
 
@@ -60,14 +88,14 @@ describe('CLI shell completion', () => {
       assert.doesNotMatch(script, /https?:\/\//u);
     }
     const bash = buildShellCompletion('bash');
-    const syntax = spawnSync('bash', ['-n'], { input: bash, encoding: 'utf8' });
+    const syntax = spawnSync(unitTestExecutablePath('bash'), ['-n'], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: bash });
     assertSuccessfulShellProcess(syntax, 'Bash completion syntax check');
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
     assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
       assert.match(bash, new RegExp(pattern, 'u'));
     }
-    const completionSpec = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', `${bash}\ncomplete -p whoisleuth`], { encoding: 'utf8' });
+    const completionSpec = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', `${bash}\ncomplete -p whoisleuth`], SHELL_COMPLETION_PROCESS_OPTIONS);
     assertSuccessfulShellProcess(completionSpec, 'Bash filename completion registration');
     assert.match(completionSpec.stdout, /-o filenames\b/u);
     assert.equal((bash.match(/completion:0\).*COMPREPLY=.*bash zsh fish powershell/gu) || []).length, 1);
@@ -97,7 +125,7 @@ describe('CLI shell completion', () => {
       assert.equal(bashCandidates(['whoisleuth', target, '--de']).includes('--deep'), false, target);
     }
     const zsh = buildShellCompletion('zsh');
-    const zshSyntax = spawnSync('zsh', ['-n'], { input: zsh, encoding: 'utf8' });
+    const zshSyntax = spawnSync(unitTestExecutablePath('zsh'), ['-n'], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: zsh });
     assertSuccessfulShellProcess(zshSyntax, 'Zsh completion syntax check');
     assert.match(zsh, /funcstack\[1\].*_whoisleuth/u);
     assert.match(zsh, /command="lookup"/u);
@@ -141,12 +169,12 @@ describe('CLI shell completion', () => {
     assert.match(powershell, /'--save-lookup'/u);
     assert.match(powershell, /\$fileOptions\[\$command\] -contains \$previous/u);
     assert.match(powershell, /'workflow-run' = @\([^\n]*'--resume'/u);
-    const powershellSyntax = spawnSync('pwsh', [
+    const powershellSyntax = spawnSync(unitTestExecutablePath('pwsh'), [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
       '$code = [Console]::In.ReadToEnd(); [void][scriptblock]::Create($code)',
-    ], { input: powershell, encoding: 'utf8' });
+    ], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: powershell });
     assertSuccessfulShellProcess(powershellSyntax, 'PowerShell completion syntax check');
     const powershellExpectedCases = [
       ['whoisleuth example.test --de', ['--deep']],
@@ -252,7 +280,7 @@ $results = foreach ($candidate in $candidates) {
   if ($argument -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { throw 'Completion is not a literal argument.' }
   $argument.Value
 }
-$results | ConvertTo-Json -Compress -AsArray`], { encoding: 'utf8', input: JSON.stringify(candidates) });
+$results | ConvertTo-Json -Compress -AsArray`], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: JSON.stringify(candidates) });
       assertSuccessfulShellProcess(parsed, 'PowerShell completed-argument parsing');
       assert.deepEqual(JSON.parse(parsed.stdout), positions.flatMap(() => names.map((name) => join(directory, name))));
       assert.equal(completePowerShell(directoryLine).length, 1, 'Directories must remain navigable.');

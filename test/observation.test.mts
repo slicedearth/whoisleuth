@@ -60,12 +60,6 @@ test('keeps every historical observation export identical to its canonical owner
     assert.equal(observationFacade[key], observationContract[key]);
   }
   assert.deepEqual(FACADE_TYPE_COMPATIBILITY, [true, true, true, true, true]);
-  assert.equal(observationFacade.OBSERVATION_VERSION, observationContract.OBSERVATION_VERSION);
-  assert.equal(observationFacade.createObservation, observationContract.createObservation);
-  assert.equal(observationFacade.readObservationEnvelope, observationContract.readObservationEnvelope);
-  assert.equal(observationFacade.normalizeCtTimestamp, observationContract.normalizeCtTimestamp);
-  assert.equal(observationFacade.normalizeExplicitIsoTimestamp, observationContract.normalizeExplicitIsoTimestamp);
-  assert.equal(observationFacade.normalizeLegacyIsoTimestamp, observationContract.normalizeLegacyIsoTimestamp);
 });
 
 test('creates a deterministic bounded observation envelope', () => {
