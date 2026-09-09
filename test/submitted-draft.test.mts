@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createDraftRevision } from '../frontend/src/lib/controllers/submitted-draft.ts';
+import { createDraftRevision, restoreSubmittedFocus } from '../frontend/src/lib/controllers/submitted-draft.ts';
 
 describe('submitted draft ownership', () => {
   it('clears only an unchanged submitted revision', () => {
@@ -30,5 +30,34 @@ describe('submitted draft ownership', () => {
     assert.equal(accepted(), true);
     owner = 'record-b';
     assert.equal(accepted(), false);
+  });
+
+  it('restores only a connected control owned by the same live form without stealing later focus', () => {
+    const origin = {} as Element;
+    const body = {} as HTMLElement;
+    const document = { activeElement: origin, body };
+    const owner = { isConnected: true };
+    let focused = 0;
+    const target = {
+      isConnected: true, disabled: false, ownerDocument: document,
+      focus(options: FocusOptions) { assert.deepEqual(options, { preventScroll: true }); focused += 1; },
+    };
+    const restore = () => restoreSubmittedFocus(origin, target as unknown as HTMLElement, owner as Node);
+    assert.equal(restore(), true);
+    document.activeElement = body;
+    assert.equal(restore(), true);
+    document.activeElement = {} as Element;
+    assert.equal(restore(), false);
+    document.activeElement = origin;
+    target.disabled = true;
+    assert.equal(restore(), false);
+    target.disabled = false;
+    target.isConnected = false;
+    assert.equal(restore(), false);
+    target.isConnected = true;
+    owner.isConnected = false;
+    assert.equal(restore(), false);
+    assert.equal(restoreSubmittedFocus(origin, null, null), false);
+    assert.equal(focused, 2);
   });
 });

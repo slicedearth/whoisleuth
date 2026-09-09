@@ -10,3 +10,15 @@ export function createDraftRevision(owner: () => string) {
     },
   });
 }
+
+export function restoreSubmittedFocus(
+  origin: Element | null,
+  target: HTMLElement | null | undefined,
+  owner: Node | null | undefined,
+): boolean {
+  if (!owner?.isConnected || !target?.isConnected || ('disabled' in target && target.disabled)) return false;
+  const document = target.ownerDocument;
+  if (document.activeElement !== document.body && document.activeElement !== origin) return false;
+  target.focus({ preventScroll: true });
+  return true;
+}

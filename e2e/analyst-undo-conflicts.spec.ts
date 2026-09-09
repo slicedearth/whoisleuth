@@ -72,6 +72,39 @@ test('Bulk review undo preserves a newer row state written in another tab', asyn
   }
 });
 
+test('a saved-view deletion checks the selected record and preserves a later name draft', async ({ page }) => {
+  await runBulkScan(page, DOMAINS);
+  await openBulkWorkspaceTools(page, 'review');
+  const views = page.getByRole('region', { name: 'Saved views and review queue' });
+  await views.getByLabel('New view name').fill('Shared view');
+  await views.getByRole('button', { name: 'Save current view' }).click();
+  await expect(views.getByRole('status')).toContainText('Shared view');
+  await views.getByRole('combobox', { name: 'Saved Bulk review view' }).selectOption({ label: 'Shared view' });
+  await views.getByLabel('New view name').fill('Unsaved next view');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const deleteButton = views.getByRole('button', { name: 'Delete', exact: true });
+  await expect(deleteButton).toBeVisible();
+  expect(await deleteButton.evaluate((element) => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    return range.getClientRects().length;
+  })).toBe(1);
+  const other = await page.context().newPage();
+  try {
+    await other.goto('/bulk');
+    await runBulkScan(other, DOMAINS);
+    await openBulkWorkspaceTools(other, 'review');
+    const peer = other.getByRole('region', { name: 'Saved views and review queue' });
+    await peer.getByRole('combobox', { name: 'Saved Bulk review view' }).selectOption({ label: 'Shared view' });
+    await peer.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(peer.getByRole('status')).toContainText('Deleted the Shared view review view.');
+    await expect(peer.getByRole('combobox', { name: 'Saved Bulk review view' })).toBeFocused();
+    await views.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(views.getByRole('status')).toContainText('saved view changed or was deleted');
+    await expect(views.getByLabel('New view name')).toHaveValue('Unsaved next view');
+    expect((await readBrowserLocalCollection(page, 'bulk_review')).records).toHaveLength(0);
+  } finally { await other.close(); }
+});
+
 test('shortlist compensation rejects the whole selection when one member changed', async ({ page }) => {
   await runBulkScan(page, DOMAINS);
   await openBulkFilters(page);

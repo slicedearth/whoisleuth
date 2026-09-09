@@ -29,6 +29,15 @@ Saved-work search, templates and archive maintenance are secondary tools.
 Search stays in the browser and operates over bounded normalised fields; it does
 not start collection or inspect raw upstream payloads.
 
+Campaign and investigation-template editors keep later typing when an earlier
+save completes. If another tab changes the fields being edited, the save is rejected
+and the draft remains open. Refresh the saved records, then reopen the record to
+replace the draft with its current version. A refresh failure after a successful
+write offers a read retry, not another write. Rule actions and saved-view
+deletion also check the selected record before changing it.
+Drafts whose campaign or template was deleted can be saved explicitly as a new
+record. This does not recreate the deleted identity or restore campaign membership.
+
 ### Guided investigations
 
 Starting a guide opens its current step. On ordinary tool entry, the retained

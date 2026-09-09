@@ -1,7 +1,8 @@
 <script lang="ts">
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
-  import { untrack } from 'svelte';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
+  import { tick, untrack } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import {
     createDetectionRule,
@@ -41,7 +42,9 @@
   let match=$state<'all'|'any'>('all');
   let conditions=$state<Array<{field:string;operator:string;value:string}>>([newCondition()]);
   let message=$state('');
-  let creating=$state(false);
+  let mutating=$state(false);
+  let refreshRequired=$state(false);
+  let nameInput=$state<HTMLInputElement>();
   const draft=createDraftRevision(()=> 'new-rule');
 
   const evaluations=$derived(evaluateCasesAgainstRules(records,rules));
@@ -56,6 +59,28 @@
 
   function newCondition(){return{field:'availability',operator:'equals',value:'registered'};}
   async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);onchange?.(rules);}
+  async function reconcile(next:DetectionRule[],success:string){
+    try{await refresh(next);refreshRequired=false;message=success;}
+    catch{refreshRequired=true;message=`${success} The view could not be refreshed. Retry the refresh; do not repeat the write.`;}
+  }
+  function mutationFailure(cause:unknown,fallback:string){
+    if(cause instanceof LocalRecordConflictError||failedLocalMutationOutcome(cause)==='unknown')refreshRequired=true;
+    message=cause instanceof Error?cause.message:fallback;
+  }
+  async function retryRefresh(){
+    if(mutating)return;
+    const origin=document.activeElement;
+    mutating=true;
+    try{await refresh();refreshRequired=false;message='Refreshed custom rules. Unsaved edits are unchanged.';}
+    catch(cause){mutationFailure(cause,'Could not refresh custom rules.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-custom-rules'):nameInput,nameInput);}
+  }
+  async function restoreActionFocus(origin:Element|null,index=0){
+    await tick();
+    const next=rules[Math.min(index,rules.length-1)];
+    const target=refreshRequired?document.getElementById('refresh-custom-rules'):origin?.isConnected?origin:(next?document.getElementById(`rule-toggle-${next.id}`):nameInput);
+    restoreSubmittedFocus(origin,target as HTMLElement|null|undefined,nameInput);
+  }
   function definition(field:string){return ruleFieldDefinition(field) as null|{value:string;label:string;kind:string;values?:string[];min?:number;max?:number};}
   function operatorLabel(value:string){return({equals:'equals',at_least:'at least',at_most:'at most',contains:'contains',present:'is present'} as Record<string,string>)[value]??value;}
   function updateField(index:number,value:string){const operator=operatorsForRuleField(value)[0]??'equals';const item={field:value,operator,value:operator==='present'?'true':definition(value)?.kind==='boolean'?'true':definition(value)?.values?.[0]??''};conditions=conditions.map((condition,i)=>i===index?item:condition);}
@@ -64,8 +89,9 @@
   function removeCondition(index:number){if(conditions.length>1){draft.changed();conditions=conditions.filter((_,i)=>i!==index);}}
   function resetDraft(){name='';riskDelta=0;tag='';match='all';conditions=[newCondition()];}
   async function create(){
-    if(creating)return;
-    creating=true;
+    if(mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    mutating=true;
     const unchanged=draft.capture();
     const submittedName=name.trim();
     try{
@@ -75,18 +101,63 @@
         value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value,
       }));
       const next=await createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag});
-      try{await refresh(next);message=`Created custom rule “${submittedName}”.`;}
-      catch{message=`Created custom rule “${submittedName}”, but the view could not be refreshed. Reload before creating another rule.`;}
+      await reconcile(next,`Created custom rule “${submittedName}”.`);
       if(unchanged())resetDraft();
-    }catch(cause){message=cause instanceof Error?cause.message:'Could not create the custom rule.';}
-    finally{creating=false;}
+    }catch(cause){mutationFailure(cause,'Could not create the custom rule.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-custom-rules'):nameInput,nameInput);}
   }
-  async function toggle(rule:DetectionRule){try{await refresh(await editDetectionRule(rule.id,{enabled:!rule.enabled}));message=`${rule.enabled?'Disabled':'Enabled'} “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not update the custom rule.';}}
-  async function remove(rule:DetectionRule){if(!confirm(`Delete custom rule “${rule.name}”?`))return;try{await refresh(await deleteDetectionRule(rule.id));message=`Deleted “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete the custom rule.';}}
+  async function toggle(rule:DetectionRule){
+    if(mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    const submitted=$state.snapshot(rule);
+    mutating=true;
+    try{await reconcile(await editDetectionRule(submitted.id,{enabled:!submitted.enabled},submitted),`${submitted.enabled?'Disabled':'Enabled'} “${submitted.name}”.`);}
+    catch(cause){mutationFailure(cause,'Could not update the custom rule.');}
+    finally{mutating=false;await restoreActionFocus(origin);}
+  }
+  async function remove(rule:DetectionRule){
+    if(mutating||refreshRequired||!confirm(`Delete custom rule “${rule.name}”?`))return;
+    const origin=document.activeElement;
+    const index=rules.findIndex((candidate)=>candidate.id===rule.id);
+    const submitted=$state.snapshot(rule);
+    mutating=true;
+    try{await reconcile(await deleteDetectionRule(submitted.id,submitted),`Deleted “${submitted.name}”.`);}
+    catch(cause){mutationFailure(cause,'Could not delete the custom rule.');}
+    finally{mutating=false;await restoreActionFocus(origin,index);}
+  }
   async function download(){try{await exportDetectionRules();message='Exported the custom-rule collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export custom rules.';}}
-  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_RULE_IMPORT_BYTES)throw new Error('Custom-rule imports are limited to 2 MB.');const result=await importDetectionRules(parseBoundedJson(await file.text(),{label:'Custom-rule import',maximumBytes:MAX_RULE_IMPORT_BYTES}));await refresh(result.rules);message=`Imported ${result.added} new and ${result.updated} updated custom rule${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}catch(cause){message=cause instanceof Error?cause.message:'Custom-rule import failed.';}finally{input.value='';}}
-  async function installPack(pack:StaticPagePatternPack){try{const result=await importDetectionRules(reviewedStaticPagePatternPackExport(pack.id));await refresh(result.rules);message=`Installed or restored ${pack.rules.length} reviewed rule${pack.rules.length===1?'':'s'} from “${pack.label}”. Existing built-in Risk scores were not changed.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not install the reviewed pack.';}}
-  async function importPackFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_STATIC_PAGE_PATTERN_PACK_BYTES)throw new Error('Page-pattern pack imports are limited to 256 KB.');const pack=validateStaticPagePatternPack(parseBoundedJson(await file.text(),{label:'Page-pattern pack import',maximumBytes:MAX_STATIC_PAGE_PATTERN_PACK_BYTES}));const result=await importDetectionRules(staticPagePatternPackRuleExport(pack));await refresh(result.rules);message=`Installed ${result.added} new and ${result.updated} updated rule${result.added+result.updated===1?'':'s'} from the validated local pack “${pack.label}”. Built-in Risk scores were not changed.`;}catch(cause){message=cause instanceof Error?cause.message:'Page-pattern pack import failed.';}finally{input.value='';}}
+  async function importFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];
+    if(!file||mutating||refreshRequired)return;
+    mutating=true;
+    try{
+      if(file.size>MAX_RULE_IMPORT_BYTES)throw new Error('Custom-rule imports are limited to 2 MB.');
+      const result=await importDetectionRules(parseBoundedJson(await file.text(),{label:'Custom-rule import',maximumBytes:MAX_RULE_IMPORT_BYTES}));
+      await reconcile(result.rules,`Imported ${result.added} new and ${result.updated} updated custom rule${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`);
+    }catch(cause){mutationFailure(cause,'Custom-rule import failed.');}
+    finally{input.value='';mutating=false;}
+  }
+  async function installPack(pack:StaticPagePatternPack){
+    if(mutating||refreshRequired)return;
+    mutating=true;
+    try{
+      const result=await importDetectionRules(reviewedStaticPagePatternPackExport(pack.id));
+      await reconcile(result.rules,`Installed or restored ${pack.rules.length} reviewed rule${pack.rules.length===1?'':'s'} from “${pack.label}”. Existing built-in Risk scores were not changed.`);
+    }catch(cause){mutationFailure(cause,'Could not install the reviewed pack.');}
+    finally{mutating=false;}
+  }
+  async function importPackFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];
+    if(!file||mutating||refreshRequired)return;
+    mutating=true;
+    try{
+      if(file.size>MAX_STATIC_PAGE_PATTERN_PACK_BYTES)throw new Error('Page-pattern pack imports are limited to 256 KB.');
+      const pack=validateStaticPagePatternPack(parseBoundedJson(await file.text(),{label:'Page-pattern pack import',maximumBytes:MAX_STATIC_PAGE_PATTERN_PACK_BYTES}));
+      const result=await importDetectionRules(staticPagePatternPackRuleExport(pack));
+      await reconcile(result.rules,`Installed ${result.added} new and ${result.updated} updated rule${result.added+result.updated===1?'':'s'} from the validated local pack “${pack.label}”. Built-in Risk scores were not changed.`);
+    }catch(cause){mutationFailure(cause,'Page-pattern pack import failed.');}
+    finally{input.value='';mutating=false;}
+  }
   function packInstalled(pack:StaticPagePatternPack){return pack.rules.every((candidate)=>rules.some((rule)=>rule.id===candidate.id));}
   function countMatches(ruleId:string){return evaluations.filter((result)=>result.matchedRules.some((item)=>item.id===ruleId)).length;}
   function conditionLabel(condition:DetectionRuleCondition){const field=definition(condition.field)?.label??condition.field;return condition.operator==='present'?`${field} is present`:`${field} ${operatorLabel(condition.operator)} ${String(condition.value)}`;}
@@ -103,10 +174,10 @@
 </script>
 
 <section class="rule-builder card">
-  <header class="section-head"><div><p class="eyebrow">Custom detection</p><h2>Browser-local rules</h2><p>Combine bounded case-evidence checks without changing the built-in risk model.</p></div><div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!rules.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></header>
+  <header class="section-head"><div><p class="eyebrow">Custom detection</p><h2>Browser-local rules</h2><p>Combine bounded case-evidence checks without changing the built-in risk model.</p></div><div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!rules.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div></header>
   <form oninput={draft.changed} onchange={draft.changed} onsubmit={(event)=>{event.preventDefault();void create();}}>
     <div class="rule-fields">
-      <label class="field">Name<input bind:value={name} maxlength={MAX_RULE_NAME_LENGTH} placeholder="Login page with copied assets" required></label>
+      <label class="field">Name<input bind:this={nameInput} bind:value={name} maxlength={MAX_RULE_NAME_LENGTH} placeholder="Login page with copied assets" required></label>
       <label class="field">Match<select bind:value={match}><option value="all">All conditions</option><option value="any">Any condition</option></select></label>
       <label class="field">Custom contribution<input type="number" bind:value={riskDelta} min="0" max={MAX_RULE_RISK_DELTA} step="1"></label>
       <label class="field">Suggested tag <small>optional</small><input bind:value={tag} maxlength={MAX_RULE_TAG_LENGTH} placeholder="manual-review"></label>
@@ -129,7 +200,7 @@
       {/each}
       <button type="button" class="btn" onclick={addCondition} disabled={conditions.length>=MAX_RULE_CONDITIONS}>Add condition</button>
     </fieldset>
-    <button class="primary create" type="submit" disabled={creating || !name.trim()}>Create custom rule</button>
+    <button class="primary create" type="submit" disabled={mutating || refreshRequired || !name.trim()}>Create custom rule</button>
     {#if name.trim() && draftPreview}
       <aside class="draft-preview" aria-live="polite">
         <div><strong>Preview only</strong><span>{caseSourceState === 'ready' ? `${draftPreview.matchCount} current case match${draftPreview.matchCount===1?'':'es'}` : 'Current case matches unavailable'} · custom contribution +{draftPreview.candidate.riskDelta}</span></div>
@@ -141,6 +212,7 @@
   </form>
 </section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+{#if refreshRequired}<button id="refresh-custom-rules" class="btn" type="button" onclick={retryRefresh} disabled={mutating}>Refresh custom rules</button>{/if}
 
 <section class="rule-limits card">
   <strong>Interpretation boundary</strong>
@@ -148,14 +220,14 @@
 </section>
 
 <section class="pattern-packs card" aria-labelledby="pattern-packs-title">
-  <header><div><p class="eyebrow">Reviewed static patterns</p><h2 id="pattern-packs-title">Page-pattern packs</h2><p>Install fixed, inspectable rules that use only evidence already retained in cases.</p></div><label class="btn file-btn">Import validated pack<input type="file" accept="application/json,.json" onchange={importPackFile}></label></header>
+  <header><div><p class="eyebrow">Reviewed static patterns</p><h2 id="pattern-packs-title">Page-pattern packs</h2><p>Install fixed, inspectable rules that use only evidence already retained in cases.</p></div><label class="btn file-btn">Import validated pack<input type="file" accept="application/json,.json" onchange={importPackFile} disabled={mutating || refreshRequired}></label></header>
   <div class="pack-grid">
     {#each REVIEWED_STATIC_PAGE_PATTERN_PACKS as pack}
       <article>
         <div><strong>{pack.label}</strong><span>v{STATIC_PAGE_PATTERN_PACK_VERSION} · {pack.relationship === 'brand_relative' ? 'brand-relative' : 'generic'} · review required · {pack.rules.length} rule{pack.rules.length === 1 ? '' : 's'}</span></div>
         <p>{pack.description}</p>
         <small>{pack.evidenceBoundary}</small>
-        <button type="button" class="btn" onclick={() => void installPack(pack)}>{packInstalled(pack) ? 'Restore reviewed pack' : 'Install reviewed pack'}</button>
+        <button type="button" class="btn" onclick={() => void installPack(pack)} disabled={mutating || refreshRequired}>{packInstalled(pack) ? 'Restore reviewed pack' : 'Install reviewed pack'}</button>
       </article>
     {/each}
   </div>
@@ -165,7 +237,7 @@
   <section class="rule-list" aria-label="Custom detection rules">
     {#each rules as rule (rule.id)}
       <article class="rule card" class:disabled={!rule.enabled}>
-        <header><div><strong>{rule.name}</strong><small>{rule.match==='all'?'All':'Any'} of {rule.conditions.length} condition{rule.conditions.length===1?'':'s'} · {caseSourceState === 'ready' ? `${countMatches(rule.id)} current match${countMatches(rule.id)===1?'':'es'}` : 'current matches unavailable'}</small></div><div><button type="button" class="btn small" aria-pressed={rule.enabled} onclick={()=>toggle(rule)}>{rule.enabled?'Enabled':'Disabled'}</button><button type="button" class="btn small danger" onclick={()=>remove(rule)}>Delete</button></div></header>
+        <header><div><strong>{rule.name}</strong><small>{rule.match==='all'?'All':'Any'} of {rule.conditions.length} condition{rule.conditions.length===1?'':'s'} · {caseSourceState === 'ready' ? `${countMatches(rule.id)} current match${countMatches(rule.id)===1?'':'es'}` : 'current matches unavailable'}</small></div><div><button id={`rule-toggle-${rule.id}`} type="button" class="btn small" aria-pressed={rule.enabled} onclick={()=>toggle(rule)} disabled={mutating || refreshRequired}>{rule.enabled?'Enabled':'Disabled'}</button><button type="button" class="btn small danger" onclick={()=>remove(rule)} disabled={mutating || refreshRequired}>Delete</button></div></header>
         <ul>{#each rule.conditions as condition}<li>{conditionLabel(condition)}</li>{/each}</ul>
         <footer><span>Custom contribution <strong>+{rule.riskDelta}</strong></span>{#if rule.tag}<span>Suggested tag <strong>{rule.tag}</strong></span>{/if}</footer>
       </article>

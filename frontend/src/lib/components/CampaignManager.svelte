@@ -1,6 +1,7 @@
 <script lang="ts">
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
   import { tick, untrack } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
@@ -30,13 +31,13 @@
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
-  let creating=$state(false);
+  let mutating=$state(false);
+  let refreshRequired=$state(false);
   const createDraft=createDraftRevision(()=> 'new-campaign');
   let nameDraft=$state('');
   let descriptionDraft=$state('');
   let selectedDomain=$state('');
-  let savingDetails=$state(false);
-  let addingMember=$state(false);
+  let detailsBase=$state.raw<CampaignRecord|null>(null);
   const detailsDraft=createDraftRevision(()=>expandedId);
   const memberDraft=createDraftRevision(()=>expandedId);
   let message=$state('');
@@ -50,6 +51,7 @@
   const casesReady=$derived(cohortSourceStates.cases==='ready');
 
   const expanded=$derived(campaigns.find((campaign)=>campaign.id===expandedId)??null);
+  const orphanedDraft=$derived(detailsBase&&expandedId===detailsBase.id&&!expanded?detailsBase:null);
   const caseByDomain=$derived(new Map(records.map((record)=>[record.domain,record])));
   const availableCases=$derived(records.filter((record)=>!expanded?.domains.includes(record.domain)).sort((a,b)=>a.domain.localeCompare(b.domain)));
   const pageCount=$derived(Math.max(1,Math.ceil(campaigns.length/PAGE_SIZE)));
@@ -85,53 +87,97 @@
 
   async function refresh(next?:CampaignRecord[]){
     campaigns=next??await loadCampaigns();
-    if(expandedId&&!campaigns.some((campaign)=>campaign.id===expandedId))expandedId='';
     oncount?.(campaigns.length);
     onchange?.(campaigns);
   }
   async function reconcile(next:CampaignRecord[],success:string){
-    try{await refresh(next);message=success;}
-    catch{message=`${success} The change was saved, but the view could not be refreshed. Reload before changing this campaign again.`;}
+    try{await refresh(next);refreshRequired=false;message=success;}
+    catch{refreshRequired=true;message=`${success} The change was saved, but the view could not be refreshed. Retry the refresh; do not repeat the write.`;}
+  }
+  function mutationFailure(cause:unknown,fallback:string){
+    if(cause instanceof LocalRecordConflictError||failedLocalMutationOutcome(cause)==='unknown')refreshRequired=true;
+    message=cause instanceof Error?cause.message:fallback;
+  }
+  async function retryRefresh(){
+    if(mutating)return;
+    const origin=document.activeElement;
+    mutating=true;
+    try{await refresh();refreshRequired=false;message='Refreshed campaigns. Unsaved edits are unchanged.';}
+    catch(cause){mutationFailure(cause,'Could not refresh campaigns.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-campaigns'):document.getElementById(expandedId?`campaign-name-${expandedId}`:'new-campaign'),componentRoot);}
   }
   function open(campaign:CampaignRecord){
     detailsDraft.changed();memberDraft.changed();
     if(expandedId===campaign.id){expandedId='';return;}
-    showCampaign(campaign.id);expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';memberPage=1;
+    showCampaign(campaign.id);expandedId=campaign.id;detailsBase=$state.snapshot(campaign);nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';memberPage=1;
   }
   async function create(){
-    if(creating)return;
-    creating=true;
+    if(mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    let createdId='';
+    mutating=true;
     const unchanged=createDraft.capture();
     const previousExpandedId=expandedId;
     try{
       const result=await createCampaign({name:newName});
       const created=result.record;
+      createdId=created.id;
       await reconcile(result.campaigns,`Created campaign “${created.name}”.`);
       if(unchanged())newName='';
       if(unchanged()&&expandedId===previousExpandedId)open(created);
     }
-    catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
-    finally{creating=false;}
+    catch(cause){mutationFailure(cause,'Could not create the campaign.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-campaigns'):createdId&&expandedId===createdId?document.getElementById(`campaign-name-${createdId}`):origin as HTMLElement|null,componentRoot);}
   }
   async function save(campaign:CampaignRecord){
-    if(savingDetails)return;
-    savingDetails=true;
+    if(mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    mutating=true;
     const unchanged=detailsDraft.capture();
     const submittedName=nameDraft;
     const submittedDescription=descriptionDraft;
+    const submittedBase=detailsBase;
     try{
-      const next=await editCampaign(campaign.id,{name:submittedName,description:submittedDescription});
+      const next=await editCampaign(campaign.id,{name:submittedName,description:submittedDescription},submittedBase);
       const current=next.find((item)=>item.id===campaign.id);
       await reconcile(next,`Updated campaign “${current?.name??campaign.name}”.`);
+      if(current&&expandedId===campaign.id&&detailsBase===submittedBase)detailsBase=current;
       if(current&&unchanged()){nameDraft=current.name;descriptionDraft=current.description;}
     }
-    catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
-    finally{savingDetails=false;}
+    catch(cause){mutationFailure(cause,'Could not update the campaign.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-campaigns'):origin as HTMLElement|null,componentRoot);}
+  }
+  async function saveAsNew(){
+    const submittedBase=orphanedDraft;
+    if(!submittedBase||mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    const unchanged=detailsDraft.capture();
+    mutating=true;
+    try{
+      const result=await createCampaign({name:nameDraft,description:descriptionDraft});
+      const retainsOwner=detailsBase===submittedBase&&expandedId===submittedBase.id;
+      const retainsDraft=unchanged();
+      if(retainsOwner){expandedId=result.record.id;detailsBase=result.record;if(retainsDraft){nameDraft=result.record.name;descriptionDraft=result.record.description;}}
+      await reconcile(result.campaigns,`Created campaign “${result.record.name}” from the retained draft. Add any cases to the new campaign separately.`);
+      if(retainsOwner)showCampaign(result.record.id);
+    }catch(cause){mutationFailure(cause,'Could not save the campaign draft.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,refreshRequired?document.getElementById('refresh-campaigns'):document.getElementById(`campaign-name-${expandedId}`),componentRoot);}
+  }
+  async function discardOrphanedDraft(){
+    const origin=document.activeElement;
+    detailsDraft.changed();expandedId='';detailsBase=null;nameDraft='';descriptionDraft='';
+    await tick();restoreSubmittedFocus(origin,document.getElementById('new-campaign'),componentRoot);
+  }
+  function membershipFocusTarget(campaignId:string){
+    if(refreshRequired)return document.getElementById('refresh-campaigns');
+    const selector=document.getElementById(`campaign-case-${campaignId}`);
+    return selector instanceof HTMLSelectElement&&!selector.disabled?selector:document.getElementById(`campaign-head-${campaignId}`);
   }
   async function add(campaign:CampaignRecord){
-    if(addingMember)return;
+    if(mutating||refreshRequired)return;
     if(!selectedDomain){message='Choose a case to add.';return;}
-    addingMember=true;
+    const origin=document.activeElement;
+    mutating=true;
     const unchanged=memberDraft.capture();
     const submittedDomain=selectedDomain;
     try{
@@ -139,21 +185,46 @@
       await reconcile(next,`Added ${submittedDomain} to “${campaign.name}”.`);
       if(unchanged())selectedDomain='';
     }
-    catch(cause){message=cause instanceof Error?cause.message:'Could not add the case.';}
-    finally{addingMember=false;}
+    catch(cause){mutationFailure(cause,'Could not add the case.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,membershipFocusTarget(campaign.id),componentRoot);}
   }
   async function removeDomain(campaign:CampaignRecord,domain:string){
+    if(mutating||refreshRequired)return;
+    const origin=document.activeElement;
+    mutating=true;
     try{await reconcile(await removeCampaignDomain(campaign.id,domain),`Removed ${domain} from “${campaign.name}”.`);}
-    catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
+    catch(cause){mutationFailure(cause,'Could not remove the case.');}
+    finally{mutating=false;await tick();restoreSubmittedFocus(origin,membershipFocusTarget(campaign.id),componentRoot);}
   }
   async function remove(campaign:CampaignRecord){
+    if(mutating||refreshRequired)return;
     const origin=document.activeElement;
     const owner=componentRoot;
     const previousIndex=campaigns.findIndex((item)=>item.id===campaign.id);
+    const unchanged=detailsDraft.capture();
+    let draftFocus:Readonly<{id:string;start:number|null;end:number|null;direction:HTMLInputElement['selectionDirection']}>|null=null;
     if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
-    try{await reconcile(await deleteCampaign(campaign.id),`Deleted campaign “${campaign.name}”.`);}
-    catch(cause){message=cause instanceof Error?cause.message:'Could not delete the campaign.';}
+    mutating=true;
+    try{
+      const next=await deleteCampaign(campaign.id,$state.snapshot(campaign));
+      const currentFocus=document.activeElement;
+      if((currentFocus instanceof HTMLInputElement||currentFocus instanceof HTMLTextAreaElement)
+        &&[ `campaign-name-${campaign.id}`, `campaign-description-${campaign.id}` ].includes(currentFocus.id)){
+        draftFocus={id:currentFocus.id,start:currentFocus.selectionStart,end:currentFocus.selectionEnd,direction:currentFocus.selectionDirection};
+      }
+      if(expandedId===campaign.id&&unchanged()){expandedId='';detailsBase=null;}
+      await reconcile(next,`Deleted campaign “${campaign.name}”.`);
+    }
+    catch(cause){mutationFailure(cause,'Could not delete the campaign.');}
+    finally{mutating=false;}
     await tick();
+    if(refreshRequired){restoreSubmittedFocus(origin,document.getElementById('refresh-campaigns'),owner);return;}
+    if(orphanedDraft?.id===campaign.id){
+      const target=document.getElementById(draftFocus?.id??`campaign-name-${campaign.id}`);
+      if(restoreSubmittedFocus(origin,target,owner)&&draftFocus&&draftFocus.start!==null&&draftFocus.end!==null
+        &&(target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement))target.setSelectionRange(draftFocus.start,draftFocus.end,draftFocus.direction??undefined);
+      return;
+    }
     const active=document.activeElement;
     if(!owner?.isConnected||(active instanceof HTMLElement&&active!==origin&&active!==document.body&&active.isConnected))return;
     if(campaigns.some((item)=>item.id===campaign.id)){if(origin instanceof HTMLElement&&origin.isConnected)origin.focus();return;}
@@ -167,22 +238,44 @@
   }
   async function download(){try{await exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
   async function importFile(event:Event){
+    if(mutating||refreshRequired)return;
     const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
-    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(parseBoundedJson(await file.text(),{label:'Campaign import',maximumBytes:MAX_CAMPAIGN_IMPORT_BYTES}));await refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
-    catch(cause){message=cause instanceof Error?cause.message:'Campaign import failed.';}finally{input.value='';}
+    mutating=true;
+    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(parseBoundedJson(await file.text(),{label:'Campaign import',maximumBytes:MAX_CAMPAIGN_IMPORT_BYTES}));page=1;memberPage=1;await reconcile(result.campaigns,`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`);}
+    catch(cause){mutationFailure(cause,'Campaign import failed.');}finally{input.value='';mutating=false;}
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
 </script>
 
+{#snippet detailsEditor(campaign:CampaignRecord,missing=false)}
+  <form class="campaign-edit" oninput={detailsDraft.changed} onchange={detailsDraft.changed} onsubmit={(event)=>{event.preventDefault();void(missing?saveAsNew():save(campaign));}}>
+    <label for={`campaign-name-${campaign.id}`}>Name</label>
+    <input id={`campaign-name-${campaign.id}`} bind:value={nameDraft} maxlength="100" required>
+    <label for={`campaign-description-${campaign.id}`}>Description <small>optional</small></label>
+    <textarea id={`campaign-description-${campaign.id}`} bind:value={descriptionDraft} maxlength="1000" rows="3" placeholder="Scope, working hypothesis, or handoff context"></textarea>
+    <button class="btn" type="submit" disabled={mutating || refreshRequired || !nameDraft.trim()}>{missing?'Save as new campaign':'Save details'}</button>
+  </form>
+{/snippet}
+
 <section class="campaign-toolbar card" bind:this={componentRoot}>
   <form oninput={createDraft.changed} onchange={createDraft.changed} onsubmit={(event)=>{event.preventDefault();void create();}}>
     <label for="new-campaign">New campaign</label>
-    <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={creating || !newName.trim()}>Create campaign</button></div>
+    <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={mutating || refreshRequired || !newName.trim()}>Create campaign</button></div>
   </form>
-  <div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!campaigns.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div>
+  <div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!campaigns.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div>
 </section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+{#if refreshRequired}<button id="refresh-campaigns" class="btn" type="button" onclick={retryRefresh} disabled={mutating}>Refresh campaigns</button>{/if}
+
+{#if orphanedDraft}
+  <section class="campaign card campaign-body orphaned-draft" aria-labelledby="orphaned-campaign-draft-title">
+    <h2 id="orphaned-campaign-draft-title">Unsaved campaign draft</h2>
+    <p>The saved campaign was deleted. Keep editing this draft or save it as a new campaign; the deleted campaign and its membership are not restored.</p>
+    {@render detailsEditor(orphanedDraft,true)}
+    <button class="btn" type="button" onclick={discardOrphanedDraft} disabled={mutating}>Discard draft</button>
+  </section>
+{/if}
 
 {#if campaigns.length}
   <p class="summary">{campaigns.length} browser-local campaign{campaigns.length===1?'':'s'} · domain membership only</p>
@@ -196,19 +289,13 @@
         </button>
         {#if expandedId===campaign.id}
           <div class="campaign-body" id={`campaign-${campaign.id}`}>
-            <form class="campaign-edit" oninput={detailsDraft.changed} onchange={detailsDraft.changed} onsubmit={(event)=>{event.preventDefault();void save(campaign);}}>
-              <label for={`campaign-name-${campaign.id}`}>Name</label>
-              <input id={`campaign-name-${campaign.id}`} bind:value={nameDraft} maxlength="100" required>
-              <label for={`campaign-description-${campaign.id}`}>Description <small>optional</small></label>
-              <textarea id={`campaign-description-${campaign.id}`} bind:value={descriptionDraft} maxlength="1000" rows="3" placeholder="Scope, working hypothesis, or handoff context"></textarea>
-              <button class="btn" type="submit" disabled={savingDetails || !nameDraft.trim()}>Save details</button>
-            </form>
+            {@render detailsEditor(campaign)}
 
             <section class="members" aria-label={`Cases in ${campaign.name}`}>
               <header><div><p class="eyebrow">Members</p><h3>{campaign.domains.length} case domain{campaign.domains.length===1?'':'s'}</h3></div></header>
               {#if campaign.domains.length}
                 {#if !casesReady}<p class="source-state" role="alert">Case evidence could not be read. Retained campaign membership remains available, but linkage and missing-case states are unavailable.</p>{/if}
-                <ul>{#each pagedMembers as domain}{@const linked=casesReady?caseByDomain.get(domain):null}<li><div><strong>{domain}</strong>{#if casesReady&&!linked}<small>Case unavailable in this browser</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#if linked}<button class="btn small" type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)}>Remove</button></div></li>{/each}</ul>
+                <ul>{#each pagedMembers as domain}{@const linked=casesReady?caseByDomain.get(domain):null}<li><div><strong>{domain}</strong>{#if casesReady&&!linked}<small>Case unavailable in this browser</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#if linked}<button class="btn small" type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)} disabled={mutating || refreshRequired}>Remove</button></div></li>{/each}</ul>
                 <Pagination currentPage={currentMemberPage} pageCount={memberPageCount} setPage={setMemberPage} ariaLabel={`Case pages for ${campaign.name}`} />
               {:else}<p>No cases have been added to this campaign.</p>{/if}
             </section>
@@ -243,21 +330,23 @@
 
             {#if casesReady}<form class="add-case" oninput={memberDraft.changed} onchange={memberDraft.changed} onsubmit={(event)=>{event.preventDefault();void add(campaign);}}>
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
-              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={addingMember || !selectedDomain}>Add case</button></div>
+              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={mutating || refreshRequired || !selectedDomain}>Add case</button></div>
             </form>{/if}
             <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this browser. Membership organises review; it is not attribution.</p></details>
-            <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)}>Delete campaign</button>
+            <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)} disabled={mutating || refreshRequired}>Delete campaign</button>
           </div>
         {/if}
       </article>
     {/each}
   </section>
   <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Campaign pages" />
-{:else}
+{:else if !orphanedDraft}
   <section class="empty-state card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a browser-local investigation without copying their evidence or notes.</p></section>
 {/if}
 
 <style>
+  .orphaned-draft{margin:16px 0}.orphaned-draft>h2,.orphaned-draft>p{margin:0}.orphaned-draft>h2{font-size:var(--text-lg)}.orphaned-draft>p{max-width:75ch;color:var(--muted);font-size:var(--text-sm);line-height:1.5}.orphaned-draft>button{justify-self:start}
+  @media(max-width:700px){.orphaned-draft>button{width:100%}}
   .campaign-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}.campaign-toolbar form label,.campaign-edit>label,.add-case>label{display:block;margin-bottom:5px;color:var(--text);font:600 var(--text-xs) var(--mono)}.campaign-toolbar form>div,.add-case>div{display:flex;flex-wrap:wrap;gap:8px}.campaign-toolbar input,.campaign-edit input{min-height:42px}.add-case select{min-height:var(--control-h)}.message{color:var(--accent);font-size:var(--text-sm)}.summary{margin:12px 2px 2px;color:var(--muted);font-size:var(--text-xs)}.privacy-note{margin:0 2px 12px;color:var(--muted);font-size:var(--text-xs)}.campaign-list{display:grid;gap:10px}.campaign{padding:0;overflow:hidden}.campaign.open{border-color:var(--accent)}.campaign-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}.campaign-head:hover strong{color:var(--accent)}.campaign-head>span:first-child{display:grid;gap:3px;min-width:0}.campaign-head strong,.campaign-head small{overflow-wrap:anywhere}.campaign-head strong{font:700 var(--text-md) var(--mono)}.campaign-head small,.campaign-head>span:last-child{color:var(--muted);font-size:var(--text-2xs)}.campaign-body{display:grid;gap:16px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.campaign-edit{display:grid;gap:7px}.campaign-edit textarea{resize:vertical}.campaign-edit button{justify-self:start}.members,.review-summary{padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm)}.members h3,.review-summary h3{margin:0;font-size:var(--text-md)}.members ul{display:grid;gap:7px;margin:11px 0 0;padding:0;list-style:none}.members li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.members li>div:first-child{display:grid;gap:2px;min-width:0}.members li strong{overflow-wrap:anywhere;font-size:var(--text-sm)}.members li small,.members>p,details p{color:var(--muted);font-size:var(--text-xs)}.members li>div:last-child{display:flex;flex-wrap:wrap;gap:6px}.source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.review-summary>header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.review-summary>header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.review-health{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.review-health span{padding:4px 7px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font-size:var(--text-2xs)}.review-health strong{color:var(--text)}.cue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.cue-grid article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.cue-grid article>strong{display:block;color:var(--accent);font:700 var(--text-lg) var(--mono)}.cue-grid article>span{font-weight:700;font-size:var(--text-xs)}.cue-grid article>p{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.review-summary details{margin-top:10px}.review-summary details ul{margin:7px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.add-case select{min-width:0;max-width:100%}details summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}details p{max-width:80ch}.delete{justify-self:start}
   @media(max-width:700px){.campaign-toolbar{align-items:stretch;flex-direction:column}.campaign-toolbar form>div,.add-case>div{display:grid}.campaign-toolbar input,.campaign-toolbar button,.top-actions>:global(*),.add-case select{width:100%}.campaign-head{grid-template-columns:1fr}.members li,.review-summary>header{align-items:stretch;flex-direction:column}.members li>div:last-child button{flex:1}.cue-grid{grid-template-columns:minmax(0,1fr)}.campaign-edit button,.delete{width:100%}}
 </style>

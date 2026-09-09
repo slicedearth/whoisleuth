@@ -12,6 +12,7 @@ import {
   updateDetectionRule as updateRule,
 } from './analysis/detection-rule-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { assertLocalRecordCurrent } from './local-mutation-outcome.ts';
 import { LEGACY_DETECTION_RULES_KEY } from './browser-local-data-contract.ts';
 import type { CaseRecord } from './cases.ts';
 import type {
@@ -55,15 +56,17 @@ export async function createDetectionRule(input: Omit<DetectionRule, 'id'>): Pro
   });
 }
 
-export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): Promise<DetectionRule[]> {
+export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>, expected: DetectionRule | null = null): Promise<DetectionRule[]> {
   return updateBrowserLocalData('detection_rules', (current) => {
+    assertLocalRecordCurrent(current.find((rule) => rule.id === id), expected, 'custom rule');
     const rules = boundedRules(updateRule(current, id, patch));
     return { document: rules, result: rules };
   });
 }
 
-export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> {
+export async function deleteDetectionRule(id: string, expected: DetectionRule | null = null): Promise<DetectionRule[]> {
   return updateBrowserLocalData('detection_rules', (current) => {
+    assertLocalRecordCurrent(current.find((rule) => rule.id === id), expected, 'custom rule');
     const rules = boundedRules(current.filter((rule) => rule.id !== id));
     return { document: rules, result: rules };
   });

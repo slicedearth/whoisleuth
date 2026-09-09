@@ -12,6 +12,7 @@ import {
   parseCacaoInvestigationPlaybook,
 } from './analysis/investigation-playbook-interchange.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { serialiseWorkspacePortableJsonLine } from '../../../packages/contracts/workspace-portability.mts';
 
 export {
@@ -37,11 +38,13 @@ export async function loadInvestigationTemplates(): Promise<InvestigationTemplat
 export async function saveInvestigationTemplate(
   raw: unknown,
   makeId = () => crypto.randomUUID(),
+  expected?: InvestigationTemplate | null,
 ): Promise<InvestigationTemplate[]> {
   return updateBrowserLocalData('investigation_templates', (current) => {
-    const existing = raw && typeof raw === 'object' && 'id' in raw
-      ? current.find((item) => item.id === String((raw as { id?: unknown }).id ?? ''))
-      : null;
+    const id = raw && typeof raw === 'object' && 'id' in raw ? String((raw as { id?: unknown }).id ?? '') : '';
+    const existing = id ? current.find((item) => item.id === id) : null;
+    if (expected === null && existing) throw new LocalRecordConflictError('investigation template');
+    assertLocalRecordCurrent(existing, expected ?? null, 'investigation template');
     const candidate = createInvestigationTemplate({
       ...existing,
       ...(raw && typeof raw === 'object' ? raw : {}),
@@ -52,8 +55,9 @@ export async function saveInvestigationTemplate(
   });
 }
 
-export async function deleteInvestigationTemplate(id: string): Promise<InvestigationTemplate[]> {
+export async function deleteInvestigationTemplate(id: string, expected: InvestigationTemplate | null = null): Promise<InvestigationTemplate[]> {
   return updateBrowserLocalData('investigation_templates', (current) => {
+    assertLocalRecordCurrent(current.find((template) => template.id === id), expected, 'investigation template');
     const templates = bounded(removeTemplate(current, id));
     return { document: templates, result: templates };
   });

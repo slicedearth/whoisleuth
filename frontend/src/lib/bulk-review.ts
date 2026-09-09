@@ -6,12 +6,14 @@ import {
   setBulkReviewRowState,
   upsertBulkReviewPreset,
   type BulkReviewPresetView,
+  type BulkReviewPreset,
   type BulkReviewState,
   type BulkReviewRow,
   type BulkReviewStore,
 } from './analysis/bulk-review-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
+import { assertLocalRecordCurrent } from './local-mutation-outcome.ts';
 import { normalizeDomain } from './analysis/case-model.ts';
 
 export type {
@@ -32,15 +34,17 @@ export async function saveBulkReviewPreset(input: {
   id?: string;
   name: string;
   view: BulkReviewPresetView;
-}): Promise<BulkReviewStore> {
+}, expected: BulkReviewPreset | null = null): Promise<BulkReviewStore> {
   return updateBrowserLocalData('bulk_review', (current) => {
+    assertLocalRecordCurrent(current.presets.find((preset) => preset.id === input.id), expected, 'saved view');
     const store = upsertBulkReviewPreset(current, input);
     return { document: store, result: store };
   });
 }
 
-export async function deleteBulkReviewPreset(id: string): Promise<BulkReviewStore> {
+export async function deleteBulkReviewPreset(id: string, expected: BulkReviewPreset | null = null): Promise<BulkReviewStore> {
   return updateBrowserLocalData('bulk_review', (current) => {
+    assertLocalRecordCurrent(current.presets.find((preset) => preset.id === id), expected, 'saved view');
     const store = removeBulkReviewPreset(current, id);
     return { document: store, result: store };
   });

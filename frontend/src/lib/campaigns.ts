@@ -11,6 +11,7 @@ import {
   addCampaignDomain as addDomain,
 } from './analysis/campaign-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { assertLocalRecordCurrent } from './local-mutation-outcome.ts';
 import { LEGACY_CAMPAIGNS_KEY } from './browser-local-data-contract.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -44,8 +45,9 @@ export async function createCampaign(input: { name: string; description?: string
   });
 }
 
-export async function editCampaign(id: string, patch: { name?: string; description?: string; domains?: string[] }): Promise<CampaignRecord[]> {
+export async function editCampaign(id: string, patch: { name?: string; description?: string; domains?: string[] }, expected: CampaignRecord | null = null): Promise<CampaignRecord[]> {
   return updateBrowserLocalData('campaigns', (current) => {
+    assertLocalRecordCurrent(current.find((campaign) => campaign.id === id), expected, 'campaign', Object.keys(patch) as (keyof CampaignRecord)[]);
     const campaigns = boundedCampaigns(updateCampaignRecord(current, id, patch).campaigns as CampaignRecord[]);
     return { document: campaigns, result: campaigns };
   });
@@ -65,8 +67,9 @@ export async function removeCampaignDomain(id: string, domain: string): Promise<
   });
 }
 
-export async function deleteCampaign(id: string): Promise<CampaignRecord[]> {
+export async function deleteCampaign(id: string, expected: CampaignRecord | null = null): Promise<CampaignRecord[]> {
   return updateBrowserLocalData('campaigns', (current) => {
+    assertLocalRecordCurrent(current.find((campaign) => campaign.id === id), expected, 'campaign');
     const campaigns = boundedCampaigns(current.filter((campaign) => campaign.id !== id));
     return { document: campaigns, result: campaigns };
   });
