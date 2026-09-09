@@ -287,11 +287,13 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
         sourceObservedAt: report.reviewedAt,
         ageDays: report.ageDays,
         itemCount: report.routeCount,
-        detail: report.state === 'stale'
-          ? `The reviewed reporting routes reached their ${report.reviewAfter.slice(0, 10)} recheck date.`
-          : report.state === 'limited'
-            ? `The reporting routes are due for review in ${report.reviewDueInDays} day${report.reviewDueInDays === 1 ? '' : 's'}.`
-            : `The reporting routes are inside their review window until ${report.reviewAfter.slice(0, 10)}.`,
+        detail: report.state === 'unavailable'
+          ? 'The reporting-route review date is later than the evaluation clock; catalogue health is unavailable.'
+          : report.state === 'stale'
+            ? `The reviewed reporting routes reached their ${report.reviewAfter.slice(0, 10)} recheck date.`
+            : report.state === 'limited'
+              ? `The reporting routes are due for review in ${report.reviewDueInDays} day${report.reviewDueInDays === 1 ? '' : 's'}.`
+              : `The reporting routes are inside their review window until ${report.reviewAfter.slice(0, 10)}.`,
         limitation: 'This status checks only reviewed dates and catalogue structure. It does not contact a platform or establish that a complaint route is currently available.',
         action: report.state === 'current'
           ? 'No local maintenance action is currently indicated.'

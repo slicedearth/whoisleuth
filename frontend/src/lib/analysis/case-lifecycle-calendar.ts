@@ -4,10 +4,16 @@ import { latestObservationCohort } from '../../../../packages/evidence/latest-ob
 import { caseFollowUpSources } from '../../../../packages/cases/case-follow-ups.mts';
 import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
 import { caseNumber, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+import {
+  MAX_CASES, MAX_CASE_ACTIONS, MAX_CASE_OBSERVED_EFFECT_REVIEWS,
+  MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+  MAX_CASE_STORE_BYTES, MAX_RESPONSE_VALUE_LENGTH,
+} from '../../../../packages/contracts/case-portability.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
-export const MAX_CASE_LIFECYCLE_EVENTS = 500;
-export const MAX_CASE_LIFECYCLE_SOURCE_CASES = 500;
+export const MAX_CASE_LIFECYCLE_EVENTS = MAX_CASES * (MAX_CASE_ACTIONS * 2 + MAX_CASE_OBSERVED_EFFECT_REVIEWS + 3);
+// Calendar fields repeat bounded Case context within each standard event.
+export const MAX_CASE_LIFECYCLE_CALENDAR_BYTES = MAX_CASE_STORE_BYTES * 8;
 
 export type CaseLifecycleCalendarKind = 'action_due' | 'action_follow_up' | 'observed_effect_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
 export type CaseLifecycleCalendarSource = 'case_action' | 'observed_effect_review' | 'evidence_history' | 'evidence_pin';
@@ -34,13 +40,17 @@ export type CaseLifecycleCalendarDisclosure = Readonly<{
 }>;
 
 export type CaseLifecycleCalendarQuery = Readonly<{ kind?: unknown; window?: unknown; includeHistorical?: boolean }>;
-export type CaseLifecycleCalendarProjection = Readonly<{
+export type CaseLifecycleCalendarCollection = Readonly<{
   events: readonly CaseLifecycleCalendarEvent[];
-  matchingCount: number;
-  omittedCount: number;
+  evaluatedAt: string | null;
   sourceCasesOmitted: number;
+  sourceActionsOmitted: number;
+  sourceReviewsOmitted: number;
+  sourceSnapshotsOmitted: number;
+  sourcePinsOmitted: number;
   dateLimitations: readonly Readonly<{ caseId: string; domain: string; detail: string }>[];
 }>;
+export type CaseLifecycleCalendarProjection = CaseLifecycleCalendarCollection & Readonly<{ matchingCount: number }>;
 
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -50,8 +60,8 @@ function timestamp(value: unknown): string | null {
   return normalizeExplicitIsoTimestamp(value);
 }
 
-function addDays(value: string, days: number): string {
-  return new Date(Date.parse(value) + days * 86_400_000).toISOString();
+function addDays(value: string, days: number): string | null {
+  return timestamp(new Date(Date.parse(value) + days * 86_400_000).toISOString());
 }
 
 function escapeCalendarText(value: string): string {
@@ -68,17 +78,21 @@ function calendarDate(value: string): string {
 }
 
 function foldLine(value: string): string {
-  const encoder = new TextEncoder();
   const parts: string[] = [];
   let current = '';
+  let currentBytes = 0;
   let byteLimit = 75;
   for (const character of value) {
-    if (current && encoder.encode(`${current}${character}`).byteLength > byteLimit) {
+    const point = character.codePointAt(0)!;
+    const bytes = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+    if (current && currentBytes + bytes > byteLimit) {
       parts.push(current);
       current = character;
+      currentBytes = bytes;
       byteLimit = 74;
     } else {
       current += character;
+      currentBytes += bytes;
     }
   }
   parts.push(current);
@@ -94,17 +108,44 @@ const EVENT_LABELS: Readonly<Record<CaseLifecycleCalendarKind, string>> = Object
   domain_expiry_review: 'Domain expiry evidence review',
 });
 
-function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHistorical: boolean, now: unknown) {
+export function collectCaseLifecycleEvents(
+  records: readonly CaseRecord[],
+  includeHistorical = false,
+  now: unknown = new Date().toISOString(),
+): CaseLifecycleCalendarCollection {
   const events: CaseLifecycleCalendarEvent[] = [];
+  function appendEvent(sourceId: string, event: Omit<CaseLifecycleCalendarEvent, 'uid'>) {
+    events.push({ ...event, uid: JSON.stringify([event.caseId, event.source, sourceId, event.kind]) });
+  }
   const dateLimitations: Array<{ caseId: string; domain: string; detail: string }> = [];
   const asOf = timestamp(now);
-  for (const record of records.slice(0, MAX_CASE_LIFECYCLE_SOURCE_CASES)) {
+  let sourceActionsOmitted = 0;
+  let sourceReviewsOmitted = 0;
+  let sourceSnapshotsOmitted = 0;
+  let sourcePinsOmitted = 0;
+  for (const record of records.slice(0, MAX_CASES)) {
+    const actionsOmitted = Math.max(0, record.actions.length - MAX_CASE_ACTIONS);
+    const reviewsOmitted = Math.max(0, record.observedEffects.reviews.length - MAX_CASE_OBSERVED_EFFECT_REVIEWS);
+    const snapshotsOmitted = Math.max(0, record.evidenceHistory.length - MAX_EVIDENCE_SNAPSHOTS_PER_CASE);
+    const pinsOmitted = Math.max(0, record.evidencePins.length - MAX_CASE_EVIDENCE_PINS);
+    sourceActionsOmitted += actionsOmitted;
+    sourceReviewsOmitted += reviewsOmitted;
+    sourceSnapshotsOmitted += snapshotsOmitted;
+    sourcePinsOmitted += pinsOmitted;
     const caseContext = {
       caseReference: caseNumber(record.id),
       domain: record.domain,
       classification: caseTypeSummary(record.tags) || null,
     };
-    const followUpSources = caseFollowUpSources(record, includeHistorical);
+    const followUpSources = caseFollowUpSources({
+      ...record,
+      actions: record.actions.slice(-MAX_CASE_ACTIONS),
+      observedEffects: { ...record.observedEffects, reviews: record.observedEffects.reviews.slice(-MAX_CASE_OBSERVED_EFFECT_REVIEWS) },
+    }, includeHistorical);
+    if (reviewsOmitted && !includeHistorical) {
+      followUpSources.reviews = [];
+      dateLimitations.push({ caseId: record.id, domain: record.domain, detail: 'Independent effect review: source reviews exceed the Case bound; no latest follow-up was selected.' });
+    }
     function latestDate<T>(values: readonly T[], clock: (item: T) => unknown, value: (item: T) => unknown, label: string): string | null {
       if (!values.length || values.every((item) => value(item) == null || value(item) === '')) return null;
       const cohort = latestObservationCohort(values, clock);
@@ -120,12 +161,17 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHisto
       }
       return dates[0] ?? null;
     }
+    function reminderDate(expiry: string | null, days: number, label: string): string | null {
+      if (!expiry) return null;
+      const startsAt = addDays(expiry, days);
+      if (!startsAt) dateLimitations.push({ caseId: record.id, domain: record.domain, detail: `${label}: the reminder falls outside the supported calendar range; no calendar date was selected.` });
+      return startsAt;
+    }
     for (const action of followUpSources.actions) {
       const dueAt = timestamp(action.dueAt);
       const followUpAt = timestamp(action.followUpAt);
       if (dueAt) {
-        events.push({
-          uid: `${record.id}-${action.id}-due`,
+        appendEvent(action.id, {
           caseId: record.id,
           ...caseContext,
           recipient: action.recipient,
@@ -138,8 +184,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHisto
         });
       }
       if (followUpAt && followUpAt !== dueAt) {
-        events.push({
-          uid: `${record.id}-${action.id}-follow-up`,
+        appendEvent(action.id, {
           caseId: record.id,
           ...caseContext,
           recipient: action.recipient,
@@ -155,8 +200,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHisto
     for (const review of followUpSources.reviews) {
       const followUpAt = timestamp(review.followUpAt);
       if (!followUpAt) continue;
-      events.push({
-        uid: `${record.id}-${review.id}-effect-follow-up`,
+      appendEvent(review.id, {
         caseId: record.id,
         ...caseContext,
         recipient: null,
@@ -168,54 +212,62 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHisto
         description: `The prior independent review state was ${review.state}. Open the browser-local case and deliberately decide whether to collect or attach new evidence; this calendar event performs no request.`,
       });
     }
-    const expiry = latestDate(record.evidenceHistory, (snapshot) => snapshot.capturedAt, (snapshot) => snapshot.expiryDate, 'Domain expiry');
-    if (expiry) {
-      events.push({
-        uid: `${record.id}-${expiry.slice(0, 10)}-expiry-review`,
+    if (snapshotsOmitted) dateLimitations.push({ caseId: record.id, domain: record.domain, detail: 'Domain expiry: source snapshots exceed the Case bound; no latest expiry was selected.' });
+    if (pinsOmitted) dateLimitations.push({ caseId: record.id, domain: record.domain, detail: 'Certificate and disclosure expiry: source pins exceed the Case bound; no latest expiry was selected.' });
+    const expiry = snapshotsOmitted ? null : latestDate(record.evidenceHistory, (snapshot) => snapshot.capturedAt, (snapshot) => snapshot.expiryDate, 'Domain expiry');
+    const expiryReminder = reminderDate(expiry, -30, 'Domain expiry');
+    if (expiry && expiryReminder) {
+      appendEvent(expiry, {
         caseId: record.id,
         ...caseContext,
         recipient: null,
         kind: 'domain_expiry_review',
         source: 'evidence_history',
         sourceLabel: 'Latest retained domain evidence',
-        startsAt: addDays(expiry, -30),
+        startsAt: expiryReminder,
         summary: `Review observed expiry evidence for ${record.domain}`,
         description: 'The retained expiry date is point-in-time evidence, not a guarantee of deletion, availability, release, or acquisition eligibility.',
       });
     }
-    const certificateExpiry = latestDate(record.evidencePins.filter((pin) => pin.field === 'tls.valid_to'), (pin) => pin.observedAt, (pin) => pin.value, 'Certificate expiry');
-    if (certificateExpiry) {
-      events.push({
-        uid: `${record.id}-${certificateExpiry.slice(0, 10)}-certificate-review`,
+    const certificateExpiry = pinsOmitted ? null : latestDate(record.evidencePins.filter((pin) => pin.field === 'tls.valid_to'), (pin) => pin.observedAt, (pin) => pin.value, 'Certificate expiry');
+    const certificateReminder = reminderDate(certificateExpiry, -30, 'Certificate expiry');
+    if (certificateExpiry && certificateReminder) {
+      appendEvent(certificateExpiry, {
         caseId: record.id,
         ...caseContext,
         recipient: null,
         kind: 'certificate_expiry_review',
         source: 'evidence_pin',
         sourceLabel: 'Analyst-selected TLS evidence pin',
-        startsAt: addDays(certificateExpiry, -30),
+        startsAt: certificateReminder,
         summary: `Review retained certificate expiry for ${record.domain}`,
         description: 'This date came from an analyst-selected TLS evidence pin. Recollect before interpreting current certificate state.',
       });
     }
-    const disclosureExpiry = latestDate(record.evidencePins.filter((pin) => pin.field === 'disclosure.security_txt_expires'), (pin) => pin.observedAt, (pin) => pin.value, 'Disclosure expiry');
-    if (disclosureExpiry) {
-      events.push({
-        uid: `${record.id}-${disclosureExpiry.slice(0, 10)}-disclosure-review`,
+    const disclosureExpiry = pinsOmitted ? null : latestDate(record.evidencePins.filter((pin) => pin.field === 'disclosure.security_txt_expires'), (pin) => pin.observedAt, (pin) => pin.value, 'Disclosure expiry');
+    const disclosureReminder = reminderDate(disclosureExpiry, -14, 'Disclosure expiry');
+    if (disclosureExpiry && disclosureReminder) {
+      appendEvent(disclosureExpiry, {
         caseId: record.id,
         ...caseContext,
         recipient: null,
         kind: 'disclosure_expiry_review',
         source: 'evidence_pin',
         sourceLabel: 'Analyst-selected disclosure evidence pin',
-        startsAt: addDays(disclosureExpiry, -14),
+        startsAt: disclosureReminder,
         summary: `Review retained security.txt expiry for ${record.domain}`,
         description: 'This date came from an analyst-selected disclosure evidence pin. Publication and contact reachability must be reviewed again.',
       });
     }
   }
   events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid));
-  return { events, dateLimitations };
+  return Object.freeze({
+    events: Object.freeze(events),
+    evaluatedAt: asOf,
+    sourceCasesOmitted: Math.max(0, records.length - MAX_CASES),
+    sourceActionsOmitted, sourceReviewsOmitted, sourceSnapshotsOmitted, sourcePinsOmitted,
+    dateLimitations: Object.freeze(dateLimitations),
+  });
 }
 
 function lifecycleEventPredicate(
@@ -236,8 +288,8 @@ function lifecycleEventPredicate(
   const window = typeof options.window === 'string' && ['all', 'overdue', '30d', '90d', 'future'].includes(options.window)
     ? options.window
     : 'future';
-  const nowAt = timestamp(now) || new Date(0).toISOString();
-  const nowMs = Date.parse(nowAt);
+  const nowAt = timestamp(now);
+  const nowMs = nowAt === null ? NaN : Date.parse(nowAt);
   const maximum = window === '30d'
     ? nowMs + 30 * 86_400_000
     : window === '90d'
@@ -245,7 +297,9 @@ function lifecycleEventPredicate(
       : Number.POSITIVE_INFINITY;
   return (event) => {
     if (kind !== 'all' && event.kind !== kind) return false;
-    const startsAt = Date.parse(event.startsAt);
+    const validDate = timestamp(event.startsAt);
+    if (!validDate || (window !== 'all' && nowAt === null)) return false;
+    const startsAt = Date.parse(validDate);
     if (window === 'overdue') return startsAt < nowMs;
     if (window === 'future') return startsAt >= nowMs;
     if (window === '30d' || window === '90d') return startsAt >= nowMs && startsAt <= maximum;
@@ -259,14 +313,11 @@ export function projectCaseLifecycleEvents(
   now: unknown = new Date().toISOString(),
 ): CaseLifecycleCalendarProjection {
   const collected = collectCaseLifecycleEvents(records, options.includeHistorical === true, now);
-  const matching = collected.events.filter(lifecycleEventPredicate(options, now));
-  const events = matching.slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+  const events = filterCaseLifecycleEvents(collected.events, options, now);
   return Object.freeze({
+    ...collected,
     events: Object.freeze(events),
-    matchingCount: matching.length,
-    omittedCount: matching.length - events.length,
-    sourceCasesOmitted: Math.max(0, records.length - MAX_CASE_LIFECYCLE_SOURCE_CASES),
-    dateLimitations: Object.freeze(collected.dateLimitations),
+    matchingCount: events.length,
   });
 }
 
@@ -279,7 +330,8 @@ export function filterCaseLifecycleEvents(
   options: CaseLifecycleCalendarQuery = {},
   now: unknown = new Date().toISOString(),
 ): CaseLifecycleCalendarEvent[] {
-  return events.filter(lifecycleEventPredicate(options, now)).slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+  if (events.length > MAX_CASE_LIFECYCLE_EVENTS) throw new RangeError('Calendar events exceed the bounded Case source population.');
+  return events.filter(lifecycleEventPredicate(options, now));
 }
 
 export function serializeCaseLifecycleCalendarEvents(
@@ -287,18 +339,36 @@ export function serializeCaseLifecycleCalendarEvents(
   disclosure: CaseLifecycleCalendarDisclosure = {},
   generatedAt: unknown = new Date().toISOString(),
 ): string {
-  const createdAt = timestamp(generatedAt) || new Date(0).toISOString();
-  const lines = [
+  if (events.length > MAX_CASE_LIFECYCLE_EVENTS) throw new RangeError('Calendar events exceed the bounded Case source population.');
+  const createdAt = timestamp(generatedAt);
+  if (!createdAt) throw new TypeError('Calendar export requires an explicit valid generation time.');
+  const lines: string[] = [];
+  const encoder = new TextEncoder();
+  let byteLength = 0;
+  function append(...values: string[]) {
+    for (const value of values) {
+      const line = `${foldLine(value)}\r\n`;
+      byteLength += encoder.encode(line).byteLength;
+      if (byteLength > MAX_CASE_LIFECYCLE_CALENDAR_BYTES) throw new RangeError('Calendar export exceeds its byte bound. Select fewer events.');
+      lines.push(line);
+    }
+  }
+  append(
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//WHOISleuth//Browser-local case review//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeCalendarText('WHOISleuth case follow-ups')}`,
-  ];
+  );
   const seen = new Set<string>();
-  for (const event of events.slice(0, MAX_CASE_LIFECYCLE_EVENTS)) {
-    if (seen.has(event.uid)) continue;
+  for (const event of events) {
+    if (!event.uid || seen.has(event.uid)) throw new TypeError('Selected calendar events have missing or duplicate identities. Review the selection before exporting.');
+    if ([event.uid, event.caseId, event.caseReference, event.domain, event.recipient, event.classification, event.description].some((value) => value !== null && (typeof value !== 'string' || value.length > MAX_RESPONSE_VALUE_LENGTH))) {
+      throw new RangeError('A calendar event exceeds the bounded Case text fields.');
+    }
+    const startsAt = timestamp(event.startsAt);
+    if (!startsAt || !Object.hasOwn(EVENT_LABELS, event.kind)) throw new TypeError('A selected calendar event has an invalid date or kind.');
     seen.add(event.uid);
     const summaryParts = [EVENT_LABELS[event.kind], event.caseReference];
     if (disclosure.includeDomain) summaryParts.push(event.domain);
@@ -308,11 +378,11 @@ export function serializeCaseLifecycleCalendarEvents(
       if (event.classification) descriptions.push(`Case types: ${event.classification}.`);
       descriptions.push(event.description);
     }
-    lines.push(
+    append(
       'BEGIN:VEVENT',
-      `UID:${sha256IdentityHex(new TextEncoder().encode(event.uid))}@whoisleuth.local`,
+      `UID:${sha256IdentityHex(encoder.encode(event.uid))}@whoisleuth.local`,
       `DTSTAMP:${calendarDate(createdAt)}`,
-      `DTSTART:${calendarDate(event.startsAt)}`,
+      `DTSTART:${calendarDate(startsAt)}`,
       `SUMMARY:${escapeCalendarText(summaryParts.join(' · '))}`,
       `DESCRIPTION:${escapeCalendarText(descriptions.join(' '))}`,
       `X-WHOISLEUTH-SCHEMA:${CASE_LIFECYCLE_CALENDAR_SCHEMA}`,
@@ -320,8 +390,8 @@ export function serializeCaseLifecycleCalendarEvents(
       'END:VEVENT',
     );
   }
-  lines.push('END:VCALENDAR');
-  return lines.map(foldLine).join('\r\n').concat('\r\n');
+  append('END:VCALENDAR');
+  return lines.join('');
 }
 
 export function serializeCaseLifecycleCalendar(

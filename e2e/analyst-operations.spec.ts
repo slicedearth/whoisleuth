@@ -256,6 +256,106 @@ test('calendar export includes only selected follow-ups and keeps Case context o
   expect(collectionRequests.count()).toBe(0);
 });
 
+test('calendar reaches and exports every matching event beyond the former five-hundred-event cap', async ({ page }, testInfo) => {
+  test.slow();
+  const collectionRequests = countCollectionRequests(page);
+  const records = Array.from({ length: 12 }, (_, caseIndex) => caseRecord({
+    id: `full-calendar-${caseIndex}`, domain: `full-calendar-${caseIndex}.invalid`,
+    actions: Array.from({ length: 50 }, (_, actionIndex) => {
+      const index = caseIndex * 50 + actionIndex;
+      const action = readyForReviewAction();
+      return { ...action, id: `calendar-action-${index}`, type: 'internal_review',
+        recipient: `Private calendar owner ${String(index).padStart(3, '0')}`,
+        dueAt: '2030-06-01T00:00:00.000Z', followUpAt: '2030-07-01T00:00:00.000Z',
+        history: action.history.map((event, eventIndex) => ({ ...event, id: `calendar-event-${index}-${eventIndex}` })),
+      };
+    }),
+  }));
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records } }, { destination: '/monitor' });
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 12 });
+  expect(saved.records).toHaveLength(12);
+  for (const record of saved.records) expect(record.value.actions).toHaveLength(50);
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const calendar = page.getByRole('region', { name: 'Contact and lifecycle review', exact: true });
+  await expect(calendar.getByRole('button', { name: 'Select matching (1200)', exact: true })).toBeEnabled();
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
+  await expect(calendar.getByRole('button', { name: 'Select matching (600)', exact: true })).toBeEnabled();
+  const pages = calendar.getByRole('navigation', { name: 'Lifecycle event pages', exact: true });
+  const timeline = calendar.getByRole('list', { name: 'Browser-local lifecycle review timeline', exact: true });
+  const owners = new Set<string>();
+  for (let pageNumber = 1; pageNumber <= 25; pageNumber++) {
+    await expect(pages.getByRole('status')).toHaveText(`Page ${pageNumber} of 25`);
+    await expect(timeline.getByRole('listitem')).toHaveCount(24);
+    for (const owner of await timeline.getByText(/^Recipient or owner: Private calendar owner \d{3}$/u).allTextContents()) owners.add(owner);
+    if (pageNumber < 25) {
+      const next = pages.getByRole('button', { name: 'Next', exact: true });
+      await next.focus(); await next.press('Enter');
+      await expect(next).toBeFocused();
+    }
+  }
+  expect(owners.size).toBe(600);
+  const last = timeline.getByRole('checkbox').last();
+  await last.focus(); await last.press('Space');
+  await expect(last).toBeChecked();
+  await expect(calendar.getByRole('button', { name: 'Export selected (1)', exact: true })).toBeEnabled();
+  await calendar.getByRole('button', { name: 'Select matching (600)', exact: true }).click();
+  const exportButton = calendar.getByRole('button', { name: 'Export selected (600)', exact: true });
+  const download = page.waitForEvent('download');
+  await exportButton.click();
+  const exported = Buffer.concat(await (await (await download).createReadStream()).toArray()).toString('utf8').replaceAll(/\r\n[ \t]/gu, '');
+  expect(exported.match(/BEGIN:VEVENT/gu)).toHaveLength(600);
+  expect(new Set(exported.match(/^UID:.+$/gmu)).size).toBe(600);
+  expect(exported).not.toMatch(/Private calendar owner|full-calendar-\d+/u);
+  await expect(exportButton).toBeFocused();
+  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected browser-local review events.');
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_due');
+  await expect(calendar.getByRole('button', { name: 'Export selected (0)', exact: true })).toBeDisabled();
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
+  await expect(calendar.getByRole('button', { name: 'Export selected (600)', exact: true })).toBeEnabled();
+  await expect(timeline.getByRole('checkbox').first()).toBeChecked();
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await timeline.getByRole('listitem').first().evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expect(timeline.getByRole('listitem').first()).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('platform reporting routes are unavailable before review and become usable inside the review window', async ({ page }, testInfo) => {
+  const collectionRequests = countCollectionRequests(page);
+  await page.clock.setFixedTime('2026-09-03T23:59:59.999Z');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ id: 'platform-clock', domain: 'platform-clock.invalid' })] } }, { destination: '/cases?case=platform-clock' });
+  const workspace = await openCaseResponseWorkspace(page, 'platform-clock');
+  await workspace.getByLabel('Exact HTTP(S) URL').fill('https://t.me/example/7');
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const routes = workspace.getByRole('region', { name: 'Official platform routes', exact: true });
+  await expect(routes.getByText('unavailable', { exact: true })).toBeVisible();
+  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  await expect(routes).toContainText('within its review window at this time');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await routes.getByRole('article').evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expect(routes.getByRole('article')).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  await page.clock.setFixedTime('2026-09-04T00:00:00.000Z');
+  await page.reload();
+  const refreshed = await openCaseResponseWorkspace(page, 'platform-clock');
+  const reviewedRoutes = refreshed.getByRole('region', { name: 'Official platform routes', exact: true });
+  await expect(reviewedRoutes.getByText('found', { exact: true })).toBeVisible();
+  await expect(reviewedRoutes.getByRole('button', { name: 'Create drafting action', exact: true })).toBeEnabled();
+  expect(collectionRequests.count()).toBe(0);
+});
+
 test('calendar qualifies conflicting dates and exposes superseded follow-ups only on request', async ({ page }) => {
   const review = { id: 'earlier-review', state: 'not_checked', observedAt: OBSERVED_AT, sourceClass: 'analyst', source: 'Fixture review', completeness: 'unknown', limitations: [], evidencePinId: null, sightingId: null, followUpAt: '2030-06-10T00:00:00.000Z', createdAt: OBSERVED_AT };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
@@ -277,6 +377,13 @@ test('calendar qualifies conflicting dates and exposes superseded follow-ups onl
   await calendar.getByLabel('Include completed actions and earlier effect reviews').uncheck();
   await expect(calendar.getByRole('button', { name: 'Export selected (0)' })).toBeDisabled();
   await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  const reviewCase = calendar.getByRole('link', { name: 'calendar-conflict.invalid', exact: true });
+  await expect(reviewCase).toHaveAttribute('href', '/cases?case=calendar-conflict');
+  await reviewCase.focus(); await reviewCase.press('Enter');
+  await expect(page).toHaveURL(/\/cases\?case=calendar-conflict$/u);
+  await expect(page.locator('#case-response-calendar-conflict')).toBeVisible();
+  await openCaseResponseWorkspace(page, 'calendar-conflict');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -30,7 +30,7 @@ export type IncidentPlatform = Readonly<{
 
 export type PlatformReportingResolution = Readonly<{
   platform: IncidentPlatform | null;
-  state: 'found' | 'stale' | 'unsupported';
+  state: 'found' | 'stale' | 'unsupported' | 'unavailable';
   routes: readonly PlatformReportingRoute[];
   limitation: string;
 }>;
@@ -154,16 +154,18 @@ export function platformReportingCatalogueHealth(now: Date = new Date()) {
   const reviewedMs = Date.parse(reviewedAt);
   const reviewAfterMs = Date.parse(reviewAfter);
   const warningMs = reviewAfterMs - (REVIEW_WARNING_DAYS * 86_400_000);
-  const state = now.getTime() >= reviewAfterMs
-    ? 'stale'
-    : now.getTime() >= warningMs
-      ? 'limited'
-      : 'current';
+  const state = now.getTime() < reviewedMs
+    ? 'unavailable'
+    : now.getTime() >= reviewAfterMs
+      ? 'stale'
+      : now.getTime() >= warningMs
+        ? 'limited'
+        : 'current';
   return Object.freeze({
     state,
     reviewedAt,
     reviewAfter,
-    ageDays: Math.max(0, Math.floor((now.getTime() - reviewedMs) / 86_400_000)),
+    ageDays: now.getTime() < reviewedMs ? null : Math.floor((now.getTime() - reviewedMs) / 86_400_000),
     reviewDueInDays: Math.ceil((reviewAfterMs - now.getTime()) / 86_400_000),
     routeCount: PLATFORM_REPORTING_ROUTES.length,
   });
@@ -197,10 +199,24 @@ export function resolvePlatformReportingRoutes(
     routes: [],
     limitation: 'No reviewed platform route matches this exact hostname. Use the provider’s current official help centre and verify the route before acting.',
   };
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return {
+    platform,
+    state: 'unavailable',
+    routes: [],
+    limitation: 'The review clock is unavailable. Platform reporting-route freshness could not be evaluated.',
+  };
   const candidates = PLATFORM_REPORTING_ROUTES.filter((candidate) => candidate.platformId === platform.id);
   const selected = new Set(selectedCaseTypes);
   const routes = candidates.filter((candidate) => !candidate.caseTypes.length || candidate.caseTypes.some((type) => selected.has(type)));
-  const fresh = routes.filter((candidate) => now.getTime() < Date.parse(`${candidate.reviewAfter}T00:00:00Z`));
+  const futureReview = routes.some((candidate) => now.getTime() < Date.parse(`${candidate.reviewedAt}T00:00:00Z`));
+  const fresh = routes.filter((candidate) => now.getTime() >= Date.parse(`${candidate.reviewedAt}T00:00:00Z`)
+    && now.getTime() < Date.parse(`${candidate.reviewAfter}T00:00:00Z`));
+  if (!fresh.length && (futureReview || !routes.length)) return {
+    platform,
+    state: 'unavailable',
+    routes: [],
+    limitation: `No reviewed ${platform.label} route matches the selected Case types within its review window at this time.`,
+  };
   if (!fresh.length) return {
     platform,
     state: 'stale',

@@ -57,7 +57,7 @@ describe('provider reporting-route catalogue', () => {
     for (const profileVersion of [9, TECHNOLOGY_PROFILE_VERSION + 1, '11', null]) {
       const result = resolveProviderReportingRoutes({ ...observed, profileVersion }, new Date('2026-09-05T00:00:00.000Z'));
       assert.equal(result.routes.length, 0);
-      assert.equal(result.coverage.every((item) => item.state === 'not_collected'), true);
+      assert.equal(result.coverage.every((item) => item.state === 'unavailable'), true);
     }
   });
 
@@ -70,6 +70,55 @@ describe('provider reporting-route catalogue', () => {
     ]) {
       const result = resolveProviderReportingRoutes(value, new Date('2026-09-05T00:00:00.000Z'));
       assert.equal(result.routes.length, 0);
+    }
+  });
+
+  test('distinguishes an absent source from present evidence that cannot be interpreted', () => {
+    const now = new Date('2026-09-05T00:00:00Z');
+    assert.ok(resolveProviderReportingRoutes(null, now).coverage.every((item) => item.state === 'not_collected'));
+    for (const value of [{}, { ...profile([]), source: 'imported' }, { ...profile([]), status: 'error' }]) {
+      assert.ok(resolveProviderReportingRoutes(value, now).coverage.every((item) => item.state === 'unavailable'));
+    }
+  });
+
+  test('source and evaluation clocks must be explicit, calendar-valid and temporally possible', () => {
+    const observed = profile([{ id: 'netlify', confidence: 'medium', roles: ['application_platform'] }]);
+    for (const observedAt of ['', '2026-09-04', '2026-02-29T00:00:00Z', '2026-09-06T00:00:00Z']) {
+      const result = resolveProviderReportingRoutes({ ...observed, observedAt }, new Date('2026-09-05T00:00:00Z'));
+      assert.equal(result.routes.length, 0, observedAt);
+      assert.ok(result.coverage.every((item) => item.state === 'unavailable'));
+    }
+    for (const now of [new Date('invalid'), new Date('+010000-01-01T00:00:00Z')]) {
+      const result = resolveProviderReportingRoutes(observed, now);
+      assert.equal(result.routes.length, 0);
+      assert.ok(result.coverage.every((item) => item.state === 'unavailable'));
+    }
+    const exact = resolveProviderReportingRoutes({ ...observed, observedAt: '2026-09-04T12:00:00+10:00' }, new Date(OBSERVED_AT));
+    assert.equal(exact.routes.length, 1);
+    assert.equal(exact.routes[0]?.observedAt, OBSERVED_AT);
+  });
+
+  test('catalogue review start and expiry remain independent of retained technology observation time', () => {
+    const observed = { ...profile([{ id: 'netlify', confidence: 'medium', roles: ['application_platform'] }]), observedAt: '2026-09-01T00:00:00Z' };
+    const before = resolveProviderReportingRoutes(observed, new Date('2026-09-03T23:59:59.999Z'));
+    assert.equal(before.routes.length, 0);
+    assert.equal(before.coverage[0]?.state, 'unavailable');
+    assert.equal(resolveProviderReportingRoutes(observed, new Date('2026-09-04T00:00:00Z')).routes.length, 1);
+    assert.equal(resolveProviderReportingRoutes(observed, new Date('2027-03-03T23:59:59.999Z')).routes.length, 1);
+    const expired = resolveProviderReportingRoutes({ ...observed, observedAt: '2027-03-04T00:00:00Z' }, new Date('2027-03-04T00:00:00Z'));
+    assert.equal(expired.routes.length, 0);
+    assert.equal(expired.coverage[0]?.state, 'stale');
+  });
+
+  test('duplicate provider findings cannot select an arbitrary role or confidence', () => {
+    const findings = [
+      { id: 'netlify', confidence: 'medium', roles: ['application_platform'] },
+      { id: 'netlify', confidence: 'high', roles: ['embedded_dependency'] },
+    ];
+    for (const values of [findings, [...findings].reverse()]) {
+      const result = resolveProviderReportingRoutes(profile(values), new Date('2026-09-05T00:00:00Z'));
+      assert.equal(result.routes.length, 0);
+      assert.ok(result.coverage.every((item) => item.state === 'unavailable'));
     }
   });
 });

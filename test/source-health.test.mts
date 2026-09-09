@@ -37,6 +37,10 @@ describe('offline source-health composition', () => {
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
     assert.equal(report.summary.entries, 11);
+    const platformRoutes = report.entries.find((item) => item.id === 'platform_reporting_routes');
+    assert.equal(platformRoutes?.state, 'unavailable');
+    assert.equal(platformRoutes?.ageDays, null);
+    assert.match(platformRoutes?.detail ?? '', /review date is later than the evaluation clock/iu);
     for (const [state, count] of Object.entries(report.summary.states)) {
       assert.equal(count, report.entries.filter((entry) => entry.state === state).length);
     }

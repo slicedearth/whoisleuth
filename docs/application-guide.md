@@ -240,9 +240,12 @@ from collected evidence.
 If snapshots share the latest capture time, or any snapshot is undated, the
 timeline retains them without selecting a latest assessment. Record updates do
 not refresh evidence capture times. The calendar
-shows active follow-ups; completed actions and earlier effect reviews are
-available through its historical filter. Conflicting expiry dates need review
-before a calendar date can be selected.
+shows every matching follow-up from the admitted Case store across pages;
+completed actions and earlier effect reviews are available through its
+historical filter. Event times display in the browser's time zone. Select
+matching events or individual rows to export.
+Conflicting or unknown expiry dates need review before a calendar date can be
+selected. Exports include every selected event, with a 32-MiB file limit.
 Calendar event identifiers are stable digests, separate from displayed Case
 references. Replace an older calendar import if its original identifiers would
 otherwise create duplicate events.

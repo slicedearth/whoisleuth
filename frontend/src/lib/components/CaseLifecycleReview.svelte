@@ -3,7 +3,8 @@
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
   import Pagination from '$lib/components/Pagination.svelte';
   import {
-    projectCaseLifecycleEvents,
+    collectCaseLifecycleEvents,
+    filterCaseLifecycleEvents,
     serializeCaseLifecycleCalendarEvents,
   } from '$lib/analysis/case-lifecycle-calendar.ts';
 
@@ -30,12 +31,13 @@
       && (!routeSearch || [route.domain, route.recipient, route.source].some((value) => value.toLowerCase().includes(routeSearch)))));
   const routePageCount = $derived(Math.max(1, Math.ceil(matchingRoutes.length / routePageSize)));
   const pagedRoutes = $derived(matchingRoutes.slice((routePage - 1) * routePageSize, routePage * routePageSize));
-  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window, includeHistorical }, evaluatedAt));
-  const visibleEvents = $derived(eventProjection.events);
+  const eventProjection = $derived(collectCaseLifecycleEvents(records, includeHistorical, evaluatedAt));
+  const visibleEvents = $derived(filterCaseLifecycleEvents(eventProjection.events, { kind, window }, evaluatedAt));
   const eventPageCount = $derived(Math.max(1, Math.ceil(visibleEvents.length / eventPageSize)));
   const pagedEvents = $derived(visibleEvents.slice((eventPage - 1) * eventPageSize, eventPage * eventPageSize));
-  const selectedEvents = $derived(visibleEvents.filter((event) => selectedEventIds.includes(event.uid)));
-  const visibleSelectedCount = $derived(visibleEvents.filter((event) => selectedEventIds.includes(event.uid)).length);
+  const selectedEventSet = $derived(new Set(selectedEventIds));
+  const selectedEvents = $derived(visibleEvents.filter((event) => selectedEventSet.has(event.uid)));
+  const visibleSelectedCount = $derived(selectedEvents.length);
 
   function selectVisibleEvents() {
     selectedEventIds = [...new Set([...selectedEventIds, ...visibleEvents.map((event) => event.uid)])];
@@ -80,18 +82,26 @@
 
   function downloadCalendar() {
     if (!selectedEvents.length) return;
-    const content = serializeCaseLifecycleCalendarEvents(selectedEvents, {
-      includeDomain,
-      includeRecipient,
-      includeContext,
-    });
-    const url = URL.createObjectURL(new Blob([content], { type: 'text/calendar;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `whoisleuth-case-follow-ups-${new Date().toISOString().slice(0, 10)}.ics`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    message = `Exported ${selectedEvents.length} selected browser-local review event${selectedEvents.length === 1 ? '' : 's'}.`;
+    try {
+      const generatedAt = new Date().toISOString();
+      const content = serializeCaseLifecycleCalendarEvents(selectedEvents, {
+        includeDomain,
+        includeRecipient,
+        includeContext,
+      }, generatedAt);
+      const url = URL.createObjectURL(new Blob([content], { type: 'text/calendar;charset=utf-8' }));
+      try {
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `whoisleuth-case-follow-ups-${generatedAt.slice(0, 10)}.ics`;
+        anchor.click();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+      message = `Exported ${selectedEvents.length} selected browser-local review event${selectedEvents.length === 1 ? '' : 's'}.`;
+    } catch (error) {
+      message = `Calendar was not exported. ${error instanceof Error ? error.message : 'Review the selected events and try again.'}`;
+    }
   }
 </script>
 
@@ -112,8 +122,12 @@
     <label class="field">Time window<select bind:value={window}><option value="future">All upcoming</option><option value="30d">Next 30 days</option><option value="90d">Next 90 days</option><option value="overdue">Overdue</option><option value="all">All retained time</option></select></label>
   </fieldset>
   <label><input type="checkbox" bind:checked={includeHistorical}> Include completed actions and earlier effect reviews</label>
+  {#if !eventProjection.evaluatedAt}<p class="note">The review clock is unavailable. Time-window classification is unavailable; explicitly dated events remain in All retained time.</p>{/if}
+  {#if eventProjection.sourceCasesOmitted || eventProjection.sourceActionsOmitted || eventProjection.sourceReviewsOmitted || eventProjection.sourceSnapshotsOmitted || eventProjection.sourcePinsOmitted}
+    <p class="note">Outside the calendar source bounds: {eventProjection.sourceCasesOmitted} Cases; within admitted Cases, {eventProjection.sourceActionsOmitted} actions, {eventProjection.sourceReviewsOmitted} effect reviews, {eventProjection.sourceSnapshotsOmitted} snapshots and {eventProjection.sourcePinsOmitted} evidence pins. Their dates were not evaluated.</p>
+  {/if}
   {#if eventProjection.dateLimitations.length}
-    <details><summary>Dates needing review ({eventProjection.dateLimitations.length})</summary><ul>{#each eventProjection.dateLimitations as item}<li><a href={`/cases/${encodeURIComponent(item.caseId)}`}>{item.domain}</a>: {item.detail}</li>{/each}</ul></details>
+    <details><summary>Dates needing review ({eventProjection.dateLimitations.length})</summary><ul>{#each eventProjection.dateLimitations as item}<li><a href={`/cases?case=${encodeURIComponent(item.caseId)}`}>{item.domain}</a>: {item.detail}</li>{/each}</ul></details>
   {/if}
   <div class="calendar-selection">
     <div class="selection-actions">
@@ -134,15 +148,15 @@
   </div>
   {#if visibleEvents.length}
     <ol class="timeline" aria-label="Browser-local lifecycle review timeline">
-      {#each pagedEvents as event}
+      {#each pagedEvents as event, index (event.uid)}
         <li>
-          <label class="event-select"><input type="checkbox" checked={selectedEventIds.includes(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select ${event.summary}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleDateString()}</time></label>
-          <div><strong>{event.summary}</strong><p>{event.description}</p><small>{event.sourceLabel}</small><a href={`/monitor?view=cases&case=${encodeURIComponent(event.caseId)}`}>Open {event.domain}</a></div>
+          <label class="event-select"><input type="checkbox" checked={selectedEventSet.has(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select event ${(eventPage - 1) * eventPageSize + index + 1}: ${event.summary}${event.recipient ? ` · ${event.recipient}` : ''} · ${event.startsAt}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleString()}</time></label>
+          <div><strong>{event.summary}</strong>{#if event.recipient}<small>Recipient or owner: {event.recipient}</small>{/if}<p>{event.description}</p><small>{event.sourceLabel}</small><a href={`/monitor?view=cases&case=${encodeURIComponent(event.caseId)}`}>Open {event.domain}</a></div>
         </li>
       {/each}
     </ol>
     <Pagination currentPage={eventPage} pageCount={eventPageCount} setPage={(page) => eventPage = page} ariaLabel="Lifecycle event pages" />
-    <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} retained matching browser-local review events. Export includes only the {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this bounded matching view.{eventProjection.omittedCount ? ` ${eventProjection.omittedCount} additional matching event${eventProjection.omittedCount === 1 ? ' was' : 's were'} omitted by the ${visibleEvents.length}-event view bound.` : ''}{eventProjection.sourceCasesOmitted ? ` ${eventProjection.sourceCasesOmitted} Case${eventProjection.sourceCasesOmitted === 1 ? ' was' : 's were'} outside the bounded source population.` : ''}</p>
+    <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} matching browser-local review events. Times use your browser’s time zone. Export includes all {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this matching view.</p>
   {:else}
     <p class="empty">No lifecycle review events match these filters.</p>
   {/if}

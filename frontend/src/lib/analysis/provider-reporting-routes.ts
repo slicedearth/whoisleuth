@@ -1,4 +1,5 @@
-import { SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS } from '../../../../lib/lookup-child-profile-contract.mts';
+import { MAX_TECHNOLOGY_FINDINGS, SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS } from '../../../../lib/lookup-child-profile-contract.mts';
+import { normalizeExplicitIsoTimestamp as timestamp } from '../../../../packages/evidence/observation.mts';
 
 export type ProviderReportingRole = 'application_platform' | 'observed_edge';
 export type ProviderReportingChannel = 'email' | 'url';
@@ -47,9 +48,8 @@ const ROLES: readonly ProviderReportingRole[] = Object.freeze(['application_plat
 
 /**
  * Small, explicitly reviewed catalogue of official provider-published routes.
- * It is deliberately not a provider-name lookup table: a route is exposed only
- * when a current technology profile contains the exact provider identifier and
- * the required evidence role. Entries expire closed and are then withheld.
+ * Routes require an attributed profile with the exact provider identifier and
+ * evidence role, within the catalogue's review window.
  */
 export const PROVIDER_REPORTING_ROUTE_CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   Object.freeze({
@@ -104,19 +104,14 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function validObservedAt(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
-
 function profileState(value: unknown): Readonly<{
-  usable: boolean;
+  state: 'usable' | 'not_collected' | 'unavailable';
   observedAt: string | null;
   findings: readonly Record<string, unknown>[];
 }> {
+  if (value == null) return { state: 'not_collected', observedAt: null, findings: [] };
   const profile = record(value);
-  const observedAt = validObservedAt(profile.observedAt);
+  const observedAt = timestamp(profile.observedAt);
   if (
     typeof profile.profileVersion !== 'number'
     || !SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS.includes(profile.profileVersion)
@@ -124,15 +119,17 @@ function profileState(value: unknown): Readonly<{
     || !['success', 'partial'].includes(String(profile.status))
     || !observedAt
     || !Array.isArray(profile.findings)
-    || profile.findings.length > 24
+    || profile.findings.length > MAX_TECHNOLOGY_FINDINGS
   ) {
-    return { usable: false, observedAt: null, findings: [] };
+    return { state: 'unavailable', observedAt: null, findings: [] };
   }
   const findings = profile.findings.filter((finding): finding is Record<string, unknown> => (
     Boolean(finding) && typeof finding === 'object' && !Array.isArray(finding)
   ));
-  if (findings.length !== profile.findings.length) return { usable: false, observedAt: null, findings: [] };
-  return { usable: true, observedAt, findings };
+  if (findings.length !== profile.findings.length || new Set(findings.map((finding) => finding.id)).size !== findings.length) {
+    return { state: 'unavailable', observedAt: null, findings: [] };
+  }
+  return { state: 'usable', observedAt, findings };
 }
 
 function matchedFinding(
@@ -148,25 +145,35 @@ function matchedFinding(
   return null;
 }
 
-function utcDay(value: Date): number {
-  return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
-}
-
 export function resolveProviderReportingRoutes(
   technologyProfile: unknown,
   now: Date = new Date(),
 ): ProviderReportingRouteResolution {
   const profile = profileState(technologyProfile);
-  if (!profile.usable || !profile.observedAt) {
+  if (profile.state !== 'usable' || !profile.observedAt) {
     return {
       routes: [],
       coverage: ROLES.map((role) => ({
         role,
-        state: 'not_collected' as const,
-        detail: 'A supported, source-attributed technology profile was not available for provider-route matching.',
+        state: profile.state === 'not_collected' ? 'not_collected' as const : 'unavailable' as const,
+        detail: profile.state === 'not_collected'
+          ? 'No technology profile was supplied for provider-route matching.'
+          : 'The supplied technology profile could not be matched: its version, attribution, observation time or findings were unsupported or invalid.',
       })),
     };
   }
+  const evaluatedAt = now instanceof Date && Number.isFinite(now.getTime()) ? timestamp(now.toISOString()) : null;
+  if (!evaluatedAt || Date.parse(profile.observedAt) > Date.parse(evaluatedAt)) return {
+    routes: [],
+    coverage: ROLES.map((role) => ({
+      role,
+      state: 'unavailable' as const,
+      detail: evaluatedAt
+        ? 'The technology observation is later than this review. No reporting route was selected.'
+        : 'The review clock is unavailable. Reporting-route freshness could not be evaluated.',
+    })),
+  };
+  const reviewTime = Date.parse(evaluatedAt);
 
   const routes: ProviderReportingRoute[] = [];
   const staleRoles = new Set<ProviderReportingRole>();
@@ -175,8 +182,10 @@ export function resolveProviderReportingRoutes(
     const finding = matchedFinding(profile.findings, entry);
     if (!finding) continue;
     matchedRoles.add(entry.role);
-    const reviewDeadline = Date.parse(`${entry.reviewAfter}T00:00:00.000Z`);
-    if (utcDay(now) >= reviewDeadline) {
+    const reviewedAt = timestamp(`${entry.reviewedAt}T00:00:00.000Z`);
+    const reviewAfter = timestamp(`${entry.reviewAfter}T00:00:00.000Z`);
+    if (!reviewedAt || !reviewAfter || Date.parse(reviewAfter) <= Date.parse(reviewedAt) || reviewTime < Date.parse(reviewedAt)) continue;
+    if (reviewTime >= Date.parse(reviewAfter)) {
       staleRoles.add(entry.role);
       continue;
     }
@@ -207,7 +216,7 @@ export function resolveProviderReportingRoutes(
       if (found) return {
         role,
         state: 'found' as const,
-        detail: `${found} freshness-valid official route${found === 1 ? '' : 's'} matched exact ${role.replaceAll('_', ' ')} evidence.`,
+        detail: `${found} official route${found === 1 ? '' : 's'} within the catalogue review window matched retained ${role.replaceAll('_', ' ')} evidence.`,
       };
       if (staleRoles.has(role)) return {
         role,
@@ -218,8 +227,8 @@ export function resolveProviderReportingRoutes(
         role,
         state: 'unavailable' as const,
         detail: matchedRoles.has(role)
-          ? `A matching ${role.replaceAll('_', ' ')} indicator had no usable freshness-valid route.`
-          : `No exact supported ${role.replaceAll('_', ' ')} indicator was present in the current technology evidence; this does not establish absence.`,
+          ? `A matching ${role.replaceAll('_', ' ')} indicator had no route with a valid review window at this time.`
+          : `No exact supported ${role.replaceAll('_', ' ')} indicator was present in the supplied technology evidence; this does not establish absence.`,
       };
     })),
   };

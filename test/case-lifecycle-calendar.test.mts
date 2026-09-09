@@ -1,13 +1,22 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 import {
   buildCaseLifecycleEvents,
+  collectCaseLifecycleEvents,
   filterCaseLifecycleEvents,
   projectCaseLifecycleEvents,
   serializeCaseLifecycleCalendar,
   serializeCaseLifecycleCalendarEvents,
+  MAX_CASE_LIFECYCLE_EVENTS,
+  MAX_CASE_LIFECYCLE_CALENDAR_BYTES,
 } from '../frontend/src/lib/analysis/case-lifecycle-calendar.ts';
 import { normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
+import {
+  CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, MAX_CASES, MAX_CASE_ACTIONS,
+  MAX_CASE_OBSERVED_EFFECT_REVIEWS, MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+} from '../packages/contracts/case-portability.mts';
+import { enforceStoreBudget, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 
 describe('case lifecycle calendar', () => {
   test('exports bounded due, follow-up, and observed-expiry review events without recipients', () => {
@@ -163,7 +172,7 @@ describe('case lifecycle calendar', () => {
   });
 });
 
-test('filters before applying the bounded event view and reports omissions', () => {
+test('time filters preserve all matching admitted events beyond the former display limit', () => {
   const action = (id: string, dueAt: string, followUpAt: string | null) => ({
     id,
     type: 'internal_review',
@@ -202,9 +211,138 @@ test('filters before applying the bounded event view and reports omissions', () 
   const records = [...past, future];
   const upcoming = projectCaseLifecycleEvents(records, { window: 'future' }, '2026-06-01T00:00:00.000Z');
   assert.deepEqual(upcoming.events.map((event) => event.caseId), ['future-case']);
-  assert.equal(upcoming.omittedCount, 0);
   const all = projectCaseLifecycleEvents(records, { window: 'all' }, '2026-06-01T00:00:00.000Z');
-  assert.equal(all.events.length, 500);
+  assert.equal(all.events.length, 501);
   assert.equal(all.matchingCount, 501);
-  assert.equal(all.omittedCount, 1);
+  assert.equal(all.sourceCasesOmitted, 0);
+});
+
+const CLOCK = '2026-09-10T10:00:00.000Z';
+function calendarCase(id: string, actionCount = 1) {
+  const record = normalizeCase({ id, domain: `${id}.test`, source: 'manual', createdAt: CLOCK, updatedAt: CLOCK,
+    actions: Array.from({ length: actionCount }, (_, index) => ({ id: `action-${index}`, type: 'internal_review', recipient: `Private recipient ${index}`,
+      contactSource: 'Analyst', dueAt: '2026-10-01T00:00:00.000Z', followUpAt: '2026-11-01T00:00:00.000Z' })),
+  }, undefined, CLOCK, CASE_SCHEMA_VERSION);
+  assert.ok(record);
+  return record;
+}
+
+test('an admitted multi-Case calendar retains and exports every one of five thousand events', () => {
+  const records = Array.from({ length: 50 }, (_, index) => calendarCase(`calendar-${index}`, 50));
+  assert.ok(Buffer.byteLength(serializeCaseStore(records)) <= MAX_CASE_STORE_BYTES);
+  const admitted = enforceStoreBudget(records);
+  assert.equal(admitted.pruned, 0);
+  const collection = collectCaseLifecycleEvents(admitted.cases, false, CLOCK);
+  assert.equal(collection.events.length, 5_000);
+  assert.equal(new Set(collection.events.map((event) => event.uid)).size, 5_000);
+  const all = filterCaseLifecycleEvents(collection.events, { window: 'all' }, CLOCK);
+  assert.equal(all.length, 5_000);
+  const followUps = filterCaseLifecycleEvents(collection.events, { kind: 'action_follow_up', window: 'all' }, CLOCK);
+  assert.equal(followUps.length, 2_500);
+  assert.ok(followUps.every((event) => all.includes(event)));
+  const calendar = serializeCaseLifecycleCalendarEvents(all, {}, CLOCK);
+  assert.equal(calendar.match(/BEGIN:VEVENT/gu)?.length, 5_000);
+  assert.doesNotMatch(calendar, /calendar-\d+\.test|Private recipient|Case action state/iu);
+  assert.equal(collectCaseLifecycleEvents(records, false, CLOCK).events.length, 5_000);
+});
+
+test('unknown evaluation clocks never become an epoch-based future or overdue classification', () => {
+  const records = [calendarCase('clock')];
+  for (const now of ['', 'invalid', '2026-09-10', '2026-02-29T00:00:00Z']) {
+    for (const window of ['future', 'overdue', '30d', '90d']) {
+      const result = projectCaseLifecycleEvents(records, { window }, now);
+      assert.equal(result.evaluatedAt, null);
+      assert.equal(result.events.length, 0);
+    }
+    const all = projectCaseLifecycleEvents(records, { window: 'all' }, now);
+    assert.equal(all.events.length, 2);
+    assert.equal(all.evaluatedAt, null);
+    assert.throws(() => serializeCaseLifecycleCalendarEvents(all.events, {}, now), /valid generation time/iu);
+  }
+});
+
+test('derived reminder dates outside the supported calendar range remain explicit limitations', () => {
+  const record = calendarCase('early-expiry', 0);
+  const dated = normalizeCase({ ...record, evidenceHistory: [{ id: 'old-expiry', capturedAt: CLOCK, source: 'lookup', scanDepth: 'deep', expiryDate: '0001-01-01T00:00:00.000Z' }] }, undefined, CLOCK, CASE_SCHEMA_VERSION);
+  assert.ok(dated);
+  assert.equal(dated.evidenceHistory.length, 1);
+  const result = projectCaseLifecycleEvents([dated], { window: 'all' }, CLOCK);
+  assert.equal(result.events.length, 0);
+  assert.equal(result.dateLimitations.length, 1);
+  assert.match(result.dateLimitations[0]?.detail ?? '', /reminder falls outside the supported calendar range/iu);
+});
+
+test('source bounds count each stage and do not select a latest date from incomplete source arrays', () => {
+  const record = normalizeCase({ ...calendarCase('source-bounds'),
+    observedEffects: { reviews: [{ id: 'review', observedAt: CLOCK, state: 'not_checked', source: 'Review source', sourceClass: 'analyst',
+      completeness: 'unknown', followUpAt: '2026-12-01T00:00:00.000Z', createdAt: CLOCK }], omitted: 0, limitations: [], preV13HistoryUnavailable: false },
+    evidencePins: [{ id: 'pin', field: 'tls.valid_to', label: 'Certificate expiry', source: 'Retained source', value: '2027-01-01T00:00:00.000Z', observedAt: CLOCK, createdAt: CLOCK }],
+    evidenceHistory: [{ id: 'snapshot', capturedAt: CLOCK, source: 'lookup', scanDepth: 'deep', expiryDate: '2027-01-01T00:00:00.000Z' }],
+  }, undefined, CLOCK, CASE_SCHEMA_VERSION);
+  assert.ok(record);
+  assert.equal(record.observedEffects.reviews.length, 1);
+  assert.equal(record.evidencePins.length, 1);
+  assert.equal(record.evidenceHistory.length, 1);
+  record.actions = Array.from({ length: MAX_CASE_ACTIONS + 1 }, (_, index) => ({ ...record.actions[0]!, id: `action-${index}` }));
+  record.observedEffects.reviews = Array.from({ length: MAX_CASE_OBSERVED_EFFECT_REVIEWS + 2 }, (_, index) => ({ ...record.observedEffects.reviews[0]!, id: `review-${index}` }));
+  record.evidenceHistory = Array.from({ length: MAX_EVIDENCE_SNAPSHOTS_PER_CASE + 3 }, (_, index) => ({ ...record.evidenceHistory[0]!, id: `snapshot-${index}` }));
+  record.evidencePins = Array.from({ length: MAX_CASE_EVIDENCE_PINS + 4 }, (_, index) => ({ ...record.evidencePins[0]!, id: `pin-${index}` }));
+  const result = collectCaseLifecycleEvents([record], false, CLOCK);
+  assert.deepEqual([result.sourceActionsOmitted, result.sourceReviewsOmitted, result.sourceSnapshotsOmitted, result.sourcePinsOmitted], [1, 2, 3, 4]);
+  assert.equal(result.dateLimitations.length, 3);
+  assert.equal(result.events.length, 100);
+  assert.ok(result.events.every((event) => event.kind === 'action_due' || event.kind === 'action_follow_up'));
+  assert.equal(collectCaseLifecycleEvents([record], true, CLOCK).events.length, 140);
+  const empty = calendarCase('empty', 0);
+  const many = collectCaseLifecycleEvents(Array.from({ length: MAX_CASES + 2 }, (_, index) => ({ ...empty, id: `case-${index}` })), false, CLOCK);
+  assert.equal(many.sourceCasesOmitted, 2);
+});
+
+test('calendar export rejects oversized, invalid or duplicate selections without publishing a partial result', () => {
+  const [event] = collectCaseLifecycleEvents([calendarCase('export')], false, CLOCK).events;
+  assert.ok(event);
+  assert.throws(() => serializeCaseLifecycleCalendarEvents(Array(MAX_CASE_LIFECYCLE_EVENTS + 1).fill(event), {}, CLOCK), /bounded Case source population/iu);
+  assert.throws(() => serializeCaseLifecycleCalendarEvents([event, event], {}, CLOCK), /duplicate identities/iu);
+  assert.throws(() => serializeCaseLifecycleCalendarEvents([{ ...event, startsAt: '2026-02-29T00:00:00Z' }], {}, CLOCK), /invalid date/iu);
+  assert.throws(() => serializeCaseLifecycleCalendarEvents([{ ...event, description: 'x'.repeat(1_001) }], { includeContext: true }, CLOCK), /bounded Case text/iu);
+  const large = { ...event, description: '界'.repeat(1_000), classification: '界'.repeat(1_000) };
+  const disclosure = { includeContext: true };
+  const headerBytes = Buffer.byteLength(serializeCaseLifecycleCalendarEvents([], disclosure, CLOCK));
+  const eventBytes = Buffer.byteLength(serializeCaseLifecycleCalendarEvents([large], disclosure, CLOCK)) - headerBytes;
+  const count = Math.floor((MAX_CASE_LIFECYCLE_CALENDAR_BYTES - headerBytes) / eventBytes);
+  assert.ok(count < MAX_CASE_LIFECYCLE_EVENTS);
+  const events = Array.from({ length: count }, (_, index) => ({ ...large, uid: `event-${index}` }));
+  const accepted = serializeCaseLifecycleCalendarEvents(events, disclosure, CLOCK);
+  assert.equal(accepted.match(/BEGIN:VEVENT/gu)?.length, count);
+  assert.equal(Buffer.byteLength(accepted), headerBytes + count * eventBytes);
+  assert.ok(Buffer.byteLength(accepted) <= MAX_CASE_LIFECYCLE_CALENDAR_BYTES);
+  assert.throws(() => serializeCaseLifecycleCalendarEvents([...events, { ...large, uid: 'one-over' }], disclosure, CLOCK), /byte bound/iu);
+});
+
+test('calendar folding retains Unicode scalars, escaped text and stable digest event identity', () => {
+  const [event] = collectCaseLifecycleEvents([calendarCase('unicode')], false, CLOCK).events;
+  assert.ok(event);
+  const text = 'é界🧭;\\,\n'.repeat(60);
+  const calendar = serializeCaseLifecycleCalendarEvents([{ ...event, recipient: text }], { includeRecipient: true }, CLOCK);
+  for (const line of calendar.split('\r\n')) assert.ok(Buffer.byteLength(line) <= 75);
+  const unfolded = calendar.replaceAll(/\r\n /gu, '');
+  assert.ok(unfolded.includes(text.replaceAll('\\', '\\\\').replaceAll('\n', '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;')));
+  assert.equal(unfolded.includes('\uFFFD'), false);
+  assert.ok(unfolded.includes(`UID:${createHash('sha256').update(event.uid).digest('hex')}@whoisleuth.local`));
+});
+
+test('independent Case and source identities cannot collide at delimiter boundaries', () => {
+  const first = calendarCase('one-two');
+  first.actions[0]!.id = 'three';
+  const second = calendarCase('one');
+  second.actions[0]!.id = 'two-three';
+  const forward = collectCaseLifecycleEvents([first, second], false, CLOCK).events;
+  const reversed = collectCaseLifecycleEvents([second, first], false, CLOCK).events;
+  assert.equal(forward.length, 4);
+  assert.equal(new Set(forward.map((event) => event.uid)).size, 4);
+  assert.deepEqual(reversed, forward);
+  const calendar = serializeCaseLifecycleCalendarEvents(forward, {}, CLOCK).replaceAll(/\r\n /gu, '');
+  assert.equal(calendar.match(/BEGIN:VEVENT/gu)?.length, 4);
+  assert.equal(new Set(calendar.match(/^UID:.+$/gmu)).size, 4);
+  assert.doesNotMatch(calendar, /one-two|two-three/iu);
 });
