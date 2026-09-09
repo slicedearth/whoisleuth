@@ -27,7 +27,7 @@
     CASE_RESPONSE_STAGE_DEFINITIONS,
     type CaseResponseStage,
   } from '$lib/analysis/case-response-stage.ts';
-  import { isoFromLocal, localFromIso, list } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
   import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 
@@ -163,7 +163,7 @@
     if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
     if (!packetObservedAt) {
       const cohort = latestObservationCohort(record.evidencePins, (pin) => pin.observedAt);
-      packetObservedAt = localFromIso(cohort.undated.length ? null : cohort.observedAt);
+      packetObservedAt = utcInputFromIso(cohort.undated.length ? null : cohort.observedAt);
     }
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
@@ -175,7 +175,7 @@
     const artefactReferences = packetArtefactDigest.trim() ? [{
       label: packetArtefactLabel,
       mediaType: packetArtefactMediaType,
-      capturedAt: isoFromLocal(packetArtefactCapturedAt),
+      capturedAt: isoFromUtcInput(packetArtefactCapturedAt),
       source: packetArtefactSource,
       digestSha256: packetArtefactDigest,
       byteLength: packetArtefactByteLength ? Number(packetArtefactByteLength) : null,
@@ -187,7 +187,7 @@
       affectedParty: packetAffectedParty,
       abusiveUrls: packetUrls,
       observedHarm: packetHarm,
-      observedAt: isoFromLocal(packetObservedAt),
+      observedAt: isoFromUtcInput(packetObservedAt),
       actionId: packetActionId || null,
       selectedEvidencePinIds: packetSelectedEvidenceIds,
       readiness: {
@@ -216,7 +216,7 @@
       ...(includeAuthorisation ? {
         authorisation: {
           reviewedInputDigestSha256: packetReviewDigest,
-          confirmedAt: isoFromLocal(packetAuthorisationConfirmedAt),
+          confirmedAt: isoFromUtcInput(packetAuthorisationConfirmedAt),
           confirmations: packetConfirmations,
         },
       } : {}),
@@ -277,7 +277,7 @@
         onmessage('The reviewed inputs or their freshness state changed. Review and bind the current packet again before authorisation.');
         return;
       }
-      packetAuthorisationConfirmedAt = localFromIso(new Date().toISOString());
+      packetAuthorisationConfirmedAt = utcInputFromIso(new Date().toISOString());
       onmessage('Authorised the exact browser-local inputs bound to the retained review digest. Nothing was submitted.');
       await setPacketWizardStep(3);
     } catch (cause) {
@@ -401,6 +401,7 @@
   <details id={`case-response-preflight-${record.id}`}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
+      <p class="notice">Date and time fields use UTC.</p>
       <p class="notice">This prepares local drafts only; nothing is sent. Contact selection, review, authorisation and export remain explicit.</p>
       <p class="notice preflight-scope">{CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE.limitation}</p>
       <nav class="packet-wizard-nav" aria-label="Response-packet phases">
@@ -422,7 +423,7 @@
             </div>
             {#if packetProfilePreview.missingEvidence.length}<p class="profile-missing"><strong>Still needed:</strong> {packetProfilePreview.missingEvidence.join('; ')}</p>{/if}
           </section>
-          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} oninput={() => packetCategoryEdited = true} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" step="0.001" bind:value={packetObservedAt} required></label></div>
+          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} oninput={() => packetCategoryEdited = true} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetObservedAt} required></label></div>
           <label class="field">Exact abusive HTTP(S) URLs <small>one per line</small><textarea bind:value={packetUrls} oninput={() => packetUrlsEdited = true} maxlength="42000" rows="3" required></textarea></label>
           {#if investigationContext?.urlRetention === 'origin_only'}<p class="notice">This Case retained only the Incident origin. Review and paste the exact URL deliberately if it belongs in this packet.</p>{/if}
           <label class="field">Observed harm<textarea bind:value={packetHarm} maxlength="2000" rows="3" required></textarea></label>
@@ -448,7 +449,7 @@
         <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
           <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy, redaction and optional capture</h4></div><span>Phase 2</span></header>
           <div class="privacy-review"><section><strong>Profile redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section><section><strong>Profile exclusions</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section></div>
-          <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>
+          <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>
         </section>
       {/if}
       {#if packetWizardStep === 2}
@@ -474,7 +475,7 @@
           {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Bind the current inputs above before confirming authorisation.</p>{/if}
           <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
           <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
-          <label class="field">Confirmation time<input type="datetime-local" step="0.001" bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
+          <label class="field">Confirmation time<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
           <p class="notice">Authorisation applies only to the exact inputs bound to the current digest. It does not submit the packet or establish a provider outcome.</p>
         </section>
       {/if}

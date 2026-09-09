@@ -6,7 +6,7 @@
     type CaseRecord,
   } from '$lib/cases';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
-  import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
 
@@ -55,7 +55,7 @@
         label: pinLabel,
         value: pinValue,
         source: pinSource,
-        observedAt: isoFromLocal(pinObservedAt) || new Date().toISOString(),
+        observedAt: isoFromUtcInput(pinObservedAt) || new Date().toISOString(),
         completeness: pinCompleteness,
         limitations: list(pinLimitations),
       },
@@ -72,7 +72,7 @@
         state: sightingState,
         category: sightingCategory,
         source: sightingSource,
-        observedAt: isoFromLocal(sightingObservedAt) || new Date().toISOString(),
+        observedAt: isoFromUtcInput(sightingObservedAt) || new Date().toISOString(),
         completeness: sightingCompleteness,
         evidencePinId: sightingEvidencePinId || null,
         limitations: list(sightingLimitations),
@@ -87,6 +87,7 @@
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
     <form class="response-form" oninput={pinDraft.changed} onchange={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
+      <p class="notice">Date and time fields use UTC.</p>
       <div class="two-columns">
         <label class="field">Label
           <input bind:value={pinLabel} maxlength="80" required placeholder="Observed login form">
@@ -95,7 +96,7 @@
           <input bind:value={pinSource} maxlength="80" required placeholder="Lookup evidence">
         </label>
         <label class="field">Observed at
-          <input type="datetime-local" bind:value={pinObservedAt}>
+          <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={pinObservedAt}>
         </label>
         <label class="field">Completeness
           <select bind:value={pinCompleteness}>
@@ -128,6 +129,7 @@
   <details id={`case-response-observation-sightings-${record.id}`}>
     <summary>Record a source-qualified sighting</summary>
     <form class="response-form" oninput={sightingDraft.changed} onchange={sightingDraft.changed} onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
+      <p class="notice">Date and time fields use UTC.</p>
       <p class="notice">Use observed or reported states for source evidence. Analyst confirmed, not reproduced, and expired are review conclusions and do not alter the original observation.</p>
       <div class="two-columns">
         <label class="field">Sighting state
@@ -144,7 +146,7 @@
           <input bind:value={sightingSource} maxlength="80" required>
         </label>
         <label class="field">Observed or reviewed at
-          <input type="datetime-local" bind:value={sightingObservedAt}>
+          <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={sightingObservedAt}>
         </label>
         <label class="field">Completeness
           <select bind:value={sightingCompleteness}>

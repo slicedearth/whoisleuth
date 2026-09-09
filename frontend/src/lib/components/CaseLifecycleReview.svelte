@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
+  import Pagination from '$lib/components/Pagination.svelte';
   import {
     projectCaseLifecycleEvents,
     serializeCaseLifecycleCalendarEvents,
@@ -16,9 +17,20 @@
   let includeRecipient = $state(false);
   let includeContext = $state(false);
   let eventPage = $state(1);
+  let routePage = $state(1);
+  let routeState = $state('all');
+  let routeQuery = $state('');
+  let evaluatedAt = $state(new Date().toISOString());
   const eventPageSize = 24;
-  const routeReview = $derived(buildDisclosureRouteReview(records));
-  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window, includeHistorical }));
+  const routePageSize = 12;
+  const routeReview = $derived(buildDisclosureRouteReview(records, evaluatedAt));
+  const routeSearch = $derived(routeQuery.trim().toLowerCase());
+  const matchingRoutes = $derived(routeReview.routes.filter((route) =>
+    (routeState === 'all' || route.review === routeState)
+      && (!routeSearch || [route.domain, route.recipient, route.source].some((value) => value.toLowerCase().includes(routeSearch)))));
+  const routePageCount = $derived(Math.max(1, Math.ceil(matchingRoutes.length / routePageSize)));
+  const pagedRoutes = $derived(matchingRoutes.slice((routePage - 1) * routePageSize, routePage * routePageSize));
+  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window, includeHistorical }, evaluatedAt));
   const visibleEvents = $derived(eventProjection.events);
   const eventPageCount = $derived(Math.max(1, Math.ceil(visibleEvents.length / eventPageSize)));
   const pagedEvents = $derived(visibleEvents.slice((eventPage - 1) * eventPageSize, eventPage * eventPageSize));
@@ -46,6 +58,26 @@
     if (eventPage > eventPageCount) eventPage = eventPageCount;
   });
 
+  $effect(() => {
+    records;
+    evaluatedAt = new Date().toISOString();
+  });
+
+  $effect(() => {
+    routeState;
+    routeQuery;
+    routePage = 1;
+  });
+
+  $effect(() => {
+    if (routePage > routePageCount) routePage = routePageCount;
+  });
+
+  function refreshReview() {
+    evaluatedAt = new Date().toISOString();
+    message = 'Re-evaluated saved dates and routes. No collection was performed.';
+  }
+
   function downloadCalendar() {
     if (!selectedEvents.length) return;
     const content = serializeCaseLifecycleCalendarEvents(selectedEvents, {
@@ -70,8 +102,9 @@
       <h2 id="lifecycle-review-title">Contact and lifecycle review</h2>
       <p>Review saved reporting routes and select dated actions or evidence reviews for a local calendar. The default export identifies only the stable Case reference; target and response context require separate opt-in.</p>
     </div>
-    <button type="button" class="btn" onclick={downloadCalendar} disabled={!selectedEvents.length}>Export selected ({selectedEvents.length})</button>
+    <div class="selection-actions"><button type="button" class="btn" onclick={refreshReview}>Refresh local review</button><button type="button" class="btn" onclick={downloadCalendar} disabled={!selectedEvents.length}>Export selected ({selectedEvents.length})</button></div>
   </header>
+  <p class="note">Evaluated at <time datetime={evaluatedAt}>{evaluatedAt}</time>. Refresh to re-evaluate saved dates against the current time.</p>
   {#if message}<p class="message" role="status">{message}</p>{/if}
   <fieldset class="timeline-filters">
     <legend>Lifecycle review filters</legend>
@@ -108,29 +141,42 @@
         </li>
       {/each}
     </ol>
-    <div class="event-pages" aria-label="Lifecycle event pages"><button class="btn small" type="button" onclick={() => eventPage = Math.max(1, eventPage - 1)} disabled={eventPage === 1}>Previous</button><span>Page {eventPage} of {eventPageCount}</span><button class="btn small" type="button" onclick={() => eventPage = Math.min(eventPageCount, eventPage + 1)} disabled={eventPage === eventPageCount}>Next</button></div>
+    <Pagination currentPage={eventPage} pageCount={eventPageCount} setPage={(page) => eventPage = page} ariaLabel="Lifecycle event pages" />
     <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} retained matching browser-local review events. Export includes only the {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this bounded matching view.{eventProjection.omittedCount ? ` ${eventProjection.omittedCount} additional matching event${eventProjection.omittedCount === 1 ? ' was' : 's were'} omitted by the ${visibleEvents.length}-event view bound.` : ''}{eventProjection.sourceCasesOmitted ? ` ${eventProjection.sourceCasesOmitted} Case${eventProjection.sourceCasesOmitted === 1 ? ' was' : 's were'} outside the bounded source population.` : ''}</p>
   {:else}
     <p class="empty">No lifecycle review events match these filters.</p>
   {/if}
-  {#if routeReview.routes.length}
+  <section class="saved-routes" aria-labelledby="saved-routes-title">
+    <h3 id="saved-routes-title">Saved reporting routes</h3>
+    <fieldset class="timeline-filters">
+      <legend>Reporting route filters</legend>
+      <label class="field">Source review<select bind:value={routeState}><option value="all">All saved routes</option><option value="due">Due</option><option value="unconfirmed">Unconfirmed</option><option value="current">Current</option></select></label>
+      <label class="field route-search">Find a route<input type="search" bind:value={routeQuery} maxlength="200" placeholder="Domain, recipient or source"></label>
+    </fieldset>
+    <p class="note" role="status">{matchingRoutes.length} matching of {routeReview.routes.length} saved reporting routes.</p>
+  {#if matchingRoutes.length}
     <div class="route-grid">
-      {#each routeReview.routes.slice(0, 12) as route}
+      {#each pagedRoutes as route (route.id)}
         <article>
           <div><strong>{route.domain}</strong><span class:due={route.review === 'due'}>{route.review}</span></div>
           <p>{route.actionType.replaceAll('_', ' ')} · {route.state.replaceAll('_', ' ')}</p>
           <small>{route.recipient}</small>
-          <small>{route.source}</small>
-          {#if route.nextReviewAt}<small>Source review due <time datetime={route.nextReviewAt}>{new Date(route.nextReviewAt).toLocaleDateString()}</time></small>{/if}
-          {#if route.followUpAt}<small>Action follow-up <time datetime={route.followUpAt}>{new Date(route.followUpAt).toLocaleDateString()}</time></small>{/if}
+          <small>Source: {route.source}</small>
+          <small>Source observed: {#if route.observedAt}<time datetime={route.observedAt}>{route.observedAt}</time>{:else}Unknown{/if}</small>
+          {#if route.nextReviewAt}<small>Source review due: <time datetime={route.nextReviewAt}>{route.nextReviewAt}</time></small>{/if}
+          {#if route.followUpAt}<small>Action follow-up: <time datetime={route.followUpAt}>{route.followUpAt}</time></small>{/if}
+          <details><summary>Saved action details</summary><small>Action updated: {#if route.updatedAt}<time datetime={route.updatedAt}>{route.updatedAt}</time>{:else}Unknown{/if}</small>{#if route.limitations.length}<ul>{#each route.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</details>
           <a href={`/monitor?view=cases&case=${encodeURIComponent(route.caseId)}`}>Open case</a>
         </article>
       {/each}
     </div>
-    {#if routeReview.routes.length > 12}<p class="note">Showing 12 of {routeReview.routes.length} recorded contact routes.</p>{/if}
+    <Pagination currentPage={routePage} pageCount={routePageCount} setPage={(page) => routePage = page} ariaLabel="Reporting route pages" />
+    <p class="note">Showing {(routePage - 1) * routePageSize + 1}–{Math.min(routePage * routePageSize, matchingRoutes.length)} of {matchingRoutes.length} matching routes.</p>
   {:else}
-    <p class="empty">No reviewed reporting routes are saved in current cases.</p>
+    <p class="empty">{routeReview.routes.length ? 'No saved reporting routes match these filters.' : 'No reporting routes are saved in current Cases.'}</p>
   {/if}
+    {#if routeReview.truncated}<p class="note">Outside the source bounds: {routeReview.sourceCasesOmitted} Cases and {routeReview.sourceActionsOmitted} actions within admitted Cases. Their reporting routes were not evaluated.</p>{/if}
+  </section>
   <ul class="limitations">{#each routeReview.limitations as limitation}<li>{limitation}</li>{/each}</ul>
 </section>
 
@@ -138,15 +184,17 @@
   .lifecycle{display:grid;gap:14px;margin-top:14px;padding:var(--card-pad)}
   .lifecycle>header{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:14px}
   h2,p{margin:0}.lifecycle>header h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}.lifecycle>header p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm)}
-  .route-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .saved-routes{display:grid;min-width:0;gap:10px}.saved-routes h3{margin:0;font:650 var(--text-sm) var(--mono)}
+  .route-search{flex:1;min-width:0}.route-search input{width:100%}
+  .route-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));align-items:start;gap:8px}
   .route-grid article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .route-grid article>div{display:flex;justify-content:space-between;gap:8px}.route-grid strong,.route-grid small{overflow-wrap:anywhere}
   .route-grid span{color:var(--accent2);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.route-grid span.due{color:var(--amber)}
   .route-grid p,.route-grid small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.route-grid a{display:inline-block;margin-top:8px;font-size:var(--text-xs)}
-  .message{color:var(--accent);font-size:var(--text-xs)}.empty,.note,.limitations{color:var(--muted);font-size:var(--text-xs)}.limitations{margin:0;padding-left:18px}.event-pages{display:flex;align-items:center;justify-content:flex-end;gap:8px}.event-pages span{color:var(--muted);font:650 var(--text-xs) var(--mono)}
+  .route-grid details{margin-top:8px;overflow-wrap:anywhere;font-size:var(--text-2xs)}.route-grid summary{font-weight:600}.route-grid ul{padding-left:18px;color:var(--muted)}
+  .message{color:var(--accent);font-size:var(--text-xs)}.empty,.note,.limitations{color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}.limitations{margin:0;padding-left:18px}
   .timeline-filters{display:flex;flex-wrap:wrap;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md)}.timeline-filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .calendar-selection{display:grid;gap:8px}.selection-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.selection-actions span{color:var(--muted);font:650 var(--text-xs) var(--mono)}.calendar-privacy{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.calendar-privacy>summary{padding:11px 13px;font:650 var(--text-xs) var(--mono)}.calendar-privacy fieldset{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0;padding:12px 13px;border:0;border-top:1px solid var(--border)}.calendar-privacy legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.calendar-privacy label{display:flex;align-items:flex-start;gap:7px;color:var(--text);font-size:var(--text-xs)}.calendar-privacy input{margin-top:2px}.calendar-privacy p{margin:0;padding:0 13px 13px;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .timeline{display:grid;gap:0;padding:0;margin:0;list-style:none}.timeline li{display:grid;grid-template-columns:minmax(118px,150px) minmax(0,1fr);gap:14px;padding:11px 0;border-top:1px solid var(--border)}.timeline li:first-child{border-top:0}.event-select{display:flex;align-items:flex-start;gap:8px;cursor:pointer}.event-select input{margin-top:1px}.timeline time{color:var(--accent2);font:650 var(--text-xs) var(--mono)}.timeline strong,.timeline p,.timeline small,.timeline a{display:block;overflow-wrap:anywhere}.timeline p,.timeline small{margin-top:4px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.timeline a{margin-top:6px;font-size:var(--text-xs)}
-  @media(max-width:850px){.route-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:600px){.lifecycle>header,.timeline-filters{display:grid}.lifecycle>header button,.timeline-filters select{width:100%}.route-grid{grid-template-columns:1fr}.timeline li{grid-template-columns:1fr;gap:4px}}
+  @media(max-width:600px){.lifecycle>header,.timeline-filters{display:grid}.lifecycle>header button,.timeline-filters select{width:100%}.timeline li{grid-template-columns:1fr;gap:4px}}
 </style>

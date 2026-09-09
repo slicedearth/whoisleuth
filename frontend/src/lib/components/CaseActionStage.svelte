@@ -5,7 +5,7 @@
     type CaseRecord, type CaseActionRecord, type CaseActionState,
   } from '$lib/cases';
   import { isLegalCaseActionTransition, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
-  import { isoFromLocal, localFromIso, list } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
@@ -88,11 +88,11 @@
       type: actionType,
       recipient: actionRecipient,
       contactSource: actionContactSource,
-      routeObservedAt: isoFromLocal(actionRouteObservedAt),
-      routeReviewAfter: isoFromLocal(actionRouteReviewAfter),
+      routeObservedAt: isoFromUtcInput(actionRouteObservedAt),
+      routeReviewAfter: isoFromUtcInput(actionRouteReviewAfter),
       contactLimitations: list(actionLimitations),
-      dueAt: isoFromLocal(actionDueAt),
-      followUpAt: isoFromLocal(actionFollowUpAt),
+      dueAt: isoFromUtcInput(actionDueAt),
+      followUpAt: isoFromUtcInput(actionFollowUpAt),
       originActionId: actionOriginId || null,
     };
   }
@@ -123,11 +123,11 @@
     actionType = action.type;
     actionRecipient = action.recipient;
     actionContactSource = action.contactSource;
-    actionRouteObservedAt = localFromIso(action.routeObservedAt);
-    actionRouteReviewAfter = localFromIso(action.routeReviewAfter);
+    actionRouteObservedAt = utcInputFromIso(action.routeObservedAt);
+    actionRouteReviewAfter = utcInputFromIso(action.routeReviewAfter);
     actionLimitations = action.contactLimitations.join('\n');
-    actionDueAt = localFromIso(action.dueAt);
-    actionFollowUpAt = localFromIso(action.followUpAt);
+    actionDueAt = utcInputFromIso(action.dueAt);
+    actionFollowUpAt = utcInputFromIso(action.followUpAt);
     actionOriginId = action.originActionId || '';
     clearTransition();
     transitionNextState = nextTransitionState(action, transitionSourceClass);
@@ -203,7 +203,7 @@
         id: selectedAction.id,
         transition: {
           nextState: transitionNextState,
-          occurredAt: isoFromLocal(transitionOccurredAt) || new Date().toISOString(),
+          occurredAt: isoFromUtcInput(transitionOccurredAt) || new Date().toISOString(),
           sourceClass: transitionSourceClass,
           provenance: transitionProvenance,
           reference: transitionReference || null,
@@ -254,7 +254,7 @@
         id: action.id,
         transition: {
           nextState,
-          occurredAt: isoFromLocal(quickOccurredAt) || new Date().toISOString(),
+          occurredAt: isoFromUtcInput(quickOccurredAt) || new Date().toISOString(),
           sourceClass,
           provenance,
           reference: quickActionReference || null,
@@ -277,6 +277,7 @@
 
 {#snippet metadataForm()}
   <form class="stack" oninput={actionDraft.changed} onchange={actionDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
+    <p class="notice">Date and time fields use UTC.</p>
     {#if record.actions.length}
       <label class="field">Action metadata<select value={selectedActionId} onchange={(event) => selectAction(event.currentTarget.value)}><option value="">Create a new action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
     {/if}
@@ -285,11 +286,11 @@
       <label class="field">Action type<select bind:value={actionType} disabled={selectedActionIdentityLocked}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label class="field">{mode === 'quick' ? 'Recipient or owner' : 'Recipient or internal owner'}<input bind:value={actionRecipient} maxlength="320" required disabled={selectedActionIdentityLocked}></label>
       <label class="field">{mode === 'quick' ? 'How this route was found' : 'Contact source'}<input bind:value={actionContactSource} maxlength="80" required disabled={selectedActionIdentityLocked}></label>
-      <label class="field">Route observed at<input id={`case-action-route-time-${record.id}`} type="datetime-local" step="0.001" bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
-      <label class="field">Route review after<input type="datetime-local" step="0.001" bind:value={actionRouteReviewAfter} disabled={selectedActionIdentityLocked}></label>
+      <label class="field">Route observed at<input id={`case-action-route-time-${record.id}`} type="datetime-local" {...utcDateTimeInputAttributes} bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
+      <label class="field">Route review after<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={actionRouteReviewAfter} disabled={selectedActionIdentityLocked}></label>
       <label class="field">Originating action<select bind:value={actionOriginId} disabled={selectedActionIdentityLocked}><option value="">No originating action</option>{#each record.actions.filter((action) => action.id !== selectedActionId) as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
-      <label class="field">Due at<input type="datetime-local" step="0.001" bind:value={actionDueAt}></label>
-      <label class="field">Follow-up at<input type="datetime-local" step="0.001" bind:value={actionFollowUpAt}></label>
+      <label class="field">Due at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={actionDueAt}></label>
+      <label class="field">Follow-up at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={actionFollowUpAt}></label>
     </div>
     {#if !selectedActionIdentityLocked}<p class="notice">Record the source observation and its review deadline or published expiry after checking the route. Changing recipient evidence invalidates prior review and authorisation; follow-up dates do not refresh it.</p>{/if}
     <label class="field">Contact limitations <small>one per line</small><textarea bind:value={actionLimitations} maxlength="2000" rows="2" disabled={selectedActionIdentityLocked}></textarea></label>
@@ -352,7 +353,7 @@
             <label class="field">Outcome detail<textarea bind:value={quickOutcomeDetail} maxlength="2000" rows="2"></textarea></label>
           {/if}
           {#if ['authorised', 'submitted', 'acknowledged'].includes(quickAction.state)}
-            <label class="field">Event time <small>Local time; leave blank only when recording the event as it happens</small><input type="datetime-local" step="0.001" bind:value={quickOccurredAt}></label>
+            <label class="field">Event time <small>UTC; leave blank only when recording the event as it happens</small><input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={quickOccurredAt}></label>
             <details><summary>Event evidence and limitations</summary><div class="stack"><label class="field">Receipt evidence<select bind:value={quickEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
           {/if}
           {#if quickAction.state !== 'terminal'}
@@ -372,12 +373,13 @@
       {#if mode === 'advanced'}
         {#if selectedAction}
           <form class="transition-form" aria-labelledby={`transition-title-${record.id}`} oninput={transitionDraft.changed} onchange={transitionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addActionTransition(); }}>
+            <p class="notice">Date and time fields use UTC.</p>
             <div><strong id={`transition-title-${record.id}`}>Append transition for {selectedAction.recipient}</strong><span>Current projection: {selectedAction.state.replaceAll('_', ' ')}</span></div>
             {#if legalTransitionStates.length}
               <div class="two-columns">
                 <label class="field">Event source<select value={transitionSourceClass} onchange={(event) => setTransitionSourceClass(event.currentTarget.value)}>{#each userActionEventSourceClasses as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
                 <label class="field">Next state<select value={transitionNextState} onchange={(event) => setTransitionNextState(event.currentTarget.value)}>{#each legalTransitionStates as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-                <label class="field">Original event time<input type="datetime-local" bind:value={transitionOccurredAt}></label>
+                <label class="field">Original event time<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={transitionOccurredAt}></label>
                 <label class="field">Provenance<input bind:value={transitionProvenance} maxlength="80" required></label>
                 <label class="field">Bounded reference<input id={`case-action-transition-reference-${record.id}`} bind:value={transitionReference} maxlength="500"></label>
                 <label class="field">Evidence pin<select bind:value={transitionEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>

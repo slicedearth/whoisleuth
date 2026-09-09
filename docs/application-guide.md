@@ -256,8 +256,15 @@ and detailed action transitions. Switching presentations preserves unfinished
 stage drafts for the open Case; navigating away does not save them.
 Recipient review retains the source observation and review deadline separately
 from operational follow-ups. Updating that evidence invalidates prior approval.
+Case response date and time fields use UTC and retain seconds and milliseconds.
 Receipts retain an original event time, reference, optional evidence pin and
 limitations. **Prepare a recheck** opens Lookup without starting collection.
+
+The saved reporting-route review includes platform reports. Filter by source
+review state or search by domain, recipient or source; pagination exposes all
+routes in the admitted Case store. Source observation and review dates remain
+separate from action updates and follow-ups. **Refresh local review** re-evaluates
+saved dates against the displayed clock without starting collection.
 
 External imports open a paged review of every accepted finding or claim. Select
 records across pages and inspect **Retained fields** before importing; shortened

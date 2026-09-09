@@ -15,6 +15,53 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 
 test.use({ timezoneId: 'UTC' });
 
+for (const timezoneId of ['Australia/Melbourne', 'America/New_York']) {
+  test.describe(`Case UTC entry in ${timezoneId}`, () => {
+    test.use({ timezoneId });
+    test('preserves distinct source instants through metadata edits and new evidence entry', async ({ page }) => {
+      await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
+      const instants = ['2026-04-04T15:30:12.345Z', '2026-04-04T16:30:12.345Z'];
+      const actions = instants.map((routeObservedAt, index) => currentActionFixture({
+        id: `utc-route-${index}`, type: 'registrar_report', recipient: `Fixture route ${index}`,
+        contactSource: 'Retained fixture route', routeObservedAt, contactLimitations: [],
+        dueAt: null, targetState: 'ready_for_review', reference: null, followUpAt: null, outcome: null,
+        createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-05T00:00:00.000Z',
+      }));
+      await openSeededTimelineCase(page, 'utc-entry.invalid', [caseRecord({ id: 'utc-entry', domain: 'utc-entry.invalid', actions })], CASE_SCHEMA_VERSION);
+      const workspace = await openCaseResponseWorkspace(page, 'utc-entry');
+      const actionStage = workspace.getByRole('region', { name: 'Case response actions', exact: true });
+      await actionStage.getByText('Track append-only response actions', { exact: true }).click();
+      for (const [index, instant] of instants.entries()) {
+        await actionStage.getByRole('combobox', { name: 'Action metadata', exact: true }).selectOption(`utc-route-${index}`);
+        await expect(actionStage.getByLabel('Route observed at', { exact: true })).toHaveValue(instant.slice(0, -1));
+        await actionStage.getByLabel(/Contact limitations/).fill(`Reviewed fixture ${index}`);
+        await actionStage.getByRole('button', { name: 'Update metadata', exact: true }).click();
+        await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions
+          .find((action: { id: string }) => action.id === `utc-route-${index}`)).toMatchObject({
+          routeObservedAt: instant, contactLimitations: [`Reviewed fixture ${index}`],
+        });
+      }
+      const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
+      await observation.getByText('Pin an observed fact', { exact: true }).click();
+      await expect(observation.getByText('Date and time fields use UTC.', { exact: true }).first()).toBeVisible();
+      await observation.getByLabel('Label', { exact: true }).fill('Explicit UTC observation');
+      await observation.getByLabel('Source', { exact: true }).first().fill('Fixture source');
+      await observation.getByLabel('Fact', { exact: true }).fill('A source observation, not the record edit time.');
+      const observedInput = observation.getByLabel('Observed at', { exact: true });
+      await observedInput.fill('10000-01-01T00:00');
+      expect(await observedInput.evaluate((input) => (input as HTMLInputElement).validity.rangeOverflow)).toBe(true);
+      await observation.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+      await expect(observedInput).toBeFocused();
+      expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.evidencePins).toHaveLength(0);
+      await expect(observation.getByLabel('Label', { exact: true })).toHaveValue('Explicit UTC observation');
+      await observedInput.fill('2026-04-05T02:30:12.345');
+      await observation.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+      await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.evidencePins)
+        .toMatchObject([{ observedAt: '2026-04-05T02:30:12.345Z' }]);
+    });
+  });
+}
+
 test('Quick completes reviewed packet handoff, a response receipt, recheck and closure', async ({ page }, testInfo) => {
   test.slow();
   await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');

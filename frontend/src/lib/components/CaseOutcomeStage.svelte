@@ -4,7 +4,7 @@
     CASE_PIN_COMPLETENESS, caseLookupTarget, type CaseRecord,
   } from '$lib/cases';
   import { buildCaseResponseLifecycleSummary } from '$lib/analysis/case-response-model.ts';
-  import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
 
@@ -50,13 +50,13 @@
     if (!await persist({
       observedEffectReview: {
         state: effectState,
-        observedAt: isoFromLocal(effectObservedAt) || new Date().toISOString(),
+        observedAt: isoFromUtcInput(effectObservedAt) || new Date().toISOString(),
         sourceClass: effectSourceClass,
         source: effectSource,
         completeness: effectCompleteness,
         evidencePinId: effectEvidencePinId || null,
         sightingId: effectSightingId || null,
-        followUpAt: isoFromLocal(effectFollowUpAt),
+        followUpAt: isoFromUtcInput(effectFollowUpAt),
         limitations: list(effectLimitations),
       },
     }, `Recorded an independent observed-effect review for ${record.domain}.`) || !unchanged()) return;
@@ -101,15 +101,16 @@
       {/if}
       <form class="stack" aria-labelledby={`effect-review-title-${record.id}`} oninput={effectDraft.changed} onchange={effectDraft.changed} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
         <strong id={`effect-review-title-${record.id}`}>Append independent observed-effect review</strong>
+        <p class="notice">Date and time fields use UTC.</p>
         <div class="two-columns">
           <label class="field">Observed effect<select bind:value={effectState}>{#each CASE_OBSERVED_EFFECT_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Observed at' : 'Observation time'}<input type="datetime-local" bind:value={effectObservedAt}></label>
+          <label class="field">{mode === 'quick' ? 'Observed at' : 'Observation time'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectObservedAt}></label>
           <label class="field">Source class<select bind:value={effectSourceClass}>{#each userObservedEffectSourceClasses as value}<option {value}>{value}</option>{/each}</select></label>
           <label class="field">{mode === 'quick' ? 'Source' : 'Separately attributed source'}<input bind:value={effectSource} maxlength="80" required></label>
           <label class="field">Completeness<select bind:value={effectCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
           <label class="field">{mode === 'quick' ? 'Current evidence' : 'Evidence pin'}<select bind:value={effectEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>
           <label class="field">Existing sighting<select bind:value={effectSightingId}><option value="">No sighting</option>{#each record.sightings as sighting}<option value={sighting.id}>{sighting.state.replaceAll('_', ' ')} · {sighting.source}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Follow up at' : 'Scheduled local follow-up'}<input type="datetime-local" bind:value={effectFollowUpAt}></label>
+          <label class="field">{mode === 'quick' ? 'Follow up at' : 'Scheduled local follow-up'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectFollowUpAt}></label>
         </div>
         <label class="field">Limitations <small>one per line</small><textarea bind:value={effectLimitations} maxlength="2000" rows="2"></textarea></label>
         <button class="btn" type="submit" disabled={mutationBusy || mode === 'quick' && effectState === 'not_checked'}>{mode === 'quick' ? 'Record independent outcome' : 'Record independent review'}</button>

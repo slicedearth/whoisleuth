@@ -280,6 +280,81 @@ test('calendar qualifies conflicting dates and exposes superseded follow-ups onl
   await expectNoHorizontalOverflow(page);
 });
 
+test('saved reporting routes remain reachable across pages with explicit local freshness review', async ({ page }, testInfo) => {
+  test.slow();
+  const collectionRequests = countCollectionRequests(page);
+  await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
+  const reportingTypes = ['registrar_report', 'registry_report', 'network_hosting_report', 'security_contact_report', 'platform_report'] as const;
+  const records = Array.from({ length: 6 }, (_, caseIndex) => caseRecord({
+    id: `routes-${caseIndex}`, domain: `routes-${caseIndex}.invalid`,
+    actions: Array.from({ length: 50 }, (_, actionIndex) => {
+      const index = caseIndex * 50 + actionIndex;
+      const action = readyForReviewAction();
+      return { ...action, id: `route-${index}`, type: reportingTypes[index % reportingTypes.length],
+        recipient: `Fixture route ${String(index).padStart(3, '0')}`,
+        routeObservedAt: index === 0 ? null : '2026-09-10T09:00:00.123Z',
+        routeReviewAfter: '2026-09-10T13:00:00.000Z',
+        followUpAt: index === 299 ? '2026-09-10T11:00:00.000Z' : null,
+        history: action.history.map((event, eventIndex) => ({ ...event, id: `route-${index}-event-${eventIndex}` })),
+      };
+    }),
+  }));
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records } }, { destination: '/monitor' });
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const lifecycle = page.getByRole('region', { name: 'Contact and lifecycle review', exact: true });
+  const routes = lifecycle.getByRole('region', { name: 'Saved reporting routes', exact: true });
+  await expect(routes.getByRole('status').first()).toHaveText('300 matching of 300 saved reporting routes.');
+  const pages = routes.getByRole('navigation', { name: 'Reporting route pages', exact: true });
+  const recipients = new Set<string>();
+  for (let index = 1; index <= 25; index += 1) {
+    await expect(pages.getByRole('status')).toHaveText(`Page ${index} of 25`);
+    const cards = routes.getByRole('article');
+    await expect(cards).toHaveCount(12);
+    for (const recipient of await cards.locator(':scope > small').filter({ hasText: /^Fixture route \d{3}$/u }).allTextContents()) recipients.add(recipient);
+    if (index < 25) {
+      await pages.getByRole('button', { name: 'Next', exact: true }).focus();
+      await pages.getByRole('button', { name: 'Next', exact: true }).press('Enter');
+      await expect(pages.getByRole('button', { name: 'Next', exact: true })).toBeFocused();
+    }
+  }
+  expect(recipients.size).toBe(300);
+  await expect(pages.getByRole('button', { name: 'Next', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await routes.getByRole('searchbox', { name: 'Find a route', exact: true }).fill('Fixture route 299');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(routes.getByRole('article')).toContainText('platform report');
+  await expect(routes.getByRole('article')).toContainText('Source observed: 2026-09-10T09:00:00.123Z');
+  await expect(routes.getByRole('article')).toContainText('Action follow-up: 2026-09-10T11:00:00.000Z');
+  await expect(routes.getByRole('article').getByRole('link', { name: 'Open case', exact: true })).toHaveAttribute('href', '/monitor?view=cases&case=routes-5');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('current');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(lifecycle.getByRole('list', { name: 'Browser-local lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await page.clock.setFixedTime('2026-09-10T14:00:00.000Z');
+  await lifecycle.getByRole('button', { name: 'Refresh local review', exact: true }).click();
+  await expect(lifecycle.getByText('Re-evaluated saved dates and routes. No collection was performed.')).toBeVisible();
+  await expect(routes.getByText('No saved reporting routes match these filters.', { exact: true })).toBeVisible();
+  await expect(lifecycle.getByText('No lifecycle review events match these filters.', { exact: true })).toBeVisible();
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('due');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await routes.getByRole('searchbox', { name: 'Find a route', exact: true }).fill('');
+  await expect(routes.getByRole('status').first()).toHaveText('299 matching of 300 saved reporting routes.');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('unconfirmed');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(routes.getByRole('article')).toContainText('Source observed: Unknown');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('all');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await routes.getByRole('heading', { name: 'Saved reporting routes', exact: true }).scrollIntoViewIfNeeded();
+      await routes.getByRole('article').first().evaluate((card) => card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expectNoHorizontalOverflow(page);
+      await expect(routes.getByRole('article').first()).toBeInViewport({ ratio: 1 });
+      await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect(collectionRequests.count()).toBe(0);
+});
+
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {
   const collectionRequests = countCollectionRequests(page);
   await migrateLegacyBrowserData(page, {

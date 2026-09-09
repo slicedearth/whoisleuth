@@ -1,15 +1,19 @@
-// Input conversion only; validation and mutation policy remain with the domain.
-export function isoFromLocal(value: string): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+
+export const utcDateTimeInputAttributes = Object.freeze({
+  min: '0001-01-01T00:00',
+  max: '9999-12-31T23:59:59.999',
+  step: '0.001',
+});
+
+// Native date/time fields carry UTC wall time; saved values are explicit instants.
+export function isoFromUtcInput(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/u.test(value)) return null;
+  return normalizeExplicitIsoTimestamp(`${value.length === 16 ? `${value}:00` : value}Z`);
 }
 
-export function localFromIso(value: string | null): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000).toISOString().slice(0, -1);
+export function utcInputFromIso(value: string | null): string {
+  return normalizeExplicitIsoTimestamp(value)?.slice(0, -1) ?? '';
 }
 
 export function list(value: string): string[] {
