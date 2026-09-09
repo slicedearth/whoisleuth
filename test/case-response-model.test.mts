@@ -422,6 +422,47 @@ describe('case response record normalization', () => {
     assert.match(requiredValue(oversized[0]).historyLimitations.join(' '), /omitted/iu);
   });
 
+  test('equal-clock transitions follow their state prerequisites without rewriting source time', () => {
+    const seed = requiredValue(appendCaseAction([], { recipient: 'Same-clock review owner' }, NOW)[0]);
+    const root = requiredValue(seed.history[0]);
+    const states = [null, 'drafting', 'ready_for_review', 'reviewed', 'authorised'] as const;
+    const history = states.slice(1).map((nextState, index) => ({
+      ...root, id: `event-${9 - index}`, previousState: states[index]!, nextState,
+    }));
+    const historyLimitations = [
+      '2 retained concurrent transitions are not applied to the current-state projection.',
+      'The original provider receipt could not be independently verified.',
+    ];
+    const forward = requiredValue(normalizeCaseActions([{ ...seed, history, historyLimitations }], NOW, { sourceVersion: 15 })[0]);
+    const reversed = requiredValue(normalizeCaseActions([{ ...seed, history: [...history].reverse(), historyLimitations }], NOW, { sourceVersion: 15 })[0]);
+    assert.deepEqual(forward, reversed);
+    assert.equal(forward.state, 'authorised');
+    assert.deepEqual(forward.history.map((event) => [event.id, event.applied, event.occurredAt]), [
+      ['event-9', true, NOW], ['event-8', true, NOW], ['event-7', true, NOW], ['event-6', true, NOW],
+    ]);
+    assert.deepEqual(forward.historyLimitations, ['The original provider receipt could not be independently verified.']);
+    const sent = requiredValue(appendCaseActionTransition([forward], forward.id, {
+      nextState: 'submitted', occurredAt: NOW, reference: 'LOCAL-RECEIPT',
+    }, NOW)[0]);
+    assert.equal(sent.state, 'submitted');
+    assert.equal(sent.reference, 'LOCAL-RECEIPT');
+    assert.ok(sent.history.every((event) => event.applied && event.occurredAt === NOW));
+    assert.deepEqual(normalizeCaseActions([sent], LATEST, { sourceVersion: 15 }), [sent]);
+  });
+
+  test('state prerequisites do not reorder an event across a different source time', () => {
+    const seed = requiredValue(appendCaseAction([], { recipient: 'Source-clock review owner' }, NOW)[0]);
+    const root = requiredValue(seed.history[0]);
+    const result = requiredValue(normalizeCaseActions([{ ...seed, history: [
+      root,
+      { ...root, id: 'later-ready', previousState: 'drafting', nextState: 'ready_for_review', occurredAt: NEXT },
+      { ...root, id: 'earlier-review', previousState: 'ready_for_review', nextState: 'reviewed', occurredAt: LATER },
+    ] }], LATEST, { sourceVersion: 15 })[0]);
+    assert.equal(result.state, 'ready_for_review');
+    assert.equal(result.history.find((event) => event.id === 'earlier-review')?.applied, false);
+    assert.equal(result.history.find((event) => event.id === 'earlier-review')?.occurredAt, LATER);
+  });
+
   test('normalises malformed and conflicting lifecycle histories idempotently with explicit omissions', () => {
     const seed = requiredValue(appendCaseAction([], { recipient: 'Bounded lifecycle desk' }, NOW)[0]);
     const initial = requiredValue(seed.history[0]);

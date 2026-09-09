@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
@@ -276,7 +276,8 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await expect(page.locator('.case-head', { hasText: 'tracked.invalid' })).toBeVisible();
 });
 
-test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }) => {
+test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }, testInfo) => {
+  test.slow();
   await openCasesView(page);
   await createCase(page, 'reported-content.invalid');
   const initial = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
@@ -290,7 +291,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await workspace.getByRole('checkbox', { name: /^Phishing/u }).check();
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await workspace.getByRole('checkbox', { name: /^Copyright infringement/u }).check();
-  await workspace.getByRole('button', { name: 'Save Case types' }).click();
+  await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
   await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
   await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
@@ -306,8 +307,30 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await expect(routes).toContainText('TikTok');
   await expect(routes).toContainText('Report an account or content');
   await expect(routes).toContainText('Submit a trademark or counterfeit report');
+  const trademarkRoute = routes.locator('.route', { hasText: 'Submit a trademark or counterfeit report' });
+  const copyrightRoute = routes.locator('.route', { hasText: 'Submit a copyright report' });
+  await trademarkRoute.getByRole('checkbox').first().check();
+  await expect(copyrightRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.locator('.case-types').locator(':scope > summary').click();
+  await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).uncheck();
+  await expect(trademarkRoute).toHaveCount(0);
+  await expect(copyrightRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
+  await expect(trademarkRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
   await routes.locator('.route', { hasText: 'Report an account or content' }).getByRole('button', { name: 'Create drafting action' }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await trademarkRoute.getByRole('group', { name: 'Preparation checklist', exact: true }).scrollIntoViewIfNeeded();
+      await expect(trademarkRoute.getByRole('checkbox').first()).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
@@ -316,9 +339,12 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
 
   await page.getByLabel('Additional tags').fill('priority-review');
   await page.getByRole('button', { name: 'Save tags' }).click();
-  const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: initial.manifest.revision + 4 });
+  await expect.poll(async () => {
+    const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    return saved.records.find((item) => item.value.id === stored.id)?.value.tags;
+  }).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
+  const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
-  expect(updatedCase.tags).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
   expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
   expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({
     type: 'platform_report',

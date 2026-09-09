@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     CASE_CLOSURE_REASONS, CASE_OBSERVED_EFFECT_SOURCE_CLASSES, CASE_OBSERVED_EFFECT_STATES,
-    CASE_PIN_COMPLETENESS, type CaseRecord,
+    CASE_PIN_COMPLETENESS, caseLookupTarget, type CaseRecord,
   } from '$lib/cases';
   import { buildCaseResponseLifecycleSummary } from '$lib/analysis/case-response-model.ts';
   import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
@@ -88,6 +88,7 @@
     <summary>{mode === 'quick' ? 'Record recheck outcome and closure' : 'Verify remediation independently and close deliberately'}</summary>
     <div class="response-form remediation-review">
       <p class="notice">Provider responses, independent observations and analyst closure are separate records.</p>
+      <a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Prepare a recheck for {caseLookupTarget(record)}</a>
       <dl class="separate-times">
         <div><dt>Provider outcome time</dt><dd>{responseLifecycle.latestProviderOutcome ? `${responseLifecycle.latestProviderOutcome.occurredAt} · ${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')}` : `Withheld — ${responseLifecycle.providerOutcomeState}`}</dd></div>
         <div><dt>Independently observed change time</dt><dd>{responseLifecycle.latestObservedChangeAt ?? `Withheld — ${responseLifecycle.observedChangeState}`}</dd></div>

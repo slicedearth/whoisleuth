@@ -52,6 +52,9 @@ Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The
 domain model owns validation and append-only histories, and the browser-store
 adapter owns persistence.
+The packet component owns one transient manual-handoff preview. Its generator
+supplies text and structured output; input identity and the existing
+freshness-bound review digest govern reuse. No preview is stored in the Case.
 
 ## Request pipeline
 

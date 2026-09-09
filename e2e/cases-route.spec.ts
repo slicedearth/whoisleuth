@@ -68,7 +68,10 @@ test('direct Cases do not offer empty-state mutations when local storage is unre
   await failBrowserLocalCollectionReads(page, 'cases');
   const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page).toHaveURL('/bulk');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toHaveCount(0);
   await navigation.getByRole('link', { name: /^Cases/u }).click();
+  await expect(page).toHaveURL('/cases');
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Open or create case' })).toHaveCount(0);

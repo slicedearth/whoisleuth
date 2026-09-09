@@ -5,7 +5,8 @@
     type CaseRecord, type CaseActionRecord, type CaseActionState,
   } from '$lib/cases';
   import { isLegalCaseActionTransition, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
-  import { isoFromLocal, list } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromLocal, localFromIso, list } from '$lib/analysis/case-response-form-values.ts';
+  import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
 
@@ -24,6 +25,7 @@
   let actionRecipient = $state('');
   let actionContactSource = $state('analyst supplied');
   let actionRouteObservedAt = $state('');
+  let actionRouteReviewAfter = $state('');
   let actionLimitations = $state('');
   let actionDueAt = $state('');
   let actionFollowUpAt = $state('');
@@ -42,9 +44,13 @@
   let quickActionReference = $state('');
   let quickProviderOutcome = $state('');
   let quickOutcomeDetail = $state('');
+  let quickOccurredAt = $state('');
+  let quickEvidencePinId = $state('');
+  let quickLimitations = $state('');
+  let metadataExpanded = $state(false);
   const actionDraft = createDraftRevision(() => record.id);
   const transitionDraft = createDraftRevision(() => `${record.id}:${selectedActionId}`);
-  const quickActionDraft = createDraftRevision(() => `${record.id}:${quickActionId}`);
+  const quickActionDraft = createDraftRevision(() => `${record.id}:${quickAction?.id ?? ''}`);
   const selectedAction = $derived(record.actions.find((action) => action.id === selectedActionId) ?? null);
   const selectedActionIdentityLocked = $derived(Boolean(selectedAction
     && ['submitted', 'acknowledged', 'terminal'].includes(selectedAction.state)));
@@ -68,17 +74,14 @@
         : [],
   );
   const quickAction = $derived(record.actions.find((action) => action.id === quickActionId)
-    ?? record.actions.find((action) => action.state !== 'terminal')
-    ?? record.actions.at(-1)
+    ?? (quickActionId ? null : record.actions.find((action) => action.state !== 'terminal') ?? record.actions.at(-1))
     ?? null);
+  $effect(() => { if (!quickActionId && quickAction) quickActionId = quickAction.id; });
 
-  function localFromIso(value: string | null): string {
-    if (!value) return '';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '';
-    const adjusted = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
-    return adjusted.toISOString().slice(0, 16);
-  }
+  let routeReviewClock = $state(new Date().toISOString());
+  $effect(() => { record; routeReviewClock = new Date().toISOString(); });
+  const quickRouteFreshness = $derived(quickAction
+    ? responseRouteFreshness(quickAction.routeObservedAt, quickAction.routeReviewAfter, routeReviewClock) : 'unknown');
 
   function actionInput() {
     return {
@@ -86,6 +89,7 @@
       recipient: actionRecipient,
       contactSource: actionContactSource,
       routeObservedAt: isoFromLocal(actionRouteObservedAt),
+      routeReviewAfter: isoFromLocal(actionRouteReviewAfter),
       contactLimitations: list(actionLimitations),
       dueAt: isoFromLocal(actionDueAt),
       followUpAt: isoFromLocal(actionFollowUpAt),
@@ -99,6 +103,7 @@
     actionRecipient = '';
     actionContactSource = 'analyst supplied';
     actionRouteObservedAt = '';
+    actionRouteReviewAfter = '';
     actionLimitations = '';
     actionDueAt = '';
     actionFollowUpAt = '';
@@ -119,12 +124,37 @@
     actionRecipient = action.recipient;
     actionContactSource = action.contactSource;
     actionRouteObservedAt = localFromIso(action.routeObservedAt);
+    actionRouteReviewAfter = localFromIso(action.routeReviewAfter);
     actionLimitations = action.contactLimitations.join('\n');
     actionDueAt = localFromIso(action.dueAt);
     actionFollowUpAt = localFromIso(action.followUpAt);
     actionOriginId = action.originActionId || '';
     clearTransition();
     transitionNextState = nextTransitionState(action, transitionSourceClass);
+  }
+
+  async function reviewQuickRecipient() {
+    if (!quickAction) return;
+    routeReviewClock = new Date().toISOString();
+    selectAction(quickAction.id);
+    metadataExpanded = true;
+    await tick();
+    document.getElementById(`case-action-route-time-${record.id}`)?.focus();
+  }
+
+  function clearQuickEvent() {
+    quickActionReference = '';
+    quickProviderOutcome = '';
+    quickOutcomeDetail = '';
+    quickOccurredAt = '';
+    quickEvidencePinId = '';
+    quickLimitations = '';
+  }
+
+  function selectQuickAction(id: string) {
+    quickActionDraft.changed();
+    quickActionId = id;
+    clearQuickEvent();
   }
 
   async function saveAction() {
@@ -224,26 +254,23 @@
         id: action.id,
         transition: {
           nextState,
-          occurredAt: new Date().toISOString(),
+          occurredAt: isoFromLocal(quickOccurredAt) || new Date().toISOString(),
           sourceClass,
           provenance,
           reference: quickActionReference || null,
-          evidencePinId: null,
-          limitations: [],
+          evidencePinId: quickEvidencePinId || null,
+          limitations: list(quickLimitations),
           providerOutcome: recordsProviderOutcome ? quickProviderOutcome || null : null,
           outcomeDetail: recordsProviderOutcome ? quickOutcomeDetail || null : null,
           originActionId: action.originActionId,
         },
       },
     }, `${quickActionVerb(action)} recorded for ${record.domain}.`) || !unchanged()) return;
-    quickActionReference = '';
-    quickProviderOutcome = '';
-    quickOutcomeDetail = '';
+    clearQuickEvent();
   }
 
   export function prepareDeliveryRecord(actionId: string, digestSha256: string): void {
-    quickActionDraft.changed();
-    quickActionId = actionId;
+    selectQuickAction(actionId);
     quickActionReference = `response-packet-sha256:${digestSha256}`;
   }
 </script>
@@ -258,11 +285,13 @@
       <label class="field">Action type<select bind:value={actionType} disabled={selectedActionIdentityLocked}>{#each CASE_ACTION_TYPES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label class="field">{mode === 'quick' ? 'Recipient or owner' : 'Recipient or internal owner'}<input bind:value={actionRecipient} maxlength="320" required disabled={selectedActionIdentityLocked}></label>
       <label class="field">{mode === 'quick' ? 'How this route was found' : 'Contact source'}<input bind:value={actionContactSource} maxlength="80" required disabled={selectedActionIdentityLocked}></label>
-      <label class="field">Route observed at<input type="datetime-local" bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
+      <label class="field">Route observed at<input id={`case-action-route-time-${record.id}`} type="datetime-local" step="0.001" bind:value={actionRouteObservedAt} disabled={selectedActionIdentityLocked}></label>
+      <label class="field">Route review after<input type="datetime-local" step="0.001" bind:value={actionRouteReviewAfter} disabled={selectedActionIdentityLocked}></label>
       <label class="field">Originating action<select bind:value={actionOriginId} disabled={selectedActionIdentityLocked}><option value="">No originating action</option>{#each record.actions.filter((action) => action.id !== selectedActionId) as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
-      <label class="field">Due at<input type="datetime-local" bind:value={actionDueAt}></label>
-      <label class="field">Follow-up at<input type="datetime-local" bind:value={actionFollowUpAt}></label>
+      <label class="field">Due at<input type="datetime-local" step="0.001" bind:value={actionDueAt}></label>
+      <label class="field">Follow-up at<input type="datetime-local" step="0.001" bind:value={actionFollowUpAt}></label>
     </div>
+    {#if !selectedActionIdentityLocked}<p class="notice">Record the source observation and its review deadline or published expiry after checking the route. Changing recipient evidence invalidates prior review and authorisation; follow-up dates do not refresh it.</p>{/if}
     <label class="field">Contact limitations <small>one per line</small><textarea bind:value={actionLimitations} maxlength="2000" rows="2" disabled={selectedActionIdentityLocked}></textarea></label>
     <div class="actions"><button class="btn" type="submit" disabled={mutationBusy}>{mutationBusy ? 'Saving…' : selectedActionId ? 'Update metadata' : 'Create drafting action'}</button>{#if selectedActionId}<button class="btn" type="button" disabled={mutationBusy} onclick={clearAction}>Cancel edit</button>{/if}</div>
   </form>
@@ -278,6 +307,7 @@
           <p>{action.recipient}</p>
           <small>Action ID {action.id} · {action.contactSource} · created {action.createdAt}</small>
           <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
+          <small>Route review after {action.routeReviewAfter ?? 'not recorded'} · follow-up {action.followUpAt ?? 'not scheduled'}</small>
           {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
           {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
           {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
@@ -310,9 +340,10 @@
     <summary>{mode === 'quick' ? 'Prepare and track response' : 'Track append-only response actions'}</summary>
     <div class="response-form">
       {#if mode === 'quick' && quickAction}
-        <div class="quick-form" oninput={quickActionDraft.changed} onchange={quickActionDraft.changed}>
-          {#if record.actions.length > 1}<label class="field">Action<select value={quickAction.id} onchange={(event) => quickActionId = event.currentTarget.value}>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}
-          <div class="retained-summary"><strong>{quickAction.type.replaceAll('_', ' ')} · {quickAction.state.replaceAll('_', ' ')}</strong><p>{quickAction.recipient}</p><small>Route source: {quickAction.contactSource}</small></div>
+        <form class="quick-form" oninput={quickActionDraft.changed} onchange={quickActionDraft.changed} onsubmit={(event) => { event.preventDefault(); void advanceQuickAction(quickAction); }}>
+          {#if record.actions.length > 1}<label class="field">Action<select value={quickAction.id} onchange={(event) => selectQuickAction(event.currentTarget.value)}>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}
+          <div class="retained-summary"><strong>{quickAction.type.replaceAll('_', ' ')} · {quickAction.state.replaceAll('_', ' ')}</strong><p>{quickAction.recipient}</p><small>Route source: {quickAction.contactSource} · freshness {quickRouteFreshness} at {routeReviewClock}</small><small>Observed {quickAction.routeObservedAt ?? 'time unavailable'} · review after {quickAction.routeReviewAfter ?? 'not recorded'}</small><small>Follow-up {quickAction.followUpAt ?? 'not scheduled'}</small></div>
+          {#if !['submitted', 'acknowledged', 'terminal'].includes(quickAction.state)}<button class="btn" type="button" onclick={() => void reviewQuickRecipient()} disabled={mutationBusy}>Review recipient and schedule</button>{/if}
           {#if quickAction.state === 'authorised'}
             <label class="field">Delivery reference<input bind:value={quickActionReference} maxlength="500" placeholder="Provider reference, ticket, or response-packet digest"></label>
           {:else if quickAction.state === 'submitted' || quickAction.state === 'acknowledged'}
@@ -320,14 +351,18 @@
             <label class="field">Reference<input bind:value={quickActionReference} maxlength="500" placeholder="Ticket, message, or provider reference"></label>
             <label class="field">Outcome detail<textarea bind:value={quickOutcomeDetail} maxlength="2000" rows="2"></textarea></label>
           {/if}
+          {#if ['authorised', 'submitted', 'acknowledged'].includes(quickAction.state)}
+            <label class="field">Event time <small>Local time; leave blank only when recording the event as it happens</small><input type="datetime-local" step="0.001" bind:value={quickOccurredAt}></label>
+            <details><summary>Event evidence and limitations</summary><div class="stack"><label class="field">Receipt evidence<select bind:value={quickEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
+          {/if}
           {#if quickAction.state !== 'terminal'}
-            <button id={`quick-action-advance-${record.id}`} class="primary" type="button" onclick={() => void advanceQuickAction(quickAction)} disabled={mutationBusy || quickAction.state === 'authorised' && !quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && !quickProviderOutcome}>{quickActionVerb(quickAction)}</button>
+            <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={mutationBusy || quickAction.state === 'authorised' && !quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && !quickProviderOutcome}>{quickActionVerb(quickAction)}</button>
           {:else}
             <p class="notice">This action is terminal. Its retained history is immutable.</p>
           {/if}
-        </div>
+        </form>
 
-        <details class="action-metadata">
+        <details class="action-metadata" bind:open={metadataExpanded}>
           <summary>Create an action or update scheduling</summary>
           {@render metadataForm()}
         </details>

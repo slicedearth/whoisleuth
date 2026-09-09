@@ -254,6 +254,10 @@ manual delivery record, independent recheck and closure. Stage links open the
 relevant form. Advanced adds assertions, branches, manual investigation steps
 and detailed action transitions. Switching presentations preserves unfinished
 stage drafts for the open Case; navigating away does not save them.
+Recipient review retains the source observation and review deadline separately
+from operational follow-ups. Updating that evidence invalidates prior approval.
+Receipts retain an original event time, reference, optional evidence pin and
+limitations. **Prepare a recheck** opens Lookup without starting collection.
 
 External imports open a paged review of every accepted finding or claim. Select
 records across pages and inspect **Retained fields** before importing; shortened
@@ -269,6 +273,7 @@ content, resolved without erasing history, and carried into a response packet.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded
 official safety or rights-reporting routes matched to the selected Case types.
+Each route includes a preparation checklist from its reviewed guidance.
 The analyst must verify the current route and authority before opening it.
 WHOISleuth creates only a drafting action and never submits the complaint.
 
@@ -277,6 +282,9 @@ privacy, redactions, analyst authority, freshness and contradictions. Drafts
 remain available with cautions. Reviewed authorisation is bound to the exact
 canonical inputs and is invalidated by material change. Packet generation is a
 local export; WHOISleuth does not send it or promise a provider outcome.
+**Preview manual complaint** shows the exact text used by Copy and the email
+download. JSON and Markdown describe the same prepared packet. Changed inputs
+or freshness require a new preview; receipt recording remains a separate action.
 
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.

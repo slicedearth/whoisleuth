@@ -27,6 +27,9 @@
     CASE_RESPONSE_STAGE_DEFINITIONS,
     type CaseResponseStage,
   } from '$lib/analysis/case-response-stage.ts';
+  import { isoFromLocal, localFromIso, list } from '$lib/analysis/case-response-form-values.ts';
+  import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
+  import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 
   let {
     record,
@@ -90,11 +93,31 @@
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
   let lastPacketExport = $state<(Parameters<typeof onpacketexported>[0] & { materialSignature: string }) | null>(null);
-  const reviewNow = new Date().toISOString();
+  type PreparedPacket = Readonly<{
+    built: Awaited<ReturnType<typeof buildCaseResponsePacket>>;
+    signature: string;
+    caseId: string;
+    domain: string;
+    actionId: string | null;
+    actionSignature: string;
+    generatedAt: string;
+  }>;
+  let manualPreview = $state.raw<PreparedPacket | null>(null);
+  let previewFreshnessChanged = $state(false);
+  const previewIsCurrent = $derived(Boolean(manualPreview && !previewFreshnessChanged && manualPreview.signature === packetHandoffSignature()));
 
-  const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
+  const packetReview = $derived.by(() => {
+    const input = packetInput();
+    const now = new Date().toISOString();
+    return {
+      now,
+      preflight: buildCaseResponsePreflight(record, input, now),
+      readiness: buildCaseResponseReadiness(record, input, now),
+    };
+  });
+  const packetPreflight = $derived(packetReview.preflight);
   const packetProfilePreview = $derived(buildResponsePacketProfilePreview(record, packetInput()));
-  const packetReadiness = $derived(buildCaseResponseReadiness(record, packetInput(), reviewNow));
+  const packetReadiness = $derived(packetReview.readiness);
   const packetReviewIsCurrent = $derived(Boolean(packetReviewDigest) && packetReviewSignature === packetMaterialSignature());
   const selectedPacketAction = $derived(record.actions.find((action) => action.id === packetActionId) ?? null);
   const investigationContext = $derived(caseInvestigationContext(record));
@@ -139,35 +162,14 @@
     }
     if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
     if (!packetObservedAt) {
-      const latestObservedAt = [...record.evidencePins]
-        .map((pin) => pin.observedAt)
-        .filter((value) => Number.isFinite(Date.parse(value)))
-        .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
-      packetObservedAt = localFromIso(latestObservedAt);
+      const cohort = latestObservationCohort(record.evidencePins, (pin) => pin.observedAt);
+      packetObservedAt = localFromIso(cohort.undated.length ? null : cohort.observedAt);
     }
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
     if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
     defaultsAppliedRecordId = record.id;
   });
-
-  function isoFromLocal(value: string): string | null {
-    if (!value) return null;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-  }
-
-  function localFromIso(value: string | null): string {
-    if (!value) return '';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '';
-    const adjusted = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
-    return adjusted.toISOString().slice(0, 16);
-  }
-
-  function list(value: string): string[] {
-    return value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
-  }
 
   function packetInput(includeAuthorisation = true): CaseResponsePacketInput {
     const artefactReferences = packetArtefactDigest.trim() ? [{
@@ -223,6 +225,10 @@
 
   function packetMaterialSignature(): string {
     return JSON.stringify({ record, input: packetInput(false) });
+  }
+
+  function packetHandoffSignature(): string {
+    return JSON.stringify({ record, input: packetInput() });
   }
 
   async function reviewPacketInputs() {
@@ -282,8 +288,42 @@
     }
   }
 
-  function packet(generatedAt: string = new Date().toISOString()) {
-    return buildCaseResponsePacket(record, packetInput(), generatedAt);
+  async function prepareManualPacket(usePreview: boolean): Promise<PreparedPacket> {
+    const signature = packetHandoffSignature();
+    const generatedAt = new Date().toISOString();
+    if (usePreview && manualPreview) {
+      const preview = manualPreview;
+      if (previewFreshnessChanged || preview.signature !== signature) throw new Error('The manual complaint preview is out of date. Refresh it before copying or exporting.');
+      const digest = await buildCaseResponseReviewDigest(record, packetInput(false), generatedAt);
+      if (signature !== packetHandoffSignature()) throw new Error('The packet inputs changed while the handoff was being prepared. Nothing was downloaded or copied.');
+      if (Date.parse(generatedAt) < Date.parse(preview.generatedAt)
+        || digest !== preview.built.json.authorisation.reviewedInputDigestSha256) {
+        previewFreshnessChanged = true;
+        throw new Error('Evidence or route freshness changed after the preview. Refresh it and review its current authorisation before copying or exporting.');
+      }
+      return preview;
+    }
+    const action = record.actions.find((item) => item.id === packetActionId);
+    const context = { caseId: record.id, domain: record.domain, actionId: action?.id ?? null, actionSignature: JSON.stringify(action) ?? '' };
+    const built = await buildCaseResponsePacket(record, packetInput(), generatedAt);
+    if (signature !== packetHandoffSignature()) throw new Error('The packet inputs changed while the handoff was being prepared. Nothing was downloaded or copied.');
+    return { built, signature, generatedAt, ...context };
+  }
+
+  async function previewManualComplaint() {
+    if (packetBusy) return;
+    packetBusy = true;
+    try {
+      manualPreview = await prepareManualPacket(false);
+      previewFreshnessChanged = false;
+      onmessage(`Prepared the exact ${manualPreview.built.json.authorisation.status} manual complaint preview. Nothing was copied, downloaded or submitted.`);
+      await tick();
+      document.getElementById(`manual-complaint-${record.id}`)?.focus({ preventScroll: true });
+    } catch (cause) {
+      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the manual complaint preview.');
+    } finally {
+      packetBusy = false;
+    }
   }
 
   async function downloadPacket(format: 'json' | 'md' | 'txt') {
@@ -291,18 +331,8 @@
     packetBusy = true;
     lastPacketExport = null;
     try {
-      const generatedAt = new Date().toISOString();
-      const materialSignature = packetMaterialSignature();
-      const caseId = record.id;
-      const domain = record.domain;
-      const action = record.actions.find((item) => item.id === packetActionId);
-      const actionId = action?.id ?? null;
-      const actionSignature = JSON.stringify(action);
-      const built = await packet(generatedAt);
-      if (materialSignature !== packetMaterialSignature()) {
-        onmessage('The packet inputs changed while the export was being prepared. Nothing was downloaded; review the current inputs before exporting again.');
-        return;
-      }
+      const prepared = await prepareManualPacket(true);
+      const { built, caseId, domain, actionId, actionSignature, generatedAt } = prepared;
       const content = format === 'json'
         ? JSON.stringify(built.json, null, 2)
         : format === 'md'
@@ -320,7 +350,7 @@
         caseId,
         actionId,
         actionSignature,
-        materialSignature,
+        materialSignature: prepared.signature,
         exportedAt: generatedAt,
         digestSha256: built.json.integrity.digestSha256,
       } : null;
@@ -336,9 +366,12 @@
     if (packetBusy) return;
     packetBusy = true;
     try {
-      const built = await packet();
+      const prepared = await prepareManualPacket(true);
+      const { built } = prepared;
       await navigator.clipboard.writeText(built.email);
-      onmessage(`Copied the ${built.json.authorisation.status} response email draft. Nothing was submitted.`);
+      onmessage(prepared.signature === packetHandoffSignature()
+        ? `Copied the ${built.json.authorisation.status} response email draft. Nothing was submitted.`
+        : 'Copied the prepared response draft, but the inputs changed while clipboard access completed. Review the current inputs before using that earlier copy. Nothing was submitted.');
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Clipboard access was unavailable.');
     } finally {
@@ -348,7 +381,7 @@
 
   async function continueToDeliveryRecord() {
     if (!lastPacketExport) return;
-    if (lastPacketExport.materialSignature !== packetMaterialSignature()) {
+    if (lastPacketExport.materialSignature !== packetHandoffSignature()) {
       lastPacketExport = null;
       onmessage('The Case or packet inputs changed after export. Review and export the current packet before using its digest in a delivery record.');
       return;
@@ -389,7 +422,7 @@
             </div>
             {#if packetProfilePreview.missingEvidence.length}<p class="profile-missing"><strong>Still needed:</strong> {packetProfilePreview.missingEvidence.join('; ')}</p>{/if}
           </section>
-          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} oninput={() => packetCategoryEdited = true} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" bind:value={packetObservedAt} required></label></div>
+          <div class="two-columns"><label class="field">Abuse category<input bind:value={packetCategory} oninput={() => packetCategoryEdited = true} maxlength="80" required placeholder="Credential phishing"></label><label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label><label class="field">Observed at<input type="datetime-local" step="0.001" bind:value={packetObservedAt} required></label></div>
           <label class="field">Exact abusive HTTP(S) URLs <small>one per line</small><textarea bind:value={packetUrls} oninput={() => packetUrlsEdited = true} maxlength="42000" rows="3" required></textarea></label>
           {#if investigationContext?.urlRetention === 'origin_only'}<p class="notice">This Case retained only the Incident origin. Review and paste the exact URL deliberately if it belongs in this packet.</p>{/if}
           <label class="field">Observed harm<textarea bind:value={packetHarm} maxlength="2000" rows="3" required></textarea></label>
@@ -407,6 +440,7 @@
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>Delivery context</span></header>
           <label class="field">Case action for this packet<select bind:value={packetActionId}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
           {#if selectedPacketAction}<section class="profile-preview"><div><strong>{selectedPacketAction.recipient}</strong><span>{selectedPacketAction.type.replaceAll('_', ' ')}</span></div><p><strong>Source:</strong> {selectedPacketAction.contactSource}</p><p><strong>Route observed:</strong> {selectedPacketAction.routeObservedAt ?? 'Time unavailable'}</p>{#if selectedPacketAction.originActionId}<p><strong>Originating action:</strong> {selectedPacketAction.originActionId}</p>{/if}{#if selectedPacketAction.contactLimitations.length}<p><strong>Limitations:</strong> {selectedPacketAction.contactLimitations.join('; ')}</p>{/if}</section>{:else}<p class="notice">Create and review a Case action first. Browser and blocklist destinations use a manually entered internal-review action; other profiles require the matching typed route.</p>{/if}
+          {#if selectedPacketAction}<p class="notice">Route freshness: {responseRouteFreshness(selectedPacketAction.routeObservedAt, selectedPacketAction.routeReviewAfter, packetReview.now)} · review deadline or published expiry: {selectedPacketAction.routeReviewAfter ?? 'not recorded'}. Refresh recipient evidence in the Response decision stage; changing it invalidates this packet review.</p>{/if}
           <p class="notice">Only the selected action, its bounded origin lineage and its route are included. A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action.</p>
         </section>
       {/if}
@@ -440,7 +474,7 @@
           {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Bind the current inputs above before confirming authorisation.</p>{/if}
           <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
           <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
-          <label class="field">Confirmation time<input type="datetime-local" bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
+          <label class="field">Confirmation time<input type="datetime-local" step="0.001" bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
           <p class="notice">Authorisation applies only to the exact inputs bound to the current digest. It does not submit the packet or establish a provider outcome.</p>
         </section>
       {/if}
@@ -448,6 +482,14 @@
         <section id={`packet-wizard-step-${record.id}-8`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-8`}>
           <header><div><p class="eyebrow">Export and record</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local handoff</h4></div><span>Phase 3</span></header>
           <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
+          <button class="btn" type="button" onclick={() => void previewManualComplaint()} disabled={packetBusy || !packetPreflight.canExport}>{manualPreview ? 'Refresh manual complaint preview' : 'Preview manual complaint'}</button>
+          {#if manualPreview}
+            {#if previewIsCurrent}
+              <label class="field">Exact manual complaint <small>Prepared {manualPreview.generatedAt} · {manualPreview.built.json.authorisation.status}. Copy and export use this prepared packet while its inputs and freshness remain unchanged.</small><textarea id={`manual-complaint-${record.id}`} class="manual-complaint" value={manualPreview.built.email} readonly rows="16" spellcheck="false"></textarea></label>
+            {:else}
+              <p class="history-warning">The manual complaint preview is out of date. Refresh it before copying or exporting.</p>
+            {/if}
+          {/if}
           <div class="actions"><button class="btn" type="button" onclick={() => void downloadPacket('json')} disabled={packetBusy || !packetPreflight.canExport}>Export JSON draft or authorised packet</button><button class="btn" type="button" onclick={() => void downloadPacket('md')} disabled={packetBusy || !packetPreflight.canExport}>Export Markdown</button><button class="btn" type="button" onclick={() => void downloadPacket('txt')} disabled={packetBusy || !packetPreflight.canExport}>Export email draft</button><button class="btn" type="button" onclick={() => void copyEmail()} disabled={packetBusy || !packetPreflight.canExport}>Copy email draft</button></div>
           {#if lastPacketExport}
             <div class="delivery-handoff">
@@ -473,6 +515,7 @@
   .response-form{display:grid;gap:10px;padding:12px}
   .two-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   textarea,input,select{width:100%}
+  .manual-complaint{min-width:0;max-width:100%;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono);font-size:var(--text-xs);line-height:1.55}
   .field small{color:var(--muted)}
   .pin-references,.contacts,.readiness-inputs,.artefact-reference,.confirmations{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}

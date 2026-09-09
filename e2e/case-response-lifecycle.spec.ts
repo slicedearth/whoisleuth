@@ -61,7 +61,7 @@ test('a pending Case save retains a later draft in the same form', async ({ page
   await expect(pin.getByLabel('Label', { exact: true })).toHaveValue('');
 });
 
-test('packet export rejects inputs changed during hashing and a stale delivery hand-off', async ({ page }) => {
+test('packet handoffs reject inputs changed during hashing and a stale delivery hand-off', async ({ page }) => {
   const record = caseRecord({ id: 'case-packet-selection', domain: 'packet-selection.invalid', actions: ['action-a', 'action-b'].map((id) => currentActionFixture({
     id, type: 'internal_review', recipient: `Owner ${id}`, contactSource: 'Analyst supplied internal owner',
     routeObservedAt: null, contactLimitations: ['Internal review only'], dueAt: null, targetState: 'ready_for_review',
@@ -82,28 +82,42 @@ test('packet export rejects inputs changed during hashing and a stale delivery h
   await openPacketWizardStep(packet, 'Export and record');
   const exportButton = packet.getByRole('button', { name: 'Export JSON draft or authorised packet', exact: true });
   await expect(exportButton).toBeEnabled();
-  await page.evaluate(() => {
-    const target = window as typeof window & { heldDigest?: boolean; releaseDigest?: () => void };
-    const original = SubtleCrypto.prototype.digest;
-    SubtleCrypto.prototype.digest = async function (...args: Parameters<SubtleCrypto['digest']>) {
-      SubtleCrypto.prototype.digest = original;
-      target.heldDigest = true;
-      await new Promise<void>((resolve) => { target.releaseDigest = resolve; });
-      return original.apply(this, args);
-    };
-  });
   let downloads = 0;
+  let copies = 0;
   page.on('download', () => { downloads += 1; });
-  try {
-    await exportButton.click();
-    await expect.poll(() => page.evaluate(() => (window as typeof window & { heldDigest?: boolean }).heldDigest)).toBe(true);
-    await openPacketWizardStep(packet, 'Prepare');
-    await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption('action-b');
-  } finally {
-    await page.evaluate(() => (window as typeof window & { releaseDigest?: () => void }).releaseDigest?.());
+  await page.exposeFunction('countFixtureCopy', () => { copies += 1; });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: () => (window as typeof window & { countFixtureCopy: () => Promise<void> }).countFixtureCopy(),
+  } }));
+  for (const [index, button] of [exportButton, packet.getByRole('button', { name: 'Copy email draft', exact: true }), packet.getByRole('button', { name: 'Preview manual complaint', exact: true })].entries()) {
+    await openPacketWizardStep(packet, 'Export and record');
+    await page.evaluate(() => {
+      const target = window as typeof window & { heldDigest?: boolean; releaseDigest?: () => void };
+      target.heldDigest = false;
+      const original = SubtleCrypto.prototype.digest;
+      SubtleCrypto.prototype.digest = async function (...args: Parameters<SubtleCrypto['digest']>) {
+        SubtleCrypto.prototype.digest = original;
+        target.heldDigest = true;
+        await new Promise<void>((resolve) => { target.releaseDigest = resolve; });
+        return original.apply(this, args);
+      };
+    });
+    try {
+      await button.click();
+      await expect.poll(() => page.evaluate(() => (window as typeof window & { heldDigest?: boolean }).heldDigest)).toBe(true);
+      await openPacketWizardStep(packet, 'Prepare');
+      await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption(index % 2 === 0 ? 'action-b' : 'action-a');
+    } finally {
+      await page.evaluate(() => (window as typeof window & { releaseDigest?: () => void }).releaseDigest?.());
+    }
+    await expect(exportButton).toBeHidden();
+    await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was downloaded or copied');
+    await openPacketWizardStep(packet, 'Export and record');
+    await expect(button).toBeEnabled();
+    expect(downloads).toBe(0);
+    expect(copies).toBe(0);
+    await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toHaveCount(0);
   }
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was downloaded');
-  expect(downloads).toBe(0);
   await openPacketWizardStep(packet, 'Export and record');
   await expect(packet.getByRole('button', { name: 'Continue to record delivery' })).toHaveCount(0);
   const downloadPromise = page.waitForEvent('download');

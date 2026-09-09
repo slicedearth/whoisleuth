@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import {
   expectNoHorizontalOverflow,
@@ -5,11 +6,20 @@ import {
   failNextBrowserLocalManifestWrite,
   holdBrowserLocalTransaction,
   readBrowserLocalCollection,
+  requiredValue,
+  useTheme,
 } from './helpers';
-import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
-import { caseWorkspaceActionStatus } from './case-response-fixtures';
+import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
+import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
-test('Quick records an observation, conclusion, response receipt, independent review and closure', async ({ page }) => {
+test.use({ timezoneId: 'UTC' });
+
+test('Quick completes reviewed packet handoff, a response receipt, recheck and closure', async ({ page }, testInfo) => {
+  test.slow();
+  await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
+  let collectionRequests = 0;
+  await page.route('**/api/lookup', async (route) => { collectionRequests += 1; await route.abort(); });
   await page.setViewportSize({ width: 390, height: 844 });
   await openCasesView(page);
   await createCase(page, 'quick-stages.invalid');
@@ -38,9 +48,11 @@ test('Quick records an observation, conclusion, response receipt, independent re
   await actions.getByLabel('Recipient or owner', { exact: true }).fill('Fixture abuse review desk');
   await actions.getByLabel('How this route was found', { exact: true }).fill('Fixture registration evidence');
   await actions.getByLabel('Route observed at', { exact: true }).fill('2026-09-01T10:00');
+  await actions.getByLabel('Route review after', { exact: true }).fill('2026-09-20T10:00');
   await actions.getByLabel(/Contact limitations/).fill('Selected registrar route; no delivery performed by the application.');
   await actions.getByRole('button', { name: 'Create drafting action', exact: true }).click();
-  for (const name of ['Ready for review', 'Mark reviewed', 'Authorise']) {
+  for (const [index, name] of ['Ready for review', 'Mark reviewed', 'Authorise'].entries()) {
+    await page.clock.setFixedTime(`2026-09-10T10:0${index + 1}:00.000Z`);
     await actions.getByRole('button', { name, exact: true }).click();
   }
   await expect(actions.getByRole('button', { name: 'Mark sent', exact: true })).toBeDisabled();
@@ -50,16 +62,80 @@ test('Quick records an observation, conclusion, response receipt, independent re
   await expect(packet.locator(':scope > summary')).toBeFocused();
   await expect(packet.locator(':scope > summary')).toBeInViewport({ ratio: 1 });
   await expect(packet.getByRole('combobox', { name: 'Audience profile', exact: true })).toBeVisible();
-
-  await stages.getByRole('button', { name: /3\. Response decision/ }).click();
-  await expect(actions.locator(':scope > details > summary')).toBeInViewport({ ratio: 1 });
-  await actions.getByLabel('Delivery reference', { exact: true }).fill('FIXTURE-DELIVERY-1');
+  await packet.getByRole('combobox', { name: 'Audience profile', exact: true }).selectOption('registrar');
+  await packet.getByLabel('Abuse category', { exact: true }).fill('Credential phishing');
+  await packet.getByLabel('Affected party', { exact: true }).fill('Example organisation');
+  await packet.getByLabel('Observed at', { exact: true }).fill('2026-09-10T10:00');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://quick-stages.invalid/review');
+  await packet.getByLabel('Observed harm', { exact: true }).fill('An observed credential form requires reviewed escalation.');
+  await expect(packet.getByRole('checkbox', { name: /Selected page observation/ })).toBeChecked();
+  await expect(packet).toContainText('2026-09-20T10:00:00.000Z');
+  await openPacketWizardStep(packet, 'Review');
+  for (const label of ['Infrastructure responsibility', 'Analyst authority', 'Contradiction review', 'Source limitations review']) {
+    const section = packet.locator('.readiness-editor section', { hasText: label });
+    await section.getByRole('combobox', { name: 'State', exact: true }).selectOption('complete');
+    await section.getByLabel('Detail', { exact: true }).fill(`Explicit fixture ${label.toLowerCase()}.`);
+  }
+  await packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true }).click();
+  for (const confirmation of await packet.locator('.confirmations input[type="checkbox"]').all()) await confirmation.check();
+  await packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true }).click();
+  await packet.getByRole('button', { name: 'Preview manual complaint', exact: true }).click();
+  const preview = packet.getByRole('textbox', { name: /^Exact manual complaint/ });
+  await expect(preview).toBeFocused();
+  const exactEmail = await preview.inputValue();
+  expect(exactEmail).toContain('An observed credential form');
+  const clipboard = { text: '' };
+  await page.exposeFunction('retainFixtureClipboard', (text: string) => { clipboard.text = text; });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (text: string) => (window as typeof window & { retainFixtureClipboard: (value: string) => Promise<void> }).retainFixtureClipboard(text),
+  } }));
+  await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
+  await expect.poll(() => clipboard.text).toBe(exactEmail);
+  for (const format of ['email draft', 'JSON draft or authorised packet']) {
+    const downloaded = page.waitForEvent('download');
+    await packet.getByRole('button', { name: `Export ${format}`, exact: true }).click();
+    const content = await readFile(requiredValue(await (await downloaded).path(), 'The exact packet download is missing.'), 'utf8');
+    if (format === 'email draft') expect(content).toBe(exactEmail);
+    else {
+      const exported = JSON.parse(content);
+      expect(exported).toMatchObject({ submissionPerformed: false, authorisation: { status: 'authorised', digestMatches: true } });
+      expect(exported.selectedEvidence).toHaveLength(1);
+    }
+  }
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark']) {
+      await useTheme(page, theme as 'light' | 'dark');
+      await preview.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!.state).toBe('authorised');
+  await packet.getByRole('button', { name: 'Continue to record delivery', exact: true }).click();
+  await expect(actions.getByLabel('Delivery reference', { exact: true })).toHaveValue(/^response-packet-sha256:[a-f0-9]{64}$/u);
+  await page.clock.setFixedTime('2026-09-10T10:10:00.000Z');
+  await actions.getByLabel(/^Event time/).fill('2026-09-10T10:05:12.345');
   await actions.getByRole('button', { name: 'Mark sent', exact: true }).click();
+  await page.clock.setFixedTime('2026-09-10T11:00:00.000Z');
   await actions.getByRole('combobox', { name: 'Provider outcome', exact: true }).selectOption('accepted_for_review');
   await actions.getByLabel('Reference', { exact: true }).fill('FIXTURE-RECEIPT-1');
   await actions.getByLabel('Outcome detail', { exact: true }).fill('Provider acknowledged the report for review.');
+  await actions.getByLabel(/^Event time/).fill('2026-09-10T10:30:20.678');
+  await actions.getByText('Event evidence and limitations', { exact: true }).click();
+  await actions.getByRole('combobox', { name: 'Receipt evidence', exact: true }).selectOption({ label: 'Selected page observation' });
+  await actions.getByLabel(/^Receipt limitations/).fill('Receipt confirms review only, not removal.');
   await actions.getByRole('button', { name: 'Record provider response', exact: true }).click();
 
+  const recheck = workspace.getByRole('link', { name: 'Prepare a recheck for quick-stages.invalid', exact: true });
+  await recheck.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/lookup\?q=quick-stages\.invalid$/u);
+  const selectedContext = page.getByRole('region', { name: 'Selected Case', exact: true });
+  await expect(selectedContext).toContainText('quick-stages.invalid');
+  expect(collectionRequests).toBe(0);
+  await selectedContext.getByRole('link', { name: 'quick-stages.invalid', exact: true }).click();
+  await openCaseResponseWorkspace(page, '', 'quick');
   const outcome = workspace.getByRole('region', { name: 'Case independent review and closure', exact: true });
   await expect(outcome.getByRole('list', { name: 'Independent observed-effect reviews' })).toHaveCount(0);
   await expect(outcome).toContainText('accepted for review');
@@ -83,7 +159,71 @@ test('Quick records an observation, conclusion, response receipt, independent re
   expect(stored.observedEffects.reviews).toEqual([expect.objectContaining({ state: 'not_reproduced', completeness: 'partial', limitations: ['One source failed; this does not establish takedown.'] })]);
   expect(stored.closures.records).toEqual([expect.objectContaining({ reason: 'unable_to_proceed' })]);
   await expect(workspace.getByRole('button', { name: 'Quick', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(stored.actions[0]!.history.at(-2)).toMatchObject({ occurredAt: '2026-09-10T10:05:12.345Z', sourceClass: 'analyst' });
+  expect(stored.actions[0]!.history.at(-1)).toMatchObject({ occurredAt: '2026-09-10T10:30:20.678Z', sourceClass: 'provider', evidencePinId: stored.evidencePins[0]!.id, limitations: ['Receipt confirms review only, not removal.'] });
+  expect(collectionRequests).toBe(0);
   await expectNoHorizontalOverflow(page);
+});
+
+test('Quick recipient refresh invalidates approval and stale manual previews cannot be copied', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-10T12:00:00.000Z');
+  const record = caseRecord({ id: 'route-review-case', domain: 'route-review.invalid', actions: [currentActionFixture({
+    id: 'route-review-action', type: 'registrar_report', recipient: 'Fixture registrar desk', contactSource: 'Fixture published route',
+    routeObservedAt: '2026-09-10T11:00:00.123Z', routeReviewAfter: '2026-09-10T13:00:00.456Z',
+    contactLimitations: ['Publisher expiry retained as the source deadline.'], dueAt: null, targetState: 'ready_for_review',
+    reference: null, followUpAt: '2026-10-01T00:00:00.000Z', outcome: null,
+    createdAt: '2026-09-10T11:00:00.000Z', updatedAt: '2026-09-10T11:30:00.000Z',
+  })] });
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  await addFixtureCasePin(page, 'Route review evidence');
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  const actions = workspace.getByRole('region', { name: 'Case response actions', exact: true });
+  for (const name of ['Mark reviewed', 'Authorise']) await actions.getByRole('button', { name, exact: true }).click();
+  const stages = workspace.getByRole('navigation', { name: 'Case response stages', exact: true });
+  await stages.getByRole('button', { name: /4\. Evidence handoff/ }).click();
+  const packet = workspace.locator('details[id^="case-response-preflight-"]');
+  await packet.getByRole('combobox', { name: 'Audience profile', exact: true }).selectOption('registrar');
+  await packet.getByLabel('Abuse category', { exact: true }).fill('Reviewed fixture concern');
+  await packet.getByLabel('Affected party', { exact: true }).fill('Example organisation');
+  await packet.getByLabel('Observed harm', { exact: true }).fill('A source-qualified review request.');
+  await packet.getByLabel('Observed at', { exact: true }).fill('2026-09-10T11:00');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://route-review.invalid/review');
+  await packet.getByRole('checkbox', { name: /Route review evidence/ }).check();
+  await openPacketWizardStep(packet, 'Export and record');
+  await packet.getByRole('button', { name: 'Preview manual complaint', exact: true }).click();
+  await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toBeVisible();
+  let copies = 0;
+  await page.exposeFunction('countFixtureClipboard', () => { copies += 1; });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: () => (window as typeof window & { countFixtureClipboard: () => Promise<void> }).countFixtureClipboard(),
+  } }));
+  await page.clock.setFixedTime('2026-09-10T13:00:00.457Z');
+  await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('freshness changed after the preview');
+  await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toHaveCount(0);
+  expect(copies).toBe(0);
+
+  await stages.getByRole('button', { name: /3\. Response decision/ }).click();
+  await actions.getByRole('button', { name: 'Review recipient and schedule', exact: true }).click();
+  await expect(actions.getByLabel('Route observed at', { exact: true })).toBeFocused();
+  await expect(actions.getByLabel('Route observed at', { exact: true })).toHaveValue('2026-09-10T11:00:00.123');
+  await expect(actions.getByLabel('Route review after', { exact: true })).toHaveValue('2026-09-10T13:00:00.456');
+  await actions.getByLabel('Route observed at', { exact: true }).fill('2026-09-10T13:00:00.457');
+  await actions.getByLabel('Route review after', { exact: true }).fill('2026-09-12T13:00:00.789');
+  await actions.getByRole('button', { name: 'Update metadata', exact: true }).click();
+  await expect(actions.getByRole('button', { name: 'Ready for review', exact: true })).toBeVisible();
+  const retained = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!;
+  expect(retained).toMatchObject({ state: 'drafting', routeObservedAt: '2026-09-10T13:00:00.457Z', routeReviewAfter: '2026-09-12T13:00:00.789Z', followUpAt: '2026-10-01T00:00:00.000Z' });
+  expect(retained.history.at(-1)).toMatchObject({ previousState: 'authorised', nextState: 'drafting', provenance: 'material_action_change' });
+  await stages.getByRole('button', { name: /4\. Evidence handoff/ }).click();
+  await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('preview is out of date');
+  expect(copies).toBe(0);
+  await packet.getByRole('button', { name: 'Refresh manual complaint preview', exact: true }).click();
+  await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toBeVisible();
+  await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
+  await expect.poll(() => copies).toBe(1);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!.state).toBe('drafting');
 });
 
 test('a Quick closure without a response action preserves validation, failed-write and committed-refresh outcomes', async ({ page }) => {

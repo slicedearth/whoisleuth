@@ -280,15 +280,20 @@
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
       <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from exact incident-link hostnames and the selected Case types.</p></div></div>
       <div class="route-groups">
-        {#each routeGroups as group (group.key)}
+        {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}
           <article>
             <header><strong>{group.label}</strong><span class:stale={group.resolution.state === 'stale'}>{group.resolution.state}</span></header>
             <ul class="matched-targets">{#each group.targets as target}<li>{target}</li>{/each}</ul>
             <p>{group.resolution.limitation}</p>
-            {#each group.resolution.routes as route}
+            {#each group.resolution.routes as route (route.id)}
               <section class="route">
                 <div><strong>{route.label}</strong><span>Reviewed {route.reviewedAt} · recheck before {route.reviewAfter}</span></div>
-                <p>Prepare: {route.preparation.join('; ')}.</p>
+                <fieldset class="route-checklist">
+                  <legend>Preparation checklist</legend>
+                  {#each route.preparation as item, index (`${index}:${item}`)}
+                    <label><input type="checkbox"><span>{item}</span></label>
+                  {/each}
+                </fieldset>
                 <p>{route.privacyNote}</p>
                 <div class="route-actions"><a class="btn" href={routeHref(route)} target={route.channel === 'url' ? '_blank' : undefined} rel={route.channel === 'url' ? 'noopener noreferrer' : undefined}>{route.channel === 'email' ? `Prepare email to ${route.contact}` : 'Open official route'}<span class="sr-only"> ({route.channel === 'email' ? 'opens the mail application' : 'opens in a new tab'})</span></a><a href={route.guidanceUrl} target="_blank" rel="noopener noreferrer">Official guidance<span class="sr-only"> (opens in a new tab)</span></a><button class="btn" type="button" disabled={busy || typesDirty || reportingActionExists(route)} title={typesDirty ? 'Save the selected Case types before creating a reporting action.' : undefined} onclick={() => void createReportingAction(route)}>{reportingActionExists(route) ? 'Action already active' : typesDirty ? 'Save Case types first' : 'Create drafting action'}</button></div>
               </section>
@@ -302,6 +307,7 @@
 
 <style>
   .workflow-details{display:grid;gap:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .route-checklist{display:grid;min-width:0;gap:7px;margin:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.route-checklist legend{padding:0 5px;font-weight:650}.route-checklist label{display:flex;align-items:start;gap:7px;cursor:pointer}.route-checklist input{width:auto;flex:none;margin-top:3px}.route-checklist span{min-width:0;overflow-wrap:anywhere}
   .workflow-details>header,.section-heading,.route-groups article>header,.route>div:first-child{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.workflow-details h4,.workflow-details h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .case-number{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px;max-width:100%}.case-number>span{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-number code{max-width:min(100%,430px);padding:5px 7px;background:var(--panel-raised);font-size:var(--text-2xs);overflow-wrap:anywhere;white-space:normal}.case-number button{grid-column:2;grid-row:2}
   .case-types{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.case-types>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}.case-types>summary small{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-align:right}.case-types>form{display:grid;gap:8px;padding:0 10px 10px}.case-types fieldset{display:grid;gap:10px;min-width:0;margin:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.case-types fieldset>p,.section-heading p,.route p,.empty{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.case-types>form>button{justify-self:start}

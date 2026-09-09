@@ -1008,14 +1008,25 @@ function projectActionHistory(
 ): { history: CaseActionTransitionEvent[]; state: CaseActionState; conflicts: number } {
   let state: CaseActionState | null = null;
   let conflicts = 0;
-  const history = source.map((event, index) => {
-    if (state === null && omitted > 0 && index === 0 && event.previousState !== null) state = event.previousState;
-    const applied = event.previousState === state
-      && isLegalCaseActionTransition(event.previousState, event.nextState, event.sourceClass);
-    if (applied) state = event.nextState;
-    else conflicts += 1;
-    return { ...event, applied };
-  });
+  const history: CaseActionTransitionEvent[] = [];
+  for (let start = 0; start < source.length;) {
+    let end = start + 1;
+    while (end < source.length && source[end]!.occurredAt === source[start]!.occurredAt) end += 1;
+    const cohort = source.slice(start, end);
+    if (state === null && omitted > 0 && start === 0 && cohort[0]!.previousState !== null) state = cohort[0]!.previousState;
+    while (cohort.length) {
+      // State prerequisites order equal-time transitions. Competing successors
+      // retain the existing deterministic conflict order; times are unchanged.
+      const eligible = cohort.findIndex((event) => event.previousState === state);
+      const [event] = cohort.splice(eligible < 0 ? 0 : eligible, 1);
+      const applied = event!.previousState === state
+        && isLegalCaseActionTransition(event!.previousState, event!.nextState, event!.sourceClass);
+      if (applied) state = event!.nextState;
+      else conflicts += 1;
+      history.push({ ...event!, applied });
+    }
+    start = end;
+  }
   return { history, state: state ?? 'drafting', conflicts };
 }
 
@@ -1065,7 +1076,8 @@ function normalizeActionHistory(
   const totalOmitted = omitted + invalid + duplicateConflict;
   const projected = projectActionHistory(history, totalOmitted);
   const retainedLimitations = limitations(item.historyLimitations).filter((item) =>
-    !/^\d+ earlier action transition events? omitted by bounded retention\.$/u.test(item));
+    !/^\d+ earlier action transition events? omitted by bounded retention\.$/u.test(item)
+    && !/^\d+ retained concurrent transition(?: is|s are) not applied to the current-state projection\.$/u.test(item));
   const historyLimitations = lifecycleLimitations([
     ...(totalOmitted ? [`${totalOmitted} earlier action transition event${totalOmitted === 1 ? '' : 's'} omitted by bounded retention.`] : []),
     ...(invalid ? [`${invalid} malformed or illegal action transition event${invalid === 1 ? '' : 's'} omitted during normalisation.`] : []),
