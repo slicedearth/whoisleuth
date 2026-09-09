@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { unitTestExecutablePath } from '../../tools/toolchain-compatibility.mts';
 
@@ -135,6 +138,40 @@ ${invocations}`;
   assertSuccessfulShellProcess(child, 'Zsh completion batch');
   const results = parseMarkedResults(child.stdout, cases);
   return (words) => lookupResult(results, words);
+}
+
+export function prepareFishCompletionBatch(
+  script: string,
+  lines: readonly string[],
+  repositoryRoot: string,
+): (line: string) => readonly string[] {
+  const literal = (value: string) => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  const invocations = lines.map((line, index) => `
+printf '${START_MARKER}${index}__\\n'
+complete --do-complete ${literal(line)}
+printf '${END_MARKER}${index}__\\n'
+`).join('\n');
+  const harness = `
+function whoisleuth
+    command "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts $argv
+end
+${script}
+${invocations}`;
+  const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-fish-completion-'));
+  try {
+    const child = spawnSync(unitTestExecutablePath('fish'), ['--no-config', '--private', '-c', harness], {
+      ...SHELL_COMPLETION_PROCESS_OPTIONS,
+      cwd: repositoryRoot,
+      env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath,
+        XDG_CONFIG_HOME: directory, XDG_DATA_HOME: directory, XDG_CACHE_HOME: directory },
+    });
+    assertSuccessfulShellProcess(child, 'Fish completion batch');
+    assert.equal(child.stderr.trim(), '', `Fish completion diagnostics: ${child.stderr.trim().slice(0, 2_048)}`);
+    const results = parseMarkedResults(child.stdout, lines.map((line) => [line]));
+    return (line) => lookupResult(results, [line]).map((candidate) => candidate.split('\t')[0]!);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 function parsePowerShellResults(stdout: string, expected: readonly string[]): ReadonlyMap<string, readonly string[]> {

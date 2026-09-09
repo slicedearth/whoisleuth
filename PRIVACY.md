@@ -235,6 +235,9 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+Optional metadata CSV retains source versions, collection and report times,
+collection origin and source-health states alongside the selected results.
+
 The offline `mail-headers` command parses only the bounded header block from a
 selected message or standard input. Its output can retain a header digest,
 domain-only identity and routing, reported authentication states, and

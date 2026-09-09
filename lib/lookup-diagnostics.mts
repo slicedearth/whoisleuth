@@ -5,6 +5,31 @@ import { FEATURE_DISABLED_ERROR_CODE } from './feature-policy.mts';
 
 const LOOKUP_DIAGNOSTICS_VERSION = 8;
 const LOOKUP_LEGACY_DIAGNOSTICS_VERSION = 7;
+const LOOKUP_SOURCE_STATES = Object.freeze([
+  'success', 'partial', 'not_found', 'skipped', 'error', 'unsupported',
+  'not_applicable', 'unavailable', 'rate_limited', 'complete', 'disabled', 'stale',
+] as const);
+type LookupSourceState = typeof LOOKUP_SOURCE_STATES[number];
+const SOURCE_STATES: ReadonlySet<string> = new Set(LOOKUP_SOURCE_STATES);
+
+function lookupDiagnosticStates(value: unknown): Readonly<Record<string, LookupSourceState | null>> {
+  const record = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown> : {};
+  const diagnostics = record(value);
+  const candidates = {
+    rdap: record(diagnostics.rdap).status,
+    registrar_rdap: record(record(diagnostics.rdap).registrar).status,
+    whois: record(diagnostics.whois).status,
+    availability: record(diagnostics.availability).status,
+    reverse_dns: record(diagnostics.reverseDns).status,
+    network_context: record(diagnostics.network).status,
+    security_txt: record(diagnostics.securityTxt).status,
+    sslbl: record(diagnostics.sslbl).status,
+  };
+  return Object.freeze(Object.fromEntries(Object.entries(candidates).map(([source, state]) => [
+    source, typeof state === 'string' && SOURCE_STATES.has(state) ? state as LookupSourceState : null,
+  ])));
+}
 const LOOKUP_TIMING_VERSION = 1;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const LOOKUP_TIMING_SOURCE_ORDER = Object.freeze([
@@ -117,11 +142,13 @@ function createLookupTimingTracker(
 export {
   LOOKUP_DIAGNOSTICS_VERSION,
   LOOKUP_LEGACY_DIAGNOSTICS_VERSION,
+  LOOKUP_SOURCE_STATES,
   LOOKUP_TIMING_VERSION,
   MAX_LOOKUP_TIMING_MS,
   LOOKUP_ERROR_CODES,
   boundedSourceDetail,
   createLookupTimingTracker,
   errorMessage,
+  lookupDiagnosticStates,
 };
-export type { LookupTimingSource };
+export type { LookupSourceState, LookupTimingSource };

@@ -357,6 +357,24 @@ describe('canonical CLI command registry', () => {
     }
   });
 
+  test('treats every argument after the option separator as a literal positional value', () => {
+    for (const source of ['--help', '-h', '--config', '--profile', '--', '-evidence.json']) {
+      const action = parseCliArguments(['verify-artifact', '--json', '--', source]);
+      assert.equal(action.action, 'verify-artifact');
+      if (action.action !== 'verify-artifact') throw new Error('Expected artifact verification.');
+      assert.equal(action.source, source);
+      assert.equal(action.output, 'json');
+      assert.equal(cliMetaActionForInvocation(['verify-artifact', '--', source]), null);
+    }
+    assert.equal(cliMetaActionForInvocation(['lookup', '--observer', '--help']), null);
+    assert.throws(() => parseCliArguments(['lookup', '--observer', '--help', '--plan', 'example.test']), /--observer requires/u);
+    assert.throws(() => parseCliArguments(['verify-artifact', '--output', '--', '-evidence.json']), /requires one bounded file path/u);
+    assert.equal(cliInvocationNetworkEffect('lookup', ['--', '--plan']), 'network');
+    assert.equal(cliInvocationNetworkEffect('doctor', ['--', '--network']), 'offline');
+    assert.equal(cliInvocationNetworkEffect('workflow-run', ['--', '--approve-network']), 'offline');
+    assert.equal(cliInvocationNetworkEffect('lookup', ['--observer', '--plan']), 'network');
+  });
+
   test('binds every declared option constraint to parser rejection', () => {
     for (const definition of CLI_COMMAND_REGISTRY) {
       const command = definition.command;

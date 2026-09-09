@@ -16,6 +16,7 @@ import {
   SHELL_COMPLETION_PROCESS_OPTIONS,
   assertSuccessfulShellProcess,
   prepareBashCompletionBatch,
+  prepareFishCompletionBatch,
   preparePowerShellCompletionBatch,
   prepareZshCompletionBatch,
 } from './support/shell-completion-harness.mts';
@@ -91,7 +92,6 @@ describe('CLI shell completion', () => {
     const syntax = spawnSync(unitTestExecutablePath('bash'), ['-n'], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: bash });
     assertSuccessfulShellProcess(syntax, 'Bash completion syntax check');
     assert.doesNotMatch(bash, /--preset\) COMPREPLY=.*custom/u);
-    assert.match(bash, /--palette\) COMPREPLY=.*auto light dark/u);
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
       assert.match(bash, new RegExp(pattern, 'u'));
     }
@@ -131,7 +131,6 @@ describe('CLI shell completion', () => {
     assert.match(zsh, /command="lookup"/u);
     assert.match(zsh, /--plan --json/u);
     assert.doesNotMatch(zsh, /--preset\) compadd -- .*custom/u);
-    assert.match(zsh, /--palette\) compadd -- auto light dark/u);
     for (const pattern of ['lookup:--save-lookup', 'monitor-once:--previous', 'dnssec-validate:--trust-anchor']) {
       assert.match(zsh, new RegExp(pattern, 'u'));
     }
@@ -145,7 +144,7 @@ describe('CLI shell completion', () => {
     const fish = buildShellCompletion('fish');
     assert.match(fish, /-l output -r -F/u);
     assert.match(fish, /-l save-lookup -r -F/u);
-    assert.match(fish, /__fish_prev_arg_in --palette.*-a 'auto light dark'/u);
+    assert.match(fish, /__fish_prev_arg_in --palette.*__whoisleuth_values --palette auto light dark/u);
     assert.match(fish, /__whoisleuth_position_is 0 completion.*bash zsh fish powershell/u);
     assert.match(fish, /__whoisleuth_direct_lookup_target/u);
     assert.match(fish, /__whoisleuth_command_is lookup; or __whoisleuth_direct_lookup_target/u);
@@ -178,6 +177,8 @@ describe('CLI shell completion', () => {
     assertSuccessfulShellProcess(powershellSyntax, 'PowerShell completion syntax check');
     const powershellExpectedCases = [
       ['whoisleuth example.test --de', ['--deep']],
+      ['whoisleuth lookup --h', ['--help', '--html']],
+      ['whoisleuth lookup --observer ', []],
       ['whoisleuth report.json --de', []],
       ['whoisleuth case-pack package.json --audience ', ['internal', 'trusted', 'public']],
       ['whoisleuth sharing-review package.json --marking ', ['clear', 'green', 'amber', 'amber-strict', 'red']],
@@ -239,6 +240,30 @@ describe('CLI shell completion', () => {
     }
   });
 
+  test('Fish dispatches command, option-value and direct-target completions natively', () => {
+    const script = buildShellCompletion('fish');
+    const syntax = spawnSync(unitTestExecutablePath('fish'), ['--no-config', '--private', '--no-execute'], {
+      ...SHELL_COMPLETION_PROCESS_OPTIONS, input: script,
+    });
+    assertSuccessfulShellProcess(syntax, 'Fish completion syntax');
+    const cases = [
+      ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
+      ['whoisleuth lookup --h', ['--help', '--html']],
+      ['whoisleuth lookup --observer ', []],
+      ['whoisleuth case-pack package.json --audience ', ['internal', 'trusted', 'public']],
+      ['whoisleuth lookup --palette ', ['auto', 'light', 'dark']],
+      ['whoisleuth example.test --palette ', ['auto', 'light', 'dark']],
+      ['whoisleuth bulk package.json --concurrency ', ['1', '2', '3', '4', '5', '6', '7', '8']],
+      ['whoisleuth bulk package.json --deep --concurrency ', ['1', '2', '3']],
+      ['whoisleuth example.test --de', ['--deep']],
+      ['whoisleuth report.json --de', []],
+      ['whoisleuth http --scenario ', []],
+    ] as const;
+    const complete = prepareFishCompletionBatch(script, ['whoisleuth ', ...cases.map(([line]) => line)], REPOSITORY_ROOT);
+    for (const command of CLI_COMMANDS) assert.ok(complete('whoisleuth ').includes(command), command);
+    for (const [line, expected] of cases) assert.deepEqual([...complete(line)].sort(), [...expected].sort(), line);
+  });
+
   test('completes ordinary filenames as one literal argument, including spaces, quotes and metacharacters', () => {
     const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-completion-'));
     try {
@@ -263,6 +288,13 @@ describe('CLI shell completion', () => {
       }
       const lines = positions.flatMap((position) => names.map((name) => `${position.join(' ')} ${join(directory, name.split(' ')[0]!)}`));
       const directoryLine = `whoisleuth verify-artifact ${join(directory, 'Nested')}`;
+      const completeFish = prepareFishCompletionBatch(buildShellCompletion('fish'), [...lines, directoryLine], REPOSITORY_ROOT);
+      assert.deepEqual(lines.flatMap((line) => {
+        const matches = completeFish(line);
+        assert.equal(matches.length, 1, line);
+        return matches;
+      }), positions.flatMap(() => names.map((name) => join(directory, name))));
+      assert.deepEqual(completeFish(directoryLine), [`${join(directory, 'Nested Evidence')}/`]);
       const completePowerShell = preparePowerShellCompletionBatch(buildShellCompletion('powershell'), [...lines, directoryLine], REPOSITORY_ROOT);
       const candidates = lines.map((line) => {
         const matches = completePowerShell(line);
@@ -327,8 +359,6 @@ $results | ConvertTo-Json -Compress -AsArray`], { ...SHELL_COMPLETION_PROCESS_OP
       assert.match(scripts[2], new RegExp(`-l ${option.slice(2)} -r`, 'u'));
       assert.match(scripts[3], new RegExp(`'${option}'`, 'u'));
     }
-    assert.match(scripts[0], /--scenario\) COMPREPLY=.*registered not_found inconclusive/u);
-    assert.match(scripts[1], /--scenario\) compadd -- registered not_found inconclusive/u);
     assert.match(scripts[2], /-l scenario -r/u);
     assert.match(scripts[3], /'--scenario' = @\('registered', 'not_found', 'inconclusive'\)/u);
     for (const option of ['manifest', 'mmdb']) {
@@ -350,6 +380,61 @@ $results | ConvertTo-Json -Compress -AsArray`], { ...SHELL_COMPLETION_PROCESS_OP
     assert.equal(stderr.value(), '');
     assert.deepEqual(parseCliArguments(['completion', 'fish']), { action: 'completion', shell: 'fish' });
     assert.deepEqual(parseCliArguments(['completion', 'powershell']), { action: 'completion', shell: 'powershell' });
+  });
+
+  test('omits supplied and incompatible options while retaining repeatable selections and valid enum alternatives', () => {
+    const cases = [
+      { args: ['lookup', '--json', '--'], absent: ['--json', '--junit', '--quiet', '--summary', '--help', '--no-attribution'], present: ['--deep', '--observer'] },
+      { args: ['lookup', '--quiet', '--'], absent: ['--output', '--force', '--json'], present: ['--deep'] },
+      { args: ['lookup', '--force', '--'], absent: ['--quiet', '--events', '--browse'], present: ['--output'] },
+      { args: ['bulk', '--plan', '--'], absent: ['--csv', '--resume', '--checkpoint', '--events', '--plan'], present: ['--json', '--deep'] },
+      { args: ['discover', '--preset', 'common', '--'], absent: ['--preset', '--dictionary', '--families'], present: ['--json'] },
+      { args: ['discover', '--dictionary', 'words.txt', '--preset', ''], absent: ['common'], present: ['impersonation', 'all'] },
+      { args: ['workflow-run', '--select', 'collect=example.test', '--'], absent: ['--help'], present: ['--select', '--resume'] },
+      { args: ['verify-artifact', '--', '--help', '--'], absent: ['--json', '--help', '--output'], present: [] },
+      { args: ['lookup', '--', '--plan', '--'], absent: ['--json', '--deep', '--help'], present: [] },
+    ];
+    const words = cases.map(({ args }) => ['whoisleuth', ...args]);
+    const bash = prepareBashCompletionBatch(buildShellCompletion('bash'), words, REPOSITORY_ROOT);
+    const zsh = prepareZshCompletionBatch(buildShellCompletion('zsh'), words, REPOSITORY_ROOT);
+    const lines = words.map((tokens) => tokens.join(' '));
+    const powershell = preparePowerShellCompletionBatch(buildShellCompletion('powershell'), lines, REPOSITORY_ROOT);
+    const fish = prepareFishCompletionBatch(buildShellCompletion('fish'), lines, REPOSITORY_ROOT);
+    for (const [index, entry] of cases.entries()) {
+      for (const [shell, candidates] of [
+        ['bash', bash(words[index]!)], ['zsh', zsh(words[index]!)], ['powershell', powershell(lines[index]!)], ['fish', fish(lines[index]!)],
+      ] as const) {
+        for (const value of entry.present) assert.ok(candidates.includes(value), `${shell}: ${lines[index]} must include ${value}`);
+        for (const value of entry.absent) assert.ok(!candidates.includes(value), `${shell}: ${lines[index]} must omit ${value}`);
+      }
+    }
+  });
+
+  test('keeps option-like filenames literal and excludes flag suggestions at the positional boundary', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-completion-separator-'));
+    try {
+      writeFileSync(join(directory, '-evidence.json'), '{}\n');
+      const separated = ['whoisleuth', 'verify-artifact', '--', '-evidence'];
+      const ordinary = ['whoisleuth', 'verify-artifact', '-evidence'];
+      const bash = prepareBashCompletionBatch(buildShellCompletion('bash'), [separated, ordinary], directory);
+      assert.deepEqual(bash(separated), ['-evidence.json']);
+      assert.deepEqual(bash(ordinary), []);
+      const zsh = prepareZshCompletionBatch(buildShellCompletion('zsh'), [separated, ordinary], directory);
+      assert.deepEqual(zsh(separated), ['__FILES__']);
+      assert.ok(!zsh(ordinary).includes('__FILES__'));
+      const fish = prepareFishCompletionBatch(buildShellCompletion('fish'), [separated.join(' '), ordinary.join(' ')], directory);
+      assert.deepEqual(fish(separated.join(' ')), ['-evidence.json']);
+      assert.deepEqual(fish(ordinary.join(' ')), []);
+      const powershellPath = 'whoisleuth verify-artifact -- ./-evidence';
+      const powershell = preparePowerShellCompletionBatch(buildShellCompletion('powershell'), [powershellPath, separated.join(' '), ordinary.join(' ')], directory);
+      // PowerShell can use its own filename fallback for a dash-prefixed word after --.
+      assert.equal(powershell(powershellPath).length, 1);
+      assert.match(powershell(powershellPath)[0]!, /-evidence\.json/u);
+      for (const candidate of powershell(separated.join(' '))) assert.match(candidate, /(?:^|[/\\])-evidence\.json'?$/u);
+      for (const candidate of powershell(ordinary.join(' '))) assert.match(candidate, /^(?:'?[./]|'?[A-Za-z]:[/\\]).*-evidence\.json'?$/u);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test('prints a generated manual with every supported command and stable exit statuses', async () => {

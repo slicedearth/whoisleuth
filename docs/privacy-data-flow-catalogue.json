@@ -2721,7 +2721,7 @@
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.",
+        "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],
@@ -3743,7 +3743,7 @@
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.",
+        "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],

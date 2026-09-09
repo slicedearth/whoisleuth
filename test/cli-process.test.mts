@@ -1,11 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } from '../cli/errors.mts';
+import { CLI_COMMANDS, HELP, commandHelp } from '../cli/command-reference.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -64,9 +66,9 @@ function savedLookup() {
   };
 }
 
-function runBinary(args: string[], input = '') {
+function runBinary(args: string[], input = '', cwd = ROOT) {
   return spawnSync(process.execPath, [BIN, ...args], {
-    cwd: ROOT,
+    cwd,
     encoding: 'utf8',
     input,
     timeout: 10_000,
@@ -76,6 +78,25 @@ function runBinary(args: string[], input = '') {
 }
 
 describe('installed CLI process boundary', () => {
+  test('ordinary explicit help renders from static metadata without execution, input or configuration modules', () => {
+    const guard = `import { registerHooks } from 'node:module';
+registerHooks({ resolve(specifier, context, next) {
+  if (/\\/(?:runner|config-profile|input|output-file|interactive-launcher|.*-command-runner)\\.m[jt]s$/.test(specifier)) {
+    throw new Error('Help attempted to load an execution module: ' + specifier);
+  }
+  return next(specifier, context);
+} });`;
+    for (const command of [null, ...CLI_COMMANDS]) {
+      const args = command ? [command, '--help'] : ['--help'];
+      const result = spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(guard)}`, BIN, ...args], {
+        cwd: ROOT, encoding: 'utf8', timeout: 10_000, maxBuffer: 256 * 1024,
+        env: { ...process.env, NO_COLOR: '1', XDG_CONFIG_HOME: '/unavailable/configuration' },
+      });
+      assert.equal(result.status, 0, `${command ?? 'root'}: ${result.stderr}`);
+      assert.equal(result.stderr, '');
+      assert.equal(result.stdout, command ? commandHelp(command) : HELP);
+    }
+  });
   test('version preserves the installed executable stream and exit contract', () => {
     const packageDocument = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as unknown;
     assert.ok(packageDocument && typeof packageDocument === 'object' && !Array.isArray(packageDocument));
@@ -125,6 +146,21 @@ describe('installed CLI process boundary', () => {
     assert.equal(document.registrarPublicationComparison.counts.conflict, 0);
     assert.ok(document.registrarPublicationComparison.counts.equivalent > 0);
     assert.doesNotMatch(result.stdout, /fixtureSecret|fixture response body|registrarSecret|private@example/);
+  });
+
+  test('opens a literal help or profile filename after the separator without invoking help or configuration', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-literal-input-'));
+    try {
+      for (const filename of ['--help', '--profile']) {
+        writeFileSync(join(directory, filename), JSON.stringify(savedLookup()));
+        const result = runBinary(['compare', '--json', '--', filename], '', directory);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stderr, '');
+        assert.equal(JSON.parse(result.stdout).schema, 'whoisleuth.cli.compare');
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

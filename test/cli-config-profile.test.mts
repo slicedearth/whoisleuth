@@ -13,6 +13,20 @@ function configuration(argumentsList: string[] = ['--fast', '--no-color', '--con
 }
 
 describe('CLI configuration profiles', () => {
+  test('preserves option-like filenames and values without reading or overriding profile defaults', async () => {
+    let reads = 0;
+    const options = { readConfig: async () => { reads += 1; return configuration(['--no-color']); } };
+    for (const command of ['verify-artifact', 'registry-scaffold']) {
+      const argv = [command, '--', '--config', '--profile', '--help'];
+      assert.deepEqual(await resolveCliProfileArguments(argv, options), argv);
+    }
+    assert.deepEqual(await resolveCliProfileArguments(['lookup', '--observer', '--profile', '--plan', 'example.test'], options),
+      ['lookup', '--observer', '--profile', '--plan', 'example.test']);
+    assert.equal(reads, 0);
+    assert.deepEqual(await resolveCliProfileArguments(['verify-artifact', '--profile', 'careful', '--', '--palette'], options),
+      ['verify-artifact', '--no-color', '--', '--palette']);
+    assert.equal(reads, 1);
+  });
   test('loads only an explicitly selected file or profile and lets command flags override defaults', async () => {
     let readPath = '';
     const resolved = await resolveCliProfileArguments(['bulk', '--profile', 'careful', '--deep', '--concurrency', '1'], {

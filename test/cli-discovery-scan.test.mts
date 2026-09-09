@@ -191,6 +191,21 @@ describe('discovery scan allowlists and relationships', () => {
     assert.match(formatDiscoveryScanCsv(document), /"'=HYPERLINK\(""https:\/\/example\.invalid""\)"/u);
   });
 
+  test('metadata CSV retains source versions, previous observation clocks and the original compact columns', () => {
+    const retained = { ...success(0, 'one.example'), observedAt: '2026-07-31T00:00:00.000Z', collectionOrigin: 'resumed_checkpoint' as const };
+    const document = buildDiscoveryScanDocument(candidates().slice(0, 1), [retained], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set());
+    const compact = formatDiscoveryScanCsv(document);
+    assert.equal(compact.split('\n')[0], 'domain,availability,confidence,review_lane,mutation_types,a,aaaa,ns,mx,relationship_ids,error');
+    const enriched = formatDiscoveryScanCsv(document, true);
+    assert.ok(enriched.split('\n')[1]!.startsWith(`${compact.split('\n')[1]},${document.schema},${document.version},`));
+    assert.match(enriched, /,2026-07-31T00:00:00\.000Z,2026-08-01T00:00:00\.000Z,resumed_checkpoint,deep,8,/u);
+    assert.match(enriched, /""whois"":""skipped""/u);
+    assert.equal(formatDiscoveryScanCsv(document), compact);
+    for (const option of ['--csv', '--json', '--plan', '--quiet']) {
+      assert.throws(() => parseCliArguments(['discover-scan', 'example.test', '--csv-with-metadata', option]), CliUsageError);
+    }
+  });
+
   test('reversibly escapes terminal-unsafe collection errors in JSONL output', () => {
     const error = 'visible\u009b[31m\u202ereversed';
     const failed: BulkLookupResult = { index: 0, query: 'one.example', ok: false, error };
@@ -415,6 +430,33 @@ describe('discovery observation snapshots', () => {
 });
 
 describe('discover-scan runner', () => {
+  test('metadata CSV preserves a partial exit and emits events only on stderr', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let requests = 0;
+    const code = await runCli(['discover-scan', 'brand.example', '--scan-limit', '2', '--csv-with-metadata', '--events'], {
+      stdout: stdout.stream, stderr: stderr.stream, now: () => '2026-08-02T00:00:00.000Z',
+      loadTyposquatGenerator: async () => ({
+        MAX_GENERATION_TLDS: 20, MUTATION_FAMILY_IDS: ['character_omission'],
+        MUTATION_LABELS: { character_omission: 'Character omission' },
+        normalizeMutationFamilyIds: () => [], normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+        generateTyposquatCandidateSet: () => ({ inputValid: true, candidates: candidates(), version: 1 }),
+      }),
+      classifyQuery: classified,
+      runUnifiedLookup: async (item) => {
+        requests += 1;
+        if (item.value === 'two.example') throw new Error('=fixture failure');
+        return compactResult(item.value);
+      },
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(requests, 2);
+    assert.match(stdout.value(), /^domain,availability,/u);
+    assert.match(stdout.value(), /,source_schema,source_version,observed_at,report_generated_at,/u);
+    assert.match(stdout.value(), /,'=fixture failure,whoisleuth\.cli\.discovery-scan,/u);
+    assert.doesNotMatch(stdout.value(), /\x1b|"event":/u);
+    assert.match(stderr.value(), /"event":"started"/u);
+  });
   test('rejects invalid or non-public resolver selections before planning or generation', async () => {
     let generationCalls = 0;
     for (const resolver of ['not-an-ip', '127.0.0.1', '192.0.2.1']) {

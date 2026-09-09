@@ -71,7 +71,7 @@ actions and packet preparation remain deliberate browser steps.
 Process selected local input:
 
 ```bash
-whoisleuth bulk domains.txt --csv
+whoisleuth bulk domains.txt --csv-with-metadata
 whoisleuth discover example.test --preset common --jsonl
 whoisleuth verify-artifact lookup.json --json --strict-exit
 whoisleuth compare lookup.json --json

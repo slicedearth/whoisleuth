@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { LOOKUP_SOURCE_STATES, lookupDiagnosticStates, type LookupSourceState as SourceState } from '../lib/lookup-diagnostics.mts';
 import {
   normalizeExplicitIsoTimestamp,
   normalizeLegacyIsoTimestamp,
@@ -23,19 +24,6 @@ export const MAX_SOURCE_RELIABILITY_DOCUMENTS = 100;
 export const MAX_SOURCE_RELIABILITY_SOURCES = 64;
 
 type UnknownRecord = Record<string, unknown>;
-type SourceState =
-  | 'success'
-  | 'partial'
-  | 'not_found'
-  | 'skipped'
-  | 'error'
-  | 'unsupported'
-  | 'not_applicable'
-  | 'unavailable'
-  | 'rate_limited'
-  | 'complete'
-  | 'disabled'
-  | 'stale';
 type SourceAccumulator = {
   states: Map<SourceState, number>;
   observationDurations: number[];
@@ -122,20 +110,7 @@ export type SourceReliabilityReport = Readonly<{
 }>;
 
 const SOURCE_RE = /^[a-z][a-z0-9_-]{0,39}$/u;
-const STATES = new Set<SourceState>([
-  'success',
-  'partial',
-  'not_found',
-  'skipped',
-  'error',
-  'unsupported',
-  'not_applicable',
-  'unavailable',
-  'rate_limited',
-  'complete',
-  'disabled',
-  'stale',
-]);
+const STATES = new Set<SourceState>(LOOKUP_SOURCE_STATES);
 const BULK_HEALTH_VERSIONS = new Set([1, 2, CLI_BULK_SCHEMA_VERSION]);
 const PROVIDER_IDS = new Set(LOOKUP_THREAT_INTELLIGENCE_PROVIDERS.map((provider) => provider.id));
 const REPORT_KEYS = new Set([
@@ -347,20 +322,7 @@ function collectTiming(document: UnknownRecord, store: Map<string, SourceAccumul
 }
 
 function collectDiagnostics(document: UnknownRecord, store: Map<string, SourceAccumulator>): void {
-  const diagnostics = record(document.diagnostics);
-  if (!diagnostics) return;
-  const fixed: Array<[string, unknown]> = [
-    ['rdap', record(diagnostics.rdap)?.status],
-    ['registrar_rdap', record(record(diagnostics.rdap)?.registrar)?.status],
-    ['whois', record(diagnostics.whois)?.status],
-    ['availability', record(diagnostics.availability)?.status],
-    ['reverse_dns', record(diagnostics.reverseDns)?.status],
-    ['network_context', record(diagnostics.network)?.status],
-    ['security_txt', record(diagnostics.securityTxt)?.status],
-    ['sslbl', record(diagnostics.sslbl)?.status],
-  ];
-  for (const [source, value] of fixed) {
-    const state = safeState(value);
+  for (const [source, state] of Object.entries(lookupDiagnosticStates(document.diagnostics))) {
     if (state) addState(store, source, state);
   }
 }

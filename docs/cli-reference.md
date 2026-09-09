@@ -77,10 +77,19 @@ refused. Output goes to the terminal unless a command supports `--output`.
 Private output is written atomically and an existing path is refused unless
 replacement is explicit.
 
+`--` ends option processing. All later arguments are literal positional inputs,
+including names such as `--help`. Use `./-evidence.json` for a hyphen-prefixed
+filename when completing paths across shells. Options must precede `--`.
+
 Terminal text is the default. JSON, JSONL, CSV, Markdown, HTML and domain-only
 formats are available only where the installed command declares them.
 Redirected and machine output contains no ANSI or progress text. Diagnostics
 and optional target-free `--events` output use standard error.
+
+For `bulk` and `discover-scan`, `--csv-with-metadata` adds the source schema and
+version, observation and report times, collection origin, scan mode, diagnostic
+version and source-health states. Missing clocks remain `unknown`; a null
+source state is unmeasured, not a negative result. `--csv` keeps the compact columns.
 
 `--fail-on` and `--strict-exit` expose selected evidence states to automation
 without changing the result document. Review focused help for the policies a

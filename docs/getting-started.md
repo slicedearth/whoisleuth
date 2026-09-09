@@ -10,7 +10,7 @@ tasks.
 - Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
-- Bash, zsh and PowerShell (`pwsh`) for the completion contract tests
+- Bash, zsh, Fish and PowerShell (`pwsh`) for the completion contract tests
 
 Use the committed lockfile. Do not replace it with an independently resolved
 dependency tree.

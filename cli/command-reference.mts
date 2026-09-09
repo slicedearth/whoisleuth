@@ -201,6 +201,8 @@ redirected or unsupported terminals continue to print this help. No request
 starts until a Lookup plan is shown and the analyst confirms collection.
 Use --json or --jsonl where supported for machine-readable stdout.
 Use --output <file> for atomic private file output and --force to replace it.
+Use -- before positional filenames that begin with a hyphen; ./ also makes a
+filename unambiguous, for example: whoisleuth verify-artifact -- ./-evidence.json.
 Use --palette auto, light, or dark after the command to select a fixed terminal
 colour palette; --no-color, NO_COLOR, and redirected output still suppress ANSI.
 Use --config <file> and --profile <name> for explicit versioned safe defaults.
@@ -335,6 +337,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--events': flag(),
   '--jsonl': flag(),
   '--csv': flag(),
+  '--csv-with-metadata': flag(),
   '--domains': flag(),
   '--queries': flag(),
   '--registered-only': flag(),
@@ -428,7 +431,9 @@ const QUIET_OUTPUT_CONSTRAINT = constraint({
 });
 const PRESENTATION_OPTIONS = Object.freeze([
   ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
-  ['--csv', 'CSV'], ['--domains', 'domain list'], ['--queries', 'query list'],
+  ['--csv', 'CSV'],
+  ['--csv-with-metadata', 'CSV with evidence metadata'],
+  ['--domains', 'domain list'], ['--queries', 'query list'],
   ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
   ['--summary-json', 'summary JSON'],
 ] as const);
@@ -680,18 +685,18 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
       example: 'cat domains.txt | whoisleuth bulk --jsonl',
-      boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.',
+      boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
     },
     collection: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
     summary: 'Run bounded multi-target collection',
-    options: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
+    options: ['--json', '--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
-    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--registered-only', '--inconclusive-only', '--errors-only'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--fast', '--deep'] }),
     constraint({ kind: 'requires_all', option: '--resume', requiredOptions: ['--checkpoint'] }),
-    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--junit', '--csv', '--domains', '--queries', '--events', '--checkpoint', '--resume', '--quiet', '--fail-on'] }),
+    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries', '--events', '--checkpoint', '--resume', '--quiet', '--fail-on'] }),
   ]),
     handlerOwner: 'bulk',
     networkEffect: 'conditional_network',
@@ -770,20 +775,20 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
       example: 'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
-      boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.',
+      boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
     },
     collection: { mode: 'network', scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
     summary: 'Collect a supervised candidate review queue',
-    options: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
+    options: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains', '--quiet', '--no-color'],
     positionals: OPTIONAL_TEXT_POSITIONAL,
     constraints: Object.freeze([
-    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--csv', '--domains'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--preset', '--families'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--fast', '--deep'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only'] }),
     constraint({ kind: 'requires_all', option: '--resume', requiredOptions: ['--checkpoint'] }),
     constraint({ kind: 'value_excludes', option: '--preset', value: 'common', excludedOptions: ['--dictionary'] }),
-    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--csv', '--domains', '--events', '--checkpoint', '--resume', '--observation-snapshot', '--quiet', '--fail-on'] }),
+    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--csv', '--csv-with-metadata', '--domains', '--events', '--checkpoint', '--resume', '--observation-snapshot', '--quiet', '--fail-on'] }),
   ]),
     handlerOwner: 'discovery_scan',
     networkEffect: 'conditional_network',
@@ -1707,11 +1712,32 @@ function metaActionDefinition(id: CliMetaActionId): CliMetaAction {
   return CLI_META_ACTION_BY_ID[id];
 }
 
+function cliInvocationOptionIndices(argv: readonly string[]): ReadonlySet<number> {
+  const namedCommand = isCliCommand(argv[0]) ? argv[0] : null;
+  const options = new Map(commandDefinition(namedCommand ?? 'lookup').grammar.options
+    .map((option) => [option.option, option]));
+  const indices = new Set<number>();
+  for (let index = namedCommand ? 1 : 0; index < argv.length; index += 1) {
+    const argument = argv[index]!;
+    if (argument === '--') break;
+    if (!argument.startsWith('-')) continue;
+    indices.add(index);
+    const option = options.get(argument);
+    const value = argv[index + 1];
+    if (option?.arity === 1 && value !== undefined) {
+      if (value === '--' && !option.acceptsOptionLikeValue) break;
+      index += 1;
+    }
+  }
+  return indices;
+}
+
 function cliMetaActionForInvocation(argv: readonly string[]): CliMetaAction | null {
+  const optionIndices = cliInvocationOptionIndices(argv);
   for (const action of CLI_META_ACTIONS) {
     const matches = action.scope === 'root_only'
       ? action.aliases.includes(argv[0] ?? '')
-      : argv.some((argument) => action.aliases.includes(argument));
+      : argv.some((argument, index) => optionIndices.has(index) && action.aliases.includes(argument));
     if (matches) return action;
   }
   return null;
@@ -1779,13 +1805,8 @@ function commandOwnsOption(command: CliCommand, option: string): boolean {
 }
 
 function invocationHasFlag(command: CliCommand, args: readonly string[], flag: string): boolean {
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === flag) return true;
-    const specification = argument ? commandOptionSpec(command, argument) : null;
-    if (specification?.arity === 1) index += 1;
-  }
-  return false;
+  const argv = [command, ...args];
+  return [...cliInvocationOptionIndices(argv)].some((index) => argv[index] === flag);
 }
 
 function cliInvocationNetworkEffect(
@@ -1826,6 +1847,7 @@ export {
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   OPTIONS_BY_COMMAND,
   cliMetaActionForInvocation,
+  cliInvocationOptionIndices,
   cliInvocationNetworkEffect,
   commandOptionSpec,
   commandOwnsOption,

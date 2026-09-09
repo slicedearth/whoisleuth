@@ -81,6 +81,15 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
       await page.getByRole('heading', { name: 'Privacy policy', exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: test.info().outputPath(`privacy-${surface.width}-${surface.theme}.png`) });
     }
+    const metadata = page.locator('p').filter({ hasText: 'Optional metadata CSV' });
+    await expect(metadata).toContainText('collection and report times');
+    await expect(metadata).toContainText('collection origin');
+    await metadata.scrollIntoViewIfNeeded();
+    await expect(metadata).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await test.info().attach(`csv-privacy-${surface.width}-${surface.theme}`, {
+      body: await page.screenshot(), contentType: 'image/png',
+    });
   }
 });
 

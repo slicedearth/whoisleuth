@@ -178,11 +178,11 @@ function bulkJsonItem(item: BulkLookupResult, metadata: BulkMetadata): UnknownRe
   };
 }
 
-function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata): UnknownRecord {
+function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata) {
   const succeeded = items.filter((item) => item.ok).length;
   return {
     schema: CLI_BULK_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
-    mode: metadata.deep ? 'deep' : 'fast',
+    mode: metadata.deep ? 'deep' as const : 'fast' as const,
     filter: metadata.filter || 'all',
     summary: {
       collected: metadata.collectedTotal ?? items.length,

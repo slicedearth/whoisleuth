@@ -52,11 +52,11 @@ type CliAction =
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'csv_metadata' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
-  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'csv_metadata' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json' | 'sarif'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard'; ownedDomain: boolean } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -231,8 +231,9 @@ function parseBulkArguments(parsed: ParsedCommandArguments): Extract<CliAction, 
   const selectedFailPolicies = failPolicies(parsed, 'bulk');
   const output = parseOutput(parsed, [
     ['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--domains', 'domains'],
+    ['--csv-with-metadata', 'csv_metadata'],
     ['--queries', 'queries'], ['--junit', 'junit'],
-  ]) as 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit';
+  ]) as Extract<CliAction, { action: 'bulk' }>['output'];
   const filter = parsed.hasOption('--registered-only') ? 'registered'
     : parsed.hasOption('--inconclusive-only') ? 'inconclusive'
       : parsed.hasOption('--errors-only') ? 'errors' : 'all';
@@ -284,7 +285,7 @@ function parseDiscoverScanArguments(parsed: ParsedCommandArguments): Extract<Cli
   return {
     action: 'discover-scan',
     seed: parsed.positionalValue('subject'),
-    output: parseOutput(parsed, [['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--domains', 'domains']]) as 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains',
+    output: parseOutput(parsed, [['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--csv-with-metadata', 'csv_metadata'], ['--domains', 'domains']]) as Extract<CliAction, { action: 'discover-scan' }>['output'],
     ...discoveryValues(parsed),
     deep,
     scanLimit: parsed.integerOption('--scan-limit') ?? Math.min(100, deep ? 50 : 500),

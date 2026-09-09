@@ -366,11 +366,12 @@ describe('continuous integration workflow', () => {
     fs.mkdirSync(executableDirectory);
     context.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
 
-    assert.throws(() => resolveUnitTestExecutables(['zsh', 'pwsh'], {
+    assert.throws(() => resolveUnitTestExecutables(['zsh', 'fish', 'pwsh'], {
       environment: { PATH: path.join(temporaryRoot, 'missing') },
       cwd: temporaryRoot,
     }), (error) => error instanceof Error
       && error.message.includes('zsh: not found')
+      && error.message.includes('fish: not found')
       && error.message.includes('pwsh: not found'));
 
     const failing = path.join(executableDirectory, 'zsh');
@@ -391,7 +392,7 @@ describe('continuous integration workflow', () => {
       }),
     }), /zsh: failed to launch \(fixture launch failure\)/u);
 
-    for (const executable of ['bash', 'zsh', 'pwsh']) {
+    for (const executable of ['bash', 'zsh', 'fish', 'pwsh']) {
       fs.writeFileSync(path.join(executableDirectory, executable), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     }
     const sourceEnvironment = { PATH: executableDirectory, PRESERVED_VALUE: 'yes' };
@@ -402,6 +403,7 @@ describe('continuous integration workflow', () => {
     assert.deepEqual([...resolved], [
       ['bash', path.join(executableDirectory, 'bash')],
       ['zsh', path.join(executableDirectory, 'zsh')],
+      ['fish', path.join(executableDirectory, 'fish')],
       ['pwsh', path.join(executableDirectory, 'pwsh')],
     ]);
     const executionEnvironment = unitTestExecutableEnvironment(resolved, sourceEnvironment);
@@ -409,6 +411,7 @@ describe('continuous integration workflow', () => {
     assert.equal(executionEnvironment.PRESERVED_VALUE, 'yes');
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_BASH, path.join(executableDirectory, 'bash'));
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_ZSH, path.join(executableDirectory, 'zsh'));
+    assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_FISH, path.join(executableDirectory, 'fish'));
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_PWSH, path.join(executableDirectory, 'pwsh'));
   });
 

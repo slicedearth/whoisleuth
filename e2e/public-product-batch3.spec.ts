@@ -305,6 +305,42 @@ test('command details distinguish an artefact from its presentation and destinat
   await expect(command.locator('.contract-details')).toContainText('Exit 0 reports command completion');
 });
 
+test('distinguishes compact and metadata CSV in responsive command details', async ({ page }, testInfo) => {
+  const requests = collectInvestigationRequests(page);
+  for (const commandId of ['bulk', 'discover-scan']) {
+    await page.goto(`/cli#command-${commandId}`);
+    const command = page.locator(`[data-command-detail="${commandId}"]`);
+    await expect(command).toBeVisible();
+    const presentations = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+    await expect(presentations.getByText('--csv', { exact: true })).toBeVisible();
+    await expect(presentations.getByText('--csv-with-metadata', { exact: true })).toBeVisible();
+    await command.getByText('Operational boundary', { exact: true }).click();
+    const boundary = command.locator('.boundary p');
+    await expect(boundary).toContainText('separate observation and report times');
+    await expect(boundary).toContainText('--csv retains the compact columns');
+    if (commandId !== 'bulk') continue;
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await presentations.scrollIntoViewIfNeeded();
+        await expect(presentations).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+        await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
+          body: await page.screenshot(), contentType: 'image/png',
+        });
+        await boundary.scrollIntoViewIfNeeded();
+        await expect(boundary).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+      }
+    }
+  }
+  expect(requests).toEqual([]);
+});
+
 test('opens a directly linked CLI workflow section after the responsive layout settles', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/cli#browser-handoff');

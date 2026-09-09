@@ -2,7 +2,8 @@
 
 import { createRequire } from 'node:module';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { metaActionDefinition } from '../cli/command-reference.mts';
+import { HELP, commandHelp, isCliCommand, metaActionDefinition } from '../cli/command-reference.mts';
+import { presentTerminalOutput, terminalPresentation } from '../cli/terminal-presentation.mts';
 
 for (const stream of [process.stdout, process.stderr]) {
   stream.on('error', (error: NodeJS.ErrnoException) => {
@@ -12,6 +13,9 @@ for (const stream of [process.stdout, process.stderr]) {
 }
 
 const argv = process.argv.slice(2);
+const rootHelp = argv.length === 1 && metaActionDefinition('help').aliases.includes(argv[0] ?? '');
+const command = argv.length === 2 && isCliCommand(argv[0])
+  && metaActionDefinition('help').aliases.includes(argv[1] ?? '') ? argv[0] : null;
 if (argv.length === 1 && metaActionDefinition('version').aliases.includes(argv[0] ?? '')) {
   const require = createRequire(import.meta.url);
   const metadata = require('../package.json') as { version?: unknown };
@@ -21,6 +25,8 @@ if (argv.length === 1 && metaActionDefinition('version').aliases.includes(argv[0
   } else {
     process.stdout.write(`${metadata.version}\n`);
   }
+} else if (rootHelp || command) {
+  process.stdout.write(presentTerminalOutput(command ? commandHelp(command) : HELP, terminalPresentation(process.stdout)));
 } else {
   const [configModule, errorsModule, outputModule, runnerModule] = await Promise.all([
     import('../cli/config-profile.mts'),

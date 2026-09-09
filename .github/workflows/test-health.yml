@@ -26,10 +26,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install tested shell
+      - name: Install tested shells
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes zsh
+          sudo apt-get install --no-install-recommends --yes zsh fish
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Verify development toolchain compatibility

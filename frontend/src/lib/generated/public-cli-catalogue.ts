@@ -609,9 +609,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Run bounded multi-target collection",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
+      "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--csv-with-metadata|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "cat domains.txt | whoisleuth bulk --jsonl",
-      "boundary": "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.",
+      "boundary": "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
       "collection": {
         "mode": "network",
         "scope": "Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep."
@@ -632,6 +632,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--jsonl",
         "--junit",
         "--csv",
+        "--csv-with-metadata",
         "--domains",
         "--queries",
         "--registered-only",
@@ -682,6 +683,10 @@ export const PUBLIC_CLI_CATALOGUE = {
         {
           "option": "--csv",
           "format": "CSV"
+        },
+        {
+          "option": "--csv-with-metadata",
+          "format": "CSV with evidence metadata"
         },
         {
           "option": "--domains",
@@ -978,9 +983,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Collect a supervised candidate review queue",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
+      "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--csv-with-metadata|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json",
-      "boundary": "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.",
+      "boundary": "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
       "collection": {
         "mode": "network",
         "scope": "Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep."
@@ -1022,6 +1027,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--jsonl",
         "--csv",
+        "--csv-with-metadata",
         "--domains",
         "--quiet",
         "--no-color"
@@ -1056,6 +1062,10 @@ export const PUBLIC_CLI_CATALOGUE = {
         {
           "option": "--csv",
           "format": "CSV"
+        },
+        {
+          "option": "--csv-with-metadata",
+          "format": "CSV with evidence metadata"
         },
         {
           "option": "--domains",
