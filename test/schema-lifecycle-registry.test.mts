@@ -21,6 +21,7 @@ import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/tab-port
 import { WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/workspace-portability.mts';
 import {
   MAX_SCHEMA_LIFECYCLE_FAMILIES,
+  defineSchemaLifecycleFamily,
   defineSchemaLifecycleRegistry,
   type SchemaLifecycleFamily,
 } from '../packages/contracts/schema-lifecycle.mts';
@@ -143,7 +144,7 @@ function heavyFamily(index: number): Record<string, unknown> {
     ));
   }
   const shapes = metadata.shapes as Array<Record<string, unknown>>;
-  const documentShape = shapes.find((shape) => String(shape.id).startsWith('domain-control.manifest.v1-v2'));
+  const documentShape = shapes.find((shape) => Array.isArray(shape.fixedArrays) && shape.fixedArrays.length > 0);
   const fixedArrays = documentShape?.fixedArrays as Array<Record<string, unknown>> | undefined;
   assert.ok(fixedArrays?.[0]);
   fixedArrays[0].values = Array.from({ length: 64 }, (_, itemIndex) => {
@@ -560,9 +561,18 @@ describe('schema lifecycle registry', () => {
   });
 
   it('enforces the aggregate serialised registry budget before inspecting the untouched tail', () => {
-    const families = Array.from({ length: 24 }, (_, index) => heavyFamily(index));
+    const families: Record<string, unknown>[] = [];
+    const maximumBytes = 4 * 1_048_576;
+    let bytes = 2;
+    while (bytes <= maximumBytes && families.length < MAX_SCHEMA_LIFECYCLE_FAMILIES - 1) {
+      const family = heavyFamily(families.length);
+      const normalised = defineSchemaLifecycleFamily(family as unknown as SchemaLifecycleFamily);
+      bytes += Number(families.length > 0) + Buffer.byteLength(JSON.stringify(normalised));
+      families.push(family);
+    }
+    assert.ok(bytes > maximumBytes, 'The synthetic families must cross the aggregate byte boundary.');
     assert.doesNotThrow(() => defineSchemaLifecycleRegistry(
-      families.slice(0, 23) as unknown as readonly SchemaLifecycleFamily[],
+      families.slice(0, -1) as unknown as readonly SchemaLifecycleFamily[],
     ));
 
     let tailTouches = 0;

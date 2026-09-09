@@ -148,6 +148,13 @@ test('selected Case context has compact native controls and readable expanded co
       await expectNoHorizontalOverflow(page);
       const clear = await context.getByRole('button', { name: 'Clear Case selection' }).boundingBox();
       expect(clear).not.toBeNull(); expect(clear!.height).toBeGreaterThanOrEqual(44);
+      const disclosure = await summary.boundingBox();
+      expect(disclosure).not.toBeNull();
+      const focusExtent = await summary.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return Math.max(0, Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset));
+      });
+      expect(disclosure!.y - focusExtent).toBeGreaterThanOrEqual(clear!.y + clear!.height);
       await page.evaluate(() => window.scrollTo(0, 0));
       const name = `selected-case-${theme}-${viewport.width}.png`;
       const path = testInfo.outputPath(name); await page.screenshot({ path }); await testInfo.attach(name, { path, contentType: 'image/png' });

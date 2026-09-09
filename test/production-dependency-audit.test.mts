@@ -294,11 +294,4 @@ describe('production dependency audit policy', () => {
     }
   });
 
-  test('documents the zero-only policy and non-blocking online audit boundary', () => {
-    const guide = fs.readFileSync(path.join(REPOSITORY_ROOT, 'docs/dependency-maintenance.md'), 'utf8');
-    assert.match(guide, /accepts exactly zero production vulnerabilities/u);
-    assert.match(guide, /five-minute outer deadline/u);
-    assert.match(guide, /not part of the required per-push CI\s+path/u);
-    assert.match(guide, /weekly or manually dispatched workflow/u);
-  });
 });

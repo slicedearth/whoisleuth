@@ -70,13 +70,11 @@ enforcement.
 The current writer supports the exact public formats and direct migrations
 documented in the generated
 [Case portability reference](case-contracts.md) and the
-[portable compatibility reference](portable-domain-contracts.md). Reader-only
-historical formats and unreleased development checkpoints are not public
-compatibility commitments.
+[portable compatibility reference](portable-domain-contracts.md). Unreleased
+development checkpoints are not supported formats.
 
-Published durable schemas, exports, browser stores and CLI contracts remain
-supported boundaries. A later release must preserve them or provide an explicit,
-tested and non-destructive migration or export path.
+Supported published schemas, exports, browser stores and CLI contracts have
+fixture-backed readers or explicit, non-destructive migration paths.
 Malformed and unsupported future data fails closed; browser-local future data
 is preserved without rewrite where its storage contract promises that
 behaviour.

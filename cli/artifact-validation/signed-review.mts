@@ -40,6 +40,7 @@ import {
   INVESTIGATION_MANIFEST_SCHEMA,
   INVESTIGATION_MANIFEST_VERSION,
   MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
+  MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
   MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
 } from '../investigation-manifest.mts';
 import {
@@ -354,7 +355,7 @@ function validateInvestigationManifest(value: UnknownRecord): void {
       || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artifact order');
     if (item.schema !== null) text(item.schema, 'Investigation manifest artifact schema', 160);
     if (item.version !== null) integer(item.version, 'Investigation manifest artifact version', 1, 1_000);
-    totalBytes += integer(item.byteLength, 'Investigation manifest artifact bytes', 1, 15 * 1024 * 1024);
+    totalBytes += integer(item.byteLength, 'Investigation manifest artifact bytes', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
     digest(item.contentDigestSha256, 'Investigation manifest content digest');
     digest(item.canonicalDigestSha256, 'Investigation manifest canonical digest');
     const step = exact(steps[index], ['sequence', 'artifactId', 'contentDigestSha256'], `Investigation manifest step ${index + 1}`);

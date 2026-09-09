@@ -40,6 +40,7 @@
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let editingRevision=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
   const profileDraft=createDraftRevision(()=>editing);
   let auditGeneration=0;let auditController:AbortController|null=null;
+  let baselineMutationFocus:{profileId:string;origin:Element|null}|null=null;
   let cases=$state<CaseRecord[]>([]);
   let relationships=$state<RelationshipObservation[]>([]);
   let profileSourceState=$state<BrandReviewSourceState>('loading');
@@ -129,8 +130,22 @@
     url.hash=selected==='baselines'&&page.url.hash==='#desired-posture-baseline'?page.url.hash:'';
     await goto(`${url.pathname}${url.search}${url.hash}`,{noScroll:true,keepFocus:true});
   }
+  function restoreBaselineMutationFocus():boolean{
+    const pending=baselineMutationFocus;
+    if(!pending)return false;
+    if(document.activeElement!==document.body&&document.activeElement!==pending.origin){baselineMutationFocus=null;return false;}
+    if(profileSourceState==='unavailable'){
+      baselineMutationFocus=null;document.getElementById('brand-profile-source-state')?.focus({preventScroll:true});return true;
+    }
+    if(active&&active.id!==pending.profileId){baselineMutationFocus=null;return false;}
+    const editor=document.getElementById('desired-posture-baseline');
+    const target=document.getElementById('save-desired-posture-settings');
+    if(editor?.dataset.profileId!==pending.profileId||!(target instanceof HTMLButtonElement)||target.disabled)return false;
+    baselineMutationFocus=null;target.focus({preventScroll:true});return true;
+  }
   async function deferredBrandReady(){
     await tick();
+    if(restoreBaselineMutationFocus())return;
     const hash=page.url.hash;
     if(!hash.startsWith('#')||hash.length>257)return;
     let targetId='';
@@ -238,8 +253,21 @@
   }
   async function saveAttestations(attestations:ProtectionAttestation[]){if(!active)return;try{const result=await commitProfileFieldWrite(active.id,{protectionAttestations:attestations},{preserveCompletedAudit:true});message=result.issue?`Saved reviewed account controls. ${committedIssueText(result.issue)}`:'Saved reviewed account controls. Expired statements remain visible until reviewed again.';}catch(cause){message=profileWriteFailureMessage(cause,'Could not save reviewed account controls.');}}
   async function saveAllowlist(allowlistedDomains:string[],allowlistedRegistrars:string[]):Promise<boolean>{if(!active){message='No active Brand Profile is available.';return false;}const profileId=active.id;const profileName=active.name;try{const result=await commitProfileFieldWrite(profileId,{allowlistedDomains,allowlistedRegistrars},{preserveCompletedAudit:true});message=result.issue?`Saved the allowlist for "${profileName}". ${committedIssueText(result.issue)}`:`Saved the allowlist for "${profileName}".`;return true;}catch(cause){message=profileWriteFailureMessage(cause,'Could not save the allowlist.');return false;}}
-  async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileFieldWrite(active.id,{desiredPostureBaselines},{preserveCompletedAudit:true});message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');message=failure;return{committed:false,message:failure};}}
-  async function saveBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{return persistBaselines(desiredPostureBaselines);}
+  async function saveBaselines(profileId:string,expectedUpdatedAt:string,desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{
+    if(!active||active.id!==profileId)return{committed:false,message:'The selected Brand Profile changed. Review its expected settings before saving.'};
+    baselineMutationFocus={profileId,origin:document.activeElement};
+    try{
+      const result=await commitProfileFieldWrite(profileId,{desiredPostureBaselines},{preserveCompletedAudit:true,expectedUpdatedAt});
+      message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';
+      return{committed:true};
+    }catch(cause){
+      baselineMutationFocus=null;
+      const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');
+      message=failure;return{committed:false,message:failure};
+    }finally{
+      await tick();restoreBaselineMutationFocus();
+    }
+  }
   async function savePassportProfile(profile:BrandProfile,expectedUpdatedAt:string):Promise<ProfilePersistenceResult>{try{const result=await commitProfileWrite(profile,profile.id,{expectedUpdatedAt});message=result.issue?`Imported and saved the selected domain-control passport fields. ${committedIssueText(result.issue)}`:'Imported the selected domain-control passport fields.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save imported domain-control fields.');message=failure;return{committed:false,message:failure};}}
   async function retainObservation(report:DomainPostureHttpResponse){
     const owner=active;

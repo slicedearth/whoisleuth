@@ -262,7 +262,7 @@
 <style>
   .review-inbox{padding:var(--card-pad)}
   .empty-start{max-width:70ch;margin:20px 0}
-  .empty-start h3{font-size:var(--text-base)}
+  .empty-start h3{font-size:var(--text-lg)}
   .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .review-scope{margin-top:16px;padding-top:10px;border-top:1px solid var(--border)}
   .review-scope summary{cursor:pointer;font-size:var(--text-sm)}

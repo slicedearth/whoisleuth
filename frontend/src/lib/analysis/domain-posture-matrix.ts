@@ -67,6 +67,7 @@ const STATES: readonly DomainPostureMatrixState[] = Object.freeze([
   'approved_window',
   'drift',
   'not_configured',
+  'observed',
   'review',
   'suppressed',
   'unavailable',

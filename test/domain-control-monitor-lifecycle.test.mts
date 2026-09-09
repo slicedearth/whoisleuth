@@ -117,7 +117,7 @@ async function fixture(): Promise<string> {
 }
 
 describe('domain-control monitor schema lifecycle', () => {
-  test('registers one immutable exact-current family and its static hooks', () => {
+  test('registers the supported public checkpoint and current writer with static hooks', () => {
     assert.deepEqual(
       SCHEMA_LIFECYCLE_REGISTRY.find((family) => family.id === DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.id),
       DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE,
@@ -130,7 +130,10 @@ describe('domain-control monitor schema lifecycle', () => {
       contract.readable,
       contract.emitted,
       contract.futureVersionBehaviour,
-    ]), [[CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 1, 'document', true, true, 'reject']]);
+    ]), [
+      [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 1, 'document', true, false, 'reject'],
+      [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 2, 'document', true, true, 'reject'],
+    ]);
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE), true);
     assert.deepEqual(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.hooks.map((hook) => [
       hook.id, hook.role, hook.runtime, hook.module, hook.exportName,
@@ -144,20 +147,21 @@ describe('domain-control monitor schema lifecycle', () => {
   });
 
   test('owns exact shape, bounds, privacy, and composition relationships', () => {
-    assert.deepEqual(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.shapes, [{
-      id: 'domain-control-monitor.document.v1',
-      schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-      versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION],
-      objects: [
+    for (const version of [1, 2]) {
+      const shape = DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.shapes.find((candidate) => (
+        candidate.schema === CLI_DOMAIN_CONTROL_MONITOR_SCHEMA && candidate.versions.includes(version)
+      ));
+      assert.ok(shape);
+      assert.deepEqual(shape.objects, [
         { path: '$', requiredKeys: DOMAIN_CONTROL_MONITOR_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         { path: '$.manifest', requiredKeys: DOMAIN_CONTROL_MONITOR_MANIFEST_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         { path: '$.collection', requiredKeys: DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         { path: '$.collection.failures[]', requiredKeys: DOMAIN_CONTROL_MONITOR_FAILURE_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-      ],
-      fixedArrays: [{ path: '$.limitations', values: DOMAIN_CONTROL_MONITOR_LIMITATIONS }],
-      normalisation: 'preserve_document',
-      target: null,
-    }]);
+      ]);
+      assert.deepEqual(shape.fixedArrays, [{ path: '$.limitations', values: DOMAIN_CONTROL_MONITOR_LIMITATIONS }]);
+      assert.equal(shape.normalisation, 'preserve_document');
+      assert.equal(shape.target, null);
+    }
     assert.deepEqual(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.boundProfiles, [
       {
         id: 'domain-control-monitor.document-bounds.v1',
@@ -246,38 +250,60 @@ describe('domain-control monitor schema lifecycle', () => {
     ], [16_777_216, 48, 50_000, 100_000, 10_000]);
   });
 
-  test('pins one LF fixture and reproduces its bytes exactly through Deep collection', async () => {
-    const raw = await fixture();
-    assert.equal(Buffer.byteLength(raw, 'utf8'), FIXTURE_BYTES);
-    assert.equal(createHash('sha256').update(raw).digest('hex'), FIXTURE_SHA256);
-    assert.equal(raw.endsWith('\n'), true);
+  test('pins public bytes and reproduces the current checkpoint through its collector boundary', async () => {
+    const historical = await fixture();
+    assert.equal(Buffer.byteLength(historical, 'utf8'), FIXTURE_BYTES);
+    assert.equal(createHash('sha256').update(historical).digest('hex'), FIXTURE_SHA256);
+    for (const retained of DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.fixtures) {
+      const raw = await readFile(new URL(`../${retained.path}`, import.meta.url), 'utf8');
+      assert.equal(Buffer.byteLength(raw), retained.bytes);
+      assert.equal(createHash('sha256').update(raw).digest('hex'), retained.sha256);
+      assert.equal(raw.endsWith('\n'), true);
+    }
+    const input = JSON.parse(await readFile(new URL('./fixtures/cli-domain-control-review-input-v2.json', import.meta.url), 'utf8'));
+    const current = await readFile(new URL(`./fixtures/domain-control-monitor-v${CLI_DOMAIN_CONTROL_MONITOR_VERSION}.json`, import.meta.url), 'utf8');
     const modes: Array<Readonly<{ fast: boolean; compact: boolean }>> = [];
-    const document = await runDomainControlMonitor(JSON.stringify(manifest()), null, {
-      executeLookup: async (_classified, options) => {
+    const document = await runDomainControlMonitor(JSON.stringify(input.manifest), null, {
+      executeLookup: async (classified, options) => {
+        assert.equal(classified.registrableDomain, 'example.test');
         assert.ok(options);
         modes.push({ fast: options.fast === true, compact: options.compact === true });
-        return unsupportedResult();
+        return input.lookups[0];
       },
       now: () => GENERATED_AT,
       limit: 1,
       concurrency: 1,
     });
     assert.deepEqual(modes, [{ fast: false, compact: false }]);
-    assert.equal(formatJsonDocument(document), raw);
-    assert.deepEqual(document, JSON.parse(raw));
-    assert.deepEqual(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.fixtures, [{
-      id: 'domain-control-monitor-v1',
-      path: 'test/fixtures/domain-control-monitor-v1.json',
-      bytes: FIXTURE_BYTES,
-      sha256: FIXTURE_SHA256,
-      contentDigestSha256: null,
-      schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-      version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
-      role: 'current',
-      expectation: 'accepted_exact',
-      expectedOutputFixtureId: null,
-      scope: 'repository',
-    }]);
+    assert.equal(formatJsonDocument(document), current);
+    const replay = await runDomainControlMonitor(JSON.stringify(input.manifest), current, {
+      executeLookup: async () => input.lookups[0],
+      now: () => '2026-08-21T00:00:00.000Z',
+      limit: 1, concurrency: 1,
+    });
+    assert.equal(replay.flightRecorder.observationCount, 2);
+    assert.equal(replay.flightRecorder.summary.unexpectedChanges, 0);
+  });
+
+  test('retains a completed checkpoint when the manifest expires during collection', async () => {
+    const expiring = buildDomainControlManifest({
+      schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 2,
+      expiresAt: '2026-08-20T00:00:01.000Z', entries: [{ domain: 'example.test' }],
+    }, MANIFEST_GENERATED_AT);
+    const times = [GENERATED_AT, '2026-08-20T00:00:02.000Z', '2026-08-20T00:00:03.000Z'];
+    const completed = await runDomainControlMonitor(JSON.stringify(expiring), null, {
+      executeLookup: async () => unsupportedResult(),
+      now: () => times.shift()!, limit: 1, concurrency: 1,
+    });
+    assert.equal(times.length, 0);
+    assert.equal(completed.review.state, 'expired');
+    assert.equal(completed.review.manifest.expired, true);
+    const resumed = await runDomainControlMonitor(JSON.stringify(manifest()), JSON.stringify(completed), {
+      executeLookup: async () => unsupportedResult(),
+      now: () => '2026-08-21T00:00:00.000Z', limit: 1, concurrency: 1,
+    });
+    assert.equal(resumed.flightRecorder.observationCount, 2);
+    assert.equal(resumed.review.manifest.expired, false);
   });
 
   test('fails closed on altered checkpoints before collection but retains historical expiry as provenance', async () => {
@@ -289,7 +315,7 @@ describe('domain-control monitor schema lifecycle', () => {
       return unsupportedResult();
     };
     const mutations: Array<readonly [(document: Record<string, unknown>) => void, RegExp]> = [
-      [(document) => { document.version = 2; }, /must use .* version/u],
+      [(document) => { document.version = CLI_DOMAIN_CONTROL_MONITOR_VERSION + 1; }, /must use .* version/u],
       [(document) => { document.unexpected = true; }, /exact object fields/u],
       [(document) => { delete document.collection; }, /exact object fields/u],
       [(document) => {
@@ -398,7 +424,7 @@ describe('domain-control monitor schema lifecycle', () => {
     assert.equal(calls, 0);
   });
 
-  test('rejects a reader-only manifest before collection', async () => {
+  test('rejects an unsupported manifest before collection', async () => {
     const unsupported = { ...manifest(['aa.example', 'z.example']), version: 1 };
     const before = structuredClone(unsupported);
     let calls = 0;
@@ -574,11 +600,11 @@ describe('domain-control monitor schema lifecycle', () => {
     }, MANIFEST_GENERATED_AT);
     const document = await runDomainControlMonitor(JSON.stringify(configuredManifest), null, {
       executeLookup: async () => ({
-        diagnostics: { rdap: { status: 'success' }, whois: { status: 'unsupported' } },
+        diagnostics: { rdap: { status: 'success', observedAt: GENERATED_AT }, whois: { status: 'unsupported' } },
         rdap: { parsed: { nameservers: ['ns2.example.test'] } },
         whois: { parsed: {} },
         availability: {
-          dns: { status: 'success', records: { ns: ['ns2.example.test'], mx: [], caa: [] }, delegation: { status: 'success', records: { ds: [] } } },
+          dns: { status: 'success', observedAt: GENERATED_AT, records: { ns: ['ns2.example.test'], mx: [], caa: [] }, delegation: { status: 'success', records: { ds: [] } } },
           tls: { status: 'unavailable' },
           http: { status: 'unavailable' },
           pageIdentity: { status: 'unavailable' },

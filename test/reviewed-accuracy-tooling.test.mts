@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 
 import {
   REVIEWED_ACCURACY_INTAKE_SCHEMA,
@@ -42,8 +43,9 @@ describe('reviewed accuracy programme tooling', () => {
     const technology = report.corpora.find((corpus) => corpus.key === 'technology-detection');
     assert.ok(technology);
     assert.equal(technology.readiness, 'measured');
-    assert.equal(technology.reviewedPositiveCases, 76);
-    assert.equal(technology.reviewedBenignCases, 69);
+    assert.equal(technology.reviewedCases, TECHNOLOGY_REVIEWED_FIXTURES.length);
+    assert.equal(technology.reviewedPositiveCases, TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.expectedIds.length > 0).length);
+    assert.equal(technology.reviewedBenignCases, TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.negativeFor.length > 0).length);
     const unproven = report.corpora.filter((corpus) => corpus.key !== 'technology-detection');
     assert.ok(unproven.every((corpus) => corpus.readiness === 'unproven'));
     assert.ok(unproven.every((corpus) => corpus.reviewedCases === 0
@@ -84,8 +86,8 @@ describe('reviewed accuracy programme tooling', () => {
     const human = writer();
     assert.equal(await statusMain([], { stdout: human.stream }), 0);
     assert.match(human.read(), /Reviewed accuracy status/iu);
-    assert.match(human.read(), /Technology detection: measured \(78 reviewed cases\)/iu);
-    assert.match(human.read(), /Class coverage: 76 positive, 69 benign or collision cases/iu);
+    assert.ok(human.read().includes(`Technology detection: measured (${TECHNOLOGY_REVIEWED_FIXTURES.length} reviewed cases)`));
+    assert.ok(human.read().includes(`Class coverage: ${TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.expectedIds.length > 0).length} positive, ${TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.negativeFor.length > 0).length} benign or collision cases`));
     const json = writer();
     assert.equal(await statusMain(['--json'], { stdout: json.stream }), 0);
     assert.equal((JSON.parse(json.read()) as { schema: string }).schema, REVIEWED_ACCURACY_STATUS_SCHEMA);

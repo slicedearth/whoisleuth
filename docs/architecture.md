@@ -108,6 +108,10 @@ cannot decide authoritative registration availability.
 Brand settings reviews use shared source-context and record-normalisation
 owners. The control centre, matrix and history use the same comparison rules;
 profile mutations use the existing revision-checked persistence coordinator.
+Portable expectations distinguish unspecified, absent, specified and
+observation-only record sets. CLI projections retain source observation times
+separately from capture and report times; history compares like sources with
+increasing observation times.
 
 Homepage capture, native analysis, fingerprints and offline technology review
 share the source-size policy in `lib/outbound-request-bounds.mts`.

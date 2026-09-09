@@ -3,22 +3,27 @@ import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
   buildDomainControlFlightRecorder,
   validateDomainControlFlightRecorderDocument,
+  normalizeDomainControlFlightRecorderObservations,
   type DomainControlFlightRecorderObservation,
 } from '../lib/domain-control-flight-recorder.mts';
 import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
   DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+  PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
 } from '../packages/contracts/domain-control-flight-recorder.mts';
 import {
   DOMAIN_CONTROL_REVIEW_SCHEMA,
   DOMAIN_CONTROL_REVIEW_VERSION,
+  PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION,
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   CLI_DOMAIN_CONTROL_REVIEW_VERSION,
 } from '../packages/contracts/domain-control-review.mts';
 import {
   CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
   CLI_DOMAIN_CONTROL_MONITOR_VERSION,
+  PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION,
+  SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS,
   DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS,
   DOMAIN_CONTROL_MONITOR_FAILURE_CATEGORIES,
   DOMAIN_CONTROL_MONITOR_FAILURE_KEYS,
@@ -46,6 +51,7 @@ import type { LookupDependency } from './runner-types.mts';
 import { buildCliLookupDocument } from './formatters/json.mts';
 import {
   buildCliDomainControlReview,
+  DOMAIN_CONTROL_REVIEW_SOURCE_FIELDS,
 } from './domain-control-observations.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import { CliUsageError } from './errors.mts';
@@ -107,9 +113,12 @@ function previousSnapshot(input: string | null, currentGeneratedAt: string): Pre
   if (input === null) return { observations: [] };
   const parsed = parseMonitorJson(input, 'Previous monitor snapshot');
   const root = exactMonitorRecord(parsed, DOMAIN_CONTROL_MONITOR_ROOT_KEYS, 'Previous monitor snapshot');
-  if (root.schema !== CLI_DOMAIN_CONTROL_MONITOR_SCHEMA || root.version !== CLI_DOMAIN_CONTROL_MONITOR_VERSION) {
-    throw new CliUsageError(`Previous monitor snapshot must use ${CLI_DOMAIN_CONTROL_MONITOR_SCHEMA} version ${CLI_DOMAIN_CONTROL_MONITOR_VERSION}.`);
+  if (root.schema !== CLI_DOMAIN_CONTROL_MONITOR_SCHEMA || !SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.some((version) => version === root.version)) {
+    throw new CliUsageError(`Previous monitor snapshot must use ${CLI_DOMAIN_CONTROL_MONITOR_SCHEMA} supported version ${SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.join(' or ')}.`);
   }
+  const legacy = root.version === PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION;
+  const reviewVersion = legacy ? PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION : DOMAIN_CONTROL_REVIEW_VERSION;
+  const flightVersion = legacy ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION : DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
   let previousGeneratedAt: string;
   try {
     previousGeneratedAt = requireIsoTimestamp(root.generatedAt, 'Previous monitor snapshot generatedAt');
@@ -130,7 +139,7 @@ function previousSnapshot(input: string | null, currentGeneratedAt: string): Pre
   } catch {
     throw new CliUsageError('Previous monitor snapshot manifest expiresAt must be a valid ISO 8601 timestamp.');
   }
-  if (Date.parse(manifest.expiresAt) <= Date.parse(previousGeneratedAt)) {
+  if (legacy && Date.parse(manifest.expiresAt) <= Date.parse(previousGeneratedAt)) {
     throw new CliUsageError('Previous monitor snapshot manifest must have been unexpired when the checkpoint was generated.');
   }
   const collection = exactMonitorRecord(root.collection, DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS, 'Previous monitor snapshot collection');
@@ -170,44 +179,57 @@ function previousSnapshot(input: string | null, currentGeneratedAt: string): Pre
   let flightRecorder: ReturnType<typeof validateDomainControlFlightRecorderDocument>;
   try {
     review = validateDomainControlReviewDocument(root.review);
+    if (review.version !== reviewVersion) throw new TypeError('Mismatched review version.');
   } catch {
-    throw new CliUsageError(`Previous monitor snapshot review must use the exact ${DOMAIN_CONTROL_REVIEW_SCHEMA} version ${DOMAIN_CONTROL_REVIEW_VERSION} contract.`);
+    throw new CliUsageError(`Previous monitor snapshot review must use the exact ${DOMAIN_CONTROL_REVIEW_SCHEMA} version ${reviewVersion} contract.`);
   }
   try {
     flightRecorder = validateDomainControlFlightRecorderDocument(root.flightRecorder);
+    if (flightRecorder.version !== flightVersion) throw new TypeError('Mismatched flight-recorder version.');
   } catch {
-    throw new CliUsageError(`Previous monitor snapshot flight recorder must use the exact ${DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA} version ${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION} contract.`);
+    throw new CliUsageError(`Previous monitor snapshot flight recorder must use the exact ${DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA} version ${flightVersion} contract.`);
   }
   if (!Array.isArray(root.limitations)
     || root.limitations.length !== DOMAIN_CONTROL_MONITOR_LIMITATIONS.length
     || root.limitations.some((value, index) => value !== DOMAIN_CONTROL_MONITOR_LIMITATIONS[index])) {
     throw new CliUsageError('Previous monitor snapshot limitations are invalid.');
   }
+  let observations: readonly DomainControlFlightRecorderObservation[];
   try {
+    observations = normalizeDomainControlFlightRecorderObservations(root.observations, flightVersion);
     buildDomainControlFlightRecorder({
       schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
-      version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+      version: flightVersion,
       observations: root.observations,
       approvedWindows: [],
     }, previousGeneratedAt);
   } catch {
     throw new CliUsageError('Previous monitor snapshot observations must use the exact bounded flight-recorder input contract.');
   }
-  const observations = root.observations as DomainControlFlightRecorderObservation[];
   const observationDomainOrder = observations.map((observation) => observation.domain);
   const observationDomains = new Set(observationDomainOrder);
   const requestedDomains = review.domains.slice(0, requested).map((item) => item.domain);
   const expectedObservationDomains = requestedDomains.filter((domain) => !failureDomains.has(domain));
   const expectedFailureDomains = requestedDomains.filter((domain) => !observationDomains.has(domain));
+  const mismatchedSource = !legacy && review.domains.some((item) => {
+    const observation = observations.find((candidate) => candidate.domain === item.domain);
+    return item.comparisons.some((comparison) => {
+      if (comparison.source === null) return false;
+      const field = observation?.fields.find((candidate) => DOMAIN_CONTROL_REVIEW_SOURCE_FIELDS[candidate.id] === comparison.field);
+      return !field || field.source !== comparison.source || field.observedAt !== comparison.observedAt;
+    });
+  });
   if (review.domains.length < requested
+    || mismatchedSource
     || observationDomains.size !== observations.length
     || observationDomainOrder.some((domain, index) => domain !== expectedObservationDomains[index])
     || observationDomainOrder.length !== expectedObservationDomains.length
     || failureDomainOrder.some((domain, index) => domain !== expectedFailureDomains[index])
     || failureDomainOrder.length !== expectedFailureDomains.length
-    || observations.some((observation) => observation.observedAt !== previousGeneratedAt)
+    || observations.some((observation) => legacy ? observation.capturedAt !== previousGeneratedAt
+      : Date.parse(observation.capturedAt) > Date.parse(previousGeneratedAt))
     || review.domains.some((item) => item.comparisons.some(
-      (comparison) => comparison.observedAt !== null && comparison.observedAt !== previousGeneratedAt,
+      (comparison) => legacy && comparison.observedAt !== null && comparison.observedAt !== previousGeneratedAt,
     ))
     || review.generatedAt !== previousGeneratedAt
     || review.manifest.digestSha256 !== manifest.digestSha256
@@ -218,7 +240,11 @@ function previousSnapshot(input: string | null, currentGeneratedAt: string): Pre
     || [...observationDomains].some((domain) => !flightRecorder.domains.includes(domain))) {
     throw new CliUsageError('Previous monitor snapshot embedded documents are inconsistent with its observation projection.');
   }
-  return { observations };
+  // Published checkpoints recorded run time, not independently retained source
+  // clocks. Their values remain available without upgrading that timestamp.
+  return { observations: legacy ? observations.map((item) => Object.freeze({
+    ...item, fields: Object.freeze(item.fields.map((field) => Object.freeze({ ...field, observedAt: null }))),
+  })) : observations };
 }
 
 function monitorFailureMessage(): typeof DOMAIN_CONTROL_MONITOR_FAILURE_CATEGORIES[number] {
@@ -251,9 +277,9 @@ export async function runDomainControlMonitor(
       `Domain-control monitor concurrency must be from ${MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY} to ${MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY}.`,
     );
   }
-  let generatedAt: string;
+  let startedAt: string;
   try {
-    generatedAt = requireIsoTimestamp(options.now(), 'Domain-control monitor time');
+    startedAt = requireIsoTimestamp(options.now(), 'Domain-control monitor time');
   } catch {
     throw new CliUsageError('Domain-control monitor time must be a valid ISO 8601 timestamp.');
   }
@@ -264,11 +290,11 @@ export async function runDomainControlMonitor(
   } catch {
     throw new CliUsageError('Domain-control manifest must satisfy its supported bounded integrity contract.');
   }
-  const checkedAt = Date.parse(generatedAt);
+  const checkedAt = Date.parse(startedAt);
   if (Date.parse(manifest.expiresAt) <= checkedAt) {
     throw new CliUsageError('Domain-control monitor requires an unexpired manifest.');
   }
-  const previous = previousSnapshot(previousInput, generatedAt);
+  const previous = previousSnapshot(previousInput, startedAt);
   const entries = manifest.entries.slice(0, Math.min(options.limit, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS));
   const lookups: unknown[] = new Array(entries.length);
   const failuresByIndex: Array<Readonly<{ domain: string; error: string }> | undefined> = new Array(entries.length);
@@ -284,7 +310,9 @@ export async function runDomainControlMonitor(
         const classified = classifyQuery(entry.domain);
         const result = await options.executeLookup(classified, { fast: false, compact: false, ...(options.signal ? { signal: options.signal } : {}) });
         options.signal?.throwIfAborted();
-        lookups[index] = buildCliLookupDocument(entry.domain, classified, result as UnknownRecord, generatedAt, 'deep');
+        const capturedAt = requireIsoTimestamp(options.now(), 'Domain-control capture time');
+        if (Date.parse(capturedAt) < checkedAt) throw new CliUsageError('Domain-control capture time must not precede the run.');
+        lookups[index] = buildCliLookupDocument(entry.domain, classified, result as UnknownRecord, capturedAt, 'deep');
       } catch {
         if (options.signal?.aborted) {
           throw options.signal.reason || new DOMException('Aborted', 'AbortError');
@@ -301,6 +329,11 @@ export async function runDomainControlMonitor(
   const failures = failuresByIndex.filter((failure): failure is Readonly<{ domain: string; error: string }> => Boolean(failure));
   const successful = lookups.filter(Boolean);
   if (!successful.length) throw new Error('No domain-control monitor lookup completed successfully.');
+  const generatedAt = requireIsoTimestamp(options.now(), 'Domain-control completion time');
+  if (Date.parse(generatedAt) < checkedAt || successful.some((lookup) =>
+    Date.parse(String((lookup as UnknownRecord).generatedAt)) > Date.parse(generatedAt))) {
+    throw new CliUsageError('Domain-control completion time must not precede its captures.');
+  }
   const review = buildCliDomainControlReview(JSON.stringify({
     schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
     version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,

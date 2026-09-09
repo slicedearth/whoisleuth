@@ -4,6 +4,8 @@ import {
 import {
   assertDomainControlPassportByteBudget,
   buildUnsignedDomainControlPassport,
+  domainControlRecordMode,
+  normalizeDomainControlRecordModes,
   DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
   MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
   normalizeDomainControlPassportDocument,
@@ -13,8 +15,12 @@ import {
 import {
   DOMAIN_CONTROL_MANIFEST_CURRENT_CANONICALIZATION,
   DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+  DOMAIN_CONTROL_RECORD_LIST_FIELDS,
+  DOMAIN_CONTROL_RECORD_MODE_OPTIONS,
+  type DomainControlRecordField,
 } from '../contracts/domain-control-manifest.mts';
 import { serializeDomainControlManifest } from '../evidence/domain-control-runtime.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_DESIRED_POSTURE_BASELINES,
   normalizeDesiredPostureBaselines,
@@ -48,6 +54,7 @@ function passportEntry(baseline: DesiredPostureBaseline): DomainControlPassportE
     ds: baseline.ds,
     mx: baseline.mx,
     caa: baseline.caa,
+    recordModes: normalizeDomainControlRecordModes(baseline.recordModes, baseline),
     tlsIssuer: baseline.tlsIssuer || null,
     tlsSpkiSha256: baseline.tlsSpkiSha256 || null,
     registrarLock: baseline.registrarLock === 'unconfigured' ? null : baseline.registrarLock,
@@ -110,8 +117,9 @@ export async function verifyDomainControlPassport(
   if (await sha256ArtifactDigestFor(normalized.unsigned, normalized.canonicalization) !== normalized.manifest.integrity.digestSha256) {
     throw new TypeError('Domain control manifest failed its SHA-256 integrity check.');
   }
-  const checkedAt = Date.parse(now);
-  if (!Number.isFinite(checkedAt)) throw new TypeError('Passport verification time is invalid.');
+  const checkedAtText = normalizeExplicitIsoTimestamp(now);
+  if (!checkedAtText) throw new TypeError('Passport verification time must be valid and include an explicit timezone.');
+  const checkedAt = Date.parse(checkedAtText);
   if (Date.parse(normalized.manifest.expiresAt) <= checkedAt) {
     throw new TypeError('Domain control passport has expired.');
   }
@@ -144,6 +152,9 @@ function emptyBaseline(domain: string, updatedAt: string): DesiredPostureBaselin
 }
 
 function configured(entry: DomainControlPassportEntry, field: DomainControlPassportField): boolean {
+  if (DOMAIN_CONTROL_RECORD_LIST_FIELDS.includes(field as DomainControlRecordField)) {
+    return domainControlRecordMode(entry, field as DomainControlRecordField) !== 'unconfigured';
+  }
   const value = entry[field];
   return Array.isArray(value) ? value.length > 0 : value !== null;
 }
@@ -176,7 +187,13 @@ export function applyDomainControlPassport(
       else if (field === 'tlsIssuer') next.tlsIssuer = entry.tlsIssuer ?? '';
       else if (field === 'tlsSpkiSha256') next.tlsSpkiSha256 = entry.tlsSpkiSha256 ?? '';
       else if (field === 'renewalReviewAt') next.renewalReviewAt = entry.renewalReviewAt;
-      else next[field] = [...entry[field]];
+      else {
+        next[field] = [...entry[field]];
+        next.recordModes = {
+          ...next.recordModes,
+          [field]: domainControlRecordMode(entry, field),
+        };
+      }
     }
     if (changed) baselines.set(entry.domain, { ...next, updatedAt: importedAt });
   }
@@ -201,4 +218,16 @@ export async function applyVerifiedDomainControlPassport(
 
 export function passportConfiguredFields(entry: DomainControlPassportEntry): DomainControlPassportField[] {
   return DOMAIN_CONTROL_PASSPORT_FIELDS.filter((field) => configured(entry, field));
+}
+
+export function passportFieldSummary(entry: DomainControlPassportEntry, field: DomainControlPassportField): string {
+  if (!configured(entry, field)) return 'Not configured; destination remains unchanged';
+  if (DOMAIN_CONTROL_RECORD_LIST_FIELDS.includes(field as DomainControlRecordField)) {
+    const recordField = field as DomainControlRecordField;
+    const mode = domainControlRecordMode(entry, recordField);
+    const label = DOMAIN_CONTROL_RECORD_MODE_OPTIONS.find((option) => option.value === mode)!.label;
+    return mode === 'expect_records' ? `${label}: ${entry[recordField].length}`
+      : `${label}; replaces the selected destination record expectation`;
+  }
+  return String(entry[field]);
 }

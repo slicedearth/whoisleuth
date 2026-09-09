@@ -11,7 +11,7 @@ import type {
 } from './client-response-contracts.ts';
 import { brandPostureObservationContext, currentDesiredPostureObservation, MAX_DESIRED_POSTURE_OBSERVATIONS } from './brand-profile-model.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
-import { canonicalPostureRecords } from '../../../../packages/evidence/domain-control-runtime.mts';
+import { canonicalPostureRecords, domainControlRecordMode, domainControlEvidenceAdmission } from '../../../../packages/evidence/domain-control-runtime.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, postureSourceAdmission, postureTransferRestriction, type DomainPostureProfileContext } from '../../../../packages/evidence/domain-posture-context.mts';
 
 export type DomainPostureAuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string; context?: DomainPostureProfileContext };
@@ -52,7 +52,7 @@ export type OwnedDomainPostureReview = Readonly<{
 export type DesiredPostureComparison = Readonly<{
   field: DesiredPostureComparisonField;
   label: string;
-  state: 'aligned' | 'approved_window' | 'drift' | 'not_configured' | 'review' | 'suppressed' | 'unavailable' | 'unknown' | 'unsupported';
+  state: 'aligned' | 'approved_window' | 'drift' | 'not_configured' | 'observed' | 'review' | 'suppressed' | 'unavailable' | 'unknown' | 'unsupported';
   desired: readonly string[];
   observed: readonly string[];
   explanation: string;
@@ -225,8 +225,9 @@ function recordComparison(
   contextLimitation: string | null,
 ): DesiredPostureComparison {
   const desired = canonicalPostureRecords(field, baseline[field]);
+  const mode = domainControlRecordMode(baseline, field);
   if (desired === null) return withSuppression({ field, label: DESIRED_POSTURE_FIELD_LABELS[field], state: 'unknown', desired: baseline[field], observed: [], explanation: 'The desired record set contains invalid or unsupported values; review the baseline.' }, baseline, nowMs);
-  if (!desired.length) {
+  if (mode === 'unconfigured') {
     return withSuppression({
       field,
       label: DESIRED_POSTURE_FIELD_LABELS[field],
@@ -237,7 +238,9 @@ function recordComparison(
     }, baseline, nowMs, observationAt);
   }
   const observed = comparableRecords(check);
-  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null);
+  const reviewedAt = Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null;
+  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, reviewedAt)
+    ?? domainControlEvidenceAdmission(check?.sourceContext?.observedAt, reviewedAt);
   if (observed === null || limitation) {
     return withSuppression({
       field,
@@ -248,8 +251,12 @@ function recordComparison(
       explanation: limitation ?? 'The retained values include invalid or unsupported records.',
     }, baseline, nowMs, observationAt);
   }
+  if (mode === 'observe_only') return withSuppression({
+    field, label: DESIRED_POSTURE_FIELD_LABELS[field], state: 'observed', desired: [], observed,
+    explanation: 'Observation only: no required record set is compared.',
+  }, baseline, nowMs, check?.sourceContext?.observedAt ?? null);
   const aligned = sameRecords(desired, observed);
-  const needsReview = aligned && (check?.status === 'warning' || check?.status === 'danger');
+  const needsReview = aligned && mode !== 'expect_none' && (check?.status === 'warning' || check?.status === 'danger');
   return withSuppression({
     field,
     label: DESIRED_POSTURE_FIELD_LABELS[field],
@@ -258,6 +265,8 @@ function recordComparison(
     observed,
     explanation: needsReview
       ? 'The retained values match the desired set, but the source-qualified posture check still needs review.'
+      : mode === 'expect_none'
+        ? aligned ? 'The complete source observation contains no records, as expected.' : 'The complete source observation contains records where none are expected.'
       : aligned
         ? 'The retained source records match the analyst-authored desired set.'
       : 'The retained source records differ from the analyst-authored desired set.',
@@ -270,13 +279,14 @@ function unsupportedComparison(
   desired: readonly string[],
   nowMs: number,
 ): DesiredPostureComparison {
+  const configured = field === 'ds' ? domainControlRecordMode(baseline, 'ds') !== 'unconfigured' : desired.length > 0;
   return withSuppression({
     field,
     label: DESIRED_POSTURE_FIELD_LABELS[field],
-    state: desired.length ? 'unsupported' : 'not_configured',
+    state: configured ? 'unsupported' : 'not_configured',
     desired,
     observed: [],
-    explanation: desired.length
+    explanation: configured
       ? 'This audit does not return a complete comparable value for this field.'
       : 'No analyst-authored desired value is configured.',
   }, baseline, nowMs);
@@ -303,7 +313,9 @@ function lockComparison(
   }
   const records = comparableRecords(check);
   const observedLock = records && postureTransferRestriction(records);
-  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null);
+  const reviewedAt = Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null;
+  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, reviewedAt)
+    ?? domainControlEvidenceAdmission(check?.sourceContext?.observedAt, reviewedAt);
   if (!observedLock || limitation) {
     return withSuppression({
       field: 'registrarLock',

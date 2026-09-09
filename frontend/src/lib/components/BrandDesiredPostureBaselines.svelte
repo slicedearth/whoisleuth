@@ -9,22 +9,28 @@
     DESIRED_POSTURE_SUPPRESSION_FIELDS,
     MAX_DESIRED_POSTURE_CHANGE_WINDOWS,
     MAX_DESIRED_POSTURE_SUPPRESSIONS,
+    MAX_DESIRED_POSTURE_RECORDS,
   } from '$lib/analysis/brand-profile-model.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
+  import { DESIRED_POSTURE_FIELD_LABELS } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { domainControlRecordMode, normalizeDomainControlRecordSettings } from '../../../../packages/evidence/domain-control-runtime.mts';
+  import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+  import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, DOMAIN_CONTROL_RECORD_MODE_OPTIONS, MAX_CURRENT_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH, type DomainControlRecordField, type DomainControlRecordModes } from '../../../../packages/contracts/domain-control-manifest.mts';
 
   type PersistenceResult = { committed: true } | { committed: false; message: string };
 
   let { active, saveBaselines, requestedDomain = '' }: {
     active: BrandProfile;
-    saveBaselines: (baselines: DesiredPostureBaseline[]) => Promise<PersistenceResult>;
+    saveBaselines: (profileId: string, expectedUpdatedAt: string, baselines: DesiredPostureBaseline[]) => Promise<PersistenceResult>;
     requestedDomain?: string;
   } = $props();
 
   let selectedDomain = $state('');
-  let nameservers = $state('');
-  let ds = $state('');
-  let mx = $state('');
-  let caa = $state('');
+  let draftProfile = $state<BrandProfile | null>(null);
+  let recordDrafts = $state<Record<DomainControlRecordField, string>>({ nameservers: '', ds: '', mx: '', caa: '' });
+  let recordModes = $state<DomainControlRecordModes>({ nameservers: 'unconfigured', ds: 'unconfigured', mx: 'unconfigured', caa: 'unconfigured' });
+  const recordPresentationLengths = { nameservers: MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, ds: MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, mx: MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, caa: MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH };
+  const recordPlaceholders = { nameservers: 'ns1.example.test', ds: 'key-tag algorithm digest-type digest', mx: '10 mail.example.test', caa: '0 issue "ca.example"' };
   let tlsIssuer = $state('');
   let tlsSanPatterns = $state('');
   let tlsSpkiSha256 = $state('');
@@ -47,16 +53,18 @@
     return `cw-${Date.now().toString(36)}-${changeWindowSequence.toString(36)}`;
   }
 
-  function list(value: string): string[] {
-    return [...new Set(value.split(/[\n,]/u).map((item) => item.trim()).filter(Boolean))].slice(0, 32);
+  function list(value: string, maximum = MAX_CURRENT_DOMAIN_CONTROL_RECORDS): string[] {
+    const values = [...new Set(value.split(/\n/u).map((item) => item.trim()).filter(Boolean))];
+    if (values.length > maximum) throw new RangeError(`Enter at most ${maximum} records, one per line.`);
+    return values;
   }
 
   function timezoneTimestamp(value: string, label: string): string {
-    const candidate = value.trim();
-    if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(candidate) || !Number.isFinite(Date.parse(candidate))) {
+    const candidate = normalizeExplicitIsoTimestamp(value.trim());
+    if (!candidate) {
       throw new TypeError(`${label} must be an ISO timestamp with Z or an explicit UTC offset.`);
     }
-    return new Date(candidate).toISOString();
+    return candidate;
   }
 
   function validatedChangeWindows(): DesiredPostureChangeWindow[] {
@@ -135,12 +143,11 @@
   }
 
   function load(domain: string): void {
+    draftProfile = active;
     selectedDomain = domain;
     const baseline = active.desiredPostureBaselines.find((item) => item.domain === domain);
-    nameservers = baseline?.nameservers.join('\n') || '';
-    ds = baseline?.ds.join('\n') || '';
-    mx = baseline?.mx.join('\n') || '';
-    caa = baseline?.caa.join('\n') || '';
+    recordDrafts = Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => [field, baseline?.[field].join('\n') ?? ''])) as typeof recordDrafts;
+    recordModes = Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => [field, baseline ? domainControlRecordMode(baseline, field) : 'unconfigured'])) as DomainControlRecordModes;
     tlsIssuer = baseline?.tlsIssuer || '';
     tlsSanPatterns = baseline?.tlsSanPatterns.join('\n') || '';
     tlsSpkiSha256 = baseline?.tlsSpkiSha256 || '';
@@ -155,12 +162,28 @@
     message = '';
   }
 
+  async function restoreEditorFocus(origin: Element | null): Promise<void> {
+    await tick();
+    if (document.activeElement !== document.body && document.activeElement !== origin) return;
+    if (origin instanceof HTMLButtonElement && origin.isConnected && !origin.disabled) origin.focus({ preventScroll: true });
+  }
+
   async function save(): Promise<void> {
-    if (!selectedDomain || busy) return;
+    const owner = draftProfile;
+    const domain = selectedDomain;
+    if (!domain || !owner || owner.id !== active.id || busy) return;
+    const origin = document.activeElement;
     message = '';
     let nextChangeWindows: DesiredPostureChangeWindow[];
     let nextSuppressions: DesiredPostureSuppression[];
+    let nextRecords: ReturnType<typeof normalizeDomainControlRecordSettings>;
+    let nextRenewal: string | null;
+    let nextSanPatterns: string[];
     try {
+      const values = Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => [field, recordModes[field] === 'expect_records' ? list(recordDrafts[field]) : []]));
+      nextRecords = normalizeDomainControlRecordSettings({ ...values, recordModes });
+      nextRenewal = renewalReviewAt ? timezoneTimestamp(`${renewalReviewAt}T00:00:00.000Z`, 'Renewal review date') : null;
+      nextSanPatterns = list(tlsSanPatterns, MAX_DESIRED_POSTURE_RECORDS);
       nextChangeWindows = validatedChangeWindows();
       nextSuppressions = validatedSuppressions();
     } catch (cause) {
@@ -168,21 +191,16 @@
       return;
     }
     busy = true;
-    const existing = active.desiredPostureBaselines.find((item) => item.domain === selectedDomain);
+    const existing = owner.desiredPostureBaselines.find((item) => item.domain === domain);
     const baseline: DesiredPostureBaseline = {
       version: 1,
-      domain: selectedDomain,
-      nameservers: list(nameservers),
-      ds: list(ds),
-      mx: list(mx),
-      caa: list(caa),
+      domain,
+      ...nextRecords,
       tlsIssuer: tlsIssuer.trim(),
-      tlsSanPatterns: list(tlsSanPatterns),
+      tlsSanPatterns: nextSanPatterns,
       tlsSpkiSha256: tlsSpkiSha256.trim().toLowerCase(),
       registrarLock,
-      renewalReviewAt: renewalReviewAt
-        ? new Date(`${renewalReviewAt}T00:00:00.000Z`).toISOString()
-        : null,
+      renewalReviewAt: nextRenewal,
       zoneIntent,
       lifecycle,
       recoveryDependency: recoveryDependency.trim(),
@@ -194,40 +212,46 @@
       updatedAt: new Date().toISOString(),
     };
     try {
-      const result = await saveBaselines([
-        ...active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain),
+      const result = await saveBaselines(owner.id, owner.updatedAt, [
+        ...owner.desiredPostureBaselines.filter((item) => item.domain !== domain),
         baseline,
       ]);
       message = result.committed
-        ? `Saved expected settings for ${selectedDomain}.`
+        ? `Saved expected settings for ${domain}.`
         : result.message;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not save the expected domain settings.';
     } finally {
       busy = false;
+      await restoreEditorFocus(origin);
     }
   }
 
   async function remove(): Promise<void> {
-    if (!selectedDomain || busy || !confirm(`Remove the expected settings for ${selectedDomain}?`)) return;
+    const owner = draftProfile;
+    const domain = selectedDomain;
+    if (!domain || !owner || owner.id !== active.id || busy || !confirm(`Remove the expected settings for ${domain}?`)) return;
+    const origin = document.activeElement;
     busy = true;
     message = '';
     try {
-      const result = await saveBaselines(active.desiredPostureBaselines.filter((item) => item.domain !== selectedDomain));
+      const result = await saveBaselines(owner.id, owner.updatedAt, owner.desiredPostureBaselines.filter((item) => item.domain !== domain));
       if (!result.committed) {
         message = result.message;
         return;
       }
-      load(selectedDomain);
-      message = `Removed the expected settings for ${selectedDomain}.`;
+      if (selectedDomain === domain && active.id === owner.id) load(domain);
+      message = `Removed the expected settings for ${domain}.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not remove the expected domain settings.';
     } finally {
       busy = false;
+      await restoreEditorFocus(origin);
     }
   }
 
   $effect(() => {
+    if (busy) return;
     if (requestedDomain && requestedDomain !== appliedRequestedDomain && active.officialDomains.includes(requestedDomain)) {
       appliedRequestedDomain = requestedDomain;
       load(requestedDomain);
@@ -240,7 +264,7 @@
   });
 </script>
 
-<section id="desired-posture-baseline" class="baselines card" tabindex="-1">
+<section id="desired-posture-baseline" class="baselines card" tabindex="-1" data-profile-id={active.id}>
   <header class="section-head">
     <div>
       <p class="eyebrow">Expected settings</p>
@@ -268,10 +292,19 @@
   {#if selectedDomain}
     <fieldset class="baseline-editor" disabled={busy}>
     <div class="baseline-grid">
-      <label><span>Nameservers</span><textarea rows="3" maxlength="6000" bind:value={nameservers} placeholder="ns1.example.test"></textarea></label>
-      <label><span>DS records</span><textarea rows="3" maxlength="6000" bind:value={ds} placeholder="key-tag algorithm digest-type digest"></textarea></label>
-      <label><span>Mail exchangers</span><textarea rows="3" maxlength="6000" bind:value={mx} placeholder="10 mail.example.test"></textarea></label>
-      <label><span>CAA policy</span><textarea rows="3" maxlength="6000" bind:value={caa} placeholder='0 issue "ca.example"'></textarea></label>
+      {#each DOMAIN_CONTROL_RECORD_LIST_FIELDS as field}
+        <div class="record-expectation">
+          <label><span>{DESIRED_POSTURE_FIELD_LABELS[field]} expectation</span><select bind:value={recordModes[field]}>{#each DOMAIN_CONTROL_RECORD_MODE_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+          {#if recordModes[field] === 'expect_records'}
+            <label><span>{DESIRED_POSTURE_FIELD_LABELS[field]}</span><textarea rows="3" maxlength={(recordPresentationLengths[field] + 1) * MAX_CURRENT_DOMAIN_CONTROL_RECORDS} bind:value={recordDrafts[field]} placeholder={recordPlaceholders[field]} aria-describedby={`expected-${field}-help`}></textarea></label>
+            <small id={`expected-${field}-help`}>One record per line; up to {MAX_CURRENT_DOMAIN_CONTROL_RECORDS}.</small>
+          {:else if recordModes[field] === 'expect_none'}
+            <small>A complete source observation is needed to confirm an empty record set.{field === 'mx' ? ' Null MX is a record: use “Expect records” for 0 .' : ''}</small>
+          {:else if recordModes[field] === 'observe_only'}
+            <small>Show available evidence without comparing it with a required record set.</small>
+          {/if}
+        </div>
+      {/each}
       <label><span>TLS issuer</span><input maxlength="2000" bind:value={tlsIssuer} placeholder="Reviewed issuer name"></label>
       <label><span>TLS SAN patterns</span><textarea rows="3" maxlength="6000" bind:value={tlsSanPatterns} placeholder="example.test&#10;*.example.test"></textarea></label>
       <label><span>TLS SPKI SHA-256</span><input maxlength="64" bind:value={tlsSpkiSha256} placeholder="64 hexadecimal characters"></label>
@@ -337,7 +370,7 @@
     </fieldset>
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">
-      <button class="primary" onclick={save} disabled={busy}>Save expected settings</button>
+      <button id="save-desired-posture-settings" class="primary" onclick={save} disabled={busy}>Save expected settings</button>
       <button class="btn danger-action" onclick={remove} disabled={busy || !active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Remove</button>
     </div>
     </fieldset>
@@ -360,6 +393,7 @@
   label>span{color:var(--muted);font-size:var(--text-2xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
   input,select,textarea{width:100%;min-width:0}
   textarea{resize:vertical}
+  .record-expectation{display:grid;align-content:start;gap:9px;min-width:0}.record-expectation small{color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
   .baseline-editor{min-width:0;margin:0;padding:0;border:0}
   .section-head>label{align-self:start;min-width:min(260px,100%)}
   .baseline-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}

@@ -7,6 +7,7 @@ import {
 } from '../lib/interchange-fidelity-registry.mts';
 import {
   offlineArtifactSatisfiesAssurance,
+  MAX_OFFLINE_ARTIFACT_BYTES,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
@@ -17,7 +18,7 @@ import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
-export const MAX_INTERCHANGE_REPORT_BYTES = 15 * 1024 * 1024;
+export const MAX_INTERCHANGE_REPORT_BYTES = MAX_OFFLINE_ARTIFACT_BYTES;
 
 type UnknownRecord = Record<string, unknown>;
 type VerificationState = 'envelope_valid' | 'integrity_valid' | 'not_verified' | 'structure_valid' | 'unsupported_version' | 'verified';

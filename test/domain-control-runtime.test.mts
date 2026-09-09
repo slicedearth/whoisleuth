@@ -35,6 +35,7 @@ import {
 import { MAX_DOMAIN_NAME_LENGTH } from '../packages/contracts/domain-name.mts';
 import {
   DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  DOMAIN_CONTROL_REVIEW_VERSION,
   buildDomainControlManifest,
   reviewDomainControlManifest,
   verifyDomainControlManifest,
@@ -127,7 +128,7 @@ describe('pure domain-control runtime ownership', () => {
   test('derives raw wire shapes and executable bounds from dependency-neutral contracts', () => {
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_INPUT_KEYS, ['schema', 'version', 'expiresAt', 'entries']);
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ROOT_KEYS, ['schema', 'version', 'generatedAt', 'expiresAt', 'entries', 'limitations', 'integrity']);
-    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, ['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note']);
+    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, ['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note', 'recordModes']);
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS, ['algorithm', 'canonicalization', 'digestSha256']);
     assert.deepEqual(DOMAIN_CONTROL_RECORD_LIST_FIELDS, ['nameservers', 'ds', 'mx', 'caa']);
     assert.deepEqual(DOMAIN_CONTROL_MX_RECORD_KEYS, ['exchange', 'host', 'value', 'priority', 'preference']);
@@ -273,7 +274,7 @@ describe('pure domain-control runtime ownership', () => {
     assert.deepEqual(verifyDomainControlManifest(structuredClone(manifest)), manifest);
     const review = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'example.test',
@@ -400,9 +401,11 @@ describe('pure domain-control runtime ownership', () => {
     }
   });
 
-  test('serialises the exact current document to its portable bytes', async () => {
-    const raw = await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8');
-    assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
+  test('serialises supported public and current documents to their portable bytes', async () => {
+    for (const version of [2, 3]) {
+      const raw = await readFile(new URL(`./fixtures/domain-control-manifest-v${version}.json`, import.meta.url), 'utf8');
+      assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
+    }
   });
 
   test('returns only the detached validated snapshot from Node and browser verifiers', async () => {

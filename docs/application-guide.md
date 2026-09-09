@@ -172,6 +172,12 @@ observation time and completeness of comparable DNS and registry sources.
 Report completion is not a source observation time. The history preserves
 equal-time records; missing context or ambiguous ordering remains unknown.
 
+For nameservers, DS, MX and CAA, choose no expectation, an expected empty set,
+specified records, or observation only. A null MX (`0 .`) is a specified record,
+not an empty set. Portable settings preserve these choices; an import changes
+only the selected fields. Missing, incomplete or stale observations cannot
+confirm an expected absence.
+
 Brand views can provide:
 
 - a cross-domain posture matrix over saved baselines and retained observations;

@@ -11,12 +11,13 @@ import {
   requireIsoTimestamp,
 } from '../lib/bounded-contract-normalizers.mts';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { MAX_DOMAIN_CONTROL_MANIFEST_BYTES } from '../packages/contracts/domain-control-manifest.mts';
 import { parseBoundedJsonObject } from './bounded-json.mts';
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';
 export const INVESTIGATION_MANIFEST_VERSION = 2;
 export const MAX_INVESTIGATION_MANIFEST_ARTIFACTS = 16;
-export const MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES = 15 * 1024 * 1024;
+export const MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES = MAX_DOMAIN_CONTROL_MANIFEST_BYTES;
 export const MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES = 32 * 1024 * 1024;
 
 const SHA256_RE = /^sha256:[a-f0-9]{64}$/u;

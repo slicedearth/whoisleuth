@@ -1,5 +1,6 @@
 import {
   hasVerifiedWholeArtifactIntegrity,
+  MAX_OFFLINE_ARTIFACT_BYTES,
   UnsupportedOfflineArtifactError,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
@@ -7,7 +8,7 @@ import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 const SHARING_REVIEW_SCHEMA = 'whoisleuth.cli.sharing-review';
 const SHARING_REVIEW_VERSION = 2;
-const MAX_SHARING_REVIEW_BYTES = 15 * 1024 * 1024;
+const MAX_SHARING_REVIEW_BYTES = MAX_OFFLINE_ARTIFACT_BYTES;
 const TLP_MARKINGS = ['clear', 'green', 'amber', 'amber-strict', 'red'] as const;
 const RECIPIENT_SCOPES = ['public', 'community', 'organization', 'named-recipients'] as const;
 
@@ -88,39 +89,34 @@ function markingFromText(value: string): TlpMarking | null {
 function scanArtifact(root: UnknownRecord): Readonly<{
   importedMarkings: readonly TlpMarking[];
   riskyKeyCount: number;
-  truncated: boolean;
 }> {
-  const stack: Array<{ value: unknown; depth: number; key: string | null }> = [{ value: root, depth: 0, key: null }];
+  // The caller has already enforced the JSON byte, node, nesting and container
+  // bounds. Scan that admitted tree in full without a second, smaller prefix.
+  const stack: Array<{ value: unknown; marking: boolean }> = [{ value: root, marking: false }];
   const markings = new Set<TlpMarking>();
   let riskyKeyCount = 0;
-  let visited = 0;
-  let truncated = false;
-  while (stack.length && visited < 20_000) {
+  while (stack.length) {
     const next = stack.pop()!;
-    visited += 1;
-    if (next.key && RISKY_KEYS.has(normalizedKey(next.key))) riskyKeyCount += 1;
     if (typeof next.value === 'string') {
-      const marking = markingFromText(next.value);
-      if (marking && (next.key === null || MARKING_KEYS.has(normalizedKey(next.key)))) markings.add(marking);
-      continue;
-    }
-    if (next.depth >= 12) {
-      if (next.value && typeof next.value === 'object') truncated = true;
+      if (next.marking) {
+        const marking = markingFromText(next.value);
+        if (marking) markings.add(marking);
+      }
       continue;
     }
     if (Array.isArray(next.value)) {
-      for (const item of next.value.slice(0, 500)) stack.push({ value: item, depth: next.depth + 1, key: next.key });
-      if (next.value.length > 500) truncated = true;
+      for (const value of next.value) stack.push({ value, marking: next.marking });
       continue;
     }
     const valueRecord = record(next.value);
     if (!valueRecord) continue;
-    const entries = Object.entries(valueRecord);
-    for (const [key, value] of entries.slice(0, 500)) stack.push({ value, depth: next.depth + 1, key });
-    if (entries.length > 500) truncated = true;
+    for (const [key, value] of Object.entries(valueRecord)) {
+      const normalized = normalizedKey(key);
+      if (RISKY_KEYS.has(normalized)) riskyKeyCount += 1;
+      stack.push({ value, marking: MARKING_KEYS.has(normalized) });
+    }
   }
-  if (stack.length) truncated = true;
-  return { importedMarkings: [...markings], riskyKeyCount, truncated };
+  return { importedMarkings: [...markings], riskyKeyCount };
 }
 
 function expectedScope(marking: TlpMarking): RecipientScope {
@@ -204,7 +200,6 @@ async function buildSharingReview(
     options.recipientScope === expectedScope(effective)
       ? `The recipient scope matches the effective ${tlpLabel(effective)} sharing boundary.`
       : `${tlpLabel(effective)} requires the ${expectedScope(effective)} recipient scope in this local policy.`);
-  if (scan.truncated) add('scan-bounds', 'caution', 'Bounded content scan', 'The defensive key and marking scan reached a traversal bound; review the artefact manually.');
 
   const counts = {
     block: findings.filter((finding) => finding.state === 'block').length,

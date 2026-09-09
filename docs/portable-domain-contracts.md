@@ -84,6 +84,17 @@ adapters. Current writers and supported public archive versions are listed in
 the [Case portability reference](case-contracts.md). Unsupported archives fail
 explicitly without mutation.
 
+### Domain controls
+
+Domain-control manifests and reviews are owned by
+`packages/contracts/domain-control-*.mts`, with record normalisation in
+`packages/evidence/domain-control-runtime.mts`. Current manifests retain
+explicit record expectations and complete sets of up to 64 records per field.
+CLI reviews and monitor checkpoints separate each source’s observation time
+from capture and report time. The public manifest and checkpoint readers
+preserve their original formats; a historical run timestamp is not substituted
+for an unknown source time.
+
 ## Compatibility and privacy bounds
 
 Compatibility fixtures bind exact bytes and SHA-256 digests.

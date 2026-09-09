@@ -1,0 +1,126 @@
+{
+  "schema": "whoisleuth.domain-control-flight-recorder",
+  "version": 2,
+  "generatedAt": "2026-08-02T00:00:00.000Z",
+  "domains": [
+    "example.test"
+  ],
+  "observationCount": 2,
+  "events": [
+    {
+      "id": "example.test:delegated_nameservers:2026-08-01T00:00:00.000Z:1",
+      "domain": "example.test",
+      "field": "delegated_nameservers",
+      "observedAt": "2026-08-01T00:00:00.000Z",
+      "capturedAt": "2026-08-01T00:00:00.000Z",
+      "kind": "first_observation",
+      "state": "observed",
+      "before": [],
+      "after": [
+        "ns1.example.test"
+      ],
+      "source": "DNS delegation evidence",
+      "approvedWindow": null,
+      "explanation": "The first complete source-timed value for this field was retained."
+    },
+    {
+      "id": "example.test:mail_exchangers:2026-08-01T00:00:00.000Z:2",
+      "domain": "example.test",
+      "field": "mail_exchangers",
+      "observedAt": "2026-08-01T00:00:00.000Z",
+      "capturedAt": "2026-08-01T00:00:00.000Z",
+      "kind": "first_observation",
+      "state": "observed",
+      "before": [],
+      "after": [
+        "10 mail.example.test"
+      ],
+      "source": "DNS mail evidence",
+      "approvedWindow": null,
+      "explanation": "The first complete source-timed value for this field was retained."
+    },
+    {
+      "id": "example.test:http_origin:2026-08-01T00:00:00.000Z:3",
+      "domain": "example.test",
+      "field": "http_origin",
+      "observedAt": "2026-08-01T00:00:00.000Z",
+      "capturedAt": "2026-08-01T00:00:00.000Z",
+      "kind": "incomplete_observation",
+      "state": "partial",
+      "before": [],
+      "after": [],
+      "source": "HTTP evidence",
+      "approvedWindow": null,
+      "explanation": "The source is partial. Retained values are incomplete; this is not evidence that a prior value disappeared or changed."
+    },
+    {
+      "id": "example.test:delegated_nameservers:2026-08-02T00:00:00.000Z:4",
+      "domain": "example.test",
+      "field": "delegated_nameservers",
+      "observedAt": "2026-08-02T00:00:00.000Z",
+      "capturedAt": "2026-08-02T00:00:00.000Z",
+      "kind": "observed_change",
+      "state": "observed",
+      "before": [
+        "ns1.example.test"
+      ],
+      "after": [
+        "ns2.example.test"
+      ],
+      "source": "DNS delegation evidence",
+      "approvedWindow": {
+        "id": "dns-change-1",
+        "reason": "Reviewed nameserver migration."
+      },
+      "explanation": "Two complete observations from the same source changed during the recorded change window."
+    },
+    {
+      "id": "example.test:mail_exchangers:2026-08-02T00:00:00.000Z:5",
+      "domain": "example.test",
+      "field": "mail_exchangers",
+      "observedAt": "2026-08-02T00:00:00.000Z",
+      "capturedAt": "2026-08-02T00:00:00.000Z",
+      "kind": "collection_change",
+      "state": "partial",
+      "before": [
+        "10 mail.example.test"
+      ],
+      "after": [],
+      "source": "DNS mail evidence",
+      "approvedWindow": null,
+      "explanation": "The source is partial. Retained values are incomplete; this is not evidence that a prior value disappeared or changed."
+    },
+    {
+      "id": "example.test:http_origin:2026-08-02T00:00:00.000Z:6",
+      "domain": "example.test",
+      "field": "http_origin",
+      "observedAt": "2026-08-02T00:00:00.000Z",
+      "capturedAt": "2026-08-02T00:00:00.000Z",
+      "kind": "recovered",
+      "state": "observed",
+      "before": [],
+      "after": [
+        "https://example.test"
+      ],
+      "source": "HTTP evidence",
+      "approvedWindow": null,
+      "explanation": "A complete source-timed value is available after an incomplete observation; this does not establish a value change."
+    }
+  ],
+  "summary": {
+    "firstObservations": 2,
+    "observedChanges": 1,
+    "approvedChanges": 1,
+    "unexpectedChanges": 0,
+    "collectionChanges": 1,
+    "recoveredSources": 1,
+    "incompleteFields": 2
+  },
+  "limitations": [
+    "The flight recorder compares only supplied bounded observations and performs no collection or configuration change.",
+    "Source fields remain separate. A collection failure, partial result, unsupported source, or missing field never becomes evidence that a prior value disappeared.",
+    "Approved windows label expected timing but do not delete evidence or establish that a change was authorised, successful, safe, or complete.",
+    "Observed changes can reflect publication lag or different collection conditions and require analyst review.",
+    "Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change."
+  ]
+}

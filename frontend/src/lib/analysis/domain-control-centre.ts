@@ -2,6 +2,8 @@ import type { BrandProfile, DesiredPostureBaseline } from './brand-profile-model
 import { brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations } from './brand-profile-model.ts';
 import { buildDesiredPostureComparisonsFromObservation } from './owned-domain-posture-review.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { domainControlRecordMode } from '../../../../packages/evidence/domain-control-runtime.mts';
+import { DOMAIN_CONTROL_RECORD_LIST_FIELDS } from '../../../../packages/contracts/domain-control-manifest.mts';
 
 export type DomainControlCentreRow = Readonly<{
   domain: string;
@@ -9,7 +11,7 @@ export type DomainControlCentreRow = Readonly<{
   baselineFields: number;
   latestObservationAt: string | null;
   observationLimitation: string | null;
-  nameserverPreflight: 'aligned' | 'configured' | 'drift' | 'incomplete' | 'not_configured';
+  nameserverPreflight: 'aligned' | 'configured' | 'drift' | 'incomplete' | 'not_configured' | 'observed';
   activeWindow: DesiredPostureBaseline['approvedChangeWindows'][number] | null;
   nextWindow: DesiredPostureBaseline['approvedChangeWindows'][number] | null;
 }>;
@@ -34,21 +36,18 @@ export type DomainControlCentre = Readonly<{
 
 function nameserverPreflight(profile: BrandProfile, baseline: DesiredPostureBaseline | null, now: string): DomainControlCentreRow['nameserverPreflight'] {
   if (!baseline) return 'not_configured';
-  if (!baseline.nameservers.length) return 'incomplete';
+  if (domainControlRecordMode(baseline, 'nameservers') === 'unconfigured') return 'not_configured';
   if (!desiredPostureObservations(baseline).length) return 'configured';
   const latest = currentDesiredPostureObservation(baseline);
   const comparison = buildDesiredPostureComparisonsFromObservation(baseline, latest.observation, now, {
     context: brandPostureObservationContext(profile, baseline.domain), limitation: latest.limitation,
   }).find((item) => item.field === 'nameservers');
-  return comparison?.state === 'aligned' ? 'aligned' : comparison?.state === 'drift' ? 'drift' : 'incomplete';
+  return comparison?.state === 'aligned' ? 'aligned' : comparison?.state === 'drift' ? 'drift' : comparison?.state === 'observed' ? 'observed' : 'incomplete';
 }
 
 function baselineFieldCount(baseline: DesiredPostureBaseline): number {
   return [
-    baseline.nameservers.length,
-    baseline.ds.length,
-    baseline.mx.length,
-    baseline.caa.length,
+    ...DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => domainControlRecordMode(baseline, field) !== 'unconfigured'),
     baseline.tlsIssuer,
     baseline.tlsSanPatterns.length,
     baseline.tlsSpkiSha256,

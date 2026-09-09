@@ -130,7 +130,7 @@ Every operation below is joined to the exact installed command identity. Variant
 | `command.cli.registry-support`<br>Explain local registry coverage | Reads the embedded registry capability catalogue for one domain or suffix. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete |
 | `command.cli.review-evidence`<br>Review supplied evidence offline | Reads one bounded versioned evidence or request-planning document and performs no collection. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>blocked |
 | `command.cli.risk-calibrate`<br>Replay reviewed Risk labels offline | Reads one bounded reviewed-label dataset and changes no model or evidence. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete |
-| `command.cli.sharing-review`<br>Lint an artefact before deliberate sharing | Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>blocked |
+| `command.cli.sharing-review`<br>Lint an artefact before deliberate sharing | Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>blocked |
 | `command.cli.sign-artifact`<br>Sign a reviewed artefact locally | Reads one selected artefact and one local private key without transmitting either. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete |
 | `command.cli.source-report`<br>Build a target-free source report | Reads bounded saved evidence and emits target-free source reliability data. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete<br>partial |
 | `command.cli.timeline`<br>Build same-domain history from saved lookups | Reads 2 to 20 saved observations for one domain, capped at 32 MiB in total. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete<br>partial |
@@ -152,7 +152,7 @@ The machine-readable catalogue contains every exact compatibility, privacy-profi
 | `analyst-review-state` | analyst authored sensitive | 1 | 1 | 1 |
 | `case-portability` | analyst authored sensitive | 9 | 3 | 17 |
 | `cli-lookup` | analyst authored sensitive | 1 | 4 | 6 |
-| `domain-control-flight-recorder` | analyst authored sensitive | 2 | 3 | 6 |
+| `domain-control-flight-recorder` | analyst authored sensitive | 2 | 3 | 7 |
 | `domain-control-manifest` | analyst authored sensitive | 2 | 8 | 14 |
 | `domain-control-monitor` | analyst authored sensitive | 1 | 3 | 4 |
 | `domain-control-review` | analyst authored sensitive | 4 | 3 | 11 |

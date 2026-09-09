@@ -4,6 +4,8 @@
 
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { canonicalDomainControlRecords, normalizeDeclaredDomainControlRecordModes, normalizeDomainControlRecordModes } from '../evidence/domain-control-runtime.mts';
+import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, type DomainControlRecordModes } from '../contracts/domain-control-manifest.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, normalizeDomainPostureProfileContext, type DomainPostureProfileContext, type DomainPostureSourceContext } from '../evidence/domain-posture-context.mts';
@@ -140,6 +142,7 @@ export type DesiredPostureBaseline = {
   ds: string[];
   mx: string[];
   caa: string[];
+  recordModes?: Readonly<Partial<DomainControlRecordModes>>;
   tlsIssuer: string;
   tlsSanPatterns: string[];
   tlsSpkiSha256: string;
@@ -503,6 +506,22 @@ function normalizeTlsSanPatterns(value: unknown): string[] {
   return [...output].sort();
 }
 
+function normalizeBaselineRecords(candidate: Record<string, unknown>) {
+  const records = {
+    nameservers: normalizeDesiredPostureRecords(candidate.nameservers, (entry) => normalizeDomain(entry)),
+    ds: normalizeDesiredPostureRecords(candidate.ds),
+    mx: normalizeDesiredPostureRecords(candidate.mx),
+    caa: normalizeDesiredPostureRecords(candidate.caa),
+  };
+  if (!Object.hasOwn(candidate, 'recordModes')) return records;
+  const recordModes = normalizeDeclaredDomainControlRecordModes(candidate.recordModes);
+  for (const field of DOMAIN_CONTROL_RECORD_LIST_FIELDS) {
+    if (Object.hasOwn(recordModes, field)) records[field] = canonicalDomainControlRecords(candidate[field], field);
+  }
+  normalizeDomainControlRecordModes(recordModes, records);
+  return { ...records, recordModes };
+}
+
 export function normalizeDesiredPostureBaselines(
   value: unknown,
   officialDomains: readonly string[],
@@ -540,10 +559,7 @@ export function normalizeDesiredPostureBaselines(
     output.push({
       version: 1,
       domain,
-      nameservers: normalizeDesiredPostureRecords(candidate.nameservers, (entry) => normalizeDomain(entry)),
-      ds: normalizeDesiredPostureRecords(candidate.ds),
-      mx: normalizeDesiredPostureRecords(candidate.mx),
-      caa: normalizeDesiredPostureRecords(candidate.caa),
+      ...normalizeBaselineRecords(candidate),
       tlsIssuer: boundedText(candidate.tlsIssuer, MAX_PROFILE_TEXT_LENGTH),
       tlsSanPatterns: normalizeTlsSanPatterns(candidate.tlsSanPatterns),
       tlsSpkiSha256: typeof candidate.tlsSpkiSha256 === 'string' && SHA256_RE.test(candidate.tlsSpkiSha256)

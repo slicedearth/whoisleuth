@@ -2,7 +2,9 @@ import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const CLI_DOMAIN_CONTROL_MONITOR_SCHEMA = 'whoisleuth.cli.domain-control-monitor';
-export const CLI_DOMAIN_CONTROL_MONITOR_VERSION = 1;
+export const PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION = 1;
+export const CLI_DOMAIN_CONTROL_MONITOR_VERSION = 2;
+export const SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS = [PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION, CLI_DOMAIN_CONTROL_MONITOR_VERSION] as const;
 
 export const MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_DOMAIN_CONTROL_MONITOR_JSON_DEPTH = 48;
@@ -55,10 +57,10 @@ export const DOMAIN_CONTROL_MONITOR_COMPATIBILITY = defineSchemaCompatibility({
   kind: 'cli_document',
   schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
   currentVersion: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
-  supportedVersions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION],
+  supportedVersions: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS,
   acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject',
-  migration: 'exact_current_only',
+  migration: 'read_only',
   writeSemantics: 'normalized_rewrite',
   byteBudget: null,
   owner: 'packages/contracts/domain-control-monitor.mts',
@@ -70,24 +72,22 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
   owner: 'packages/contracts/domain-control-monitor.mts',
   privacy: 'analyst_authored_sensitive',
   compatibility: [DOMAIN_CONTROL_MONITOR_COMPATIBILITY],
-  contracts: [
-    {
+  contracts: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.map((version) => ({
       compatibilityId: DOMAIN_CONTROL_MONITOR_COMPATIBILITY.id,
       schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-      version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
-      role: 'document',
-      lifecycle: 'current',
+      version,
+      role: 'document' as const,
+      lifecycle: version === CLI_DOMAIN_CONTROL_MONITOR_VERSION ? 'current' as const : 'legacy' as const,
       readable: true,
-      emitted: true,
+      emitted: version === CLI_DOMAIN_CONTROL_MONITOR_VERSION,
       exactKeys: true,
-      extensionPolicy: 'reject',
-      futureVersionBehaviour: 'reject',
+      extensionPolicy: 'reject' as const,
+      futureVersionBehaviour: 'reject' as const,
       migrationTarget: null,
       canonicalisation: null,
       byteBudget: null,
-      fixtureIds: ['domain-control-monitor-v1'],
-    },
-  ],
+      fixtureIds: [`domain-control-monitor-v${version}`],
+    })),
   fixtures: [
     {
       id: 'domain-control-monitor-v1',
@@ -96,32 +96,36 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
       sha256: '1b505015fbc4cb6fc10b8d1c4552762fc78a21bea2f6614761e34d03f290ffb4',
       contentDigestSha256: null,
       schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-      version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
-      role: 'current',
+      version: PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION,
+      role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
+    },
+    {
+      id: 'domain-control-monitor-v2', path: 'test/fixtures/domain-control-monitor-v2.json',
+      bytes: 18_023, sha256: 'f4017f3dc84b3adb6b6114ea49c37ff05939779daabbbb56c868010145cac55c',
+      contentDigestSha256: null, schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
+      role: 'current', expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
     },
   ],
   metadata: {
     metadataVersion: 2,
     enforcement: 'declarative_only',
-    shapes: [
-      {
-        id: 'domain-control-monitor.document.v1',
+    shapes: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.map((version) => ({
+        id: `domain-control-monitor.document.v${version}`,
         schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA,
-        versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION],
-        objects: [
+        versions: [version],
+        objects: ([
           { path: '$', requiredKeys: DOMAIN_CONTROL_MONITOR_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
           { path: '$.manifest', requiredKeys: DOMAIN_CONTROL_MONITOR_MANIFEST_KEYS, optionalKeys: [], unknownKeys: 'reject' },
           { path: '$.collection', requiredKeys: DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS, optionalKeys: [], unknownKeys: 'reject' },
           { path: '$.collection.failures[]', requiredKeys: DOMAIN_CONTROL_MONITOR_FAILURE_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-        ],
+        ] as const),
         fixedArrays: [{ path: '$.limitations', values: DOMAIN_CONTROL_MONITOR_LIMITATIONS }],
-        normalisation: 'preserve_document',
+        normalisation: 'preserve_document' as const,
         target: null,
-      },
-    ],
+      })),
     boundProfiles: [
       {
         id: 'domain-control-monitor.document-bounds.v1',
@@ -226,9 +230,9 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
         id: 'domain-control-monitor.cli-run',
         plane: 'cli',
         operation: 'bounded-passive-deep-monitor',
-        acceptedContracts: [{ schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, versions: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, version: CLI_DOMAIN_CONTROL_MONITOR_VERSION },
-        shapeIds: ['domain-control-monitor.document.v1'],
+        shapeIds: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.map((version) => `domain-control-monitor.document.v${version}`),
         boundProfileIds: ['domain-control-monitor.document-bounds.v1', 'domain-control-monitor.cli-intake.v1', 'domain-control-monitor.action.v1'],
         hookIds: ['domain-control-monitor.cli.run'],
         serialisationProfileId: null,
@@ -245,7 +249,7 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
         operation: 'serialise-json',
         acceptedContracts: [{ schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION], mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['domain-control-monitor.document.v1'],
+        shapeIds: [`domain-control-monitor.document.v${CLI_DOMAIN_CONTROL_MONITOR_VERSION}`],
         boundProfileIds: ['domain-control-monitor.document-bounds.v1'],
         hookIds: ['domain-control-monitor.cli.serialise-json'],
         serialisationProfileId: 'domain-control-monitor.json.v1',
@@ -262,7 +266,7 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
         operation: 'format-terminal',
         acceptedContracts: [{ schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION], mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['domain-control-monitor.document.v1'],
+        shapeIds: [`domain-control-monitor.document.v${CLI_DOMAIN_CONTROL_MONITOR_VERSION}`],
         boundProfileIds: ['domain-control-monitor.document-bounds.v1'],
         hookIds: ['domain-control-monitor.cli.format-terminal'],
         serialisationProfileId: null,
@@ -279,7 +283,7 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
         operation: 'format-junit',
         acceptedContracts: [{ schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, versions: [CLI_DOMAIN_CONTROL_MONITOR_VERSION], mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['domain-control-monitor.document.v1'],
+        shapeIds: [`domain-control-monitor.document.v${CLI_DOMAIN_CONTROL_MONITOR_VERSION}`],
         boundProfileIds: ['domain-control-monitor.document-bounds.v1'],
         hookIds: ['domain-control-monitor.cli.format-junit'],
         serialisationProfileId: null,

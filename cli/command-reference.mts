@@ -1307,7 +1307,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
       example: 'whoisleuth domain-control domain-control-input.json --json',
-      boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
+      boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.',
     },
     collection: { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
     summary: 'Build or review a domain control manifest',
@@ -1391,7 +1391,7 @@ const COMMAND_SEEDS = Object.freeze({
       example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
       boundary: 'The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.',
     },
-    collection: { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
+    collection: { mode: 'offline', scope: 'Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission.' },
     summary: 'Lint an artefact before deliberate sharing',
     options: ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,

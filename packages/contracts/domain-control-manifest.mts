@@ -17,13 +17,16 @@ export {
 
 export const DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA = 'whoisleuth.domain-control-manifest-input';
 export const DOMAIN_CONTROL_MANIFEST_SCHEMA = 'whoisleuth.domain-control-manifest';
-export const DOMAIN_CONTROL_MANIFEST_INPUT_VERSION = 1;
-export const DOMAIN_CONTROL_MANIFEST_VERSION = 2;
+export const PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION = 1;
+export const PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION = 2;
+export const DOMAIN_CONTROL_MANIFEST_INPUT_VERSION = 2;
+export const DOMAIN_CONTROL_MANIFEST_VERSION = 3;
 export const MAX_DOMAIN_CONTROL_MANIFEST_BYTES = 16 * 1024 * 1024;
 export const MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES = 1;
 export const MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES = 100;
 export const MIN_DOMAIN_CONTROL_RECORDS = 0;
 export const MAX_CANONICAL_DOMAIN_CONTROL_RECORDS = 32;
+export const MAX_CURRENT_DOMAIN_CONTROL_RECORDS = 64;
 export const DOMAIN_CONTROL_RECORD_INPUT_BOUND_FACTOR = 4;
 export const MAX_DOMAIN_CONTROL_INPUT_RECORDS = MAX_CANONICAL_DOMAIN_CONTROL_RECORDS
   * DOMAIN_CONTROL_RECORD_INPUT_BOUND_FACTOR;
@@ -60,7 +63,7 @@ export const MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES = 20;
 export const MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_DEPTH = 50;
 export const MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_KEYS = 5_050_000;
 export const MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_VALUES = 10_100_000;
-export const MAX_DOMAIN_CONTROL_PORTABLE_BYTES = 15 * 1024 * 1024;
+export const MAX_DOMAIN_CONTROL_PORTABLE_BYTES = MAX_DOMAIN_CONTROL_MANIFEST_BYTES;
 export const DOMAIN_CONTROL_MANIFEST_INPUT_KEYS = Object.freeze([
   'schema',
   'version',
@@ -76,7 +79,7 @@ export const DOMAIN_CONTROL_MANIFEST_ROOT_KEYS = Object.freeze([
   'limitations',
   'integrity',
 ] as const);
-export const DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS = Object.freeze([
+export const PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS = Object.freeze([
   'domain',
   'nameservers',
   'ds',
@@ -87,6 +90,9 @@ export const DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS = Object.freeze([
   'registrarLock',
   'renewalReviewAt',
   'note',
+] as const);
+export const DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS = Object.freeze([
+  ...PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, 'recordModes',
 ] as const);
 export const DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS = Object.freeze([
   'algorithm',
@@ -99,6 +105,15 @@ export const DOMAIN_CONTROL_RECORD_LIST_FIELDS = Object.freeze([
   'mx',
   'caa',
 ] as const);
+export type DomainControlRecordField = typeof DOMAIN_CONTROL_RECORD_LIST_FIELDS[number];
+export const DOMAIN_CONTROL_RECORD_MODE_OPTIONS = Object.freeze([
+  { value: 'unconfigured', label: 'Not configured' },
+  { value: 'expect_none', label: 'Expect no records' },
+  { value: 'expect_records', label: 'Expect records' },
+  { value: 'observe_only', label: 'Observe only' },
+] as const);
+export type DomainControlRecordMode = typeof DOMAIN_CONTROL_RECORD_MODE_OPTIONS[number]['value'];
+export type DomainControlRecordModes = Readonly<Record<DomainControlRecordField, DomainControlRecordMode>>;
 export const DOMAIN_CONTROL_MX_RECORD_KEYS = Object.freeze([
   'exchange',
   'host',
@@ -120,9 +135,13 @@ export const DOMAIN_CONTROL_DS_RECORD_KEYS = Object.freeze([
   'digest_type',
   'digest',
 ] as const);
-export const DOMAIN_CONTROL_MANIFEST_LIMITATIONS = Object.freeze([
+export const PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS = Object.freeze([
   'This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.',
   'Empty desired fields are unconfigured rather than claims that a record should be absent.',
+] as const);
+export const DOMAIN_CONTROL_MANIFEST_LIMITATIONS = Object.freeze([
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS[0],
+  'Record expectations distinguish unconfigured, expected absence, specified records and observation-only fields. Missing or incomplete observations cannot establish absence.',
 ] as const);
 
 type DomainControlIntegerInput = number | string;
@@ -157,6 +176,7 @@ export type DomainControlManifestInputEntry = Readonly<{
   ds?: readonly (string | DomainControlDsRecordInput)[];
   mx?: readonly (string | DomainControlMxRecordInput)[];
   caa?: readonly (string | DomainControlCaaRecordInput)[];
+  recordModes?: Partial<DomainControlRecordModes>;
   tlsIssuer?: string | null;
   tlsSpkiSha256?: string | null;
   registrarLock?: 'required' | 'not_required' | null;
@@ -171,22 +191,29 @@ export type DomainControlManifestInput = Readonly<{
   entries: readonly DomainControlManifestInputEntry[];
 }>;
 export const SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS = Object.freeze([
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_MANIFEST_VERSION,
 ] as const);
+export const SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS = Object.freeze([
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+] as const);
+const INPUT_SHAPE_IDS = SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.map((version) => `domain-control.input.v${version}`);
+const CURRENT_MANIFEST_SHAPE_ID = `domain-control.manifest.v${DOMAIN_CONTROL_MANIFEST_VERSION}`;
+const MANIFEST_SHAPE_IDS = SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS.map((version) => `domain-control.manifest.v${version}`);
 
 export const DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.domain-control-manifest-input',
   kind: 'export',
   schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   currentVersion: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
-  supportedVersions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION],
+  supportedVersions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS,
   acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject',
-  migration: 'exact_current_only',
+  migration: 'read_only',
   writeSemantics: 'read_only',
   byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
   owner: 'packages/contracts/domain-control-manifest.mts',
-  note: 'Exact-current bounded ordinary JSON desired-state input. Malformed list shapes, ambiguous structured aliases, unknown structured fields, and over-limit collections fail closed outside the supported envelope.',
+  note: 'Current input supports explicit record expectations. Public input version 1 remains readable with its original empty-field meaning and record normalisation.',
 });
 
 export const DOMAIN_CONTROL_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
@@ -201,7 +228,7 @@ export const DOMAIN_CONTROL_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
   owner: 'packages/contracts/domain-control-manifest.mts',
-  note: 'The v1.47.4 current writer and v2 use version 2 with deterministic sorted-json-v2 integrity for bounded analyst-authored desired state; browser import is an explicit non-destructive field selection.',
+  note: 'Current version 3 retains explicit record expectations. Public version 2 remains verifiable with its exact canonical bytes and empty-field meaning; browser import is an explicit non-destructive field selection.',
 });
 
 export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
@@ -213,38 +240,38 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     DOMAIN_CONTROL_MANIFEST_COMPATIBILITY,
   ],
   contracts: [
-    {
+    ...SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.map((version) => ({
       compatibilityId: DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.id,
       schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
-      version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
-      role: 'input',
-      lifecycle: 'current',
+      version,
+      role: 'input' as const,
+      lifecycle: version === DOMAIN_CONTROL_MANIFEST_INPUT_VERSION ? 'current' as const : 'legacy' as const,
       readable: true,
-      emitted: true,
+      emitted: version === DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
       exactKeys: true,
-      extensionPolicy: 'reject',
-      futureVersionBehaviour: 'reject',
+      extensionPolicy: 'reject' as const,
+      futureVersionBehaviour: 'reject' as const,
       migrationTarget: null,
       canonicalisation: null,
       byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
-      fixtureIds: ['domain-control-manifest-input-v1'],
-    },
-    {
+      fixtureIds: [`domain-control-manifest-input-v${version}`],
+    })),
+    ...SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS.map((version) => ({
       compatibilityId: DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
       schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-      version: DOMAIN_CONTROL_MANIFEST_VERSION,
-      role: 'document',
-      lifecycle: 'current',
+      version,
+      role: 'document' as const,
+      lifecycle: version === DOMAIN_CONTROL_MANIFEST_VERSION ? 'current' as const : 'legacy' as const,
       readable: true,
-      emitted: true,
+      emitted: version === DOMAIN_CONTROL_MANIFEST_VERSION,
       exactKeys: true,
-      extensionPolicy: 'reject',
-      futureVersionBehaviour: 'reject',
+      extensionPolicy: 'reject' as const,
+      futureVersionBehaviour: 'reject' as const,
       migrationTarget: null,
-      canonicalisation: 'sorted-json-v2',
+      canonicalisation: 'sorted-json-v2' as const,
       byteBudget: MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
-      fixtureIds: ['domain-control-manifest-v2'],
-    },
+      fixtureIds: [`domain-control-manifest-v${version}`],
+    })),
   ],
   fixtures: [
     {
@@ -254,10 +281,10 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: '2b8a10dec2d78ae0804a469d99b3dfbacbf380c8af0a01ec903106861cd73b09',
       contentDigestSha256: null,
       schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
-      version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+      version: PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
       role: 'input',
-      expectation: 'normalises_to_current_output',
-      expectedOutputFixtureId: 'domain-control-manifest-v2',
+      expectation: 'accepted_exact',
+      expectedOutputFixtureId: null,
       scope: 'repository',
     },
     {
@@ -267,93 +294,107 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: '799211e5eba37e733c7f22aac92e073950ffb69c2da64cc11af7ade303deb17a',
       contentDigestSha256: 'sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a',
       schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-      version: DOMAIN_CONTROL_MANIFEST_VERSION,
-      role: 'current',
+      version: PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION,
+      role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
+    },
+    {
+      id: 'domain-control-manifest-input-v2', path: 'test/fixtures/domain-control-manifest-input-v2.json',
+      bytes: 435, sha256: 'c4a23b9d04e704ee7e9e749211996f06f98fb0ae97f70eac7ecf44968ea67d3b', contentDigestSha256: null,
+      schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+      role: 'input', expectation: 'normalises_to_current_output', expectedOutputFixtureId: 'domain-control-manifest-v3', scope: 'repository',
+    },
+    {
+      id: 'domain-control-manifest-v3', path: 'test/fixtures/domain-control-manifest-v3.json',
+      bytes: 1180, sha256: '35a99dcdcaefdb280b3b64decde8c06fb47b46e7a47e480becf117b1c87b0c72', contentDigestSha256: 'sha256:873c645257b7391bc958781ef02f913d454002a9d66b9f5889bec3a181477214',
+      schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION,
+      role: 'current', expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
     },
   ],
   metadata: {
     metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: [
-      {
-        id: 'domain-control.input.v1',
+      ...SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.map((version) => ({
+        id: `domain-control.input.v${version}`,
         schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
-        versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION],
+        versions: [version],
         objects: [
           {
             path: '$',
             requiredKeys: DOMAIN_CONTROL_MANIFEST_INPUT_KEYS,
             optionalKeys: [],
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.entries[]',
             requiredKeys: ['domain'],
-            optionalKeys: DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS.filter((key) => key !== 'domain'),
-            unknownKeys: 'reject',
+            optionalKeys: (version === PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION ? PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS : DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS).filter((key) => key !== 'domain'),
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.entries[].mx[]',
             requiredKeys: [],
             optionalKeys: DOMAIN_CONTROL_MX_RECORD_KEYS,
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.entries[].caa[]',
             requiredKeys: [],
             optionalKeys: DOMAIN_CONTROL_CAA_RECORD_KEYS,
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.entries[].ds[]',
             requiredKeys: [],
             optionalKeys: DOMAIN_CONTROL_DS_RECORD_KEYS,
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
+          ...(version === DOMAIN_CONTROL_MANIFEST_INPUT_VERSION ? [{ path: '$.entries[].recordModes', requiredKeys: [], optionalKeys: DOMAIN_CONTROL_RECORD_LIST_FIELDS, unknownKeys: 'reject' as const }] : []),
         ],
         fixedArrays: [],
-        normalisation: 'input_to_current',
+        normalisation: 'input_to_current' as const,
         target: {
           schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
           version: DOMAIN_CONTROL_MANIFEST_VERSION,
         },
-      },
-      {
-        id: 'domain-control.manifest.v1-v2',
+      })),
+      ...SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS.map((version) => ({
+        id: `domain-control.manifest.v${version}`,
         schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-        versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS,
+        versions: [version],
         objects: [
           {
             path: '$',
             requiredKeys: DOMAIN_CONTROL_MANIFEST_ROOT_KEYS,
             optionalKeys: [],
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.entries[]',
-            requiredKeys: DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS,
+            requiredKeys: version === PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION ? PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS : DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS,
             optionalKeys: [],
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
           {
             path: '$.integrity',
             requiredKeys: DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS,
             optionalKeys: [],
-            unknownKeys: 'reject',
+            unknownKeys: 'reject' as const,
           },
+          ...(version === DOMAIN_CONTROL_MANIFEST_VERSION ? [{ path: '$.entries[].recordModes', requiredKeys: DOMAIN_CONTROL_RECORD_LIST_FIELDS, optionalKeys: [], unknownKeys: 'reject' as const }] : []),
         ],
         fixedArrays: [
           {
             path: '$.limitations',
-            values: DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
+            values: version === PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION ? PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS : DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
           },
         ],
-        normalisation: 'preserve_signed_document',
+        normalisation: 'preserve_signed_document' as const,
         target: null,
-      },
+      })),
     ],
     boundProfiles: [
       {
@@ -365,10 +406,7 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { id: 'input-ds', path: '$.entries[].ds', phase: 'pre_accumulation', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_DOMAIN_CONTROL_INPUT_RECORDS, handling: 'reject' },
           { id: 'input-mx', path: '$.entries[].mx', phase: 'pre_accumulation', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_DOMAIN_CONTROL_INPUT_RECORDS, handling: 'reject' },
           { id: 'input-caa', path: '$.entries[].caa', phase: 'pre_accumulation', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_DOMAIN_CONTROL_INPUT_RECORDS, handling: 'reject' },
-          { id: 'canonical-nameservers', path: '$.entries[].nameservers', phase: 'normalised', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, handling: 'truncate' },
-          { id: 'canonical-ds', path: '$.entries[].ds', phase: 'normalised', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, handling: 'truncate' },
-          { id: 'canonical-mx', path: '$.entries[].mx', phase: 'normalised', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, handling: 'truncate' },
-          { id: 'canonical-caa', path: '$.entries[].caa', phase: 'normalised', unit: 'items', minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, handling: 'truncate' },
+          ...DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => ({ id: `current-${field}`, path: `$.entries[].${field}`, phase: 'normalised' as const, unit: 'items' as const, minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CURRENT_DOMAIN_CONTROL_RECORDS, handling: 'reject' as const })),
           { id: 'json-depth', path: '$', phase: 'pre_accumulation', unit: 'depth', minimum: 0, maximum: MAX_DOMAIN_CONTROL_JSON_DEPTH, handling: 'reject' },
           { id: 'json-values', path: '$', phase: 'pre_accumulation', unit: 'values', minimum: 1, maximum: MAX_DOMAIN_CONTROL_JSON_VALUES, handling: 'reject' },
           { id: 'raw-domain', path: '$.entries[].domain', phase: 'pre_accumulation', unit: 'characters', minimum: 1, maximum: MAX_DOMAIN_CONTROL_NAME_INPUT_LENGTH, handling: 'reject' },
@@ -418,6 +456,10 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { id: 'spki-digest', path: '$.entries[].tlsSpkiSha256', phase: 'normalised', unit: 'characters', minimum: DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH, maximum: DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH, handling: 'drop_value' },
           { id: 'manifest-digest', path: '$.integrity.digestSha256', phase: 'normalised', unit: 'characters', minimum: DOMAIN_CONTROL_DIGEST_SHA256_LENGTH, maximum: DOMAIN_CONTROL_DIGEST_SHA256_LENGTH, handling: 'reject' },
         ],
+      },
+      {
+        id: 'domain-control.public-records.v2',
+        bounds: DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => ({ id: `public-${field}`, path: `$.entries[].${field}`, phase: 'normalised' as const, unit: 'items' as const, minimum: MIN_DOMAIN_CONTROL_RECORDS, maximum: MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, handling: 'truncate' as const })),
       },
       {
         id: 'domain-control.browser-file.v1',
@@ -740,11 +782,11 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         plane: 'browser',
         operation: 'export',
         acceptedContracts: [
-          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' },
+          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS, mode: 'direct' },
         ],
         emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-        shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.browser-profile.v1'],
+        shapeIds: [...INPUT_SHAPE_IDS, CURRENT_MANIFEST_SHAPE_ID],
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.browser-profile.v1'],
         hookIds: [
           'domain-control.shared.build-unsigned',
           'domain-control.shared.measure-serialised-bytes',
@@ -769,9 +811,9 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
+        shapeIds: MANIFEST_SHAPE_IDS,
         boundProfileIds: [
-          'domain-control.core-wire.v1',
+          'domain-control.core-wire.v1', 'domain-control.public-records.v2',
           'domain-control.browser-file.v1',
           'domain-control.browser-profile.v1',
         ],
@@ -793,11 +835,11 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         plane: 'node',
         operation: 'build',
         acceptedContracts: [
-          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' },
+          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS, mode: 'direct' },
         ],
         emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-        shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1'],
+        shapeIds: [...INPUT_SHAPE_IDS, CURRENT_MANIFEST_SHAPE_ID],
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2'],
         hookIds: [
           'domain-control.shared.build-unsigned',
           'domain-control.shared.assert-byte-budget',
@@ -819,8 +861,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2'],
         hookIds: [
           'domain-control.shared.normalise-document',
           'domain-control.node.verify-integrity',
@@ -841,8 +883,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2'],
         hookIds: ['domain-control.node.verify-integrity', 'domain-control.node.review'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.review-sensitive.v1',
@@ -860,8 +902,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-domain-control-file.v1'],
         hookIds: ['domain-control.node.verify-integrity', 'domain-control.node.review'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.review-sensitive.v1',
@@ -879,8 +921,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-domain-control-file.v1'],
         hookIds: [
           'domain-control.node.verify-integrity',
           'domain-control.node.review',
@@ -899,11 +941,11 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         plane: 'cli',
         operation: 'build',
         acceptedContracts: [
-          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' },
+          { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS, mode: 'direct' },
         ],
         emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-        shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
+        shapeIds: [...INPUT_SHAPE_IDS, CURRENT_MANIFEST_SHAPE_ID],
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-domain-control-file.v1'],
         hookIds: [
           'domain-control.shared.measure-serialised-bytes',
           'domain-control.shared.assert-byte-budget',
@@ -926,8 +968,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-portable-file.v1'],
         hookIds: [
           'domain-control.cli.offline-structure',
           'domain-control.cli.offline-verify',
@@ -949,8 +991,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-portable-file.v1'],
         hookIds: ['domain-control.cli.interchange-report', 'domain-control.cli.offline-verify'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.metadata-only.v1',
@@ -968,8 +1010,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-portable-file.v1'],
         hookIds: ['domain-control.cli.offline-verify', 'domain-control.cli.sign-package'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.signed-wrapper.v1',
@@ -987,8 +1029,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-portable-file.v1'],
         hookIds: ['domain-control.cli.verify-signature', 'domain-control.cli.offline-verify'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.metadata-only.v1',
@@ -1006,8 +1048,8 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
-        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
+        shapeIds: MANIFEST_SHAPE_IDS,
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.cli-portable-file.v1'],
         hookIds: ['domain-control.cli.sharing-review', 'domain-control.cli.offline-verify'],
         serialisationProfileId: null,
         privacyProfileId: 'domain-control.metadata-only.v1',
@@ -1025,9 +1067,9 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
           { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['domain-control.manifest.v1-v2'],
+        shapeIds: MANIFEST_SHAPE_IDS,
         boundProfileIds: [
-          'domain-control.core-wire.v1',
+          'domain-control.core-wire.v1', 'domain-control.public-records.v2',
           'domain-control.cli-monitor-file.v1',
           'domain-control.cli-monitor-action.v1',
         ],

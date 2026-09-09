@@ -1,0 +1,37 @@
+{
+  "schema": "whoisleuth.domain-control-manifest",
+  "version": 3,
+  "generatedAt": "2026-08-03T00:00:00.000Z",
+  "expiresAt": "2026-09-03T00:00:00.000Z",
+  "entries": [
+    {
+      "domain": "example.test",
+      "nameservers": [
+        "ns1.example.test"
+      ],
+      "ds": [],
+      "mx": [],
+      "caa": [],
+      "recordModes": {
+        "nameservers": "expect_records",
+        "ds": "unconfigured",
+        "mx": "expect_none",
+        "caa": "observe_only"
+      },
+      "tlsIssuer": null,
+      "tlsSpkiSha256": null,
+      "registrarLock": null,
+      "renewalReviewAt": null,
+      "note": null
+    }
+  ],
+  "limitations": [
+    "This analyst-authored manifest records intended domain-control state. It does not collect evidence or change registrar, DNS, mail, or certificate configuration.",
+    "Record expectations distinguish unconfigured, expected absence, specified records and observation-only fields. Missing or incomplete observations cannot establish absence."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:873c645257b7391bc958781ef02f913d454002a9d66b9f5889bec3a181477214"
+  }
+}

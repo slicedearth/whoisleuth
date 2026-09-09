@@ -980,6 +980,7 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
 });
 
 test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(ISO));
   let postureRequests = 0;
   await page.route('**/api/domain-posture**', (route) => {
     postureRequests += 1;
@@ -1135,7 +1136,7 @@ test('exports and locally verifies a selective domain-control passport on deskto
   expect(content).toContain('10 mail.stored.example');
   expect(content).not.toMatch(/must-not-export|Stored Brand|change_planned/iu);
 
-  const duplicateVersion = content.replace(/("version"\s*:\s*2)/u, '$1,$1');
+  const duplicateVersion = content.replace(/("version"\s*:\s*\d+)/u, '$1,$1');
   expect(duplicateVersion).not.toBe(content);
   await passport.getByLabel('Review passport').setInputFiles({
     name: 'duplicate-key-passport.json',
@@ -1174,6 +1175,7 @@ test('owned-domain baseline feedback reflects the committed browser-local write'
   await expect(consumers).toContainText('certificate-policy review');
   await expect(consumers).toContainText('SAN patterns are not a posture-matrix column');
   await expect(consumers).toContainText('DNS change rehearsal');
+  await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('expect_records');
   await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('ns1.stored.example');
   await failNextBrowserLocalManifestWrite(page, 'brand_profiles');
   await baseline.getByRole('button', { name: 'Save expected settings' }).click();
@@ -1197,6 +1199,90 @@ test('owned-domain baseline feedback reflects the committed browser-local write'
   expect(stored.desiredPostureBaselines).toEqual([
     expect.objectContaining({ domain: 'stored.example', nameservers: ['ns1.stored.example'] }),
   ]);
+});
+
+test('preserves explicit record expectations, null MX and complete record sets through save and export', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]),
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'baselines');
+  const baseline = page.locator('#desired-posture-baseline');
+  const nameservers = Array.from({ length: 64 }, (_, index) => `ns${String(index + 1).padStart(2, '0')}.stored.example`);
+  for (const name of ['Nameservers', 'DS records', 'Mail exchangers', 'CAA policy']) {
+    await expect(baseline.getByRole('combobox', { name: `${name} expectation`, exact: true })).toHaveValue('unconfigured');
+    await expect(baseline.getByRole('textbox', { name, exact: true })).toHaveCount(0);
+  }
+  await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('expect_records');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveAccessibleDescription(/One record per line/u);
+  await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill(nameservers.join('\n'));
+  await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('observe_only');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveCount(0);
+  await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('expect_records');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveValue(nameservers.join('\n'));
+  await baseline.getByRole('combobox', { name: 'DS records expectation', exact: true }).selectOption('expect_none');
+  await baseline.getByRole('combobox', { name: 'Mail exchangers expectation', exact: true }).selectOption('expect_records');
+  await baseline.getByRole('textbox', { name: 'Mail exchangers', exact: true }).fill('0 .');
+  await baseline.getByRole('combobox', { name: 'CAA policy expectation', exact: true }).selectOption('observe_only');
+  await baseline.getByRole('button', { name: 'Save expected settings' }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved expected domain settings.');
+  await expect(baseline.getByRole('button', { name: 'Save expected settings' })).toBeFocused();
+
+  const expectedModes = { nameservers: 'expect_records', ds: 'expect_none', mx: 'expect_records', caa: 'observe_only' };
+  const stored = requiredValue((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0], 'The saved profile is missing.').value;
+  expect(stored.desiredPostureBaselines[0]).toEqual(expect.objectContaining({ nameservers, ds: [], mx: ['0 .'], caa: [], recordModes: expectedModes }));
+  await page.reload();
+  await openBrandWorkbench(page, 'baselines');
+  await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveValue(nameservers.join('\n'));
+  await expect(baseline.getByRole('combobox', { name: 'DS records expectation', exact: true })).toHaveValue('expect_none');
+  await expect(baseline.getByRole('textbox', { name: 'Mail exchangers', exact: true })).toHaveValue('0 .');
+  await expect(baseline.getByRole('combobox', { name: 'CAA policy expectation', exact: true })).toHaveValue('observe_only');
+
+  await openBrandWorkbench(page, 'passport');
+  const passport = page.getByRole('region', { name: 'Portable domain settings' });
+  const downloadPromise = page.waitForEvent('download');
+  await passport.getByRole('button', { name: 'Export passport' }).click();
+  const file = requiredValue(await (await downloadPromise).path(), 'The exported passport is missing.');
+  const exported = JSON.parse(await readFile(file, 'utf8'));
+  expect(exported.entries[0]).toEqual(expect.objectContaining({ nameservers, ds: [], mx: ['0 .'], caa: [], recordModes: expectedModes }));
+  await passport.getByLabel('Review passport').setInputFiles(file);
+  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('a stale expected-settings editor preserves its draft and cannot overwrite another tab', async ({ page, context }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{
+      ...profileFixture(),
+      desiredPostureBaselines: [{ domain: 'stored.example', nameservers: ['ns1.stored.example'], updatedAt: ISO }],
+    }]),
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'baselines');
+  const baseline = page.locator('#desired-posture-baseline');
+  await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('draft.stored.example');
+  const other = await context.newPage();
+  try {
+    await other.goto('/brands');
+    await openBrandWorkbench(other, 'baselines');
+    const current = other.locator('#desired-posture-baseline');
+    await current.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('concurrent.stored.example');
+    await current.getByRole('button', { name: 'Save expected settings' }).click();
+    await expect(other.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved expected domain settings.');
+    await page.bringToFront();
+    await baseline.getByRole('button', { name: 'Save expected settings' }).click();
+    await expect(baseline.getByRole('status')).toContainText('changed after this editor opened');
+    await expect(baseline.getByRole('textbox', { name: 'Nameservers', exact: true })).toHaveValue('draft.stored.example');
+    await expect(baseline.getByRole('button', { name: 'Save expected settings' })).toBeFocused();
+    const stored = requiredValue((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0], 'The current profile is missing.').value;
+    expect(stored.desiredPostureBaselines[0]?.nameservers).toEqual(['concurrent.stored.example']);
+  } finally {
+    await other.close();
+  }
 });
 
 test('Brand Profile v6 change windows migrate to stable v7 identities and round-trip', async ({ page }) => {

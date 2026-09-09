@@ -7,6 +7,7 @@
     DOMAIN_CONTROL_PASSPORT_FIELDS,
     MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
     passportConfiguredFields,
+    passportFieldSummary,
     serializeDomainControlManifest,
     verifyDomainControlPassport,
     type DomainControlPassportField,
@@ -221,7 +222,7 @@
               <label class:unavailable={!configuredFields.includes(field)}>
                 <input type="checkbox" disabled={!configuredFields.includes(field) || !selectedImports.includes(entry.domain) || !importEligible} checked={(importFields[entry.domain] ?? []).includes(field)} onchange={(event) => toggleField(entry.domain, field, event.currentTarget.checked)}>
                 <span>{fieldLabels[field]}</span>
-                <small>{configuredFields.includes(field) ? 'Configured in passport' : 'Not configured; destination remains unchanged'}</small>
+                <small>{passportFieldSummary(entry, field)}</small>
               </label>
             {/each}
           </div>
@@ -232,7 +233,7 @@
   {/if}
 
   {#if message}<p class="message" role="status">{message}</p>{/if}
-  <p class="limitation">A valid digest confirms that the file has not changed since export. It does not prove that the desired state is correct or currently deployed. Imports never delete values merely because a field is absent.</p>
+  <p class="limitation">A valid digest confirms that the file has not changed since export, not that its settings are correct or deployed. Selecting “Expect no records” clears that field’s expected values; omitted and unselected fields stay unchanged.</p>
 </section>
 
 <style>

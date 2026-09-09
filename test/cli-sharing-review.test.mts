@@ -165,4 +165,21 @@ describe('CLI sharing review', () => {
       new RegExp(`limited to ${MAX_SHARING_REVIEW_BYTES} bytes`, 'iu'),
     );
   });
+
+  test('checks markings and sensitive keys beyond the former traversal prefixes', async () => {
+    let nested: Record<string, unknown> = { marking: 'TLP:RED', email: ['sensitive-value', 'second-value'] };
+    for (let depth = 0; depth < 15; depth += 1) nested = { nested };
+    const rows = Array.from({ length: 600 }, () => ({ padding: Array.from({ length: 40 }, () => 'ordinary') }));
+    // The stack visits later rows first; this marked first row is reached after
+    // more than 20,000 admitted values and below the old depth boundary.
+    const report = await buildSharingReview(JSON.stringify({ rows: [nested, ...rows] }), {
+      marking: 'clear', recipientScope: 'public', purpose: 'Complete content review',
+      humanReviewed: true, personalDataReviewed: false, redactionsConfirmed: false,
+    }, NOW);
+    assert.equal(report.sharing.strictestImportedMarking, 'TLP:RED');
+    assert.equal(report.summary.status, 'blocked');
+    assert.match(report.findings.find((finding) => finding.id === 'personal-data')?.detail ?? '', /found 1 field names/u);
+    assert.equal(report.findings.some((finding) => finding.id === 'scan-bounds'), false);
+    assert.doesNotMatch(JSON.stringify(report), /sensitive-value|second-value/u);
+  });
 });

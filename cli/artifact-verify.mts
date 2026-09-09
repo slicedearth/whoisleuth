@@ -60,6 +60,7 @@ import {
 } from '../lib/domain-control-manifest.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
+  MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
 } from '../packages/contracts/domain-control-manifest.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -84,7 +85,7 @@ import {
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 3;
-export const MAX_OFFLINE_ARTIFACT_BYTES = 15 * 1024 * 1024;
+export const MAX_OFFLINE_ARTIFACT_BYTES = MAX_DOMAIN_CONTROL_MANIFEST_BYTES;
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
 export class UnsupportedOfflineArtifactError extends TypeError {

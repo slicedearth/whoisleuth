@@ -143,7 +143,7 @@ function profileItems(profiles: readonly BrandProfile[], now: string): AnalystRe
       }, now));
       for (const check of observation?.checks ?? []) {
         const comparison = comparisons.find((value) => value.field === (check.id === 'registration_lock' ? 'registrarLock' : check.id));
-        const relevantComparison = comparison && comparison.state !== 'not_configured' && comparison.state !== 'aligned';
+        const relevantComparison = comparison && !['not_configured', 'aligned', 'observed'].includes(comparison.state);
         if (check.status !== 'danger' && check.status !== 'warning' && !relevantComparison) continue;
         output.push(item({
           stable: [profile.id, baseline.domain, 'desired-posture', check.id],

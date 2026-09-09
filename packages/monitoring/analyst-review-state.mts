@@ -1,5 +1,4 @@
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
-import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 /**
  * Canonical, framework-independent analyst review identity and lifecycle.
@@ -25,25 +24,13 @@ import {
   type AnalystReviewDisposition,
   type AnalystReviewEvidenceFamily,
   type AnalystReviewItem,
-  type AnalystReviewAge,
   type AnalystReviewLifecycle,
   type AnalystReviewStateRecord,
   type AnalystReviewStateStore,
 } from '../contracts/analyst-review-state-contract.mts';
 
 export * from '../contracts/analyst-review-state-contract.mts';
-export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
-export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
-
-export function analystReviewAgeAt(observedAt: unknown, now: unknown): AnalystReviewAge {
-  const observed = normalizeExplicitIsoTimestamp(observedAt);
-  const reviewed = normalizeExplicitIsoTimestamp(now);
-  if (!observed || !reviewed) return 'unknown';
-  const age = Date.parse(reviewed) - Date.parse(observed);
-  if (age < 0) return 'unknown';
-  const days = age / 86_400_000;
-  return days > ANALYST_REVIEW_STALE_AFTER_DAYS ? 'stale' : days > ANALYST_REVIEW_AGING_AFTER_DAYS ? 'aging' : 'current';
-}
+export { ANALYST_REVIEW_AGING_AFTER_DAYS, ANALYST_REVIEW_STALE_AFTER_DAYS, analystReviewAgeAt } from '../evidence/review-age.mts';
 
 export function analystReviewCanResolve(item: Pick<AnalystReviewItem, 'completeness' | 'age'>): boolean {
   return item.completeness === 'complete' && (item.age === 'current' || item.age === 'aging');

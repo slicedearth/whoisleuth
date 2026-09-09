@@ -2943,7 +2943,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": false,
       "usage": "whoisleuth domain-control [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth domain-control domain-control-input.json --json",
-      "boundary": "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.",
+      "boundary": "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one bounded desired-state or review document and performs no collection or configuration change."
@@ -3268,7 +3268,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission."
+        "scope": "Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission."
       },
       "inputs": [
         {
@@ -3301,7 +3301,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.sharing-review"
       ],
       "inputLimits": [
-        "Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.",
+        "Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

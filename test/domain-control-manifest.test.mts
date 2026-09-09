@@ -45,7 +45,7 @@ function input() {
 }
 
 describe('domain control manifests', () => {
-  it('assigns UTC to version-1 input timestamps but requires explicit runtime times', () => {
+  it('assigns UTC to version-1 input timestamps but requires explicit runtime times', async () => {
     const legacyInput = input();
     legacyInput.expiresAt = '2026-09-03T12:00:00.000';
     legacyInput.entries[0] = { ...legacyInput.entries[0]!, renewalReviewAt: '2026-08-20T12:00:00.000' };
@@ -54,10 +54,11 @@ describe('domain control manifests', () => {
     assert.equal(manifest.entries[0]?.renewalReviewAt, '2026-08-20T12:00:00.000Z');
     assert.throws(() => buildDomainControlManifest(input(), '2026-08-03T12:00:00.000'), /explicit timezone/u);
 
+    const publicManifest = JSON.parse(await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8'));
     const report = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
       version: 1,
-      manifest,
+      manifest: publicManifest,
       observations: [{
         domain: 'example.test',
         fields: { nameservers: { state: 'partial', values: [], source: 'Legacy review', observedAt: '2026-08-03T12:00:00.000' } },
@@ -65,7 +66,7 @@ describe('domain control manifests', () => {
     }, generatedAt);
     assert.equal(report.domains[0]?.comparisons.find((item) => item.field === 'nameservers')?.observedAt, '2026-08-03T12:00:00.000Z');
     assert.throws(() => reviewDomainControlManifest({
-      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: 1, manifest, observations: [],
+      schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: 1, manifest: publicManifest, observations: [],
     }, '2026-08-03T12:00:00.000'), /explicit timezone/u);
   });
 
@@ -141,7 +142,7 @@ describe('domain control manifests', () => {
     const manifest = buildDomainControlManifest(input(), generatedAt);
     assert.throws(() => reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'example.test',
@@ -208,20 +209,20 @@ describe('domain control manifests', () => {
     );
     assert.equal(tailReads, 0);
 
-    const tooManyUniqueValues = Array.from({ length: 33 }, (_, index) => `ns-${index}.example.test`);
+    const tooManyUniqueValues = Array.from({ length: 65 }, (_, index) => `ns-${index}.example.test`);
     assert.throws(
       () => reviewDomainControlManifest(reviewInput({ ...field(), values: tooManyUniqueValues }), generatedAt),
       /invalid observation/iu,
     );
 
-    const duplicateValues = Array.from({ length: 128 }, (_, index) => `ns-${index % 32}.example.test`);
+    const duplicateValues = Array.from({ length: 128 }, (_, index) => `ns-${index % 64}.example.test`);
     const duplicateReport = reviewDomainControlManifest(
       reviewInput({ ...field(), values: duplicateValues.reverse() }),
       generatedAt,
     );
     const nameservers = duplicateReport.domains[0]?.comparisons.find((item) => item.field === 'nameservers');
     assert.equal(nameservers?.state, 'drift');
-    assert.equal(nameservers?.observed.length, 32);
+    assert.equal(nameservers?.observed.length, 64);
 
     const customValues = ['ns1.example.test'];
     Object.assign(customValues, { extra: true });
@@ -325,7 +326,7 @@ describe('domain control manifests', () => {
     const manifest = buildDomainControlManifest(input(), generatedAt);
     const report = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'example.test',
@@ -357,7 +358,7 @@ describe('domain control manifests', () => {
     const manifest = buildDomainControlManifest(input(), generatedAt);
     const report = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'unrelated.example',
@@ -399,7 +400,7 @@ describe('domain control manifests', () => {
   });
 
   it('keeps current, unsupported-version, and expiry semantics aligned across consumers', async () => {
-    const currentRaw = await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8');
+    const currentRaw = await readFile(new URL(`./fixtures/domain-control-manifest-v${DOMAIN_CONTROL_MANIFEST_VERSION}.json`, import.meta.url), 'utf8');
     const current = JSON.parse(currentRaw) as Record<string, unknown>;
     assert.doesNotThrow(() => validateSignedDigestArtifactStructure(DOMAIN_CONTROL_MANIFEST_SCHEMA, current));
     const offline = await verifyOfflineArtifact(currentRaw);
@@ -460,7 +461,7 @@ describe('domain control manifests', () => {
     );
     const review = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest: current,
       observations: [],
     }, expiredAt);

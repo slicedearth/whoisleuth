@@ -116,11 +116,12 @@
   .context-heading a{font-weight:700}
   .context-heading .btn{margin-left:auto;min-height:44px}
   .context-state{color:var(--text)}
+  details{margin-top:8px}
   summary{padding:8px 0;cursor:pointer;font:inherit}
   .case-reference{font-family:var(--mono);font-size:var(--text-xs);color:var(--muted)}
   .context-sections{max-width:80ch;display:grid;gap:16px;padding:8px 0}
   .context-sections section{min-width:0}
-  .context-sections h2{margin:0 0 8px;font-size:var(--text-base)}
+  .context-sections h2{margin:0 0 8px;font-size:var(--text-lg)}
   .context-sections h3{margin:8px 0;font-size:var(--text-sm)}
   .context-sections ul{padding-left:20px;margin:8px 0}
   .context-sections li+li,.context-sections article+article{margin-top:12px}

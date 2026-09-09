@@ -78,13 +78,10 @@ describe('technology review candidate intake', () => {
         technologyProfile: {
           source: 'derived', status: 'success', complete: true, truncated: false,
           observedAt: '2026-08-05T09:00:00.000Z',
-          findings: [{
-            id: 'fastly',
-            evidence: [{
-              source: 'passive response header',
-              description: 'The passive X-Served-By response header contains a Fastly cache-node identifier.',
-            }],
-          }],
+          findings: analyzeWebsiteTechnology({
+            responseHeaders: { 'x-served-by': 'cache-private-123-SYD' },
+            observedAt: '2026-08-05T09:00:00.000Z',
+          }).findings,
         },
       },
     });
