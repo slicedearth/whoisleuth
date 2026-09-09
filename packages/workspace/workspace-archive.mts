@@ -571,7 +571,10 @@ function manifestEntry(raw: unknown): WorkspaceArchiveManifestEntry | null {
 /** Validate structure, section byte counts, and checksums without applying data. */
 export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
   assertWorkspaceInputGraph(raw, 'Workspace archive', { maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES });
-  const value = record(raw);
+  // Snapshot before the first asynchronous digest: caller-owned data must not
+  // change between its checksum, contract checks and eventual import preview.
+  const { serialized, bytes } = ensureArchiveBudget(raw);
+  const value = record(JSON.parse(serialized));
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
@@ -590,7 +593,6 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     : WORKSPACE_ARCHIVE_SECTION_IDS;
   const generatedAt = timestamp(value.generatedAt);
   if (!generatedAt) throw new Error('The workspace archive generation time is invalid.');
-  const { bytes } = ensureArchiveBudget(value);
   assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS, `version ${sourceVersion} envelope`);
   const manifest = record(value.manifest);
   const sectionValues = record(value.sections);
@@ -653,7 +655,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     } else if (definition.count(data) !== entry.recordCount) {
       throw new Error(`${entry.id} does not match its manifest record count.`);
     }
-    sections.push({ ...entry, label: definition?.label || entry.id, status, reason, data: clone(data) });
+    sections.push({ ...entry, label: definition?.label || entry.id, status, reason, data });
     totalRecords += entry.recordCount;
   }
   if (Object.keys(sectionValues).some((id) => !seen.has(id))) {
@@ -727,9 +729,27 @@ function settingsPreview(
   return { added: 0, updated, skipped, reason, settings: { activeProfileId, theme } };
 }
 
+/** Retain one verified snapshot; each read or preview returns an independent copy. */
+export async function prepareWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
+  const archive = await readWorkspaceArchive(raw, options);
+  return Object.freeze({
+    read: () => clone(archive),
+    preview: (localInput: unknown, selection: Pick<WorkspaceArchiveOptions, 'selectedSectionIds'> = {}) =>
+      previewVerifiedWorkspaceArchive(clone(archive), localInput, selection),
+  });
+}
+
 /** Preview section-specific non-destructive merge outcomes without writing. */
 export async function previewWorkspaceArchive(raw: unknown, localInput: unknown, options: WorkspaceArchiveOptions = {}) {
-  const archive = await readWorkspaceArchive(raw, options);
+  // A one-shot preview owns the reader result directly; retained readers copy it.
+  return previewVerifiedWorkspaceArchive(await readWorkspaceArchive(raw, options), localInput, options);
+}
+
+function previewVerifiedWorkspaceArchive(
+  archive: Awaited<ReturnType<typeof readWorkspaceArchive>>,
+  localInput: unknown,
+  options: Pick<WorkspaceArchiveOptions, 'selectedSectionIds'>,
+) {
   const local = normalizedInput(localInput);
   const results: WorkspaceArchivePreviewSection[] = [];
   let mergedProfiles = local.brandProfiles;

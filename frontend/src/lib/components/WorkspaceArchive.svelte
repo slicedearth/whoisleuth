@@ -10,16 +10,16 @@
     decryptLocalWorkspaceArchive,
     inspectEncryptedWorkspaceArchive,
     isEncryptedWorkspaceArchive,
-    mergeLocalWorkspaceArchive,
-    previewLocalWorkspaceArchive,
+    prepareLocalWorkspaceArchive,
   } from '$lib/workspace-archive';
   import type { WorkspaceImportSummary } from '$lib/workspace-archive';
   import { restoreLegacyBrowserData } from '$lib/browser-local-data-service';
 
-  type WorkspacePreview = Awaited<ReturnType<typeof previewLocalWorkspaceArchive>>;
+  type ArchiveReview = Awaited<ReturnType<typeof prepareLocalWorkspaceArchive>>;
+  type WorkspacePreview = Awaited<ReturnType<ArchiveReview['preview']>>;
 
   let { onimport, importOnly = false }:{onimport?:(message:string)=>void|Promise<void>;importOnly?:boolean}=$props();
-  let archiveValue=$state<unknown>(null);
+  let archiveReview=$state.raw<ArchiveReview|null>(null);
   let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
   let message=$state('');
@@ -34,10 +34,10 @@
   async function toggle(id:string,checked:boolean){
     const nextIds=checked?[...new Set([...selectedIds,id])]:selectedIds.filter((item)=>item!==id);
     selectedIds=nextIds;
-    if(!archiveValue)return;
+    if(!archiveReview)return;
     busy=true;
     try{
-      preview=await previewLocalWorkspaceArchive(archiveValue,nextIds);
+      preview=await archiveReview.preview(nextIds);
       selectedIds=preview.sections.filter((section)=>section.status==='ready'&&section.selected).map((section)=>section.id);
     }catch(cause){message=cause instanceof Error?cause.message:'Could not update the workspace selection preview.';}
     finally{busy=false;}
@@ -79,15 +79,16 @@
   }
 
   async function previewArchive(value:unknown){
-    const result=await previewLocalWorkspaceArchive(value);
-    archiveValue=value;preview=result;
+    const review=await prepareLocalWorkspaceArchive(value);
+    const result=await review.preview();
+    archiveReview=review;preview=result;
     selectedIds=result.sections.filter((section)=>section.status==='ready').map((section)=>section.id);
     message=`Reviewed ${result.sections.length} backup sections. Check existing matches and skipped records before merging.`;
   }
 
   async function chooseFile(event:Event){
     const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];
-    archiveValue=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';
+    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';
     if(!file)return;
     busy=true;
     try{
@@ -117,10 +118,10 @@
   }
 
   async function apply(){
-    if(!archiveValue)return;
+    if(!archiveReview)return;
     busy=true;message='';
     try{
-      const result=await mergeLocalWorkspaceArchive(archiveValue,selectedIds);
+      const result=await archiveReview.merge(selectedIds);
       const totals=result.results.reduce(
         (sum:Omit<WorkspaceImportSummary,'id'>,item)=>({
           added:sum.added+item.added,
@@ -133,7 +134,7 @@
         {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0,authoredHistoryOmitted:0},
       );
       const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
-      archiveValue=null;preview=null;selectedIds=[];
+      archiveReview=null;preview=null;selectedIds=[];
       message=resultMessage;
       try {
         await onimport?.(resultMessage);
@@ -236,7 +237,7 @@
       </ul>
       <div class="preview-actions">
         <button class="primary" type="button" onclick={apply} disabled={busy||!selectedIds.length}>Add selected data</button>
-        <button class="btn" type="button" onclick={()=>{archiveValue=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
+        <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
     </div>
   {/if}

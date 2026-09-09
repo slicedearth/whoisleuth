@@ -121,8 +121,10 @@ records the selected sections, codec, counts, byte totals and ordered SHA-256
 digests. Digests detect corruption or mismatched content; they do not establish
 authorship, truth or confidentiality.
 
-Import validates the complete envelope and selected sections before applying a
-non-destructive merge. The preview reports additions, conflicts, skips,
+Import validates the complete envelope and section checksums into a page-local
+snapshot. Selection previews reuse that snapshot and reread local records;
+application merges with current records inside the storage transaction.
+The preview reports additions, conflicts, skips,
 unavailable sections and unsupported versions. Omission does not delete local
 data. Settings are resolved after section selection so a deselected or rejected
 Brand Profile cannot supply an active-profile preference.

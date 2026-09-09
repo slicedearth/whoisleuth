@@ -1,7 +1,7 @@
 import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   buildWorkspaceArchive,
-  previewWorkspaceArchive,
+  prepareWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.ts';
 import type { WorkspaceArchivePreviewSection } from './analysis/workspace-archive.ts';
@@ -54,6 +54,7 @@ export {
 } from './analysis/workspace-archive-crypto.ts';
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
+type WorkspacePreview = ReturnType<Awaited<ReturnType<typeof prepareWorkspaceArchive>>['preview']>;
 export type WorkspaceImportSummary = {
   id: string;
   added: number;
@@ -156,12 +157,20 @@ export async function decryptLocalWorkspaceArchive(raw: unknown, passphrase: str
   return decryptWorkspaceArchive(raw, passphrase);
 }
 
-export async function previewLocalWorkspaceArchive(raw: unknown, selectedSectionIds?: readonly string[]) {
-  return previewWorkspaceArchive(
-    raw,
-    await localInput(),
-    selectedSectionIds ? { selectedSectionIds } : {},
-  );
+export async function previewLocalWorkspaceArchive(raw: unknown, selectedSectionIds?: readonly string[]): Promise<WorkspacePreview> {
+  return (await prepareLocalWorkspaceArchive(raw)).preview(selectedSectionIds);
+}
+
+/** A page-scoped verified archive; local records are read afresh for every action. */
+export async function prepareLocalWorkspaceArchive(raw: unknown) {
+  const archive = await prepareWorkspaceArchive(raw);
+  async function preview(selectedSectionIds?: readonly string[]) {
+    return archive.preview(await localInput(), selectedSectionIds ? { selectedSectionIds } : {});
+  }
+  return Object.freeze({
+    preview,
+    merge: async (selectedIds: string[]) => mergeWorkspacePreview(await preview(selectedIds), selectedIds),
+  });
 }
 
 function snapshotSettings() {
@@ -210,7 +219,13 @@ async function applySettings(
 
 /** Revalidates the archive, then applies only selected ready sections. */
 export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: string[]) {
-  const preview = await previewLocalWorkspaceArchive(raw, selectedIds);
+  return (await prepareLocalWorkspaceArchive(raw)).merge(selectedIds);
+}
+
+async function mergeWorkspacePreview(
+  preview: WorkspacePreview,
+  selectedIds: string[],
+) {
   const selected = new Set(selectedIds);
   const sections = preview.sections.filter((section) => section.status === 'ready' && selected.has(section.id));
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');

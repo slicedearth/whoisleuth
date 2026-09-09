@@ -33,13 +33,13 @@ import {
   SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
 } from '../packages/contracts/investigation-portability.mts';
 import {
-  decryptWorkspaceArchive,
+  decryptWorkspaceArchiveWithMetadata,
   inspectEncryptedWorkspaceArchive,
   isEncryptedWorkspaceArchive,
 } from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
-  previewWorkspaceArchive,
+  prepareWorkspaceArchive,
   readWorkspaceArchive,
 } from '../packages/workspace/workspace-archive.mts';
 import {
@@ -292,14 +292,13 @@ function inputBytes(raw: string): number {
   return Buffer.byteLength(raw, 'utf8');
 }
 
-async function archiveReport(
+function archiveReport(
   raw: string,
-  source: unknown,
   archive: Awaited<ReturnType<typeof readWorkspaceArchive>>,
+  preview: ReturnType<Awaited<ReturnType<typeof prepareWorkspaceArchive>>['preview']>,
   encrypted: boolean,
   ciphertextBytes: number | null,
-): Promise<OfflineArtifactVerificationCore> {
-  const preview = await previewWorkspaceArchive(source, {});
+): OfflineArtifactVerificationCore {
   const readySectionCount = preview.sections.filter((section) => section.status === 'ready').length;
   const unsupportedSectionCount = preview.sections.filter((section) => section.status === 'unsupported').length;
   const blockedSectionCount = preview.sections.filter((section) => section.status === 'blocked').length;
@@ -345,6 +344,29 @@ async function archiveReport(
         : []),
     ]),
   });
+}
+
+async function verifyWorkspaceArchiveValue(
+  raw: string,
+  value: UnknownRecord,
+  passphrase?: string | null,
+) {
+  const encrypted = isEncryptedWorkspaceArchive(value);
+  if (encrypted && !passphrase) {
+    throw new TypeError('Encrypted archive inspection requires a separate passphrase file.');
+  }
+  if (!encrypted) artifactVersion(value);
+  const decrypted = encrypted ? await decryptWorkspaceArchiveWithMetadata(value, passphrase!) : null;
+  const source = decrypted ? decrypted.archive : value;
+  const prepared = await prepareWorkspaceArchive(source);
+  const archive = prepared.read();
+  const report = archiveReport(raw, archive, prepared.preview({}), encrypted, decrypted?.ciphertextBytes ?? null);
+  return { archive, report, encrypted };
+}
+
+/** Verify an archive once and retain its sections for bounded offline inspection. */
+export async function verifyOfflineWorkspaceArchive(raw: string, options: Readonly<{ passphrase?: string | null }> = {}) {
+  return verifyWorkspaceArchiveValue(raw, parseJson(raw), options.passphrase);
 }
 
 async function verifySignedArtifact(
@@ -440,8 +462,8 @@ async function verifyOfflineArtifactCore(
   }
 
   if (isEncryptedWorkspaceArchive(value)) {
-    const inspected = inspectEncryptedWorkspaceArchive(value);
     if (!options.passphrase) {
+      const inspected = inspectEncryptedWorkspaceArchive(value);
       return Object.freeze({
         schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA,
         version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -469,15 +491,13 @@ async function verifyOfflineArtifactCore(
         ]),
       });
     }
-    const decrypted = await decryptWorkspaceArchive(value, options.passphrase);
-    const archive = await readWorkspaceArchive(decrypted);
-    return archiveReport(raw, decrypted, archive, true, inspected.ciphertextBytes);
+    return (await verifyWorkspaceArchiveValue(raw, value, options.passphrase)).report;
   }
 
   const schema = typeof value.schema === 'string' ? value.schema : '';
   const version = artifactVersion(value);
   if (schema === WORKSPACE_ARCHIVE_SCHEMA) {
-    return archiveReport(raw, value, await readWorkspaceArchive(value), false, null);
+    return (await verifyWorkspaceArchiveValue(raw, value)).report;
   }
 
   if (casePortabilityVerifier?.id === 'case-response-packet') {

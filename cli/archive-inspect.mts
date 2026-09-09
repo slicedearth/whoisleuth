@@ -2,21 +2,12 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
-import { boundedJsonLimitsForBytes, scanBoundedJson } from '../lib/bounded-json.mts';
-
-import {
-  decryptWorkspaceArchive,
-  isEncryptedWorkspaceArchive,
-} from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
   readWorkspaceArchive,
 } from '../packages/workspace/workspace-archive.mts';
 import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
-import {
-  MAX_OFFLINE_ARTIFACT_BYTES,
-  verifyOfflineArtifact,
-} from './artifact-verify.mts';
+import { verifyOfflineWorkspaceArchive } from './artifact-verify.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 
 export const ARCHIVE_INSPECTION_SCHEMA = 'whoisleuth.workspace-archive-inspection';
@@ -84,24 +75,6 @@ function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : null;
-}
-
-function parseJson(raw: string): UnknownRecord {
-  if (typeof raw !== 'string') throw new TypeError('Archive input must be UTF-8 JSON text.');
-  const bytes = Buffer.byteLength(raw, 'utf8');
-  if (bytes === 0 || bytes > MAX_OFFLINE_ARTIFACT_BYTES) {
-    throw new TypeError(`Archive input must be between 1 byte and ${MAX_OFFLINE_ARTIFACT_BYTES} bytes.`);
-  }
-  let parsed: unknown;
-  try {
-    scanBoundedJson(raw, boundedJsonLimitsForBytes(MAX_OFFLINE_ARTIFACT_BYTES));
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new TypeError('Archive input must be valid bounded JSON without duplicate keys.');
-  }
-  const value = record(parsed);
-  if (!value) throw new TypeError('Archive input must contain one JSON object.');
-  return value;
 }
 
 function normalizeSearch(value: unknown): string | null {
@@ -216,18 +189,7 @@ export async function inspectWorkspaceArchive(
     expectedContentDigest?: string | null;
   }> = {},
 ): Promise<ArchiveInspectionReport> {
-  const parsed = parseJson(raw);
-  const encrypted = isEncryptedWorkspaceArchive(parsed);
-  if (encrypted && !options.passphrase) {
-    throw new TypeError('Encrypted archive inspection requires a separate passphrase file.');
-  }
-  await verifyOfflineArtifact(raw, options.passphrase === undefined
-    ? {}
-    : { passphrase: options.passphrase });
-  const archiveValue = encrypted
-    ? await decryptWorkspaceArchive(parsed, options.passphrase as string)
-    : parsed;
-  const archive = await readWorkspaceArchive(archiveValue);
+  const { archive, encrypted } = await verifyOfflineWorkspaceArchive(raw, options);
   const contentDigestSha256 = archiveContentDigest(archive.sections);
   const expectedDigest = expectedContentDigest(options.expectedContentDigest);
   if (expectedDigest && expectedDigest !== contentDigestSha256) {

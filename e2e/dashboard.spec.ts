@@ -5,7 +5,8 @@ import { resolve } from 'node:path';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
+import { canonicalArtifactJson, sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
+import { createCase as createCaseInBrowser } from './case-test-fixtures';
 import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
@@ -856,6 +857,54 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(bulkReview.records).toHaveLength(2);
   expect(settings.activeProfile).toBe('archive-profile');
   expect(settings.theme).toBe('light');
+});
+
+test('workspace selection reuses verified content while preview and merge see peer changes', async ({ page }) => {
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+  const { content } = await downloadWorkspaceArchive(page);
+  const archive = JSON.parse(content) as WorkspaceArchiveDocument;
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.evaluate((sectionJson) => {
+    const state = window as typeof window & { archiveChecksumCalls: number };
+    state.archiveChecksumCalls = 0;
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const sections = new Set(sectionJson);
+    crypto.subtle.digest = function (algorithm, data) {
+      if (sections.has(new TextDecoder().decode(data))) state.archiveChecksumCalls += 1;
+      return digest(algorithm, data);
+    };
+  }, Object.values(archive.sections).map((section) => canonicalArtifactJson(section)));
+  const checksumCalls = () => page.evaluate(() => (window as typeof window & { archiveChecksumCalls: number }).archiveChecksumCalls);
+  await reviewWorkspaceBackup(page, { name: 'verified-workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  const preview = page.locator('.preview');
+  const cases = preview.locator('li', { hasText: 'Cases' });
+  await expect(cases).toContainText('1 new');
+  expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
+
+  const peer = await page.context().newPage();
+  try {
+    await peer.goto('/monitor?view=cases');
+    await createCaseInBrowser(peer, 'archive-case.invalid');
+    const original = (await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 1 })).records[0]!;
+    await cases.getByRole('checkbox').uncheck();
+    await expect(cases).toContainText('0 new');
+    await expect(cases).toContainText('1 existing match');
+    await cases.getByRole('checkbox').check();
+    await expect(preview.getByRole('button', { name: 'Add selected data' })).toBeEnabled();
+    expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
+
+    await createCaseInBrowser(peer, 'peer-added.invalid');
+    await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 2 });
+    await preview.getByRole('button', { name: 'Add selected data' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 13 sections' }).first()).toBeVisible();
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+    expect(stored.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'peer-added.invalid']);
+    expect(stored.records.find((record) => record.value.domain === 'archive-case.invalid')?.value.id).toBe(original.value.id);
+    expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
+  } finally {
+    await peer.close();
+  }
 });
 
 test('workspace application skips the same malformed Brand Profile identifiers as preview', async ({ page }) => {

@@ -326,15 +326,19 @@ export async function encryptWorkspaceArchive(
   passphrase: string,
   provider?: Crypto,
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
-  await readWorkspaceArchive(archive);
-  const archiveVersion = record(archive)?.version;
-  if (!isSupportedWorkspaceArchiveVersion(archiveVersion)) {
-    throw new Error('The workspace archive declares an unsupported content contract.');
-  }
+  assertWorkspaceInputGraph(archive, 'Workspace archive', { maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES });
   const plaintext = JSON.stringify(archive);
   const plaintextBytes = encoder.encode(plaintext);
   if (plaintextBytes.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
     throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+  }
+  // Validation and encryption consume the same snapshot, including when the
+  // caller changes the original object while checksum verification is pending.
+  const snapshot: unknown = JSON.parse(plaintext);
+  await readWorkspaceArchive(snapshot);
+  const archiveVersion = record(snapshot)?.version;
+  if (!isSupportedWorkspaceArchiveVersion(archiveVersion)) {
+    throw new Error('The workspace archive declares an unsupported content contract.');
   }
   const crypto = cryptoProvider(provider);
   const passphraseBytes = assertPassphrase(passphrase);
@@ -385,6 +389,15 @@ export async function decryptWorkspaceArchive(
   passphrase: string,
   provider?: Crypto,
 ): Promise<unknown> {
+  return (await decryptWorkspaceArchiveWithMetadata(raw, passphrase, provider)).archive;
+}
+
+/** Authenticate one envelope and return its inner JSON with verified byte metadata. */
+export async function decryptWorkspaceArchiveWithMetadata(
+  raw: unknown,
+  passphrase: string,
+  provider?: Crypto,
+): Promise<{ archive: unknown; ciphertextBytes: number }> {
   const { envelope, salt, iv, ciphertext } = validateEnvelope(raw);
   const crypto = cryptoProvider(provider);
   const passphraseBytes = assertPassphrase(passphrase);
@@ -416,11 +429,12 @@ export async function decryptWorkspaceArchive(
     } catch {
       throw new Error('The backup decrypted, but its contents are not valid UTF-8.');
     }
-    return parseBoundedJson(json, {
+    const archive = parseBoundedJson(json, {
       label: 'Decrypted workspace archive',
       maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES,
       limits: boundedJsonLimitsForBytes(MAX_WORKSPACE_ARCHIVE_BYTES),
     });
+    return { archive, ciphertextBytes: ciphertext.byteLength };
   } finally {
     passphraseBytes.fill(0);
   }
