@@ -224,6 +224,7 @@ test('calendar export includes only selected follow-ups and keeps Case context o
     },
   }, { destination: '/monitor?view=inbox' });
 
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
   const lifecycle = page.getByRole('region', { name: 'Contact and lifecycle review' });
   const exportButton = lifecycle.getByRole('button', { name: 'Export selected (0)' });
   await expect(exportButton).toBeDisabled();

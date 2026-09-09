@@ -64,7 +64,8 @@
   let restartPending = $state(false);
   let exportPending = $state(false);
   let exportError = $state('');
-  let contextDismissed = $state(false);
+  let workPlanOpen = $state(false);
+  const outcomeDrafts = new Map<string, { outcome: 'partial' | 'skipped'; note: string }>();
   let editingTarget = $state(false);
   let targetChangePending = $state(false);
   let contextDomain = $state('');
@@ -81,8 +82,6 @@
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
-  let actionObserver: IntersectionObserver | null = null;
-  let actionObservationVersion = 0;
   let handledLocation = '';
   type StoredEvidenceContext = Readonly<{ observations: number; relationships: number; partial: boolean; truncated: boolean; latestObservedAt: string }>;
   const emptyStoredEvidenceContext = (): StoredEvidenceContext => ({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
@@ -185,6 +184,7 @@
   }
 
   async function revealGuide() {
+    workPlanOpen = true;
     await tick();
     guideSection?.focus({ preventScroll: true });
     guideSection?.scrollIntoView({ block: 'start' });
@@ -204,28 +204,26 @@
     });
   }
 
-  async function observeAction() {
-    const observationVersion = ++actionObservationVersion;
-    await tick();
-    if (observationVersion !== actionObservationVersion) return;
-    actionObserver?.disconnect();
-    actionObserver = null;
-    const panel = actionPanel;
+  $effect(() => {
+    const panel = workPlanOpen ? actionPanel : guideSection;
     if (!panel) {
       actionVisible = true;
       return;
     }
     actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
     if (typeof IntersectionObserver === 'undefined') return;
-    actionObserver = new IntersectionObserver(([entry]) => {
-      if (observationVersion !== actionObservationVersion || actionPanel !== panel) return;
+    let active = true;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!active || !panel.isConnected) return;
       const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
       actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
     }, { threshold: [0, usefulActionExposure, returnControlHideExposure] });
-    actionObserver.observe(panel);
-  }
+    observer.observe(panel);
+    return () => { active = false; observer.disconnect(); };
+  });
 
   async function revealAction() {
+    workPlanOpen = true;
     actionVisible = true;
     await tick();
     actionPanel?.focus({ preventScroll: true });
@@ -239,7 +237,7 @@
     }
     panel.focus({ preventScroll: true });
     await afterLayout();
-    await observeAction();
+    actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
     actionPanel?.focus({ preventScroll: true });
   }
 
@@ -270,8 +268,8 @@
       reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
+      outcomeDrafts.clear();
       planOpen = false;
-      contextDismissed = false;
       editingTarget = false;
       targetChangePending = false;
       contextDomain = guide?.focusDomain || guide?.domain || '';
@@ -279,7 +277,6 @@
     }
     void refreshStoredContext();
     if (identityChanged) void revealGuide();
-    void observeAction();
   }
 
   async function refreshEvidence(requestedGuide: InvestigationGuide | null): Promise<StoredEvidenceContext> {
@@ -327,9 +324,6 @@
       return;
     }
     persistenceError = '';
-    actionObservationVersion += 1;
-    actionObserver?.disconnect();
-    actionObserver = null;
     guide = null;
   }
 
@@ -387,8 +381,9 @@
       reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
+      outcomeDrafts.clear();
       planOpen = false;
-      contextDismissed = false;
+      workPlanOpen = true;
       editingTarget = false;
       targetChangePending = false;
       contextDomain = domain;
@@ -430,10 +425,12 @@
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
     if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome))) return;
+    outcomeDrafts.delete(stageId);
     pendingOutcome = null;
     outcomeNote = '';
     if (outcome !== 'pending') {
       selectedStageId = '';
+      restoreOutcomeDraft(nextStageId);
       planOpen = false;
       void revealAction();
     }
@@ -448,24 +445,40 @@
     if (!pendingOutcome || !outcomeNote.trim()) return;
     const outcome = pendingOutcome;
     if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome, outcomeNote))) return;
+    outcomeDrafts.delete(stageId);
     pendingOutcome = null;
     outcomeNote = '';
     selectedStageId = '';
+    restoreOutcomeDraft(nextStageId);
     planOpen = false;
     void revealAction();
   }
 
   function cancelOutcomeReview() {
+    if (actionStage) outcomeDrafts.delete(actionStage.id);
     pendingOutcome = null;
     outcomeNote = '';
   }
 
+  function rememberOutcomeDraft() {
+    if (!actionStage) return;
+    if (pendingOutcome) outcomeDrafts.set(actionStage.id, { outcome: pendingOutcome, note: outcomeNote });
+    else outcomeDrafts.delete(actionStage.id);
+  }
+
+  function restoreOutcomeDraft(stageId: string | null) {
+    const draft = stageId ? outcomeDrafts.get(stageId) : undefined;
+    pendingOutcome = draft?.outcome ?? null;
+    outcomeNote = draft?.note ?? '';
+  }
+
   function reviewStage(stageId: string) {
+    if (!stages.some((stage) => stage.id === stageId)) return;
+    rememberOutcomeDraft();
     selectedStageId = stageId;
     reviewingStageId = '';
     reviewingLocation = '';
-    pendingOutcome = null;
-    outcomeNote = '';
+    restoreOutcomeDraft(stageId);
     planOpen = false;
     void revealAction();
   }
@@ -476,6 +489,9 @@
       return;
     }
     if (!applyGuideMutation(restartStoredInvestigationGuide)) return;
+    outcomeDrafts.clear();
+    pendingOutcome = null;
+    outcomeNote = '';
     selectedStageId = '';
     reviewingStageId = '';
     reviewingLocation = '';
@@ -526,13 +542,10 @@
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       if (hash) await focusRouteTarget(hash);
-      await observeAction();
       void refreshStoredContext();
     })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => {
-      actionObservationVersion += 1;
-      actionObserver?.disconnect();
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     };
   });
@@ -543,29 +556,36 @@
     const location = `${pathname}\u0000${hash}`;
     if (mounted && location !== handledLocation) {
       handledLocation = location;
+      rememberOutcomeDraft();
       selectedStageId = '';
+      restoreOutcomeDraft(nextStageId);
+      workPlanOpen = false;
       if (reviewingLocation !== location) {
         reviewingStageId = '';
         reviewingLocation = '';
       }
       applyGuideMutation(() => recordInvestigationGuideVisit(pathname));
-      if (hash) void focusRouteTarget(hash).then(observeAction);
-      else void observeAction();
+      if (hash) void focusRouteTarget(hash);
     }
   });
 </script>
 
 {#if guide && recipe}
   <section class="guide card" aria-labelledby="investigation-guide-title" tabindex="-1" bind:this={guideSection}>
+    <details class="work-plan" bind:open={workPlanOpen}>
+      <summary>
+        <span class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</span>
+        <span class="recipe-progress">{guide.status === 'paused' ? 'Paused · ' : ''}{reviewedCount} of {stages.length} steps reviewed · {actionStage?.label || 'Review completed plan'}</span>
+      </summary>
     <div class="guide-heading">
-      <div>
-        <p class="eyebrow">Guided investigation</p>
-        <strong class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</strong>
-        <p class="recipe-progress">{guide.template ? `${recipe.label} template · ` : ''}{reviewedCount} of {stages.length} steps reviewed</p>
-      </div>
+      <label class="stage-selector" for="guide-review-stage">Review step
+        <select id="guide-review-stage" value={actionStage?.id || ''} onchange={(event) => reviewStage(event.currentTarget.value)}>
+          {#if !actionStage}<option value="" disabled>All steps reviewed</option>{/if}
+          {#each stages as stage, index}<option value={stage.id}>{index + 1}. {stage.label} · {stageState(stage.id)}</option>{/each}
+        </select>
+      </label>
       <div class="context-actions">
         <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
-        <button class="btn compact" type="button" onclick={() => contextDismissed = !contextDismissed}>{contextDismissed ? 'Show work plan' : 'Dismiss details'}</button>
         <button class="btn compact danger" type="button" onclick={endGuide}>Clear context</button>
       </div>
     </div>
@@ -579,7 +599,6 @@
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
     {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
 
-    {#if !contextDismissed}
     {#if actionStage && actionProgress}
       {#key actionStage.id}
         <article class="current-action" tabindex="-1" bind:this={actionPanel}>
@@ -683,7 +702,7 @@
                     required
                     placeholder={pendingOutcome === 'partial' ? 'Record missing, unavailable, or deferred work.' : 'Record why this step does not apply or is deferred.'}
                   ></textarea>
-                  <small>{outcomeNote.length}/{MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH} characters · stored in this tab and included in the compact guide export</small>
+                  <small>{outcomeNote.length}/{MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH} characters · confirmed notes are saved in this tab and included in the guide export</small>
                   <div class="request-actions">
                     <button class="primary compact" type="submit">Confirm {pendingOutcome}</button>
                     <button class="btn compact" type="button" onclick={cancelOutcomeReview}>Cancel</button>
@@ -730,9 +749,11 @@
           <li data-stage-id={stage.id} class:current={isCurrent} class:partial={progress?.outcome === 'partial'} class:complete={progress?.outcome === 'complete'} class:skipped={progress?.outcome === 'skipped'}>
             <details open={actionStage?.id === stage.id}>
               <summary>
+                <span class="plan-stage-label">
                 <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                 <span class="stage-heading"><strong>{stage.label}</strong><small>{stage.detail}</small></span>
                 <span class="stage-state">{isCurrent ? `Current · ${stageState(stage.id)}` : stageState(stage.id)}</span>
+                </span>
               </summary>
               <div class="stage-body">
                 <dl>
@@ -782,7 +803,7 @@
       </details>
     </div>
     <p class="boundary">Progress stays in this tab. The guide never starts a scan, submits a target, changes Risk, or decides a case disposition.</p>
-    {/if}
+    </details>
   </section>
 {/if}
 
@@ -795,27 +816,31 @@
 {/if}
 
 <style>
-  .guide{margin:0 0 24px;padding:16px;scroll-margin-top:76px}
+  .guide{margin:0 0 20px;padding:0 16px;scroll-margin-top:76px}
+  .work-plan>summary{padding:14px 0;cursor:pointer;line-height:1.5}
+  .work-plan[open]{padding-bottom:16px}
+  .stage-selector{display:grid;gap:5px;flex:1;max-width:64ch;min-width:0;font-size:var(--text-xs);color:var(--muted)}
+  .stage-selector select{width:100%;min-width:0;font-size:var(--text-sm)}
   .guide:focus,.current-action:focus{outline:2px solid var(--accent);outline-offset:3px}
-  .guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .guide-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:8px}
   .context-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center}
-  .guide-title{display:block;margin:3px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
-  .recipe-progress{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs)}
+  .guide-title{overflow-wrap:anywhere;font:700 var(--text-sm) var(--mono)}
+  .recipe-progress{display:block;margin:4px 0 0 1.2em;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .recipe-status{flex:none;padding:5px 8px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:999px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .recipe-status.paused{border-color:var(--border);color:var(--muted)}
-  .context-tray{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:12px 0 0;padding:1px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
-  .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
+  .context-tray{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 0;padding:12px 0;border-block:1px solid var(--border)}
+  .context-tray div{display:block;min-width:0}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
-  .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-2xs);line-height:1.45}
-  .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
+  .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-sm);line-height:1.45}
+  .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:24px;align-items:start;margin-top:16px;padding:0;scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}
-  .action-copy>p{max-width:760px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .action-copy>p{max-width:72ch;margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .action-copy>.step-number{color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .action-copy h3{margin:13px 0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .action-instructions{display:grid;gap:5px;margin:0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .completion-check{margin-top:13px;padding:10px 11px;border-left:3px solid var(--accent);background:rgb(var(--accent-rgb) / .06)}
+  .action-instructions{display:grid;gap:6px;max-width:72ch;margin:0;padding-left:20px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .completion-check{margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
   .completion-check h3{margin:0 0 7px}
   .completion-check dl{margin:0;padding:0;border:0}
   .action-controls{display:grid;gap:9px;align-content:start}
@@ -826,15 +851,15 @@
   .mobile-action-label strong{margin-top:2px;font:700 var(--text-sm) var(--mono)}
   .request-review{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .request-review>strong{font:700 var(--text-xs) var(--mono)}
-  .candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.45}
   .candidate-note strong{color:var(--text)}
   .request-actions,.outcome-actions{display:flex;flex-wrap:wrap;gap:6px}
   .outcome-actions{margin-top:2px;padding-top:9px;border-top:1px solid var(--border)}
   .outcome-actions>span{flex:1 0 100%;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
   .outcome-review{display:grid;gap:7px;padding:10px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
-  .outcome-review label{font:700 var(--text-2xs) var(--mono)}
+  .outcome-review label{font:700 var(--text-xs) var(--mono)}
   .outcome-review textarea{width:100%;min-height:74px;resize:vertical}
-  .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .outcome-review>small{color:var(--muted);font-size:var(--text-xs);line-height:1.4}
   .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
   .handoff-readiness.ready{border-color:var(--success)}
   .handoff-readiness.unavailable{border-color:var(--border)}
@@ -847,27 +872,25 @@
   .handoff-readiness li.block{color:var(--danger)}
   .handoff-readiness li>span:first-child{font:700 var(--text-xs) var(--mono)}
   .handoff-readiness li strong,.handoff-readiness li small{display:block}
-  .handoff-readiness li strong{color:var(--text);font-size:var(--text-2xs)}
-  .handoff-readiness li small{margin-top:1px;color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
-  .handoff-readiness>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .handoff-readiness li strong{color:var(--text);font-size:var(--text-xs)}
+  .handoff-readiness li small{margin-top:1px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .handoff-readiness>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .complete-handoff{margin-top:12px;max-width:780px}
-  .guide-complete{margin-top:13px;padding:16px;border:1px solid rgb(var(--accent2-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .07)}
+  .guide-complete{margin-top:16px;padding:0}
   .guide-complete h2{margin:4px 0 6px;font:700 var(--text-md) var(--mono)}
   .guide-complete>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .compact{flex:none;padding:7px 10px;font-size:var(--text-2xs)}
+  .compact{flex:none;padding:8px 10px;font-size:var(--text-xs)}
   .plan-toggle{margin-top:10px}
   #investigation-plan{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
   #investigation-plan>li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   summary{cursor:pointer}
-  #investigation-plan>li summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px 9px;align-items:start;padding:12px;list-style:none}
-  #investigation-plan>li summary::-webkit-details-marker{display:none}
-  #investigation-plan>li summary::after{content:'+';color:var(--muted);font:700 var(--text-sm) var(--mono);line-height:1}
-  #investigation-plan>li details[open] summary::after{content:'−'}
-  #investigation-plan>li summary>span:first-child{color:var(--muted);font:700 var(--text-2xs) var(--mono)}
+  #investigation-plan>li summary{padding:12px}
+  .plan-stage-label{display:inline-grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 9px;align-items:start;vertical-align:top;width:calc(100% - 1.2em)}
+  .plan-stage-label>span:first-child{color:var(--muted);font:700 var(--text-xs) var(--mono)}
   .stage-heading{min-width:0}
   #investigation-plan>li strong,#investigation-plan>li small{display:block}
   #investigation-plan>li strong{font:700 var(--text-xs) var(--mono)}
-  #investigation-plan>li small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  #investigation-plan>li small{margin-top:3px;color:var(--muted);font-size:var(--text-xs);line-height:1.4}
   .stage-state{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-align:right}
   #investigation-plan>li.current{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
   #investigation-plan>li.current .stage-state{color:var(--accent)}
@@ -876,11 +899,11 @@
   .stage-body{padding:0 12px 12px}
   dl{display:grid;gap:7px;margin:0 0 12px;padding-top:12px;border-top:1px solid var(--border)}
   dl div{display:grid;grid-template-columns:105px minmax(0,1fr);gap:8px}
-  dt{color:var(--muted);font:700 var(--text-2xs) var(--mono)}
-  dd{margin:0;font-size:var(--text-2xs);line-height:1.45}
+  dt{color:var(--muted);font:700 var(--text-xs) var(--mono)}
+  dd{min-width:0;margin:0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
   .secondary-details{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:10px}
-  .secondary-details>details{flex:1 1 300px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
-  .secondary-details>details>summary{padding:9px 10px;font:700 var(--text-2xs) var(--mono)}
+  .secondary-details>details{flex:1 1 300px;min-width:0;border-top:1px solid var(--border)}
+  .secondary-details>details>summary{padding:12px 0;font:700 var(--text-xs) var(--mono)}
   .evidence-checkpoint p{margin:0;padding:0 10px 10px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-controls{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
   .guide-options .error{margin:0 10px 10px}
@@ -899,5 +922,6 @@
   .guide-return:hover{border-color:var(--accent);background:var(--panel-raised)}
   @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.current-action>.action-copy{grid-row:2}.current-action>.action-controls{grid-row:1}.mobile-action-label{display:block}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
-  @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}
+  @media(max-width:560px){.compact,.stage-selector select,.work-plan>summary,#investigation-plan>li summary,.secondary-details>details>summary{min-height:44px}.stage-selector{flex-basis:100%}}
+  @media(max-width:360px){.guide-controls{grid-template-columns:1fr}.plan-stage-label{grid-template-columns:auto minmax(0,1fr)}.stage-state{grid-column:2;text-align:left}}
 </style>

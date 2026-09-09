@@ -363,17 +363,22 @@
 
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
-  <BrandProtectionOperationsReport records={cases} sourceState={casesSourceState} />
-  <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
   {#if reviewInboxSourceState==='ready'}
     <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
-    <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
+    <LocalCollectionState state={reviewInboxSourceState} title={reviewInboxSourceState==='loading'?'Loading review inbox':'Review inbox evidence unavailable'} detail={reviewInboxSourceState==='loading'?'Reading retained evidence and review decisions from this browser.':'Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views.'} />
   {/if}
-  {#if casesSourceState==='ready'}
-    <CaseDecisionQuality report={decisionQuality} />
-    <CaseLifecycleReview records={cases} />
+  {#if cases.length || bulkSessions.length || evidenceDebtReview.sourceStates.cases==='unavailable' || evidenceDebtReview.sourceStates.bulk==='unavailable'}
+    <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
+  {/if}
+  {#if casesSourceState==='ready' && cases.length}
+    <details class="monitor-reports">
+      <summary>Case reports and follow-up tools</summary>
+      <BrandProtectionOperationsReport records={cases} sourceState={casesSourceState} />
+      <CaseDecisionQuality report={decisionQuality} />
+      <CaseLifecycleReview records={cases} />
+    </details>
   {/if}
 </div>
 {/if}
@@ -465,6 +470,8 @@
 {/if}
 
 <style>
+  .monitor-reports{margin-top:20px;border-top:1px solid var(--border)}
+  .monitor-reports>summary{padding:14px 0;cursor:pointer;font:650 var(--text-sm) var(--mono)}
   :global(#watchlist-activity){margin-bottom:16px}
   .case-message{margin:12px 2px;color:var(--accent);font-size:var(--text-sm)}
   .refresh-status{margin:10px 2px;color:var(--muted);font-size:var(--text-xs)}

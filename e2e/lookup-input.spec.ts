@@ -84,6 +84,7 @@ test('task guidance recommends evidence depth without submitting a lookup', asyn
   const question = guidance.getByLabel('Analyst question');
   await expect(question).toHaveValue('general');
   await expect(guidance).toContainText('Fast recommended');
+  await guidance.locator('summary').click();
   await expect(guidance.getByRole('button', { name: 'Use Fast recommendation' })).toBeDisabled();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
 
@@ -109,6 +110,7 @@ test('acquisition deep-link guidance preserves the route and permits deliberate 
   await page.goto('/lookup?task=acquisition&depth=fast#query');
   const guidance = page.locator('.task-guidance');
   await expect(guidance.getByLabel('Analyst question')).toHaveValue('acquisition');
+  await guidance.locator('summary').click();
   await expect(guidance).toContainText('Deep recommended');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();

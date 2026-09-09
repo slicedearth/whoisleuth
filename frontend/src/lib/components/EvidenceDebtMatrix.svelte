@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from './Pagination.svelte';
+  import { handlesLocalLink } from '../link-activation.ts';
   import {
     EVIDENCE_DEBT_STATES,
     type EvidenceDebtOwner,
@@ -81,7 +82,7 @@
   }
 
   function openCase(event: MouseEvent, item: EvidenceDebtItem) {
-    if (!oncase || item.owner !== 'case') return;
+    if (!oncase || item.owner !== 'case' || !handlesLocalLink(event)) return;
     event.preventDefault();
     oncase(item.ownerId);
   }

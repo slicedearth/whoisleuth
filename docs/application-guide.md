@@ -29,6 +29,17 @@ Saved-work search, templates and archive maintenance are secondary tools.
 Search stays in the browser and operates over bounded normalised fields; it does
 not start collection or inspect raw upstream payloads.
 
+### Guided investigations
+
+Starting a guide opens its current step. On ordinary tool entry, the retained
+guide appears as a compact disclosure above the tool. Open it to select a step,
+review request permissions or record an outcome. Selecting a step does not
+approve collection or mark it complete.
+
+Unconfirmed outcome notes remain separate for each step while the guide is
+open. Collapsing it or changing steps preserves those drafts; reloading the
+page discards them. Confirmed progress stays in the current tab.
+
 ## Lookup
 
 Lookup accepts one domain, IP address or ASN. URL-like input is normalised only
@@ -148,6 +159,10 @@ context and desired posture. It can include official domains, approved partners,
 allowlists, mail expectations, reviewed certificate baselines, protection
 attestations, suppressions and approved change windows.
 
+Start a profile with its name and official domains. Matching and mail settings,
+rights and official channels, and official-site identity are optional
+disclosures. Closing a disclosure preserves its unsaved fields.
+
 These values express analyst intent. They do not prove the live state of a
 registry, account, DNS zone, certificate or service. Observed evidence,
 desired-state baselines and analyst attestations remain separate.
@@ -172,6 +187,9 @@ parser. Different algorithms are not treated as equivalent evidence. See the
 ## Monitor, Respond and Assure
 
 Monitor groups existing browser-local records into Respond and Assure views.
+The review inbox appears first. Case reporting, decision summaries and the
+follow-up calendar are under **Case reports and follow-up tools** when Cases
+are retained.
 
 ### Cases and response preparation
 

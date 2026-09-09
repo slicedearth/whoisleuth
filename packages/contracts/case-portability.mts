@@ -367,7 +367,7 @@ export const CASE_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: CASE_REPORT_OUTPUT_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: null, owner: CASE_CONTRACT_OWNER,
-  note: 'Published Case report version 9 and current version 10 are exact readable output contracts; retired and future report versions are unsupported.',
+  note: 'Supported Case reports are exact readable output contracts; retired and future report versions are unsupported.',
 });
 export const CASE_RESPONSE_PACKET_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.case-response-packet', kind: 'export', schema: CASE_RESPONSE_PACKET_SCHEMA,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { Capability } from '$lib/capabilities';
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
@@ -29,6 +30,7 @@
     onsubmit,
     oncancel,
     onquerychange,
+    guidance,
   }: {
     query: string;
     task: 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
@@ -54,6 +56,7 @@
     onsubmit: (event: SubmitEvent) => void | Promise<void>;
     oncancel: () => void;
     onquerychange?: (value: string) => void;
+    guidance?: Snippet;
   } = $props();
 
   const intelligenceOptionCount = $derived(
@@ -139,6 +142,8 @@
   {/if}
   {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+  {@render guidance?.()}
 
   <fieldset class="lookup-mode" disabled={loading}>
     <legend>Lookup depth</legend>

@@ -158,6 +158,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
     },
   });
 
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
   const report = page.locator('.operations-report');
   await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
   await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();

@@ -118,11 +118,12 @@
     <div>
       <p class="eyebrow">Analyst review</p>
       <h2 id="review-inbox-title">Review inbox</h2>
-      <p>One queue for retained case decisions, evidence gaps, reviewed follow-ups, watchlist changes, and incomplete Bulk sessions.</p>
+      {#if inbox.items.length}<p>Retained Case decisions, evidence gaps, follow-ups, watchlist changes and incomplete Bulk sessions.</p>{/if}
     </div>
-    <strong>{inbox.admission.displayed}</strong>
+    {#if inbox.items.length || inbox.truncated}<strong aria-label={`${inbox.admission.displayed} retained review items`}>{inbox.admission.displayed}</strong>{/if}
   </div>
 
+  {#if inbox.items.length}
   <div class="filters" role="group" aria-label="Review queue">
     {#each ANALYST_REVIEW_QUEUE_OPTIONS as option}
       <button type="button" class:active={queue === option.value} aria-pressed={queue === option.value} onclick={() => setQueue(option.value)}>
@@ -179,6 +180,7 @@
       <button type="button" class="reset" onclick={resetDetailFilters}>Reset advanced filters</button>
     </div>
   </details>
+  {/if}
 
   {#if visible.length}
     <ol class="items">
@@ -228,6 +230,12 @@
       {/each}
     </ol>
     <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; }} ariaLabel="Review inbox pages" />
+  {:else if !inbox.items.length && !inbox.truncated}
+    <div class="empty-start">
+      <h3>No retained review items</h3>
+      <p>Investigate a domain or open saved Cases.</p>
+      <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
+    </div>
   {:else}
     <p class="empty">No retained items match this review filter.</p>
   {/if}
@@ -248,11 +256,16 @@
       </details>
     </div>
   {/if}
-  <ul class="limitations">{#each inbox.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+  <details class="review-scope"><summary>Review scope and limitations</summary><ul class="limitations">{#each inbox.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
 </section>
 
 <style>
   .review-inbox{padding:var(--card-pad)}
+  .empty-start{max-width:70ch;margin:20px 0}
+  .empty-start h3{font-size:var(--text-base)}
+  .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .review-scope{margin-top:16px;padding-top:10px;border-top:1px solid var(--border)}
+  .review-scope summary{cursor:pointer;font-size:var(--text-sm)}
   .inbox-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
   .inbox-heading h2,.inbox-heading p{margin:0}
   .inbox-heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
@@ -280,7 +293,7 @@
   .item-meta .overdue{border-color:rgb(var(--danger-rgb) / .55);color:var(--danger)}
   h3{margin:8px 0 3px;font:700 var(--text-sm) var(--mono);overflow-wrap:anywhere}
   .items p,.items small{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .items small{display:block;margin-top:5px;font-size:var(--text-2xs)}
+  .items small{display:block;margin-top:5px;font-size:var(--text-xs)}
   .item-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:168px}
   .item-actions .btn{text-align:center}
   .item-actions select,.dismiss{width:100%;min-height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:650 var(--text-2xs) var(--mono)}
@@ -291,6 +304,7 @@
   .empty,.warning,.limitations{color:var(--muted);font-size:var(--text-sm)}
   .warning{color:var(--amber)}
   .limitations{margin:18px 0 0;padding-left:20px}
+  @media(max-width:640px){.filters button,.detail-filters select,.detail-filters input,.detail-filters .reset,.item-actions select,.dismiss{min-height:44px}}
   @media(max-width:1000px){.detail-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media(max-width:640px){.items li{display:grid}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}.detail-filters{grid-template-columns:1fr 1fr}.detail-filters label:nth-child(3),.detail-filters .reset{grid-column:1 / -1}}
 </style>

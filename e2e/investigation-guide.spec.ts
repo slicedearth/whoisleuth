@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
@@ -37,7 +37,15 @@ function currentAction(page: import('@playwright/test').Page) {
   return page.locator('.guide .current-action');
 }
 
+async function openWorkPlan(page: import('@playwright/test').Page) {
+  const plan = page.locator('details.work-plan');
+  await expect(plan).toHaveCount(1);
+  if (!await plan.evaluate((element: HTMLDetailsElement) => element.open)) await plan.locator(':scope > summary').click();
+  await expect(plan).toHaveJSProperty('open', true);
+}
+
 async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discover' | 'Bulk' | 'Lookup') {
+  await openWorkPlan(page);
   const action = currentAction(page);
   await action.getByRole('button', { name: 'Review requests' }).click();
   const review = action.getByRole('region', { name: /Review requests for/ });
@@ -60,6 +68,7 @@ async function markReviewed(page: import('@playwright/test').Page, step: string)
 }
 
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
+  await openWorkPlan(page);
   const action = currentAction(page);
   const control = page.getByRole('button', { name: `Return to guided investigation: ${step}` });
   const hasStableUsefulExposure = () => action.evaluate(async (element) => {
@@ -202,10 +211,14 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(context.getByText('Not retained', { exact: true })).toBeVisible();
   await expect(context.getByText('No retained evidence', { exact: true })).toBeVisible();
   await expect(context.getByText('Confirm brand profile', { exact: true })).toBeVisible();
-  await guide.getByRole('button', { name: 'Dismiss details' }).click();
-  await expect(currentAction(page)).toHaveCount(0);
-  await expect(context).toBeVisible();
-  await guide.getByRole('button', { name: 'Show work plan' }).click();
+  const disclosure = guide.locator('details.work-plan > summary');
+  await disclosure.focus();
+  await disclosure.press('Enter');
+  await expect(currentAction(page)).toHaveCount(1);
+  await expect(currentAction(page)).toBeHidden();
+  await expect(context).toBeHidden();
+  await expect(disclosure).toContainText('0 of 5 steps reviewed');
+  await disclosure.press('Enter');
   await expect(currentAction(page)).toContainText('Step 1 of 5');
   await expect(currentAction(page)).toContainText('Confirm brand profile');
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
@@ -238,7 +251,7 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
     { width: 320, height: 700, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });
-    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, surface.theme);
+    await useTheme(page, surface.theme);
     const stepRows = await planItems.evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)));
     expect(new Set(stepRows).size).toBe(surface.width <= 900 ? 5 : 3);
     await expectNoHorizontalOverflow(page);
@@ -417,6 +430,7 @@ test('returning to the same guided Bulk step keeps its peer set and completed re
   await expect(page.locator('.results-table tbody tr')).toHaveCount(2);
 
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  await openWorkPlan(page);
   await expect(currentAction(page)).toContainText('Compare focused peers');
   await currentAction(page).getByRole('link', { name: 'Open Bulk' }).click();
 
@@ -646,6 +660,7 @@ test('an unavailable active-profile preference does not hide a healthy retained 
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {
   await startRecipe(page, 'Infrastructure pivot');
   await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
   await currentAction(page).getByRole('button', { name: 'Mark partial' }).click();
   await currentAction(page).getByRole('textbox', { name: 'What remains incomplete?' }).fill('The registry source was unavailable, so the evidence needs another review.');
   await currentAction(page).getByRole('button', { name: 'Confirm partial' }).click();
@@ -654,6 +669,7 @@ test('partial progress, pause, resume, and restart remain explicit', async ({ pa
   await page.getByRole('button', { name: 'Pause guide' }).click();
   await expect(page.locator('.guide')).toContainText('Paused');
   await page.reload();
+  await openWorkPlan(page);
   await page.getByRole('button', { name: 'Resume guide' }).click();
   await page.getByText('Guide options', { exact: true }).click();
   await page.getByRole('button', { name: 'Restart guide' }).click();
@@ -665,6 +681,7 @@ test('partial progress, pause, resume, and restart remain explicit', async ({ pa
 test('failed guide progress and clear operations retain the draft and visible context', async ({ page }) => {
   await startRecipe(page, 'Infrastructure pivot');
   await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
   await currentAction(page).getByRole('button', { name: 'Mark partial', exact: true }).click();
   const rationale = currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true });
   await rationale.fill('The selected source needs a later review.');
@@ -696,6 +713,42 @@ test('failed guide progress and clear operations retain the draft and visible co
   await page.getByRole('button', { name: 'Clear context', exact: true }).click();
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBeNull();
+});
+
+test('step selection and disclosure preserve separate temporary outcome notes without recording progress', async ({ page }) => {
+  await startRecipe(page, 'Infrastructure pivot');
+  await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
+  await currentAction(page).getByRole('button', { name: 'Mark partial', exact: true }).click();
+  await currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true }).fill('Unsubmitted evidence note.');
+  const stage = page.getByRole('combobox', { name: 'Review step', exact: true });
+  await stage.selectOption('bulk');
+  await currentAction(page).getByRole('button', { name: 'Skip this step', exact: true }).click();
+  await currentAction(page).getByRole('textbox', { name: 'Why is this step being skipped?', exact: true }).fill('Unsubmitted comparison note.');
+  await stage.selectOption('lookup');
+  const note = currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true });
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  const summary = page.locator('details.work-plan > summary');
+  await summary.click();
+  await expect(currentAction(page).locator('textarea')).toHaveCount(1);
+  await expect(note).toBeHidden();
+  await summary.press('Enter');
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  const before = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(before.stages.every((item: { outcome: string; reviewNote: string | null }) => item.outcome === 'pending' && item.reviewNote === null)).toBe(true);
+  expect(before.stages.find((item: { id: string }) => item.id === 'bulk').approvedAt).toBeNull();
+  await stage.selectOption('bulk');
+  await expect(currentAction(page).getByRole('textbox', { name: 'Why is this step being skipped?', exact: true })).toHaveValue('Unsubmitted comparison note.');
+  await currentAction(page).getByRole('button', { name: 'Confirm skipped', exact: true }).click();
+  await expect(currentAction(page)).toBeFocused();
+  const after = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(after.stages.find((item: { id: string }) => item.id === 'bulk')).toMatchObject({ outcome: 'skipped', reviewNote: 'Unsubmitted comparison note.' });
+  expect(after.stages.find((item: { id: string }) => item.id === 'lookup')).toMatchObject({ outcome: 'pending', reviewNote: null });
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  await page.reload();
+  await expect(page.locator('details.work-plan')).toHaveJSProperty('open', false);
+  await openWorkPlan(page);
+  await expect(currentAction(page).getByRole('textbox')).toHaveCount(0);
 });
 
 test('exports only a compact versioned progress summary after explicit confirmation', async ({ page }) => {

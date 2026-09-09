@@ -197,6 +197,8 @@
   }
   async function save(){
     if(savingProfile)return;
+    const origin=document.activeElement;
+    let savedProfileId='';
     cancelIdentityCapture();
     savingProfile=true;
     const unchanged=profileDraft.capture();
@@ -205,11 +207,19 @@
     try{
       const existing=editing?profiles.find((profile)=>profile.id===editing):null;
       const result=await commitProfileWrite({name,officialDomains:parseList(official,true),officialChannels,productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:existing?.allowlistedDomains||[],allowlistedRegistrars:existing?.allowlistedRegistrars||[],dkimSelectors:parseList(selectors,true),retiredDkimSelectors:parseList(retiredSelectors,true),mailProtectionProfile,protectionAttestations:existing?.protectionAttestations||[],desiredPostureBaselines:existing?.desiredPostureBaselines||[],trademarkOwner,trademarkRegistration,rightsReferences,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing,{expectedUpdatedAt:editing?editingRevision:null});
+      savedProfileId=result.profile.id;
       if(editing===submittedEditingId)editingRevision=result.profile.updatedAt;
       if(unchanged())showForm=false;
       message=result.issue?`Saved "${result.profile.name}". ${committedIssueText(result.issue)}`:`Saved "${result.profile.name}" and set it active.`;
-    }catch(cause){message=profileFailureMessage(cause,'Could not save profile.');}
-    finally{savingProfile=false;}
+    }catch(cause){message=profileWriteFailureMessage(cause,'Could not save profile.');}
+    finally{
+      savingProfile=false;
+      await tick();
+      if(document.activeElement===document.body||document.activeElement===origin){
+        const target=showForm?origin:document.getElementById(`brand-profile-edit-${savedProfileId}`)||document.getElementById('brand-profile-source-state')||document.getElementById('new-brand-profile');
+        if(target instanceof HTMLElement&&target.isConnected&&!(target instanceof HTMLButtonElement&&target.disabled))target.focus({preventScroll:true});
+      }
+    }
   }
   async function remove(profile:BrandProfile){
     let impact:string;
@@ -282,7 +292,7 @@
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Assure" title="Brands" description="Review owned-domain profiles, trusted dependencies and externally visible security settings."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button><button class="btn" onclick={download} disabled={profileSourceState!=='ready'||!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
+<PageHeading eyebrow="Assure" title="Brands" description="Review owned-domain profiles, trusted dependencies and externally visible security settings."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()} disabled={profileSourceState!=='ready'}>New profile</button>{#if profiles.length}<button class="btn" onclick={download} disabled={profileSourceState!=='ready'}>Export JSON</button>{/if}<label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={profileSourceState!=='ready'}></label></div></PageHeading>
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 {#if message}<p class="message" role="status" aria-label="Brand Profile action status" aria-live="polite" aria-atomic="true">{message}</p>{/if}
 {#if profileSourceState === 'loading'}
@@ -290,9 +300,10 @@
 {:else if profileSourceState === 'unavailable'}
   <section id="brand-profile-source-state" tabindex="-1" class="profile-source-state unavailable card" role="alert">Brand Profiles could not be read. No empty-profile conclusion has been drawn; reload to try again.</section>
 {:else}
-  <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
+  {#if profiles.length || !showForm}<BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />{/if}
 {/if}
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {officialChannels} {rightsReferences} setOfficialChannels={(value)=>{profileDraft.changed();officialChannels=value;}} setRightsReferences={(value)=>{profileDraft.changed();rightsReferences=value;}} {pageBaseline} {capturingIdentity} busy={savingProfile} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={closeEditor} formatDate={baselineDate} />{/if}
+{#if profiles.length || cases.length || relationships.length || activeId || localContextStatus || brandsView==='assets'}
 <div class="brand-views" role="tablist" aria-label="Brands views">
   <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
   <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onpointerenter={()=>preloadBrandsView('assets')} onfocus={()=>preloadBrandsView('assets')} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
@@ -300,8 +311,6 @@
 
 {#if brandsView==='overview'}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-overview">
-    <BrandAssetRegisterSummary projection={brandAssetRegister} />
-    <BrandReviewInbox inbox={brandReviewInbox} />
     {#if active}
       {#key active.id}<BrandAllowlistManager profile={active} onsave={saveAllowlist} onmessage={(value)=>message=value} />{/key}
       <section class="workbench-launcher card" aria-labelledby="brand-workbench-title">
@@ -326,11 +335,14 @@
         <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" />
       {/if}
     {/if}
+    <BrandReviewInbox inbox={brandReviewInbox} />
+    <BrandAssetRegisterSummary projection={brandAssetRegister} />
   </div>
 {:else}
   <div id="brands-view-panel" role="tabpanel" aria-labelledby="brands-tab-assets">
     <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
   </div>
+{/if}
 {/if}
 
 <style>

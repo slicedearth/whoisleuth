@@ -6,7 +6,7 @@ import { sectionedLookupFixture } from './lookup-design-fixtures';
 // Lookup response bounds, disclosure, analyst-task and URL reconciliation coverage.
 
 function analystQuestion(page: import('@playwright/test').Page) {
-  return page.getByRole('region', { name: 'Choose evidence depth for the question' })
+  return page.getByRole('region', { name: 'Question and depth guidance' })
     .getByLabel('Analyst question');
 }
 

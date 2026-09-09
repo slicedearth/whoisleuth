@@ -123,10 +123,11 @@ async function cleanBrandStorage(page: import('@playwright/test').Page) {
   });
 }
 
-async function openProfileForm(page: import('@playwright/test').Page) {
+async function openProfileForm(page: import('@playwright/test').Page, options?: 'Official-site identity' | 'Matching and mail settings' | 'Rights and official channels') {
   await page.getByRole('button', { name: 'New profile' }).click();
   await page.getByLabel('Brand name').fill('Example Brand');
   await page.getByLabel('Official domains').fill('example.com');
+  if (options) await page.getByText(options, { exact: true }).click();
 }
 
 test('Brand Profile saving preserves a newer editable draft', async ({ page }) => {
@@ -164,6 +165,33 @@ test('expected-setting drafts follow the selected profile even for a shared doma
   const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
   expect(snapshot.records.find((item) => item.id === 'profile-a')?.value.desiredPostureBaselines[0]?.nameservers).toEqual(['ns-a.example']);
   expect(snapshot.records.find((item) => item.id === 'profile-b')?.value.desiredPostureBaselines[0]?.nameservers).toEqual(['ns-b.example']);
+});
+
+test('a rejected profile write keeps optional drafts for a deliberate retry and returns focus after success', async ({ page }) => {
+  await cleanBrandStorage(page);
+  await openProfileForm(page, 'Matching and mail settings');
+  await page.getByLabel('Product names', { exact: true }).fill('Retained product draft');
+  await page.getByText('Matching and mail settings', { exact: true }).click();
+  await page.getByText('Rights and official channels', { exact: true }).click();
+  await page.getByLabel('Trademark owner', { exact: true }).fill('Reserved rights holder');
+  await page.getByText('Rights and official channels', { exact: true }).click();
+  await failNextBrowserLocalManifestWrite(page, 'brand_profiles');
+  const save = page.getByRole('button', { name: 'Save profile', exact: true });
+  await save.click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('out of storage space');
+  await expect(save).toBeFocused();
+  await expect(page.getByLabel('Brand name', { exact: true })).toHaveValue('Example Brand');
+  await page.getByText('Matching and mail settings', { exact: true }).click();
+  await expect(page.getByLabel('Product names', { exact: true })).toHaveValue('Retained product draft');
+  await page.getByText('Rights and official channels', { exact: true }).click();
+  await expect(page.getByLabel('Trademark owner', { exact: true })).toHaveValue('Reserved rights holder');
+  expect((await readBrowserLocalCollection(page, 'brand_profiles')).records).toHaveLength(0);
+  await save.click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Example Brand"');
+  const snapshot = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(snapshot.records).toHaveLength(1);
+  expect(snapshot.records[0]?.value).toMatchObject({ productNames: ['Retained product draft'], trademarkOwner: 'Reserved rights holder' });
+  await expect(page.getByRole('button', { name: /^Edit Example Brand/u })).toBeFocused();
 });
 
 test('passport export preserves an intentional empty selection and exports only reselected domains', async ({ page }) => {
@@ -210,7 +238,7 @@ test('rapid repeated Brand Profile save persists only one record', async ({ page
 
 test('official channels and rights references remain editable and browser-local', async ({ page }) => {
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Rights and official channels');
   await page.getByRole('button', { name: 'Add channel' }).click();
   await page.getByLabel('Official channel 1 platform').selectOption('instagram');
   await page.getByLabel('Official channel 1 exact public URL').fill('https://social.example/example/');
@@ -231,6 +259,7 @@ test('official channels and rights references remain editable and browser-local'
 
   await page.reload();
   await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByText('Rights and official channels', { exact: true }).click();
   await expect(page.getByLabel('Official channel 1 exact public URL')).toHaveValue('https://social.example/example/');
   await expect(page.getByLabel('Rights reference 1 identifier')).toHaveValue('TM-123');
 });
@@ -292,7 +321,7 @@ test('captures and persists only a bounded official-site baseline after profile 
     body: JSON.stringify(availabilityFixture()),
   }));
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Official-site identity');
 
   await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
   await expect(page.getByRole('status')).toHaveText(/Captured a complete page baseline.*Save the profile/i);
@@ -357,6 +386,7 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   expect(website.records[0]?.value.profileProvenance.pageFingerprint).toEqual({ version: 1, state: 'known' });
   expect(requests).toBe(0);
   await page.getByRole('button', { name: 'Edit Example account (baseline-profile)', exact: true }).click();
+  await page.getByText('Official-site identity', { exact: true }).click();
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Captured a complete page baseline');
   await page.getByRole('button', { name: 'Save profile', exact: true }).click();
@@ -379,7 +409,7 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
     body: JSON.stringify(availabilityFixture()),
   }));
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Official-site identity');
   await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
   await page.getByLabel('Official domains').fill('different.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
@@ -412,7 +442,7 @@ test('a late capture cannot bind one official domain identity to another', async
     }
   });
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Official-site identity');
 
   await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
   await expect(page.getByRole('button', { name: 'Capturing…' })).toBeVisible();
@@ -455,7 +485,7 @@ test('an inconclusive recapture preserves the existing form baseline', async ({ 
     });
   });
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Official-site identity');
   await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status')).toHaveText(/existing baseline is unchanged/i);
@@ -470,7 +500,7 @@ test('a malformed successful capture cannot populate or persist identity evidenc
     body: JSON.stringify({ faviconHash: 'a'.repeat(64) }),
   }));
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Official-site identity');
 
   await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
   await expect(page.getByRole('status')).toHaveText('Official-site capture returned an invalid response.');
@@ -627,7 +657,7 @@ test('creating a new active profile clears ownership of an older in-flight postu
 
 test('defensive mail settings, retired selectors, and expiring reviewed controls persist locally', async ({ page }) => {
   await cleanBrandStorage(page);
-  await openProfileForm(page);
+  await openProfileForm(page, 'Matching and mail settings');
   await page.getByLabel('Mail posture profile').selectOption('defensive_no_mail');
   await page.getByLabel('Active DKIM selectors').fill('active');
   await page.getByLabel('Retired DKIM selectors').fill('retired, active');
@@ -793,8 +823,8 @@ test('keeps completed posture results visible when retaining an observation cann
 test('official-site baseline controls fit a narrow mobile viewport without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await cleanBrandStorage(page);
-  await openProfileForm(page);
-  const fieldset = page.getByRole('group', { name: 'Official-site identity' });
+  await openProfileForm(page, 'Official-site identity');
+  const fieldset = page.locator('details.profile-options').filter({ has: page.getByText('Official-site identity', { exact: true }) });
   await expect(fieldset).toBeVisible();
   const layout = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
@@ -1173,7 +1203,9 @@ test('a browser quota failure reports a stable message and preserves the previou
   await page.getByLabel('Brand name').fill('Changed name');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('out of storage space');
-  await expect(page.locator('.local-context-status')).toContainText('Browser-local Brand Profiles could not be read.');
+  await expect(page.locator('.local-context-status')).toHaveCount(0);
+  await expect(page.getByLabel('Brand name')).toHaveValue('Changed name');
+  await expect(page.getByRole('button', { name: 'Save profile', exact: true })).toBeFocused();
   const after = await readBrowserLocalCollection(page, 'brand_profiles');
   expect(after.records.map((entry) => entry.value)).toEqual(before.records.map((entry) => entry.value));
 });

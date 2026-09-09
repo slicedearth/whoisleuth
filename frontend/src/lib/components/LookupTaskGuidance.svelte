@@ -16,25 +16,33 @@
   }
 </script>
 
-<section class="task-guidance card" aria-labelledby="lookup-task-guidance-title">
-  <header>
-    <div><p class="eyebrow">Task guidance</p><h2 id="lookup-task-guidance-title">Choose evidence depth for the question</h2></div>
+<section class="task-guidance" aria-label="Question and depth guidance">
     <label>Analyst question
       <select value={task} onchange={(event) => ontask(event.currentTarget.value as LookupTaskView)}>
         {#each LOOKUP_TASK_VIEWS as option}<option value={option.id}>{option.label}</option>{/each}
       </select>
     </label>
-  </header>
+  <details>
+    <summary>{guidance.recommendation === 'review_retained' ? 'Review retained evidence first' : `${guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommended`}</summary>
   <div class="guidance-copy">
-    <p><strong>{guidance.recommendation === 'review_retained' ? 'Review retained evidence first' : `${guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommended`}.</strong> {guidance.reason}</p>
+    <p>{guidance.reason}</p>
     <p class="limitation">{guidance.limitation}</p>
   </div>
   <div class="guidance-actions">
     <button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>
-    <span>You can still choose either depth below.</span>
   </div>
+  </details>
 </section>
 
 <style>
-  .task-guidance{display:grid;gap:12px;margin-bottom:14px;padding:var(--card-pad)}.task-guidance>header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.task-guidance h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.task-guidance header label{display:grid;min-width:min(340px,100%);gap:5px;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.task-guidance select{width:100%}.guidance-copy{display:grid;gap:6px;padding:11px;border-left:3px solid var(--accent);background:rgb(var(--accent-rgb) / .06)}.guidance-copy p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.guidance-copy strong{color:var(--text)}.guidance-copy .limitation{color:var(--amber)}.guidance-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px}.guidance-actions span{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}@media(max-width:620px){.task-guidance>header{display:grid}.guidance-actions,.guidance-actions .btn{width:100%}}
+  .task-guidance{display:grid;grid-template-columns:minmax(0,26rem) minmax(0,1fr);gap:12px 20px;align-items:start;margin-block:16px;padding-block:12px;border-block:1px solid var(--border)}
+  label{display:grid;min-width:0;gap:5px;color:var(--muted);font:650 var(--text-xs) var(--mono)}
+  select{width:100%;min-width:0}
+  details{min-width:0}
+  summary{padding:12px 0;cursor:pointer;font-size:var(--text-sm)}
+  .guidance-copy{display:grid;gap:8px;max-width:72ch}
+  .guidance-copy p{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .guidance-copy .limitation{color:var(--amber)}
+  .guidance-actions{margin-top:12px}
+  @media(max-width:760px){.task-guidance{grid-template-columns:1fr;gap:4px}summary,select{min-height:44px}.guidance-actions .btn{width:100%}}
 </style>

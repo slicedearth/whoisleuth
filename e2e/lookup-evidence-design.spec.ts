@@ -5,7 +5,7 @@ import { sectionedLookupFixture } from './lookup-design-fixtures';
 // Data-heavy Lookup evidence presentation and accessibility coverage.
 
 function analystQuestion(page: import('@playwright/test').Page) {
-  return page.getByRole('region', { name: 'Choose evidence depth for the question' })
+  return page.getByRole('region', { name: 'Question and depth guidance' })
     .getByLabel('Analyst question');
 }
 

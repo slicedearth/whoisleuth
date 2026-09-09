@@ -773,7 +773,6 @@
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
-<LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
 <LookupForm
   bind:query
   task={taskView}
@@ -799,7 +798,11 @@
   onsubmit={submit}
   oncancel={cancelLookup}
   onquerychange={handleLookupQueryChange}
-/>
+>
+  {#snippet guidance()}
+    <LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+  {/snippet}
+</LookupForm>
 
 <LookupSavedContextPreview {query} />
 

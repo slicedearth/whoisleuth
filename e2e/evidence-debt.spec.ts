@@ -228,6 +228,28 @@ test('keeps readable Bulk gaps visible while the Case source is unavailable', as
   await expectNoHorizontalOverflow(page);
 });
 
+test('a modified Case link opens its own tab without changing the inbox or writing evidence', async ({ page, context }) => {
+  await page.goto('/monitor');
+  await seedEvidenceDebt(page);
+  const region = page.getByRole('region', { name: 'Evidence gaps' });
+  const link = region.locator('.queue > li', { hasText: 'conflicting.invalid' }).getByRole('link', { name: 'Review case', exact: true });
+  await expect(link).toBeVisible();
+  await installNoSideEffectCounters(page);
+  const originalUrl = page.url();
+  await link.scrollIntoViewIfNeeded();
+  await expect(link).toBeInViewport({ ratio: 1 });
+  const opened = context.waitForEvent('page');
+  await link.click({ modifiers: ['ControlOrMeta'] });
+  const other = await opened;
+  try {
+    await expect(other).toHaveURL(/\/monitor\?view=cases&case=case-conflicting#case-response-case-conflicting$/u);
+    await expect(other.locator('#case-head-case-conflicting')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page).toHaveURL(originalUrl);
+    await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
+    expect(await page.evaluate(() => (window as typeof window & { __evidenceDebtWrites?: number }).__evidenceDebtWrites || 0)).toBe(0);
+  } finally { await other.close(); }
+});
+
 test('announces loading without presenting a false zero', async ({ page }) => {
   await page.goto('/bulk');
   await seedEvidenceDebt(page, '/bulk');
@@ -238,11 +260,22 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   const navigation = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
 
   const region = page.getByRole('region', { name: 'Evidence gaps' });
-  await expect(region).toHaveAttribute('aria-busy', 'true');
-  await expect(region.locator('.review-heading > strong')).toHaveText('—');
-  await expect(region.getByRole('status')).toContainText('Loading saved Bulk sessions and Cases');
-  await expect(region.getByText(/No actionable partial/u)).toHaveCount(0);
+  const loading = page.locator('.local-collection-state');
+  await expect(loading).toHaveAttribute('aria-busy', 'true');
+  await expect(loading.getByRole('heading', { name: 'Loading review inbox', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Inbox/u }).locator('span')).toHaveAccessibleName('count loading');
+  await expect(region).toHaveCount(0);
+  await expect(page.getByText('No retained review items', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Review inbox evidence unavailable', exact: true })).toHaveCount(0);
+  const heading = page.getByRole('heading', { name: 'Monitor', exact: true });
+  const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
+  const headingBefore = await heading.boundingBox();
+  const tabsBefore = await tabs.boundingBox();
+  expect(headingBefore).not.toBeNull();
+  expect(tabsBefore).not.toBeNull();
   await navigation;
   await expect(region).toHaveAttribute('aria-busy', 'false', { timeout: 5_000 });
   await expect(region.locator('.review-heading > strong')).toHaveText('4 evidence gaps to review');
+  expect(await heading.boundingBox()).toEqual(headingBefore);
+  expect(await tabs.boundingBox()).toEqual(tabsBefore);
 });
