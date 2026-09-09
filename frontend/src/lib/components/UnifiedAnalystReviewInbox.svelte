@@ -35,24 +35,27 @@
     oncount?: (count: number) => void;
   } = $props();
 
-  const now = new Date().toISOString();
-  const localProjection = $derived(buildLocalAnalystReviewProjection({ cases, profiles, detectionRules, websiteSnapshots, watchlists, bulkSessions, reviewState }, now));
-  const certificateProjection = $derived(buildCertificateReviewInbox(profiles, cases, { now, reviewState }));
-  const inbox = $derived(buildAnalystReviewInbox({
-    cases,
-    watchlists,
-    bulkSessions,
-    reviewState,
-    projectedItems: [...localProjection.items, ...certificateProjection.reviewItems],
-    projectedAdmissions: [localProjection.admission, certificateProjection.reviewAdmission],
-  }, now));
+  const review = $derived.by(() => {
+    const now = new Date().toISOString();
+    const localProjection = buildLocalAnalystReviewProjection({ cases, profiles, detectionRules, websiteSnapshots, watchlists, bulkSessions, reviewState }, now);
+    const certificateProjection = buildCertificateReviewInbox(profiles, cases, { now, reviewState });
+    return { now, inbox: buildAnalystReviewInbox({
+      cases,
+      watchlists,
+      bulkSessions,
+      reviewState,
+      projectedItems: [...localProjection.items, ...certificateProjection.reviewItems],
+      projectedAdmissions: [localProjection.admission, certificateProjection.reviewAdmission],
+    }, now) };
+  });
+  const inbox = $derived(review.inbox);
 
   $effect(() => { oncount?.(inbox.counts.all); });
 </script>
 
 <AnalystReviewInbox
   {inbox}
-  {now}
+  now={review.now}
   {...(ondismiss ? { ondismiss } : {})}
   {...(onreview ? { onreview } : {})}
 />

@@ -53,6 +53,25 @@ function item(overrides: Partial<AnalystReviewItem> = {}): AnalystReviewItem {
 }
 
 describe('canonical analyst Review Item lifecycle', () => {
+  test('validates calendar dates independently and keeps an unavailable review clock open', () => {
+    for (const reviewedAt of ['2026-02-30T00:00:00Z', '2026-08-23T24:00:00Z', '2026-08-23T01:00:00', 'Sun, 23 Aug 2026 01:00:00 GMT']) {
+      assert.throws(() => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
+        disposition: 'open', rationale: 'Calendar validation.', reviewedAt,
+      }), /explicit valid date, time and timezone/u);
+    }
+    const review = item();
+    const state = setAnalystReviewDecision(emptyAnalystReviewStateStore(), review, {
+      disposition: 'expected', rationale: 'Time-limited analyst review.', reviewedAt: NOW, expiresAt: '2026-08-24T00:00:00Z',
+    });
+    for (const now of ['', 'invalid', '2026-08-22T00:00:00Z']) {
+      const lifecycle = analystReviewLifecycle(review, state, now);
+      assert.equal(lifecycle.effectiveDisposition, 'open');
+      assert.equal(lifecycle.invalidated, true);
+      assert.match(lifecycle.reason, /clock/u);
+      assert.deepEqual(lifecycle.decision, state.records[0]);
+    }
+    assert.equal(analystReviewLifecycle(review, state, NOW).effectiveDisposition, 'expected');
+  });
   test('shared bounded record digests match independent vectors and the platform implementation', () => {
     assert.equal(sha256IdentityHex(new Uint8Array()), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
     assert.equal(sha256IdentityHex(new TextEncoder().encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   analystReviewQueue,
+  compareAnalystReviewAdmission,
   buildAnalystReviewInbox,
   filterAnalystReviewItems,
   MAX_ANALYST_REVIEW_ITEMS,
@@ -116,6 +117,54 @@ function watchlists(domain = 'changed.invalid'): WatchlistCollection {
 }
 
 describe('analyst review inbox', () => {
+  test('uses source times instead of recent Case edits and keeps unavailable dates unknown', () => {
+    const record = createCase({ domain: 'review-clock.example', evidencePin: {
+      label: 'Limited retained observation', value: 'Unavailable', field: 'tls.issuer', source: 'Fixture source',
+      observedAt: '2026-06-01T00:00:00Z', completeness: 'partial', limitations: ['Source incomplete.'],
+    } }, NOW);
+    const gap = buildAnalystReviewInbox({ cases: [record] }, NOW).items.find((entry) => entry.kind === 'evidence_gap')!;
+    assert.equal(gap.observedAt, '2026-06-01T00:00:00.000Z');
+    assert.equal(gap.age, 'stale');
+    const undated = { ...record, evidencePins: record.evidencePins.map((pin) => ({ ...pin, observedAt: '' })) };
+    const unknown = buildAnalystReviewInbox({ cases: [undated] }, NOW).items.find((entry) => entry.kind === 'evidence_gap')!;
+    assert.equal(unknown.observedAt, '');
+    assert.equal(unknown.age, 'unknown');
+    const session = bulkSession();
+    for (const updatedAt of ['', '2026-02-30T00:00:00Z', '2026-07-27T09:00:00']) {
+      const projected = buildAnalystReviewInbox({ bulkSessions: [{ ...session, updatedAt }] }, NOW).items[0]!;
+      assert.equal(projected.observedAt, '');
+      assert.equal(projected.age, 'unknown');
+    }
+  });
+
+  test('selects material-change cohorts by check time and invalidates same-count content changes', () => {
+    const source = watchlists();
+    const older = source.Priority!.history[0]!;
+    const recent = { ...older, checkedAt: '2026-07-28T07:00:00Z', changes: older.changes.map((change) => ({ ...change, domain: 'recent.example' })) };
+    const project = (history: WatchlistCollection[string]['history']) => buildAnalystReviewInbox({ watchlists: { Priority: { ...source.Priority!, history } } }, NOW).items[0]!;
+    const selected = project([recent, older]);
+    assert.equal(selected.observedAt, '2026-07-28T07:00:00.000Z');
+    assert.deepEqual(project([older, recent]), selected);
+    const conflict = { ...recent, checkedAt: '2026-07-28T17:00:00+10:00', changes: older.changes };
+    const ambiguous = project([recent, conflict]);
+    assert.equal(ambiguous.completeness, 'inconclusive');
+    assert.match(ambiguous.detail, /share the latest check time/u);
+    assert.deepEqual(project([conflict, recent]), ambiguous);
+    assert.equal(project([{ ...older, checkedAt: '' }, recent]).age, 'unknown');
+    const changed = project([{ ...recent, changes: older.changes }]);
+    assert.equal(changed.subjectKey, selected.subjectKey);
+    assert.notEqual(changed.materialFingerprint, selected.materialFingerprint);
+  });
+
+  test('orders unknown dates and then newest observations without a non-finite comparator', () => {
+    const first = buildAnalystReviewInbox({ cases: [caseRecord()] }, NOW).items[0]!;
+    const old = { ...first, dueAt: null, observedAt: '2026-06-01T00:00:00Z' };
+    const recent = { ...old, observedAt: NOW };
+    const undated = { ...old, observedAt: '', dueAt: 'not a date' };
+    assert.ok(compareAnalystReviewAdmission(undated, recent, NOW) < 0);
+    assert.ok(compareAnalystReviewAdmission(recent, old, NOW) < 0);
+    assert.equal(compareAnalystReviewAdmission(undated, { ...undated }, NOW), 0);
+  });
   test('combines retained work without changing source semantics', () => {
     const inbox = buildAnalystReviewInbox({
       cases: [caseRecord()],

@@ -5,6 +5,8 @@ import {
 import { caseStatusIsClosed, isReviewedCaseDisposition } from './case-record-decisions.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
+import { normalizeExplicitIsoTimestamp as timestamp } from '../../../../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 import {
   ANALYST_REVIEW_EVIDENCE_FAMILIES,
   ANALYST_REVIEW_KINDS,
@@ -125,7 +127,7 @@ export function analystReviewQueue(
   item: AnalystReviewInboxItem,
   now: unknown,
 ): Exclude<AnalystReviewQueue, 'all'> | 'reviewed' {
-  const nowIso = timestamp(now) || new Date(0).toISOString();
+  const nowIso = timestamp(now) ?? '';
   if (item.lifecycle.invalidated || item.lifecycle.recurred) return 'changed';
   if (item.lifecycle.state === 'resolved') return 'reviewed';
   const dueAt = item.dueAt ? Date.parse(item.dueAt) : Number.NaN;
@@ -133,12 +135,6 @@ export function analystReviewQueue(
   if (item.lifecycle.state === 'expected' || item.lifecycle.state === 'suppressed' || futureFollowUp) return 'waiting';
   if (CHANGED_REVIEW_KINDS.has(item.kind)) return 'changed';
   return 'needs_action';
-}
-
-function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 type AdmissionComparableItem = AnalystReviewItem & Readonly<{ lifecycle?: AnalystReviewLifecycle }>;
@@ -155,7 +151,7 @@ export function compareAnalystReviewAdmission(
   right: AdmissionComparableItem,
   now: unknown,
 ): number {
-  const nowIso = timestamp(now) || new Date(0).toISOString();
+  const nowIso = timestamp(now) ?? '';
   return compareAnalystReviewAdmissionAt(left, right, Date.parse(nowIso));
 }
 
@@ -164,8 +160,8 @@ function compareAnalystReviewAdmissionAt(
   right: AdmissionComparableItem,
   nowMs: number,
 ): number {
-  const leftDue = left.dueAt ? Date.parse(left.dueAt) : Number.POSITIVE_INFINITY;
-  const rightDue = right.dueAt ? Date.parse(right.dueAt) : Number.POSITIVE_INFINITY;
+  const leftDue = timestamp(left.dueAt) ? Date.parse(left.dueAt!) : Number.POSITIVE_INFINITY;
+  const rightDue = timestamp(right.dueAt) ? Date.parse(right.dueAt!) : Number.POSITIVE_INFINITY;
   const leftOverdue = leftDue <= nowMs;
   const rightOverdue = rightDue <= nowMs;
   const priority = PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
@@ -176,7 +172,10 @@ function compareAnalystReviewAdmissionAt(
   if (leftDue !== rightDue) return leftDue - rightDue;
   const completeness = COMPLETENESS_RANK[left.completeness] - COMPLETENESS_RANK[right.completeness];
   if (completeness) return completeness;
-  const observed = Date.parse(left.observedAt) - Date.parse(right.observedAt);
+  const leftObserved = timestamp(left.observedAt);
+  const rightObserved = timestamp(right.observedAt);
+  if (Boolean(leftObserved) !== Boolean(rightObserved)) return leftObserved ? 1 : -1;
+  const observed = leftObserved && rightObserved ? Date.parse(rightObserved) - Date.parse(leftObserved) : 0;
   if (observed) return observed;
   return compareCodeUnits(left.subjectKey, right.subjectKey) || compareCodeUnits(left.id, right.id);
 }
@@ -232,7 +231,7 @@ export function retainTopAnalystReviewItems<T extends AnalystReviewItem>(
     limit?: number;
   }>,
 ): RetainedReviewItems<T> {
-  const nowIso = timestamp(options.now) || new Date(0).toISOString();
+  const nowIso = timestamp(options.now) ?? '';
   const nowMs = Date.parse(nowIso);
   const limit = Math.max(0, Math.min(MAX_ANALYST_REVIEW_ITEMS, Math.trunc(options.limit ?? MAX_ANALYST_REVIEW_ITEMS)));
   const candidateCounts = emptyFamilyCounts();
@@ -280,7 +279,7 @@ function rankingReason(priority: AnalystReviewPriority, dueAt: string | null, no
   if (dueAt) return 'Dated work is ordered by its next due time.';
   if (priority === 'urgent') return 'Escalated or overdue review receives urgent priority.';
   if (priority === 'high') return 'Contradictory, failed, or submission-stage evidence receives high priority.';
-  return 'Undated work is ordered by priority, newest observation, then stable identity.';
+  return 'Work is ordered by priority, unknown time first, then newest observation and stable identity.';
 }
 
 type AnalystReviewItemSeed = Omit<
@@ -303,6 +302,7 @@ function reviewEvidenceFamily(kind: AnalystReviewKind): AnalystReviewEvidenceFam
 function withReviewMetadata(
   item: AnalystReviewItemSeed,
   nowIso: string,
+  material?: readonly unknown[],
 ): AnalystReviewItem {
   const evidenceFamily = item.evidenceFamily ?? reviewEvidenceFamily(item.kind);
   const subjectKey = analystReviewSubjectKey(evidenceFamily, [item.kind, item.id, item.caseId, item.caseDomain]);
@@ -316,6 +316,7 @@ function withReviewMetadata(
     item.dueAt,
     item.completeness,
     item.nextAction,
+    ...(material ? [material] : []),
   ]);
   return {
     ...item,
@@ -351,11 +352,16 @@ function currentCaseEvidenceGap(record: CaseRecord, nowIso: string) {
     ...limitedPinRecords.map((item) => `pin:${item.id}:${item.completeness}:${String(item.truncated)}`),
   ];
   const dismissalTarget = gapIds.length ? gapDismissalTarget(record, gapIds) : null;
+  const times = [...openUnknownRecords, ...openContradictionRecords]
+    .map((entry) => timestamp(entry.provenance ? entry.provenance.observedAt : entry.updatedAt));
+  times.push(...limitedPinRecords.map((entry) => timestamp(entry.observedAt)));
+  const observedAt = times.every((value): value is string => value !== null) ? times.sort()[0] ?? '' : '';
   return {
     openUnknownRecords,
     openContradictionRecords,
     stalePinRecords,
     limitedPinRecords,
+    observedAt,
     dismissalTarget,
     dismissed: dismissalTarget !== null && record.manualTrail.some((event) =>
       event.kind === 'review' && event.target === dismissalTarget
@@ -365,7 +371,7 @@ function currentCaseEvidenceGap(record: CaseRecord, nowIso: string) {
 
 export function currentCaseEvidenceGapDismissedPinIds(record: CaseRecord, nowRaw: unknown): ReadonlySet<string> {
   if (caseStatusIsClosed(record.status)) return new Set();
-  const nowIso = timestamp(nowRaw) || new Date().toISOString();
+  const nowIso = timestamp(nowRaw) ?? '';
   const gap = currentCaseEvidenceGap(record, nowIso);
   return gap.dismissed ? new Set(gap.limitedPinRecords.map((item) => item.id)) : new Set();
 }
@@ -373,7 +379,7 @@ export function currentCaseEvidenceGapDismissedPinIds(record: CaseRecord, nowRaw
 function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystReviewItem[] {
   const items: AnalystReviewItem[] = [];
   for (const record of records.slice(0, 500)) {
-    const updatedAt = timestamp(record.updatedAt) || nowIso;
+    const updatedAt = timestamp(record.updatedAt) ?? '';
     if (!caseStatusIsClosed(record.status) && !isReviewedCaseDisposition(record.disposition)) {
       items.push(withReviewMetadata({
         id: `case:${record.id}`,
@@ -399,6 +405,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
       openContradictionRecords,
       stalePinRecords,
       limitedPinRecords,
+      observedAt: gapObservedAt,
       dismissalTarget,
       dismissed,
     } = currentCaseEvidenceGap(record, nowIso);
@@ -430,7 +437,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
             ...(openUnknowns || openContradictions ? ['analyst_assertion'] : []),
           ])].sort(),
           caseDomain: record.domain,
-          observedAt: updatedAt,
+          observedAt: gapObservedAt,
           dueAt: null,
           completeness: openContradictions || openUnknowns ? 'inconclusive' : 'partial',
           nextAction: limitedPins ? 'refresh' : 'review',
@@ -455,7 +462,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         source: 'Reviewed case action',
         sourceIds: ['case_action'],
         caseDomain: record.domain,
-        observedAt: timestamp(action.updatedAt) || updatedAt,
+        observedAt: timestamp(action.updatedAt) ?? '',
         dueAt,
         completeness: action.state === 'submitted' || action.state === 'acknowledged' ? 'complete' : 'partial',
         nextAction: 'follow_up',
@@ -478,7 +485,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         source: 'Independent browser-local observed-effect review',
         sourceIds: ['observed_effect_review'],
         caseDomain: record.domain,
-        observedAt: timestamp(review.observedAt) || updatedAt,
+        observedAt: timestamp(review.observedAt) ?? '',
         dueAt,
         completeness: review.completeness === 'complete' ? 'complete' : review.completeness === 'partial' ? 'partial' : 'inconclusive',
         nextAction: 'follow_up',
@@ -499,9 +506,25 @@ function watchlistItems(
 ): AnalystReviewItem[] {
   const items: AnalystReviewItem[] = [];
   for (const [name, watchlist] of Object.entries(watchlists).slice(0, 100)) {
-    const latestChange = [...watchlist.history].reverse().find((event) => event.changeCount > 0);
-    if (!latestChange) continue;
-    const observedAt = timestamp(latestChange.checkedAt) || timestamp(watchlist.updatedAt) || nowIso;
+    const cohort = latestObservationCohort(watchlist.history.filter((event) => event.changeCount > 0), (event) => event.checkedAt);
+    const candidates = [...cohort.latest, ...cohort.undated];
+    if (!candidates.length) continue;
+    if (cohort.undated.length || cohort.latest.length !== 1) {
+      items.push(withReviewMetadata({
+        id: `watchlist:${name}`, kind: 'watchlist_change', priority: 'high',
+        title: `Review change history for ${name}`,
+        detail: cohort.undated.length
+          ? 'Material-change history includes an unknown check time. No single latest change is selected.'
+          : 'Distinct material-change records share the latest check time. No single latest change is selected.',
+        source: 'Browser-local watchlist history', sourceIds: ['watchlist'], caseDomain: null,
+        observedAt: cohort.undated.length ? '' : cohort.observedAt ?? '', dueAt: null, completeness: 'inconclusive',
+        nextAction: 'review', href: `/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`,
+        retryHref: null, caseId: null, dismissalTarget: null,
+      }, nowIso, candidates.map((event) => analystReviewMaterialFingerprint([event])).sort()));
+      continue;
+    }
+    const latestChange = cohort.latest[0]!;
+    const observedAt = cohort.observedAt ?? '';
     const priority: AnalystReviewPriority = latestChange.changes.some((change) => change.tone === 'danger') ? 'high' : 'normal';
     const changedDomains = new Set(latestChange.changes.map((change) => change.domain));
     const relatedCases = cases.filter((record) => (
@@ -527,7 +550,7 @@ function watchlistItems(
       retryHref: null,
       caseId: relatedCase?.id ?? null,
       dismissalTarget: null,
-    }, nowIso));
+    }, nowIso, [latestChange]));
   }
   return items;
 }
@@ -548,7 +571,7 @@ function bulkItems(sessions: readonly BulkSession[], nowIso: string): AnalystRev
       source: 'Saved Bulk session',
       sourceIds: ['bulk'],
       caseDomain: null,
-      observedAt: timestamp(session.updatedAt) || nowIso,
+      observedAt: timestamp(session.updatedAt) ?? '',
       dueAt: null,
       completeness: 'partial',
       nextAction: 'resume',
@@ -704,7 +727,7 @@ export function buildAnalystReviewInbox(
   }>,
   now: unknown = new Date().toISOString(),
 ): AnalystReviewInbox {
-  const nowIso = timestamp(now) || new Date(0).toISOString();
+  const nowIso = timestamp(now) ?? '';
   const nowMs = Date.parse(nowIso);
   const projected = projectionAdmission(input.projectedAdmissions ?? []);
   if ((input.cases?.length ?? 0) > 500) projected.lowerBoundFamilies.add('case');

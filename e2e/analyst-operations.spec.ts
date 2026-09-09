@@ -8,6 +8,7 @@ import {
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
   requiredValue,
+  useTheme,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
@@ -316,6 +317,9 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
     hasText: 'Recorded suppressed for Complete reviewed handoff for lifecycle-review.invalid',
   })).toBeVisible();
   await expect(item).toHaveCount(0);
+  await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Everything/u }).click();
+  await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
+  await expect(item.locator('details.lifecycle-controls > summary')).not.toContainText('invalidated');
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {
     minimumRecords: 1,
@@ -354,6 +358,55 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await expect(recurred).toBeVisible();
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('invalidated');
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('recurred');
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('ambiguous and future certificate observations remain reviewable through the source Case', async ({ page }, testInfo) => {
+  const collectionRequests = countCollectionRequests(page);
+  const record = certificateCase();
+  record.evidencePins.push(certificatePin('pin-equal-time-issuer', 'tls.issuer', 'TLS issuer', 'Conflicting retained issuer', 'tls', 'Independent retained fixture observation'));
+  const key = certificatePin('pin-future-key', 'tls.spki_sha256', 'TLS public-key SHA-256', EXPECTED_SPKI_SHA256, 'tls', 'Future-dated retained fixture observation');
+  key.observedAt = '2099-01-01T00:00:00.000Z';
+  record.evidencePins.push(key);
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([certificateProfile()]),
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [record] },
+  }, { clearStorage: true, destination: '/monitor?view=certificates' });
+  const inbox = page.getByRole('region', { name: 'Certificate review inbox' });
+  await inbox.getByLabel('Evidence class').selectOption('spki');
+  const future = inbox.locator('.findings > li');
+  await expect(future).toHaveCount(1);
+  await expect(future).toContainText('later than the review clock');
+  await expect(future).not.toContainText('Expected public key retained');
+  await future.locator('details.lifecycle-controls > summary').click();
+  await expect(future.getByLabel('Review outcome').locator('option[value="resolved"]')).toHaveJSProperty('disabled', true);
+  await inbox.getByLabel('Evidence class').selectOption('live_tls');
+  const ambiguous = inbox.locator('.findings > li').filter({ has: page.getByRole('heading', { name: 'Review retained TLS issuer context for certificate-operations.example' }) });
+  await expect(ambiguous).toContainText('2 retained facts in 1 Case');
+  await expect(ambiguous).toContainText('No single latest fact is selected');
+  const sourceLink = ambiguous.getByRole('link', { name: 'Review source Case', exact: true });
+  await expect(sourceLink).toHaveAttribute('href', '/monitor?view=cases&case=case-certificate-operations');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await ambiguous.getByRole('heading').evaluate((element) => window.scrollTo({ top: Math.max(0, window.scrollY + element.getBoundingClientRect().top - 96), behavior: 'instant' }));
+      await expect(ambiguous.getByRole('heading')).toBeVisible();
+      await expect(sourceLink).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  await sourceLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/view=cases&case=case-certificate-operations/u);
+  await expect(page.locator('#case-head-case-certificate-operations')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#case-head-case-certificate-operations')).toBeFocused();
+  await page.goto('/monitor?view=inbox');
+  await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Changed since review/u }).click();
+  const review = page.locator('.review-inbox .items > li').filter({ has: page.getByRole('heading', { name: 'Review retained TLS issuer context for certificate-operations.example' }) });
+  await expect(review).toBeVisible();
+  await expect(review).toContainText('inconclusive');
   expect(collectionRequests.count()).toBe(0);
 });
 

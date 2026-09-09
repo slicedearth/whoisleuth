@@ -1,4 +1,5 @@
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 /**
  * Canonical, framework-independent analyst review identity and lifecycle.
@@ -156,11 +157,8 @@ function boundedText(value: unknown, maximum: number, label: string, required = 
 
 function timestamp(value: unknown, label: string, nullable = false): string | null {
   if (nullable && (value === null || value === undefined || value === '')) return null;
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) throw inputError(`${label} is invalid`);
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) throw inputError(`${label} must use an explicit valid date and time`);
-  const normalized = new Date(parsed).toISOString();
-  if (!/(?:Z|[+-]\d{2}:\d{2})$/u.test(value)) throw inputError(`${label} must use an explicit timezone`);
+  const normalized = normalizeExplicitIsoTimestamp(value);
+  if (!normalized) throw inputError(`${label} must use an explicit valid date, time and timezone`);
   return normalized;
 }
 
@@ -465,7 +463,14 @@ export function analystReviewLifecycle(
   if (!decision) {
     return { state: 'open', effectiveDisposition: 'open', decision: null, reason: 'No analyst lifecycle decision is retained.', expired: false, invalidated: false, recurred: false, reviewDue: false };
   }
-  const now = timestamp(nowRaw, 'now')!;
+  const now = normalizeExplicitIsoTimestamp(nowRaw);
+  if (!now || Date.parse(now) < Date.parse(decision.reviewedAt)) {
+    return {
+      state: 'invalidated', effectiveDisposition: 'open', decision,
+      reason: 'The review clock is unavailable or earlier than the retained decision. Its disposition cannot hide current work.',
+      expired: false, invalidated: true, recurred: decision.disposition !== 'open', reviewDue: false,
+    };
+  }
   const invalidated = decision.reviewedFingerprint !== item.materialFingerprint;
   const expired = decision.expiresAt !== null && Date.parse(decision.expiresAt) <= Date.parse(now);
   const reviewDue = decision.reviewDueAt !== null && Date.parse(decision.reviewDueAt) <= Date.parse(now);

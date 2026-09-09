@@ -112,6 +112,10 @@ observation-only record sets. CLI projections retain source observation times
 separately from capture and report times; history compares like sources with
 increasing observation times.
 
+Analyst and certificate inboxes share timestamp, age and latest-cohort helpers.
+Equal or unknown observation times remain explicit; source dates are separate
+from Case edits and analyst decision times.
+
 Homepage capture, native analysis, fingerprints and offline technology review
 share the source-size policy in `lib/outbound-request-bounds.mts`.
 Native tree construction, derived outputs, deadlines and concurrency have
