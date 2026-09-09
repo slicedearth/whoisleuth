@@ -10,6 +10,7 @@
   let message = $state('');
   let kind = $state('all');
   let window = $state('future');
+  let includeHistorical = $state(false);
   let selectedEventIds = $state<string[]>([]);
   let includeDomain = $state(false);
   let includeRecipient = $state(false);
@@ -17,7 +18,7 @@
   let eventPage = $state(1);
   const eventPageSize = 24;
   const routeReview = $derived(buildDisclosureRouteReview(records));
-  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window }));
+  const eventProjection = $derived(projectCaseLifecycleEvents(records, { kind, window, includeHistorical }));
   const visibleEvents = $derived(eventProjection.events);
   const eventPageCount = $derived(Math.max(1, Math.ceil(visibleEvents.length / eventPageSize)));
   const pagedEvents = $derived(visibleEvents.slice((eventPage - 1) * eventPageSize, eventPage * eventPageSize));
@@ -37,6 +38,7 @@
   $effect(() => {
     kind;
     window;
+    includeHistorical;
     eventPage = 1;
   });
 
@@ -76,6 +78,10 @@
     <label class="field">Event type<select bind:value={kind}><option value="all">All review events</option><option value="action_due">Action due dates</option><option value="action_follow_up">Action follow-ups</option><option value="observed_effect_follow_up">Independent effect follow-ups</option><option value="domain_expiry_review">Domain expiry reviews</option><option value="certificate_expiry_review">Certificate reviews</option><option value="disclosure_expiry_review">Disclosure reviews</option></select></label>
     <label class="field">Time window<select bind:value={window}><option value="future">All upcoming</option><option value="30d">Next 30 days</option><option value="90d">Next 90 days</option><option value="overdue">Overdue</option><option value="all">All retained time</option></select></label>
   </fieldset>
+  <label><input type="checkbox" bind:checked={includeHistorical}> Include completed actions and earlier effect reviews</label>
+  {#if eventProjection.dateLimitations.length}
+    <details><summary>Dates needing review ({eventProjection.dateLimitations.length})</summary><ul>{#each eventProjection.dateLimitations as item}<li><a href={`/cases/${encodeURIComponent(item.caseId)}`}>{item.domain}</a>: {item.detail}</li>{/each}</ul></details>
+  {/if}
   <div class="calendar-selection">
     <div class="selection-actions">
       <button class="btn small" type="button" onclick={selectVisibleEvents} disabled={!visibleEvents.length || visibleSelectedCount === visibleEvents.length}>Select matching ({visibleEvents.length})</button>

@@ -199,6 +199,7 @@ describe('local investigation search index', () => {
     const index = indexFor(projectionInput({
       cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-source', 'candidate.invalid', {
         evidenceHistory: [snapshot({
+          inputHostname: 'candidate.invalid',
           nameservers: ['ns1.shared.invalid'],
           httpSummaryVersion: 1,
           httpEvidenceStatus: 'success',

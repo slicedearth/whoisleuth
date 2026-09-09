@@ -153,6 +153,7 @@ describe('typed local investigation projection', () => {
   test('projects cases, domains, nameserver sets, and comparable final origins with provenance', () => {
     const evidence = snapshot({
       firstCapturedAt: EARLY,
+      inputHostname: 'login.a.invalid',
       nameservers: ['NS2.SHARED.INVALID.', 'ns1.shared.invalid'],
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'partial',
@@ -165,12 +166,16 @@ describe('typed local investigation projection', () => {
       cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'A.INVALID', [evidence])] },
     }), { generatedAt: LATE });
 
-    assert.equal(entity(result, 'domain').properties.domain, 'a.invalid');
+    assert.equal(entity(result, 'domain', (item) => item.canonical === 'a.invalid').properties.domain, 'a.invalid');
     assert.deepEqual(entity(result, 'nameserver_set').properties.nameservers, ['ns1.shared.invalid', 'ns2.shared.invalid']);
     assert.equal(entity(result, 'http_origin').properties.origin, 'https://landing.invalid');
     assert.equal(relationship(result, 'case_documents_domain').classification, 'direct');
     assert.equal(relationship(result, 'domain_uses_nameserver_set').classification, 'normalized');
     assert.equal(relationship(result, 'domain_reached_http_origin').classification, 'normalized');
+    const originRelationship = relationship(result, 'domain_reached_http_origin');
+    assert.equal(result.entities.find((item) => item.id === originRelationship.from)?.canonical, 'login.a.invalid');
+    const nameserverRelationship = relationship(result, 'domain_uses_nameserver_set');
+    assert.equal(result.entities.find((item) => item.id === nameserverRelationship.from)?.canonical, 'a.invalid');
     assert.equal(relationship(result, 'domain_uses_nameserver_set').firstObservedAt, EARLY);
     assert.equal(relationship(result, 'domain_uses_nameserver_set').lastObservedAt, LATE);
 
@@ -194,8 +199,9 @@ describe('typed local investigation projection', () => {
     };
     const result = buildInvestigationProjection(currentInput({
       cases: { version: CASE_SCHEMA_VERSION, cases: [
-        caseRecord('case-fast', 'fast.invalid', [snapshot({ ...http, scanDepth: 'fast' })]),
-        caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, scanDepth: 'unknown' })]),
+        caseRecord('case-fast', 'fast.invalid', [snapshot({ ...http, inputHostname: 'fast.invalid', scanDepth: 'fast' })]),
+        caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, inputHostname: 'unknown.invalid', scanDepth: 'unknown' })]),
+        caseRecord('case-unknown-host', 'unknown-host.invalid', [snapshot({ ...http, inputHostname: null, scanDepth: 'deep' })]),
       ] },
     }), { generatedAt: LATE });
     assert.equal(findEntity(result, 'http_origin'), undefined);

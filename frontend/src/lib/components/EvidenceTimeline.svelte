@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
+  import { currentCaseEvidence } from '$lib/analysis/case-record-model.ts';
   import {
     currentEvidenceSummary,
     deriveTimeline,
@@ -17,6 +18,7 @@
   let expandedSnapshots = $state(new Set<string>());
 
   const summary = $derived(currentEvidenceSummary(record.evidenceHistory));
+  const selection = $derived(currentCaseEvidence(record));
   const timeline = $derived(deriveTimeline(record.evidenceHistory));
   const visibleTimeline = $derived(changedOnly ? filterChangedOnly(timeline) : timeline);
   const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
@@ -54,6 +56,7 @@
   }
 </script>
 
+{#if selection.limitation}<p class="timeline-incomparable-note">{selection.limitation} Review the retained snapshots below.</p>{/if}
 {#if summary}
   <dl class="evidence">
     <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
@@ -114,7 +117,7 @@
               {/each}
             </ul>
           {/if}
-          {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{incomparableNote(entry.incomparableReasons)}</p>{/if}
+          {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{entry.orderingLimitation ?? incomparableNote(entry.incomparableReasons)}</p>{/if}
 
           {#if isExpanded}
             <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>

@@ -3,7 +3,7 @@
 // latestCaseEvidence) and produces display-ready derivations and formatted
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
-import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
+import { caseEvidenceTimeline, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 
@@ -63,13 +63,7 @@ const FIELD_LABELS = {
 /** Fields grouped into display sections. Order within each group is deliberate. */
 type SnapshotField = keyof CaseEvidenceSnapshot;
 type EvidenceChange = ReturnType<typeof compareCaseEvidence>[number];
-export type TimelineEntry = {
-  snapshot: CaseEvidenceSnapshot;
-  isBaseline: boolean;
-  hasRepeatedObservation: boolean;
-  changes: EvidenceChange[] | null;
-  hasIncomparableChange: boolean;
-  incomparableReasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other'>;
+export type TimelineEntry = ReturnType<typeof caseEvidenceTimeline>[number] & {
   displayIndex: number;
 };
 type SnapshotGroup = {
@@ -248,67 +242,13 @@ function classifyChangeKind(field: string, before: unknown, after: unknown): str
  * Derives a display-ready timeline from a case's evidence history. Returns
  * entries in newest-first display order. Does not mutate the input array.
  *
- * - The first chronological snapshot is marked `isBaseline` and has no changes.
- * - Every subsequent snapshot is compared against its immediate chronological
- *   predecessor via `compareCaseEvidence`.
- * - When two snapshots are materially distinct but `compareCaseEvidence`
- *   has fields suppressed by the depth or score-model gates,
- *   `hasIncomparableChange` and `incomparableReasons` explain why.
- * - `hasRepeatedObservation` is true when `firstCapturedAt !== capturedAt`.
+ * Equal or unknown capture times retain their comparison limitations.
  *
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[]} evidenceHistory
  * @returns {TimelineEntry[]}
  */
 export function deriveTimeline(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined): TimelineEntry[] {
-  if (!Array.isArray(evidenceHistory) || evidenceHistory.length === 0) return [];
-
-  // Work on a copy; chronological order is the stored order.
-  const chronological = [...evidenceHistory];
-
-  const entries: TimelineEntry[] = [];
-
-  for (let i = 0; i < chronological.length; i++) {
-    const snapshot = chronological[i];
-    if (!snapshot) continue;
-    const isBaseline = i === 0;
-    const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
-
-    let changes: TimelineEntry['changes'] = null;
-    let hasIncomparableChange = false;
-    let incomparableReasons: TimelineEntry['incomparableReasons'] = [];
-
-    if (!isBaseline) {
-      const previous = chronological[i - 1];
-      if (!previous) continue;
-      const rawChanges = compareCaseEvidence(previous, snapshot);
-      incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
-      if (rawChanges.length > 0) {
-        changes = rawChanges;
-      } else if (snapshot.fingerprint !== previous.fingerprint && incomparableReasons.length === 0) {
-        incomparableReasons = ['other'];
-      }
-      hasIncomparableChange = incomparableReasons.length > 0;
-    }
-
-    entries.push({
-      snapshot,
-      isBaseline,
-      hasRepeatedObservation,
-      changes,
-      hasIncomparableChange,
-      incomparableReasons,
-      displayIndex: 0, // assigned after reversal
-    });
-  }
-
-  // Reverse for newest-first display, then assign display indices.
-  entries.reverse();
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    if (entry) entry.displayIndex = i + 1;
-  }
-
-  return entries;
+  return caseEvidenceTimeline(evidenceHistory).reverse().map((entry, index) => ({ ...entry, displayIndex: index + 1 }));
 }
 
 /**
@@ -338,9 +278,8 @@ export function evidenceSourceLabel(source: unknown): string {
 }
 
 /**
- * The most recent snapshot's concise summary fields, or null when there is no
- * evidence. Used for the compact current-evidence summary near the top of an
- * expanded case.
+ * The uniquely latest snapshot's summary, or null when retained capture times
+ * cannot establish one. Used by the compact current-evidence summary.
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
  * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */

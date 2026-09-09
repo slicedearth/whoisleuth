@@ -457,8 +457,8 @@ test.describe('accessible cross-case relationship table', () => {
     await openRelationshipTable(page, [
       caseRecord({ id: 'ns-a', domain: 'alpha-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
       caseRecord({ id: 'ns-b', domain: 'bravo-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
-      caseRecord({ id: 'http-a', domain: 'charlie-table.invalid', evidenceHistory: [snapshot(http)] }),
-      caseRecord({ id: 'http-b', domain: 'delta-table.invalid', evidenceHistory: [snapshot(http)] }),
+      caseRecord({ id: 'http-a', domain: 'charlie-table.invalid', evidenceHistory: [snapshot({ ...http, inputHostname: 'charlie-table.invalid' })] }),
+      caseRecord({ id: 'http-b', domain: 'delta-table.invalid', evidenceHistory: [snapshot({ ...http, inputHostname: 'delta-table.invalid' })] }),
     ]);
 
     await expect(page.getByRole('tab', { name: /Relationships 2/ })).toHaveAttribute('aria-selected', 'true');
@@ -671,8 +671,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'graph-a', domain: 'alpha-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
-      caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
+      caseRecord({ id: 'graph-a', domain: 'alpha-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http, inputHostname: 'alpha-graph.invalid' })] }),
+      caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http, inputHostname: 'bravo-graph.invalid' })] }),
     ]);
 
     const graph = page.locator('.graph-scroll > svg');
@@ -725,8 +725,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'view-a', domain: 'alpha-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
-      caseRecord({ id: 'view-b', domain: 'bravo-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
+      caseRecord({ id: 'view-a', domain: 'alpha-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http, inputHostname: 'alpha-view.invalid' })] }),
+      caseRecord({ id: 'view-b', domain: 'bravo-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http, inputHostname: 'bravo-view.invalid' })] }),
       caseRecord({ id: 'view-c', domain: 'charlie-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'] })] }),
     ]);
 
@@ -782,8 +782,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'export-graph-a', domain: 'alpha-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
-      caseRecord({ id: 'export-graph-b', domain: 'bravo-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
+      caseRecord({ id: 'export-graph-a', domain: 'alpha-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http, inputHostname: 'alpha-export-graph.invalid' })] }),
+      caseRecord({ id: 'export-graph-b', domain: 'bravo-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http, inputHostname: 'bravo-export-graph.invalid' })] }),
     ]);
 
     const region = page.getByRole('region', { name: 'Relationship graph' });

@@ -2,6 +2,7 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.mts';
+import { latestCaseEvidence } from './case-evidence-model.mts';
 import { responseRouteFreshness } from './response-route-freshness.mts';
 import { caseDispositionSupportsDefensiveResponse } from './case-record-operations.mts';
 import {
@@ -751,7 +752,7 @@ function buildResponseReadiness(
 ): CaseResponsePacket['readiness'] {
   const profile = responsePacketProfile(input.profile);
   const urls = normalizeUrls(input.abusiveUrls);
-  const observedAt = timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null;
+  const observedAt = timestamp(input.observedAt) || latestCaseEvidence(caseRecord)?.capturedAt || null;
   const age = observedAt ? observationAge(observedAt, generatedAt) : null;
   const infrastructure = readinessOverride(input.readiness, 'infrastructureResponsibility');
   const authority = readinessOverride(input.readiness, 'authorityReview');
@@ -916,7 +917,7 @@ export function buildResponsePacketProfilePreview(
   const binding = bindPacketRoute(caseRecord, input, caseRecord.updatedAt);
   const missingEvidence = [
     ...(!normalizeUrls(input.abusiveUrls).length ? ['At least one exact HTTP(S) URL'] : []),
-    ...(!timestamp(input.observedAt) && !caseRecord.evidenceHistory.at(-1)?.capturedAt ? ['Observation time'] : []),
+    ...(!timestamp(input.observedAt) && !latestCaseEvidence(caseRecord)?.capturedAt ? ['Observation time'] : []),
     ...(!normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds).length ? ['Explicitly selected evidence pin'] : []),
     ...(profile.id !== 'internal_soc' && binding.actionBinding.state !== 'selected'
       ? ['Selected retained Case action']
@@ -947,7 +948,7 @@ export function buildCaseResponsePreflight(
   input: CaseResponsePacketInput,
   generatedAt: string = new Date().toISOString(),
 ): CaseResponsePreflight {
-  const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
+  const latestEvidence = latestCaseEvidence(caseRecord);
   const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
   const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
@@ -1245,7 +1246,7 @@ export function buildCaseResponseReviewInputs(
       affectedParty: text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH),
       abusiveUrls: normalizeUrls(input.abusiveUrls, true),
       observedHarm: text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH),
-      observedAt: timestamp(input.observedAt) || caseRecord.evidenceHistory.at(-1)?.capturedAt || null,
+      observedAt: timestamp(input.observedAt) || latestCaseEvidence(caseRecord)?.capturedAt || null,
     },
     contacts: binding.contacts,
     recipientRoute: binding.recipientRoute,
@@ -1739,7 +1740,7 @@ export async function buildCaseResponsePacket(
   const affectedParty = text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH);
   const abusiveUrls = normalizeUrls(input.abusiveUrls, true);
   const observedHarm = text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH);
-  const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
+  const latestEvidence = latestCaseEvidence(caseRecord);
   const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
   if (!category || !affectedParty || !abusiveUrls.length || !observedHarm || !observedAt) {
     throw new Error('Category, affected party, at least one exact HTTP(S) URL, observed harm, and an observation time are required.');

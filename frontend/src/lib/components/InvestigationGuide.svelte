@@ -3,6 +3,8 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
+  import { investigationGuideEvidenceContext, investigationGuideCaseContext } from '$lib/analysis/investigation-guide-context.ts';
+  import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '$lib/console-workflow-state.ts';
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
@@ -79,15 +81,20 @@
   let profileContextPending = $state(true);
   let caseContextPending = $state(true);
   let localContextRefreshVersion = 0;
+  let focusRequest = 0;
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
   let handledLocation = '';
-  type StoredEvidenceContext = Readonly<{ observations: number; relationships: number; partial: boolean; truncated: boolean; latestObservedAt: string }>;
-  const emptyStoredEvidenceContext = (): StoredEvidenceContext => ({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
+  type StoredEvidenceContext = ReturnType<typeof investigationGuideEvidenceContext>;
+  const emptyStoredEvidenceContext = (): StoredEvidenceContext => investigationGuideEvidenceContext(null, '', new Date().toISOString());
   let evidence = $state<StoredEvidenceContext>(emptyStoredEvidenceContext());
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
+  let contextCaseChoices = $state<ReturnType<typeof investigationGuideCaseContext>['choices']>([]);
+  let contextCaseLabel = $state('Not retained');
+  let caseSelector = $state<HTMLSelectElement | null>(null);
+  const caseSelectionRequired = $derived(!contextCase && contextCaseChoices.length > 0);
   const localContextPending = $derived(evidenceContextPending || profileContextPending || caseContextPending);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
   const stages = $derived(guide ? investigationGuideStagesForGuide(guide) : []);
@@ -121,7 +128,6 @@
   const caseWorkspaceHref = $derived(contextCase
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
     : null);
-  const evidenceFreshness = $derived(formatEvidenceFreshness(evidence.latestObservedAt, evidence.observations));
   const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
     label: actionStage.label,
     requestImpact: actionStage.requestImpact,
@@ -130,21 +136,11 @@
     approved: actionApproved,
   }) : null);
 
-  function formatEvidenceFreshness(observedAt: string, observations: number): string {
-    if (!observations || !observedAt) return 'No retained evidence';
-    const parsed = new Date(observedAt);
-    if (!Number.isFinite(parsed.getTime())) return 'Retained time unavailable';
-    return `Latest ${new Intl.DateTimeFormat('en-AU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(parsed)}`;
-  }
-
   async function refreshStoredContext() {
     const refreshVersion = ++localContextRefreshVersion;
     const requestedGuide = guide;
     const requestedIdentity = guideIdentity(requestedGuide);
+    const selectedCaseId = readSelectedConsoleCase();
     evidenceContextPending = true;
     profileContextPending = true;
     caseContextPending = true;
@@ -152,7 +148,7 @@
     const [evidenceResult, profileResult, caseResult] = await Promise.allSettled([
       refreshEvidence(requestedGuide),
       refreshProfileContext(requestedGuide),
-      refreshCaseContext(requestedGuide),
+      refreshCaseContext(requestedGuide, selectedCaseId),
     ]);
     if (refreshVersion !== localContextRefreshVersion || requestedIdentity !== guideIdentity(guide)) return;
     evidenceContextAvailable = evidenceResult.status === 'fulfilled';
@@ -160,7 +156,9 @@
     caseContextAvailable = caseResult.status === 'fulfilled';
     evidence = evidenceResult.status === 'fulfilled' ? evidenceResult.value : emptyStoredEvidenceContext();
     contextProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-    contextCase = caseResult.status === 'fulfilled' ? caseResult.value : null;
+    contextCase = caseResult.status === 'fulfilled' ? caseResult.value.record : null;
+    contextCaseChoices = caseResult.status === 'fulfilled' ? caseResult.value.choices : [];
+    contextCaseLabel = caseResult.status === 'fulfilled' ? caseResult.value.label : 'Unavailable';
     evidenceContextPending = false;
     profileContextPending = false;
     caseContextPending = false;
@@ -184,8 +182,10 @@
   }
 
   async function revealGuide() {
+    const request = ++focusRequest;
     workPlanOpen = true;
     await tick();
+    if (!mounted || request !== focusRequest) return;
     guideSection?.focus({ preventScroll: true });
     guideSection?.scrollIntoView({ block: 'start' });
   }
@@ -223,25 +223,31 @@
   });
 
   async function revealAction() {
+    const request = ++focusRequest;
+    const startingFocus = document.activeElement;
     workPlanOpen = true;
     actionVisible = true;
     await tick();
-    actionPanel?.focus({ preventScroll: true });
-    await afterLayout();
+    if (!mounted || request !== focusRequest
+      || (document.activeElement !== startingFocus && document.activeElement !== document.body)) return;
     const panel = actionPanel;
     if (!panel) return;
+    panel.focus({ preventScroll: true });
+    const stillOwnsFocus = () => mounted && request === focusRequest
+      && panel.isConnected && document.activeElement === panel;
+    await afterLayout();
+    if (!stillOwnsFocus()) return;
     for (const block of ['center', 'start', 'center'] as const) {
       panel.scrollIntoView({ behavior: 'auto', block });
       await afterLayout();
+      if (!stillOwnsFocus()) return;
       if (actionExposureRatio(panel) >= usefulActionExposure) break;
     }
-    panel.focus({ preventScroll: true });
-    await afterLayout();
     actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
-    actionPanel?.focus({ preventScroll: true });
   }
 
   async function focusRouteTarget(hash: string) {
+    const request = ++focusRequest;
     let targetId = '';
     try {
       targetId = decodeURIComponent(hash.replace(/^#/, ''));
@@ -251,6 +257,7 @@
     if (!guideTargetIds.has(targetId)) return;
     await tick();
     await afterLayout();
+    if (!mounted || request !== focusRequest) return;
     const target = document.getElementById(targetId);
     if (!target) return;
     target.scrollIntoView({ block: 'center' });
@@ -283,25 +290,7 @@
     if (!requestedGuide) return emptyStoredEvidenceContext();
     const projection = await loadLocalInvestigationProjection();
     const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
-    const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === targetDomain);
-    if (!domainEntity) {
-      return { ...emptyStoredEvidenceContext(), truncated: projection.truncated };
-    }
-    const observationIds = new Set(domainEntity.observationIds);
-    const observations = projection.observations.filter((observation) => observationIds.has(observation.id));
-    const relationships = projection.relationships.filter((relationship) => relationship.from === domainEntity.id || relationship.to === domainEntity.id);
-    return {
-      observations: observations.length,
-      relationships: relationships.length,
-      partial: observations.some((observation) => observation.status === 'partial' || observation.complete !== true),
-      truncated: projection.truncated || domainEntity.observationsTruncated
-        || observations.some((observation) => observation.truncated === true || observation.entityReferencesTruncated)
-        || relationships.some((relationship) => relationship.truncated === true || relationship.sourceObservationsTruncated),
-      latestObservedAt: observations.reduce(
-        (latest, observation) => observation.observedAt > latest ? observation.observedAt : latest,
-        '',
-      ),
-    };
+    return investigationGuideEvidenceContext(projection, targetDomain, new Date().toISOString());
   }
 
   async function refreshProfileContext(requestedGuide: InvestigationGuide | null): Promise<BrandProfile | null> {
@@ -309,11 +298,17 @@
     return activeProfile();
   }
 
-  async function refreshCaseContext(requestedGuide: InvestigationGuide | null): Promise<CaseRecord | null> {
-    if (!requestedGuide) return null;
+  async function refreshCaseContext(requestedGuide: InvestigationGuide | null, selectedId: string | null) {
+    if (!requestedGuide) return investigationGuideCaseContext([], '', null);
     const cases = await loadCases();
     const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
-    return cases.find((record) => record.domain === targetDomain) || null;
+    return investigationGuideCaseContext(cases, targetDomain, selectedId);
+  }
+
+  function revealCaseSelector() {
+    focusRequest += 1;
+    caseSelector?.focus({ preventScroll: true });
+    caseSelector?.scrollIntoView({ block: 'center' });
   }
 
   function endGuide() {
@@ -542,10 +537,20 @@
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       if (hash) await focusRouteTarget(hash);
-      void refreshStoredContext();
+      if (mounted) void refreshStoredContext();
     })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
+    let selectedId = readSelectedConsoleCase();
+    const unsubscribeSelection = subscribeSelectedConsoleCase((id) => {
+      if (id === selectedId) return;
+      selectedId = id;
+      void refreshStoredContext();
+    });
     return () => {
+      mounted = false;
+      localContextRefreshVersion += 1;
+      focusRequest += 1;
+      unsubscribeSelection();
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     };
   });
@@ -592,8 +597,16 @@
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
       <div><dt>Brand Profile</dt><dd>{profileContextPending ? 'Loading…' : profileContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
-      <div><dt>Case</dt><dd>{caseContextPending ? 'Loading…' : caseContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
+      <div class:case-choice={contextCaseChoices.length > 0}><dt>Case</dt><dd>
+        {#if contextCaseChoices.length}
+          <select aria-label="Case for this guide" aria-busy={caseContextPending} bind:this={caseSelector} value={contextCase?.id || ''} onchange={(event) => selectConsoleCase(event.currentTarget.value)}>
+            <option value="" disabled>Choose Case</option>
+            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain}</option>{/each}
+          </select>
+        {/if}
+        <span role="status">{caseContextPending ? 'Loading…' : contextCaseLabel}</span>
+      </dd></div>
+      <div><dt>Retained evidence time</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidence.timeLabel : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
@@ -625,18 +638,22 @@
                 <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
                   <div>
                     <span>Case handoff</span>
-                    <strong>{handoffReadiness.label}</strong>
+                    <strong>{caseSelectionRequired ? contextCaseLabel : handoffReadiness.label}</strong>
                   </div>
-                  <ul>
-                    {#each handoffReadiness.checks as check}
-                      <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
-                        <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
-                        <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                      </li>
-                    {/each}
-                  </ul>
-                  {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
-                  <p>{handoffReadiness.limitations[0]}</p>
+                  {#if caseSelectionRequired}
+                    <button class="btn compact" type="button" onclick={revealCaseSelector}>Choose Case for handoff</button>
+                  {:else}
+                    <ul>
+                      {#each handoffReadiness.checks as check}
+                        <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
+                          <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
+                          <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                        </li>
+                      {/each}
+                    </ul>
+                    {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
+                    <p>{handoffReadiness.limitations[0]}</p>
+                  {/if}
                 </section>
               {:else}
                 <section class="handoff-readiness unavailable" aria-label="Case handoff readiness">
@@ -722,10 +739,14 @@
           <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
             <div>
               <span>Decision handoff</span>
-              <strong>{handoffReadiness.label}</strong>
+              <strong>{caseSelectionRequired ? contextCaseLabel : handoffReadiness.label}</strong>
             </div>
-            <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
-            {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+            {#if caseSelectionRequired}
+              <button class="btn compact" type="button" onclick={revealCaseSelector}>Choose Case for handoff</button>
+            {:else}
+              <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
+              {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+            {/if}
           </section>
         {:else}
           <section class="handoff-readiness complete-handoff unavailable" aria-label="Completed guide handoff readiness">
@@ -832,6 +853,7 @@
   .context-tray div{display:block;min-width:0}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
+  .context-tray select{display:block;width:100%;min-width:0;max-width:100%;margin-bottom:5px;font-size:var(--text-xs)}
   .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-sm);line-height:1.45}
   .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:24px;align-items:start;margin-top:16px;padding:0;scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
@@ -920,8 +942,8 @@
   .guide-return strong{margin:2px 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .guide-return small{color:var(--accent);font-weight:700}
   .guide-return:hover{border-color:var(--accent);background:var(--panel-raised)}
-  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}.context-tray .case-choice{grid-column:1/-1}}
   @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.current-action>.action-copy{grid-row:2}.current-action>.action-controls{grid-row:1}.mobile-action-label{display:block}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
-  @media(max-width:560px){.compact,.stage-selector select,.work-plan>summary,#investigation-plan>li summary,.secondary-details>details>summary{min-height:44px}.stage-selector{flex-basis:100%}}
+  @media(max-width:560px){.compact,.stage-selector select,.context-tray select,.work-plan>summary,#investigation-plan>li summary,.secondary-details>details>summary{min-height:44px}.stage-selector{flex-basis:100%}}
   @media(max-width:360px){.guide-controls{grid-template-columns:1fr}.plan-stage-label{grid-template-columns:auto minmax(0,1fr)}.stage-state{grid-column:2;text-align:left}}
 </style>

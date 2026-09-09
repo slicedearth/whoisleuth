@@ -207,6 +207,18 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+If snapshots share the latest capture time, or any snapshot is undated, the
+timeline retains them without selecting a latest assessment. Record updates do
+not refresh evidence capture times. The calendar
+shows active follow-ups; completed actions and earlier effect reviews are
+available through its historical filter. Conflicting expiry dates need review
+before a calendar date can be selected.
+Calendar event identifiers are stable digests, separate from displayed Case
+references. Replace an older calendar import if its original identifiers would
+otherwise create duplicate events.
+Guides show matching retained Cases in their Case selector. A selected Case for
+another target does not supply the current guide's handoff assessment.
+
 Quick response includes observation, conclusion, recipient review, packet,
 manual delivery record, independent recheck and closure. Stage links open the
 relevant form. Advanced adds assertions, branches, manual investigation steps

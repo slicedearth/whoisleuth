@@ -188,6 +188,20 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
   await markReviewed(page, label);
   const completedGuide = page.locator('.guide-complete');
   await expect(completedGuide).toContainText('All');
+  await expect(completedGuide).not.toContainText('No case retained');
+  const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
+  if (domains.length > 1) {
+    await expect(completedGuide).toContainText('Selected Case has another target');
+    const chooseCase = completedGuide.getByRole('button', { name: 'Choose Case for handoff' });
+    await chooseCase.focus();
+    await chooseCase.press('Enter');
+    await expect(caseSelector).toBeFocused();
+    await caseSelector.selectOption({ label: firstDomain });
+    await expect(caseSelector).toBeFocused();
+  } else {
+    await expect(completedGuide.getByRole('button', { name: 'Choose Case for handoff' })).toHaveCount(0);
+    await expect(caseSelector.locator('option:checked')).toHaveText(firstDomain);
+  }
   await expect(completedGuide).toContainText('Case needs a reviewed disposition or decision');
   await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/monitor\?view=cases&case=.+#case-response-/u);
 }
@@ -329,7 +343,7 @@ test('active context can change its target only through an explicit guide restar
   const target = guide.getByRole('textbox', { name: 'Investigation target' });
   await target.fill('replacement.example.test');
   await guide.getByRole('button', { name: 'Review target change' }).click();
-  await expect(guide.getByRole('status')).toContainText('Changing the target restarts this guide');
+  await expect(guide.getByRole('status').filter({ hasText: 'Changing the target restarts this guide' })).toBeVisible();
   expect((await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY)).domain).toBe('portal.example.test');
 
   await guide.getByRole('button', { name: 'Confirm and restart guide' }).click();
@@ -362,7 +376,7 @@ test('an analyst can save and run a bounded local guide template without removin
   await expect(mandatoryApproval).toBeChecked();
   await expect(mandatoryApproval).toBeDisabled();
   await page.getByRole('button', { name: 'Save template' }).click();
-  await expect(page.getByRole('status')).toContainText('Saved the Focused local review template.');
+  await expect(page.getByRole('status').filter({ hasText: 'Saved the Focused local review template.' })).toBeVisible();
 
   await page.getByRole('combobox', { name: 'Template' }).selectOption({ label: 'Focused local review' });
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
@@ -557,7 +571,7 @@ test('a browser-local context failure does not block or misstate a guided invest
   const guide = page.locator('.guide');
   await expect(guide).toBeFocused();
   await expect(currentAction(page)).toContainText('Collect domain evidence');
-  await expect(guide.getByRole('status')).toContainText('unreadable saved data is not treated as absent');
+  await expect(guide.getByRole('status').filter({ hasText: 'Some browser-local investigation context is unavailable' })).toContainText('unreadable saved data is not treated as absent');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
   await guide.getByText('Saved evidence unavailable', { exact: true }).click();
   await expect(guide).toContainText('do not interpret this state as an empty evidence history');
@@ -638,8 +652,9 @@ test('an unavailable active-profile preference does not hide a healthy retained 
   const guide = page.locator('.guide');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(1);
   await expect(guide.locator('.context-tray').getByText('reviewing · unreviewed', { exact: true })).toBeVisible();
-  await expect(guide.getByRole('status')).toContainText('active-profile preference');
-  await expect(guide.getByRole('status')).not.toContainText('Cases');
+  const unavailableContext = guide.getByRole('status').filter({ hasText: 'Some browser-local investigation context is unavailable' });
+  await expect(unavailableContext).toContainText('active-profile preference');
+  await expect(unavailableContext).not.toContainText('Cases');
   await page.evaluate((key) => {
     const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
     const now = new Date().toISOString();
@@ -767,7 +782,7 @@ test('exports only a compact versioned progress summary after explicit confirmat
   expect(Object.keys(payload).sort()).toEqual(['createdAt', 'generatedAt', 'limitations', 'recipe', 'schema', 'stages', 'status', 'target', 'template', 'updatedAt', 'version']);
 });
 
-test('shows retained evidence without treating it as workflow completion', async ({ page }) => {
+test('shows retained Case context without treating a record update as evidence or workflow completion', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
@@ -779,8 +794,35 @@ test('shows retained evidence without treating it as workflow completion', async
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await page.getByRole('button', { name: 'Start guide' }).click();
   await page.getByText(/^Saved evidence/).click();
-  await expect(page.locator('.evidence-checkpoint')).toContainText('1 observation');
+  await expect(page.locator('.evidence-checkpoint')).toContainText('0 observations');
+  await expect(page.locator('.context-tray')).toContainText('Retained context only; no evidence captures');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
+});
+
+test('the guide does not arbitrarily choose between retained hostname and parent Cases', async ({ page }) => {
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test'].map((domain, index) => ({
+      id: `guide-case-${index}`, domain, status: 'new', disposition: 'unreviewed', tags: [], notes: [], source: 'manual', evidenceHistory: [], createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
+    })) },
+  }, { destination: '/dashboard' });
+  await startRecipe(page, 'New-domain triage', 'login.example.test');
+  await expect(page.locator('.context-tray')).toContainText('Choose a Case (2 match this target)');
+  await expect(page.locator('.guide').getByRole('link', { name: 'Review case decision workspace' })).toHaveCount(0);
+  const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
+  await expect(caseSelector).toHaveValue('');
+  await expect(caseSelector.getByRole('option')).toHaveCount(3);
+  await caseSelector.focus();
+  await caseSelector.selectOption({ label: 'login.example.test' });
+  await expect(caseSelector).toHaveValue('guide-case-1');
+  await expect(caseSelector).toBeFocused();
+  await expect(page.locator('.context-tray')).toContainText('new · unreviewed');
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await caseSelector.evaluate((element) => {
+    const control = element.getBoundingClientRect();
+    const context = element.closest('.context-tray')!.getBoundingClientRect();
+    return control.width >= context.width * 0.9 && control.height >= 44;
+  })).toBe(true);
+  await expectNoHorizontalOverflow(page);
 });
 
 test('future and oversized current guide records stay untouched', async ({ page }) => {

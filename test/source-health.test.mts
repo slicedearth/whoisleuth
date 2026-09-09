@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 
 import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
 import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
@@ -44,7 +45,8 @@ describe('offline source-health composition', () => {
     assert.match(report.limitations.join(' '), /corpus coverage only; it does not establish general accuracy or recall/iu);
     const technology = report.entries.find((item) => item.id === 'accuracy_technology_detection');
     assert.equal(technology?.state, 'measured');
-    assert.equal(technology?.itemCount, 78);
+    assert.ok(TECHNOLOGY_REVIEWED_FIXTURES.length > 0);
+    assert.equal(technology?.itemCount, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.ok(report.entries
       .filter((item) => item.kind === 'evaluation' && item.id !== 'accuracy_technology_detection')
       .every((item) => item.state === 'unproven' && item.itemCount === 0));

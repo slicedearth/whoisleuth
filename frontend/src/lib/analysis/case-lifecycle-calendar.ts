@@ -1,5 +1,8 @@
 import type { CaseRecord } from './case-model.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
+import { caseFollowUpSources } from '../../../../packages/cases/case-follow-ups.mts';
+import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
 import { caseNumber, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
 
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
@@ -30,12 +33,13 @@ export type CaseLifecycleCalendarDisclosure = Readonly<{
   includeContext?: boolean;
 }>;
 
-export type CaseLifecycleCalendarQuery = Readonly<{ kind?: unknown; window?: unknown }>;
+export type CaseLifecycleCalendarQuery = Readonly<{ kind?: unknown; window?: unknown; includeHistorical?: boolean }>;
 export type CaseLifecycleCalendarProjection = Readonly<{
   events: readonly CaseLifecycleCalendarEvent[];
   matchingCount: number;
   omittedCount: number;
   sourceCasesOmitted: number;
+  dateLimitations: readonly Readonly<{ caseId: string; domain: string; detail: string }>[];
 }>;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -90,15 +94,33 @@ const EVENT_LABELS: Readonly<Record<CaseLifecycleCalendarKind, string>> = Object
   domain_expiry_review: 'Domain expiry evidence review',
 });
 
-function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
+function collectCaseLifecycleEvents(records: readonly CaseRecord[], includeHistorical: boolean, now: unknown) {
   const events: CaseLifecycleCalendarEvent[] = [];
+  const dateLimitations: Array<{ caseId: string; domain: string; detail: string }> = [];
+  const asOf = timestamp(now);
   for (const record of records.slice(0, MAX_CASE_LIFECYCLE_SOURCE_CASES)) {
     const caseContext = {
       caseReference: caseNumber(record.id),
       domain: record.domain,
       classification: caseTypeSummary(record.tags) || null,
     };
-    for (const action of record.actions.slice(-50)) {
+    const followUpSources = caseFollowUpSources(record, includeHistorical);
+    function latestDate<T>(values: readonly T[], clock: (item: T) => unknown, value: (item: T) => unknown, label: string): string | null {
+      if (!values.length || values.every((item) => value(item) == null || value(item) === '')) return null;
+      const cohort = latestObservationCohort(values, clock);
+      const dates = cohort.latest.map((item) => timestamp(value(item)));
+      const future = !asOf || (cohort.observedAt !== null && Date.parse(cohort.observedAt) > Date.parse(asOf));
+      const reason = cohort.undated.length ? 'capture time is unknown'
+        : future ? 'capture time is later than this review or the review clock is unavailable'
+          : !dates.length || dates.some((date) => date === null) ? 'the latest observation has no valid date'
+            : new Set(dates).size !== 1 ? 'the latest observations disagree' : null;
+      if (reason) {
+        dateLimitations.push({ caseId: record.id, domain: record.domain, detail: `${label}: ${reason}; no calendar date was selected.` });
+        return null;
+      }
+      return dates[0] ?? null;
+    }
+    for (const action of followUpSources.actions) {
       const dueAt = timestamp(action.dueAt);
       const followUpAt = timestamp(action.followUpAt);
       if (dueAt) {
@@ -130,7 +152,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecyc
         });
       }
     }
-    for (const review of (record.observedEffects?.reviews ?? []).slice(-40)) {
+    for (const review of followUpSources.reviews) {
       const followUpAt = timestamp(review.followUpAt);
       if (!followUpAt) continue;
       events.push({
@@ -146,7 +168,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecyc
         description: `The prior independent review state was ${review.state}. Open the browser-local case and deliberately decide whether to collect or attach new evidence; this calendar event performs no request.`,
       });
     }
-    const expiry = timestamp(record.evidenceHistory.at(-1)?.expiryDate);
+    const expiry = latestDate(record.evidenceHistory, (snapshot) => snapshot.capturedAt, (snapshot) => snapshot.expiryDate, 'Domain expiry');
     if (expiry) {
       events.push({
         uid: `${record.id}-${expiry.slice(0, 10)}-expiry-review`,
@@ -161,13 +183,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecyc
         description: 'The retained expiry date is point-in-time evidence, not a guarantee of deletion, availability, release, or acquisition eligibility.',
       });
     }
-    const latestPins = new Map<string, typeof record.evidencePins[number]>();
-    for (const pin of record.evidencePins) {
-      if (pin.field === 'tls.valid_to' || pin.field === 'disclosure.security_txt_expires') {
-        latestPins.set(pin.field, pin);
-      }
-    }
-    const certificateExpiry = timestamp(latestPins.get('tls.valid_to')?.value);
+    const certificateExpiry = latestDate(record.evidencePins.filter((pin) => pin.field === 'tls.valid_to'), (pin) => pin.observedAt, (pin) => pin.value, 'Certificate expiry');
     if (certificateExpiry) {
       events.push({
         uid: `${record.id}-${certificateExpiry.slice(0, 10)}-certificate-review`,
@@ -182,7 +198,7 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecyc
         description: 'This date came from an analyst-selected TLS evidence pin. Recollect before interpreting current certificate state.',
       });
     }
-    const disclosureExpiry = timestamp(latestPins.get('disclosure.security_txt_expires')?.value);
+    const disclosureExpiry = latestDate(record.evidencePins.filter((pin) => pin.field === 'disclosure.security_txt_expires'), (pin) => pin.observedAt, (pin) => pin.value, 'Disclosure expiry');
     if (disclosureExpiry) {
       events.push({
         uid: `${record.id}-${disclosureExpiry.slice(0, 10)}-disclosure-review`,
@@ -198,8 +214,8 @@ function collectCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecyc
       });
     }
   }
-  return events
-    .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid));
+  events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || compareCodeUnits(left.uid, right.uid));
+  return { events, dateLimitations };
 }
 
 function lifecycleEventPredicate(
@@ -242,18 +258,20 @@ export function projectCaseLifecycleEvents(
   options: CaseLifecycleCalendarQuery = {},
   now: unknown = new Date().toISOString(),
 ): CaseLifecycleCalendarProjection {
-  const matching = collectCaseLifecycleEvents(records).filter(lifecycleEventPredicate(options, now));
+  const collected = collectCaseLifecycleEvents(records, options.includeHistorical === true, now);
+  const matching = collected.events.filter(lifecycleEventPredicate(options, now));
   const events = matching.slice(0, MAX_CASE_LIFECYCLE_EVENTS);
   return Object.freeze({
     events: Object.freeze(events),
     matchingCount: matching.length,
     omittedCount: matching.length - events.length,
     sourceCasesOmitted: Math.max(0, records.length - MAX_CASE_LIFECYCLE_SOURCE_CASES),
+    dateLimitations: Object.freeze(collected.dateLimitations),
   });
 }
 
-export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLifecycleCalendarEvent[] {
-  return [...projectCaseLifecycleEvents(records, { window: 'all' }, new Date(0).toISOString()).events];
+export function buildCaseLifecycleEvents(records: readonly CaseRecord[], now: unknown = new Date().toISOString()): CaseLifecycleCalendarEvent[] {
+  return [...projectCaseLifecycleEvents(records, { window: 'all' }, now).events];
 }
 
 export function filterCaseLifecycleEvents(
@@ -292,7 +310,7 @@ export function serializeCaseLifecycleCalendarEvents(
     }
     lines.push(
       'BEGIN:VEVENT',
-      `UID:${escapeCalendarText(`${event.uid}@whoisleuth.local`)}`,
+      `UID:${sha256IdentityHex(new TextEncoder().encode(event.uid))}@whoisleuth.local`,
       `DTSTAMP:${calendarDate(createdAt)}`,
       `DTSTART:${calendarDate(event.startsAt)}`,
       `SUMMARY:${escapeCalendarText(summaryParts.join(' · '))}`,
@@ -311,5 +329,5 @@ export function serializeCaseLifecycleCalendar(
   generatedAt: unknown = new Date().toISOString(),
   disclosure: CaseLifecycleCalendarDisclosure = {},
 ): string {
-  return serializeCaseLifecycleCalendarEvents(buildCaseLifecycleEvents(records), disclosure, generatedAt);
+  return serializeCaseLifecycleCalendarEvents(buildCaseLifecycleEvents(records, generatedAt), disclosure, generatedAt);
 }

@@ -230,10 +230,12 @@ function projectCaseSnapshot(
 ): void {
   const observedAt = timestamp(snapshot.capturedAt);
   if (!observedAt) return;
+  const hostname = snapshot.inputHostname;
+  const hostnameEntity = hostname ? addEntity('domain', hostname, hostname, { domain: hostname }) : null;
   const observation = addObservation({
     id: stableId('observation', `case-evidence|${caseRecord.id}|${snapshot.id}|${observedAt}`),
     kind: 'case_evidence',
-    entityIds: [caseEntity.id, domainEntity.id],
+    entityIds: [...new Set([caseEntity.id, domainEntity.id, ...(hostnameEntity ? [hostnameEntity.id] : [])])],
     store: 'cases',
     recordId: caseRecord.id,
     source: text(snapshot.source, 40) || 'unknown',
@@ -250,6 +252,7 @@ function projectCaseSnapshot(
     },
     limitations: [
       'Compact case evidence does not retain a complete source-health or source-truncation envelope.',
+      ...(!hostname ? ['The submitted hostname is unknown; hostname-scoped relationships are not inferred from the Case parent.'] : []),
       ...(snapshot.scanDepth === 'unknown' ? ['Scan depth is unknown, so deep-only fields are not comparable.'] : []),
     ],
   });
@@ -270,7 +273,7 @@ function projectCaseSnapshot(
       }, observation);
     }
   }
-  if (snapshot.scanDepth === 'deep' && snapshot.httpEvidenceStatus
+  if (hostnameEntity && snapshot.scanDepth === 'deep' && snapshot.httpEvidenceStatus
     && ['success', 'partial'].includes(snapshot.httpEvidenceStatus)) {
     const origin = httpOrigin(snapshot.httpFinalOrigin);
     const entity = origin ? addEntity('http_origin', origin, origin, { origin }) : null;
@@ -278,7 +281,7 @@ function projectCaseSnapshot(
       linkObservationEntity(observation, entity);
       addRelationship({
         type: 'domain_reached_http_origin',
-        from: domainEntity.id,
+        from: hostnameEntity.id,
         to: entity.id,
         classification: 'normalized',
         method: 'Exact normalised final HTTP(S) origin from comparable deep evidence',

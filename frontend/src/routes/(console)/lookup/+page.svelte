@@ -19,7 +19,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { compareCaseEvidence, DEFAULT_DISPOSITION, dispositionLabel as caseDispositionLabel, isReviewedCaseDisposition, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation, type EvidenceChange } from '$lib/cases';
-  import { caseEvidenceIncomparableReasons } from '$lib/analysis/case-model.ts';
+  import { caseEvidenceIncomparableReasons, latestCaseEvidence } from '$lib/analysis/case-model.ts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -362,14 +362,15 @@
   async function recheckLookupCase(){
     const target=caseObservationTarget;
     if(!target||loading)return;
-    const before=caseRecord?.evidenceHistory.at(-1)??null;
+    const before=latestCaseEvidence(caseRecord);
     caseRecheckComparison=null;
     query=target;
     lookupMode=lookupEvidenceDepth;
     await runLookup({refreshCaseEvidence:true});
     if(error)return;
-    const after=caseRecord?.evidenceHistory.at(-1)??null;
-    if(!before||!after){caseRecheckComparison={available:false,changes:[],observedAt:after?.capturedAt??'',detail:'A prior and current retained Case observation are required before a comparison can be reviewed.'};return;}
+    const after=latestCaseEvidence(caseRecord);
+    if(!before||!after){caseRecheckComparison={available:false,changes:[],observedAt:after?.capturedAt??'',detail:'A uniquely latest prior and current Case observation are required. Review any equal-time or undated snapshots before comparing.'};return;}
+    if(Date.parse(after.capturedAt)<=Date.parse(before.capturedAt)){caseRecheckComparison={available:false,changes:[],observedAt:after.capturedAt,detail:'No later Case capture is available. Equal or earlier capture times cannot establish a recheck outcome.'};return;}
     const changes=compareCaseEvidence(before,after);
     if(caseEvidenceIncomparableReasons(before,after).includes('observation-context')){caseRecheckComparison={available:false,changes,observedAt:after.capturedAt,detail:'These captures concern different or unknown hostnames. Only registration fields can be compared; recheck the same hostname before recording an observed-effect outcome.'};return;}
     caseRecheckComparison={available:true,changes,observedAt:after.capturedAt,detail:changes.length?`${changes.length} comparable material change${changes.length===1?' was':'s were'} found.`:'No comparable material field change was found. This does not prove the page or behaviour is absent.'};

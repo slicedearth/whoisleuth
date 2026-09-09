@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.mts';
+import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { analystInteroperabilityTags } from '../../lib/analyst-taxonomy.mts';
@@ -251,53 +251,17 @@ export function buildCaseReport(
 
   // --- Build JSON report ---
 
-  const timelineEntries: ReportTimelineEntry[] = [];
-
-  if (Array.isArray(caseRecord.evidenceHistory) && caseRecord.evidenceHistory.length > 0) {
-    const chronological = [...caseRecord.evidenceHistory];
-    for (let i = 0; i < chronological.length; i++) {
-      const snapshot = chronological[i];
-      if (!snapshot) continue;
-      const isBaseline = i === 0;
-      const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
-
-      let changes: ReportChange[] | null = null;
-      let hasIncomparableChange = false;
-      let incomparableReasons: ReportReason[] = [];
-
-      if (!isBaseline) {
-        const previous = chronological[i - 1];
-        if (!previous) continue;
-        const rawChanges = compareCaseEvidence(previous, snapshot);
-        incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot) as ReportReason[];
-        if (rawChanges.length > 0) {
-          changes = rawChanges.map((change) => ({
-            field: change.field,
-            label: change.label,
-            before: change.before,
-            after: change.after,
-            tone: change.tone,
-          }));
-        } else if (snapshot.fingerprint !== previous.fingerprint
-          && incomparableReasons.length === 0
-        ) {
-          incomparableReasons = ['other'];
-        }
-        hasIncomparableChange = incomparableReasons.length > 0;
-      }
-
-      timelineEntries.push({
-        snapshot: pickKnownSnapshotFields(snapshot),
-        isBaseline,
-        hasRepeatedObservation,
-        changes,
-        hasIncomparableChange,
-        incomparableReasons,
-      });
-    }
-  }
-
-  const latest = latestCaseEvidence({ evidenceHistory: caseRecord.evidenceHistory ?? undefined });
+  const timeline = caseEvidenceTimeline(caseRecord.evidenceHistory);
+  const timelineEntries: ReportTimelineEntry[] = timeline.map((entry) => ({
+    snapshot: pickKnownSnapshotFields(entry.snapshot),
+    isBaseline: entry.isBaseline,
+    hasRepeatedObservation: entry.hasRepeatedObservation,
+    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
+    hasIncomparableChange: entry.hasIncomparableChange,
+    incomparableReasons: [...entry.incomparableReasons],
+  }));
+  const selection = currentCaseEvidence(caseRecord);
+  const latest = selection.snapshot;
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
   const responseLifecycle = buildCaseResponseLifecycleSummary(caseRecord);
   const observedEffects = caseRecord.observedEffects ?? {
@@ -379,7 +343,7 @@ export function buildCaseReport(
       })),
     },
     responseLifecycle,
-    limitations: LIMITATIONS_TEXT,
+    limitations: [LIMITATIONS_TEXT, selection.limitation, ...new Set(timeline.map((entry) => entry.orderingLimitation))].filter(Boolean).join(' '),
   };
 
   // --- Build Markdown ---
@@ -448,7 +412,9 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push(`- **Scan depth:** ${escapeMarkdownInline(formatReportValue(a.scanDepth))}`);
     lines.push(`- **Source:** ${escapeMarkdownInline(formatReportValue(a.source))}`);
   } else {
-    lines.push('No evidence captured.');
+    lines.push(report.evidenceTimeline.length
+      ? 'Retained snapshots have no unique latest assessment. Review the timeline and limitations.'
+      : 'No evidence captured.');
   }
   lines.push('');
 

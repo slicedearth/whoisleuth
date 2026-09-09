@@ -14,6 +14,7 @@ import {
   type AnalystReviewItem,
 } from '../frontend/src/lib/analysis/analyst-review-state.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase } from '../packages/cases/case-model.mts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import type { WatchlistCollection } from '../frontend/src/lib/analysis/watchlist-store.ts';
 
@@ -95,7 +96,7 @@ function bulkSession(): BulkSession {
   };
 }
 
-function watchlists(): WatchlistCollection {
+function watchlists(domain = 'changed.invalid'): WatchlistCollection {
   return {
     Priority: {
       updatedAt: '2026-07-27T10:00:00.000Z',
@@ -108,7 +109,7 @@ function watchlists(): WatchlistCollection {
         conclusiveCount: 1,
         changeCount: 1,
         omittedChanges: 0,
-        changes: [{ domain: 'changed.invalid', field: 'hasMx', before: false, after: true, kind: 'mail_activated', tone: 'warning' }],
+        changes: [{ domain, field: 'hasMx', before: false, after: true, kind: 'mail_activated', tone: 'warning' }],
       }],
     },
   };
@@ -157,8 +158,9 @@ describe('analyst review inbox', () => {
 
   test('links a watchlist change directly to one matching Case but not an ambiguous set', () => {
     const matching = caseRecord();
-    matching.evidenceHistory = [{ inputHostname: 'changed.invalid' } as unknown as CaseRecord['evidenceHistory'][number]];
-    const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists() }, NOW)
+    const target = 'login.review.invalid';
+    matching.evidenceHistory = createCase({ domain: matching.domain, evidence: { inputHostname: target, scanDepth: 'deep', availability: 'registered' } }, NOW).evidenceHistory;
+    const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists(target) }, NOW)
       .items.find((item) => item.kind === 'watchlist_change');
     assert.equal(linked?.caseId, matching.id);
     assert.match(linked?.href ?? '', /case-response-case-one$/u);
@@ -166,8 +168,8 @@ describe('analyst review inbox', () => {
 
     const second = caseRecord();
     second.id = 'case-two';
-    second.domain = 'changed.invalid';
-    const ambiguous = buildAnalystReviewInbox({ cases: [matching, second], watchlists: watchlists() }, NOW)
+    second.domain = target;
+    const ambiguous = buildAnalystReviewInbox({ cases: [matching, second], watchlists: watchlists(target) }, NOW)
       .items.find((item) => item.kind === 'watchlist_change');
     assert.equal(ambiguous?.caseId, null);
     assert.match(ambiguous?.href ?? '', /^\/monitor\?view=watchlists/u);

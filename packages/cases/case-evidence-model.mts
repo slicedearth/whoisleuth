@@ -4,6 +4,8 @@
 import { normalizeHttpSummary } from './http-summary.mts';
 import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
 import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { latestObservationCohort } from '../evidence/latest-observations.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_EVIDENCE_CHANGES,
   MAX_EVIDENCE_DETAIL_LENGTH,
@@ -447,17 +449,68 @@ function assignUniqueSnapshotIds(snapshots: CaseEvidenceSnapshot[]): CaseEvidenc
   });
 }
 
-/**
- * The most recent snapshot, or null. Lets UI render "the latest evidence"
- * without knowing the history is a bounded, deduplicated timeline.
- * @param {{ evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined} record
- * @returns {CaseEvidenceSnapshot | null}
- */
-export function latestCaseEvidence(
-  record: { evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined,
-): CaseEvidenceSnapshot | null {
+/** Select from an admitted history without assigning order to equal or unknown capture times. */
+export function currentCaseEvidence(
+  record: { evidenceHistory?: readonly CaseEvidenceSnapshot[] } | null | undefined,
+) {
   const history = record && Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
-  return history.at(-1) ?? null;
+  const cohort = latestObservationCohort(history, (snapshot) => snapshot.capturedAt);
+  const snapshot = cohort.undated.length === 0 && cohort.latest.length === 1 ? cohort.latest[0]! : null;
+  return {
+    snapshot,
+    candidates: [...cohort.latest, ...cohort.undated],
+    capturedAt: cohort.observedAt,
+    limitation: cohort.undated.length
+      ? 'Retained snapshots include an unknown capture time. No single latest assessment is selected.'
+      : cohort.latest.length > 1
+        ? 'Distinct snapshots share the latest capture time. No single latest assessment is selected.'
+        : null,
+  };
+}
+
+/** The unique latest retained snapshot, or null for empty or temporally ambiguous evidence. */
+export function latestCaseEvidence(
+  record: { evidenceHistory?: readonly CaseEvidenceSnapshot[] } | null | undefined,
+): CaseEvidenceSnapshot | null {
+  return currentCaseEvidence(record).snapshot;
+}
+
+/** Chronological presentation and comparison admission shared by the browser and Case report. */
+export function caseEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null | undefined) {
+  const dated = (history ?? []).map((snapshot) => ({
+    snapshot,
+    at: normalizeExplicitIsoTimestamp(snapshot.capturedAt),
+  }));
+  const counts = new Map<string, number>();
+  for (const { at } of dated) if (at) counts.set(at, (counts.get(at) ?? 0) + 1);
+  const hasUndated = dated.some(({ at }) => at === null);
+  dated.sort((a, b) => (a.at === b.at ? 0 : a.at === null ? 1 : b.at === null ? -1 : Date.parse(a.at) - Date.parse(b.at))
+    || (a.snapshot.id < b.snapshot.id ? -1 : a.snapshot.id > b.snapshot.id ? 1 : 0));
+  return dated.map(({ snapshot, at }, index) => {
+    const previous = dated[index - 1];
+    const isBaseline = index === 0 && !hasUndated && at !== null && counts.get(at) === 1;
+    const orderingLimitation = !at || (previous && !previous.at)
+      ? 'Capture order is unknown; no temporal change is inferred.'
+      : counts.get(at) !== 1 || (previous && counts.get(previous.at!) !== 1)
+        ? 'Equal-time snapshots have no unique before-and-after order; no temporal change is inferred.'
+        : null;
+    const comparable = previous && !orderingLimitation;
+    const changes = comparable ? compareCaseEvidence(previous.snapshot, snapshot) : [];
+    const incomparableReasons: Array<ReturnType<typeof caseEvidenceIncomparableReasons>[number] | 'other'> = orderingLimitation
+      ? ['other']
+      : comparable ? caseEvidenceIncomparableReasons(previous.snapshot, snapshot) : [];
+    if (comparable && !changes.length && !incomparableReasons.length
+      && previous.snapshot.fingerprint !== snapshot.fingerprint) incomparableReasons.push('other');
+    return {
+      snapshot,
+      isBaseline,
+      hasRepeatedObservation: snapshot.firstCapturedAt !== snapshot.capturedAt,
+      changes: changes.length ? changes : null,
+      hasIncomparableChange: incomparableReasons.length > 0,
+      incomparableReasons,
+      orderingLimitation,
+    };
+  });
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { caseRecord, openCaseResponseWorkspace } from './case-test-fixtures';
+import { caseRecord, snapshot, openCaseResponseWorkspace } from './case-test-fixtures';
 import {
   currentBrandProfileBrowserStore,
   expectNoHorizontalOverflow,
@@ -253,6 +253,30 @@ test('calendar export includes only selected follow-ups and keeps Case context o
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   expect(collectionRequests.count()).toBe(0);
+});
+
+test('calendar qualifies conflicting dates and exposes superseded follow-ups only on request', async ({ page }) => {
+  const review = { id: 'earlier-review', state: 'not_checked', observedAt: OBSERVED_AT, sourceClass: 'analyst', source: 'Fixture review', completeness: 'unknown', limitations: [], evidencePinId: null, sightingId: null, followUpAt: '2030-06-10T00:00:00.000Z', createdAt: OBSERVED_AT };
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
+    ...caseRecord({ id: 'calendar-conflict', domain: 'calendar-conflict.invalid' }),
+    evidenceHistory: [
+      { ...snapshot({ id: 'date-one', capturedAt: OBSERVED_AT }), expiryDate: '2030-01-01T00:00:00.000Z' },
+      { ...snapshot({ id: 'date-two', capturedAt: OBSERVED_AT }), expiryDate: '2030-02-01T00:00:00.000Z' },
+    ],
+    observedEffects: { reviews: [review, { ...review, id: 'later-review', observedAt: '2026-08-24T00:00:00.000Z', followUpAt: null }], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+  }] } }, { destination: '/monitor' });
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const calendar = page.getByRole('region', { name: 'Contact and lifecycle review' });
+  await expect(calendar.getByText('No lifecycle review events match these filters.')).toBeVisible();
+  const disclosure = calendar.locator('summary', { hasText: 'Dates needing review (1)' });
+  await disclosure.focus(); await disclosure.press('Enter');
+  await expect(calendar.getByText(/latest observations disagree; no calendar date was selected/)).toBeVisible();
+  await calendar.getByLabel('Include completed actions and earlier effect reviews').check();
+  await expect(calendar.getByRole('list', { name: 'Browser-local lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await calendar.getByLabel('Include completed actions and earlier effect reviews').uncheck();
+  await expect(calendar.getByRole('button', { name: 'Export selected (0)' })).toBeDisabled();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {

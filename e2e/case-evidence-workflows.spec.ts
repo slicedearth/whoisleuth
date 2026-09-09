@@ -15,6 +15,27 @@ import { caseRecord, openSeededTimelineCase, snapshot } from './case-test-fixtur
 
 
 test.describe('evidence timeline', () => {
+  test('equal-time conflicting snapshots stay reviewable without a chosen summary or temporal change', async ({ page }) => {
+    await openSeededTimelineCase(page, 'equal-time.invalid', [caseRecord({
+      id: 'case-equal-time', domain: 'equal-time.invalid', evidenceHistory: [
+        snapshot({ id: 'low', riskScore: 10 }), snapshot({ id: 'high', riskScore: 90 }),
+      ],
+    })], CASE_SCHEMA_VERSION);
+    await expect(page.getByText(/Distinct snapshots share the latest capture time/)).toBeVisible();
+    await expect(page.locator('dl.evidence')).toHaveCount(0);
+    await expect(page.locator('.timeline-entry')).toHaveCount(2);
+    await expect(page.locator('.timeline-changes')).toHaveCount(0);
+    await expect(page.locator('.timeline-baseline')).toHaveCount(0);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const button of await page.locator('.timeline-toggle').all()) {
+        if (await button.getAttribute('aria-expanded') !== 'true') { await button.focus(); await button.press('Enter'); }
+      }
+      await expect(page.locator('.timeline-detail')).toHaveCount(2);
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
   test('a case with no evidence shows the empty state', async ({ page }) => {
     await openSeededTimelineCase(page, 'no-evidence.invalid', [
       caseRecord({ id: 'empty-ev', domain: 'no-evidence.invalid', evidenceHistory: [] }),
