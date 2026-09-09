@@ -500,8 +500,10 @@ test('plaintext writes and reads share byte and structure admission before seria
 });
 
 test('over-budget updates leave the previous collection and manifest readable', async () => {
+  const notifications: Array<readonly string[]> = [];
   const provider = new BrowserLocalDataProvider({
     databaseName: 'fixture-rejected-write',
+    oncommit: (ids) => { notifications.push(ids); },
     indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION]),
     storage: NULL_STORAGE,
   });
@@ -511,6 +513,7 @@ test('over-budget updates leave the previous collection and manifest readable', 
       document: ['x'.repeat(WRITE_DEFINITION.maximumBytes)], result: 'not committed',
     })), (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_QUOTA');
     assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
+    assert.deepEqual(notifications, []);
   } finally {
     provider.close();
   }
@@ -525,10 +528,12 @@ test('plaintext encoding rejects oversized aggregate text before creating JSON o
 });
 
 test('rejects invalid collection sets and returns no-op update results without writing', async () => {
+  const notifications: Array<readonly string[]> = [];
   const provider = new BrowserLocalDataProvider({
     databaseName: 'fixture-definition-bounds',
     indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]),
     storage: NULL_STORAGE,
+    oncommit: (ids) => { notifications.push(ids); },
   });
   await assert.rejects(provider.initialize([]), /between 1 and 16/u);
   await assert.rejects(provider.initialize([WRITE_DEFINITION, WRITE_DEFINITION]), /identifiers must be unique/u);
@@ -539,6 +544,7 @@ test('rejects invalid collection sets and returns no-op update results without w
     documents,
     result: 'unchanged-many',
   })), 'unchanged-many');
+  assert.deepEqual(notifications, []);
   await provider.close();
 });
 
@@ -669,6 +675,7 @@ test('confirms a durably applied write after its completion acknowledgement time
   timeout: 1_000,
 }, async () => {
   const harness = delayedWriteFactory('committed');
+  const notifications: Array<readonly string[]> = [];
   const restoreKeyRange = installKeyRangeStub();
   const unhandled: unknown[] = [];
   const onUnhandled = (reason: unknown) => unhandled.push(reason);
@@ -677,6 +684,7 @@ test('confirms a durably applied write after its completion acknowledgement time
   try {
     const provider = new BrowserLocalDataProvider({
       databaseName: 'fixture-late-commit',
+      oncommit: (ids) => { notifications.push(ids); throw new Error('Observer unavailable'); },
       indexedDB: harness.factory,
       storage: NULL_STORAGE,
       timeoutMs: WRITE_TIMEOUT_MS,
@@ -690,6 +698,7 @@ test('confirms a durably applied write after its completion acknowledgement time
     });
 
     assert.equal(result, 'committed');
+    assert.deepEqual(notifications, [[WRITE_DEFINITION.id]]);
     assert.equal(updaterCalls, 1);
     assert.equal(harness.state.writeTransactions, 1);
     assert.equal(harness.state.abortAttempts, 1);
@@ -713,6 +722,7 @@ test('blocks a duplicate retry when timed-out write recovery cannot establish th
   timeout: 1_000,
 }, async () => {
   const harness = delayedWriteFactory('unknown');
+  const notifications: Array<readonly string[]> = [];
   const restoreKeyRange = installKeyRangeStub();
   const unhandled: unknown[] = [];
   const onUnhandled = (reason: unknown) => unhandled.push(reason);
@@ -721,6 +731,7 @@ test('blocks a duplicate retry when timed-out write recovery cannot establish th
   try {
     const provider = new BrowserLocalDataProvider({
       databaseName: 'fixture-unknown-commit',
+      oncommit: (ids) => { notifications.push(ids); },
       indexedDB: harness.factory,
       storage: NULL_STORAGE,
       timeoutMs: WRITE_TIMEOUT_MS,
@@ -741,6 +752,7 @@ test('blocks a duplicate retry when timed-out write recovery cannot establish th
       (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_COMMIT_UNKNOWN',
     );
     assert.equal(retryUpdaterCalls, 0);
+    assert.deepEqual(notifications, []);
     assert.equal(harness.state.transactions, transactionsAfterUnknown);
     assert.deepEqual(await provider.read(WRITE_DEFINITION), ['saved']);
 

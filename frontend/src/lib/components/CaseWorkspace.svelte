@@ -7,6 +7,7 @@
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { preloadBestEffort } from '$lib/idle-preload';
+  import { selectConsoleCase } from '$lib/console-workflow-state';
   import { buildMonitorNavigationUrl, monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
@@ -105,6 +106,7 @@
     }
     showCasePage(record);
     expandedId = record.id;
+    selectConsoleCase(record.id);
     tagDraft = caseTagDraft(record);
     noteDraft = '';
   }
@@ -138,6 +140,7 @@
     await reconcileCommittedCaseSnapshot(committed, created ? `Opened a new case for ${record.domain}.` : `Opened the existing case for ${record.domain}.`);
     if (!mounted || !editorUnchanged())
       return;
+    selectConsoleCase(record.id);
     clearCaseFilters();
     casePage = 1;
     showCasePage(record);
@@ -179,6 +182,7 @@
       await reconcileCommittedCaseSnapshot(committed, created ? `Opened a new case for ${record.domain}.` : `${record.domain} already has a case.`);
       if (!mounted || !editorUnchanged())
         return;
+      selectConsoleCase(record.id);
       clearCaseFilters();
       casePage = 1;
       showCasePage(record);
@@ -482,10 +486,12 @@
       const record = cases.find(record => record.id === target.id);
       if (!record) {
         expandedId = '';
+        selectConsoleCase(null);
         caseMessage = 'That Case is not available in this browser workspace. Choose a retained Case or import its workspace archive.';
         return;
       }
       clearCaseFilters();
+      selectConsoleCase(record.id);
       casePage = 1;
       showCasePage(record);
       if (expandedId !== record.id) {

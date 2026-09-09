@@ -21,7 +21,7 @@
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
-  import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
+  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
   import {
     hasStoredInvestigationGuide,
     INVESTIGATION_GUIDE_EVENT,
@@ -43,9 +43,14 @@
   let commandReturnFocus: HTMLElement | undefined;
   let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
+  let selectedCaseId = $state<string | null>(null);
+  const showCaseContext = $derived(Boolean(selectedCaseId)
+    && page.url.pathname !== '/cases'
+    && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
   const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
+    const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
     void checkSession();
     if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
     const showInvestigationGuide = () => {
@@ -59,6 +64,7 @@
     };
     mobileNavigation.addEventListener('change', closeAtDesktopWidth);
     return () => {
+      unsubscribeCase();
       mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     };
@@ -254,7 +260,12 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}{@render children()}<SiteFooter console /></main>
+    <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
+      {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('$lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+      {#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
+      {@render children()}
+      <SiteFooter console />
+    </main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
       <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />

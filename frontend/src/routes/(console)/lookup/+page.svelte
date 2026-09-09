@@ -79,7 +79,7 @@
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
+  import { readLookupWorkflowState, writeLookupWorkflowState, selectConsoleCase } from '$lib/console-workflow-state.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller';
@@ -321,6 +321,7 @@
       if(next.sourceState)caseSourceState=next.sourceState;
       else if(next.record)caseSourceState='ready';
       afterPublish(next);
+      if (next.mutationOutcome === 'committed' && next.record) selectConsoleCase(next.record.id);
       return next.mutationOutcome;
     }finally{
       if(generation===caseActionGeneration)caseActionBusy=false;

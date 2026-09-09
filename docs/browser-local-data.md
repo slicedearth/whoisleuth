@@ -28,6 +28,11 @@ Small tab-scoped handoffs and transient preferences use `sessionStorage` or
 `localStorage` only under their documented limits. They are not silently
 promoted into workspace evidence.
 
+The selected Case identifier lives only in the current page's memory. Its
+read-only context uses the canonical Case store, refreshes after Case writes in
+the same tab or when the tab regains focus, and clears on reload or sign-out.
+This selection neither changes the Case nor authorises a network request.
+
 ## Data model and evidence semantics
 
 Stored records retain their own provenance, observation time, completeness,

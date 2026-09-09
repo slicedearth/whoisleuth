@@ -45,6 +45,9 @@ import Svelte routes, components or browser adapters.
 The Cases route and Monitor's Cases view use one Case workspace component.
 It owns the list, filters, selection, drafts and collection refresh; Monitor
 owns the separate inbox, watchlist, campaign and relationship projections.
+The Console's in-memory workflow owner retains the selected Case identifier.
+A read-only context component reads that Case from the browser store; scoped
+commit notifications contain collection identifiers, not record payloads.
 The Case response workspace coordinates response writes, reconciliation and focus.
 Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The

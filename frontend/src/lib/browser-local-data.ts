@@ -384,6 +384,8 @@ export const plaintextJsonCodec: BrowserLocalDataCodec = Object.freeze<BrowserLo
   },
 });
 
+export type BrowserLocalDataCommitListener = (collections: readonly string[]) => void;
+
 export class BrowserLocalDataProvider {
   readonly databaseName: string;
   readonly codec: BrowserLocalDataCodec;
@@ -397,6 +399,7 @@ export class BrowserLocalDataProvider {
   #definitions = new Map<string, AnyLocalDataCollectionDefinition>();
   #databaseInvalidated = false;
   #commitState: BrowserLocalCommitState = 'confirmed';
+  #oncommit: BrowserLocalDataCommitListener | undefined;
 
   constructor(options: Readonly<{
     databaseName?: string;
@@ -405,6 +408,7 @@ export class BrowserLocalDataProvider {
     codec?: BrowserLocalDataCodec;
     timeoutMs?: number;
     now?: () => Date;
+    oncommit?: BrowserLocalDataCommitListener;
   }> = {}) {
     let factory: IDBFactory | undefined;
     let storage: BrowserStorage | undefined;
@@ -430,6 +434,7 @@ export class BrowserLocalDataProvider {
     this.#factory = factory;
     this.#storage = storage;
     this.#now = options.now || (() => new Date());
+    this.#oncommit = options.oncommit;
   }
 
   async initialize(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<BrowserLocalDataInitialization> {
@@ -470,6 +475,7 @@ export class BrowserLocalDataProvider {
       try {
         this.#requireConfirmedCommitState();
         await this.#commit([prepared], new Map([[definition.id, snapshot.manifest]]));
+        this.#notifyCommitted([definition.id]);
         return updated.result;
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT' || attempt === MAX_LOCAL_DATA_UPDATE_ATTEMPTS) throw cause;
@@ -530,12 +536,18 @@ export class BrowserLocalDataProvider {
       try {
         this.#requireConfirmedCommitState();
         await this.#commit(changed, expectedManifests);
+        this.#notifyCommitted(changed.map((item) => item.definition.id));
         return updated.result;
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT' || attempt === MAX_LOCAL_DATA_UPDATE_ATTEMPTS) throw cause;
       }
     }
     throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', 'Browser-local data changed repeatedly in another tab. Try again.');
+  }
+
+  #notifyCommitted(collections: readonly string[]): void {
+    try { void Promise.resolve(this.#oncommit?.(Object.freeze([...collections]))).catch(() => {}); }
+    catch { /* A confirmed write is independent of its read-only observers. */ }
   }
 
   async close(): Promise<void> {

@@ -179,6 +179,11 @@ Open **Cases** from the Respond navigation, or use the Cases view in Monitor.
 A Case's **Open Case page** link opens that record directly in this browser
 workspace. It does not share the record with another browser or person.
 
+Opening a Case keeps it selected while moving between Console tools. The
+compact Case context exposes retained hypotheses, pins, decisions, response
+history and follow-up dates. **Clear** removes the selection, not the Case.
+Selection lasts until the page is reloaded or the protected session ends.
+
 Cases can retain bounded evidence snapshots, pins, checkpoints, analyst
 assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate

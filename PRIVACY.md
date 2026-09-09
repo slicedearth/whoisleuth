@@ -74,6 +74,9 @@ candidate handoff uses a random token and is removed when accepted. Appearance
 preference can use `localStorage`. These records are not uploaded merely because
 they exist.
 
+Selected Case context uses only page memory and the existing local Case store.
+The selection clears on reload or sign-out and does not initiate collection.
+
 Saved Bulk rows and deliberately retained relationships can include bounded
 contributing-source identities, states and observation times, not raw responses.
 Older records remain readable with missing provenance marked unknown.

@@ -3,6 +3,7 @@ import {
   BrowserLocalDataProvider,
   type AnyLocalDataCollectionDefinition,
   type BrowserLocalDataInitialization,
+  type BrowserLocalDataCommitListener,
   type LocalDataCollectionDefinition,
 } from './browser-local-data.ts';
 import type {
@@ -28,7 +29,7 @@ export type BrowserLocalDataProviderBoundary = Readonly<{
 
 export type BrowserLocalDataServiceDependencies = Readonly<{
   loadCollections: () => Promise<readonly AnyLocalDataCollectionDefinition[]>;
-  createProvider: () => BrowserLocalDataProviderBoundary;
+  createProvider: (oncommit: BrowserLocalDataCommitListener) => BrowserLocalDataProviderBoundary;
 }>;
 
 function boundedDetail(cause: unknown): string {
@@ -50,10 +51,30 @@ export function createBrowserLocalDataService(
     () => import('./browser-local-data-definitions.ts'),
   )
     .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
-  const createProvider = dependencies.createProvider ?? (() => new BrowserLocalDataProvider());
+  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({ oncommit }));
+  const listeners = new Map<BrowserLocalCollectionId, Set<() => void>>();
   let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
   let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
   let serviceState: BrowserLocalDataServiceState = Object.freeze({ state: 'idle' });
+
+  function subscribe(id: BrowserLocalCollectionId, listener: () => void): () => void {
+    const collectionListeners = listeners.get(id) ?? new Set<() => void>();
+    collectionListeners.add(listener);
+    listeners.set(id, collectionListeners);
+    return () => {
+      collectionListeners.delete(listener);
+      if (!collectionListeners.size) listeners.delete(id);
+    };
+  }
+
+  function notifyCommitted(ids: readonly string[]): void {
+    for (const [id, collectionListeners] of listeners) {
+      if (!ids.includes(id)) continue;
+      for (const listener of [...collectionListeners]) {
+        try { void Promise.resolve(listener()).catch(() => {}); } catch { /* Observers do not participate in persistence. */ }
+      }
+    }
+  }
 
   function collections(): Promise<readonly AnyLocalDataCollectionDefinition[]> {
     if (collectionsPromise) return collectionsPromise;
@@ -82,7 +103,7 @@ export function createBrowserLocalDataService(
     providerPromise = (async () => {
       try {
         const definitions = await collections();
-        const nextProvider = createProvider();
+        const nextProvider = createProvider(notifyCommitted);
         const initialization = await nextProvider.initialize(definitions);
         serviceState = Object.freeze({ state: 'ready', initialization });
         return nextProvider;
@@ -139,10 +160,15 @@ export function createBrowserLocalDataService(
     read,
     update,
     collection,
+    subscribe,
   });
 }
 
 const defaultService = createBrowserLocalDataService();
+
+export function subscribeBrowserLocalData(collection: BrowserLocalCollectionId, listener: () => void): () => void {
+  return defaultService.subscribe(collection, listener);
+}
 
 export async function browserLocalDataProvider(): Promise<BrowserLocalDataProvider> {
   return await defaultService.provider() as BrowserLocalDataProvider;

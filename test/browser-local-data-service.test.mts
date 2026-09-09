@@ -33,6 +33,33 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
 }
 
 describe('browser-local data service', () => {
+  test('scopes post-commit notifications and isolates unsubscribed or failing observers', async () => {
+    let commit: (ids: readonly string[]) => void = () => {};
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: (oncommit) => { commit = oncommit; return readyProvider(); },
+    });
+    let cases = 0;
+    let shortlist = 0;
+    const unsubscribe = service.subscribe('cases', () => { cases += 1; });
+    const broken = service.subscribe('cases', () => { throw new Error('View unavailable'); });
+    const asyncBroken = service.subscribe('cases', async () => { throw new Error('Async view unavailable'); });
+    const other = service.subscribe('shortlist', () => { shortlist += 1; });
+    await service.initialize();
+    assert.equal(cases, 0);
+    commit(['shortlist']);
+    assert.equal(cases, 0);
+    assert.equal(shortlist, 1);
+    commit(['cases', 'shortlist']);
+    assert.equal(cases, 1);
+    assert.equal(shortlist, 2);
+    unsubscribe(); broken(); asyncBroken(); other();
+    commit(['cases', 'shortlist']);
+    assert.equal(cases, 1);
+    assert.equal(shortlist, 2);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+
   test('shares one in-flight initialisation and exposes only the settled ready state', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => { release = resolve; });

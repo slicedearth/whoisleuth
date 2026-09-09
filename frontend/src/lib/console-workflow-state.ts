@@ -8,6 +8,7 @@ import type {
 } from './analysis/bulk-triage.ts';
 import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
+import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-reference-id.mts';
 
 export type LookupMode = 'fast' | 'deep';
 
@@ -58,6 +59,8 @@ export type BulkWorkflowState<Result> = {
 
 let lookupWorkflowState: LookupWorkflowState | null = null;
 let bulkWorkflowState: BulkWorkflowState<unknown> | null = null;
+let selectedCaseId: string | null = null;
+const caseSelectionListeners = new Set<(id: string | null) => void>();
 
 function inBrowser(): boolean {
   return typeof window !== 'undefined';
@@ -79,7 +82,34 @@ export function writeBulkWorkflowState<Result>(state: BulkWorkflowState<Result>)
   if (inBrowser()) bulkWorkflowState = state as BulkWorkflowState<unknown>;
 }
 
+export function readSelectedConsoleCase(): string | null {
+  return inBrowser() ? selectedCaseId : null;
+}
+
+export function selectConsoleCase(id: string | null): void {
+  if (!inBrowser()) return;
+  if (id !== null && normalizeOpaqueReferenceId(id) !== id) {
+    throw new RangeError('The selected Case identifier is invalid.');
+  }
+  if (selectedCaseId === id) return;
+  selectedCaseId = id;
+  for (const listener of [...caseSelectionListeners]) {
+    try { void Promise.resolve(listener(id)).catch(() => {}); } catch { /* A view observer cannot change the selection. */ }
+  }
+}
+
+export function subscribeSelectedConsoleCase(listener: (id: string | null) => void): () => void {
+  listener(readSelectedConsoleCase());
+  if (!inBrowser()) return () => {};
+  caseSelectionListeners.add(listener);
+  return () => { caseSelectionListeners.delete(listener); };
+}
+
 export function clearConsoleWorkflowState(): void {
   lookupWorkflowState = null;
   bulkWorkflowState = null;
+  selectedCaseId = null;
+  for (const listener of [...caseSelectionListeners]) {
+    try { void Promise.resolve(listener(null)).catch(() => {}); } catch { /* Clearing private state does not depend on a view. */ }
+  }
 }
