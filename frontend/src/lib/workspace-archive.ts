@@ -24,21 +24,11 @@ import { mergeInvestigationTemplates } from './analysis/investigation-template-m
 import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
 import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
-import { loadCampaigns } from './campaigns';
-import { loadCases } from './cases';
-import { loadDetectionRules } from './detection-rules';
-import { loadRelationshipObservations } from './relationship-observations';
-import { loadBulkSessions } from './bulk-sessions';
-import { loadWebsiteSnapshots } from './website-snapshots';
-import { loadInvestigationTemplates } from './investigation-templates';
-import { loadBulkReviewStore } from './bulk-review';
-import { loadAnalystReviewState } from './analyst-review-state';
-import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
-import { loadWatchlists } from './watchlists';
 import {
   browserLocalDataCollection,
   browserLocalDataProvider,
+  readBrowserLocalDataCollections,
 } from './browser-local-data-service.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
@@ -81,34 +71,25 @@ function importSummary(
 }
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
+const SECTION_COLLECTIONS = [
+  ['cases', 'cases'],
+  ['campaigns', 'campaigns'],
+  ['brandProfiles', 'brand_profiles'],
+  ['watchlists', 'watchlists'],
+  ['shortlist', 'shortlist'],
+  ['detectionRules', 'detection_rules'],
+  ['relationshipObservations', 'relationship_observations'],
+  ['bulkSessions', 'bulk_sessions'],
+  ['websiteSnapshots', 'website_snapshots'],
+  ['investigationTemplates', 'investigation_templates'],
+  ['bulkReview', 'bulk_review'],
+  ['analystReviewState', 'analyst_review_state'],
+] as const;
+
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview, analystReviewState] = await Promise.all([
-    loadCases(),
-    loadCampaigns(),
-    loadProfiles(),
-    loadWatchlists(),
-    loadShortlist(),
-    loadDetectionRules(),
-    loadRelationshipObservations(),
-    loadBulkSessions(),
-    loadWebsiteSnapshots(),
-    loadInvestigationTemplates(),
-    loadBulkReviewStore(),
-    loadAnalystReviewState(),
-  ]);
+  const documents = await readBrowserLocalDataCollections(SECTION_COLLECTIONS.map(([, collection]) => collection));
   return {
-    cases,
-    campaigns,
-    brandProfiles,
-    watchlists,
-    shortlist,
-    detectionRules,
-    relationshipObservations,
-    bulkSessions,
-    websiteSnapshots,
-    investigationTemplates,
-    bulkReview,
-    analystReviewState,
+    ...Object.fromEntries(SECTION_COLLECTIONS.map(([section, collection]) => [section, documents[collection]])),
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -122,9 +103,9 @@ export async function createWorkspaceArchive(generatedAt = new Date().toISOStrin
 
 export async function createWorkspaceArchiveDownload(generatedAt = new Date().toISOString()) {
   const archive = await createWorkspaceArchive(generatedAt);
-  const content = `${JSON.stringify(archive, null, 2)}\n`;
+  const content = `${JSON.stringify(archive)}\n`;
   if (new TextEncoder().encode(content).byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
   }
   return {
     archive,
@@ -142,7 +123,7 @@ export async function createEncryptedWorkspaceArchiveDownload(
   const envelope = await encryptWorkspaceArchive(archive, passphrase);
   const content = `${JSON.stringify(envelope, null, 2)}\n`;
   if (new TextEncoder().encode(content).byteLength > MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('The encrypted workspace archive exceeds its 13.4 MiB envelope limit.');
+    throw new Error(`The encrypted workspace archive exceeds its ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES}-byte envelope limit.`);
   }
   return {
     archive,
@@ -231,21 +212,7 @@ async function mergeWorkspacePreview(
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
   const settingsSnapshot = snapshotSettings();
   const dataSections = sections.filter((section) => section.id !== 'settings');
-  const sectionCollections = [
-    ['cases', 'cases'],
-    ['campaigns', 'campaigns'],
-    ['brandProfiles', 'brand_profiles'],
-    ['watchlists', 'watchlists'],
-    ['shortlist', 'shortlist'],
-    ['detectionRules', 'detection_rules'],
-    ['relationshipObservations', 'relationship_observations'],
-    ['bulkSessions', 'bulk_sessions'],
-    ['websiteSnapshots', 'website_snapshots'],
-    ['investigationTemplates', 'investigation_templates'],
-    ['bulkReview', 'bulk_review'],
-    ['analystReviewState', 'analyst_review_state'],
-  ] as const;
-  const definitionEntries = await Promise.all(sectionCollections.map(async ([section, collection]) => [
+  const definitionEntries = await Promise.all(SECTION_COLLECTIONS.map(async ([section, collection]) => [
     section,
     await browserLocalDataCollection(collection),
   ] as const));

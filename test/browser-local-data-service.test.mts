@@ -24,6 +24,7 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
     initialize: async () => READY,
     restoreLegacyCopies: async () => ({ collectionCount: 0, serializedBytes: 0, keys: [] }),
     read: async <Document,>() => [] as Document,
+    readMany: async (definitions) => new Map(definitions.map((definition) => [definition.id, []])),
     update: async <Document, Result>(
       _definition: unknown,
       updater: (current: Document) => Readonly<{ document: Document; result: Result }>,
@@ -33,6 +34,25 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
 }
 
 describe('browser-local data service', () => {
+  test('a multi-collection request uses the provider snapshot rather than separate reads', async () => {
+    const documents = new Map<string, unknown>([['shortlist', [{ domain: 'snapshot.example' }]]]);
+    let reads = 0;
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: () => readyProvider({
+        read: async () => { throw new Error('Separate reads are not a consistent snapshot.'); },
+        readMany: async (definitions) => {
+          reads += 1;
+          assert.deepEqual(definitions, [SHORTLIST_COLLECTION]);
+          return documents;
+        },
+      }),
+    });
+    const snapshot = await service.readMany(['shortlist']);
+    assert.deepEqual(snapshot, { shortlist: documents.get('shortlist') });
+    assert.equal(reads, 1);
+  });
+
   test('scopes post-commit notifications and isolates unsubscribed or failing observers', async () => {
     let commit: (ids: readonly string[]) => void = () => {};
     const service = createBrowserLocalDataService({

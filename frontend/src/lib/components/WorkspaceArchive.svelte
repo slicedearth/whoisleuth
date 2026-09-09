@@ -92,14 +92,14 @@
     if(!file)return;
     busy=true;
     try{
-      if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error('Encrypted workspace archive imports are limited to 13.4 MiB.');
+      if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Encrypted workspace archive imports are limited to ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES} bytes.`);
       const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
       if(isEncryptedWorkspaceArchive(value)){
         const inspected=inspectEncryptedWorkspaceArchive(value);
         encryptedImportValue=value;
         message=`Encrypted backup selected (${inspected.ciphertextBytes.toLocaleString()} encrypted bytes). Enter its passphrase to review the contents locally.`;
       }else{
-        if(file.size>MAX_WORKSPACE_ARCHIVE_BYTES)throw new Error('Unencrypted workspace archive imports are limited to 10 MiB.');
+        if(file.size>MAX_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Unencrypted workspace archive imports are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB.`);
         await previewArchive(value);
       }
     }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';}

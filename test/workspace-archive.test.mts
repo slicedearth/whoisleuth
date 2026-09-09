@@ -907,7 +907,7 @@ describe('portable workspace archive', () => {
     };
     await assert.rejects(
       readWorkspaceArchive(archive),
-      /aggregate text exceeds the string ceiling|limited to 10 MiB/,
+      /aggregate text exceeds the string ceiling|limited to \d+ MiB/,
     );
   });
 

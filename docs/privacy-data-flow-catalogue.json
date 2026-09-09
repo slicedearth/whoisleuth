@@ -8708,7 +8708,7 @@
       "futureVersionBehavior": "reject",
       "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 13985110,
+      "byteBudget": 44743339,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -9095,7 +9095,7 @@
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 10485760,
+      "byteBudget": 33554432,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { performance } from 'node:perf_hooks';
-import { richBulkSessionStore, richSourceQualifiedBulkSessionStore } from './bulk-session-fixture.mts';
+import { bulkStoreAtCapacity, richBulkSessionStore, richSourceQualifiedBulkSessionStore } from './bulk-session-fixture.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from '../lib/bounded-json.mts';
 import { localDataStorageRecords, plaintextJsonCodec } from '../frontend/src/lib/browser-local-data.ts';
 import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
@@ -92,19 +92,8 @@ test('source-qualified rich Bulk backups retain all 2,000 rows through quarantin
 });
 
 test('the unchanged Bulk byte boundary accepts exactly 4 MiB and rejects the next byte without pruning the only session', async () => {
-  const store = normalizeBulkSessionStore(richBulkSessionStore());
+  const store = bulkStoreAtCapacity();
   const session = store.sessions[0]!;
-  let remaining = MAX_BULK_SESSION_STORE_BYTES - Buffer.byteLength(serializeBulkSessionStore(store));
-  // All additions fit the existing per-field bounds. No production limit or
-  // normaliser is replaced to construct the exact serialized boundary.
-  for (const field of ['error', 'registrar', 'activity', 'pageTitle'] as const) {
-    for (const row of session.results) {
-      const added = Math.min(250 - (row[field]?.length ?? 0), remaining);
-      row[field] = `${row[field] ?? ''}${'x'.repeat(added)}`;
-      remaining -= added;
-    }
-  }
-  assert.equal(remaining, 0);
   assert.equal(Buffer.byteLength(serializeBulkSessionStore(store)), MAX_BULK_SESSION_STORE_BYTES);
   assert.equal(enforceBulkSessionStoreBudget(store).pruned, 0);
   const wireRecord = localDataStorageRecords(BULK_SESSIONS_COLLECTION, [session])[0]!;

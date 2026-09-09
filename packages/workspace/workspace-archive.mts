@@ -502,7 +502,7 @@ function ensureArchiveBudget(value: unknown): { serialized: string; bytes: numbe
   const serialized = serialize(value);
   const bytes = byteLength(serialized);
   if (bytes > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
   }
   return { serialized, bytes };
 }
@@ -520,7 +520,7 @@ export async function buildWorkspaceArchive(input: unknown, options: WorkspaceAr
     const data = sections[definition.id];
     const sectionBytes = byteLength(serialize(data));
     if (sectionBytes > MAX_WORKSPACE_ARCHIVE_SECTION_BYTES) {
-      throw new Error(`${definition.label} exceeds the 5 MiB workspace archive section limit.`);
+      throw new Error(`${definition.label} exceeds the ${MAX_WORKSPACE_ARCHIVE_SECTION_BYTES / 1024 / 1024} MiB workspace archive section limit.`);
     }
     const recordCount = definition.count(data);
     manifestSections.push({

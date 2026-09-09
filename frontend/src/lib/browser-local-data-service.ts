@@ -24,6 +24,7 @@ export type BrowserLocalDataProviderBoundary = Readonly<{
   initialize: BrowserLocalDataProvider['initialize'];
   restoreLegacyCopies: BrowserLocalDataProvider['restoreLegacyCopies'];
   read: BrowserLocalDataProvider['read'];
+  readMany: BrowserLocalDataProvider['readMany'];
   update: BrowserLocalDataProvider['update'];
 }>;
 
@@ -142,6 +143,14 @@ export function createBrowserLocalDataService(
     return provider.read(definition);
   }
 
+  async function readMany<Collection extends BrowserLocalCollectionId>(
+    ids: readonly Collection[],
+  ): Promise<Pick<BrowserLocalCollectionDocumentMap, Collection>> {
+    const [provider, definitions] = await Promise.all([activeProvider(), Promise.all(ids.map(collection))]);
+    const documents = await provider.readMany(definitions);
+    return Object.fromEntries(documents) as Pick<BrowserLocalCollectionDocumentMap, Collection>;
+  }
+
   async function update<Collection extends BrowserLocalCollectionId, Result>(
     id: Collection,
     updater: (
@@ -158,6 +167,7 @@ export function createBrowserLocalDataService(
     initialize,
     restoreLegacyCopies,
     read,
+    readMany,
     update,
     collection,
     subscribe,
@@ -186,6 +196,12 @@ export async function readBrowserLocalData<Collection extends BrowserLocalCollec
   collection: Collection,
 ): Promise<BrowserLocalCollectionDocumentMap[Collection]> {
   return defaultService.read(collection);
+}
+
+export async function readBrowserLocalDataCollections<Collection extends BrowserLocalCollectionId>(
+  collections: readonly Collection[],
+): Promise<Pick<BrowserLocalCollectionDocumentMap, Collection>> {
+  return defaultService.readMany(collections);
 }
 
 export async function updateBrowserLocalData<Collection extends BrowserLocalCollectionId, Result>(

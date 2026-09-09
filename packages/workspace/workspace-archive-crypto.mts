@@ -175,7 +175,7 @@ function validateEnvelope(raw: unknown): {
   iv: Uint8Array;
   ciphertext: Uint8Array;
 } {
-  assertWorkspaceInputGraph(raw, 'Encrypted workspace archive');
+  assertWorkspaceInputGraph(raw, 'Encrypted workspace archive', { maximumBytes: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES });
   const value = record(raw);
   if (!value || value.schema !== ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not an encrypted WHOISleuth workspace archive.');
@@ -330,7 +330,7 @@ export async function encryptWorkspaceArchive(
   const plaintext = JSON.stringify(archive);
   const plaintextBytes = encoder.encode(plaintext);
   if (plaintextBytes.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
   }
   // Validation and encryption consume the same snapshot, including when the
   // caller changes the original object while checksum verification is pending.

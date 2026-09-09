@@ -12,6 +12,7 @@ import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../fro
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 import { richSourceQualifiedBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions';
+import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchiveStatus } from './workspace-backup';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -284,58 +285,6 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
     'unrelated-private-key': 'must-not-export',
   }, { clearStorage: true });
   await openDashboardSecondaryWorkspaces(page);
-}
-
-async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
-  await openDashboardSecondaryWorkspaces(page);
-  await page.getByText('How workspace backups work', { exact: true }).click();
-  const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download unencrypted backup' }).click();
-  const download = await pending;
-  const body = await (await download.createReadStream()).toArray();
-  return { download, content: Buffer.concat(body).toString('utf-8') };
-}
-
-async function downloadEncryptedWorkspaceArchive(
-  page: import('@playwright/test').Page,
-  passphrase: string,
-) {
-  await openDashboardSecondaryWorkspaces(page);
-  await page.getByRole('button', { name: 'Download encrypted backup' }).click();
-  await page.getByLabel(/^Passphrase/).fill(passphrase);
-  await page.getByLabel('Confirm passphrase').fill(passphrase);
-  const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Encrypt and download' }).click();
-  const download = await pending;
-  const body = await (await download.createReadStream()).toArray();
-  return { download, content: Buffer.concat(body).toString('utf-8') };
-}
-
-type WorkspaceBackupFile = {
-  name: string;
-  mimeType: string;
-  buffer: Buffer;
-};
-
-async function reviewWorkspaceBackup(
-  page: import('@playwright/test').Page,
-  file: WorkspaceBackupFile,
-) {
-  const savedWorkTrigger = page.getByRole('button', { name: 'Open saved-work tools' });
-  const importTrigger = page.getByRole('button', { name: /Import existing work/u });
-  await expect(savedWorkTrigger.or(importTrigger)).toBeVisible();
-  if (await savedWorkTrigger.isVisible()) {
-    await openDashboardSecondaryWorkspaces(page);
-  } else {
-    if (await importTrigger.getAttribute('aria-expanded') !== 'true') await importTrigger.click();
-    await expect(importTrigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByRole('heading', { name: 'Import existing work', exact: true })).toBeVisible();
-  }
-  await page.getByLabel('Review backup file').setInputFiles(file);
-}
-
-function workspaceArchiveStatus(page: import('@playwright/test').Page) {
-  return page.locator('.workspace-archive .status[role="status"]');
 }
 
 test('a rich 2,000-row Bulk workspace remains readable after saving and plain or encrypted restore', async ({ page }, testInfo) => {

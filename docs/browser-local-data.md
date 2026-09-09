@@ -121,6 +121,13 @@ records the selected sections, codec, counts, byte totals and ordered SHA-256
 digests. Digests detect corruption or mismatched content; they do not establish
 authorship, truth or confidentiality.
 
+The record collections are captured together in one IndexedDB read transaction.
+Theme and active-profile preferences are read separately from local storage;
+the exported active profile must exist in the captured profile collection.
+Backups use compact JSON, with a 32-MiB archive limit and a 5-MiB limit per
+section. Previously formatted JSON backups remain readable. Encryption adds
+base64 encoding and authenticated-envelope metadata to the file size.
+
 Import validates the complete envelope and section checksums into a page-local
 snapshot. Selection previews reuse that snapshot and reread local records;
 application merges with current records inside the storage transaction.

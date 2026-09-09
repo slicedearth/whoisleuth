@@ -459,6 +459,23 @@ export class BrowserLocalDataProvider {
     return (await this.#readSnapshot(definition)).document;
   }
 
+  /** All requested collections are captured by one readonly transaction. */
+  async readMany(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<ReadonlyMap<string, unknown>> {
+    this.#assertDefinitionBatch(definitions);
+    definitions = [...definitions];
+    for (const definition of definitions) await this.#requireDefinition(definition);
+    const snapshots = await this.#readSnapshots(definitions);
+    return new Map(definitions.map((definition, index) => [definition.id, snapshots[index]!.document]));
+  }
+
+  #assertDefinitionBatch(definitions: readonly AnyLocalDataCollectionDefinition[]): void {
+    if (!Array.isArray(definitions) || definitions.length < 1 || definitions.length > MAX_LOCAL_DATA_COLLECTIONS
+      || definitions.some((definition) => !definition || typeof definition.id !== 'string')
+      || new Set(definitions.map((definition) => definition.id)).size !== definitions.length) {
+      throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'A local-data batch requires a bounded, non-empty set of distinct collections.');
+    }
+  }
+
   async update<T, R>(
     definition: LocalDataCollectionDefinition<T>,
     updater: (current: T) => Readonly<{ document: T; result: R }>,
@@ -491,11 +508,13 @@ export class BrowserLocalDataProvider {
       result: R;
     }>,
   ): Promise<R> {
+    this.#assertDefinitionBatch(definitions);
+    definitions = [...definitions];
     for (const definition of definitions) await this.#requireDefinition(definition);
     this.#requireConfirmedCommitState();
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
       this.#requireConfirmedCommitState();
-      const snapshots = await Promise.all(definitions.map((definition) => this.#readSnapshot(definition)));
+      const snapshots = await this.#readSnapshots(definitions);
       this.#requireConfirmedCommitState();
       const current = new Map<string, unknown>();
       for (let index = 0; index < definitions.length; index++) {
@@ -572,10 +591,11 @@ export class BrowserLocalDataProvider {
   }
 
   async restoreLegacyCopies(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<LegacyRollbackCopyResult> {
-    for (const definition of definitions) await this.#requireDefinition(definition);
-    const documents = await Promise.all(definitions.map((definition) => this.read(definition)));
-    const copies = definitions.map((definition, index) => {
-      const serialized = definition.serialize(definition.normalize(documents[index]));
+    this.#assertDefinitionBatch(definitions);
+    definitions = [...definitions];
+    const documents = await this.readMany(definitions);
+    const copies = definitions.map((definition) => {
+      const serialized = definition.serialize(documents.get(definition.id));
       return {
         key: definition.legacyKey,
         value: serialized,
@@ -806,28 +826,35 @@ export class BrowserLocalDataProvider {
   }
 
   async #readSnapshot<T>(definition: LocalDataCollectionDefinition<T>): Promise<CollectionSnapshot<T>> {
+    return (await this.#readSnapshots([definition]))[0]!;
+  }
+
+  async #readSnapshots<T>(definitions: readonly LocalDataCollectionDefinition<T>[]): Promise<CollectionSnapshot<T>[]> {
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
-    const done = transactionComplete(transaction, `Reading ${definition.label}`, this.timeoutMs);
-    let manifest: BrowserLocalCollectionManifest | undefined;
-    let records: BrowserLocalStoredRecord[] = [];
+    const label = definitions.length === 1 ? definitions[0]!.label : 'workspace collections';
+    const done = transactionComplete(transaction, `Reading ${label}`, this.timeoutMs);
+    let captured: Array<{ manifest: BrowserLocalCollectionManifest; records: BrowserLocalStoredRecord[] }>;
     try {
-      manifest = await requestResult(
-        transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-        `Reading the ${definition.label} manifest`,
-        this.timeoutMs,
-      );
-      if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
-      this.#assertManifest(definition, manifest);
-      if (manifest.codec !== this.codec.id) {
-        throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
-      }
-      records = await readBoundedStoredRecords(
-        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX),
-        definition,
-        manifest.codec,
-        this.timeoutMs,
-      );
+      captured = await Promise.all(definitions.map(async (definition) => {
+        const manifest = await requestResult(
+          transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
+          `Reading the ${definition.label} manifest`,
+          this.timeoutMs,
+        );
+        if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
+        this.#assertManifest(definition, manifest);
+        if (manifest.codec !== this.codec.id) {
+          throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
+        }
+        const records = await readBoundedStoredRecords(
+          transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX),
+          definition,
+          manifest.codec,
+          this.timeoutMs,
+        );
+        return { manifest, records };
+      }));
       await done;
     } catch (cause) {
       try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
@@ -835,11 +862,18 @@ export class BrowserLocalDataProvider {
       if (cause instanceof BrowserLocalDataError) throw cause;
       throw new BrowserLocalDataError(
         'LOCAL_DATA_READ_FAILED',
-        `${definition.label} could not be read from browser-local storage.`,
+        `${label} could not be read from browser-local storage.`,
         { cause },
       );
     }
-    if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
+    return Promise.all(captured.map(({ manifest, records }, index) => this.#decodeSnapshot(definitions[index]!, manifest, records)));
+  }
+
+  async #decodeSnapshot<T>(
+    definition: LocalDataCollectionDefinition<T>,
+    manifest: BrowserLocalCollectionManifest,
+    records: BrowserLocalStoredRecord[],
+  ): Promise<CollectionSnapshot<T>> {
     if (records.length !== manifest.recordCount) {
       throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} record count does not match its manifest.`);
     }
@@ -1013,7 +1047,7 @@ export class BrowserLocalDataProvider {
     proposedManifests: ReadonlyMap<string, BrowserLocalCollectionManifest>,
   ): Promise<'committed' | 'not_committed' | 'unknown'> {
     try {
-      const snapshots = await Promise.all(prepared.map((item) => this.#readSnapshot(item.definition)));
+      const snapshots = await this.#readSnapshots(prepared.map((item) => item.definition));
       const committed = snapshots.every((snapshot, index) => {
         const item = prepared[index];
         if (!item) return false;

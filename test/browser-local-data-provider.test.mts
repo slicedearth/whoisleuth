@@ -162,7 +162,9 @@ function delayedWriteFactory(outcome: DelayedWriteOutcome): {
   state: DelayedWriteState;
   recoveryStarted: Promise<void>;
   releaseRecovery: () => void;
+  acknowledge: () => void;
 } {
+  let pendingAcknowledgement: (() => void) | null = null;
   let markRecoveryStarted: () => void = () => undefined;
   const recoveryStarted = new Promise<void>((resolve) => { markRecoveryStarted = resolve; });
   let resumeRecovery: () => void = () => undefined;
@@ -270,10 +272,10 @@ function delayedWriteFactory(outcome: DelayedWriteOutcome): {
         },
       } as unknown as IDBTransaction;
       if (readwrite) {
-        setTimeout(() => {
+        pendingAcknowledgement = () => {
           state.lateAcknowledgements += 1;
           transaction.oncomplete?.call(transaction, new Event('complete'));
-        }, WRITE_TIMEOUT_MS * 3);
+        };
       } else {
         queueMicrotask(() => transaction.oncomplete?.call(transaction, new Event('complete')));
       }
@@ -285,6 +287,11 @@ function delayedWriteFactory(outcome: DelayedWriteOutcome): {
     state,
     recoveryStarted,
     releaseRecovery: resumeRecovery,
+    acknowledge: () => {
+      const pending = pendingAcknowledgement;
+      pendingAcknowledgement = null;
+      pending?.();
+    },
     factory: {
       open() {
         const request = {
@@ -380,6 +387,7 @@ function stalledFactory(calls: { transactions: number; reads: number }): IDBFact
 
 function readyEmptyCollectionsFactory(
   definitions: readonly LocalDataCollectionDefinition<string[]>[],
+  transactions: string[][] = [],
 ): IDBFactory {
   const manifests = new Map(definitions.map((definition) => [definition.id, {
     ...emptyWriteManifest(),
@@ -389,7 +397,8 @@ function readyEmptyCollectionsFactory(
   const database = {
     onversionchange: null,
     close() {},
-    transaction() {
+    transaction(stores: string | string[]) {
+      transactions.push(typeof stores === 'string' ? [stores] : [...stores]);
       let transaction: IDBTransaction;
       transaction = {
         error: null,
@@ -431,6 +440,30 @@ function readyEmptyCollectionsFactory(
     },
   } as unknown as IDBFactory;
 }
+
+test('multi-collection reads use one captured transaction and reject invalid selections', async () => {
+  const definitions = [WRITE_DEFINITION, SECOND_WRITE_DEFINITION];
+  const transactions: string[][] = [];
+  const provider = new BrowserLocalDataProvider({ indexedDB: readyEmptyCollectionsFactory(definitions, transactions), storage: NULL_STORAGE });
+  await provider.initialize(definitions);
+  transactions.length = 0;
+  const documents = await provider.readMany(definitions);
+  assert.deepEqual([...documents], definitions.map((definition) => [definition.id, []]));
+  assert.deepEqual(transactions, [['records', 'manifests']]);
+  (documents.get(WRITE_DEFINITION.id) as string[]).push('caller-only');
+  assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
+  const previousTransactions = transactions.length;
+  for (const selection of [[], [WRITE_DEFINITION, WRITE_DEFINITION], Array(17).fill(WRITE_DEFINITION), [{ ...WRITE_DEFINITION }], [null]]) {
+    await assert.rejects(provider.readMany(selection as readonly AnyLocalDataCollectionDefinition[]),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
+  }
+  assert.equal(transactions.length, previousTransactions);
+  const selection = [...definitions];
+  const reading = provider.readMany(selection);
+  selection.splice(0, selection.length, { ...WRITE_DEFINITION, id: 'unregistered' });
+  assert.deepEqual([...await reading], definitions.map((definition) => [definition.id, []]));
+  await provider.close();
+});
 
 test('bounds provider configuration and classifies only expected browser-local failures', () => {
   assert.equal(isExpectedBrowserLocalDataFailure(new BrowserLocalDataError('FIXTURE', 'fixture')), true);
@@ -708,7 +741,7 @@ test('confirms a durably applied write after its completion acknowledgement time
     assert.equal(harness.state.recoveryReadBeforeAcknowledgement, true);
     assert.deepEqual(await provider.read(WRITE_DEFINITION), ['saved']);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, WRITE_TIMEOUT_MS * 4));
+    harness.acknowledge();
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(harness.state.lateAcknowledgements, 1);
     assert.deepEqual(unhandled, []);
@@ -756,7 +789,7 @@ test('blocks a duplicate retry when timed-out write recovery cannot establish th
     assert.equal(harness.state.transactions, transactionsAfterUnknown);
     assert.deepEqual(await provider.read(WRITE_DEFINITION), ['saved']);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, WRITE_TIMEOUT_MS * 4));
+    harness.acknowledge();
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(harness.state.lateAcknowledgements, 1);
     assert.deepEqual(unhandled, []);

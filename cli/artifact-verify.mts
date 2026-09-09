@@ -36,6 +36,7 @@ import {
   decryptWorkspaceArchiveWithMetadata,
   inspectEncryptedWorkspaceArchive,
   isEncryptedWorkspaceArchive,
+  MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
 } from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
@@ -85,7 +86,7 @@ import {
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
 export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 3;
-export const MAX_OFFLINE_ARTIFACT_BYTES = MAX_DOMAIN_CONTROL_MANIFEST_BYTES;
+export const MAX_OFFLINE_ARTIFACT_BYTES = Math.max(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
 export class UnsupportedOfflineArtifactError extends TypeError {
@@ -241,10 +242,15 @@ function rejectUnsupportedCasePortabilityVersion(
 }
 
 function parseJson(raw: string): UnknownRecord {
-  return parseBoundedJsonObject(raw, {
+  const value = parseBoundedJsonObject(raw, {
     maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES,
     limits: boundedJsonLimitsForBytes(MAX_OFFLINE_ARTIFACT_BYTES),
   });
+  if (value.schema !== WORKSPACE_ARCHIVE_SCHEMA && !isEncryptedWorkspaceArchive(value)
+    && Buffer.byteLength(raw, 'utf8') > MAX_DOMAIN_CONTROL_MANIFEST_BYTES) {
+    throw new TypeError(`Non-workspace artefacts are limited to ${MAX_DOMAIN_CONTROL_MANIFEST_BYTES} bytes.`);
+  }
+  return value;
 }
 
 export function hasVerifiedArtifactStructure(report: OfflineArtifactVerificationReport): boolean {

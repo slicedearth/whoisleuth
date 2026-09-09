@@ -33,7 +33,7 @@ test('verifies and reviews a complete rich manifest above the former portable in
   const raw = `${JSON.stringify(manifest, null, 2)}\n`;
   const bytes = Buffer.byteLength(raw);
   assert.ok(bytes > 15 * 1024 * 1024 && bytes <= MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
-  assert.equal(MAX_OFFLINE_ARTIFACT_BYTES, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
+  assert.ok(MAX_OFFLINE_ARTIFACT_BYTES >= MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
   assert.deepEqual(verifyDomainControlManifest(JSON.parse(raw)), manifest);
   for (const entry of manifest.entries) {
     for (const field of ['nameservers', 'ds', 'mx', 'caa'] as const) assert.equal(entry[field].length, 64);

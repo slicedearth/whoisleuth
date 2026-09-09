@@ -1,5 +1,5 @@
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
-import { normalizeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { MAX_BULK_SESSION_STORE_BYTES, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 
 /** A settled, mail-bearing workload with per-row objects, arrays and sources. */
@@ -62,6 +62,22 @@ export function richSourceQualifiedBulkSessionStore(count = 2_000) {
       tls: { version: 1, profileVersion: 2, source: 'tls', status: 'partial', observedAt,
         complete: false, truncated: false, certificate: { fingerprintSha256: 'a'.repeat(64) } },
     });
+  }
+  return store;
+}
+
+export function bulkStoreAtCapacity() {
+  const store = normalizeBulkSessionStore(richBulkSessionStore());
+  let remaining = MAX_BULK_SESSION_STORE_BYTES - Buffer.byteLength(serializeBulkSessionStore(store));
+  for (const field of ['error', 'registrar', 'activity', 'pageTitle'] as const) {
+    for (const row of store.sessions[0]!.results) {
+      const added = Math.min(250 - (row[field]?.length ?? 0), remaining);
+      row[field] = `${row[field] ?? ''}${'x'.repeat(added)}`;
+      remaining -= added;
+    }
+  }
+  if (remaining !== 0 || Buffer.byteLength(serializeBulkSessionStore(store)) !== MAX_BULK_SESSION_STORE_BYTES) {
+    throw new Error('The Bulk fixture did not retain its exact capacity.');
   }
   return store;
 }
