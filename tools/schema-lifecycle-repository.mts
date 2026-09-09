@@ -32,7 +32,7 @@ import {
   MAX_SCHEMA_SOURCE_AST_DEPTH,
   MAX_SCHEMA_SOURCE_AST_NODES,
   MAX_SCHEMA_SOURCE_FILE_BYTES,
-  MAX_SCHEMA_SOURCE_FILES,
+  MAX_SCHEMA_SOURCE_DIRECTORY_ENTRIES,
   MAX_SCHEMA_SOURCE_TOTAL_BYTES,
   type SchemaSourceDiscovery,
 } from './schema-source-coverage.mts';
@@ -95,7 +95,7 @@ function snapshotLifecycleSources(value: unknown): readonly LifecycleSource[] {
   }
   const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
   const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : null;
-  if (!Number.isSafeInteger(length) || Number(length) < 1 || Number(length) > MAX_SCHEMA_SOURCE_FILES) {
+  if (!Number.isSafeInteger(length) || Number(length) < 1 || Number(length) > MAX_SCHEMA_SOURCE_DIRECTORY_ENTRIES) {
     throw new TypeError('Schema lifecycle sources must use a bounded ordinary source list.');
   }
   const ownKeys = Reflect.ownKeys(value);

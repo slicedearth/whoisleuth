@@ -45,7 +45,6 @@ export {
   MAX_SCHEMA_SOURCE_STATIC_EVALUATION_STEPS,
 } from './schema-source-parsers.mts';
 
-export const MAX_SCHEMA_SOURCE_FILES = 1_024;
 export const MAX_SCHEMA_SOURCE_TOTAL_BYTES = 32 * 1024 * 1024;
 export const MAX_SCHEMA_SOURCE_IDENTIFIERS = 512;
 export const MAX_SCHEMA_SOURCE_REFERENCES = 100_000;
@@ -276,9 +275,6 @@ async function collectFiles(
         throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_TOTAL_BYTES} aggregate bytes.`);
       }
       state.files.push(relative);
-      if (state.files.length > MAX_SCHEMA_SOURCE_FILES) {
-        throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_FILES} files.`);
-      }
     }
   };
   await visit(root, relativeRoot, 0);
@@ -445,9 +441,6 @@ export async function discoverSchemaSources(
     traversal.files.push(relativeFile);
   }
   const files = traversal.files.sort(ordinalCompare);
-  if (files.length > MAX_SCHEMA_SOURCE_FILES) {
-    throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_FILES} files.`);
-  }
 
   const occurrences: SourceOccurrence[] = [];
   const definitions: SourceDefinition[] = [];

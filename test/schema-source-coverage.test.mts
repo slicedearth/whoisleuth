@@ -347,7 +347,19 @@ describe('schema source coverage', () => {
     await assert.rejects(discoverSchemaSources(root), /valid UTF-8/iu);
   });
 
-  test('enforces file and traversal bounds before source accumulation', async (t) => {
+  test('discovers many small modules within aggregate traversal and byte admission', async (t) => {
+    const root = await fixtureRepository(t);
+    const names = Array.from({ length: 1_025 }, (_, index) => `part-${String(index).padStart(4, '0')}.mts`);
+    for (let offset = 0; offset < names.length; offset += 32) {
+      await Promise.all(names.slice(offset, offset + 32).map((name) => writeFile(path.join(root, 'lib', name), 'export {};\n')));
+    }
+    const found = await discoverSchemaSources(root);
+    assert.equal(found.files.length, names.length + 1);
+    assert.equal(found.totalBytes, (names.length + 1) * Buffer.byteLength('export {};\n'));
+    assert.ok(found.files.includes('lib/part-1024.mts'));
+  });
+
+  test('enforces byte and traversal bounds before source accumulation', async (t) => {
     const root = await fixtureRepository(t);
     await writeFile(path.join(root, 'lib', 'oversize.mts'), Buffer.alloc(POLICY_SOURCE_FILE_BYTES + 1, 0x20));
     await assert.rejects(discoverSchemaSources(root), /exceeds .* bytes/iu);
