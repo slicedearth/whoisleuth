@@ -167,6 +167,11 @@ These values express analyst intent. They do not prove the live state of a
 registry, account, DNS zone, certificate or service. Observed evidence,
 desired-state baselines and analyst attestations remain separate.
 
+Retained settings reviews include their target, collection context and the
+observation time and completeness of comparable DNS and registry sources.
+Report completion is not a source observation time. The history preserves
+equal-time records; missing context or ambiguous ordering remains unknown.
+
 Brand views can provide:
 
 - a cross-domain posture matrix over saved baselines and retained observations;

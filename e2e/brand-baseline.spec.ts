@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, requiredValue } from './helpers';
+import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -9,6 +9,7 @@ import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { PUBLIC_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
+import { brandPostureObservationContext, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -97,6 +98,7 @@ function postureFixture(domain: string, checkedAt = ISO) {
       detail: '',
       records: [`ns1.${domain}`],
       remediation: '',
+      sourceContext: { version: 1, source: 'dns_ns', observedAt: checkedAt, state: 'complete', omittedRecords: 0 },
     }],
     spfExpansion: {
       version: 1,
@@ -820,6 +822,142 @@ test('keeps completed posture results visible when retaining an observation cann
   await expect(page.getByText(/Brand Profiles could not be read/u)).toHaveCount(0);
 });
 
+test('equal-time posture captures retain both source records and remain unknown in portfolio views', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/domain-posture?*', async (route) => {
+    const report = postureFixture('stored.example');
+    report.checks[0]!.records = [`ns${++requestCount}.stored.example`];
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+  });
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), desiredPostureBaselines: [{ domain: 'stored.example', nameservers: ['ns1.stored.example'], updatedAt: ISO }] }]),
+    [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+  await openBrandWorkbench(page, 'posture');
+  const status = page.getByRole('status', { name: 'Brand Profile action status' });
+  for (let index = 0; index < 2; index += 1) {
+    await page.getByRole('button', { name: 'Review official domains' }).click();
+    await expect(status).toHaveText('Reviewed 1/1 official domain.');
+    await page.getByRole('button', { name: 'Retain this observation' }).click();
+    await expect(status).toContainText(`Saved the ${ISO} settings observation`);
+  }
+  const saved = requiredValue((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0], 'The saved profile is missing.').value;
+  const baseline = requiredValue(saved.desiredPostureBaselines[0], 'The saved baseline is missing.');
+  const history = requiredValue(baseline.observationHistory, 'The saved observation history is missing.');
+  expect(baseline.previousObservation).toBeNull();
+  expect(history).toHaveLength(2);
+  expect(history.map((value) => value.checks[0]?.records[0]).sort()).toEqual(['ns1.stored.example', 'ns2.stored.example']);
+  const first = requiredValue(history[0], 'The first retained observation is missing.');
+  expect(first.context).toMatchObject({ version: 1, domain: 'stored.example', profileId: 'profile-1' });
+  expect(requiredValue(first.checks[0], 'The retained check is missing.').sourceContext).toEqual({ version: 1, source: 'dns_ns', observedAt: ISO, state: 'complete', omittedRecords: 0 });
+  await openBrandWorkbench(page, 'portfolio');
+  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  await expect(matrix.locator('tbody tr')).toContainText('Unknown');
+  const records = matrix.locator('[id="retained-posture-observation-stored.example"]');
+  expect(await records.locator(':scope > summary').evaluate((element) => getComputedStyle(element).display)).toBe('list-item');
+  await records.locator(':scope > summary').focus();
+  await records.locator(':scope > summary').press('Enter');
+  await expect(records).toContainText('Distinct observations share the latest capture time');
+  await expect(records.locator('summary').filter({ hasText: /^Capture / })).toHaveCount(2);
+  for (const summary of await records.locator('summary').filter({ hasText: /^Capture / }).all()) { await summary.focus(); await summary.press('Enter'); }
+  await expect(records.locator('pre').filter({ hasText: /^ns1\.stored\.example$/ })).toBeVisible();
+  await expect(records.locator('pre').filter({ hasText: /^ns2\.stored\.example$/ })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  expect(requestCount).toBe(2);
+});
+
+test('legacy posture records remain readable without claiming current alignment', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/domain-posture**', (route) => { requests += 1; return route.abort(); });
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), desiredPostureBaselines: [{
+      domain: 'stored.example', nameservers: ['ns1.stored.example'], updatedAt: ISO,
+      previousObservation: { observedAt: ISO, checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'] }] },
+    }] }]), [ACTIVE_KEY]: 'profile-1',
+  }, { destination: '/brands' });
+  await openBrandWorkbench(page, 'portfolio');
+  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  await expect(matrix.locator('tbody tr')).toContainText('Unknown');
+  await expect(matrix.locator('tbody tr')).not.toContainText('Aligned');
+  const retained = matrix.locator('[id="retained-posture-observation-stored.example"]');
+  await retained.locator(':scope > summary').click();
+  await retained.locator('summary').filter({ hasText: /^Capture / }).click();
+  await expect(retained).toContainText('Target and collection context were not retained');
+  await expect(retained.getByText('ns1.stored.example', { exact: true })).toBeVisible();
+  expect(requests).toBe(0);
+  await page.goto('/monitor?view=inbox');
+  const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
+  await expect(inbox).toContainText('observed at an unknown time');
+  await inbox.getByText('Advanced filters', { exact: true }).click();
+  await inbox.getByRole('combobox', { name: 'Age', exact: true }).selectOption('unknown');
+  const item = inbox.locator('.items > li');
+  await expect(item).toHaveCount(1);
+  await item.locator('summary', { hasText: 'Review state:' }).click();
+  await expect(item.getByRole('option', { name: 'Resolved', exact: true })).toHaveJSProperty('disabled', true);
+  await page.setViewportSize({ width: 320, height: 700 });
+  const filter = inbox.getByRole('combobox', { name: 'Age', exact: true });
+  await expect(filter).toBeVisible();
+  const widths = await inbox.locator('.detail-filters').evaluate((element) => {
+    const controls = [...element.querySelectorAll('select')];
+    return controls.map((control) => ({ width: control.getBoundingClientRect().width, parentWidth: element.clientWidth, height: control.getBoundingClientRect().height }));
+  });
+  expect(widths.length).toBeGreaterThan(0);
+  for (const control of widths) { expect(control.width).toBeGreaterThan(control.parentWidth * 0.8); expect(control.height).toBeGreaterThanOrEqual(44); }
+  for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 800 });
+    const form = item.locator('.lifecycle-controls');
+    await expect(form).toBeVisible();
+    const geometry = await form.evaluate((element) => ({
+      width: element.clientWidth, scrollWidth: element.scrollWidth,
+      controls: [...element.querySelectorAll('input,select,textarea,button')].map((control) => ({
+        width: control.getBoundingClientRect().width, height: control.getBoundingClientRect().height,
+      })),
+    }));
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
+    expect(geometry.controls.length).toBe(5);
+    for (const control of geometry.controls) {
+      expect(control.width).toBeGreaterThanOrEqual(Math.min(200, geometry.width));
+      if (width <= 640) expect(control.height).toBeGreaterThanOrEqual(44);
+    }
+    const cardBounds = requiredValue(await inbox.boundingBox(), 'Review inbox geometry is missing.');
+    const itemBounds = requiredValue(await item.boundingBox(), 'Review Item geometry is missing.');
+    expect(itemBounds.x + itemBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
+    await expectNoHorizontalOverflow(page);
+  }
+  expect(requests).toBe(0);
+});
+
+test('posture disclosures retain native markers and wrap every admitted source record', async ({ page }) => {
+  const report = postureFixture('stored.example');
+  const records = Array.from({ length: 64 }, (_, index) => `ns-${index}.${'d'.repeat(50)}.example.test`);
+  report.checks[0]!.records = records;
+  let requests = 0;
+  await page.route('**/api/domain-posture?*', (route) => { requests += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) }); });
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' }, { destination: '/brands' });
+  await openBrandWorkbench(page, 'posture');
+  await page.getByRole('button', { name: 'Review official domains' }).click();
+  const check = page.locator('.checks > details');
+  await expect(check).toHaveCount(1);
+  const summary = check.locator(':scope > summary');
+  await summary.focus(); await summary.press('Enter');
+  await expect(summary).toBeFocused();
+  const source = check.locator('pre');
+  await expect(source).toHaveText(records.join('\n'));
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(source).toBeVisible();
+      const marker = await summary.evaluate((element) => ({ display: getComputedStyle(element).display, type: getComputedStyle(element).listStyleType }));
+      expect(marker.display).toBe('list-item'); expect(marker.type).not.toBe('none');
+      expect(await source.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      await expectNoHorizontalOverflow(page);
+    }
+  }
+  expect(requests).toBe(1);
+});
+
 test('official-site baseline controls fit a narrow mobile viewport without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await cleanBrandStorage(page);
@@ -858,7 +996,8 @@ test('cross-domain posture matrix links exact retained baselines and observation
         ds: ['12345 13 2 abcdef'],
         observationHistory: [{
           observedAt: '2026-07-12T00:00:00.000Z',
-          checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'] }],
+          context: brandPostureObservationContext(requiredValue(normalizeBrandProfile({ ...profileFixture(), officialDomains: ['stored.example', 'unavailable.example', 'unset.example'] }), 'The profile fixture is invalid.'), 'stored.example'),
+          checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'], sourceContext: { version: 1, source: 'dns_ns', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } }],
         }],
         updatedAt: ISO,
       }, {

@@ -149,7 +149,7 @@
       <label>Age
         <select bind:value={ageFilter} onchange={() => { page = 1; }}>
           <option value="">Any age</option>
-          <option value="current">Current</option><option value="aging">Aging</option><option value="stale">Stale</option>
+          <option value="current">Current</option><option value="aging">Aging</option><option value="stale">Stale</option><option value="unknown">Age unknown</option>
         </select>
       </label>
       <label>Case
@@ -198,7 +198,7 @@
             </div>
             <h3>{item.title}</h3>
             <p>{item.detail}</p>
-            <small>{item.source} · observed {formatDate(item.observedAt)}</small>
+            <small>{item.source} · observed {formatDate(item.observedAt) || 'at an unknown time'}</small>
             <small>{item.rankingReason}</small>
             {#if onreview}<ReviewLifecycleControls {item} lifecycle={lifecycleFor(item)} {onreview} />{/if}
           </div>
@@ -276,7 +276,7 @@
   .filters button.active{border-color:rgb(var(--interface-accent-rgb) / .55);background:rgb(var(--interface-accent-rgb) / .08);color:var(--interface-accent)}
   .filters span{padding:1px 6px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   .advanced-filters{margin:-8px 0 18px}.advanced-filters>summary{width:max-content;cursor:pointer;color:var(--muted);font:650 var(--text-xs) var(--mono)}
-  .detail-filters{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));align-items:end;gap:8px;margin-top:12px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .detail-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));align-items:end;gap:8px;margin-top:12px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .detail-filters label{display:grid;gap:5px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .detail-filters select,.detail-filters input,.detail-filters .reset{min-width:0;min-height:36px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:650 var(--text-xs) var(--mono)}
   .detail-filters select,.detail-filters input{width:100%;padding:0 9px}
@@ -284,10 +284,10 @@
   .detail-filters select:focus-visible,.detail-filters input:focus-visible,.detail-filters .reset:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .admission-warning{display:grid;gap:7px;margin-top:14px}.admission-warning .warning{margin:0}.admission-warning details{font-size:var(--text-xs)}.admission-warning summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}.admission-warning ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.admission-warning li{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.admission-warning li span:first-child{color:var(--text);text-transform:capitalize}
   .items{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-  .items li{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .items li{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .items li.high{border-left-color:var(--amber)}
   .items li.urgent{border-left-color:var(--danger)}
-  .item-main{min-width:0}
+  .item-main{flex:1;min-width:0}
   .item-meta{display:flex;flex-wrap:wrap;gap:6px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .item-meta span{padding:2px 6px;border:1px solid var(--border);border-radius:99px}
   .item-meta .overdue{border-color:rgb(var(--danger-rgb) / .55);color:var(--danger)}
@@ -305,6 +305,5 @@
   .warning{color:var(--amber)}
   .limitations{margin:18px 0 0;padding-left:20px}
   @media(max-width:640px){.filters button,.detail-filters select,.detail-filters input,.detail-filters .reset,.item-actions select,.dismiss{min-height:44px}}
-  @media(max-width:1000px){.detail-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  @media(max-width:640px){.items li{display:grid}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}.detail-filters{grid-template-columns:1fr 1fr}.detail-filters label:nth-child(3),.detail-filters .reset{grid-column:1 / -1}}
+  @media(max-width:640px){.items li{display:grid}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
 </style>

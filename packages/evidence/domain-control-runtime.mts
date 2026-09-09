@@ -5,6 +5,7 @@ import {
 } from './artifact-integrity.mts';
 import { normalizeDomain } from './domain-name.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
+import { MAX_POSTURE_CHECK_RECORDS } from './domain-posture-context.mts';
 import {
   DOMAIN_CONTROL_CAA_RECORD_KEYS,
   DOMAIN_CONTROL_DIGEST_SHA256_HEX_LENGTH,
@@ -402,6 +403,23 @@ export function canonicalDomainControlRecordList(value: unknown, kind: DomainCon
   return [...new Set(retained)]
     .sort(compareCodeUnits)
     .slice(0, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS);
+}
+
+/** Complete field values for posture review; an invalid value never becomes an absent record. */
+export function canonicalPostureRecords(checkId: string, values: readonly unknown[]): string[] | null {
+  if (values.length > MAX_POSTURE_CHECK_RECORDS) return null;
+  const normalise = checkId === 'nameservers' ? domainControlName
+    : checkId === 'mx' ? canonicalMxRecord : checkId === 'caa' ? canonicalCaaRecord
+      : checkId === 'registration_lock'
+        ? (value: unknown) => typeof value === 'string' && value.length <= 120 && !/[\u0000-\u001f\u007f]/u.test(value)
+          ? value.trim().toLowerCase().replace(/[\s_-]+/gu, '') : ''
+        : null;
+  if (!normalise) return null;
+  try {
+    const records = values.map(normalise);
+    if (records.some((value) => !value)) return null;
+    return [...new Set(records)].sort(compareCodeUnits);
+  } catch { return null; }
 }
 
 class DomainControlJsonBudgetError extends Error {}

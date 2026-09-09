@@ -1,13 +1,15 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
-  type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
+  import { buildOwnedDomainPostureReview, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { desiredPostureObservations } from '$lib/analysis/brand-profile-model.ts';
+  import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
+  import PostureObservationHistory from './PostureObservationHistory.svelte';
   let { active, disabledReason, auditing, results, audit, retainObservation }: {
     active: BrandProfile;
     disabledReason: string;
     auditing: boolean;
-    results: AuditResult[];
+    results: DomainPostureAuditResult[];
     audit: () => void | Promise<void>;
     retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
@@ -33,8 +35,7 @@
           {#if item.error}
             <p class="error">{item.error}</p>
           {:else if item.report}
-            {@const review = buildOwnedDomainPostureReview(active, item.report)}
-            {@const retainedHistory = buildDesiredPostureHistory(review.baseline?.observationHistory || (review.baseline?.previousObservation ? [review.baseline.previousObservation] : []))}
+            {@const review = buildOwnedDomainPostureReview(active, item.report, new Date().toISOString(), item.context)}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
             <section class="desired-state" aria-label={`Expected settings for ${item.domain}`}>
               <header>
@@ -77,17 +78,15 @@
                     <summary>Changes since retained observation <strong>{review.previousChanges.filter((entry) => entry.state === 'changed').length}</strong></summary>
                     <ul>
                       {#each review.previousChanges as change}
-                        <li><code>{change.checkId}</code> · {change.state}</li>
+                        <li><code>{change.checkId}</code> · {change.state}{#if change.limitation} — {change.limitation}{/if}</li>
                       {/each}
                     </ul>
                   </details>
                 {/if}
-                {#if review.baseline.observationHistory?.length}
-                  <details class="history">
-                    <summary>Domain control history <strong>{review.baseline.observationHistory.length} retained</strong></summary>
-                    {#if retainedHistory.length}
-                      <ol>{#each [...retainedHistory].reverse() as transition}<li><span>{transition.previousObservedAt} → {transition.observedAt}</span><strong>{transition.changedChecks.length ? `${transition.changedChecks.length} changed` : 'unchanged'}</strong>{#if transition.changedChecks.length}<small>{transition.changedChecks.join(' · ')}</small>{/if}</li>{/each}</ol>
-                    {:else}<p>Save another completed review to compare source-attributed settings over time.</p>{/if}
+                {#if desiredPostureObservations(review.baseline).length}
+                  <details>
+                    <summary>Domain control history <strong>{desiredPostureObservations(review.baseline).length} retained</strong></summary>
+                    <PostureObservationHistory baseline={review.baseline} />
                   </details>
                 {/if}
                 <p class="limitation">Saving an observation is explicit and local. Incomplete evidence remains unknown and does not replace expected settings.</p>
@@ -101,6 +100,7 @@
                   <summary><span>{check.label}</span><strong>{check.status}</strong></summary>
                   <p>{check.summary}</p>
                   {#if check.detail}<p>{check.detail}</p>{/if}
+                  {#if check.sourceContext}<p>{POSTURE_SOURCE_LABELS[check.sourceContext.source]} · observed {check.sourceContext.observedAt || 'at an unknown time'} · {check.sourceContext.state}{#if check.sourceContext.omittedRecords !== 0} · {check.sourceContext.omittedRecords === null ? 'omissions unknown' : `${check.sourceContext.omittedRecords} records omitted`}{/if}</p>{/if}
                   {#if check.remediation}<p><b>Next:</b> {check.remediation}</p>{/if}
                   {#if check.records.length}<pre>{check.records.join('\n')}</pre>{/if}
                 </details>
@@ -179,12 +179,12 @@
   .checks{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
   .checks details{min-width:0;padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--radius-sm)}
   .checks details.danger{border-left-color:var(--danger)}.checks details.warning{border-left-color:var(--amber)}.checks details.pass{border-left-color:var(--accent2)}
-  .checks summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:var(--text-xs)}
-  .checks summary strong{text-transform:capitalize}.checks details.danger summary strong{color:var(--danger)}.checks details.warning summary strong{color:var(--amber)}.checks details.pass summary strong{color:var(--accent2)}
-  .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.checks pre{overflow:auto;font-size:var(--text-2xs)}
+  .checks summary{display:list-item;cursor:pointer;font-size:var(--text-xs);overflow-wrap:anywhere}
+  .checks summary strong{float:inline-end;margin-inline-start:10px;white-space:nowrap;text-transform:capitalize}.checks details.danger summary strong{color:var(--danger)}.checks details.warning summary strong{color:var(--amber)}.checks details.pass summary strong{color:var(--accent2)}
+  .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.checks pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-2xs)}
   .analysis{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .analysis>summary{display:flex;justify-content:space-between;gap:12px;cursor:pointer;font-size:var(--text-xs);font-weight:700}
-  .analysis>summary strong{color:var(--accent2);text-transform:capitalize}
+  .analysis>summary{display:list-item;cursor:pointer;font-size:var(--text-xs);font-weight:700;overflow-wrap:anywhere}
+  .analysis>summary strong{float:inline-end;margin-inline-start:12px;color:var(--accent2);text-transform:capitalize}
   .analysis p,.analysis li,.analysis table{font-size:var(--text-xs);line-height:1.5}
   .analysis p,.analysis li{color:var(--muted)}
   .analysis ul{padding-left:20px}
@@ -207,7 +207,6 @@
   .baseline-review>header>div{display:grid;gap:2px}.baseline-review>header span{color:var(--muted);font-size:var(--text-2xs)}
   .baseline-review>p,.baseline-review li{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .baseline-review details{font-size:var(--text-xs)}.baseline-review ul{margin-bottom:0;padding-left:20px}
-  .history ol{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}.history li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.history span,.history small{color:var(--muted);overflow-wrap:anywhere}.history small{grid-column:1/-1}
   .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}

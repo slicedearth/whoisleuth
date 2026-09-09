@@ -108,42 +108,35 @@ type DeferredInteractionSampleSet = Readonly<{
 // second ends only when that prepared workspace and its controls are visible.
 // Bulk Analysis likewise owns a separate transition/preload row before the
 // cohort-outlier disclosure is measured. Each phase keeps its own observations.
-// Retain the reviewed asset and layout bounds: transfer adds 20% and rounds up
-// to 1 KiB; layout adds 50% and rounds up to 0.005 with a 0.01 floor. A prepared
-// interaction still requires zero transfer. Elapsed-time observations are not
-// inputs to these bounds and are not promoted into universal timing limits.
-const INTERACTION_RESOURCE_BASELINE = Object.freeze({
-  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, layoutShiftScore: 0 }),
-  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, layoutShiftScore: 0 }),
-  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, layoutShiftScore: 0 }),
-  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, layoutShiftScore: 0 }),
-  bulk_analysis_transition: Object.freeze({ assetEncodedTransferBytes: 60_308, layoutShiftScore: 0 }),
-  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, layoutShiftScore: 0 }),
-  case_response_preparation: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+// These are transfer ceilings, not historical measurements. Prepared
+// interactions require zero new assets; the portfolio ceiling includes its
+// source-qualified retained-history view. Each run reports actual transfer,
+// timing and layout separately. Elapsed time is not an acceptance threshold.
+const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Object.freeze({
+  cli_command_detail: 0,
+  cli_catalogue_filter: 0,
+  examples_large_output: 15 * 1024,
+  demo_later_stage: 10 * 1024,
+  monitor_relationships_view: 113 * 1024,
+  brands_portfolio_workbench: 32 * 1024,
+  bulk_analysis_transition: 71 * 1024,
+  bulk_cohort_outliers: 0,
+  lookup_dns_evidence: 83 * 1024,
+  case_response_preparation: 0,
+  case_response_packet: 0,
+  dashboard_command_palette: 0,
 });
 
-function roundUp(value: number, quantum: number): number {
-  return Math.ceil(value / quantum) * quantum;
-}
-
 function interactionBudget(interaction: InteractionId): InteractionBudget {
-  const observed = INTERACTION_RESOURCE_BASELINE[interaction];
   return Object.freeze({
-    assetEncodedTransferBytes: observed.assetEncodedTransferBytes === 0
-      ? 0
-      : roundUp(observed.assetEncodedTransferBytes * 1.2, 1024),
-    layoutShiftScore: Math.max(0.01, roundUp(observed.layoutShiftScore * 1.5, 0.005)),
+    assetEncodedTransferBytes: INTERACTION_TRANSFER_LIMITS[interaction],
+    layoutShiftScore: 0.01,
     residualLayoutShiftScore: 0.01,
   });
 }
 
 const INTERACTION_BUDGETS: Readonly<Record<InteractionId, InteractionBudget>> = Object.freeze(
-  Object.fromEntries(Object.keys(INTERACTION_RESOURCE_BASELINE).map((interaction) => (
+  Object.fromEntries(Object.keys(INTERACTION_TRANSFER_LIMITS).map((interaction) => (
     [interaction, interactionBudget(interaction as InteractionId)]
   ))) as Record<InteractionId, InteractionBudget>,
 );

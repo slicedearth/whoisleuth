@@ -16,7 +16,8 @@
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
-  import { buildDesiredPostureObservation } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
+  import { buildDesiredPostureObservation, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
   import {
@@ -32,7 +33,6 @@
   const moduleController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
   onDestroy(() => moduleController.abort());
-  type AuditResult={domain:string;report:DomainPostureHttpResponse|null;error:string};
   type BrandsView='overview'|'assets';
   type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
   type ProfilePersistenceResult={committed:true}|{committed:false;message:string};
@@ -172,7 +172,7 @@
     const completedAudit=options.preserveCompletedAudit?captureCompletedAudit():null;
     cancelAudit();
     let profile:BrandProfile;
-    const expectedUpdatedAt=editing===profileId?editingRevision:null;
+    const expectedUpdatedAt=options.expectedUpdatedAt??(editing===profileId?editingRevision:null);
     try{profile=await updateProfileFields(profileId,patch,expectedUpdatedAt);if(editing===profileId)editingRevision=profile.updatedAt;}
     catch(cause){
       if(!isBrandProfileMutationCommittedError(cause)||cause.operation!=='save'||!cause.profile){restoreCompletedAudit(completedAudit);throw cause;}
@@ -241,9 +241,26 @@
   async function persistBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{if(!active)return{committed:false,message:'No active Brand Profile is available.'};try{const result=await commitProfileFieldWrite(active.id,{desiredPostureBaselines},{preserveCompletedAudit:true});message=result.issue?`Saved expected domain settings. ${committedIssueText(result.issue)}`:'Saved expected domain settings.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save expected domain settings.');message=failure;return{committed:false,message:failure};}}
   async function saveBaselines(desiredPostureBaselines:DesiredPostureBaseline[]):Promise<ProfilePersistenceResult>{return persistBaselines(desiredPostureBaselines);}
   async function savePassportProfile(profile:BrandProfile,expectedUpdatedAt:string):Promise<ProfilePersistenceResult>{try{const result=await commitProfileWrite(profile,profile.id,{expectedUpdatedAt});message=result.issue?`Imported and saved the selected domain-control passport fields. ${committedIssueText(result.issue)}`:'Imported the selected domain-control passport fields.';return{committed:true};}catch(cause){const failure=profileWriteFailureMessage(cause,'Could not save imported domain-control fields.');message=failure;return{committed:false,message:failure};}}
-  async function retainObservation(report:DomainPostureHttpResponse){if(!active)return;const baseline=active.desiredPostureBaselines.find((item)=>item.domain===report.domain);if(!baseline){message='Configure expected domain settings before retaining an observation.';return;}const observation=buildDesiredPostureObservation(report);const history=[...(baseline.observationHistory||(baseline.previousObservation?[baseline.previousObservation]:[])).filter((item)=>item.observedAt!==observation.observedAt),observation].sort((left,right)=>Date.parse(left.observedAt)-Date.parse(right.observedAt)).slice(-12);const saved=await persistBaselines(active.desiredPostureBaselines.map((item)=>item.domain===report.domain?{...item,previousObservation:observation,observationHistory:history,updatedAt:new Date().toISOString()}:item));if(saved.committed&&profileSourceState==='ready'&&activePreferenceSourceState==='ready')message=`Saved the ${report.checkedAt} settings observation for ${report.domain}.`;}
+  async function retainObservation(report:DomainPostureHttpResponse){
+    const owner=active;
+    if(!owner)return;
+    const context=auditResults.find((item)=>item.report===report)?.context;
+    if(!context||context.profileId!==owner.id||context.domain!==report.domain||context.profileFingerprint!==auditProfileFingerprint(owner)){
+      message='This observation no longer matches the active profile and collection settings. Run a new review before retaining it.';return;
+    }
+    const baseline=owner.desiredPostureBaselines.find((item)=>item.domain===report.domain);
+    if(!baseline){message='Configure expected domain settings before retaining an observation.';return;}
+    const observation=buildDesiredPostureObservation(report,context);
+    const history=normalizeDesiredPostureObservationHistory([...desiredPostureObservations(baseline),observation],null);
+    const previousObservation=currentDesiredPostureObservation({observationHistory:history,previousObservation:null}).observation;
+    const desiredPostureBaselines=owner.desiredPostureBaselines.map((item)=>item.domain===report.domain?{...item,previousObservation,observationHistory:history,updatedAt:new Date().toISOString()}:item);
+    try{
+      const result=await commitProfileFieldWrite(owner.id,{desiredPostureBaselines},{preserveCompletedAudit:true,expectedUpdatedAt:owner.updatedAt});
+      message=`Saved the ${report.checkedAt} settings observation for ${report.domain}.${result.issue?` ${committedIssueText(result.issue,'observation write')}`:''}`;
+    }catch(cause){message=profileWriteFailureMessage(cause,'Could not save the settings observation.');}
+  }
   function cancelAudit(){auditGeneration+=1;auditController?.abort();auditController=null;auditing=false;auditResults=[];}
-  function auditProfileFingerprint(profile:BrandProfile){const normalized=normalizeProfile(profile);return JSON.stringify([normalized.id,normalized.officialDomains,normalized.mailProtectionProfile,normalized.dkimSelectors,normalized.retiredDkimSelectors]);}
+  function auditProfileFingerprint(profile:BrandProfile){return brandPostureCollectionFingerprint(profile);}
   function activate(id:string){cancelAudit();try{setActiveProfile(id);activeId=id;activePreferenceSourceState='ready';const profile=profiles.find(item=>item.id===id);message=profile?`Set "${profile.name}" active.`:'Set the selected Brand Profile active.';return true;}catch(cause){closeActivePreferenceSource();message=cause instanceof BrowserLocalDataError?'Could not set the active profile. The active-profile preference is unavailable; reload to retry.':cause instanceof Error?cause.message:'Could not set the active profile.';return false;}}
   async function captureSiteIdentity(){if(siteIdentityDisabled){message=siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.';return;}const domain=parseList(official,true)[0];if(!domain){message='Enter an official domain first.';return;}cancelIdentityCapture();const generation=identityCaptureGeneration;const editingSnapshot=editing;const controller=new AbortController();identityCaptureController=controller;const ownsRequest=()=>generation===identityCaptureGeneration&&identityCaptureController===controller;const canPublish=()=>ownsRequest()&&showForm&&editing===editingSnapshot&&(parseList(official,true)[0]||'')===domain;capturingIdentity=true;message='Capturing official-site identity…';try{const{response,body:raw}=await requestJsonCapped(`/api/availability?q=${encodeURIComponent(domain)}`,{cache:'no-store',signal:controller.signal},{maximumBytes:LARGE_JSON_RESPONSE_BYTES,timeoutMs:40_000});if(!canPublish())return;if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Official-site capture failed'));const parsed=parseAvailabilityCaptureResponse(raw,domain);if(!parsed.ok)throw new Error(parsed.error);const body=parsed.value;const captured=createPageBaseline(domain,body);if(!captured){message=`No page fingerprint baseline was available for ${domain}.${pageBaseline?' The existing baseline is unchanged.':''}`;return;}faviconHash=captured.faviconHash||'';faviconPHash=captured.faviconPHash||'';pageBaseline=captured;message=`Captured a ${captured.complete?'complete':'partial'} page baseline for ${domain}. Save the profile to retain it.`;}catch(cause){if(!canPublish()||controller.signal.aborted)return;message=cause instanceof Error?cause.message:'Official-site capture failed';}finally{if(ownsRequest()){identityCaptureController=null;capturingIdentity=false;}}}
   function baselineDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown time':date.toLocaleString('en-AU');}
@@ -264,7 +281,25 @@
     message=`Reviewing ${domains.length} official domain${domains.length===1?'':'s'}…`;
     let cursor=0;
     const next:AuditResult[]=new Array(domains.length);
-    const worker=async()=>{while(cursor<domains.length&&!controller.signal.aborted){const index=cursor++,domain=domains[index];if(domain===undefined)break;try{const params=new URLSearchParams({q:domain,mailProfile:profileSnapshot.mailProtectionProfile});if(profileSnapshot.dkimSelectors.length)params.set('selectors',profileSnapshot.dkimSelectors.join(','));if(profileSnapshot.retiredDkimSelectors.length)params.set('retiredSelectors',profileSnapshot.retiredDkimSelectors.join(','));const{response,body:raw}=await requestJsonCapped(`/api/domain-posture?${params}`,{cache:'no-store',signal:controller.signal},{maximumBytes:STANDARD_JSON_RESPONSE_BYTES,timeoutMs:40_000});if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Review failed'));const parsed=parseDomainPostureHttpResponse(raw,domain);if(!parsed.ok)throw new Error(parsed.error);next[index]={domain,report:parsed.value,error:''};}catch(cause){if(controller.signal.aborted)return;next[index]={domain,report:null,error:cause instanceof Error?cause.message:'Review failed'};}}};
+    const worker=async()=>{
+      while(cursor<domains.length&&!controller.signal.aborted){
+        const index=cursor++,domain=domains[index];
+        if(domain===undefined)break;
+        try{
+          const params=new URLSearchParams({q:domain,mailProfile:profileSnapshot.mailProtectionProfile});
+          if(profileSnapshot.dkimSelectors.length)params.set('selectors',profileSnapshot.dkimSelectors.join(','));
+          if(profileSnapshot.retiredDkimSelectors.length)params.set('retiredSelectors',profileSnapshot.retiredDkimSelectors.join(','));
+          const{response,body:raw}=await requestJsonCapped(`/api/domain-posture?${params}`,{cache:'no-store',signal:controller.signal},{maximumBytes:STANDARD_JSON_RESPONSE_BYTES,timeoutMs:40_000});
+          if(!response.ok)throw new Error(clientHttpErrorMessage(raw,response.status,'Review failed'));
+          const parsed=parseDomainPostureHttpResponse(raw,domain);
+          if(!parsed.ok)throw new Error(parsed.error);
+          next[index]={domain,report:parsed.value,error:'',context:brandPostureObservationContext(profileSnapshot,domain)};
+        }catch(cause){
+          if(controller.signal.aborted)return;
+          next[index]={domain,report:null,error:cause instanceof Error?cause.message:'Review failed'};
+        }
+      }
+    };
     try{
       await Promise.all(Array.from({length:Math.min(3,domains.length)},worker));
       if(!canPublish())return;

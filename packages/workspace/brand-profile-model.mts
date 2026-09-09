@@ -4,6 +4,9 @@
 
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { latestObservationCohort } from '../evidence/latest-observations.mts';
+import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, normalizeDomainPostureProfileContext, type DomainPostureProfileContext, type DomainPostureSourceContext } from '../evidence/domain-posture-context.mts';
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
 import type { PageBaseline } from './page-baseline.mts';
@@ -115,11 +118,14 @@ export type DesiredPostureSuppression = {
 };
 export type DesiredPostureObservation = {
   observedAt: string;
+  context?: DomainPostureProfileContext;
   checks: Array<{
     id: string;
     status: 'danger' | 'info' | 'pass' | 'warning';
     records: string[];
+    sourceContext?: DomainPostureSourceContext;
   }>;
+  omittedChecks?: number;
 };
 export type DesiredPostureChangeWindow = {
   id: string;
@@ -349,8 +355,9 @@ function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unk
 
 function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObservation | null {
   const candidate = record(value);
-  const observedAt = timestamp(candidate.observedAt, null);
-  if (!observedAt || !Array.isArray(candidate.checks)) return null;
+  const observedAt = normalizeExplicitIsoTimestamp(candidate.observedAt) ?? '';
+  if (!Array.isArray(candidate.checks)) return null;
+  const context = normalizeDomainPostureProfileContext(candidate.context);
   const checks: DesiredPostureObservation['checks'] = [];
   const seen = new Set<string>();
   for (const item of candidate.checks.slice(0, 64)) {
@@ -363,29 +370,79 @@ function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObser
       || !POSTURE_CHECK_STATUSES.has(check.status)
     ) continue;
     seen.add(id);
+    if (check.sourceContext !== undefined && !Array.isArray(check.records)) throw new TypeError('Source-qualified posture records must be an array.');
+    const inputRecords = Array.isArray(check.records) ? check.records : [];
+    const records: string[] = [];
+    for (const item of inputRecords.slice(0, MAX_POSTURE_CHECK_RECORDS)) {
+      if (typeof item === 'string' && item.length <= MAX_POSTURE_RECORD_LENGTH && !CONTROL_RE.test(item)) records.push(item);
+    }
+    const omitted = Math.max(0, inputRecords.length - records.length);
+    const source = normalizeDomainPostureSourceContext(check.sourceContext);
+    const sourceContext = source && omitted ? {
+      ...source,
+      state: source.state === 'unavailable' ? 'unavailable' as const : 'partial' as const,
+      omittedRecords: source.omittedRecords === null ? null : Math.min(Number.MAX_SAFE_INTEGER, source.omittedRecords + omitted),
+    } : source;
     checks.push({
       id,
       status: check.status as DesiredPostureObservation['checks'][number]['status'],
-      records: normalizeDesiredPostureRecords(check.records),
+      records,
+      ...(sourceContext ? { sourceContext } : {}),
     });
-    if (checks.length >= 32) break;
+    if (checks.length >= MAX_POSTURE_CHECKS) break;
   }
-  return checks.length ? { observedAt, checks } : null;
+  const omittedChecks = Math.max(0, candidate.checks.length - checks.length)
+    + (Number.isSafeInteger(candidate.omittedChecks) && Number(candidate.omittedChecks) > 0 ? Number(candidate.omittedChecks) : 0);
+  return checks.length ? { observedAt, ...(context ? { context } : {}), checks, ...(omittedChecks ? { omittedChecks: Math.min(Number.MAX_SAFE_INTEGER, omittedChecks) } : {}) } : null;
 }
 
-function normalizeDesiredPostureObservationHistory(
+export function normalizeDesiredPostureObservationHistory(
   value: unknown,
   previous: DesiredPostureObservation | null,
 ): DesiredPostureObservation[] {
   const candidates = Array.isArray(value) ? value : previous ? [previous] : [];
-  const byTime = new Map<string, DesiredPostureObservation>();
+  const byIdentity = new Map<string, DesiredPostureObservation>();
   for (const item of candidates.slice(0, MAX_DESIRED_POSTURE_OBSERVATIONS * 4)) {
     const normalized = normalizeDesiredPostureObservation(item);
-    if (normalized) byTime.set(normalized.observedAt, normalized);
+    if (normalized) byIdentity.set(desiredPostureObservationIdentity(normalized), normalized);
   }
-  return [...byTime.values()]
-    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt))
-    .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
+  return [...byIdentity.entries()]
+    .sort(([a, left], [b, right]) => (left.observedAt === right.observedAt ? 0
+      : !left.observedAt ? 1 : !right.observedAt ? -1 : Date.parse(left.observedAt) - Date.parse(right.observedAt))
+      || (a < b ? -1 : a > b ? 1 : 0))
+    .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS)
+    .map(([, observation]) => observation);
+}
+
+export function desiredPostureObservationIdentity(observation: DesiredPostureObservation): string {
+  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify(observation)));
+}
+
+export function desiredPostureObservations(baseline: Pick<DesiredPostureBaseline, 'observationHistory' | 'previousObservation'>): readonly DesiredPostureObservation[] {
+  return baseline.observationHistory?.length ? baseline.observationHistory : baseline.previousObservation ? [baseline.previousObservation] : [];
+}
+
+export function currentDesiredPostureObservation(baseline: Pick<DesiredPostureBaseline, 'observationHistory' | 'previousObservation'>) {
+  const history = desiredPostureObservations(baseline);
+  const cohort = latestObservationCohort(history, (item) => item.observedAt);
+  return {
+    observation: !cohort.undated.length && cohort.latest.length === 1 ? cohort.latest[0]! : null,
+    candidates: [...cohort.latest, ...cohort.undated],
+    limitation: cohort.undated.length ? 'Retained observations include an unknown capture time; no unique latest review is selected.'
+      : cohort.latest.length > 1 ? 'Distinct observations share the latest capture time; no unique latest review is selected.' : null,
+  };
+}
+
+export function brandPostureCollectionFingerprint(profile: Pick<BrandProfile, 'id' | 'officialDomains' | 'mailProtectionProfile' | 'dkimSelectors' | 'retiredDkimSelectors'>): string {
+  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify([
+    profile.id, [...profile.officialDomains].sort(), profile.mailProtectionProfile,
+    [...profile.dkimSelectors].sort(), [...profile.retiredDkimSelectors].sort(),
+  ])));
+}
+
+export function brandPostureObservationContext(profile: BrandProfile, domain: string): DomainPostureProfileContext {
+  if (!profile.officialDomains.includes(domain)) throw new TypeError('Posture observation target is not an official domain of this profile.');
+  return { version: DOMAIN_POSTURE_COMPARISON_VERSION, domain, profileId: profile.id, profileFingerprint: brandPostureCollectionFingerprint(profile) };
 }
 
 function deterministicChangeWindowId(seed: string): string {
@@ -509,7 +566,7 @@ export function normalizeDesiredPostureBaselines(
       ),
       suppressions,
       note: boundedText(candidate.note, MAX_PROFILE_TEXT_LENGTH),
-      previousObservation: observationHistory.at(-1) ?? previousObservation,
+      previousObservation: currentDesiredPostureObservation({ observationHistory, previousObservation }).observation,
       observationHistory,
       updatedAt: timestamp(candidate.updatedAt, fallback),
     });

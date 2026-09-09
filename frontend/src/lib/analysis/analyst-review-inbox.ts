@@ -10,6 +10,7 @@ import {
   ANALYST_REVIEW_KINDS,
   MAX_ANALYST_REVIEW_ITEMS,
   analystReviewLifecycle,
+  analystReviewAgeAt as ageAt,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
   emptyAnalystReviewStateStore,
@@ -28,6 +29,8 @@ import type {
 } from './analyst-review-state.ts';
 
 export {
+  ANALYST_REVIEW_AGING_AFTER_DAYS,
+  ANALYST_REVIEW_STALE_AFTER_DAYS,
   ANALYST_REVIEW_EVIDENCE_FAMILIES,
   ANALYST_REVIEW_KINDS,
   MAX_ANALYST_REVIEW_ITEMS,
@@ -117,10 +120,6 @@ const PRIORITY_RANK: Record<AnalystReviewPriority, number> = { urgent: 0, high: 
 const COMPLETENESS_RANK: Record<AnalystReviewCompleteness, number> = { inconclusive: 0, partial: 1, complete: 2 };
 const DISMISSAL_PREFIX = 'evidence-gap-review:';
 const CHANGED_REVIEW_KINDS = new Set<AnalystReviewKind>(['watchlist_change', 'comparison', 'certificate']);
-export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
-export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
-const AGING_AFTER_MS = ANALYST_REVIEW_AGING_AFTER_DAYS * 24 * 60 * 60 * 1_000;
-const STALE_AFTER_MS = ANALYST_REVIEW_STALE_AFTER_DAYS * 24 * 60 * 60 * 1_000;
 
 export function analystReviewQueue(
   item: AnalystReviewInboxItem,
@@ -274,13 +273,6 @@ function sourceId(value: unknown): string {
   if (typeof value !== 'string') return 'unknown';
   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, '_').replace(/^_+|_+$/gu, '');
   return normalized.slice(0, 40) || 'unknown';
-}
-
-function ageAt(observedAt: string, nowIso: string): AnalystReviewAge {
-  const ageMs = Math.max(0, Date.parse(nowIso) - Date.parse(observedAt));
-  if (ageMs > STALE_AFTER_MS) return 'stale';
-  if (ageMs > AGING_AFTER_MS) return 'aging';
-  return 'current';
 }
 
 function rankingReason(priority: AnalystReviewPriority, dueAt: string | null, nowIso: string): string {

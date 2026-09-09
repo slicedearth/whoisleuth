@@ -1,4 +1,5 @@
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 /**
  * Canonical, framework-independent analyst review identity and lifecycle.
@@ -24,12 +25,29 @@ import {
   type AnalystReviewDisposition,
   type AnalystReviewEvidenceFamily,
   type AnalystReviewItem,
+  type AnalystReviewAge,
   type AnalystReviewLifecycle,
   type AnalystReviewStateRecord,
   type AnalystReviewStateStore,
 } from '../contracts/analyst-review-state-contract.mts';
 
 export * from '../contracts/analyst-review-state-contract.mts';
+export const ANALYST_REVIEW_AGING_AFTER_DAYS = 7;
+export const ANALYST_REVIEW_STALE_AFTER_DAYS = 30;
+
+export function analystReviewAgeAt(observedAt: unknown, now: unknown): AnalystReviewAge {
+  const observed = normalizeExplicitIsoTimestamp(observedAt);
+  const reviewed = normalizeExplicitIsoTimestamp(now);
+  if (!observed || !reviewed) return 'unknown';
+  const age = Date.parse(reviewed) - Date.parse(observed);
+  if (age < 0) return 'unknown';
+  const days = age / 86_400_000;
+  return days > ANALYST_REVIEW_STALE_AFTER_DAYS ? 'stale' : days > ANALYST_REVIEW_AGING_AFTER_DAYS ? 'aging' : 'current';
+}
+
+export function analystReviewCanResolve(item: Pick<AnalystReviewItem, 'completeness' | 'age'>): boolean {
+  return item.completeness === 'complete' && (item.age === 'current' || item.age === 'aging');
+}
 type UnknownRecord = Record<string, unknown>;
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
@@ -408,8 +426,8 @@ export function setAnalystReviewDecision(
     throw new TypeError('The Review Item identity is invalid. Reload retained evidence before recording a decision.');
   }
   if (!DISPOSITION_VALUES.has(input.disposition)) throw new TypeError('Choose a valid Review Item disposition.');
-  if (input.disposition === 'resolved' && (item.completeness !== 'complete' || item.age === 'stale')) {
-    throw new Error('Partial, inconclusive, or stale evidence cannot resolve a Review Item. Refresh or attach current complete evidence first.');
+  if (input.disposition === 'resolved' && !analystReviewCanResolve(item)) {
+    throw new Error('Partial, inconclusive, stale or undated evidence cannot resolve a Review Item. Refresh or attach current complete evidence first.');
   }
   const rationale = boundedText(input.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, 'rationale');
   const reviewedAt = timestamp(input.reviewedAt ?? new Date().toISOString(), 'reviewedAt')!;
@@ -486,10 +504,10 @@ export function analystReviewLifecycle(
       expired: false, invalidated: false, recurred: true, reviewDue: true,
     };
   }
-  if (decision.disposition === 'resolved' && (item.completeness !== 'complete' || item.age === 'stale')) {
+  if (decision.disposition === 'resolved' && !analystReviewCanResolve(item)) {
     return {
       state: 'invalidated', effectiveDisposition: 'open', decision,
-      reason: 'The current evidence is partial, inconclusive, or stale, so the retained resolved decision cannot close this item.',
+      reason: 'The current evidence is partial, inconclusive, stale or undated, so the retained resolved decision cannot close this item.',
       expired: false, invalidated: true, recurred: true, reviewDue,
     };
   }

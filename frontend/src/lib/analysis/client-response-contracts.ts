@@ -2,6 +2,7 @@ import { normalizeDomain } from './case-model.ts';
 import { PAGE_FINGERPRINT_PARSERS, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
 import { isRecord as isUnknownRecord } from '../../../../lib/json-record.mts';
+import { MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, type DomainPostureCheck } from '../../../../packages/evidence/domain-posture-context.mts';
 
 type JsonRecord = Record<string, unknown>;
 type CaptureAvailabilityState = 'available' | 'expiring' | 'for_sale' | 'registered' | 'unknown';
@@ -18,15 +19,6 @@ type AvailabilityCaptureResponse = JsonRecord & {
   faviconPHash?: string | null;
 };
 type PostureStatus = 'danger' | 'info' | 'pass' | 'warning';
-type DomainPostureCheck = {
-  id: string;
-  label: string;
-  status: PostureStatus;
-  summary: string;
-  detail: string;
-  records: string[];
-  remediation: string;
-};
 type SpfExpansionBranch = {
   domain: string;
   parent: string | null;
@@ -87,10 +79,7 @@ const MAX_AVAILABILITY_KEYS = 128;
 const MAX_PAGE_IDENTITY_KEYS = 32;
 const MAX_PAGE_FINGERPRINT_KEYS = 16;
 const MAX_POSTURE_TOP_LEVEL_KEYS = 10;
-const MAX_POSTURE_CHECKS = 32;
 const MAX_POSTURE_CHECK_KEYS = 8;
-const MAX_POSTURE_RECORDS = 64;
-const MAX_POSTURE_RECORD_LENGTH = 4096;
 const MAX_POSTURE_DETAIL_LENGTH = 2000;
 const MAX_POSTURE_ANALYSIS_TEXT_LENGTH = 512;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
@@ -189,6 +178,7 @@ function parseAvailabilityCaptureResponse(
 
 function validPostureCheck(value: unknown): value is DomainPostureCheck {
   if (!isRecord(value) || Object.keys(value).length > MAX_POSTURE_CHECK_KEYS) return false;
+  try { normalizeDomainPostureSourceContext(value.sourceContext); } catch { return false; }
   return boundedText(value.id, 64)
     && boundedText(value.label, 120)
     && typeof value.status === 'string'
@@ -197,7 +187,7 @@ function validPostureCheck(value: unknown): value is DomainPostureCheck {
     && boundedText(value.detail, MAX_POSTURE_DETAIL_LENGTH, true)
     && boundedText(value.remediation, MAX_POSTURE_DETAIL_LENGTH, true)
     && Array.isArray(value.records)
-    && value.records.length <= MAX_POSTURE_RECORDS
+    && value.records.length <= MAX_POSTURE_CHECK_RECORDS
     && value.records.every((record) => boundedText(record, MAX_POSTURE_RECORD_LENGTH, true));
 }
 

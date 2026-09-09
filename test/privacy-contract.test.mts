@@ -46,6 +46,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'lookup-url-minimisation', pattern: /browser sends only its full hostname for collection, without the port, path, query or fragment/iu },
   { id: 'lookup-url-credentials', pattern: /Credential-bearing URLs are rejected/iu },
   { id: 'browser-plaintext', pattern: /IndexedDB as plaintext JSON/iu },
+  { id: 'posture-source-retention', pattern: /Saved settings reviews also retain source times, completeness, the profile identifier and a digest of its collection settings/iu },
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
   { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${PUBLISHED_V2_2_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },

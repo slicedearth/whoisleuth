@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 8 September 2026.
+Last updated: 9 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -103,6 +103,9 @@ shares them.
 Brand Profiles can retain official-channel URLs and handles, rights owners,
 registration identifiers, jurisdictions, source URLs and review notes. These
 records can be sensitive and remain browser-local until deliberately exported.
+Saved settings reviews also retain source times, completeness, the profile
+identifier and a digest of its collection settings. They do not retain raw
+DNS or registry responses.
 
 Public CLI Case packs clear identifiers, actions, observed-effect reviews and
 closure records for the public audience. Trusted and internal Case packs and

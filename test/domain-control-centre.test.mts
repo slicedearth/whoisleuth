@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildDomainControlCentre } from '../frontend/src/lib/analysis/domain-control-centre.ts';
 import type { BrandProfile, DesiredPostureBaseline } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import { postureObservation, postureSource } from './posture-observation-fixture.mts';
 
 const NOW = '2026-08-05T10:00:00.000Z';
 
@@ -46,10 +47,10 @@ function profile(baselines: DesiredPostureBaseline[]): BrandProfile {
 }
 
 test('summarises baseline coverage, change windows, lifecycle and exact shared dependencies', () => {
-  const observation = {
+  const observation = postureObservation(profile([]), 'one.example.invalid', {
     observedAt: '2026-08-05T09:00:00.000Z',
-    checks: [{ id: 'nameservers', status: 'pass' as const, records: ['ns2.example.invalid', 'ns1.example.invalid'] }],
-  };
+    checks: [{ id: 'nameservers', status: 'pass' as const, records: ['ns2.example.invalid', 'ns1.example.invalid'], sourceContext: postureSource('dns_ns', '2026-08-05T09:00:00.000Z') }],
+  });
   const report = buildDomainControlCentre(profile([
     baseline('one.example.invalid', {
       previousObservation: observation,

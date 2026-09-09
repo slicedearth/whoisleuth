@@ -62,7 +62,7 @@ export const ANALYST_REVIEW_DISPOSITIONS = Object.freeze(['open', 'expected', 's
 export type AnalystReviewDisposition = typeof ANALYST_REVIEW_DISPOSITIONS[number];
 export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
 export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
-export type AnalystReviewAge = 'current' | 'aging' | 'stale';
+export type AnalystReviewAge = 'current' | 'aging' | 'stale' | 'unknown';
 export type AnalystReviewNextAction = 'review' | 'refresh' | 'follow_up' | 'resume';
 export type AnalystReviewLifecycleState =
   | 'open'

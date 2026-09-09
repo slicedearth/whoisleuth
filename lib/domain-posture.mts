@@ -10,6 +10,9 @@ import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { classifyMxRecords } from './dns-mx.mts';
 import type { MxRecord } from './dns-mx.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECK_RECORDS, POSTURE_CHECK_SOURCES, type DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
+import { canonicalPostureRecords } from '../packages/evidence/domain-control-runtime.mts';
 import {
   parseSpfRecords,
   parseDmarcRecords,
@@ -40,6 +43,7 @@ const MISSING_DNS_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 type DnsQuery = {
   records: unknown[];
   error: string | null;
+  observedAt?: string | null;
 };
 
 type DnssecQuery = {
@@ -74,17 +78,11 @@ type RegistryPostureEvidence = {
   dsRecordCount: number;
   dsDataTruncated?: boolean;
   error: string | null;
+  observedAt?: string | null;
+  statusesComplete?: boolean;
 };
-type CheckStatus = 'pass' | 'warning' | 'danger' | 'info';
-type PostureCheck = {
-  id: string;
-  label: string;
-  status: CheckStatus;
-  summary: string;
-  detail: string;
-  records: string[];
-  remediation: string;
-};
+type PostureCheck = DomainPostureCheck;
+type CheckStatus = DomainPostureCheck['status'];
 type CheckOptions = { detail?: string; records?: string[]; remediation?: string };
 type PostureInput = {
   spf: DnsQuery;
@@ -188,14 +186,19 @@ async function resolveDns(
   label: string,
   factory: () => Promise<unknown[]>,
   timeoutMs = DNS_TIMEOUT_MS,
-  timers?: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'>,
+  timers?: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'> & Partial<Pick<DomainPostureCollectorDependencies, 'now'>>,
 ): Promise<DnsQuery> {
+  const completed = (result: DnsQuery): DnsQuery => {
+    let observedAt: string | null = null;
+    try { const at = timers?.now?.(); observedAt = at instanceof Date && Number.isFinite(at.getTime()) ? at.toISOString() : null; } catch { /* Unknown source time remains explicit. */ }
+    return { ...result, observedAt };
+  };
   try {
-    return { records: await withTimeout(factory(), label, timeoutMs, timers), error: null };
+    return completed({ records: await withTimeout(factory(), label, timeoutMs, timers), error: null });
   } catch (err) {
     const error = errorRecord(err);
-    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
-    return { records: [], error: nonEmptyErrorMessage(err, String(err)) };
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return completed({ records: [], error: null });
+    return completed({ records: [], error: nonEmptyErrorMessage(err, String(err)) });
   }
 }
 
@@ -686,10 +689,11 @@ function defensiveMailProfileCheck(profile: MailProtectionProfile, input: Postur
 
 function registrationLockCheck(registry: RegistryPostureEvidence): PostureCheck {
   if (registry.error) return queryFailureCheck('registration_lock', 'Registration controls', registry.error);
-  const statuses = registry.statuses.map((status) => status.toLowerCase().replace(/[^a-z]/gu, ''));
+  const statuses = canonicalPostureRecords('registration_lock', registry.statuses) ?? [];
   if (statuses.length === 0) {
     return check('registration_lock', 'Registration controls', 'info', 'Registry lock state is unavailable', {
       detail: 'No normalised EPP status was returned. This does not describe registrar account security.',
+      records: registry.statuses,
     });
   }
   const transferLocks = statuses.filter((status) => ['clienttransferprohibited', 'servertransferprohibited'].includes(status));
@@ -757,7 +761,31 @@ function buildPostureReport(domain: string, input: PostureInput) {
     ...(input.registry && input.nameservers ? [nameserverCheck(input.nameservers, input.registry)] : []),
   ];
   const summary = { pass: 0, warning: 0, danger: 0, info: 0 };
-  for (const item of checks) summary[item.status] += 1;
+  for (const item of checks) {
+    summary[item.status] += 1;
+    const source = POSTURE_CHECK_SOURCES[item.id as keyof typeof POSTURE_CHECK_SOURCES];
+    const query = item.id === 'nameservers' ? input.nameservers : item.id === 'mx' ? input.mx : item.id === 'caa' ? input.caa : undefined;
+    const registry = item.id === 'registration_lock' ? input.registry : undefined;
+    if (!source || (!query && !registry)) continue;
+    const omittedRecords = Math.max(0, item.records.length - MAX_POSTURE_CHECK_RECORDS);
+    const records = item.records.slice(0, MAX_POSTURE_CHECK_RECORDS);
+    const error = query?.error ?? registry?.error;
+    const retained = canonicalPostureRecords(item.id, records);
+    const rawRecords = query?.records ?? registry?.statuses ?? [];
+    const raw = item.id === 'caa'
+      ? canonicalPostureRecords(item.id, rawRecords.map((record) => record && typeof record === 'object' ? caaDisplay(record as Record<string, unknown>) : record))
+      : canonicalPostureRecords(item.id, rawRecords);
+    const complete = !error && omittedRecords === 0 && retained !== null && raw !== null
+      && retained.length === raw.length && retained.every((value, index) => value === raw[index])
+      && (!registry || (registry.statusesComplete === true && records.length > 0));
+    item.sourceContext = {
+      version: DOMAIN_POSTURE_COMPARISON_VERSION, source,
+      observedAt: normalizeExplicitIsoTimestamp(query?.observedAt ?? registry?.observedAt),
+      state: error ? 'unavailable' : complete ? 'complete' : 'partial',
+      omittedRecords: complete ? 0 : omittedRecords || null,
+    };
+    item.records = records;
+  }
   return { domain, summary, checks };
 }
 
@@ -892,6 +920,8 @@ async function checkDomainPosture(
         dsRecordCount: parsedDomain.dsData.length,
         dsDataTruncated: parsedDomain.dsDataTruncated,
         error: null,
+        observedAt: normalizeExplicitIsoTimestamp(rdap && !('error' in rdap) ? rdap.fetchedAt : null),
+        statusesComplete: parsedDomain.statusesTruncated === false && parsedDomain.serverTruncated === false,
       }
     : {
         statuses: [],

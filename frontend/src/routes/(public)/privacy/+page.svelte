@@ -27,7 +27,7 @@
 
   <article class="policy card" aria-labelledby="privacy-title">
     <h2 id="privacy-introduction">1. Introduction</h2>
-    <p id="privacy-title"><strong>Last updated: 8 September 2026.</strong></p>
+    <p id="privacy-title"><strong>Last updated: 9 September 2026.</strong></p>
     <p>WHOISleuth is local-first. Ordinary investigation state stays in this browser profile, and the service has no general user, Case, or workspace database. Network collection, local retention, export, and active review are separate deliberate actions.</p>
     <p>Only a deliberately started network-capable operation sends its declared bounded target or evidence fields. WHOISleuth does not automatically submit reports, contact recipients, acquire domains, apply defensive controls, or change external infrastructure. Missing, blocked, stale, malformed, partial, unavailable, or unsupported evidence never becomes absence, safety, ownership, control, intent, or remediation.</p>
     <p>This policy describes the public deployment. A self-hosted operator must adapt it when hosting, authentication, enabled providers, retention, or contact routes differ.</p>
@@ -48,6 +48,7 @@
     <p><strong>Compatibility.</strong> Current Case schema 15 can retain the exact normalised submitted hostname on a new evidence snapshot, analyst decision confidence and its basis, and a response route's observation and review times. Exact public v1 Case schema 12 and published-v2 schemas 13 and 14 remain readable and migrate directly; migrated fields can remain null, unknown, or blank because WHOISleuth does not reconstruct them from weaker evidence. Case report v11 JSON and Markdown do not add the snapshot hostname. Public CLI case packs clear identifiers, actions, observed-effect reviews, and closure records; ordinary Case, workspace, trusted, and internal files can contain exact investigated hostnames and analyst context.</p>
     <p>A Case can retain controlled classifications and exact HTTP(S) incident links as browser-local Case metadata. Exact links can contain public paths, queries, and fragments, so they can be sensitive even when embedded credentials are rejected. They remain local until the analyst opens, exports, or otherwise shares them.</p>
     <p>Brand Profiles can retain official-channel URLs and handles, rights owners, registration identifiers, jurisdictions, source URLs, and review notes. These records can be sensitive and remain browser-local until deliberately exported.</p>
+    <p>Saved settings reviews also retain source times, completeness, the profile identifier and a digest of its collection settings, not raw DNS or registry responses.</p>
     <p>Failed reads, quota errors, partial evidence, and unsupported versions remain explicit. They do not become empty collections or evidence of absence. Clearing site data removes the browser workspace, including retained Case hostname history.</p>
 
     <h2 id="privacy-network">4. Hosted and third-party processing</h2>

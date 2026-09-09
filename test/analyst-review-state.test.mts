@@ -135,7 +135,7 @@ describe('canonical analyst Review Item lifecycle', () => {
         rationale: 'This should remain open.',
         reviewedAt: NOW,
       }),
-      /Partial, inconclusive, or stale evidence cannot resolve/,
+      /evidence cannot resolve/,
     );
     assert.throws(
       () => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item({ completeness: 'complete', age: 'stale' }), {
@@ -143,7 +143,7 @@ describe('canonical analyst Review Item lifecycle', () => {
         rationale: 'A stale observation must not close review.',
         reviewedAt: NOW,
       }),
-      /stale evidence cannot resolve/,
+      /stale or undated evidence cannot resolve/,
     );
 
     const expected = setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {

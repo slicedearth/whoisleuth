@@ -105,6 +105,10 @@ provider results retain separate source identities and observation times. A
 source failure or truncated response remains explicit. Supporting evidence
 cannot decide authoritative registration availability.
 
+Brand settings reviews use shared source-context and record-normalisation
+owners. The control centre, matrix and history use the same comparison rules;
+profile mutations use the existing revision-checked persistence coordinator.
+
 Homepage capture, native analysis, fingerprints and offline technology review
 share the source-size policy in `lib/outbound-request-bounds.mts`.
 Native tree construction, derived outputs, deadlines and concurrency have

@@ -9,6 +9,12 @@ import type {
   DomainPostureExternalDependency,
   DomainPostureHttpResponse,
 } from './client-response-contracts.ts';
+import { brandPostureObservationContext, currentDesiredPostureObservation, MAX_DESIRED_POSTURE_OBSERVATIONS } from './brand-profile-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { canonicalPostureRecords } from '../../../../packages/evidence/domain-control-runtime.mts';
+import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, postureSourceAdmission, postureTransferRestriction, type DomainPostureProfileContext } from '../../../../packages/evidence/domain-posture-context.mts';
+
+export type DomainPostureAuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string; context?: DomainPostureProfileContext };
 
 export type DesiredPostureGroup = Readonly<{
   id: string;
@@ -64,6 +70,7 @@ export type DesiredPosturePreviousChange = Readonly<{
   state: 'changed' | 'unchanged' | 'unknown';
   previous: readonly string[];
   current: readonly string[];
+  limitation?: string;
 }>;
 
 const PROFILE_LABELS: Record<MailProtectionProfile, string> = {
@@ -143,9 +150,18 @@ export const DESIRED_POSTURE_FIELD_LABELS: Readonly<Record<DesiredPostureCompari
   renewalReviewAt: 'Renewal review',
 });
 
-function comparableRecords(check: DomainPostureCheck | undefined): string[] | null {
-  if (!check || check.status === 'info') return null;
-  return [...new Set(check.records.map((value) => value.trim().toLowerCase()).filter(Boolean))].sort();
+function comparableRecords(check: Pick<DomainPostureCheck, 'id' | 'records'> | undefined): string[] | null {
+  return check ? canonicalPostureRecords(check.id, check.records) : null;
+}
+
+function profileAdmission(observation: DesiredPostureObservation | null, expected: DomainPostureProfileContext | undefined): string | null {
+  if (!observation) return 'No retained posture observation is available.';
+  const context = observation.context;
+  if (!context || !expected) return 'The retained observation has no verified target and profile collection context.';
+  if (context.version !== DOMAIN_POSTURE_COMPARISON_VERSION || expected.version !== DOMAIN_POSTURE_COMPARISON_VERSION
+    || context.domain !== expected.domain || context.profileId !== expected.profileId || context.profileFingerprint !== expected.profileFingerprint) return 'The observation belongs to a different target, profile or collection configuration.';
+  if (observation.omittedChecks) return 'The retained check inventory is incomplete.';
+  return null;
 }
 
 function sameRecords(left: readonly string[], right: readonly string[]): boolean {
@@ -167,7 +183,7 @@ function activeSuppression(
           ? 'renewal_review'
           : field;
   const suppression = baseline.suppressions.find((item) => (
-    item.field === normalizedField
+    Number.isFinite(nowMs) && item.field === normalizedField
     && (item.expiresAt === null || Date.parse(item.expiresAt) > nowMs)
   ));
   return suppression?.reason || '';
@@ -202,12 +218,14 @@ function withSuppression(
 function recordComparison(
   baseline: DesiredPostureBaseline,
   field: 'nameservers' | 'mx' | 'caa',
-  check: DomainPostureCheck | undefined,
+  check: DesiredPostureObservation['checks'][number] | undefined,
   nowMs: number,
   observationAt: string | null,
   observationAvailable: boolean,
+  contextLimitation: string | null,
 ): DesiredPostureComparison {
-  const desired = baseline[field].map((value) => value.toLowerCase()).sort();
+  const desired = canonicalPostureRecords(field, baseline[field]);
+  if (desired === null) return withSuppression({ field, label: DESIRED_POSTURE_FIELD_LABELS[field], state: 'unknown', desired: baseline[field], observed: [], explanation: 'The desired record set contains invalid or unsupported values; review the baseline.' }, baseline, nowMs);
   if (!desired.length) {
     return withSuppression({
       field,
@@ -219,16 +237,15 @@ function recordComparison(
     }, baseline, nowMs, observationAt);
   }
   const observed = comparableRecords(check);
-  if (observed === null) {
+  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null);
+  if (observed === null || limitation) {
     return withSuppression({
       field,
       label: DESIRED_POSTURE_FIELD_LABELS[field],
       state: observationAvailable ? 'unknown' : 'unavailable',
       desired,
-      observed: [],
-      explanation: observationAvailable
-        ? 'The retained observation did not return complete comparable evidence.'
-        : 'No retained posture observation is available for this desired value.',
+      observed: check?.records ?? [],
+      explanation: limitation ?? 'The retained values include invalid or unsupported records.',
     }, baseline, nowMs, observationAt);
   }
   const aligned = sameRecords(desired, observed);
@@ -242,9 +259,9 @@ function recordComparison(
     explanation: needsReview
       ? 'The retained values match the desired set, but the source-qualified posture check still needs review.'
       : aligned
-        ? 'The current observed records match the analyst-authored desired set.'
-      : 'The current observed records differ from the analyst-authored desired set.',
-  }, baseline, nowMs, observationAt);
+        ? 'The retained source records match the analyst-authored desired set.'
+      : 'The retained source records differ from the analyst-authored desired set.',
+  }, baseline, nowMs, check?.sourceContext?.observedAt ?? null);
 }
 
 function unsupportedComparison(
@@ -267,10 +284,11 @@ function unsupportedComparison(
 
 function lockComparison(
   baseline: DesiredPostureBaseline,
-  check: DomainPostureCheck | undefined,
+  check: DesiredPostureObservation['checks'][number] | undefined,
   nowMs: number,
   observationAt: string | null,
   observationAvailable: boolean,
+  contextLimitation: string | null,
 ): DesiredPostureComparison {
   const desired = baseline.registrarLock === 'unconfigured' ? [] : [baseline.registrarLock];
   if (!desired.length) {
@@ -283,21 +301,21 @@ function lockComparison(
       explanation: 'No analyst-authored transfer-lock expectation is configured.',
     }, baseline, nowMs, observationAt);
   }
-  if (!check || check.status === 'info') {
+  const records = comparableRecords(check);
+  const observedLock = records && postureTransferRestriction(records);
+  const limitation = contextLimitation ?? postureSourceAdmission(check, observationAt, Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : null);
+  if (!observedLock || limitation) {
     return withSuppression({
       field: 'registrarLock',
       label: DESIRED_POSTURE_FIELD_LABELS.registrarLock,
       state: observationAvailable ? 'unknown' : 'unavailable',
       desired,
-      observed: [],
-      explanation: observationAvailable
-        ? 'Registry transfer-lock evidence is unavailable or inconclusive in the retained observation.'
-        : 'No retained posture observation is available for the transfer-lock expectation.',
+      observed: check?.records ?? [],
+      explanation: limitation ?? 'No complete comparable registry status inventory is retained.',
     }, baseline, nowMs, observationAt);
   }
-  const observedLock = check.status === 'pass' ? 'required' : 'not_required';
   const aligned = observedLock === baseline.registrarLock;
-  const needsReview = aligned && (check.status === 'warning' || check.status === 'danger');
+  const needsReview = aligned && (check?.status === 'warning' || check?.status === 'danger');
   return withSuppression({
     field: 'registrarLock',
     label: DESIRED_POSTURE_FIELD_LABELS.registrarLock,
@@ -307,9 +325,9 @@ function lockComparison(
     explanation: needsReview
       ? 'The retained transfer-lock value matches the expectation, but the source-qualified check still needs review.'
       : aligned
-        ? 'The current registry status matches the analyst-authored transfer-lock expectation.'
-      : 'The current registry status differs from the analyst-authored transfer-lock expectation.',
-  }, baseline, nowMs, observationAt);
+        ? 'The retained registry status matches the analyst-authored transfer-lock expectation.'
+      : 'The retained registry status differs from the analyst-authored transfer-lock expectation.',
+  }, baseline, nowMs, check?.sourceContext?.observedAt ?? null);
 }
 
 function renewalComparison(
@@ -331,114 +349,121 @@ function renewalComparison(
   return withSuppression({
     field: 'renewalReviewAt',
     label: DESIRED_POSTURE_FIELD_LABELS.renewalReviewAt,
-    state: due ? 'drift' : 'aligned',
+    state: !Number.isFinite(nowMs) ? 'unknown' : due ? 'drift' : 'aligned',
     desired,
     observed: [],
-    explanation: due ? 'The planned renewal review date is due.' : 'The planned renewal review date is still in the future.',
+    explanation: !Number.isFinite(nowMs) ? 'The renewal review clock is unavailable.' : due ? 'The planned renewal review date is due.' : 'The planned renewal review date is still in the future.',
   }, baseline, nowMs);
 }
 
-export function buildDesiredPostureObservation(report: DomainPostureHttpResponse): DesiredPostureObservation {
+export function buildDesiredPostureObservation(report: DomainPostureHttpResponse, context?: DomainPostureProfileContext): DesiredPostureObservation {
   return {
     observedAt: report.checkedAt,
-    checks: report.checks.slice(0, 32).map((check) => ({
+    ...(context ? { context } : {}),
+    ...(report.checks.length > MAX_POSTURE_CHECKS ? { omittedChecks: report.checks.length - MAX_POSTURE_CHECKS } : {}),
+    checks: report.checks.slice(0, MAX_POSTURE_CHECKS).map((check) => ({
       id: check.id,
       status: check.status,
-      records: check.records.slice(0, 32),
+      records: check.records.slice(0, MAX_POSTURE_CHECK_RECORDS),
+      ...(check.sourceContext ? { sourceContext: {
+        ...check.sourceContext,
+        ...(check.records.length > MAX_POSTURE_CHECK_RECORDS ? {
+          state: check.sourceContext.state === 'unavailable' ? 'unavailable' as const : 'partial' as const,
+          omittedRecords: check.sourceContext.omittedRecords === null ? null : check.sourceContext.omittedRecords + check.records.length - MAX_POSTURE_CHECK_RECORDS,
+        } : {}),
+      } } : {}),
     })),
   };
 }
 
+function observationChanges(
+  previous: DesiredPostureObservation,
+  current: DesiredPostureObservation,
+  now: unknown,
+  cohortLimitation: string | null = null,
+): DesiredPosturePreviousChange[] {
+  const previousById = new Map(previous.checks.map((check) => [check.id, check]));
+  const currentById = new Map(current.checks.map((check) => [check.id, check]));
+  const previousTime = normalizeExplicitIsoTimestamp(previous.observedAt);
+  const currentTime = normalizeExplicitIsoTimestamp(current.observedAt);
+  const contextLimitation = cohortLimitation ?? profileAdmission(previous, current.context) ?? profileAdmission(current, current.context)
+    ?? (!previousTime || !currentTime || Date.parse(previousTime) >= Date.parse(currentTime) ? 'Capture times do not establish a unique before-and-after order.' : null)
+    ?? (previousById.size !== previous.checks.length || currentById.size !== current.checks.length ? 'Duplicate check identities prevent a unique comparison.' : null);
+  return [...new Set([...previousById.keys(), ...currentById.keys()])].sort().map((checkId) => {
+    const prior = previousById.get(checkId);
+    const next = currentById.get(checkId);
+    const before = comparableRecords(prior);
+    const after = comparableRecords(next);
+    const limitation = contextLimitation ?? postureSourceAdmission(prior, previous.observedAt, now)
+      ?? postureSourceAdmission(next, current.observedAt, now)
+      ?? (Date.parse(prior!.sourceContext!.observedAt!) >= Date.parse(next!.sourceContext!.observedAt!) ? 'Source times do not establish a later observation.' : null)
+      ?? (before === null || after === null ? 'Comparable source records are unavailable for this check.' : null);
+    return {
+      checkId,
+      state: limitation ? 'unknown' : sameRecords(before!, after!) ? 'unchanged' : 'changed',
+      previous: before ?? prior?.records ?? [],
+      current: after ?? next?.records ?? [],
+      ...(limitation ? { limitation } : {}),
+    };
+  });
+}
+
 export function buildDesiredPostureHistory(
   observations: readonly DesiredPostureObservation[],
+  now: unknown = new Date().toISOString(),
 ): ReadonlyArray<Readonly<{
   observedAt: string;
   previousObservedAt: string;
   changedChecks: readonly string[];
   comparableChecks: number;
+  unknownChecks: number;
+  limitation: string | null;
 }>> {
   const ordered = [...observations]
-    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt))
-    .slice(-12);
+    .sort((left, right) => {
+      const a = normalizeExplicitIsoTimestamp(left.observedAt);
+      const b = normalizeExplicitIsoTimestamp(right.observedAt);
+      return a === b ? 0 : a === null ? 1 : b === null ? -1 : Date.parse(a) - Date.parse(b);
+    })
+    .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
   return ordered.slice(1).map((current, index) => {
     const previous = ordered[index]!;
-    const previousById = new Map(previous.checks.map((check) => [check.id, check]));
-    const changedChecks = current.checks.flatMap((check) => {
-      const prior = previousById.get(check.id);
-      if (!prior) return [];
-      const priorRecords = prior.records.map((value) => value.toLowerCase()).sort();
-      const currentRecords = check.records.map((value) => value.toLowerCase()).sort();
-      return prior.status === check.status && sameRecords(priorRecords, currentRecords) ? [] : [check.id];
-    });
+    const ambiguous = ordered.some((item) => !normalizeExplicitIsoTimestamp(item.observedAt))
+      || ordered.filter((item) => Date.parse(item.observedAt) === Date.parse(previous.observedAt)).length !== 1
+      || ordered.filter((item) => Date.parse(item.observedAt) === Date.parse(current.observedAt)).length !== 1;
+    const limitation = ambiguous ? 'Unknown or equal capture times prevent a unique before-and-after comparison.' : null;
+    const changes = observationChanges(previous, current, now, limitation);
     return Object.freeze({
       observedAt: current.observedAt,
       previousObservedAt: previous.observedAt,
-      changedChecks: Object.freeze(changedChecks),
-      comparableChecks: current.checks.filter((check) => previousById.has(check.id)).length,
+      changedChecks: Object.freeze(changes.filter((check) => check.state === 'changed').map((check) => check.checkId)),
+      comparableChecks: changes.filter((check) => check.state !== 'unknown').length,
+      unknownChecks: changes.filter((check) => check.state === 'unknown').length,
+      limitation,
     });
   });
-}
-
-function previousChanges(
-  previous: DesiredPostureObservation | null,
-  report: DomainPostureHttpResponse,
-): DesiredPosturePreviousChange[] {
-  if (!previous) return [];
-  const currentById = new Map(report.checks.map((check) => [check.id, check]));
-  return previous.checks.slice(0, 32).map((prior) => {
-    const current = currentById.get(prior.id);
-    const previousRecords = prior.records.map((value) => value.toLowerCase()).sort();
-    const currentRecords = comparableRecords(current);
-    return {
-      checkId: prior.id,
-      state: currentRecords === null
-        ? 'unknown' as const
-        : prior.status === current?.status && sameRecords(previousRecords, currentRecords)
-          ? 'unchanged' as const
-          : 'changed' as const,
-      previous: previousRecords,
-      current: currentRecords || [],
-    };
-  });
-}
-
-function baselineComparisons(
-  baseline: DesiredPostureBaseline | null,
-  report: DomainPostureHttpResponse,
-  nowMs: number,
-): DesiredPostureComparison[] {
-  if (!baseline) return [];
-  const checks = new Map(report.checks.map((check) => [check.id, check]));
-  return [
-    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs, report.checkedAt, true),
-    unsupportedComparison(baseline, 'ds', baseline.ds, nowMs),
-    recordComparison(baseline, 'mx', checks.get('mx'), nowMs, report.checkedAt, true),
-    recordComparison(baseline, 'caa', checks.get('caa'), nowMs, report.checkedAt, true),
-    unsupportedComparison(baseline, 'tlsIssuer', baseline.tlsIssuer ? [baseline.tlsIssuer] : [], nowMs),
-    unsupportedComparison(baseline, 'tlsSpkiSha256', baseline.tlsSpkiSha256 ? [baseline.tlsSpkiSha256] : [], nowMs),
-    lockComparison(baseline, checks.get('registration_lock'), nowMs, report.checkedAt, true),
-    renewalComparison(baseline, nowMs),
-  ];
 }
 
 export function buildDesiredPostureComparisonsFromObservation(
   baseline: DesiredPostureBaseline,
   observation: DesiredPostureObservation | null,
   now: unknown = new Date().toISOString(),
+  options: { context?: DomainPostureProfileContext; limitation?: string | null } = {},
 ): DesiredPostureComparison[] {
-  const parsedNow = Date.parse(String(now));
-  const nowMs = Number.isFinite(parsedNow) ? parsedNow : Date.parse(baseline.updatedAt);
-  const checks = new Map((observation?.checks ?? []).map((check) => [check.id, check as DomainPostureCheck]));
+  const nowMs = Date.parse(normalizeExplicitIsoTimestamp(now) ?? '');
+  const checks = new Map((observation?.checks ?? []).map((check) => [check.id, check]));
   const observationAt = observation?.observedAt ?? null;
-  const observationAvailable = Boolean(observation);
+  const observationAvailable = Boolean(observation || options.limitation);
+  const limitation = options.limitation ?? profileAdmission(observation, options.context)
+    ?? (checks.size !== observation?.checks.length ? 'Duplicate check identities prevent a unique comparison.' : null);
   return [
-    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs, observationAt, observationAvailable),
+    recordComparison(baseline, 'nameservers', checks.get('nameservers'), nowMs, observationAt, observationAvailable, limitation),
     unsupportedComparison(baseline, 'ds', baseline.ds, nowMs),
-    recordComparison(baseline, 'mx', checks.get('mx'), nowMs, observationAt, observationAvailable),
-    recordComparison(baseline, 'caa', checks.get('caa'), nowMs, observationAt, observationAvailable),
+    recordComparison(baseline, 'mx', checks.get('mx'), nowMs, observationAt, observationAvailable, limitation),
+    recordComparison(baseline, 'caa', checks.get('caa'), nowMs, observationAt, observationAvailable, limitation),
     unsupportedComparison(baseline, 'tlsIssuer', baseline.tlsIssuer ? [baseline.tlsIssuer] : [], nowMs),
     unsupportedComparison(baseline, 'tlsSpkiSha256', baseline.tlsSpkiSha256 ? [baseline.tlsSpkiSha256] : [], nowMs),
-    lockComparison(baseline, checks.get('registration_lock'), nowMs, observationAt, observationAvailable),
+    lockComparison(baseline, checks.get('registration_lock'), nowMs, observationAt, observationAvailable, limitation),
     renewalComparison(baseline, nowMs),
   ];
 }
@@ -447,6 +472,7 @@ export function buildOwnedDomainPostureReview(
   profile: BrandProfile,
   report: DomainPostureHttpResponse,
   now: unknown = new Date().toISOString(),
+  context?: DomainPostureProfileContext,
 ): OwnedDomainPostureReview {
   const profileName = report.mailProtectionProfile;
   const checkById = new Map(report.checks.map((check) => [check.id, check]));
@@ -466,11 +492,14 @@ export function buildOwnedDomainPostureReview(
     ...dependency,
     review: dependency.state === 'unavailable' ? 'needs_evidence' as const : 'recorded' as const,
   }));
-  const nowMs = Number.isFinite(Date.parse(String(now))) ? Date.parse(String(now)) : Date.parse(report.checkedAt);
+  const nowMs = Date.parse(normalizeExplicitIsoTimestamp(now) ?? '');
   const currentAttestations = profile.protectionAttestations.filter((item) => (
     item.expiresAt === null || Date.parse(item.expiresAt) > nowMs
   ));
   const baseline = profile.desiredPostureBaselines.find((item) => item.domain === report.domain) || null;
+  const current = buildDesiredPostureObservation(report, context);
+  const retained = baseline ? currentDesiredPostureObservation(baseline) : null;
+  const expected = profile.officialDomains.includes(report.domain) ? brandPostureObservationContext(profile, report.domain) : undefined;
   return {
     domain: report.domain,
     checkedAt: report.checkedAt,
@@ -489,12 +518,13 @@ export function buildOwnedDomainPostureReview(
       unresolved: currentAttestations.filter((item) => item.state === 'needs_confirmation' || item.state === 'unavailable').length,
     },
     baseline,
-    baselineComparisons: baselineComparisons(baseline, report, nowMs),
-    previousChanges: previousChanges(baseline?.observationHistory?.at(-1) || baseline?.previousObservation || null, report),
+    baselineComparisons: baseline ? buildDesiredPostureComparisonsFromObservation(baseline, current, now, expected ? { context: expected } : {}) : [],
+    previousChanges: retained?.observation ? observationChanges(retained.observation, current, now, profileAdmission(current, expected)) : [],
     limitations: [
       'The desired-state view organises the selected Brand Profile and this point-in-time audit. It does not change DNS, registrar, mail, or provider configuration.',
       'An external dependency is a review lead. Unavailable evidence is not proof that a dependency is dangling, claimable, insecure, abandoned, or controlled by another party.',
       'Protection controls that cannot be observed from public data remain analyst attestations with their own review and expiry dates.',
+      ...(retained?.limitation ? [retained.limitation] : []),
     ],
   };
 }
