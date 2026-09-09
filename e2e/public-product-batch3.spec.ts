@@ -279,6 +279,7 @@ test('command and return links preserve open-in-new-tab activation', async ({ pa
     const opened = context.waitForEvent('page');
     await link.click({ modifiers: ['ControlOrMeta'] });
     const destination = await opened;
+    await destination.waitForURL(expectedHref, { waitUntil: 'load' });
     await expect.poll(() => destination.evaluate(() => ({
       href: location.href,
       ready: document.readyState,

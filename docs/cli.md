@@ -137,6 +137,17 @@ Checkpoint version 3 reads versions 1 and 2. Older installations reject version
 3 rather than unknowingly repeating an incomplete collection. The checkpoint
 can contain selected local paths and evidence; review it before sharing.
 
+Use `--json --output state.json` for a resumable file, and add `--force` when
+replacing it. File output holds private adjacent `.workflow.lock` files for
+the selected resume and output paths until publication. Another writer is
+refused; changes to either file during execution prevent replacement. State
+files must be regular files without symbolic or additional hard links.
+
+Locks contain only a local process ID and are removed after the run. Following
+an interrupted process, confirm that its owner has stopped before removing its
+abandoned lock. Locks have no automatic expiry. Shell redirection and external
+editors do not participate in this cooperative file-ownership protocol.
+
 ### Formats and exit behaviour
 
 Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML

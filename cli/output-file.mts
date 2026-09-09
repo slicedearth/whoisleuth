@@ -84,7 +84,7 @@ function createBufferedOutput(): BufferedOutput {
 async function writePrivateFile(
   pathValue: unknown,
   content: string,
-  options: { force?: boolean; existingFileMessage?: string } = {},
+  options: { force?: boolean; existingFileMessage?: string; beforePublish?: () => Promise<void> } = {},
   operations: OutputFileOperations = OUTPUT_FILE_OPERATIONS,
 ): Promise<string> {
   const target = safeOutputPath(pathValue);
@@ -108,6 +108,7 @@ async function writePrivateFile(
     } finally {
       await handle.close();
     }
+    await options.beforePublish?.();
     if (options.force) {
       await operations.rename(temporary, target);
       temporaryCreated = false;

@@ -71,6 +71,29 @@ test('normal cleanup does not race an in-progress output write', async () => {
   assert.equal(await writing, target);
 });
 
+test('publication preconditions run after the temporary file is closed and failure removes only that temporary file', async () => {
+  const calls: string[] = [];
+  const operations: OutputFileOperations = {
+    randomUUID: () => '00000000-0000-4000-8000-000000000003',
+    async open() {
+      calls.push('open');
+      return {
+        async writeFile() { calls.push('write'); },
+        async sync() { calls.push('sync'); },
+        async close() { calls.push('close'); },
+      };
+    },
+    async link() { calls.push('link'); },
+    async rename() { calls.push('rename'); },
+    async unlink() { calls.push('unlink'); },
+  };
+  await assert.rejects(writePrivateFile(join(process.cwd(), 'fixture-state.json'), '{}', {
+    force: true,
+    async beforePublish() { calls.push('validate'); throw new Error('fixture state changed'); },
+  }, operations), /fixture state changed/u);
+  assert.deepEqual(calls, ['open', 'write', 'sync', 'close', 'validate', 'unlink']);
+});
+
 test('persistent temporary-file cleanup failure is reported and remains retryable', async () => {
   let cleanupAllowed = false;
   let unlinkCalls = 0;

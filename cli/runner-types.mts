@@ -53,6 +53,7 @@ type CliDependencies = {
   readBulkInput?: (source?: string | null) => string | Promise<string>;
   readCompareInput?: (source?: string | null) => string | Promise<string>;
   readDiffInput?: (source: string) => string | Promise<string>;
+  workflowResumeInput?: string;
   readDiscoveryDictionary?: (source: string) => string | Promise<string>;
   readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
   readExportInput?: (source?: string | null) => string | Promise<string>;

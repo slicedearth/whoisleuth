@@ -235,6 +235,9 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+Workflow-file output uses adjacent private lock files containing a local process
+ID. They are removed after the run; interruption can leave one for manual recovery.
+
 Optional metadata CSV retains source versions, collection and report times,
 collection origin and source-health states alongside the selected results.
 

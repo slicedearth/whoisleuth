@@ -110,9 +110,11 @@ async function runWorkflowRecipeCommand(
   let resumeInput: string | null = null;
   if (args.resumeSource) {
     try {
-      resumeInput = dependencies.readDiffInput
-        ? await dependencies.readDiffInput(args.resumeSource)
-        : await context.readInput(args.resumeSource, MAX_INVESTIGATION_RUN_BYTES, 'Investigation resume state');
+      resumeInput = dependencies.workflowResumeInput !== undefined
+        ? dependencies.workflowResumeInput
+        : dependencies.readDiffInput
+          ? await dependencies.readDiffInput(args.resumeSource)
+          : await context.readInput(args.resumeSource, MAX_INVESTIGATION_RUN_BYTES, 'Investigation resume state');
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);

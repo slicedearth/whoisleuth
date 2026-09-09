@@ -333,18 +333,41 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
   }
   if (!args.destination) return runParsedCli(args, dependencies);
   const buffered = createBufferedOutput();
-  const code = await runParsedCli(args, { ...dependencies, stdout: buffered.stream });
-  if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
+  let checkpoint: Awaited<ReturnType<typeof import('./investigation-checkpoint.mts').prepareInvestigationCheckpoint>> | null = null;
   try {
-    await writePrivateFile(args.destination, buffered.value(), { force: args.force === true });
+    if (args.action === 'workflow-run') {
+      const { prepareInvestigationCheckpoint } = await import('./investigation-checkpoint.mts');
+      checkpoint = await prepareInvestigationCheckpoint({
+        destination: args.destination, resumeSource: args.resumeSource, force: args.force === true,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+    }
+    const resumeInput = checkpoint?.resumeInput;
+    const code = await runParsedCli(args, {
+      ...dependencies, stdout: buffered.stream,
+      ...(args.action === 'workflow-run' && args.resumeSource && resumeInput !== null && resumeInput !== undefined
+        ? { workflowResumeInput: resumeInput }
+        : {}),
+    });
+    if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
+    if (checkpoint) await checkpoint.publish(buffered.value());
+    else await writePrivateFile(args.destination, buffered.value(), { force: args.force === true });
     return code;
   } catch (error) {
+    if (isCancellation(error, dependencies.signal)) {
+      write(stderr, 'Cancelled by analyst.\n');
+      return EXIT_CODES.CANCELLED;
+    }
     if (error instanceof CliUsageError) {
       write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Output file could not be written')}\n`);
       return EXIT_CODES.USAGE;
     }
     write(stderr, `Output failed: ${boundedCliErrorMessage(error, 'Output file could not be written')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
+  } finally {
+    if (checkpoint && await checkpoint.release() > 0) {
+      write(stderr, 'Workflow cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n');
+    }
   }
 }
 

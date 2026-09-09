@@ -3457,7 +3457,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": false,
       "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell. Partial collections pause for review and are retained, not recollected, on resume; failed validation or export steps remain retryable. Step diagnostics go to stderr, not the checkpoint.",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell. Partial collections pause for review and are retained, not recollected, on resume; failed validation or export steps remain retryable. Step diagnostics go to stderr, not the checkpoint. File output holds exclusive adjacent locks through publication and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
