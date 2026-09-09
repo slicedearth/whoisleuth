@@ -541,8 +541,9 @@ test('oversized normalized stores fail before browser storage is touched', () =>
   const profiles = Array.from({ length: 100 }, (_, profileIndex) => profile({
     id: `profile-${profileIndex}`,
     name: `Profile ${profileIndex}`,
-    productNames: Array.from({ length: MAX_PROFILE_VALUES }, (_, valueIndex) => `${profileIndex}-${valueIndex}-${'x'.repeat(MAX_PROFILE_TEXT_LENGTH)}`),
+    productNames: Array.from({ length: MAX_PROFILE_VALUES }, (_, valueIndex) => `${profileIndex}-${valueIndex}-${'界'.repeat(MAX_PROFILE_TEXT_LENGTH)}`),
   }));
+  assert.ok(new TextEncoder().encode(JSON.stringify(normalizeBrandProfileStore(profiles))).byteLength > MAX_PROFILE_STORE_BYTES);
   assert.throws(() => assertBrandProfileStoreBudget(profiles), /Brand profile storage is full/);
 });
 

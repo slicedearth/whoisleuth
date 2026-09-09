@@ -821,7 +821,7 @@ export function brandProfileStoreVersion(raw: unknown): number | null {
 
 /** Normalize an internal profile collection or current stored envelope. */
 export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
-  assertWorkspaceInputGraph(raw, 'Brand Profile store');
+  assertWorkspaceInputGraph(raw, 'Brand Profile store', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspaceDeclaredVersion(raw, 'Brand Profile store');
   const sourceVersion = brandProfileStoreVersion(raw);
   if (!Array.isArray(raw) && sourceVersion !== null
@@ -862,8 +862,8 @@ export function mergeBrandProfiles(
   importedRaw: unknown,
   options: Pick<NormalizeBrandProfileOptions, 'nowIso' | 'makeId'> = {},
 ) {
-  assertWorkspaceInputGraph(localRaw, 'Local Brand Profile store');
-  assertWorkspaceInputGraph(importedRaw, 'Imported Brand Profile document');
+  assertWorkspaceInputGraph(localRaw, 'Local Brand Profile store', { maximumBytes: MAX_PROFILE_STORE_BYTES });
+  assertWorkspaceInputGraph(importedRaw, 'Imported Brand Profile document', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspacePortableVersion(importedRaw, BRAND_PROFILE_SCHEMA_VERSION, 'Imported Brand Profile document');
   const imported = record(importedRaw);
   if (imported.schema !== BRAND_PROFILE_SCHEMA) {

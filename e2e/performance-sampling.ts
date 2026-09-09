@@ -39,6 +39,8 @@ export type BrowserInteractionReadiness = Readonly<{
 
 type BrowserInteractionReadinessResult = Readonly<{
   browserReadyMs: number;
+  startedAtMs: number;
+  readyAtMs: number;
 }>;
 
 export async function beginBrowserInteractionReadiness(
@@ -134,7 +136,7 @@ export async function readBrowserInteractionReadiness(page: Page): Promise<Brows
       || runtime.readyAt < runtime.startedAt) {
       throw new Error('Browser interaction readiness marks are incomplete or invalid.');
     }
-    return Object.freeze({ browserReadyMs: Math.round((runtime.readyAt - runtime.startedAt) * 100) / 100 });
+    return Object.freeze({ browserReadyMs: Math.round((runtime.readyAt - runtime.startedAt) * 100) / 100, startedAtMs: runtime.startedAt, readyAtMs: runtime.readyAt });
   });
 }
 

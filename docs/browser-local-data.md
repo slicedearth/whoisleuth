@@ -156,6 +156,10 @@ Schema 5 stores identical row Profile context once on the session; mixed context
 remain per-row. The collection reader restores complete rows before application
 use. Schema 4 still requires its original explicit row context.
 
+Brand Profiles can retain up to 100 profiles in a 4-MiB collection; profile-file
+imports allow 32 MiB, including formatting and export metadata. Imports also
+enforce record, nesting and text limits.
+
 Histories are stored in the same atomic collection records. Normalisation and
 storage-pressure reporting perform no network operation.
 

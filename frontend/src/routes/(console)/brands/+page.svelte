@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getContext, onDestroy, onMount, tick } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
@@ -17,7 +17,7 @@
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
-  import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
+  import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, MAX_PROFILE_STORE_BYTES, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
@@ -469,8 +469,8 @@
     try{
       let result:Awaited<ReturnType<typeof importProfiles>>;
       try{
-        if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error('Profile imports are limited to 2 MB.');
-        result=await importProfiles(parseBoundedJson(await file.text(),{label:'Profile import',maximumBytes:MAX_PROFILE_IMPORT_BYTES}));
+        if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error(`Profile imports are limited to ${MAX_PROFILE_IMPORT_BYTES / 1024 / 1024} MiB.`);
+        result=await importProfiles(parseBoundedJson(await file.text(),{label:'Profile import',maximumBytes:MAX_PROFILE_IMPORT_BYTES,limits:boundedJsonLimitsForBytes(MAX_PROFILE_STORE_BYTES)}));
       }catch(cause){message=profileWriteFailureMessage(cause,'Import failed.');return;}
       const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';
       const imported=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;

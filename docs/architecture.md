@@ -23,8 +23,7 @@ local CLI ──> offline contracts and local files
 
 The browser and CLI share runtime-neutral contracts and analysis rules. They do
 not share storage adapters, authentication state or implicit network effects.
-The hosted application uses the same request services behind Express and
-Netlify adapters so deployment shape does not redefine evidence semantics.
+Express and Netlify adapters call the same request services and evidence rules.
 
 ## Component ownership
 
@@ -38,8 +37,8 @@ Netlify adapters so deployment shape does not redefine evidence semantics.
 | Express and Netlify adapters | Deployment-specific request and response integration. | Independent evidence or scoring rules. |
 | `tools/` | Explicit maintainer checks, deterministic measurements and generated-reference renderers. | Runtime product behaviour. |
 
-Frontend compatibility paths may re-export shared modules, but their exports
-must remain identity-preserving facades. Non-frontend production code cannot
+Frontend compatibility paths re-export shared modules through
+identity-preserving facades. Non-frontend production code cannot
 import Svelte routes, components or browser adapters.
 
 The Cases route and Monitor's Cases view use one Case workspace component.
@@ -214,5 +213,4 @@ Verification is layered:
   behaviour.
 
 Automated tests use deterministic fixtures and make no live investigation
-requests. Timing-sensitive tests use the repository stress convention, and a
-failure is diagnosed before any retry is accepted.
+requests. Timing-sensitive coverage also has a separate stress suite.
