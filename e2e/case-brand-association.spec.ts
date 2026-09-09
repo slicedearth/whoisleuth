@@ -221,7 +221,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
   await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
-  const editor = page.locator('section.form');
+  const editor = page.getByRole('form', { name: 'Brand Profile', exact: true });
   await expect(page.getByLabel('Brand name')).toBeFocused();
   await expect.poll(() => editor.evaluate((element) => {
     const inboxElement = document.querySelector('.brand-review');
@@ -544,6 +544,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 
   await page.reload();
   const committedCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Committed fixture profile', exact: true }) });
+  await expect(committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` })).toBeEnabled();
   await page.evaluate((key) => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function getItem(name: string) {
@@ -558,7 +559,8 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await deletePromise;
 
   await expect(page.getByRole('status').filter({ hasText: 'Deleted "Committed fixture profile"' })).toContainText('deletion was committed, but the active-profile preference could not be updated or reread');
-  await expect(page.getByRole('button', { name: /Edit Concurrent fixture profile/u })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Refresh saved profiles', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Edit Concurrent fixture profile/u })).toBeDisabled();
   storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRevision: 3 });
   expect(storedProfiles.records).toHaveLength(1);
   expect(storedProfiles.records[0]?.value.name).toBe('Concurrent fixture profile');
@@ -566,7 +568,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await secondPage.close();
 });
 
-test('recovers focus to the source alert when profile deletion closes the collection', async ({ page }) => {
+test('profile deletion separates a committed read failure from a rejected write', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   const deleteButton=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`});
@@ -576,19 +578,26 @@ test('recovers focus to the source alert when profile deletion closes the collec
   const deletePromise=deleteButton.click();
   const dialog=await dialogPromise;await dialog.accept();await deletePromise;
   const alert=page.locator('#brand-profile-source-state');
-  await expect(alert).toBeFocused();
+  await expect(alert).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh saved profiles', exact: true })).toBeFocused();
   await expect(page.getByRole('button',{name:'New profile'})).toBeDisabled();
   await expect(page.getByRole('status').filter({hasText:'Deleted "Fixture profile"'})).toContainText('deletion was committed, but Brand Profiles could not be reread');
 
   await page.reload();
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page,'brand_profiles');
   const retryDialogPromise=page.waitForEvent('dialog');
   const retryPromise=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`}).click();
   const retryDialog=await retryDialogPromise;await retryDialog.accept();await retryPromise;
-  await expect(page.locator('#brand-profile-source-state')).toBeFocused();
-  await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText('Brand Profiles are unavailable');
+  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeFocused();
+  await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText(/write|storage|quota/iu);
+  await expect(page.getByRole('button',{name:'New profile'})).toBeEnabled();
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(after.manifest.revision).toBe(before.manifest.revision);
+  expect(after.records).toEqual(before.records);
 });
 
 test('keeps healthy Profiles available after an unreadable import and clears preference failure after activation succeeds', async ({ page }) => {
@@ -619,6 +628,33 @@ test('keeps healthy Profiles available after an unreadable import and clears pre
   await expect(radio).toBeChecked();
   await expect(page.getByText(/active-profile preference could not be read/iu)).toHaveCount(0);
   await expect(page.getByRole('region',{name:'Brand review inbox'}).locator('.review-heading > strong')).toHaveText('0 review items');
+});
+
+test('a saved active-profile preference is not reported as unwritten when its recovery read fails', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  await page.evaluate((key) => {
+    const original = Storage.prototype.setItem;
+    let pending = true;
+    Storage.prototype.setItem = function setItem(name: string, value: string) {
+      if (pending && this === localStorage && name === key) { pending = false; throw new DOMException('Preference write denied', 'QuotaExceededError'); }
+      return original.call(this, name, value);
+    };
+  }, ACTIVE_PROFILE_KEY);
+  const radio = page.getByRole('radio', { name: 'Set Fixture profile active', exact: true });
+  await radio.click();
+  await expect(page.getByRole('status').filter({ hasText: 'active-profile preference is unavailable' })).toBeVisible();
+  await failNextBrowserLocalCollectionRead(page, 'brand_profiles');
+  await radio.click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('active-profile preference was saved, but saved profiles could not be refreshed');
+  expect(await page.evaluate((key) => localStorage.getItem(key), ACTIVE_PROFILE_KEY)).toBe(PROFILE_ID);
+  await expect(page.locator('#brand-profile-source-state')).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh saved profiles', exact: true }).click();
+  await expect(radio).toBeChecked();
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(after.manifest.revision).toBe(before.manifest.revision);
+  expect(after.records).toEqual(before.records);
 });
 
 test('propagates unavailable active-profile context across Lookup, Bulk and Discover without requests or negative inference', async ({ page }) => {

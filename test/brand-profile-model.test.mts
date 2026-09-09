@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyBrandProfileFieldPatch,
+  addBrandAllowlistValues,
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA_VERSION,
   brandProfileStoreVersion,
@@ -19,6 +20,7 @@ import {
   normalizeBrandProfileStore,
   normalizeDkimSelectors,
   normalizeProtectionAttestations,
+  reviewProtectionAttestations,
   normalizeProfileDomains,
   normalizeProfileTextValues,
   normalizeProfileTlds,
@@ -185,6 +187,49 @@ test('caps each general list and DKIM selectors at their effective limits', () =
   const selectors = Array.from({ length: MAX_PROFILE_VALUES }, (_, index) => `selector-${index}`);
   assert.equal(normalizeProfileTextValues(values).length, MAX_PROFILE_VALUES);
   assert.equal(normalizeDkimSelectors(selectors).length, MAX_DKIM_SELECTORS);
+});
+
+test('allowlist additions validate every input and reject the whole over-capacity draft', () => {
+  const owner = { officialDomains: ['official.example'], approvedPartnerDomains: ['partner.example'] };
+  assert.deepEqual(addBrandAllowlistValues(owner, 'domains', ['retained.example'], 'retained.example,NEW.example\nofficial.example\npartner.example'), ['retained.example', 'new.example']);
+  assert.deepEqual(addBrandAllowlistValues(owner, 'registrars', ['Reviewed Registrar'], 'reviewed registrar\n  Another   Registrar  '), ['Reviewed Registrar', 'Another Registrar']);
+  const retained = Array.from({ length: MAX_PROFILE_VALUES - 1 }, (_, index) => `retained-${index}.example`);
+  assert.equal(addBrandAllowlistValues(owner, 'domains', retained, 'last.example').length, MAX_PROFILE_VALUES);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', retained, 'first.example\nlast.example'), /201 entries.*200.*No entries were added/u);
+  assert.equal(retained.length, MAX_PROFILE_VALUES - 1);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], 'valid.example\nnot a domain'), /entry 2.*No entries were added/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'registrars', [], 'R'.repeat(MAX_PROFILE_TEXT_LENGTH + 1)), /entry 1.*too long/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], 'official.example'), /No new entries/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], Array(MAX_PROFILE_VALUE_INPUTS + 1).fill('repeated.example').join('\n')), /entries at a time/u);
+});
+
+test('account-control review stamps only submitted controls and keeps independent retained clocks', () => {
+  const before = normalizeProtectionAttestations([
+    { control: 'registrar_mfa', state: 'observed', assertedAt: NOW, expiresAt: '2026-08-01', note: 'Previous review' },
+    { control: 'registry_lock', state: 'needs_confirmation', assertedAt: '2026-07-01T00:00:00.000Z', note: 'Untouched' },
+  ]);
+  const unchanged = structuredClone(before);
+  const now = '2026-09-01T10:00:00.000Z';
+  const after = reviewProtectionAttestations(before, [
+    { control: 'registrar_mfa', state: 'observed', expiresAt: '2026-10-01T23:59:59.999Z', note: 'Reconfirmed' },
+  ], now);
+  assert.equal(after.length, 2);
+  assert.deepEqual(after[1], before[1]);
+  assert.equal(after[0]?.assertedAt, now);
+  assert.equal(after[0]?.expiresAt, '2026-10-01T23:59:59.999Z');
+  assert.deepEqual(before, unchanged);
+  assert.deepEqual(reviewProtectionAttestations(before, [], now), before);
+});
+
+test('invalid account-control reviews fail without refreshing or dropping retained statements', () => {
+  const before = normalizeProtectionAttestations([{ control: 'registrar_mfa', state: 'observed', assertedAt: NOW }]);
+  const valid = { control: 'registrar_mfa', state: 'observed', expiresAt: null, note: 'Reviewed' } as const;
+  assert.throws(() => reviewProtectionAttestations(before, [valid], 'not-a-time'), /review time/u);
+  assert.throws(() => reviewProtectionAttestations(before, [{ ...valid, expiresAt: '2026-02-30T23:59:59.999Z' }], NOW), /expiry date/u);
+  assert.throws(() => reviewProtectionAttestations(before, [{ ...valid, note: 'bad\ncontrol' }], NOW), /control characters/u);
+  assert.throws(() => reviewProtectionAttestations(before, [valid, valid], NOW), /repeated/u);
+  assert.throws(() => reviewProtectionAttestations(before, Array(7).fill(valid), NOW), /Too many/u);
+  assert.equal(before[0]?.assertedAt, NOW);
 });
 
 test('normalizes defensive mail profiles, retired selectors, and expiring analyst attestations', () => {

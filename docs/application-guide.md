@@ -172,8 +172,18 @@ Start a profile with its name and official domains. Matching and mail settings,
 rights and official channels, and official-site identity are optional
 disclosures. Closing a disclosure preserves its unsaved fields.
 
-These values express analyst intent. They do not prove the live state of a
-registry, account, DNS zone, certificate or service. Observed evidence,
+Allowlist, expected-setting, portable-setting and account-control drafts are
+preserved when switching tools or viewing Assets. Selecting or saving another
+profile, or leaving Brands, clears the previous profile's tool drafts. A failed
+save preserves the draft; a successful save with a failed refresh offers a
+read-only refresh, not another write. Conflicting edits require reviewing the
+current saved values.
+
+Account controls keep individual review dates. Saving changed controls or
+explicitly reconfirming one updates only those statements.
+
+These values are analyst-authored expectations. They do not prove the live
+state of a registry, account, DNS zone, certificate or service. Observed evidence,
 desired-state baselines and analyst attestations remain separate.
 
 Retained settings reviews include their target, collection context and the

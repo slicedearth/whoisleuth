@@ -5,7 +5,7 @@
   type Field = 'name'|'official'|'products'|'tlds'|'partners'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   type Values = Record<Field, string>;
 
-  let { editing, values, setValue, officialChannels, rightsReferences, setOfficialChannels, setRightsReferences, pageBaseline, capturingIdentity, busy, disabledReason, captureSiteIdentity, save, close, formatDate }: {
+  let { editing, values, setValue, officialChannels, rightsReferences, setOfficialChannels, setRightsReferences, pageBaseline, capturingIdentity, busy, saveDisabled=false, orphaned=false, disabledReason, captureSiteIdentity, save, close, formatDate }: {
     editing: boolean;
     values: Values;
     setValue: (field: Field, value: string) => void;
@@ -16,6 +16,8 @@
     pageBaseline: BrandProfile['pageBaseline'];
     capturingIdentity: boolean;
     busy: boolean;
+    saveDisabled?: boolean;
+    orphaned?: boolean;
     disabledReason: string;
     captureSiteIdentity: () => void | Promise<void>;
     save: () => void | Promise<void>;
@@ -24,7 +26,7 @@
   } = $props();
 </script>
 
-<form class="form card" aria-label="Brand Profile" aria-busy={busy} novalidate onsubmit={(event) => { event.preventDefault(); if (!busy) void save(); }}>
+<form class="form card" aria-label="Brand Profile" aria-busy={busy} novalidate onsubmit={(event) => { event.preventDefault(); if (!busy && !saveDisabled) void save(); }}>
   <header class="section-head">
     <h2>{editing ? 'Edit profile' : 'New profile'}</h2>
     <button class="btn" type="button" disabled={busy} onclick={close}>Close</button>
@@ -70,7 +72,7 @@
       <p>Capture a comparison baseline from the first official domain. The profile stores fingerprints and metadata, not page HTML.</p>
       {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
       <div class="identity-actions">
-        <button class="btn" type="button" onclick={captureSiteIdentity} disabled={busy || capturingIdentity || Boolean(disabledReason)}>{capturingIdentity ? 'Capturing…' : pageBaseline ? 'Update official-site baseline' : 'Capture official-site baseline'}</button>
+        <button class="btn" type="button" onclick={captureSiteIdentity} disabled={busy || saveDisabled || capturingIdentity || Boolean(disabledReason)}>{capturingIdentity ? 'Capturing…' : pageBaseline ? 'Update official-site baseline' : 'Capture official-site baseline'}</button>
         {#if pageBaseline}<span>{pageBaseline.domain} · {pageBaseline.complete ? 'Complete' : 'Partial'} · {formatDate(pageBaseline.observedAt)}</span>{:else}<span>Not captured</span>{/if}
       </div>
       <label class="field">Official favicon hash<input value={values.faviconHash} readonly placeholder="Not captured"></label>
@@ -84,8 +86,9 @@
       {/if}
     </div>
   </details>
+  {#if orphaned}<p class="draft-status">The saved profile was deleted. This draft can be saved under a new identity; references to the deleted profile are not reassigned.</p>{/if}
   <footer class="toolbar">
-    <button class="primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button>
+    <button class="primary" type="submit" disabled={busy || saveDisabled}>{busy ? 'Saving…' : orphaned ? 'Save as new profile' : 'Save profile'}</button>
     <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
   </footer>
 </form>
@@ -99,6 +102,7 @@
   .profile-options{margin:0;border-top:1px solid var(--border)}
   .profile-options>summary{padding:12px 0;cursor:pointer;font:650 var(--text-sm) var(--mono)}
   .form footer{margin-top:18px}
+  .draft-status{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
   .form-grid textarea{min-height:82px;background:rgb(var(--bg-rgb) / .78)}
   .form-grid small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}

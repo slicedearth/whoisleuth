@@ -3,15 +3,17 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
 
-  let { profiles, activeId, activate, edit, remove, formatDate, readOnly = false, focusId = '' }: {
+  let { profiles, activeId, activate, edit, remove, formatDate, readOnly = false, focusId = '', busy = false, activationDisabled }: {
     profiles: BrandProfile[];
     activeId: string;
-    activate?: (id: string) => boolean | void;
+    activate?: (id: string) => boolean | void | Promise<boolean | void>;
     edit?: (profile: BrandProfile) => void;
     remove?: (profile: BrandProfile) => boolean | Promise<boolean>;
     formatDate: (value: string) => string;
     readOnly?: boolean;
     focusId?: string;
+    busy?: boolean;
+    activationDisabled?: boolean;
   } = $props();
 
   const PAGE_SIZE=12;
@@ -23,11 +25,12 @@
   const focusedIndex=$derived(profiles.findIndex((profile)=>profile.id===(focusId||activeId)));
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   async function removeAndFocus(profile:BrandProfile){
-    if(!remove)return;
+    if(!remove||busy)return;
     const origin=document.activeElement;
     const previousIndex=profiles.findIndex(item=>item.id===profile.id);
     const removed=await remove(profile);
     await tick();
+    if(document.activeElement!==document.body&&document.activeElement!==origin)return;
     if(!removed&&origin instanceof HTMLElement&&origin.isConnected){origin.focus();return;}
     const next=removed?profiles[Math.min(Math.max(0,previousIndex),profiles.length-1)]:null;
     const candidates=[
@@ -42,7 +45,35 @@
   $effect(()=>{const location=`${focusId}:${activeId}:${focusedIndex}`;if(location===activeLocation)return;activeLocation=location;if(focusedIndex>=0)page=Math.floor(focusedIndex/PAGE_SIZE)+1;});
 </script>
 
-{#if profiles.length}<section><div class="profiles">{#each pagedProfiles as profile}<article id={`profile-${profile.id}`} class="profile card" class:active={profile.id === activeId} class:focused={Boolean(focusId) && profile.id === focusId}><header class="section-head"><div><p class="eyebrow">{readOnly ? 'Synthetic profile' : profile.id === focusId ? 'Search result' : profile.id === activeId ? 'Active profile' : 'Saved profile'}</p><h2>{profile.name}</h2></div>{#if !readOnly && activate}<input type="radio" name="active-profile" aria-label={`Set ${profile.name} active`} checked={profile.id === activeId} onchange={(event) => { if (activate?.(profile.id) === false) event.currentTarget.checked = false; }}>{/if}</header><p>{profile.officialDomains.length} official domain{profile.officialDomains.length === 1 ? '' : 's'} · {profile.officialChannels.length} official channel{profile.officialChannels.length === 1 ? '' : 's'} · {profile.rightsReferences.length} rights reference{profile.rightsReferences.length === 1 ? '' : 's'} · {profile.allowlistedDomains.length} allowlisted domain{profile.allowlistedDomains.length === 1 ? '' : 's'}</p><div class="chips">{#each profile.officialDomains.slice(0, 6) as domain}<span class="chip wrap">{domain}</span>{/each}{#if profile.officialDomains.length>6}<span class="chip wrap">+{profile.officialDomains.length-6} more</span>{/if}</div>{#if profile.pageBaseline}<p class="baseline-status"><strong>Page baseline</strong><span>{profile.pageBaseline.domain} · {profile.pageBaseline.complete ? 'Complete' : 'Partial'} · {formatDate(profile.pageBaseline.observedAt)}</span></p>{:else}<p class="baseline-status"><strong>Page baseline</strong><span>Not captured</span></p>{/if}{#if !readOnly && edit && remove}<footer class="toolbar"><button id={`brand-profile-edit-${profile.id}`} class="btn" aria-label={`Edit ${profile.name} (${profile.id})`} onclick={() => edit?.(profile)}>Edit</button><button class="btn danger" aria-label={`Delete ${profile.name} (${profile.id})`} onclick={() => void removeAndFocus(profile)}>Delete</button></footer>{/if}</article>{/each}</div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Brand profile pages" /></section>{:else}<section class="empty-state card"><h2>No brand profiles saved</h2><p>Create a profile to establish official domains and trusted infrastructure.</p></section>{/if}
+{#if profiles.length}
+  <section>
+    <div class="profiles">
+      {#each pagedProfiles as profile}
+        <article id={`profile-${profile.id}`} class="profile card" class:active={profile.id === activeId} class:focused={Boolean(focusId) && profile.id === focusId}>
+          <header class="section-head">
+            <div><p class="eyebrow">{readOnly ? 'Synthetic profile' : profile.id === focusId ? 'Search result' : profile.id === activeId ? 'Active profile' : 'Saved profile'}</p><h2>{profile.name}</h2></div>
+            {#if !readOnly && activate}<input type="radio" name="active-profile" aria-label={`Set ${profile.name} active`} checked={profile.id === activeId} disabled={activationDisabled??busy} onchange={async (event) => { const input=event.currentTarget; if (await activate?.(profile.id) === false && input.isConnected) input.checked = false; }}>{/if}
+          </header>
+          <p>{profile.officialDomains.length} official domain{profile.officialDomains.length === 1 ? '' : 's'} · {profile.officialChannels.length} official channel{profile.officialChannels.length === 1 ? '' : 's'} · {profile.rightsReferences.length} rights reference{profile.rightsReferences.length === 1 ? '' : 's'} · {profile.allowlistedDomains.length} allowlisted domain{profile.allowlistedDomains.length === 1 ? '' : 's'}</p>
+          <div class="chips">
+            {#each profile.officialDomains.slice(0, 6) as domain}<span class="chip wrap">{domain}</span>{/each}
+            {#if profile.officialDomains.length>6}<span class="chip wrap">+{profile.officialDomains.length-6} more</span>{/if}
+          </div>
+          {#if profile.pageBaseline}
+            <p class="baseline-status"><strong>Page baseline</strong><span>{profile.pageBaseline.domain} · {profile.pageBaseline.complete ? 'Complete' : 'Partial'} · {formatDate(profile.pageBaseline.observedAt)}</span></p>
+          {:else}<p class="baseline-status"><strong>Page baseline</strong><span>Not captured</span></p>{/if}
+          {#if !readOnly && edit && remove}
+            <footer class="toolbar">
+              <button id={`brand-profile-edit-${profile.id}`} class="btn" aria-label={`Edit ${profile.name} (${profile.id})`} disabled={busy} onclick={() => edit?.(profile)}>Edit</button>
+              <button class="btn danger" aria-label={`Delete ${profile.name} (${profile.id})`} disabled={busy} onclick={() => void removeAndFocus(profile)}>Delete</button>
+            </footer>
+          {/if}
+        </article>
+      {/each}
+    </div>
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Brand profile pages" />
+  </section>
+{:else}<section class="empty-state card"><h2>No brand profiles saved</h2><p>Create a profile to establish official domains and trusted infrastructure.</p></section>{/if}
 
 <style>
   .profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));align-items:start;gap:12px}

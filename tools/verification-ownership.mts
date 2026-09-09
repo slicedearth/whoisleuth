@@ -304,7 +304,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
       || value === 'frontend/src/lib/campaigns.ts'
       || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/brand-profile-model.test.mts', 'test/campaign-model.test.mts'),
-    focusedBrowser: browser('e2e/brand-asset-register.spec.ts', 'e2e/brand-baseline.spec.ts', 'e2e/parent-domain-campaign-scope.spec.ts'),
+    focusedBrowser: browser(...FUNCTIONAL_BROWSER_INVENTORY.filter((file) => /(?:^|[-/])(?:brand|campaign)[-.]/u.test(file))),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
     browserRequired: true,
   }),
@@ -318,6 +318,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
       'e2e/cases.spec.ts',
       'e2e/case-evidence-workflows.spec.ts',
       'e2e/case-import-workflows.spec.ts',
+      'e2e/case-brand-association.spec.ts',
       'e2e/case-relationship-workflows.spec.ts',
       'e2e/case-response-lifecycle.spec.ts',
     ),

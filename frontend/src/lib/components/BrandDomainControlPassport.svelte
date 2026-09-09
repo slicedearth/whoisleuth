@@ -13,13 +13,13 @@
     type DomainControlPassportField,
   } from '$lib/analysis/domain-control-passport.ts';
   import type { DomainControlPassport } from '$lib/analysis/domain-control-manifest-core.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
 
-  type PersistenceResult = { committed: true } | { committed: false; message: string };
-
-  let { active, saveProfile }: {
+  let { active, saveProfile, writeDisabled = false }: {
     active: BrandProfile;
-    saveProfile: (profile: BrandProfile, expectedUpdatedAt: string) => Promise<PersistenceResult>;
+    saveProfile: (profile: BrandProfile, expected: BrandProfile) => Promise<BrandProfileSaveResult>;
+    writeDisabled?: boolean;
   } = $props();
 
   const fieldLabels: Record<DomainControlPassportField, string> = {
@@ -43,6 +43,7 @@
   let importFields = $state<Record<string, DomainControlPassportField[]>>({});
   let busy = $state(false);
   let message = $state('');
+  const draft = createDraftRevision(() => active.id);
   const importReady = $derived(Boolean(imported?.entries.some((entry) =>
     selectedImports.includes(entry.domain)
       && (active.officialDomains.includes(entry.domain) || addDomains.includes(entry.domain))
@@ -58,17 +59,20 @@
   }
 
   function toggleImport(domain: string, checked: boolean): void {
+    draft.changed();
     selectedImports = toggle(selectedImports, domain, checked);
     if (!checked) addDomains = addDomains.filter((item) => item !== domain);
   }
 
   function toggleAdd(domain: string, checked: boolean): void {
+    draft.changed();
     addDomains = toggle(addDomains, domain, checked);
     if (checked) selectedImports = toggle(selectedImports, domain, true);
     else selectedImports = toggle(selectedImports, domain, false);
   }
 
   function toggleField(domain: string, field: DomainControlPassportField, checked: boolean): void {
+    draft.changed();
     importFields = {
       ...importFields,
       [domain]: toggle(importFields[domain] ?? [], field, checked) as DomainControlPassportField[],
@@ -76,7 +80,7 @@
   }
 
   async function downloadPassport(): Promise<void> {
-    if (busy || !selectedExports.length) return;
+    if (busy || writeDisabled || !selectedExports.length) return;
     busy = true;
     message = '';
     try {
@@ -101,7 +105,8 @@
   async function choosePassport(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) return;
+    if (!file || busy || writeDisabled) return;
+    draft.changed();
     busy = true;
     message = '';
     try {
@@ -130,7 +135,8 @@
   }
 
   async function applyImport(): Promise<void> {
-    if (!imported) return;
+    if (!imported || busy || writeDisabled) return;
+    const unchanged = draft.capture();
     busy = true;
     message = '';
     try {
@@ -145,15 +151,15 @@
       if (!choices.length || choices.every((choice) => !choice.fields.length)) {
         throw new Error('Select at least one configured field to import.');
       }
-      const expectedUpdatedAt = active.updatedAt;
-      const nextProfile = await applyVerifiedDomainControlPassport(active, imported, choices);
-      const result = await saveProfile(nextProfile, expectedUpdatedAt);
+      const expected = $state.snapshot(active);
+      const nextProfile = await applyVerifiedDomainControlPassport(expected, imported, choices);
+      const result = await saveProfile(nextProfile, expected);
       if (!result.committed) {
         message = result.message;
         return;
       }
       message = `Imported reviewed fields for ${choices.length} domain${choices.length === 1 ? '' : 's'}. Unselected and unconfigured fields were left unchanged.`;
-      imported = null;
+      if (unchanged()) imported = null;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not import the domain-control passport.';
     } finally {
@@ -179,7 +185,7 @@
       <h2 id="domain-passport-title">Portable domain settings</h2>
       <p>Move selected official-domain expectations between the browser Console and CLI. Integrity is verified locally before import.</p>
     </div>
-    <label class="btn file-btn" class:disabled={busy}>Review passport<input type="file" accept="application/json,.json" onchange={choosePassport} disabled={busy}></label>
+    <label class="btn file-btn" class:disabled={busy || writeDisabled}>Review passport<input type="file" accept="application/json,.json" onchange={choosePassport} disabled={busy || writeDisabled}></label>
   </header>
 
   <div class="passport-grid">
@@ -192,7 +198,7 @@
           {/each}
         </div>
         <label class="expiry"><span>Expires after</span><select bind:value={expiryDays}><option value="30">30 days</option><option value="90">90 days</option><option value="365">365 days</option></select></label>
-        <button class="btn" type="button" onclick={downloadPassport} disabled={busy || !selectedExports.length}>Export passport</button>
+        <button class="btn" type="button" onclick={downloadPassport} disabled={busy || writeDisabled || !selectedExports.length}>Export passport</button>
       {:else}
         <p class="empty">Configure an owned-domain baseline before exporting a passport.</p>
       {/if}
@@ -228,7 +234,7 @@
           </div>
         </fieldset>
       {/each}
-      <button class="primary" type="button" onclick={applyImport} disabled={busy || !importReady}>Import selected fields</button>
+      <button class="primary" type="button" onclick={applyImport} disabled={busy || writeDisabled || !importReady}>Import selected fields</button>
     </div>
   {/if}
 

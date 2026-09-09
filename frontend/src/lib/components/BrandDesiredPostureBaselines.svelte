@@ -11,22 +11,21 @@
     MAX_DESIRED_POSTURE_SUPPRESSIONS,
     MAX_DESIRED_POSTURE_RECORDS,
   } from '$lib/analysis/brand-profile-model.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
   import { DESIRED_POSTURE_FIELD_LABELS } from '$lib/analysis/owned-domain-posture-review.ts';
   import { domainControlRecordMode, normalizeDomainControlRecordSettings } from '../../../../packages/evidence/domain-control-runtime.mts';
   import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
   import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, DOMAIN_CONTROL_RECORD_MODE_OPTIONS, MAX_CURRENT_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH, type DomainControlRecordField, type DomainControlRecordModes } from '../../../../packages/contracts/domain-control-manifest.mts';
 
-  type PersistenceResult = { committed: true } | { committed: false; message: string };
-
-  let { active, saveBaselines, requestedDomain = '' }: {
+  let { active, saveBaselines, requestedDomain = '', writeDisabled = false }: {
     active: BrandProfile;
-    saveBaselines: (profileId: string, expectedUpdatedAt: string, baselines: DesiredPostureBaseline[]) => Promise<PersistenceResult>;
+    saveBaselines: (expected: BrandProfile, baselines: DesiredPostureBaseline[]) => Promise<BrandProfileSaveResult>;
     requestedDomain?: string;
+    writeDisabled?: boolean;
   } = $props();
 
   let selectedDomain = $state('');
-  let draftProfile = $state<BrandProfile | null>(null);
+  let draftProfile = $state.raw<BrandProfile | null>(null);
   let recordDrafts = $state<Record<DomainControlRecordField, string>>({ nameservers: '', ds: '', mx: '', caa: '' });
   let recordModes = $state<DomainControlRecordModes>({ nameservers: 'unconfigured', ds: 'unconfigured', mx: 'unconfigured', caa: 'unconfigured' });
   const recordPresentationLengths = { nameservers: MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, ds: MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, mx: MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, caa: MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH };
@@ -142,10 +141,10 @@
       : document.getElementById('add-suppression'))?.focus();
   }
 
-  function load(domain: string): void {
-    draftProfile = active;
+  function load(domain: string, profile = active): void {
+    draftProfile = $state.snapshot(profile);
     selectedDomain = domain;
-    const baseline = active.desiredPostureBaselines.find((item) => item.domain === domain);
+    const baseline = profile.desiredPostureBaselines.find((item) => item.domain === domain);
     recordDrafts = Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => [field, baseline?.[field].join('\n') ?? ''])) as typeof recordDrafts;
     recordModes = Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => [field, baseline ? domainControlRecordMode(baseline, field) : 'unconfigured'])) as DomainControlRecordModes;
     tlsIssuer = baseline?.tlsIssuer || '';
@@ -171,7 +170,7 @@
   async function save(): Promise<void> {
     const owner = draftProfile;
     const domain = selectedDomain;
-    if (!domain || !owner || owner.id !== active.id || busy) return;
+    if (!domain || !owner || owner.id !== active.id || busy || writeDisabled) return;
     const origin = document.activeElement;
     message = '';
     let nextChangeWindows: DesiredPostureChangeWindow[];
@@ -212,10 +211,11 @@
       updatedAt: new Date().toISOString(),
     };
     try {
-      const result = await saveBaselines(owner.id, owner.updatedAt, [
+      const result = await saveBaselines(owner, [
         ...owner.desiredPostureBaselines.filter((item) => item.domain !== domain),
         baseline,
       ]);
+      if (result.committed && selectedDomain === domain && draftProfile === owner) load(domain, result.profile);
       message = result.committed
         ? `Saved expected settings for ${domain}.`
         : result.message;
@@ -230,17 +230,17 @@
   async function remove(): Promise<void> {
     const owner = draftProfile;
     const domain = selectedDomain;
-    if (!domain || !owner || owner.id !== active.id || busy || !confirm(`Remove the expected settings for ${domain}?`)) return;
+    if (!domain || !owner || owner.id !== active.id || busy || writeDisabled || !confirm(`Remove the expected settings for ${domain}?`)) return;
     const origin = document.activeElement;
     busy = true;
     message = '';
     try {
-      const result = await saveBaselines(owner.id, owner.updatedAt, owner.desiredPostureBaselines.filter((item) => item.domain !== domain));
+      const result = await saveBaselines(owner, owner.desiredPostureBaselines.filter((item) => item.domain !== domain));
       if (!result.committed) {
         message = result.message;
         return;
       }
-      if (selectedDomain === domain && active.id === owner.id) load(domain);
+      if (selectedDomain === domain && draftProfile === owner) load(domain, result.profile);
       message = `Removed the expected settings for ${domain}.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not remove the expected domain settings.';
@@ -251,16 +251,13 @@
   }
 
   $effect(() => {
-    if (busy) return;
+    if (busy || writeDisabled) return;
     if (requestedDomain && requestedDomain !== appliedRequestedDomain && active.officialDomains.includes(requestedDomain)) {
       appliedRequestedDomain = requestedDomain;
       load(requestedDomain);
       return;
     }
-    const fallback = active.officialDomains.includes(selectedDomain)
-      ? selectedDomain
-      : active.officialDomains[0] || '';
-    if (fallback !== selectedDomain) load(fallback);
+    if (!selectedDomain && !draftProfile) load(active.officialDomains[0] || '');
   });
 </script>
 
@@ -273,7 +270,8 @@
     </div>
     <label>
       <span>Official domain</span>
-      <select value={selectedDomain} onchange={(event) => load(event.currentTarget.value)} disabled={busy}>
+      <select value={selectedDomain} onchange={(event) => load(event.currentTarget.value)} disabled={busy || writeDisabled}>
+        {#if selectedDomain && !active.officialDomains.includes(selectedDomain)}<option value={selectedDomain}>{selectedDomain} — no longer official</option>{/if}
         {#each active.officialDomains as domain}<option value={domain}>{domain}</option>{/each}
       </select>
     </label>
@@ -290,7 +288,7 @@
   </aside>
 
   {#if selectedDomain}
-    <fieldset class="baseline-editor" disabled={busy}>
+    <fieldset class="baseline-editor" disabled={busy || writeDisabled}>
     <div class="baseline-grid">
       {#each DOMAIN_CONTROL_RECORD_LIST_FIELDS as field}
         <div class="record-expectation">
@@ -371,6 +369,7 @@
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">
       <button id="save-desired-posture-settings" class="primary" onclick={save} disabled={busy}>Save expected settings</button>
+      <button class="btn" type="button" onclick={() => load(selectedDomain)} disabled={busy || !active.officialDomains.includes(selectedDomain)}>Reopen saved settings</button>
       <button class="btn danger-action" onclick={remove} disabled={busy || !active.desiredPostureBaselines.some((item) => item.domain === selectedDomain)}>Remove</button>
     </div>
     </fieldset>

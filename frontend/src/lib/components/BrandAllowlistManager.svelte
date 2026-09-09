@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { normalizeProfile, type BrandProfile } from '$lib/brand-profiles';
-  import { MAX_PROFILE_VALUES } from '$lib/analysis/brand-profile-model.ts';
+  import { tick } from 'svelte';
+  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
+  import { addBrandAllowlistValues, MAX_ALLOWLIST_DRAFT_CHARACTERS, MAX_PROFILE_VALUES } from '$lib/analysis/brand-profile-model.ts';
+  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
 
   let {
     profile,
     onsave,
     onmessage,
+    writeDisabled = false,
   }: {
     profile: BrandProfile;
-    onsave: (allowlistedDomains: string[], allowlistedRegistrars: string[]) => boolean | Promise<boolean>;
+    onsave: (expected: BrandProfile, allowlistedDomains: string[], allowlistedRegistrars: string[]) => Promise<BrandProfileSaveResult>;
     onmessage: (message: string) => void;
+    writeDisabled?: boolean;
   } = $props();
 
   let domains = $state<string[]>([]);
@@ -19,10 +23,11 @@
   let dirty = $state(false);
   let busy = $state(false);
   let syncedFingerprint = $state('');
+  let base = $state.raw<BrandProfile | null>(null);
+  let componentRoot = $state<HTMLElement>();
 
   const profileFingerprint = $derived(JSON.stringify([
     profile.id,
-    profile.updatedAt,
     profile.allowlistedDomains,
     profile.allowlistedRegistrars,
   ]));
@@ -32,57 +37,32 @@
 
   $effect(() => {
     const next = profileFingerprint;
-    if (busy || (dirty && syncedFingerprint.startsWith(`${profile.id}:`))) return;
+    if (busy || writeDisabled || dirty || domainInput || registrarInput || next === syncedFingerprint) return;
+    base = $state.snapshot(profile);
     domains = [...profile.allowlistedDomains];
     registrars = [...profile.allowlistedRegistrars];
     domainInput = '';
     registrarInput = '';
     dirty = false;
-    syncedFingerprint = `${profile.id}:${next}`;
+    syncedFingerprint = next;
   });
 
-  function normalisedDomains(raw: string): string[] {
-    return normalizeProfile({
-      ...profile,
-      allowlistedDomains: raw.split(/[\n,]+/u),
-    }, profile).allowlistedDomains;
-  }
-
-  function normalisedRegistrars(raw: string): string[] {
-    return normalizeProfile({
-      ...profile,
-      allowlistedRegistrars: raw.split(/[\n,]+/u),
-    }, profile).allowlistedRegistrars;
-  }
-
   function addDomains() {
-    const candidates = normalisedDomains(domainInput);
-    const existing = new Set(domains);
-    const additions = candidates.filter((domain) => (
-      !existing.has(domain)
-      && !profile.officialDomains.includes(domain)
-      && !profile.approvedPartnerDomains.includes(domain)
-    ));
-    if (!additions.length) {
-      onmessage('Enter a valid domain that is not already official, trusted or allowlisted.');
-      return;
-    }
-    domains = [...domains, ...additions].slice(0, MAX_PROFILE_VALUES);
-    domainInput = '';
-    dirty = true;
+    if (busy) return;
+    try {
+      domains = addBrandAllowlistValues(profile, 'domains', domains, domainInput);
+      domainInput = '';
+      dirty = true;
+    } catch (cause) { onmessage(cause instanceof Error ? cause.message : 'The domain entries could not be added.'); }
   }
 
   function addRegistrars() {
-    const existing = new Set(registrars.map((value) => value.toLowerCase()));
-    const additions = normalisedRegistrars(registrarInput)
-      .filter((value) => !existing.has(value.toLowerCase()));
-    if (!additions.length) {
-      onmessage('Enter a registrar name that is not already allowlisted.');
-      return;
-    }
-    registrars = [...registrars, ...additions].slice(0, MAX_PROFILE_VALUES);
-    registrarInput = '';
-    dirty = true;
+    if (busy) return;
+    try {
+      registrars = addBrandAllowlistValues(profile, 'registrars', registrars, registrarInput);
+      registrarInput = '';
+      dirty = true;
+    } catch (cause) { onmessage(cause instanceof Error ? cause.message : 'The registrar entries could not be added.'); }
   }
 
   function removeDomain(domain: string) {
@@ -96,29 +76,44 @@
   }
 
   function discard() {
+    base = $state.snapshot(profile);
     domains = [...profile.allowlistedDomains];
     registrars = [...profile.allowlistedRegistrars];
     domainInput = '';
     registrarInput = '';
     dirty = false;
+    syncedFingerprint = profileFingerprint;
     onmessage(`Discarded unsaved allowlist changes for ${profile.name}.`);
   }
 
   async function save() {
-    if (!dirty || busy) return;
+    if (!dirty || busy || writeDisabled || !base) return;
+    const origin = document.activeElement;
+    const submittedDomains = [...domains];
+    const submittedRegistrars = [...registrars];
     busy = true;
     try {
-      if (await onsave(domains, registrars)) dirty = false;
+      const result = await onsave(base, submittedDomains, submittedRegistrars);
+      if (result.committed) {
+        base = result.profile;
+        syncedFingerprint = JSON.stringify([base.id, base.allowlistedDomains, base.allowlistedRegistrars]);
+        dirty = JSON.stringify(domains) !== JSON.stringify(base.allowlistedDomains)
+          || JSON.stringify(registrars) !== JSON.stringify(base.allowlistedRegistrars);
+      }
+    } catch (cause) {
+      onmessage(cause instanceof Error ? cause.message : 'The allowlist could not be saved.');
     } finally {
       busy = false;
+      await tick();
+      restoreSubmittedFocus(origin, componentRoot?.querySelector<HTMLTextAreaElement>('textarea'), componentRoot);
     }
   }
 </script>
 
-<section class="allowlist card" aria-labelledby={`brand-allowlist-title-${profile.id}`} aria-busy={busy}>
+<section class="allowlist card" bind:this={componentRoot} aria-labelledby={`brand-allowlist-title-${profile.id}`} aria-busy={busy}>
   <header>
     <div>
-      <p class="eyebrow">Active Brand Profile</p>
+      <p class="eyebrow">Brand Profile</p>
       <h2 id={`brand-allowlist-title-${profile.id}`}>Allowlist</h2>
       <p>Exclude reviewed domains and registrars from Brand candidate escalation. Official and trusted domains remain separate profile facts.</p>
     </div>
@@ -133,8 +128,8 @@
     <section aria-labelledby={`allowlisted-domains-title-${profile.id}`}>
       <div class="section-heading"><h3 id={`allowlisted-domains-title-${profile.id}`}>Domains</h3><span>{domains.length}/{MAX_PROFILE_VALUES}</span></div>
       <form onsubmit={(event) => { event.preventDefault(); addDomains(); }}>
-        <label class="field">Add domains <small>one per line or comma separated</small><textarea bind:value={domainInput} rows="2" maxlength="51000" placeholder="reviewed.example"></textarea></label>
-        <button class="btn" type="submit" disabled={busy || !domainInput.trim() || domains.length >= MAX_PROFILE_VALUES}>Add</button>
+        <label class="field">Add domains <small>one per line or comma separated</small><textarea bind:value={domainInput} rows="2" maxlength={MAX_ALLOWLIST_DRAFT_CHARACTERS} placeholder="reviewed.example"></textarea></label>
+        <button class="btn" type="submit" disabled={busy || !domainInput.trim()}>Add</button>
       </form>
       {#if domains.length}
         <ul>{#each domains as domain}<li><code>{domain}</code><button class="btn small" type="button" disabled={busy} aria-label={`Remove ${domain} from the domain allowlist`} onclick={() => removeDomain(domain)}>Remove</button></li>{/each}</ul>
@@ -144,8 +139,8 @@
     <section aria-labelledby={`allowlisted-registrars-title-${profile.id}`}>
       <div class="section-heading"><h3 id={`allowlisted-registrars-title-${profile.id}`}>Registrars</h3><span>{registrars.length}/{MAX_PROFILE_VALUES}</span></div>
       <form onsubmit={(event) => { event.preventDefault(); addRegistrars(); }}>
-        <label class="field">Add registrar names <small>one per line or comma separated</small><textarea bind:value={registrarInput} rows="2" maxlength="51000" placeholder="Reviewed Registrar"></textarea></label>
-        <button class="btn" type="submit" disabled={busy || !registrarInput.trim() || registrars.length >= MAX_PROFILE_VALUES}>Add</button>
+        <label class="field">Add registrar names <small>one per line or comma separated</small><textarea bind:value={registrarInput} rows="2" maxlength={MAX_ALLOWLIST_DRAFT_CHARACTERS} placeholder="Reviewed Registrar"></textarea></label>
+        <button class="btn" type="submit" disabled={busy || !registrarInput.trim()}>Add</button>
       </form>
       {#if registrars.length}
         <ul>{#each registrars as registrar}<li><span>{registrar}</span><button class="btn small" type="button" disabled={busy} aria-label={`Remove ${registrar} from the registrar allowlist`} onclick={() => removeRegistrar(registrar)}>Remove</button></li>{/each}</ul>
@@ -154,8 +149,8 @@
   </div>
 
   <footer>
-    <span>{dirty ? 'Unsaved allowlist changes' : 'Saved in this browser'}</span>
-    <div><button class="btn" type="button" disabled={busy || !dirty} onclick={discard}>Discard</button><button class="primary" type="button" disabled={busy || !dirty} onclick={() => void save()}>{busy ? 'Saving…' : 'Save allowlist'}</button></div>
+    <span>{dirty ? 'Unsaved allowlist changes' : domainInput || registrarInput ? 'Entered text has not been added to the list' : writeDisabled ? 'Saved profile is not ready' : 'Saved in this browser'}</span>
+    <div><button class="btn" type="button" disabled={busy || writeDisabled || (!dirty && !domainInput && !registrarInput)} onclick={discard}>Discard</button><button class="primary" type="button" disabled={busy || writeDisabled || !dirty} onclick={() => void save()}>{busy ? 'Saving…' : 'Save allowlist'}</button></div>
   </footer>
 </section>
 

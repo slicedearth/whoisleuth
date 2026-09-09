@@ -353,14 +353,14 @@ export const CASE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: CASE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: CASE_CONTRACT_OWNER,
-  note: 'Exact Case versions 12 and 13 migrate directly to current version 14; other retired stores are rejected and future stores remain untouched.',
+  note: 'Declared supported Case stores migrate to the current writer; retired stores are rejected and future stores remain untouched.',
 });
 export const CASE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.cases', kind: 'export', schema: null, currentVersion: CASE_SCHEMA_VERSION,
   supportedVersions: CASE_IMPORT_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_CASE_IMPORT_BYTES, owner: CASE_CONTRACT_OWNER,
-  note: 'Exact Case versions 12, 13 and 14 merge non-destructively through one bounded reader; other versions fail without mutation.',
+  note: 'Declared supported Case exports merge non-destructively through one bounded reader; other versions fail without mutation.',
 });
 export const CASE_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.case-report', kind: 'export', schema: CASE_REPORT_SCHEMA, currentVersion: CASE_REPORT_SCHEMA_VERSION,
@@ -374,28 +374,28 @@ export const CASE_RESPONSE_PACKET_COMPATIBILITY = defineSchemaCompatibility({
   currentVersion: CASE_RESPONSE_PACKET_VERSION, supportedVersions: CASE_RESPONSE_PACKET_OUTPUT_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: CASE_CONTRACT_OWNER,
-  note: 'Exact packet versions 6, 7, 8 and 9 are verified independently; other versions fail closed.',
+  note: 'Declared supported packet versions are verified independently; other versions fail closed.',
 });
 export const CASE_RESPONSE_REVIEW_INPUTS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'derived.case-response-review-inputs', kind: 'derived', schema: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   currentVersion: CASE_RESPONSE_REVIEW_INPUTS_VERSION, supportedVersions: SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: CASE_CONTRACT_OWNER,
-  note: 'Exact review-input versions 1, 2 and 3 remain independently readable for response authorisation; extensions and future versions fail closed.',
+  note: 'Declared supported review inputs remain independently readable for response authorisation; extensions and future versions fail closed.',
 });
 export const CLI_CASE_PACK_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.cli-case-pack', kind: 'export', schema: CLI_CASE_PACK_SCHEMA, currentVersion: CLI_CASE_PACK_VERSION,
   supportedVersions: SUPPORTED_CLI_CASE_PACK_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: MAX_CASE_IMPORT_BYTES, owner: CASE_CONTRACT_OWNER,
-  note: 'Case-pack version 2 verifies exact Case/report epochs 12/8, 13/9, 14/10 and 15/11 with deterministic sorted-json-v2 integrity.',
+  note: 'Supported Case packs verify the declared exact Case/report epoch pairs with deterministic sorted-json-v2 integrity.',
 });
 export const WORKSPACE_ARCHIVE_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.workspace-archive', kind: 'export', schema: WORKSPACE_ARCHIVE_SCHEMA,
   currentVersion: WORKSPACE_ARCHIVE_VERSION, supportedVersions: SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_WORKSPACE_ARCHIVE_BYTES, owner: CASE_CONTRACT_OWNER,
-  note: 'Workspace version 8 carries the current Case contract. Exact versions 5, 6 and 7 remain readable; version 5 gains an empty Review Item section without inventing decisions, and future envelopes fail without mutation.',
+  note: 'The current workspace carries the current Case contract. Declared historical versions remain readable; version 5 gains an empty Review Item section without inventing decisions, and future envelopes fail without mutation.',
 });
 export const WORKSPACE_SETTINGS_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA,

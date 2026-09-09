@@ -581,11 +581,14 @@ describe('verification architecture contracts', () => {
     assert.ok(cases.impactAreas.includes('Case analyst workflow'));
     assert.ok(cases.focusedUnitChecks.includes('test/case-model.test.mts'));
     assert.ok(cases.focusedBrowserChecks.includes('e2e/cases.spec.ts'));
+    assert.ok(cases.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'));
 
     const campaigns = byPath.get('frontend/src/lib/campaigns.ts')!;
     assert.ok(campaigns.impactAreas.includes('Brand and campaign analyst workflow'));
     assert.ok(campaigns.focusedUnitChecks.includes('test/campaign-model.test.mts'));
     assert.ok(campaigns.focusedBrowserChecks.includes('e2e/brand-asset-register.spec.ts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/parent-domain-campaign-scope.spec.ts'));
 
     for (const owner of ['frontend/src/lib/watchlists.ts', 'frontend/src/lib/scheduled-monitoring.ts']) {
       const assignment = byPath.get(owner)!;

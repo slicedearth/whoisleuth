@@ -118,7 +118,8 @@ function validateManifest(value: unknown): Manifest {
   return Object.freeze(manifest);
 }
 
-// Reviewed against three clean production builds on 2026-08-24. Each ceiling
+// Initial calibration used three clean production builds on 2026-08-24;
+// subsequent route-specific measurements are dated below. Each ceiling
 // is the largest observed gzip total plus 15% regression headroom, rounded up
 // to the next 5 KiB. They are tripwires, not performance targets or network
 // guarantees.
@@ -131,7 +132,7 @@ export const FRONTEND_ROUTE_BUDGET_BASIS = Object.freeze({
 
 export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string, number>> = Object.freeze({
   '/': 85.5,
-  '/brands': 325.63,
+  '/brands': 377.30, // Three clean builds, 2026-09-09: maximum 386,347 gzip bytes.
   '/bulk': 381.51,
   '/cases': 375.09, // Three clean builds, 2026-09-09: maximum 384,092 gzip bytes.
   '/cli': 82.98,

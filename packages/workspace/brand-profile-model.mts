@@ -299,6 +299,33 @@ export function normalizeProfileTextValues(value: unknown): string[] {
   return normalizeList(value, (item) => boundedText(item));
 }
 
+export const MAX_ALLOWLIST_DRAFT_CHARACTERS = (MAX_PROFILE_DOMAIN_LENGTH + 2) * MAX_PROFILE_VALUE_INPUTS;
+
+/** Admit the complete submitted list or leave the draft unchanged. */
+export function addBrandAllowlistValues(
+  profile: Pick<BrandProfile, 'officialDomains' | 'approvedPartnerDomains'>,
+  kind: 'domains' | 'registrars',
+  current: readonly string[],
+  raw: string,
+): string[] {
+  if (raw.length > MAX_ALLOWLIST_DRAFT_CHARACTERS) throw new RangeError('The submitted allowlist text is too large.');
+  const inputs = raw.split(/[\n,]+/u).map((item) => item.trim()).filter(Boolean);
+  if (inputs.length > MAX_PROFILE_VALUE_INPUTS) throw new RangeError(`Review at most ${MAX_PROFILE_VALUE_INPUTS} entries at a time.`);
+  const next = new Map(current.map((value) => [value.toLowerCase(), value]));
+  const trusted = new Set([...profile.officialDomains, ...profile.approvedPartnerDomains]);
+  for (const [index, input] of inputs.entries()) {
+    const value = kind === 'domains' ? normalizeProfileDomains([input])[0] : normalizeProfileTextValues([input])[0];
+    if (!value || (kind === 'registrars' && input.replace(/\s+/gu, ' ').length > MAX_PROFILE_TEXT_LENGTH)) {
+      throw new TypeError(`Allowlist entry ${index + 1} is invalid or too long. No entries were added.`);
+    }
+    if (kind === 'domains' && trusted.has(value)) continue;
+    if (!next.has(value.toLowerCase())) next.set(value.toLowerCase(), value);
+  }
+  if (next.size > MAX_PROFILE_VALUES) throw new RangeError(`This list would contain ${next.size} entries; the current profile supports ${MAX_PROFILE_VALUES}. No entries were added.`);
+  if (next.size === current.length) throw new TypeError('No new entries remain after excluding existing and trusted values.');
+  return [...next.values()];
+}
+
 export function normalizeProfileTlds(value: unknown): string[] {
   return normalizeList(value, normalizeTld);
 }
@@ -341,6 +368,32 @@ export function normalizeProtectionAttestations(value: unknown): ProtectionAttes
     if (output.length >= MAX_PROTECTION_ATTESTATIONS) break;
   }
   return output;
+}
+
+export type ProtectionAttestationReview = Omit<ProtectionAttestation, 'assertedAt'>;
+
+/** Only submitted, validated reviews acquire a new analyst-review clock. */
+export function reviewProtectionAttestations(
+  existing: readonly ProtectionAttestation[],
+  reviews: readonly ProtectionAttestationReview[],
+  nowIso: string,
+): ProtectionAttestation[] {
+  const assertedAt = timestamp(nowIso, null);
+  if (!assertedAt) throw new TypeError('The account-control review time is invalid.');
+  if (reviews.length > MAX_PROTECTION_ATTESTATIONS) throw new RangeError('Too many account-control reviews were submitted.');
+  const next = new Map(existing.map((item) => [item.control, { ...item }]));
+  const seen = new Set<string>();
+  for (const review of reviews) {
+    if (!PROTECTION_ATTESTATION_CONTROL_SET.has(review.control) || seen.has(review.control)
+      || !PROTECTION_ATTESTATION_STATES.has(review.state)) throw new TypeError('An account-control review is invalid or repeated.');
+    const expiresAt = review.expiresAt === null ? null : timestamp(review.expiresAt, null);
+    if (review.expiresAt !== null && !expiresAt) throw new TypeError('Enter a valid account-control expiry date.');
+    if (typeof review.note !== 'string' || CONTROL_RE.test(review.note)
+      || review.note.replace(/\s+/gu, ' ').trim().length > MAX_PROFILE_TEXT_LENGTH) throw new TypeError(`Account-control notes must contain at most ${MAX_PROFILE_TEXT_LENGTH} characters and no control characters.`);
+    seen.add(review.control);
+    next.set(review.control, { control: review.control, state: review.state, assertedAt, expiresAt, note: boundedText(review.note) });
+  }
+  return [...next.values()];
 }
 
 function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unknown) => string): string[] {
